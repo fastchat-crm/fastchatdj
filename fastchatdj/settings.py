@@ -72,6 +72,7 @@ INSTALLED_APPS = [
     'area_geografica.apps.AreaGeograficaConfig',
     'public.apps.PublicConfig',
     'whatsapp.apps.WhatsappConfig',
+    'crm.apps.CrmConfig',
     # packages
     'wkhtmltopdf',
     'django_select2',
