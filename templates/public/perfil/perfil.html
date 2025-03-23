@@ -1,0 +1,122 @@
+{% extends 'public/perfil/baseperfil.html' %}
+{% load templatefunctions %}
+
+{% block contentperfil %}
+
+    <div class="col-lg-9 pt-4 pb-2 pb-sm-4">
+        <!-- Basic info-->
+        <section class="card border-0 py-1 p-md-2 p-xl-3 p-xxl-4 mb-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center mt-sm-n1 mb-0 mb-lg-1"><i
+                        class="ai-user text-primary lead pe-1 me-2"></i>
+                    <h2 class="h4 mb-0">Información Personal</h2>
+                </div>
+                <div class="row py-4 mb-2 mb-sm-3">
+                  <div class="col-md-6 mb-4 mb-md-0">
+                    <table class="table mb-0">
+                      <tr>
+                        <td class="border-0 text-muted py-1 px-0">Nombres</td>
+                        <td class="border-0 text-dark fw-medium py-1 ps-3">{{ request.user.first_name }}</td>
+                      </tr>
+                      <tr>
+                        <td class="border-0 text-muted py-1 px-0">Apellidos</td>
+                        <td class="border-0 text-dark fw-medium py-1 ps-3">{{ request.user.last_name }}</td>
+                      </tr>
+                      <tr>
+                        <td class="border-0 text-muted py-1 px-0">Correo</td>
+                        <td class="border-0 text-dark fw-medium py-1 ps-3">{{ request.user.email }}</td>
+                      </tr>
+                      <tr>
+                        <td class="border-0 text-muted py-1 px-0">Teléfonos</td>
+                        <td class="border-0 text-dark fw-medium py-1 ps-3">{{ request.user.telefono }}</td>
+                      </tr>
+                    </table>
+                  </div>
+                  <div class="col-md-6 mb-4 mb-md-0">
+                    <table class="table mb-0">
+                    </table>
+                  </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/forms.js?version=11"></script>
+    <script>
+        $(function () {
+
+            function formRepoCiudad(repo) {
+                if (repo.loading) {
+                    return repo.text;
+                }
+                if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+                    return $(`<b>${repo.name}</b>, <span class="text-muted">${repo.provincia}, ${repo.pais}</span>`);
+                } else {
+                    return $(`<b>${repo.name}</b>, <span class="text-muted">${repo.provincia}, ${repo.pais}</span>`);
+                }
+            }
+
+            ItemDisplayCiudad = function (repo) {
+                if (repo.name) {
+                    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+                        if (repo.name.length >= 18) {
+                            return $(`<span style="font-size: 11px"><b>${repo.name}</b></span>`);
+                        } else {
+                            return $(`<span style="font-size: 11px"><b>${repo.name}</b> ${repo.pais}</span>`);
+
+                        }
+                    } else {
+                        return $(`<b>${repo.name}</b>, <span class="text-muted">${repo.provincia}, ${repo.pais}</span>`);
+                    }
+                } else {
+                    {% if request.user.ciudad %}
+                        return '{{ request.user.ciudad }}, {{ request.user.ciudad.provincia }}, {{ request.user.ciudad.provincia.pais }}'
+                    {% else %}
+                        return 'Busca tu ciudad';
+                    {% endif %}
+                }
+            };
+
+            $("#id_ciudad").select2({
+                width: '100%',
+                placeholder: "Consultar Ciudades",
+                allowClear: true,
+                ajax: {
+                    url: function (params) {
+                        return "/consultas?action=buscarlocalidad";
+                    },
+                    dataType: 'json',
+                    delay: 250,
+                    data: function (params) {
+                        return {
+                            q: params.term,
+                            page: params.page
+                        };
+                    },
+                    processResults: function (data, params) {
+                        params.page = params.page || 1;
+                        return {
+                            results: data.results,
+                            pagination: {
+                                more: (params.page * 30) < data.total_count
+                            }
+                        };
+                    },
+                    cache: true
+                },
+                escapeMarkup: function (markup) {
+                    return markup;
+                }, // let our custom formatter work
+                minimumInputLength: 1,
+                templateResult: formRepoCiudad, // omitted for brevity, see the source of this page
+                templateSelection: ItemDisplayCiudad // omitted for brevity, see the source of this page
+            }).on("select2:select", function (evt) {
+                $("#prefijotel").html(`(+${evt.params.data.prefijo})`);
+            });
+
+        })
+    </script>
+{% endblock %}

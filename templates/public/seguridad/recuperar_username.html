@@ -1,0 +1,63 @@
+{% extends 'public/base.html' %}
+{% block link %}{% endblock %}
+{% block content %}
+
+    <div class="d-flex flex-column align-items-center position-relative mt-100" style="margin-top: 125px; padding: 25px">
+        <div class="mt-auto" style="max-width: 700px">
+            <h1 class="pt-3 pb-2 pb-lg-3">¿Olvidaste tu nombre de usuario?</h1>
+            <p class="pb-2">Ingrese su dirección de correo electrónico para obtener su nombre de usuario.</p>
+            <div class="card border-black">
+                <form method="post" class="card-body" id="frm-restaurar" style="padding: 22px 25px !important;">{% csrf_token %}
+                    <div class="mb-4">
+                        <div class="position-relative"><i
+                                class="ai-key fs-lg position-absolute top-50 start-0 translate-middle-y text-black opacity-80 ms-3"></i>
+                            <input class="form-control form-control-lg ps-5 input-record" type="email" style="background-color: #ffffff;   color: black;"
+                                   placeholder="Correo electronico" name="email" id="recoverEmail" required>
+                        </div>
+                    </div>
+                    <center>
+                        <button type="submit" class="btn btn-success transition-3d-hover">
+                            <i class="fa fa-sync"></i>&nbsp; Recuperar nombre de usuario
+                        </button>
+                    </center>
+                </form>
+            </div>
+            <div class="mt-4">
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+{% block jscript %}
+    <script>
+        $('#frm-restaurar').on({
+            submit: function (e) {
+                e.preventDefault();
+                var frmData = new FormData($(this)[0]);
+                $.ajax({
+                    url: '{{ request.path }}',
+                    data: frmData,
+                    method: 'POST',
+                    dataType: 'json',
+                    cache: false,
+                    contentType: false,
+                    processData: false,
+                    beforeSend: function () {
+                        pantallaespera()
+                    }
+                }).done(function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.resp === true) {
+                        location = "/login/";
+                        return false;
+                    } else {
+                        mensajeDanger(data.error);
+                    }
+                }).fail(function () {
+                    setTimeout($.unblockUI, 1);
+                    mensajeDanger('Error de conexión.')
+                });
+            }
+        });
+    </script>
+{% endblock %}

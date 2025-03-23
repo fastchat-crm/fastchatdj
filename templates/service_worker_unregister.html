@@ -1,0 +1,35 @@
+<script>
+    navigator.serviceWorker.ready.then(async registrationObj => {
+        const SERVICE_WORKER_VERSION_STARTS = "INNOVATEACH-V";
+        const INDEX_END = SERVICE_WORKER_VERSION_STARTS.length;
+        const SERVICE_WORKER_VERSION = `${SERVICE_WORKER_VERSION_STARTS}3`;
+        if(!localStorage.getItem(SERVICE_WORKER_VERSION)){
+            const formData = new FormData();
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+            fetch("/clear-site-data/", {
+                method: 'POST',
+                body: formData
+            }).then(async r => {
+                try {
+                    await registrationObj.update();
+                    await registrationObj.unregister();
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (let registration of registrations) {
+                        await registration.update();
+                        await registration.unregister();
+                    }
+                } catch (e) {
+                    
+                }
+                for (let key of Object.keys(localStorage)) {
+                    if (key.substring(0, INDEX_END).toUpperCase() === SERVICE_WORKER_VERSION_STARTS) {
+                        localStorage.removeItem(key);
+                    }
+                }
+                console.log(SERVICE_WORKER_VERSION)
+                localStorage.setItem(SERVICE_WORKER_VERSION, "true");
+                window.location.href = window.location.href;
+            });
+        }
+    });
+</script>

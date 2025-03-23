@@ -1,0 +1,71 @@
+.clearfix:after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+#logo {
+  float: left;
+}
+
+#company {
+  float: right;
+  text-align: right;
+}
+
+
+.details {
+  margin-bottom: 50px;
+}
+
+.client{
+  float: left;
+}
+
+.client.to {
+  color: #777777;
+}
+
+.invoice {
+  float: right;
+  text-align: right;
+}
+
+.invoice h1 {
+  color: #0087C3;
+  font-size: 2.4em;
+  line-height: 1em;
+  font-weight: normal;
+  margin: 0  0 10px 0;
+}
+
+.invoice .date {
+  font-size: 1.1em;
+  color: #777777;
+}
+
+
+#thanks{
+  font-size: 2em;
+  margin-bottom: 50px;
+}
+
+#notices{
+  padding-left: 6px;
+  border-left: 6px solid #0087C3;
+}
+
+#notices .notice {
+  font-size: 1.2em;
+}
+
+footer {
+  color: #777777;
+  width: 100%;
+  height: 30px;
+  position: absolute;
+  bottom: 0;
+  border-top: 1px solid #AAAAAA;
+  padding: 8px 0;
+  text-align: center;
+}

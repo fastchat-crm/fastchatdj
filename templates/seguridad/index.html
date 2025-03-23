@@ -1,0 +1,423 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block head %}
+{% endblock %}
+{% block content %}
+
+    <form method="GET">
+        <div class="form-row">
+            <div class="col-md-6 col-sm-12">
+                <div class="input-group mb-3">
+                    <select multiple data-placeholder="Filtrar por Bodegas" class="form-control select2"
+                            name="bodegas"
+                            id="bodegas">
+                        {% for l in bodegaslist %}
+                            <option value="{{ l.pk }}" {% if l.pk in bodegas %}selected{% endif %}>{{ l }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="col-sm-3">
+                <button class="btn btn-primary" type="submit" id="button-addon2"><i
+                        class="fa fa-search"></i></button>
+                {% if url_vars %}
+                    <a title="Ver todo" href="{{ request.path }}" class="btn btn-default">
+                        <i class="fas fa-sync-alt"></i>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+    <div class="row">
+
+        <div class="col-md-12">
+            <b>Estadísticas de los últimos 30 días</b>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="widget widget-stats bg-success">
+                <div class="stats-icon"><i class="fa-solid fa-user"></i></div>
+                <div class="stats-info">
+                    <h4>Nuevos Clientes</h4>
+                    <p>{{ totclientes }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="widget widget-stats bg-warning">
+                <div class="stats-icon"><i class="fa-solid fa-bag-shopping"></i></div>
+                <div class="stats-info">
+                    <h4>Total Productos Vendidos</h4>
+                    <p>{{ totproductos|floatformat:0 }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="widget widget-stats bg-green">
+                <div class="stats-icon"><i class="fa-solid fa-store"></i></div>
+                <div class="stats-info">
+                    <h4>Producto más vendido</h4>
+                    <p>{{ producto_mas_vendido.producto__nombre }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="widget widget-stats bg-success">
+                <div class="stats-icon"><i class="fa-solid fa-cash-register"></i></div>
+                <div class="stats-info">
+                    <h4>Total Facturado</h4>
+                    <p>$ {{ totfacturado }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="panel panel-default" id="index-1">
+                <div class="panel-heading">
+                    <h4 class="panel-title">Análisis de sitios web (Últimos 19 Días)</h4>
+                    <div class="panel-heading-btn">
+                        <a href="javascript:;" class="btn btn-xs btn-icon btn-circle btn-default"
+                           data-click="panel-expand"><i class="fa fa-expand"></i></a>
+                        <a href="javascript:;" class="btn btn-xs btn-icon btn-circle btn-warning"
+                           data-click="panel-collapse"><i class="fa fa-minus"></i></a>
+                    </div>
+                </div>
+                <div class="panel-body pr-1">
+                    <div id="interactive-chart" class="height-md"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="panel panel-default" data-sortable-id="index-6">
+                        <div class="panel-heading">
+                            <h4 class="panel-title"><i class="fa fa-bell text-warning blink"></i> Ultimas 5
+                                transacciones</h4>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-valign-middle table-panel mb-0">
+                                <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Bodega</th>
+                                    <th>Cliente</th>
+                                    <th>Total</th>
+                                    <th></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for venta in last_transactions %}
+                                    <tr>
+                                        <td>
+                                            {{ venta.fecha_emision|date:"d/m/Y" }}
+                                        </td>
+                                        <td>
+                                            {{ venta.bodega.nombre }}
+                                        </td>
+                                        <td>
+                                            <i class="fa fa-user"></i> {{ venta.persona.datos }}
+                                        </td>
+                                        <td>
+                                            {{ venta.subtotal_0_12 }}
+                                        </td>
+                                        <td>
+                                            <a href="/contifico/ventas/?id={{ venta.pk }}" target="_blank"
+                                               class="btn btn-mini btn-default"><i
+                                                    class="fa fa-money-bill"></i> Ver detalle</a>
+                                        </td>
+                                    </tr>
+                                {% empty %}
+                                    <td colspan="4">
+                                        <span class="text-muted"><i
+                                                class="fa fa-info-circle"></i> Sin transacciones realizadas</span>
+
+                                    </td>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-12">
+                    <div class="panel panel-default">
+                        <div class="panel-heading">
+                            <h4 class="panel-title">
+                                <i class="fa fa-user-tie text-primary"></i> Vendedor Destacado
+                            </h4>
+                        </div>
+                        <div class="panel-body p-3">
+                            {% if vendedor_top.nombre %}
+                                <div class="d-flex align-items-start">
+                                    <!-- Imagen -->
+                                    <div class="mr-3">
+                                        <div class="rounded-circle overflow-hidden"
+                                             style="width: 56px; height: 56px; border: 2px solid #edf2f9;">
+                                            <img src="/static/images/initials/gris/{{ vendedor_top.nombre|first }}.png"
+                                                 alt="{{ vendedor_top.nombre }}"
+                                                 class="img-fluid">
+                                        </div>
+                                    </div>
+
+                                    <!-- Información -->
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <h6 class="mb-0">{{ vendedor_top.nombre }}</h6>
+                                            <span class="badge bg-warning text-white ml-2" style="font-size: 0.7rem;">Top Ventas</span>
+                                        </div>
+
+                                        <!-- Stats Grid -->
+                                        <div class="row g-2">
+                                            <div class="col-6">
+                                                <div class="p-2 bg-light rounded">
+                                                    <div class="small text-muted">Ventas</div>
+                                                    <div class="fw-bold text-success">
+                                                        <strong>${{ vendedor_top.total|floatformat:2 }}</strong></div>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="p-2 bg-light rounded">
+                                                    <div class="small text-muted">Transacciones</div>
+                                                    <div class="fw-bold">{{ vendedor_top.transacciones }}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Contacto -->
+                                        <div class="d-flex flex-wrap gap-2 mt-2 small text-muted">
+                                            {% if vendedor_top.email %}
+                                                <span class="mr-2"><i class="fa fa-envelope"></i> {{ vendedor_top.email }}</span>
+                                            {% endif %}
+                                            {% if vendedor_top.telefono %}
+                                                <span><i class="fa fa-phone"></i> {{ vendedor_top.telefono }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% else %}
+                                <div class="text-center text-muted py-3">
+                                    <div class="small">Sin vendedor destacado en este período</div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cliente Top -->
+                <div class="col-lg-12">
+                    <div class="panel panel-default">
+                        <div class="panel-heading">
+                            <h4 class="panel-title">
+                                <i class="fa fa-user-check text-success"></i> Cliente Destacado
+                            </h4>
+                        </div>
+                        <div class="panel-body p-3">
+                            {% if cliente_top.nombre %}
+                                <div class="d-flex align-items-start">
+                                    <!-- Imagen -->
+                                    <div class="mr-3">
+                                        <div class="rounded-circle overflow-hidden"
+                                             style="width: 56px; height: 56px; border: 2px solid #edf2f9;">
+                                            <img src="/static/images/initials/gris/{{ cliente_top.nombre|first }}.png"
+                                                 alt="{{ cliente_top.nombre }}"
+                                                 class="img-fluid">
+                                        </div>
+                                    </div>
+
+                                    <!-- Información -->
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <h6 class="mb-0">{{ cliente_top.nombre }}</h6>
+                                            <span class="badge bg-success text-white ml-2" style="font-size: 0.7rem;">
+                                    {{ cliente_top.tipo|default:"Cliente VIP" }}
+                                </span>
+                                        </div>
+
+                                        <!-- Stats Grid -->
+                                        <div class="row g-2">
+                                            <div class="col-6">
+                                                <div class="p-2 bg-light rounded">
+                                                    <div class="small text-muted">Compras</div>
+                                                    <div class="fw-bold text-success">
+                                                        <strong>${{ cliente_top.total|floatformat:2 }}</strong></div>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="p-2 bg-light rounded">
+                                                    <div class="small text-muted">Transacciones</div>
+                                                    <div class="fw-bold">{{ cliente_top.transacciones }}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Contacto -->
+                                        <div class="d-flex flex-wrap gap-2 mt-2 small text-muted">
+                                            {% if cliente_top.email %}
+                                                <span class="mr-2 "><i class="fa fa-envelope"></i> {{ cliente_top.email }}</span>
+                                            {% endif %}
+                                            {% if cliente_top.telefono %}
+                                                <span><i class="fa fa-phone"></i> {{ cliente_top.telefono }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% else %}
+                                <div class="text-center text-muted py-3">
+                                    <div class="small">Sin cliente destacado en este período</div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {#    <div class="panel">#}
+    {#        <div class="panel-heading">#}
+    {#            <h4 class="panel-title"><i class="fa-solid fa-circle-info"></i> Calendario</h4>#}
+    {#        </div>#}
+    {#        <div class="panel-body">#}
+    {#            <div class="row">#}
+    {#                <div class="col-12">#}
+    {#                    <div id="calendar" class="vertical-box-column calendar"></div>#}
+    {#                </div>#}
+    {#            </div>#}
+    {#        </div>#}
+    {#    </div>#}
+    {#    <div class="modal fade" id="modalDetalle">#}
+    {#        <div class="modal-dialog modal-dialog-scrollable">#}
+    {#            <div class="modal-content">#}
+    {#                <div class="modal-header">#}
+    {#                    <h5 id="titulo"></h5>#}
+    {#                    <button class="close" data-dismiss="modal" aria-label="Close">#}
+    {#                        <i class="fas fa-times"></i>#}
+    {#                    </button>#}
+    {#                </div>#}
+    {#                <div class="modal-body">#}
+    {#                    <form id="modalDetalleContenido" method="post">#}
+    {#                        {% csrf_token %}#}
+    {#                    </form>#}
+    {#                </div>#}
+    {#                <div class="modal-footer">#}
+    {#                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>#}
+    {#                    <button type="button" class="btn btn-primary" id="btnToggleFecha"></button>#}
+    {#                </div>#}
+    {#            </div>#}
+    {#        </div>#}
+    {#    </div>#}
+{% endblock %}
+
+{% block jscript %}
+    {#    <link href="/static/assets/plugins/fullcalendar/dist/fullcalendar.print.css" rel="stylesheet" media='print'/>#}
+    {#    <link href="/static/assets/plugins/fullcalendar/dist/fullcalendar.min.css" rel="stylesheet"/>#}
+    {#    <style>#}
+    {#        .fc-content, .fc-time, .fc-title {#}
+    {#            font-size: 1.1em;#}
+    {#        }#}
+    {#    </style>#}
+    {#    <script src="/static/assets/plugins/fullcalendar/dist/fullcalendar.min.js"></script>#}
+    {#    <script src="/static/assets/plugins/fullcalendar/dist/locale/es.js"></script>#}
+    {#    <script src="/static/planificacion/calendario.js"></script>#}
+
+    <script>
+        var VisitaAnalitica = function () {
+            "use strict";
+
+            function showTooltip(x, y, contents) {
+                $('<div id="tooltip" class="flot-tooltip">' + contents + '</div>').css({
+                    top: y - 45,
+                    left: x - 55
+                }).appendTo("body").fadeIn(200);
+            }
+
+            if ($('#interactive-chart').length !== 0) {
+                var xLabel = [{% for u in rangofechas %}[{{ forloop.counter }}, '{{ u }}'],{% endfor %}];
+
+                var count = 1
+                var dataChat_values = []
+                var dataChat_values_temp = []
+
+                {% for fr in rangofechasstr %}
+                    var arr = ['{{ fr }}', 0]
+                    dataChat_values_temp.push(arr);
+                {% endfor %}
+
+                {% for u in ultimasvisitas %}
+                    var arr = ['{{ u.1|date:'Y-m-d' }}', {{ u.0 }}]
+                    dataChat_values.push(arr);
+                {% endfor %}
+
+                dataChat_values_temp.forEach(function (item) {
+                    dataChat_values.forEach(function (item2) {
+                        if (item2[0] === item[0]) {
+                            item[1] = item2[1]
+                        }
+                    })
+                    item[0] = count
+                    count += 1;
+                })
+
+                var dataChat = dataChat_values_temp;
+
+                $.plot($("#interactive-chart"),
+                    [
+                        {
+                            data: dataChat,
+                            label: "{{ nombreempresa }}",
+                            lines: {show: true, fill: true, lineWidth: 2},
+                            points: {show: true, radius: 3, fillColor: COLOR_WHITE},
+                            shadowSize: 0
+                        },
+                    ], {
+                        xaxis: {ticks: xLabel, tickDecimals: 0, tickColor: COLOR_DARK_TRANSPARENT_2},
+                        yaxis: {ticks: 10, tickColor: COLOR_DARK_TRANSPARENT_2, min: 0, max: {{ maxvisitaday }}},
+                        grid: {
+                            hoverable: true,
+                            clickable: true,
+                            tickColor: COLOR_DARK_TRANSPARENT_2,
+                            borderWidth: 1,
+                            backgroundColor: 'transparent',
+                            borderColor: COLOR_DARK_TRANSPARENT_2
+                        },
+                        legend: {
+                            labelBoxBorderColor: COLOR_DARK_TRANSPARENT_2,
+                            margin: 10,
+                            noColumns: 1,
+                            show: true
+                        }
+                    });
+
+                var previousPoint = null;
+                $("#interactive-chart").bind("plothover", function (event, pos, item) {
+                    $("#x").text(pos.x.toFixed(0));
+                    $("#y").text(pos.y.toFixed(0));
+                    if (item) {
+                        if (previousPoint !== item.dataIndex) {
+                            previousPoint = item.dataIndex;
+                            $("#tooltip").remove();
+                            var y = item.datapoint[1].toFixed(0);
+
+                            var content = item.series.label + " " + y;
+                            showTooltip(item.pageX, item.pageY, content);
+                        }
+                    } else {
+                        $("#tooltip").remove();
+                        previousPoint = null;
+                    }
+                    event.preventDefault();
+                });
+            }
+        };
+
+        $(document).ready(function () {
+            VisitaAnalitica();
+        });
+    </script>
+
+{% endblock %}

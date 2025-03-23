@@ -1,0 +1,201 @@
+{% extends 'base.html' %}
+{% load templatefunctions %}
+
+{% block content %}
+    <form method="GET">
+        <div class="form-row">
+            <div class="col-md-6 col-sm-12 offset-md-6">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" placeholder="Buscar" aria-label="Buscar"
+                           aria-describedby="button-addon2" name="criterio" value="{{ criterio }}">
+                    <div class="input-group-append">
+                        <button class="btn btn-primary" type="submit" id="button-addon2"><i
+                                class="fa fa-search"></i></button>
+                        {% if url_vars %}
+                            <a title="Ver todo" href="{{ request.path }}" class="btn btn-default">
+                                <i class="fas fa-sync-alt"></i>
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <div class="mb-3">
+        <a href="javascript:void(0)" onclick="formModal(0, 'Adicionar {{ titulo }}', 'add')" class="btn btn-success"><i
+                class="fas fa-plus-circle mr-2"></i> Nueva {{ titulo }}</a>
+    </div>
+
+    <div class="panel panel-default">
+        <div class="panel-body">
+            <div class="table-responsive">
+                <table id="tabla" class="table table-bordered table-hover table-td-valign-middle table-bordered">
+                    <thead>
+                    <tr>
+                        <th class="text-center">
+                            Logo
+                        </th>
+                        <th class="text-center">
+                            Nombre
+                        </th>
+                        <th class="text-center">
+                            Representante
+                        </th>
+                        <th class="text-center">
+                            URL
+                        </th>
+                        <th class="text-center">
+                            Contacto
+                        </th>
+                        <th class="text-center">
+                            Base de datos
+                        </th>
+                        <th class="text-center">
+                            # Bodegas
+                        </th>
+                        <th class="text-center">
+                            Acción
+                        </th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for l in listado %}
+                        <tr>
+                            <td class="text-center">
+                                {% if l.logo %}
+                                    <img width="50px" height="50px" src="/media/{{ l.logo }}" class="img-thumbnail"
+                                         data-fancybox="image"
+                                         alt="LOGO">
+                                {% else %}
+                                    <span class="text-muted"><i class="fa fa-info"></i> Sin registrar</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {{ l.nombre }}<br><b>Cod. {{ l.id }}</b>
+                            </td>
+                            <td class="text-center">
+                                {{ l.responsable.usuario.documento }} {{ l.responsable.usuario.datos }}
+                            </td>
+                            <td class="text-center">
+                                {% if l.dominio %}
+                                    <a href="{{ l.dominio }}" target="_blank" class="btn-link"><i
+                                            class="fa fa-link"></i> Ver enlace</a>
+                                {% else %}
+                                    <span class="text-muted"><i class="fa fa-info"></i> Sin registrar</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if l.telefono %}
+                                    <a href="javascript:void(0)"
+                                       onclick="contactarwhatsapp('{{ l.telefono }}', '{{ l.nombre }}')">
+                                        <i class="fa-brands fa-whatsapp"></i> +593 {{ l.telefono }}
+                                    </a><br>
+                                {% else %}
+                                    <span class="text-muted"><i class="fa fa-info"></i> Sin registrar teléfono </span>
+                                    <br>
+                                {% endif %}
+                                {% if l.email %}
+                                    <a href="mailto:{{ l.email }}"><i class="fa fa-envelope"></i> {{ l.email }}</a>
+                                {% else %}
+                                    <span class="text-muted"><i class="fa fa-info"></i> Sin registrar correo</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <b>Key:</b> <a target="_blank"
+                                               href="/api_key/{{ l.api_key }}/">{{ l.api_key }}</a>
+                            </td>
+                            <td class="text-center">
+                                {{ l.get_bodegas.count }}
+                            </td>
+                            <td class="with-btn-group text-center" nowrap>
+                                <div class="btn-group dropleft">
+                                    <button type="button" class="btn btn-white btn-sm width-100 dropdown-toggle"
+                                            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                        <i class="fas fa-angle-left mr-1"></i> Acciones
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-right">
+                                        <a class="dropdown-item"
+                                           href="?action=verbodegas&id={{ l.pk|encrypt }}">
+                                            <i class="fas fa-store"></i> Bodegas ({{ l.get_bodegas.count }})
+                                        </a>
+                                        <a class="dropdown-item"
+                                           onclick="formModal({{ l.pk }}, 'Editar {{ l.nombre }}', 'change')"
+                                           href="javascript:void(0);">
+                                            <i class="fas fa-edit"></i> Editar
+                                        </a>
+                                        <a class="dropdown-item"
+                                           onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'delete')"
+                                           href="javascript:void(0);">
+                                            <i class="fas fa-trash"></i> Eliminar
+                                        </a>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% include "paginacion.html" %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalDetalle">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}"
+                      class="form-horizontal form-label-left">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h4 class="modal-title"><b id="modalNombre"></b></h4>
+                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+                    </div>
+                    <div class="modal-body detalleProd">
+                    </div>
+                    {#                    <div class="modal-footer" id="footerModalView">#}
+                    {#                        <a href="javascript:;" class="btn btn-white" data-dismiss="modal"><i#}
+                    {#                                class="fa fa-window-close"></i>#}
+                    {#                            Cerrar</a>#}
+                    {#                    </div>#}
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+
+
+{% endblock %}
+
+{% block jscript %}
+    <script src="/js/forms.js?version=13"></script>
+    <script>
+        function formModal(id, text, action,) {
+            pantallaespera()
+            $.ajax({
+                type: "GET",
+                url: `{{ request.path }}`,
+                data: {
+                    'action': action,
+                    'id': id,
+                },
+                success: function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.result === true) {
+                        $('#modalNombre').html(text);
+                        $('.detalleProd').html(data.data);
+                        $('#modalDetalle').modal({backdrop: 'static'}).modal('show');
+                    } else {
+                        mensajeWarning(data.message);
+                    }
+                },
+                error: function () {
+                    setTimeout($.unblockUI, 1);
+                    mensajeWarning("Error de conexión.");
+                },
+                dataType: "json"
+            });
+        }
+    </script>
+{% endblock %}

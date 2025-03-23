@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block head %}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h3>{{ titulo }}</h3>
+
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Número Contacto</th>
+                <th>Nombre</th>
+                <th>Último Mensaje</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in page_obj %}
+            <tr>
+                <td>{{ c.contacto_numero }}</td>
+                <td>{{ c.contacto_nombre|default:"-" }}</td>
+                <td>{{ c.ultimo_mensaje|default:"-" }}</td>
+                <td>{{ c.get_estado_display }}</td>
+                <td>
+                    <a href="?action=ver_mensajes&pk={{ c.pk }}" class="btn btn-sm btn-info">Ver Mensajes</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% include 'paginacion.html' %}
+</div>
+{% endblock %}
+
+{% block jscript %}{% endblock %}

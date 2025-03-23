@@ -1,0 +1,32 @@
+<nav class="collapse navbar-collapse" id="navbarNav" style="font-size: 16px">
+    <ul class="navbar-nav navbar-nav-scroll me-auto" style="--ar-scroll-height: 520px;">
+        <li class="nav-item"><a class="nav-link" href="/">Inicio</a></li>
+
+        {% if request.user.is_authenticated %}
+            <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#"
+                                             data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                                             aria-expanded="false">Hola, {{ request.user.primernombre }}</a>
+                <ul class="dropdown-menu">
+                    {% if request.user.es_administrativo %}
+                        <li>
+                            <a class="dropdown-item" href="/panel/"><i class="fa fa-lock"></i> Administración</a>
+                        </li>
+                    {% endif %}
+                    <li>
+                        <a class="dropdown-item" href="/perfil/"><i class="fa fa-user-circle"></i> Perfil</a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="/logout/"><i class="fa fa-sign-out"></i> Cerrar
+                            Sesión</a>
+                    </li>
+                    {% if sesion_anterior %}
+                        <li>
+                            <a href="/seguridad/regresar-sesion/?path={{ request.path }}" class="dropdown-item"><i
+                                    class="fa fa-user"></i> Regresar a mi sesión</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </li>
+        {% endif %}
+    </ul>
+</nav>

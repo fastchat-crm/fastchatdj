@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% block content %}
+    {#    <form method="GET">#}
+    {#        <div class="container-fluid">#}
+    {#            <div class="form-row">#}
+    {#                <div class="col-md-4 col-sm-12 offset-md-5">#}
+    {#                    <select multiple class="form-control select2 select2-multiple" data-placeholder="Grupos de módulos"#}
+    {#                            name="modulo_grupo">#}
+    {#                        <option value="">Todos</option>#}
+    {#                        {% for lmg in list_modulo_grupo %}#}
+    {#                            <option value="{{ lmg.pk }}"#}
+    {#                                    {% if lmg.pk in modulo_grupo %}selected{% endif %}>{{ lmg.nombre }}</option>#}
+    {#                        {% endfor %}#}
+    {#                    </select>#}
+    {#                </div>#}
+    {#                <div class="col-md-3 col-sm-12">#}
+    {#                    <div class="input-group mb-3">#}
+    {#                        <input type="text" class="form-control" placeholder="Buscar" aria-label="Buscar"#}
+    {#                               aria-describedby="button-addon2" name="criterio" value="{{ criterio }}">#}
+    {#                        <div class="input-group-append">#}
+    {#                            <button class="btn btn-primary" type="submit" id="button-addon2"><i#}
+    {#                                    class="fa fa-search"></i></button>#}
+    {#                            {% if url_vars %}#}
+    {#                                <a title="Ver todo" href="{{ ruta }}?{{ dict_url_vars }}" class="btn btn-primary">#}
+    {#                                    <i class="fas fa-sync-alt"></i>#}
+    {#                                </a>#}
+    {#                            {% endif %}#}
+    {#                        </div>#}
+    {#                    </div>#}
+    {#                </div>#}
+    {#            </div>#}
+    {#        </div>#}
+    {#    </form>#}
+
+    <div class="panel panel-default">
+
+        <div class="panel-body">
+            <div class="table-responsive">
+                <select id="busqueda" multiple class="select2 form-control" data-placeholder="Buscar por Aplicación">
+                    {% for c in urls_sistema %}
+                        <option value="{{ c.nombre }}">{{ c.nombre }}</option>
+                    {% endfor %}
+                </select>
+                <br>
+                <div id="jstree-listado-modulos-urls">
+                    <ul>
+                        {% for c in urls_sistema %}
+                            <li data-paraBuscar="{{ c.nombre }}" data-jstree='{"opened":true, "dnd":false}'>
+                                <label class="mr-2" for="app_{{ forloop.counter }}">{{ c.nombre }} ({{ c.url }})</label>
+                                {% if c.sub_urls %}
+                                    <ul>
+                                        {% for sc in c.sub_urls %}
+                                            {% with '/'|add:c.url|add:sc.url as link_modulo %}
+                                                <li data-jstree='{{ sc.dicJsTree }}'>
+                                                    {{ sc.nombre }} - (/{{ c.url }}{{ sc.url }})
+                                                </li>
+                                            {% endwith %}
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <link href="/static/assets/plugins/jstree/dist/themes/default/style.min.css" rel="stylesheet"/>
+    <script src="/static/assets/plugins/jstree/dist/jstree.min.js"></script>
+    <script src="/static/js/urlsymodulos/urlsymodulos.js"></script>
+    <script>
+        $('.select2').select2();
+
+        $(document).ready(function () {
+            $('#busqueda').change(function () {
+                var seleccionadas = $(this).children('option:selected').toArray();
+                var opciones = [];
+                for (var i = 0; i < seleccionadas.length; i++) {
+                    opciones.push($(seleccionadas[i]).val().toUpperCase())
+                }
+                if (seleccionadas.length > 0) {
+                    $('.jstree-container-ul > li').each(function () {
+                        var currentLiText = $(this).attr('data-paraBuscar').toUpperCase(),
+                            showCurrentLi = opciones.indexOf(currentLiText) !== -1;
+                        $(this).toggle(showCurrentLi);
+                    });
+                } else {
+                    $('.jstree-container-ul > li').each(function () {
+                        $(this).toggle(true);
+                    });
+                }
+            });
+        });
+
+    </script>
+{% endblock %}

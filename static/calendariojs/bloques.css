@@ -1,0 +1,128 @@
+
+/*CLASES SIN INTERPRETACION DE TAMAÑO*/
+
+/*Mantiene la cebcera de una tabla fija, utilisar clase en thead*/
+.cabecera-fija{
+    position: sticky;
+    top: 0px;
+    z-index: 10;
+}
+
+/*Contenedor de form reserva*/
+.box-cabecera {
+    margin-bottom: 15px;
+}
+
+.box-content-reserva {
+    height: 80%;
+}
+
+.box-reserva {
+    height: 100%;
+    border: 2px dashed #D1E3F5;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 5px;
+}
+
+
+/*Diseño de felcha izquiera <i class="arrow-item"></i> */
+.arrow-item {
+    position: relative;
+}
+
+.arrow-item:before {
+    content: " ";
+    position: absolute;
+    z-index: 2;
+    left: 0;
+    width: 5px;
+    height: 5px;
+    bottom: -13px;
+    -webkit-transform: rotate(45deg);
+    transform: rotate(45deg);
+    border-top: 1.7px solid #FE9900;
+    border-right: 1.7px solid #FE9900;
+    background: transparent;
+}
+
+
+/*Division de contenedor para mantener en la misma linea*/
+.contenedor {
+    width: 100%;
+    align-items: center;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.principal {
+    width: auto;
+}
+
+.sidebar {
+    text-align: left;
+    width: auto;
+    vertical-align: middle;
+}
+
+
+/*Permite crear un input number personalizado con boton de mas y menos */
+.box-content-sum-res {
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+    font-size: 1.2em;
+    text-transform: uppercase;
+    border-radius: 5px;
+    justify-items: center;
+    border: 1.3px solid rgba(39, 46, 77, 0.62);
+}
+
+.box-content {
+    width: 50%;
+}
+
+.box-suma {
+    width: 25%;
+    background-color: transparent;
+    border-left: 1px solid #22374C;
+    border-radius: 5px 5px 0px 0px;
+
+}
+
+.box-suma a {
+    color: #22374C;
+    padding: 10px 50% 10px 40%;
+}
+
+.box-resta {
+    width: 25%;
+    background-color: transparent;
+    border-right: 1px solid #22374C;
+    border-radius: 0px 0px 5px 5px;
+}
+
+.box-resta a {
+    padding: 10px 40% 10px 50%;
+}
+
+/*CLASES CON INTERPRETACION DE TAMAÑO*/
+
+/* Menu fijo izquierdo despues de tamaño sm controlado con clase menu por jquery*/
+@media (min-width: 768px) {
+    .menu-left-fixed {
+        position: sticky;
+        position: -webkit-sticky;
+        /*position:fixed;*/
+        /*z-index: 1000;*/
+        top: 25px;
+    }
+}

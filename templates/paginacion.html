@@ -1,0 +1,139 @@
+{% if page.object_list %}
+<div class="dataTables_wrapper dt-bootstrap4" style="margin-bottom: 25px">
+    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2">
+        {# Información de resultados - Estilo exacto DataTables #}
+        <div class="dataTables_info small" role="status" aria-live="polite">
+            Mostrando registros del {{ paging.desde }} al {{ paging.hasta }} de un total de {{ paging.total }} registros
+        </div>
+
+        <div class="dataTables_paginate">
+            <ul class="pagination pagination-sm mb-0">
+                {# Botón Anterior #}
+                <li class="paginate_button page-item {% if not page.has_previous %}disabled{% endif %} mr-1">
+                    <a class="page-link" href="?page={{ page.number|add:'-1' }}{{ url_vars }}"
+                        {% if not page.has_previous %}tabindex="-1" aria-disabled="true"{% endif %}>
+                        Anterior
+                    </a>
+                </li>
+                {# Números de página #}
+                {% if not paging.is_heavy_query %}
+                <div class="d-none d-md-flex">
+                    {% if paging.primera_pagina %}
+                        <li class="paginate_button page-item">
+                            <a class="page-link" href="?page=1{{ url_vars }}">1</a>
+                        </li>
+                    {% endif %}
+                    {% for pagenumber in paging.paginas %}
+                        <li class="paginate_button page-item {% if pagenumber == page.number %}active{% endif %}">
+                            <a class="page-link" href="?page={{ pagenumber }}{{ url_vars }}"
+                               {% if pagenumber == page.number %}aria-current="page"{% endif %}>
+                                {{ pagenumber }}
+                            </a>
+                        </li>
+                    {% endfor %}
+                    {% if paging.ultima_pagina %}
+                        <li class="paginate_button page-item">
+                            <a class="page-link" href="?page={{ paging.num_pages }}{{ url_vars }}">
+                                {{ paging.num_pages }}
+                            </a>
+                        </li>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {# Botón Siguiente #}
+                <li class="paginate_button page-item {% if not page.has_next %}disabled{% endif %} ml-1">
+                    <a class="page-link" href="?page={{ page.next_page_number }}{{ url_vars }}"
+                        {% if not page.has_next %}tabindex="-1" aria-disabled="true"{% endif %}>
+                        Siguiente
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="text-center text-muted small mb-4">
+    <span>No existen resultados para esta búsqueda.</span>
+    <a href="{{ request.path }}" class="text-warning text-decoration-none">
+        Haz clic aquí para reiniciar
+        <i class="bi bi-arrow-clockwise ms-1"></i>
+    </a>
+</div>
+{% endif %}
+
+<style>
+/* Estilos exactos de DataTables Bootstrap 4 */
+.dataTables_wrapper .dataTables_info {
+    font-weight: 600;
+    color: #6f8293;
+    padding-top: 0.5em;
+}
+
+.dataTables_wrapper .dataTables_paginate {
+    display: flex;
+}
+
+.dataTables_wrapper .dataTables_paginate .pagination {
+    margin-left: auto;
+}
+
+.dataTables_wrapper .dataTables_paginate .pagination .paginate_button a {
+    position: relative;
+    display: block;
+    padding: 8px 12px;
+    margin-left: -1px;
+    line-height: 1.25;
+    color: #6f8293;
+    background-color: #fff;
+    border: 1px solid #d5dbe0;
+    font-weight: 600;
+    text-decoration: none;
+    outline: 0;
+    border-radius: 4px;
+}
+
+.dataTables_wrapper .dataTables_paginate .pagination .paginate_button a:hover,
+.dataTables_wrapper .dataTables_paginate .pagination .paginate_button a:focus {
+    color: #2d353c;
+    background: #f2f4f5;
+    border-color: #d5dbe0;
+    z-index: 2;
+}
+
+.dataTables_wrapper .dataTables_paginate .pagination .paginate_button.active a {
+    border-color: #f59c1a;
+    background: #f59c1a;
+    color: #fff;
+    z-index: 3;
+}
+
+.dataTables_wrapper .dataTables_paginate .pagination .paginate_button.disabled a {
+    color: #9ba8b4 !important;
+    pointer-events: none;
+    cursor: auto;
+    background-color: #fff !important;
+    border-color: #d5dbe0 !important;
+}
+
+@media (max-width: 575.98px) {
+    .dataTables_wrapper .dataTables_info {
+        padding-bottom: 8px;
+    }
+    
+    .dataTables_wrapper .dataTables_paginate .pagination {
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
+
+.paginate_button + .paginate_button .page-link {
+    margin-left: 4px;
+}
+
+/* Ajustes específicos para Anterior/Siguiente */
+.paginate_button:first-child .page-link,
+.paginate_button:last-child .page-link {
+    {#min-width: 85px;#}
+    text-align: center;
+}
+</style>

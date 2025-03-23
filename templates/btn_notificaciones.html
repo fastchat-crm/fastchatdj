@@ -1,0 +1,33 @@
+<a href="javascript:;" data-toggle="dropdown" class="dropdown-toggle">
+    <i class="fa fa-bell"></i>
+    {% if totalnot > 0 %}
+        <span class="label label-danger">{{ totalnot }}</span>
+    {% endif %}
+</a>
+<div class="dropdown-menu media-list dropdown-menu-right">
+    <div class="dropdown-header">Notificaciones</div>
+    {% for a in notificaciones %}
+        <a target="_blank" href="/seguridad/notificaciones/?id={{ a.pk }}&urlOrigen={{ ruta }}&action=abrirUrl"
+           class="dropdown-item media">
+            <div class="media-body">
+                <h6 class="media-heading"
+                    style="text-align: justify; white-space: normal; !important;">{{ a.nombre }}</h6>
+                <div class="text-muted f-s-12">{{ a.fecha_hora_registro|date:'d/m/Y H:i' }}</div>
+            </div>
+        </a>
+    {% empty %}
+        <a href="javascript:;" class="dropdown-item media">
+            <div class="media-body">
+                <h6 class="media-heading">Sin notificaciones.</h6>
+            </div>
+        </a>
+    {% endfor %}
+    <a class="dropdown-item media" href="/seguridad/notificaciones/">
+        <div class="media-body text-center">
+            <h6 class="media-heading"
+                style="text-align: center; white-space: normal; !important;">
+                Ver todo
+            </h6>
+        </div>
+    </a>
+</div>

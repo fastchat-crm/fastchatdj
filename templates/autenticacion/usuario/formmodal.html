@@ -1,0 +1,40 @@
+<div class="row">
+    <input type="hidden" value="{{ id }}" name="pk">
+    <input type="hidden" name="action" value="{{ action }}"/>
+    {% for field in form %}
+        {% if field.is_hidden %}
+            {{ field }}
+        {% else %}
+            <div class="col-lg-{{ field.field.widget.attrs.col }}">
+                <div class="form-group">
+                    <label class="form-label" for="id_{{ field.name }}">{{ field.label }}:</label><br>
+                    {{ field }}
+                    <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                </div>
+            </div>
+        {% endif %}
+    {% endfor %}
+</div>
+
+<div class="ln_solid"></div>
+
+<div class="form-group">
+    <div class="col-md-12 col-sm-12 col-xs-12 col-md-offset-3 text-right">
+        <a href="javascript:;" class="btn btn-danger" data-dismiss="modal"><i
+                class="fa fa-window-close"></i>
+            Cancelar</a>
+        <button type="submit"
+                class="btn btn-success">
+            <i class="fa fa-save"></i> Guardar
+        </button>
+    </div>
+</div>
+
+{{ form.media }}
+<script>
+
+    $(document).ready(function () {
+        $.fn.select2.defaults.set('language', 'es');
+        $('.jselect2').select2();
+    });
+</script>

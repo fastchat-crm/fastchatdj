@@ -1,0 +1,176 @@
+{% extends 'base.html' %}
+{% block atras %}{{ request.path }}{% endblock %}
+{% load templatefunctions %}
+{% block content %}
+    <form method="GET">
+        <input type="hidden" name="action" value="{{ action }}">
+        <input type="hidden" name="id" value="{{ filtro.pk|encrypt }}">
+        <div class="form-row">
+            <div class="col-sm-3">
+                <select class="form-control select2" data-placeholder="Filtrar por Región" name="region" id="region">
+                    <option value="">TODOS</option>
+                    {% for r in region_list %}
+                        <option value="{{ r.0 }}" {% if r.0 == region %}selected{% endif %}>{{ r.1 }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 col-sm-12">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" placeholder="Buscar por nombre" aria-label="Buscar"
+                           aria-describedby="button-addon2" name="criterio" value="{{ criterio }}">
+                    <div class="input-group-append">
+                        <button class="btn btn-primary" type="submit" id="button-addon2"><i
+                                class="fa fa-search"></i></button>
+                        {% if url_vars %}
+                            <a title="Ver todo" href="{{ request.path }}?action={{ action }}&id={{ filtro.pk|encrypt }}"
+                               class="btn btn-default">
+                                <i class="fas fa-sync-alt"></i>
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <div class="mb-3">
+        <a href="javascript:void(0)"
+           onclick="formModal('{{ filtro.pk|encrypt }}', 'Adicionar {{ titulo }}', 'addbodega')"
+           class="btn btn-success"><i
+                class="fas fa-plus-circle mr-2"></i> Nueva {{ titulo }}</a>
+    </div>
+
+    <div class="panel panel-default">
+        <div class="panel-body">
+            <div class="table-responsive">
+                <table id="tabla" class="table table-bordered table-hover table-td-valign-middle table-bordered">
+                    <thead>
+                    <tr>
+                        <th class="text-center">
+                            Codigo
+                        </th>
+                        <th class="text-center">
+                            Nombre
+                        </th>
+                        <th class="text-center">
+                            Ciudad
+                        </th>
+                        <th class="text-center">
+                            Region
+                        </th>
+                        <th class="text-center">
+                            Detalles
+                        </th>
+                        <th class="text-center">
+                            Acción
+                        </th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for l in listado %}
+                        <tr>
+                            <td class="text-center">
+                                {% if l.idct %}
+                                    <b>Id Origen: </b>{{ l.idct }}<br>
+                                {% endif %}
+                                <i class="fa fa-tag tu" title="Codigo Producto"
+                                   data-toggle="tooltip"></i> {{ l.codigo }}
+
+                            </td>
+                            <td class="text-center">
+                                {{ l.nombre }}
+                            </td>
+                            <td class="text-center">
+                                {{ l.ciudad|default:'SIN REGISTRAR' }}
+                            </td>
+                            <td class="text-center">
+                                {{ l.ciudad.provincia.get_region_display }}
+                            </td>
+                            <td class="text-center">
+                                <b>¿Venta?: </b><i class="{{ l.get_venta }}"></i><br>
+                                <b>¿Compra?: </b><i class="{{ l.get_compra }}"></i><br>
+                                <b>¿Producción?: </b><i class="{{ l.get_produccion }}"></i><br>
+                            </td>
+
+                            <td class="with-btn-group text-center" nowrap>
+                                <div class="btn-group dropleft">
+                                    <button type="button" class="btn btn-white btn-sm width-100 dropdown-toggle"
+                                            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                        <i class="fas fa-angle-left mr-1"></i> Acciones
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-right">
+                                        <a class="dropdown-item"
+                                           onclick="formModal({{ l.pk }}, 'Editar {{ l.nombre }}', 'changebodega')"
+                                           href="javascript:void(0);">
+                                            <i class="fas fa-edit"></i> Editar
+                                        </a>
+                                        <a class="dropdown-item"
+                                           onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deletebodega')"
+                                           href="javascript:void(0);">
+                                            <i class="fas fa-trash"></i> Eliminar
+                                        </a>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% include "paginacion.html" %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalDetalle">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}"
+                      class="form-horizontal form-label-left">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h4 class="modal-title"><b id="modalNombre"></b></h4>
+                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+                    </div>
+                    <div class="modal-body detalleProd">
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+
+
+{% endblock %}
+
+{% block jscript %}
+    <script src="/js/forms.js?version=13"></script>
+    <script>
+        function formModal(id, text, action,) {
+            pantallaespera()
+            $.ajax({
+                type: "GET",
+                url: `{{ request.path }}`,
+                data: {
+                    'action': action,
+                    'id': id,
+                },
+                success: function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.result === true) {
+                        $('#modalNombre').html(text);
+                        $('.detalleProd').html(data.data);
+                        $('#modalDetalle').modal({backdrop: 'static'}).modal('show');
+                    } else {
+                        mensajeWarning(data.message);
+                    }
+                },
+                error: function () {
+                    setTimeout($.unblockUI, 1);
+                    mensajeWarning("Error de conexión.");
+                },
+                dataType: "json"
+            });
+        }
+    </script>
+{% endblock %}

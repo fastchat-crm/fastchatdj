@@ -1,0 +1,94 @@
+{% extends 'public/base.html' %}
+{% block link %}{% endblock %}
+{% block content %}
+
+    <div class="d-flex flex-column align-items-center position-relative mt-100"
+         style="margin-top: 125px; padding: 25px">
+        <div class="d-flex flex-column align-items-center w-lg-50 h-100 px-3 px-lg-5 pt-2">
+            <div class="w-100 mt-auto" style="max-width: 526px;">
+                <h1>Iniciar Sesión</h1>
+{#                <p class="pb-3 mb-3 mb-lg-4">#}
+{#                    ¿Aún no tienes una cuenta?&nbsp;&nbsp;<a href='/register/'>Registrate ahora!</a>#}
+{#                </p>#}
+                <form method="post" id="frm-logear">{% csrf_token %}
+                    {% if next %}
+                        <input type="hidden" name="next" value="{{ next }}">
+                    {% endif %}
+                    <div class="pb-3 mb-3">
+                        <div class="position-relative"><i
+                                class="ai-user fs-lg position-absolute top-50 start-0 translate-middle-y ms-3"></i>
+                            <input class="form-control form-control-lg ps-5" type="text"
+                                   placeholder="Cédula de Identidad"
+                                   name="usuario" id="id_usuario"
+                                   required>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <div class="position-relative"><i
+                                class="ai-lock-closed fs-lg position-absolute top-50 start-0 translate-middle-y ms-3"></i>
+                            <div class="password-toggle">
+                                <input class="form-control form-control-lg ps-5" type="password"
+                                       placeholder="Contraseña" name="password" id="password"
+                                       required>
+                                <label class="password-toggle-btn" aria-label="Show/hide password">
+                                    <input class="password-toggle-check" type="checkbox"><span
+                                        class="password-toggle-indicator"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <br>
+                        <span class="text-muted mt-6"><i class="fa fa-info-circle"></i> Nota: Si es la primera vez que ingresa su contraseña es su número de cédula</span>
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center justify-content-between pb-4">
+                        <a class="fs-sm fw-semibold text-decoration-none my-1" href="/restoreusername/">¿Olvidaste tu
+                            nombre de usuario?</a>
+                        <a class="fs-sm fw-semibold text-decoration-none my-1" href="/restorepass/">¿Olvidaste tu
+                            contraseña?</a>
+                    </div>
+                    <button class="btn btn-lg btn-primary w-100 mb-4" type="submit">Ingresar a mi cuenta</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+{% block jscript %}
+    <script>
+        $('#frm-logear').on({
+            submit: function (e) {
+                e.preventDefault();
+                var frmData = new FormData($(this)[0]);
+                $.ajax({
+                    url: '/login/',
+                    data: frmData,
+                    method: 'POST',
+                    dataType: 'json',
+                    cache: false,
+                    enctype: $(this).attr('enctype'),
+                    contentType: false,
+                    processData: false,
+                    beforeSend: function () {
+                        pantallaespera()
+                    }
+                }).done(function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.resp === true) {
+                        if (data.redirect) {
+                            location = data.redirect;
+                        } else {
+                            location = "/";
+                        }
+                        return false;
+                    } else {
+                        mensajeDanger(data.error);
+                    }
+                }).fail(function (jqXHR, textStatus, errorThrown) {
+                    if (jqXHR.status === 403) {
+                        location.reload();
+                    }
+                    mensajeDanger('Error de conexión.');
+                });
+            }
+        });
+    </script>
+{% endblock %}

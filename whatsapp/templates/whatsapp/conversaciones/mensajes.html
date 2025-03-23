@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block head %}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h3>Mensajes con {{ conversacion.contacto_numero }}</h3>
+    <a href="{% url 'whatsapp:conversaciones' %}" class="btn btn-secondary mb-3">Regresar</a>
+
+    <div class="border p-3 mb-3" style="max-height: 400px; overflow-y: scroll;">
+        {% for m in mensajes %}
+        <div class="mb-2">
+            <strong>{{ m.remitente }}:</strong> {{ m.mensaje }}
+            <small class="text-muted">{{ m.fecha }}</small>
+        </div>
+        {% endfor %}
+    </div>
+
+    <form method="post" id="formSend">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="send">
+        <input type="hidden" name="pk" value="{{ conversacion.pk }}">
+        <div class="form-group">
+            <textarea name="mensaje" class="form-control" placeholder="Escribe tu mensaje..." required></textarea>
+        </div>
+        <button type="submit" class="btn btn-success mt-2">Enviar</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block jscript %}
+<script>
+$('#formSend').submit(function(e){
+    e.preventDefault();
+    $.post('', $(this).serialize(), function(res){
+        if(!res.error){
+            location.reload();
+        } else {
+            alert(res.message);
+        }
+    }, 'json');
+});
+</script>
+{% endblock %}

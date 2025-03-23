@@ -1,0 +1,91 @@
+
+.timeline:before {
+    background: transparent;
+}
+
+ul.timeline li {
+    position: relative;
+    border-bottom: 1px solid #e8e8e8;
+    clear: both
+}
+
+.timeline .block {
+    margin: -8px 0 4px 155px;
+    border-left: 3px solid #e8e8e8;
+    overflow: visible;
+    padding: 19px 13px;
+}
+
+.timeline.widget {
+    min-width: 0;
+    max-width: inherit
+}
+
+.timeline.widget .block {
+    margin-left: 5px
+}
+
+.timeline .tags {
+    position: absolute;
+    top: 15px;
+    left: 0;
+    width: 130px
+}
+
+.timeline .tag {
+    display: block;
+    height: 30px;
+    font-size: 13px;
+    padding: 8px
+}
+
+.timeline .tag span {
+    display: block;
+    overflow: hidden;
+    width: 100%;
+    white-space: nowrap;
+    text-overflow: ellipsis
+}
+
+.tag {
+    line-height: 1;
+    background: #ff7f00;
+    color: #fff !important
+}
+
+.tag:after {
+    content: " ";
+    height: 30px;
+    width: 0;
+    position: absolute;
+    left: 100%;
+    top: 0;
+    margin: 0;
+    pointer-events: none;
+    border-top: 14px solid transparent;
+    border-bottom: 14px solid transparent;
+    border-left: 11px solid #ff7f00
+}
+
+.timeline h2.title {
+    position: relative;
+    font-size: 16px;
+    margin: 0
+}
+
+.timeline h2.title:before {
+    content: "";
+    position: absolute;
+    left: -23px;
+    top: 3px;
+    display: block;
+    width: 14px;
+    height: 14px;
+    border: 3px solid #d2d3d2;
+    border-radius: 14px;
+    background: #f9f9f9
+}
+
+.timeline .byline {
+    padding: .25em 0
+}

@@ -1,0 +1,2 @@
+[console_scripts]
+check-wheel-contents = check_wheel_contents.__main__:main

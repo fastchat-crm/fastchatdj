@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block content %}
+
+    <div class="panel panel-default">
+        <div class="panel-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover table-td-valign-middle table-bordered">
+                    <thead>
+                    <tr>
+                        <th style="width: 12.5%; text-align: center">Lunes</th>
+                        <th style="width: 12.5%; text-align: center">Martes</th>
+                        <th style="width: 12.5%; text-align: center">Miercoles</th>
+                        <th style="width: 12.5%; text-align: center">Jueves</th>
+                        <th style="width: 12.5%; text-align: center">Viernes</th>
+                        <th style="width: 12.5%; text-align: center">Sabado</th>
+                        <th style="width: 12.5%; text-align: center">Domingo</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                <tr style="height: 120px">
+                    <td style="text-align: center; vertical-align: bottom">{% if 1 in dias %}<img src="/static/iconos/computacion-en-la-nube.png" width="80px"><br><a class="btn btn-mini mt-2 {% if dia_actual >= 1 %} btn-success {% else %} btn-warning {% endif %}" href="/media/backups/protinn1.zip"><i class="fa fa-arrow-down "></i>Descargar</a>{% endif %}</td>
+                    <td style="text-align: center; vertical-align: bottom">{% if 2 in dias %}<img src="/static/iconos/computacion-en-la-nube.png" width="80px"><br><a class="btn btn-mini  mt-2{% if dia_actual >= 2 %} btn-success {% else %} btn-warning {% endif %}" href="/media/backups/protinn2.zip"><i class="fa fa-arrow-down "></i>Descargar</a>{% endif %}</td>
+                    <td style="text-align: center; vertical-align: bottom">{% if 3 in dias %}<img src="/static/iconos/computacion-en-la-nube.png" width="80px"><br><a class="btn btn-mini  mt-2 {% if dia_actual >= 3 %} btn-success {% else %} btn-warning {% endif %}" href="/media/backups/protinn3.zip"><i class="fa fa-arrow-down "></i>Descargar</a>{% endif %}</td>
+                    <td style="text-align: center; vertical-align: bottom">{% if 4 in dias %}<img src="/static/iconos/computacion-en-la-nube.png" width="80px"><br><a class="btn btn-mini  mt-2{% if dia_actual >= 4 %} btn-success {% else %} btn-warning {% endif %}" href="/media/backups/protinn4.zip"><i class="fa fa-arrow-down "></i>Descargar</a>{% endif %}</td>
+                    <td style="text-align: center; vertical-align: bottom">{% if 5 in dias %}<img src="/static/iconos/computacion-en-la-nube.png" width="80px"><br><a class="btn btn-mini  mt-2{% if dia_actual >= 5 %} btn-success {% else %} btn-warning {% endif %}" href="/media/backups/protinn5.zip"><i class="fa fa-arrow-down "></i>Descargar</a>{% endif %}</td>
+                    <td style="text-align: center; vertical-align: bottom">{% if 6 in dias %}<img src="/static/iconos/computacion-en-la-nube.png" width="80px"><br><a class="btn btn-mini  mt-2{% if dia_actual >= 6 %} btn-success {% else %} btn-warning {% endif %}" href="/media/backups/protinn6.zip"><i class="fa fa-arrow-down "></i>Descargar</a>{% endif %}</td>
+                    <td style="text-align: center; vertical-align: bottom">{% if 7 in dias %}<img src="/static/iconos/computacion-en-la-nube.png" width="80px"><br><a class="btn btn-mini  mt-2{% if dia_actual >= 7 %} btn-success {% else %} btn-warning {% endif %}" href="/media/backups/protinn7.zip"><i class="fa fa-arrow-down "></i>Descargar</a>{% endif %}</td>
+                </tr>
+                </tbody>
+                <tfoot>
+                <tr>
+                    <td colspan="10">
+                        <ol>
+                            <li style="color: orange">Backups que pertenecen la semana anterior</li>
+                            <li style="color: green">Backups  que pertenecen la semana actual</li>
+                        </ol>
+                    </td>
+                </tr>
+                </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalDetalle">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}"
+                      class="form-horizontal form-label-left">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h4 class="modal-title"><b id="modalNombre"></b></h4>
+                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+                    </div>
+                    <div class="modal-body detalleProd">
+                    </div>
+                    {#                    <div class="modal-footer" id="footerModalView">#}
+                    {#                        <a href="javascript:;" class="btn btn-white" data-dismiss="modal"><i#}
+                    {#                                class="fa fa-window-close"></i>#}
+                    {#                            Cerrar</a>#}
+                    {#                    </div>#}
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <link rel="stylesheet" href="/static/lightbox/css/lightbox.min.css">
+    <script src="/static/lightbox/js/lightbox-plus-jquery.min.js"></script>
+
+
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/forms.js?version=13"></script>
+    <script>
+        function formModal(id, text, action,) {
+            pantallaespera()
+            $.ajax({
+                type: "GET",
+                url: `{{ request.path }}`,
+                data: {
+                    'action': action,
+                    'id': id,
+                },
+                success: function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.result === true) {
+                        $('#modalNombre').html(text);
+                        $('.detalleProd').html(data.data);
+                        $('#modalDetalle').modal({backdrop: 'static'}).modal('show');
+                    } else {
+                        mensajeWarning(data.message);
+                    }
+                },
+                error: function () {
+                    setTimeout($.unblockUI, 1);
+                    mensajeWarning("Error de conexión.");
+                },
+                dataType: "json"
+            });
+        }
+    </script>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends 'public/base.html' %}
+{% block link %}{% endblock %}
+{% block content %}
+
+    <div class="d-flex flex-column align-items-center position-relative mt-100" style="margin-top: 125px; padding: 25px">
+        <div class="mt-auto" style="max-width: 700px">
+            <h1 class="pt-3 pb-2 pb-lg-3"><i class="fa fa-key"></i> Cambiar Contraseña</h1>
+            <p class="pb-2">Por motivos de seguridad, es necesario que cree una nueva contraseña que servirá como clave
+                actual para la plataforma y el aula virtual. Pedimos disculpas por cualquier inconveniente y agradecemos su
+                comprensión en este asunto.
+            </p>
+            <div class="card border-black">
+                <form method="post" class="card-body" id="frm-restaurar" style="padding: 22px 25px !important;">{% csrf_token %}
+                    <div class="mb-4">
+                        <div class="position-relative"><i
+                                class="ai-key fs-lg position-absolute top-50 start-0 translate-middle-y text-black opacity-80 ms-3"></i>
+                            <input class="form-control form-control-lg ps-5 input-record" type="password"
+                                   placeholder="Contraseña" name="passNew" id="passNew" required>
+                        </div>
+                    </div>
+                    <center>
+                        <button type="submit" class="btn btn-success transition-3d-hover">
+                            <i class="fa fa-check-circle"></i>&nbsp; Cambiar Contraseña
+                        </button>
+                    </center>
+                </form>
+            </div>
+            <div class="mt-4">
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+{% block jscript %}
+    <script>
+        $('#frm-restaurar').on({
+            submit: function (e) {
+                e.preventDefault();
+                var frmData = new FormData($(this)[0]);
+                $.ajax({
+                    url: '{{ request.path }}',
+                    data: frmData,
+                    method: 'POST',
+                    dataType: 'json',
+                    cache: false,
+                    contentType: false,
+                    processData: false,
+                    beforeSend: function () {
+                        pantallaespera()
+                    }
+                }).done(function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.resp === true) {
+                        location = "/login/";
+                        return false;
+                    } else {
+                        mensajeDanger(data.error);
+                    }
+                }).fail(function () {
+                    setTimeout($.unblockUI, 1);
+                    mensajeDanger('Error de conexión.')
+                });
+            }
+        });
+    </script>
+{% endblock %}

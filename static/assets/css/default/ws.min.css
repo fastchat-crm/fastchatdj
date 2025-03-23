@@ -1,0 +1,198 @@
+.ui-resizable-sw {
+    cursor: sw-resize;
+    width: 9px;
+    height: 9px;
+    left: -5px;
+    bottom: -5px
+}
+
+.sw-main.sw-theme-default {
+    -webkit-box-shadow: none;
+    box-shadow: none
+}
+
+.sw-main.sw-theme-default .step-anchor {
+    background: #f2f3f4;
+    overflow: hidden;
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-flex: 1;
+    -ms-flex: 1;
+    flex: 1;
+    -webkit-flex-wrap: nowrap;
+    -ms-flex-wrap: nowrap;
+    flex-wrap: nowrap;
+    -webkit-border-radius: 4px 4px 0 0;
+    border-radius: 4px 4px 0 0
+}
+
+@media (max-width: 1199.98px) {
+    .sw-main.sw-theme-default .step-anchor {
+        overflow: scroll;
+        white-space: nowrap
+    }
+}
+
+.sw-main.sw-theme-default .step-anchor > li {
+    display: block;
+    float: none;
+    padding: 0;
+    margin: 0
+}
+
+@media (min-width: 992px) {
+    .sw-main.sw-theme-default .step-anchor > li {
+        -webkit-box-flex: 1;
+        -ms-flex: 1;
+        flex: 1
+    }
+}
+
+.sw-main.sw-theme-default .step-anchor > li > a {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    padding: 20px !important;
+    margin: 0;
+    color: #2d353c;
+    -webkit-border-radius: 0;
+    border-radius: 0;
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex
+}
+
+@media (max-width: 1199.98px) {
+    .sw-main.sw-theme-default .step-anchor > li > a {
+        padding: 15px !important
+    }
+}
+
+.sw-main.sw-theme-default .step-anchor > li > a .number {
+    padding: 0;
+    height: 24px;
+    width: 24px;
+    font-size: 14px;
+    line-height: 24px;
+    text-align: center;
+    margin-right: 10px;
+    background: #d5dbe0;
+    color: #2d353c;
+    font-weight: 700;
+    position: relative;
+    -webkit-border-radius: 40px;
+    border-radius: 40px
+}
+
+.sw-main.sw-theme-default .step-anchor > li > a small {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+    color: #6f8293
+}
+
+.sw-main.sw-theme-default .step-anchor > li > a:after {
+    display: none !important
+}
+
+.sw-main.sw-theme-default .step-anchor > li > a:focus, .sw-main.sw-theme-default .step-anchor > li > a:hover {
+    color: #2d353c
+}
+
+.sw-main.sw-theme-default .step-anchor > li.active {
+    background: #348fe2 !important
+}
+
+.sw-main.sw-theme-default .step-anchor > li.active > a {
+    color: #fff !important
+}
+
+.sw-main.sw-theme-default .step-anchor > li.active > a .number {
+    background: #276baa;
+    color: #fff
+}
+
+.sw-main.sw-theme-default .step-anchor > li.active > a small {
+    color: #9ac7f1
+}
+
+.sw-main.sw-theme-default .step-anchor > li.done > a .number {
+    background: #2d353c !important
+}
+
+.sw-main.sw-theme-default .step-anchor > li.done > a .number:before {
+    content: '\f00c';
+    background: #2d353c !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    color: #fff;
+    font-family: Font Awesome\ 5 Free, Font Awesome\ 5 Pro, FontAwesome !important;
+    font-weight: 900;
+    font-style: normal;
+    font-variant: normal;
+    text-rendering: auto;
+    -webkit-border-radius: 40px;
+    border-radius: 40px
+}
+
+.sw-main.sw-theme-default .sw-container {
+    margin: 0 !important;
+    padding: 0;
+    -webkit-border-radius: 0 !important;
+    border-radius: 0 !important
+}
+
+.sw-main.sw-theme-default .sw-container .step-content {
+    background: #fff;
+    padding: 20px 30px;
+    border: none !important
+}
+
+@media (max-width: 767.98px) {
+    .sw-main.sw-theme-default .sw-container .step-content {
+        padding: 20px 20px
+    }
+}
+
+.sw-main.sw-theme-default .sw-toolbar {
+    background: #f2f3f4;
+    padding: 15px
+}
+
+.sw-main.sw-theme-default .sw-toolbar:after, .sw-main.sw-theme-default .sw-toolbar:before {
+    content: '';
+    display: table;
+    clear: both
+}
+
+.sw-main.sw-theme-default .sw-toolbar .sw-btn-group {
+    margin: 0
+}
+
+.sw-main.sw-theme-default .sw-toolbar .sw-btn-group .btn {
+    min-width: 100px;
+    -webkit-border-radius: 4px !important;
+    border-radius: 4px !important
+}
+
+.sw-main.sw-theme-default .sw-toolbar .sw-btn-group .btn + .btn {
+    margin-left: 10px;
+    border-left: none
+}
+.parsley-errors-list {
+    padding: 0 !important;
+    list-style-type: none !important;
+    margin: 0 !important;
+    color: #ff100b;
+    font-size: 12px !important;
+    line-height: inherit !important
+}
+.parsley-errors-list.filled {
+    margin-top: 5px !important
+}

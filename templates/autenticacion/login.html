@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8"/>
+    <title>{{ nombreempresa }} | Iniciar Sesión</title>
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+    <meta content="" name="description"/>
+    <link href="{{ favicon }}" rel="icon" type="image/png">
+    <link href="/static/fonts/family-sans/family-sans.css" rel="stylesheet"/>
+    <link href="/static/assets/css/default/app.min.css?v=0.8" rel="stylesheet"/>
+</head>
+<body class="pace-top">
+
+<div id="page-container" class="fade">
+    <div class="login login-with-news-feed">
+        <div class="news-feed">
+            <a href="javascript:;">
+                <div class="news-image" style="background-image: url({{ bannerlog }})"></div>
+            </a>
+            <div class="news-caption">
+                <h4 class="caption-title"><b>{{ nombreempresa }}</b> Administración</h4>
+                <p>
+                    {{ alias }}
+                </p>
+            </div>
+        </div>
+        <div class="right-content">
+            <a href="/">
+                <img src="{{ logo }}" style="height: 50%;  width: 50%;">
+            </a>
+            <div class="login-header">
+                <div class="brand">
+                    <small>Bienvenido, por favor ingrese sus datos</small>
+                </div>
+            </div>
+
+            <div class="login-content">
+                <form class="margin-bottom-0" id="frm-login">
+                    {% csrf_token %}
+                    {% if next_url %}
+                        <input type="hidden" name="next_url" value="{{ next_url }}">
+                    {% endif %}
+                    <div class="form-group m-b-15">
+                        <input class="form-control form-control-lg" type="text" name="usuario"
+                               placeholder="Nombre de usuario" required>
+                    </div>
+                    <div class="form-group m-b-15">
+                        <input class="form-control form-control-lg" type="password"
+                               placeholder="********" data-toggle="password"
+                               data-placement="after"
+                               name="password" required>
+                    </div>
+                    <div class="login-buttons">
+                        <button type="submit" class="btn btn-success btn-block btn-lg" id="btnlogin">Iniciar Sesión <i
+                                class="fa fa-sign-in-alt"></i>
+                        </button>
+                    </div>
+                    <div class="m-t-20 m-b-40 p-b-40 text-inverse">
+                        {#                        ¿Has olvidado la contraseña? Click <a href="/seguridad/recuperar/">aquí</a>.#}
+                    </div>
+                    <hr/>
+                    <p class="text-center text-grey-darker mb-0">
+                        &copy; {{ nombreempresa }} Derechos Reservados {{ fecha_actual.year }}
+                    </p>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+    <a href="javascript:;" class="btn btn-icon btn-circle btn-success btn-scroll-to-top fade" data-click="scroll-top"><i
+            class="fa fa-angle-up"></i></a>
+</div>
+
+<script src="/static/assets/js/app.min.js?v=1.0"></script>
+<script src="/static/js/dfp.min.js"></script>
+<script src="/static/assets/js/theme/default.min.js"></script>
+<link rel="stylesheet" href="/static/sweetalert2/sweetalert2.css">
+<script src="/static/sweetalert2/sweetalert2.js"></script>
+<script src="/static/jquery.blockUI.js"></script>
+<script src="/static/validaciones/funciones.js?v=2.2"></script>
+<script src="/static/assets/plugins/bootstrap-show-password/dist/bootstrap-show-password.js?v=1"></script>
+<script src="/static/js/sysend.js"></script>
+<script>
+    function postPromise(url, params) {
+        return new Promise(resolve => {
+            // $.post(url, {'csrfmiddlewaretoken': '{{ csrf_token }}', data: JSON.stringify(params)}, function (data) {
+            $.post(url, params, function (data) {
+                resolve(data);
+            }, 'json');
+        });
+    }
+
+    const ModalAdd = $('#ModalAdd');
+    {% if messages %}
+        document.addEventListener("DOMContentLoaded", () => {
+            {% for message in messages %}
+                msgType = '{% if message.tags %}{{ message.tags }}{% endif %}'.toLowerCase();
+                $.gritter.add({
+                    text: '{{ message }}',
+                    class_name: 'gritter-light',
+                    position: 'top-left',
+                    image: msgType === 'success' ? '/static/iconos/success.png' : msgType === 'warning' ? '/static/iconos/warning.png' : msgType === 'error' ? '/static/iconos/danger.png' : '/static/iconos/info.png',
+                    time: '2000',
+                });
+                $('.gritter-close').html(
+                    "Cerrar"
+                );
+                $('.gritter-image').attr(
+                    "style", "width: 24px;height: 24px;"
+                );
+                {#Swal.fire('{{ message }}', '{{ nombreempresa }}', '{% if message.tags %}{{ message.tags }}{% endif %}');#}
+            {% endfor %}
+        });
+    {% endif %}
+
+    sysend.on('login', function (data) {
+        location = data.location;
+    });
+
+    $('#frm-login').on({
+        submit: function (e) {
+            e.preventDefault();
+            var frmData = new FormData($(this)[0]);
+            {#frmData.set("password", doRSA($('input[name=password]').val()));#}
+            //frmData.set("_dev_id", visitorId);
+            //console.log(visitorId)
+            $.ajax({
+                url: '{% url 'login_url' %}',
+                data: frmData,
+                method: 'POST',
+                dataType: 'json',
+                cache: false,
+                contentType: false,
+                processData: false,
+                beforeSend: function () {
+                    pantallaespera();
+                }
+            }).done(function (data) {
+                setTimeout($.unblockUI, 1);
+                if (data.resp === true) {
+                    sysend.broadcast('login', {location: data.to});
+                    location = data.to;
+                } else {
+                    Swal.fire(data.error, '{{ nombreempresa }}', 'error')
+                }
+            }).fail(function () {
+                setTimeout($.unblockUI, 1);
+                Swal.fire('ERROR DE CONEXIÓN', '{{ nombreempresa }}', 'warning')
+            });
+        }
+    });
+
+    {#$(function () {#}
+    {#    navigator.serviceWorker.getRegistrations().then(function (registrations) {#}
+    {#        for (let registration of registrations) {#}
+    {#            registration.unregister();#}
+    {#        }#}
+    {#    });#}
+    {# });#}
+
+    function pantallaespera() {
+        $.blockUI({
+            message: '<span class="spinner-grow spinner-border-lg text-primary" role="status" aria-hidden="true" style="width: 5rem; height: 5rem;"></span>',
+            css: {
+                backgroundColor: 'transparent',
+                border: '0',
+                zIndex: 9999999
+            },
+            overlayCSS: {
+                backgroundColor: '#fff',
+                opacity: 0.8,
+                zIndex: 9999990
+            }
+        });
+    }
+</script>
+</body>
+</html>

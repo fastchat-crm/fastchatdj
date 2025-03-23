@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+    <div class="panel panel-default" data-sortable-id="form-stuff-2" style="box-shadow: inset 0 0 0 1px #ffffff;">
+
+        <div class="panel-heading ui-sortable-handle">
+            <h4 class="panel-title">{{ titulo }} Formulario</h4>
+            <div class="panel-heading-btn">
+                <a href="javascript:;" class="btn btn-xs btn-icon btn-circle btn-default" data-click="panel-expand"><i
+                        class="fa fa-expand"></i></a>
+            </div>
+        </div>
+        <br>
+        <div class="panel-body">
+            <ul class="nav nav-tabs">
+                <li class="nav-item">
+                    <a href="#default-tab-2" data-toggle="tab" class="nav-link active">
+                        <span class="d-sm-none">Act</span>
+                        <span class="d-sm-block d-none">Actividades (Ultimas 10)</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#default-tab-3" data-toggle="tab" class="nav-link">
+                        <span class="d-sm-none">Conex</span>
+                        <span class="d-sm-block d-none">Ultima Conexión</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a data-toggle="modal" data-placement="top" href="javascript:void(0);"
+                       data-target="#myModal" class="nav-link">
+                        <span class="d-sm-none">Clave</span>
+                        <span class="d-sm-block d-none">Cambiar Contraseña</span>
+                    </a>
+                </li>
+
+            </ul>
+            <div class="tab-content">
+                <div class="tab-pane fade active show align-self-center" id="default-tab-2">
+                    <div class="table-responsive">
+                        <table id="tabla" class="table">
+                            <thead class="thead-dark">
+                            <tr>
+                                <th class="column-title" style="text-align: center">Fecha</th>
+                                <th class="column-title" style="text-align: center">Hora</th>
+                                <th class="column-title" style="text-align: center">Modulo</th>
+                                <th class="column-title" style="text-align: center">Registro</th>
+                                <th class="column-title" style="text-align: center">Acción</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for p in auditoria %}
+                                <tr>
+                                    <td style="text-align: center">{{ p.action_time|date:"SHORT_DATE_FORMAT" }}</td>
+                                    <td style="text-align: center">{{ p.action_time|date:"H:i" }}</td>
+                                    <td style="text-align: center">{{ p.content_type.model }}</td>
+                                    <td style="text-align: center">{{ p.change_message }}</td>
+                                    <td style="text-align: center">
+                                        {% if p.action_flag == 2 %}
+                                            <div  class="badge badge-info"
+                                               style="font-size: 15px;">EDITADO</div>
+                                        {% elif p.action_flag == 1 %}
+                                            <div class="badge badge-success"
+                                               style="font-size: 15px;">AGREGADO</div>
+                                        {% elif p.action_flag == 3 %}
+                                            <div class="badge badge-danger"
+                                               style="font-size: 15px;">ELIMINADO</div>
+                                        {% else %}
+                                            <div class="badge badge-default"
+                                               style="font-size: 15px;">{{ p.accion }}</div>
+                                        {% endif %}
+                                    </td>
+
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="tab-pane fade" id="default-tab-3">
+
+                    <h5 class="mb-2">
+                        <i class="fas fa-info-circle"></i>
+                        Ultima conexión
+                    </h5>
+                    {{ request.user.last_login }}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+
+
+    <div class="modal fade bs-example-modal-sm" id="myModal" tabindex="-1" role="dialog"
+         aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <form name="frmEliminar" id="frmEliminar" method="POST"
+                      action="{{ ruta }}"> {% csrf_token %}
+                    <div class="modal-header">
+                        <h4 class="modal-title" id="myModalLabel"><strong>Cambiar
+                            contraseña</strong></h4>
+                        <button type="button" class="close" data-dismiss="modal"
+                                aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="id" id="id" value="">
+                        <input type="hidden" name="action" value="add">
+
+                        <label>Clave Actual:</label>
+                        <input class="cloaked form-control" type="text"
+                               id="clave_actual" name="clave_actual" value="" maxlength="15"
+                               autocomplete="off" required>
+                        <br>
+                        <label>Nueva Clave:</label>
+                        <input class="cloaked form-control" type="text" id="clave"
+                               name="clave" value="" maxlength="15"
+                               autocomplete="off" required>
+
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-danger"
+                                data-dismiss="modal"><i class="fa fa-window-close"></i> Cancelar
+                        </button>
+                        <button type="submit" class="btn btn-success" id="btnElimiar">
+                            <i class="fa fa-save"></i> Cambiar Clave
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script>
+
+        function cerrarSesion(ctr, pk) {
+            $.ajax({
+                type: 'POST',
+                url: '/perfilpanel/',
+                data: {'action': 'cerrar_sesion', 'pk': pk, 'csrfmiddlewaretoken': '{{ csrf_token }}'},
+                beforeSend: function () {
+                    pantallaespera();
+                }
+            }).done(function (data) {
+                if(data.resp){
+                    $(ctr).parent().parent().parent().parent().parent().remove();
+                }
+                $.unblockUI();
+            }).fail(function (jqXHR, textStatus, errorThrown) {
+                Swal.fire('Error en el servidor', '', 'error');
+                $.unblockUI();
+            }).always(function () {
+
+            });
+        }
+    </script>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block content %}
+    <!-- Filters -->
+    <div class="container-fluid px-0">
+        <form method="GET" action="{{ ruta }}">
+            <div class="form-row align-items-center">
+                <div class="col-md mb-4">
+                    <label class="form-label">Desde</label>
+                    <input type="date" id="user-list-latest-activity" name="desde" value="{{ desde }}"
+                           class="form-control" placeholder="Buscar">
+                </div>
+                <div class="col-md mb-4">
+                    <label class="form-label">Hasta</label>
+                    <input type="date" id="user-list-latest-activity" name="hasta" value="{{ hasta }}"
+                           class="form-control" placeholder="Buscar">
+                </div>
+                <div class="col-md mb-4">
+                    <label class="form-label">Buscar</label>
+                    <input type="text" id="user-list-latest-activity" name="criterio" value="{{ criterio }}"
+                           class="form-control" placeholder="Buscar">
+                </div>
+                <div class="col-md col-xl-2 mb-4">
+                    <label class="form-label d-none d-md-block">&nbsp;</label>
+                    <button class="btn btn-secondary btn-block">Buscar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    <!-- / Filters -->
+
+    <div class="panel panel-default">
+
+        <div class="panel-body">
+            <div class="table-responsive">
+                <table id="tabla" class="table table-hover table-td-valign-middle table-bordered">
+                    <thead class="thead-dark">
+                    <tr>
+                        <th class="column-title">Fecha</th>
+                        <th class="column-title">Hora</th>
+                        <th class="column-title">Registro</th>
+                        <th class="column-title"><span class="nobr">Username</span></th>
+                        <th class="column-title">Grupo</th>
+                        <th class="column-title">SuperAdmin</th>
+                        <th class="column-title">Acción</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for p in listado %}
+                        <tr>
+                            <td>{{ p.action_time|date:"d/M/Y" }}</td>
+                            <td>{{ p.action_time|date:"H:i" }}</td>
+                            <td>{{ p.change_message }}{% if p.object_id %}<br><span class="text-muted">Registro: {{ p.object_id|default_if_none:'' }}</span>{% endif %}</td>
+                            <td>{{ p.user.username }}</td>
+                            {#                            <td>{% if p.usuario.is_staff == True %}#}
+                            {#                                SI#}
+                            {#                            {% else %}#}
+                            {#                                NO{% endif %}</td>#}
+                            <td>{{ p.user.groups.all.first.name }}</td>
+                            <td>{% if p.user.is_superuser == True %}
+                                SI
+                            {% else %}
+                                NO{% endif %}</td>
+                            <td>
+                                {% if p.action_flag == 2 %}
+                                    <div
+                                       class="badge badge-info" style="font-size: 15px;">EDITADO</div>
+                                {% elif p.action_flag == 1 %}
+                                    <div
+                                       class="badge badge-success" style="font-size: 15px;">AGREGADO</div>
+                                {% elif  p.action_flag == 3 %}
+                                    <div
+                                      class="badge badge-danger" style="font-size: 15px;">ELIMINADO</div>
+                                {% else %}
+                                    <div
+                                       class="badge badge-default"
+                                       style="font-size: 15px;">{{ p.accion }}</div>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <!-- paginacion  -->
+                {% include 'paginacion.html' %}
+                <!-- final de la paginacion  -->
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="modalDetalle">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button class="close" data-dismiss="modal" aria-label="Close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="modalDetalleContenido" class="modal-body">
+
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+
+{% endblock %}

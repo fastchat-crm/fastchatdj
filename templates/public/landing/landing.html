@@ -1,0 +1,52 @@
+{% extends 'public/base.html' %}
+
+{% block head %}
+    <style>
+        @media only screen and (max-width: 600px) {
+            .center-mobile {
+                text-align: center;
+            }
+        }
+
+    </style>
+{% endblock %}
+
+{% block content %}
+
+    <section>
+        <div class="jarallax min-vh-100 py-5">
+            <div class="jarallax-img" style="background-image: url('/media/{{ confi.fondoprincipal }}');"></div>
+            <div class="container position-relative zindex-5 py-sm-4 py-lg-5 mt-4">
+                <div class="row pt-lg-2 py-xl-4 py-xxl-5 mb-md-4 mb-lg-5 justify-content-between align-items-center">
+                    <div class="col-xl-8 col-xxl-7 pt-5 mb-5 text-center text-xl-start">
+                        <h1 class="text-uppercase pb-sm-2 pb-md-3">{{ confi.titulo|default:'Web Title' }}</h1>
+                        <p class="pb-3 pb-md-4 mb-3 d-inline"
+                           style="color:#273159!important;max-width: 520px;">{{ confi.descripcion|default:'Description web' }}</p>
+                        <div class="d-flex justify-content-center justify-content-xl-start mt-5 gap-3">
+                            <a href="https://home.protinn.com" target="_blank" class="btn btn-info ">Ir a la web <i
+                                    class="fas fa-cookie-bite ms-2"></i></a>
+                            {% if request.user.is_autenticated %}
+                                <a href="/login/" class="btn btn-success ">Inicia Sesión <i
+                                        class="fas fa-arrow-right ms-2"></i></a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-7 col-xl-4 col-xxl-5 pt-5 mb-5 text-center mx-auto">
+                        <img src="/media/{{ confi.imagen_landing }}" alt="">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+{% endblock %}
+
+{% block jscript %}
+    <div id="fb-root"></div>
+    <script async defer crossorigin="anonymous"
+            src="https://connect.facebook.net/es_ES/sdk.js#xfbml=1&version=v16.0&appId=5465147420185697&autoLogAppEvents=1"
+            nonce="GutKLHL1"></script>
+{% endblock %}
+
+
+

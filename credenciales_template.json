@@ -1,0 +1,13 @@
+{
+  "POSTGRES_HOST": "",
+  "POSTGRES_PORT": "",
+  "POSTGRES_PASSWORD": "",
+  "POSTGRES_DBNAME": "",
+  "USE_SSL": false,
+  "SECRET_KEY": "",
+  "EMAIL_HOST_USER": "",
+  "EMAIL_HOST_PASSWORD": "",
+  "WKHTMLTOPDF_CMD": "",
+  "GMAP_API_KEY": "",
+  "DEBUG": false
+}

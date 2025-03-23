@@ -1,0 +1,20 @@
+{% extends 'email/emailbase.html' %}
+{% load templatefunctions %}
+{% block titulo %}{{ title }}{% endblock %}
+{% block content %}
+    <div style="color:#555555; line-height:120%; font-family:Arial,'Helvetica Neue',Helvetica,sans-serif; padding-right:10px; padding-left:10px; padding-top:10px; padding-bottom:10px">
+        <p>Hola {% if filtro.persona %}{{ filtro.persona }}{% else %}{{ filtro.venta.persona }}{% endif %},</p>
+
+        <p>En {{ confi.nombre_empresa }}, valoramos mucho tus comentarios. Por eso, te invitamos a completar
+            una breve encuesta que nos ayudará a mejorar y ofrecerte un mejor servicio.</p>
+
+        <p>La encuesta es rápida y no tomará más de 5 minutos de tu tiempo.</p>
+
+        <p><strong>Link de la encuesta:</strong> <a href="{{ link }}">{{ link }}</a></p>
+
+        <p>¡Gracias por ayudarnos a mejorar! Si tienes alguna pregunta, no dudes en contactarnos a través de este
+            correo.</p>
+
+        <p>Atentamente,<br>{{ confi.nombre_empresa }}</p>
+    </div>
+{% endblock %}

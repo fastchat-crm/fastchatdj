@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% load templatefunctions %}
+{% block content %}
+
+
+    <form method="GET">
+        <div class="container-fluid px-0">
+            <div class="form-row">
+                <div class="col-md-2 col-sm-12">
+                    <label for="fecha_desde">Fecha Desde</label>
+                    <input type="date" name="fecha_desde" id="fecha_desde" value="{{ fecha_desde }}" class="form-control"/>
+                </div>
+                <div class="col-md-2 col-sm-12">
+                    <label for="fecha_hasta">Fecha Hasta</label>
+                    <input type="date" name="fecha_hasta" id="fecha_hasta" value="{{ fecha_hasta }}" class="form-control"/>
+                </div>
+                <div class="col-md-2 col-sm-12">
+                    <label for="tipo">Tipo</label>
+                    <select class="form-control" name="tipo" id="tipo">
+                        <option value="">Todos</option>
+                        {% for x in tipo_choices %}
+                            <option value="{{ x.0 }}" {% if tipo == x.0 %}selected{% endif %}>{{ x.1 }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 col-sm-12">
+                    <label for="usuario_envia">Mostrar los que envié</label>
+                    <select class="form-control" name="usuario_envia" id="usuario_envia">
+                        <option value="">NO</option>
+                        <option value="1" {% if usuario_envia == "1" %}selected{% endif %}>Sí, mostrar</option>
+                    </select>
+                </div>
+                <div class="col-md-2 col-sm-12">
+                    <label for="visto">Vistos</label>
+                    <select class="form-control" name="visto" id="visto">
+                        <option value="">Todos</option>
+                        <option value="1" {% if visto == "1" %}selected{% endif %}>Vistos</option>
+                        <option value="0" {% if visto == "0" %}selected{% endif %}>No Vistos</option>
+                    </select>
+                </div>
+                <div class="col-md-2 col-sm-12">
+                    <label for="tipo_mant">Buscar</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" placeholder="Buscar" aria-label="Buscar"
+                               aria-describedby="button-addon2" name="criterio" value="{{ criterio }}">
+                        <div class="input-group-append">
+                            <button class="btn btn-primary" type="submit" id="button-addon2"><i
+                                    class="fa fa-search"></i></button>
+                            {% if url_vars %}
+                                <a title="Ver todo" href="{{ ruta }}?{{ dict_url_vars }}" class="btn btn-primary">
+                                    <i class="fas fa-sync-alt"></i>
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+
+        <div class="mb-3">
+            <a href="{{ ruta }}?action=add" class="btn btn-success"><i class="fas fa-plus-circle mr-2"></i> Nuevo {{ modulo }}</a>
+        </div>
+
+
+    <div class="panel panel-default">
+        <div class="panel-body">
+            <table id="tabla" class="table table-hover table-td-valign-middle table-bordered">
+                <thead class="thead-light">
+                <tr>
+                    <th>Fecha</th>
+                    <th>Detalle</th>
+                    <th class="text-center">Visto</th>
+{#                    <th style="text-align: center">Acción</th>#}
+                </tr>
+                </thead>
+                <tbody>
+                {% for l in listado %}
+                    <tr>
+                        <td>{{ l.fecha_registro|date:'d/M/Y H:i' }}</td>
+                        <td>
+                            {% if l.url %}
+                                <a href="{{ l.url }}" target="_blank">
+                                    <div>
+                                        {{ l.nombre }}
+                                    </div>
+                                    <div>
+                                        {{ l.descripcion|default:'' }}
+                                    </div>
+                                </a>
+                            {% else %}
+                                <div>
+                                    {{ l.nombre }}
+                                </div>
+                                <div>
+                                    {{ l.descripcion|default:'' }}
+                                </div>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">{{ l.visto_boolhtml }}</td>
+{#                        <td class="with-btn-group" style="text-align: center">#}
+{#
+{#                                <a class="btn btn-info btn-mini" title="Editar"#}
+{#                                   href="?action=change&pk={{ l.pk }}"><i class="fa fa-edit" style="color: #ffffff"></i></a>#}
+{#
+{#
+{#                                <a class="btn btn-danger btn-mini" title="Eliminar"#}
+{#                                   onclick="eliminar('{{ l.pk }}','{{ l.nombre_cliente }}', 'delete')">#}
+{#                                    <i class="fa fa-trash" style="color: #ffffff"></i>#}
+{#                                </a>#}
+{#
+{#                            <a class="btn btn-warning btn-mini" title="Ver"#}
+{#                               href="?action=ver&pk={{ l.pk }}"><i class="fa fa-eye" style="color: #ffffff"></i></a>#}
+{##}
+{#                        </td>#}
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% include "paginacion.html" %}
+        </div>
+    </div>
+
+
+    <link rel="stylesheet" href="/static/lightbox/css/lightbox.min.css">
+    <script src="/static/lightbox/js/lightbox-plus-jquery.min.js"></script>
+{% endblock %}
+

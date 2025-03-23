@@ -1,0 +1,354 @@
+* {
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.title {
+    text-align: center;
+    color: #444;
+}
+
+.calendar {
+    width: 100%;
+}
+
+.calendar__info {
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+    font-size: 1.2em;
+    text-transform: uppercase;
+    border-radius: 5px;
+    justify-items: center;
+    border: 1.3px solid rgba(39, 46, 77, 0.62);
+}
+
+.calendar__day {
+    font-weight: 600;
+    display: flex;
+    align-content: center;
+    justify-content: center;
+}
+
+.calendar__prev, .calendar__next {
+    color: #2f2f2f;
+    cursor: pointer;
+    /*background-color: #CFDFEF;*/
+    font-size: 1.5em;
+}
+
+.calendar__prev {
+    height: 100%;
+    width: 10%;
+    border-right: 1.3px solid rgba(39, 46, 77, 0.62);
+}
+
+.calendar__next {
+    height: 100%;
+    width: 10%;
+    border-left: 1.3px solid rgba(39, 46, 77, 0.62);
+}
+
+.calendar__week, .calendar__dates {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-gap: 14px 0;
+}
+
+.calendar__month, .calendar__year {
+    width: 80%;
+    font-weight: 900;
+    font-size: 23px;
+    padding: .4em 1em;
+    text-align: center;
+}
+
+.calendar__item {
+    vertical-align: middle;
+    text-align: center;
+    padding: 0.7em;
+    border-radius: 10px;
+    font-size: 12px;
+    border: 1px solid transparent;
+}
+
+.calendar__item h3 {
+    font-size: 30px;
+    width: 75px;
+    vertical-align: middle;
+    margin-bottom: 0px;
+}
+
+@media (min-width: 1500px) {
+    .calendar__item h3 {
+        width: 75px;
+        font-size: 30px;
+    }
+
+    .calendar__item {
+        font-size: 20px;
+    }
+
+    .calendar__day {
+        font-size: 15px;
+    }
+}
+
+@media (max-width: 1180px) {
+    .calendar__item {
+        font-size: 8px;
+    }
+
+    .calendar__day {
+        font-size: 8px;
+    }
+}
+
+@media (max-width: 992px) {
+    .calendar__item h3 {
+        width: 20px;
+        font-size: 15px;
+    }
+
+    .calendar__item {
+        font-size: 15px;
+    }
+
+    .calendar__day {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 768px) {
+    .calendar__item h3 {
+        width: 30px;
+        font-size: 18px;
+    }
+
+    .calendar__day {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 576px) {
+    .calendar__item h3 {
+        width: 20px;
+        font-size: 15px;
+    }
+
+    .calendar__day {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 400px) {
+    .calendar__item h3 {
+        font-size: 10px;
+        width: 10px;
+        vertical-align: middle;
+        margin-bottom: 0px;
+    }
+
+    .calendar__day {
+        font-size: 8px;
+    }
+
+    .calendar__info .calendar__month {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 338px) {
+    .calendar__item h3 {
+        font-size: 5px;
+        width: 5px;
+        margin-bottom: 0px;
+    }
+
+    .calendar__day {
+        font-size: 7px;
+    }
+}
+
+.calendar__today {
+    background: #517E95;
+    color: white;
+    margin: auto;
+}
+
+.calendar__today {
+    background: #517E95;
+    color: white;
+    margin: auto;
+}
+
+.calendar__disponible {
+    background-color: #05adec1c;
+    margin: auto;
+}
+
+.calendar__disponible h3 {
+    color: #517E95;
+    font-weight: 800;
+    margin: 0px;
+}
+
+.calendar__disponible:hover {
+    background-color: #05479a;
+    color: white;
+}
+
+.calendar__disponible:hover h3 {
+    color: white;
+}
+
+.calendar__disponible-active {
+    background-color: #05479a;
+    color: white;
+}
+
+.calendar__disponible-active h3 {
+    color: white;
+}
+
+
+.calendar__agotados {
+    background-color: #517E95;
+    margin: auto;
+}
+
+.calendar__agotados h3 {
+    color: white;
+    font-weight: 800;
+    margin: 0px;
+}
+
+.calendar__sin__horario {
+    margin: auto;
+    border: 1.5px solid #517E95;
+    opacity: .4;
+}
+
+.calendar__sin__horario h3 {
+    font-weight: 800;
+    color: #517E95;
+}
+
+.sin__horario:before {
+    content: " ";
+    position: absolute;
+    z-index: 2;
+    left: 0;
+    width: 26px;
+    height: 26px;
+    bottom: 1px;
+    -moz-border-radius: 50%;
+    -webkit-border-radius: 50%;
+    border-radius: 30%;
+    border: 1.5px solid #517E95;
+    opacity: .6;
+}
+
+.sin__horario {
+    margin-right: 17px;
+    position: relative;
+}
+
+.disponible:before {
+    content: " ";
+    position: absolute;
+    z-index: 2;
+    left: 0;
+    width: 26px;
+    height: 26px;
+    bottom: 1px;
+    -moz-border-radius: 50%;
+    -webkit-border-radius: 50%;
+    background-color: #05adec1c;
+    border-radius: 30%;
+    box-shadow: 0 2px 5px #999;
+    -webkit-box-shadow: 0 2px 5px #999;
+    -moz-box-shadow: 0 2px 5px #999;
+}
+
+.disponible {
+    margin-right: 17px;
+    position: relative;
+}
+
+.agotados:before {
+    content: " ";
+    position: absolute;
+    z-index: 2;
+    left: 0;
+    width: 26px;
+    height: 26px;
+    bottom: 0px;
+    -moz-border-radius: 50%;
+    -webkit-border-radius: 50%;
+    border-radius: 30%;
+    background: #517E95;
+}
+
+.agotados {
+    margin-right: 17px;
+    position: relative;
+}
+
+.arrow-rigth {
+    position: relative;
+    margin-right: 70%;
+    margin-left: 30%;
+}
+
+.arrow-rigth:before {
+    content: " ";
+    position: absolute;
+    z-index: 2;
+    left: 0;
+    width: 10px;
+    height: 10px;
+    bottom: 10px;
+    -webkit-transform: rotate(45deg);
+    transform: rotate(45deg);
+    border-top: 3px solid #1B5082;
+    border-right: 3px solid #1B5082;
+    background: transparent;
+}
+
+.arrow-left {
+    position: relative;
+    margin-right: 50%;
+    margin-left: 50%;
+}
+
+.arrow-left:before {
+    content: " ";
+    position: absolute;
+    z-index: 2;
+    left: 0;
+    width: 10px;
+    height: 10px;
+    bottom: 10px;
+    -webkit-transform: rotate(-140deg);
+    transform: rotate(-140deg);
+    border-top: 3px solid #1B5082;
+    border-right: 3px solid #1B5082;
+    background: transparent;
+}
+
+
+.calendar_cab {
+    text-align: center;
+    vertical-align: middle;
+    /* border-radius: 14px; */
+    margin-left: 3px;
+    margin-top: 19px;
+    margin-bottom: 12px;
+    /* border: 3px solid #517e95; */
+    color: white;
+    background-color: #58bce2;
+}

@@ -1,0 +1,23 @@
+{% extends 'email/emailbase.html' %}
+
+{% block titulo %}{{ sucursal }}{% endblock %}
+{% block content %}
+    <div style="color:#555555; line-height:120%; font-family:Arial,'Helvetica Neue',Helvetica,sans-serif; padding-right:10px; padding-left:10px; padding-top:10px; padding-bottom:10px">
+        <div style="font-size:12px; line-height:14px; color:#555555; font-family:Arial,'Helvetica Neue',Helvetica,sans-serif; text-align:left">
+            <p style="margin:0; font-size:14px; line-height:17px">Hola, {{ usuario }}.</p>
+            <p style="margin:0; font-size:14px; line-height:17px">Se registró un inicio de sesión exitoso a MatSoft
+                desde el dispositivo <strong>{{ dispositivo }}</strong> con la siguiente ip <strong>{{ ip }}</strong>.
+            </p>
+            <p style="margin:0; font-size:14px; line-height:17px">el día <strong>{{ fecha|date:'l' }}, {{ fecha }}
+                ({{ timezone }})</strong></p>
+            <p style="margin:0; font-size:14px; line-height:17px">En {{ ciudad }}</p>
+        </div>
+    </div>
+    <div style="padding-right:10px; padding-left:10px; padding-top:10px; padding-bottom:10px">
+        <div align="center">
+            <div style="border-top:1px solid #BBBBBB; width:100%; line-height:1px; height:1px; font-size:1px">
+                &nbsp;
+            </div>
+        </div>
+    </div>
+{% endblock %}

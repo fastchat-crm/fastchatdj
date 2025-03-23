@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+{% block content %}
+    <form method="GET">
+        <div class="container-fluid px-0">
+            <div class="form-row">
+                <div class="col-md-6 col-sm-12 offset-md-6">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" placeholder="Buscar" aria-label="Buscar"
+                               aria-describedby="button-addon2" name="criterio" value="{{ criterio }}">
+                        <div class="input-group-append">
+                            <button class="btn btn-primary" type="submit" id="button-addon2"><i
+                                    class="fa fa-search"></i></button>
+                            {% if url_vars %}
+                                <a title="Ver todo" href="{{ ruta }}?{{ dict_url_vars }}" class="btn btn-primary">
+                                    <i class="fas fa-sync-alt"></i>
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+
+        <div class="mb-3">
+            <a href="?action=add&{{ dict_url_vars }}" class="btn btn-success"><i class="fas fa-plus-circle mr-2"></i> Nuevo {{ modulo }}</a>
+        </div>
+
+    <div class="panel panel-default">
+
+        <div class="panel-body">
+            <div class="table-responsive">
+                <table id="tabla" class="table table-hover table-td-valign-middle table-bordered">
+                    <thead class="thead-dark">
+                    <tr>
+                        <th>
+                            Nombre
+                        </th>
+                        <th>
+                            Ícono
+                        </th>
+                        <th>
+                            Prioridad
+                        </th>
+                        <th class="text-center">
+                            Acción
+                        </th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for mod in listado %}
+                        <tr>
+                            <td>
+                                {{ mod.nombre }}
+                            </td>
+                            <td>
+                                <i class="{{ mod.icono }}"></i>
+                            </td>
+                            <td>
+                                {{ mod.prioridad }}
+                            </td>
+                            <td class="with-btn-group text-center" nowrap>
+                                <div class="btn-group dropleft">
+                                    <button type="button" class="btn btn-white btn-sm width-100 dropdown-toggle"
+                                            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                        <i class="fas fa-angle-left mr-1"></i> Acciones
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-right">
+
+                                            <a class="dropdown-item" title="Ver {{ modulo }}"
+                                               href="{{ ruta }}?pk={{ mod.pk }}&action=ver&{{ dict_url_vars }}">
+                                                <i class="fas fa-eye"></i> Ver
+                                            </a>
+
+                                        <a class="dropdown-item" title="Módulos de este grupo"
+                                           href="javascript:void(0);"
+                                           onclick="vermodulos({{ mod.pk }},'{{ mod.nombre }}')">
+                                            <i class="fas fa-list-ol"></i> Urls de este grupo
+                                        </a>
+
+                                            <a class="dropdown-item" title="Editar {{ modulo }}"
+                                               href="{{ ruta }}?pk={{ mod.pk }}&action=change&{{ dict_url_vars }}">
+                                                <i class="fas fa-edit"></i> Editar
+                                            </a>
+
+                                            <a class="dropdown-item" title="Eliminar {{ modulo }}"
+                                               onclick="eliminarajax({{ mod.pk }}, '{{ mod.nombre }}', 'delete', '{{ dict_url_vars }}')"
+                                               href="javascript:void(0);">
+                                                <i class="fas fa-trash"></i> Eliminar
+                                            </a>
+
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <!-- paginacion  -->
+                {% include 'paginacion.html' %}
+                <!-- final de la paginacion  -->
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalListados">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button class="close" data-dismiss="modal" aria-label="Close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <table class="table table-hover table-bordered table-td-valign-middle">
+                        <thead>
+                        <tr>
+                            <th>Permisos</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script>
+        const modalListados = $('#modalListados');
+
+        function vergrupos(pk, nombre) {
+            getPromise('{{ ruta }}', {pk: pk, action: 'ver_grupos'}).then(function (value) {
+                modalListados.find('table').children('thead').children('tr').children('th').html(`Grupo de permisos del grupo ${nombre}`);
+                const table = $(modalListados.find('table').children('tbody'));
+                table.html('');
+                for (var i = 0; i < value.length; i++) {
+                    table.append(`<tr><td>${value[i].name}</td></tr>`);
+                }
+                modalListados.modal('show');
+            });
+        }
+
+        function vermodulos(pk, nombre) {
+            getPromise('{{ ruta }}', {pk: pk, action: 'ver_modulos'}).then(function (value) {
+                modalListados.find('table').children('thead').children('tr').children('th').html(`Módulos del grupo ${nombre}`);
+                const table = $(modalListados.find('table').children('tbody'));
+                table.html('');
+                for (var i = 0; i < value.length; i++) {
+                    table.append(`<tr><td>${value[i].nombres}</td></tr>`);
+                }
+                modalListados.modal('show');
+            });
+        }
+
+        function eliminarajax(pk, nombre, accion, dict_url_vars = "",titulo=`Estas a punto de eliminar este registro ${nombre}`) {
+        Swal.fire({
+            title: titulo,
+            text: "Esta acción es irreversible",
+            type: 'warning',
+            showCancelButton: true,
+            allowOutsideClick: false,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Si, deseo hacerlo!',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.value) {
+                pantallaespera();
+                $.ajax({
+                    type: 'POST',
+                    url: '{{ reques.path }}',
+                    async: false,
+                    data: {
+                        csrfmiddlewaretoken: '{{ csrf_token }}',
+                        action: accion,
+                        id: pk,
+                        dict_url_vars:dict_url_vars,
+                    },
+                    dataType: "json",
+                    beforeSend: function () {
+                        pantallaespera();
+                    }
+                }).done(function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.error === false) {
+                        location.reload();
+                    }
+                }).fail(function (jqXHR, textStatus, errorThrown) {
+                    setTimeout($.unblockUI, 1);
+                    mensajeWarning('Error en el servidor');
+                }).always(function () {
+                });
+            }
+        })
+    }
+    </script>
+{% endblock %}

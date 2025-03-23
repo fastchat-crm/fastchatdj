@@ -1,0 +1,45 @@
+<div class="d-sm-flex align-items-center pt-4 pt-sm-5">
+    <nav class="order-sm-2 ms-sm-auto mb-4 mb-sm-0" aria-label="Orders pagination">
+        {% if paging.num_pages > 5 %}
+            <ul class="pagination pagination-sm justify-content-center">
+                {% if paging.primera_pagina %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1{{ url_vars }}">
+                            1
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a href="?page={{ paging.ellipsis_izquierda }}{{ url_vars }}"
+                           class="active page-link">...</a>
+                    </li>
+                {% endif %}
+                {% for pagenumber in paging.paginas %}
+                    <li {% if pagenumber == page.number %}class='active page-item'
+                        {% else %}class='page-item'{% endif %}>
+                        <a href="?page={{ pagenumber }}{{ url_vars }}"
+                           class="page-link">{{ pagenumber }}</a>
+                    </li>
+                {% endfor %}
+                {% if paging.ultima_pagina %}
+                    <li class="page-item">
+                        <a href="?page={{ paging.ellipsis_derecha }}{{ url_vars }}"
+                           class="active page-link">...</a></li>
+                    <li class="page-item">
+                        <a href="?page={{ paging.num_pages }}{{ url_vars }}"
+                           class="page-link">{{ paging.num_pages }}</a>
+                    </li>
+                {% endif %}
+            </ul>
+        {% else %}
+            <ul class="pagination pagination-sm justify-content-center">
+                {% for pagenumber in paging.page_range %}
+                    <li {% if pagenumber == page.number %}class='active page-item'
+                        {% else %}class="page-item"{% endif %}>
+                        <a class="page-link"
+                           href="?page={{ pagenumber }}{{ url_vars }}">{{ pagenumber }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    </nav>
+</div>

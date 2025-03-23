@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+    <div class="panel panel-default" data-sortable-id="form-stuff-2" style="box-shadow: inset 0 0 0 1px #ffffff;">
+
+
+        <br>
+        <div class="panel-body">
+            <ul class="nav nav-tabs">
+                <li class="nav-item">
+                    <a href="#default-tab-2" data-toggle="tab" class="nav-link active">
+                        <span class="d-sm-none">Act</span>
+                        <span class="d-sm-block d-none">Actividades (Ultimas 10)</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#default-tab-3" data-toggle="tab" class="nav-link">
+                        <span class="d-sm-none">Conex</span>
+                        <span class="d-sm-block d-none">Ultima Conexión</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a data-toggle="modal" data-placement="top" href="javascript:void(0);"
+                       data-target="#myModal" class="nav-link">
+                        <span class="d-sm-none">Clave</span>
+                        <span class="d-sm-block d-none">Cambiar Contraseña</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#default-tab-5" data-toggle="tab" class="nav-link">
+                        <span class="d-sm-none">Sesiones</span>
+                        <span class="d-sm-block d-none">Sesiones</span>
+                    </a>
+                </li>
+            </ul>
+            <div class="tab-content">
+                <div class="tab-pane fade active show align-self-center" id="default-tab-2">
+                    <div class="table-responsive">
+                        <table id="tabla" class="table">
+                            <thead>
+                            <tr>
+                                <th class="column-title" style="text-align: center">Fecha</th>
+                                <th class="column-title" style="text-align: center">Hora</th>
+                                <th class="column-title" style="text-align: center">Modulo</th>
+                                <th class="column-title" style="text-align: center">Registro</th>
+                                <th class="column-title" style="text-align: center">Acción</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for p in auditoria %}
+                                <tr>
+                                    <td style="text-align: center">{{ p.fecha|date:"SHORT_DATE_FORMAT" }}</td>
+                                    <td style="text-align: center">{{ p.hora }}</td>
+                                    <td style="text-align: center">{{ p.tabla }}</td>
+                                    <td style="text-align: center">{{ p.registroname }}</td>
+                                    <td style="text-align: center">
+                                        {% if p.accion == 'CHANGE' %}
+                                            <a href="javascript:void(0)" class="badge badge-info"
+                                               style="font-size: 15px;">EDITADO</a>
+                                        {% elif p.accion == 'ADD' %}
+                                            <a href="javascript:void(0)" class="badge badge-success"
+                                               style="font-size: 15px;">AGREGADO</a>
+                                        {% elif p.accion == 'DELETE' %}
+                                            <a href="javascript:void(0)" class="badge badge-danger"
+                                               style="font-size: 15px;">ELIMINADO</a>
+                                        {% else %}
+                                            <a href="javascript:void(0)" class="badge badge-default"
+                                               style="font-size: 15px;">{{ p.accion }}</a>
+                                        {% endif %}
+                                    </td>
+
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="tab-pane fade" id="default-tab-3">
+
+                    <h5 class="mb-2">
+                        <i class="fas fa-info-circle"></i>
+                        Ultima conexión
+                    </h5>
+                    {{ request.user.last_login }}
+                </div>
+                <div class="tab-pane fade" id="default-tab-5">
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            {% for s in sesiones %}
+                                <tr class="py-2">
+                                    <td style="width: 80%">
+                                        {% if s.areageografica %}
+                                            {{ s.areageografica }}
+                                            <br>
+                                        {% endif %}
+                                        {{ s.dispositivo }} - {{ s.ip }}
+                                        <br>
+                                        {{ s.fecha_conexion }} {% if s.es_la_actual %}
+                                        <span class="text-success"><strong>Sesión actual</strong></span>{% endif %}
+                                    </td>
+                                    <td class="text-center" style="width: 20%">
+                                        <div class="d-flex align-items-center text-center"
+                                             style="width: 100%;height: 100%;">
+                                            {% if not s.es_la_actual %}
+                                                <div class="btn-group dropleft" role="group">
+                                                    <button id="btnGroupDrop{{ forloop.counter }}" type="button"
+                                                            class="btn btn-white dropdown-toggle" data-toggle="dropdown"
+                                                            aria-haspopup="true" aria-expanded="false">
+                                                        <i class="fas fa-ellipsis-v"></i>
+                                                    </button>
+                                                    <div class="dropdown-menu"
+                                                         aria-labelledby="btnGroupDrop{{ forloop.counter }}">
+                                                        <a onclick="cerrarSesion(this, '{{ s.pk }}')"
+                                                           class="dropdown-item" href="javascript:;">
+                                                            Cerrar sesión
+                                                        </a>
+                                                    </div>
+                                                </div>
+
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <div class="modal fade bs-example-modal-sm" id="myModal" tabindex="-1" role="dialog"
+         aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <form name="frmEliminar" id="frmEliminar" method="POST"
+                      action="{{ ruta }}"> {% csrf_token %}
+                    <div class="modal-header">
+                        <h4 class="modal-title" id="myModalLabel"><strong>Cambiar
+                            contraseña</strong></h4>
+                        <button type="button" class="close" data-dismiss="modal"
+                                aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="id" id="id" value="">
+                        <input type="hidden" name="action" value="add">
+
+                        <label>Clave Actual:</label>
+                        <input class="cloaked form-control" type="text"
+                               id="clave_actual" name="clave_actual" value="" maxlength="15"
+                               autocomplete="off" required>
+                        <br>
+                        <label>Nueva Clave:</label>
+                        <input class="cloaked form-control" type="text" id="clave"
+                               name="clave" value="" maxlength="15"
+                               autocomplete="off" required>
+
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-danger"
+                                data-dismiss="modal"><i class="fa fa-window-close"></i> Cancelar
+                        </button>
+                        <button type="submit" class="btn btn-success" id="btnElimiar">
+                            <i class="fa fa-save"></i> Cambiar Clave
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script>
+
+        function cerrarSesion(ctr, pk) {
+            $.ajax({
+                type: 'POST',
+                url: '/perfilpanel/',
+                data: {'action': 'cerrar_sesion', 'pk': pk, 'csrfmiddlewaretoken': '{{ csrf_token }}'},
+                beforeSend: function () {
+                    pantallaespera();
+                }
+            }).done(function (data) {
+                if(data.resp){
+                    $(ctr).parent().parent().parent().parent().parent().remove();
+                }
+                $.unblockUI();
+            }).fail(function (jqXHR, textStatus, errorThrown) {
+                Swal.fire('Error en el servidor', '', 'error');
+                $.unblockUI();
+            }).always(function () {
+
+            });
+        }
+    </script>
+{% endblock %}

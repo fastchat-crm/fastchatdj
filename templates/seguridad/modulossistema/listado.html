@@ -1,0 +1,201 @@
+{% extends 'base.html' %}
+{% block content %}
+    <form method="GET">
+        <div class="container-fluid-search">
+            <div class="form-row">
+                <div class="col-md col-sm-12">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" placeholder="Buscar" aria-label="Buscar"
+                               aria-describedby="button-addon2" name="criterio" value="{{ criterio }}">
+                        <div class="input-group-append">
+                            <button class="btn btn-primary" type="submit" id="button-addon2"><i
+                                    class="fa fa-search"></i></button>
+                            {% if url_vars %}
+                                <a title="Ver todo" href="{{ request.path }}" class="btn btn-default">
+                                    <i class="fa fa-sync-alt"></i>
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <div class="mb-3">
+        <a href="javascript:void(0)" onclick="formModal(0, 'Adicionar Modulo', 'add')" class="btn btn-success"><i
+                class="fas fa-plus-circle mr-2"></i> Nuevo Modulo</a>
+    </div>
+
+    <div class="panel panel-inverse">
+
+
+        <div class="panel-body">
+            <div class="table-responsive">
+                <table id="tabla" class="table table-bordered table-striped table-td-valign-middle">
+                    <thead>
+                    <tr>
+                        <th class="text-center">
+                            Cod.
+                        </th>
+                        <th class="text-center">
+                            Orden
+                        </th>
+                        <th class="text-center">
+                            Nombre
+                        </th>
+                        <th class="text-center">
+                            Url
+                        </th>
+                        <th class="text-center">
+                            Acción
+                        </th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for mod in listado %}
+                        <tr>
+                            <td class="text-center">
+                                {{ mod.id }}
+                            </td>
+                            <td class="text-center">
+                                {{ mod.orden }}
+                            </td>
+                            <td class="text-center">
+                                {{ mod.nombre }}
+                            </td>
+                            <td class="text-center">
+                                <a href="{{ mod.url }}" target="_blank">{{ mod.url }}</a>
+                            </td>
+                            <td class="text-center">
+                                <a class="btn btn-mini btn-info" title="Editar {{ modulo }}"
+                                   href="javascript:void(0)"
+                                   onclick="formModal({{ mod.id }}, 'Editar {{ mod.nombre }}','change')">
+                                    <i class="fa fa-edit"></i>
+                                </a>
+                                <a class="btn btn-mini btn-danger" title="Eliminar {{ modulo }}"
+                                   onclick="eliminarajax({{ mod.pk }}, '{{ mod.nombre }}', 'delete')"
+                                   href="javascript:void(0);">
+                                    <i class="fa fa-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% include "paginacion.html" %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalListados">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <table class="table table-striped table-bordered table-td-valign-middle">
+                        <thead>
+                        <tr>
+                            <th>Permisos</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalDetalle">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}"
+                      class="form-horizontal form-label-left">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h4 class="modal-title"><b id="modalNombre"></b></h4>
+                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+                    </div>
+                    <div class="modal-body detalleProdModal">
+                    </div>
+                    {#                    <div class="modal-footer" id="footerModalView">#}
+                    {#                        <a href="javascript:;" class="btn btn-white" data-dismiss="modal"><i#}
+                    {#                                class="fa fa-window-close"></i>#}
+                    {#                            Cerrar</a>#}
+                    {#                    </div>#}
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/forms.js?version=13"></script>
+    <script>
+
+        function formModal(id, text, action) {
+            pantallaespera()
+            $.ajax({
+                type: "GET",
+                url: `{{ request.path }}`,
+                data: {
+                    'action': action,
+                    'id': id,
+                },
+                success: function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.result === true) {
+                        $('#modalNombre').html(text);
+                        $('.detalleProdModal').html(data.data);
+                        $('#modalDetalle').modal({backdrop: 'static'}).modal('show');
+                    } else {
+                        mensajeWarning(data.message);
+                    }
+                },
+                error: function () {
+                    setTimeout($.unblockUI, 1);
+                    mensajeWarning("Error de conexión.");
+                },
+                dataType: "json"
+            });
+        }
+
+
+        $(".descrip").blur(function () {
+            var elemento = $(this);
+            var id = elemento.attr("ida");
+            var va = elemento.attr('vl');
+            var texto = elemento.val();
+            if (va != texto) {
+                pantallaespera();
+                $.ajax({
+                    type: "POST",
+                    url: "{{ ruta }}",
+                    data: {'action': 'act_descrip', 'id': id, 'valor': texto},
+                    success: function (data) {
+                        data = data[0]
+                        $.unblockUI();
+                        if (data.result == 'ok') {
+                            elemento.attr({'va': texto})
+                        } else {
+                            elemento.val(elemento.attr('va'));
+                            alertaWarning(data.mensaje);
+                        }
+                    },
+                    error: function () {
+                        $.unblockUI();
+                        elemento.val(elemento.attr('va'));
+                        alertaDanger("Error de conexión.");
+                    },
+                    dataType: "json"
+                });
+            }
+        });
+    </script>
+{% endblock %}

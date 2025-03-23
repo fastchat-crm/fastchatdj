@@ -1,0 +1,20 @@
+/credenciales.json
+**/migrations/**
+!**/migrations
+!**/migrations/__init__.py
+/.idea
+/.idea/**
+/private_key_enc.pem
+/public_key_enc.pem
+/api_google_key.json
+/media/
+/media/**
+!/media/foto_defaultd.png
+!/media/loadmail.gif
+!/media/no-image.webp
+/.vscode
+/.vscode/**
+/vapid.json
+#eliminar archivos de github pero conservar en local
+#git rm --cached archivo.ext
+#git rm --cached -r carpeta

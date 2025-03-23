@@ -1,0 +1,270 @@
+from datetime import datetime
+from decimal import Decimal
+
+from django.contrib.auth.models import Group
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.postgres.fields import ArrayField
+from django.core.validators import MinValueValidator, MaxValueValidator, FileExtensionValidator
+from django.db import models
+from django.db.models import Q
+from django.utils import timezone
+from django.utils.safestring import mark_safe
+
+from area_geografica.models import Ciudad
+from autenticacion.models import Usuario
+from core.custom_models import ModeloBase, NormalModel
+from core.models_utils import FileNameUploadToPath
+from core.validadores import solo_numeros
+from fastchatdj.settings import AUTH_USER_MODEL
+
+
+class ErrorLog(models.Model):
+    usuario = models.ForeignKey(AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name='Usuario', blank=True, null=True)
+    archivo = models.TextField(verbose_name='Archivo', blank=True, null=True)
+    metodo = models.CharField(max_length=100, verbose_name='Metodo', blank=True, null=True)
+    accion = models.CharField(max_length=100, verbose_name='Acción', blank=True, null=True)
+    tipo = models.CharField(max_length=100, verbose_name='Tipo Error', blank=True, null=True)
+    linea = models.CharField(max_length=100, verbose_name='Linea', blank=True, null=True)
+    descripcion = models.TextField(verbose_name='Descripción', blank=True, null=True)
+    corregido = models.BooleanField(default=False, verbose_name="¿Error Corregido?")
+    fecha = models.DateTimeField(verbose_name='Fecha', auto_now_add=True)
+
+    def save(self, force_insert=False, force_update=False, using=None, **kwargs):
+        self.accion = self.accion.upper()
+        super(ErrorLog, self).save(force_insert, force_update, using)
+
+    def __str__(self):
+        return "{} - {} - {} [{}]".format(self.tipo, self.linea, self.descripcion, self.accion)
+
+    class Meta:
+        verbose_name = 'ErrorLog'
+        verbose_name_plural = 'ErrorLogs'
+        ordering = ('-fecha', 'pk')
+
+
+class UsuarioConectado(models.Model):
+    user = models.ForeignKey(AUTH_USER_MODEL, on_delete=models.CASCADE, blank=True, null=True)
+    sesion = models.ForeignKey("sessions.Session", on_delete=models.CASCADE, blank=True, null=True)
+    dispositivo = models.CharField(max_length=1000, blank=True, null=True, verbose_name='Dispositivo')
+    ip = models.CharField(max_length=1000, blank=True, null=True, verbose_name='Ip')
+    fecha_conexion = models.DateTimeField(blank=True, null=True)
+
+    def ultima_vez(self):
+        fechaactual = timezone.now()
+        tiempo = fechaactual - self.fecha_conexion
+        return 'Hace {}'.format(str(tiempo).replace('day', 'dia').split('.')[0])
+
+    def is_not_expired(self):
+        from datetime import datetime
+        return self.sesion.expire_date > datetime.now()
+
+
+class AudiUsuarioTabla(models.Model):
+    usuario = models.ForeignKey(AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name='Usuario', editable=False)
+    usuario_admin = models.ForeignKey(AUTH_USER_MODEL, editable=False, on_delete=models.PROTECT,
+                                      verbose_name='Usuario Administrador', blank=True, null=True,
+                                      related_name="fk_usuario_admin")
+    # GenericForeignKey
+    content_type = models.ForeignKey("contenttypes.ContentType", on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    modelo = GenericForeignKey('content_type', 'object_id')
+    # ----------------------------------------------------------------
+    registroname = models.CharField(max_length=1000, editable=False, verbose_name='Registro Name')
+    accion = models.CharField(max_length=100, verbose_name='Acción', editable=False)
+    fecha = models.DateTimeField(verbose_name='Fecha', auto_now_add=True)
+    datos_json = models.TextField(verbose_name="Datos en formato json", null=True, blank=True, editable=False)
+    ip = models.CharField(max_length=1000, blank=True, null=True, verbose_name='Ip')
+
+    def save(self, force_insert=False, force_update=False, using=None, **kwargs):
+        self.registroname = str(self.registroname).upper()
+        self.accion = self.accion.upper()
+        super(AudiUsuarioTabla, self).save(force_insert, force_update, using)
+
+    def get_model_name(self):
+        return self.modelo.__class__.__name__ if self.modelo else ''
+
+    def __str__(self):
+        return "{} - {} - {} [{}]".format(self.usuario.username, self.modelo.__class__.__name__ if self.modelo else '', self.registroname, self.accion)
+
+    class Meta:
+        verbose_name = 'Auditoría Usuario'
+        verbose_name_plural = 'Auditorías Usuarios'
+        ordering = ('-fecha', 'pk')
+
+
+TIPO_ENTORNO = ((True, "Producción"), (False, "Test"),)
+
+
+TIPO_AMBIENTE_SRI = (
+    (1, u'PRUEBAS'),
+    (2, u'PRODUCCIÓN'),
+)
+
+
+class Configuracion(ModeloBase):
+    nombre_empresa = models.CharField(max_length=1000, verbose_name='Nombre de la Empresa')
+    alias = models.CharField(max_length=1000, blank=True, null=True, verbose_name='Alias')
+    titulo = models.CharField(max_length=1000, blank=True, null=True, verbose_name='Título Web')
+    descripcion = models.CharField(max_length=1000, blank=True, null=True, verbose_name='Descripción Web')
+    telefono = models.CharField(max_length=20, blank=True, null=True, verbose_name='Teléfono Empresa')
+    email = models.CharField(max_length=100, blank=True, null=True, verbose_name='Email Empresa')
+    web = models.CharField(max_length=100, blank=True, null=True, verbose_name='Web')
+    email_notificacion = models.CharField(max_length=100, blank=True, null=True, verbose_name='Email Notificaciones')
+    direccion = models.CharField(max_length=5000, blank=True, null=True, verbose_name='Dirección Empresa')
+    terminosycondiciones = models.TextField(blank=True, null=True, verbose_name='Terminos y Condiciones')
+    # DASHBOARDS
+    dias_nuevo = models.PositiveIntegerField(default=30, verbose_name='Días para considerar un producto como nuevo')
+    # DATOS LOGOS/FONDOS
+    ico = models.FileField(upload_to='configuracion/', max_length=600, blank=True, null=True, verbose_name='Favicon', validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])])
+    logo_sistema = models.FileField(upload_to='configuracion/', validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])], max_length=600, blank=True, null=True, verbose_name='Logo')
+    logo_sistema_white = models.FileField(upload_to='configuracion/', validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])], max_length=600, blank=True, null=True, verbose_name='Logo Blanco')
+    fondo_perfil = models.FileField(upload_to='configuracion/fondo_perfil/', validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])], blank=True, null=True, verbose_name='Fondo de perfil de usuario', help_text='Se recomienda que la imagen tenga un tamaño de 500x281')
+    banner_login = models.FileField(upload_to='configuracion/', validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])], blank=True, null=True, verbose_name='Fondo Login')
+    fondoprincipal = models.FileField(upload_to='configuracion/', validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])], blank=True, null=True, verbose_name='Fondo Principal')
+    imagenprincipal = models.FileField(upload_to='configuracion/', validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])], blank=True, null=True, verbose_name='Imagen Sobre Nosotros')
+    imagen_landing = models.FileField(upload_to='configuracion/', validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])], blank=True, null=True, verbose_name='Imagen Landing')
+
+    @staticmethod
+    def get_instancia():
+        from core.funciones import db_table_exists
+        try:
+            # confi = Configuracion.objects.first()
+            confi = Configuracion.objects.first() if db_table_exists(
+                Configuracion._meta.db_table) and Configuracion.objects.count() > 0 else Configuracion()
+        except Exception as ex:
+            confi = Configuracion()
+        return confi
+
+    class Meta:
+        verbose_name = 'Configuración'
+        verbose_name_plural = 'Configuración'
+        permissions = (
+            ("can_view_auditoria", "Puede ver auditorías"),
+        )
+
+
+class Modulo(ModeloBase):
+    url = models.CharField(max_length=100)
+    nombre = models.CharField(max_length=100)
+    orden = models.IntegerField(default=0)
+
+    def __str__(self):
+        return '{} ({})'.format(self.nombre, self.url)
+
+    class Meta:
+        verbose_name = 'URL del Sidebar'
+        verbose_name_plural = 'URLs del Sidebar'
+        ordering = ['nombre']
+
+
+class GroupModulo(ModeloBase):
+    group = models.OneToOneField(Group, on_delete=models.CASCADE)
+    modulos = models.ManyToManyField(Modulo)
+
+    def __str__(self):
+        return '{}'.format(self.group.name)
+
+    class Meta:
+        verbose_name = 'Asignar Urls a cada rol de usuario'
+        verbose_name_plural = 'Asignar Urls a cada rol de usuario'
+        ordering = ('pk',)
+
+
+class ModuloGrupo(ModeloBase):
+    nombre = models.CharField(max_length=100)
+    icono = models.CharField(max_length=100)
+    modulos = models.ManyToManyField(Modulo)
+    prioridad = models.IntegerField(null=True, blank=True)
+
+    def __str__(self):
+        return '{} {}'.format(self.nombre, self.prioridad)
+
+    class Meta:
+        verbose_name = 'Grupo de URLs del Sidebar'
+        verbose_name_plural = 'Grupos de URLs del Sidebar'
+        ordering = ('prioridad', 'nombre')
+        # permissions = (
+        #     ('')
+        # )
+
+    def modulos_ordenados(self):
+        return self.modulos.all().order_by('orden')
+
+    def modulos_activos(self):
+        return self.modulos.filter(status=True).order_by('orden')
+
+def slug_name(self):
+    from django.utils.text import slugify
+    return slugify(self.name)
+
+
+Group.add_to_class("slug_name", slug_name)
+
+
+class SessionUser(NormalModel):
+    user = models.ForeignKey(AUTH_USER_MODEL, on_delete=models.CASCADE)
+    session = models.OneToOneField("sessions.Session", on_delete=models.CASCADE)
+    dispositivo = models.CharField(max_length=1000, blank=True, null=True, verbose_name='Dispositivo')
+    ip = models.CharField(max_length=1000, blank=True, null=True, verbose_name='Ip')
+    codigounico = models.TextField("Código Único de navegador")
+    fecha_conexion = models.DateTimeField(auto_now_add=True)
+    areageografica = models.CharField("Área Geográfica", max_length=500, null=True, blank=True)
+
+    @staticmethod
+    def nuevo(request):
+        from core.funciones import get_client_ip
+        from django.contrib.sessions.models import Session
+        ucc = SessionUser.objects.get_or_create(session_id=Session.objects.get(session_key=request.session.session_key).pk,
+                                                   user_id=request.user.pk, codigounico=request.COOKIES.get('SISTEMA_DEVICE_ID') or 'SINCODIGO')[0]
+        ucc.fecha_conexion = datetime.now()
+        ucc.ip = get_client_ip(request)
+        ucc.save()
+        return ucc
+
+    def ultima_vez(self):
+        fechaactual = datetime.now()
+        tiempo = fechaactual - self.fecha_conexion.astimezone(timezone.get_current_timezone()).replace(tzinfo=None)
+        return 'Hace {}'.format(str(tiempo).replace('day', 'dia').split('.')[0])
+
+    def is_not_expired(self):
+        from datetime import datetime
+        return self.session.expire_date > datetime.now()
+
+
+class Empresa(ModeloBase):
+    responsable = models.ForeignKey('autenticacion.PerfilAdministrativo', on_delete=models.CASCADE, verbose_name='Responsable')
+    nombre = models.CharField(max_length=100, verbose_name='Nombre')
+    api_key = models.CharField(max_length=300, verbose_name='API Key', default='')
+    dominio = models.URLField(blank=True, null=True, verbose_name='Dominio URL')
+    telefono = models.CharField(max_length=100, blank=True, null=True, verbose_name='Teléfono',validators=[solo_numeros])
+    email = models.EmailField(blank=True, null=True, verbose_name='Email')
+    logo = models.FileField(upload_to='empresa/logo/',validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])],blank=True, null=True, verbose_name='Logo')
+
+    def get_bodegas(self):
+        return self.bodega_set.filter(status=True)
+
+    def __str__(self):
+        return self.nombre
+
+    class Meta:
+        verbose_name = 'Empresa'
+        verbose_name_plural = 'Empresas'
+
+
+class CronLogEjecucion(models.Model):
+    proceso = models.TextField(verbose_name='Proceso', blank=True, null=True)
+    detalle = models.TextField(verbose_name='Detalle de Ejecución', blank=True, null=True)
+    fecha = models.DateField(verbose_name='Fecha', auto_now_add=True)
+    hora = models.TimeField(verbose_name='Hora', auto_now_add=True)
+    conexito = models.BooleanField(default=True, verbose_name='Con Exito')
+
+    def save(self, force_insert=False, force_update=False, using=None, **kwargs):
+        super(CronLogEjecucion, self).save(force_insert, force_update, using)
+
+    def __str__(self):
+        return f"{self.fecha} {self.hora} - {self.proceso} - {self.detalle}"
+
+    class Meta:
+        verbose_name = 'Log de Ejecución'
+        verbose_name_plural = 'Log de Ejecución'
+        ordering = ('-fecha', 'pk')

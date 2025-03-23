@@ -1,0 +1,284 @@
+{% extends 'base.html' %}
+{% block atras %}{{ request.path }}{% endblock %}
+{% block head %}
+    <style>
+        .row [class*='col-'] {
+            background-clip: content-box;
+        }
+    </style>
+{% endblock %}
+{% block atras %}{{ request.path }}{% endblock %}
+{% block content %}
+
+    <div class="panel panel-default" data-sortable-id="form-stuff-2">
+
+        <div class="panel-heading ui-sortable-handle">
+            <h4 class="panel-title">{{ titulo }} Formulario</h4>
+            <div class="panel-heading-btn">
+                <a href="javascript:;" class="btn btn-xs btn-icon btn-circle btn-default" data-click="panel-expand"><i
+                        class="fa fa-expand"></i></a>
+            </div>
+        </div>
+
+        <div class="panel-body">
+            <form autocomplete="off" method="post" enctype="multipart/form-data" action="{{ ruta }}"
+                  class="">
+                {% csrf_token %}
+                <input type="hidden" name="pk" value="{{ pk|default:0 }}"/>
+                <input type="hidden" name="action" value="{{ action }}"/>
+                {{ dict_url_vars_input }}
+                <div class="row">
+                    {% for field in form %}
+                        {% if field.is_hidden %}
+                            {{ field }}
+                        {% elif  field.name == "foto" %}
+                            <div class="col-lg-12">
+                                <div class="form-group">
+                                    <label class="form-label"
+                                           for="id_{{ field.name }}">{{ field.label }}</label>
+                                    <div class="media align-items-center">
+                                        <input type="file"
+                                               name="{{ field.name }}"
+                                               data-default-file="{{ field.field.widget.attrs.data_default_file }}"
+                                               class="form-control"
+                                               id="id_{{ field.name }}"
+                                               data-allowed-file-extensions="jpg png jpeg tiff">
+                                    </div>
+                                    <div class="invalidFeedback text-danger"
+                                         id="errorMessage{{ field.name }}"></div>
+                                </div>
+                            </div>
+                        {% elif field.name == 'direccion' %}
+                            <div class="col-lg-12">
+                                <div class="form-group">
+                                    <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label><br>
+                                    {{ field }}
+                                    <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="col-lg-6">
+                                <div class="form-group">
+                                    <label class="form-label" for="id_{{ field.name }}">{{ field.label }}:</label><br>
+                                    {{ field }}
+                                    {% if field.name == "telegram_id" %}
+                                        <div>
+                                            <a target="_blank"
+                                               href="https://t.me/matsoftnotificaciones_bot?text=/obtener_id_telegram">
+                                                <i class="fa-brands fa-telegram"></i> Ir a Telegram para obtener tu ID
+                                            </a>
+                                            o
+                                            <a href="javascript:;"
+                                               onclick="copiarTextoPortapapeles('@matsoftnotificaciones_bot')">
+                                                <i class="fa-solid fa-copy"></i> Copia el username
+                                            </a>
+                                        </div>
+                                    {% endif %}
+                                    <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                <div class="form-group">
+                    <a class="btn btn-danger" style="color: #ffffff;" href="{{ ruta }}?{{ dict_url_vars_completo }}">
+                        <i class="fa fa-window-close"></i> Cancelar
+                    </a>
+                    <button {% if action != 'ver' %}type="submit" id="submit"{% else %}disabled{% endif %}
+                            class="btn btn-success">
+                        <i class="fa fa-save"></i> Guardar
+                    </button>
+                </div>
+            </form>
+        </div>
+
+    </div>
+
+
+{% endblock %}
+
+{% block jscript %}
+    {{ form.media }}
+    <link href="/static/assets/plugins/tag-it/css/jquery.tagit.css" rel="stylesheet"/>
+    <script src="/static/assets/plugins/jquery-migrate/dist/jquery-migrate.min.js"></script>
+    <script src="/static/assets/plugins/tag-it/js/tag-it.min.js?v=1"></script>
+    <script src="/static/validaciones/funciones.js?v=2.2"></script>
+    <script>
+        $(document).ready(function () {
+
+            var paisper = parseInt('{{ object.ciudad.provincia.pais.id|default_if_none:1 }}');
+            var provper = parseInt('{{ object.ciudad.provincia.id|default_if_none:1 }}');
+            var cantonper = parseInt('{{ object.ciudad.id }}');
+
+            function cargar_provincia(id) {
+                $('#id_provincia, #id_ciudad').empty().append('<option value="">---------</option>').val(0).trigger("change");
+                var control = $(this);
+                pantallaespera();
+                $.ajax({
+                    type: "GET",
+                    url: "/consultas",
+                    data: {'action': 'provincias', 'id': '1'},
+                    success: function (data) {
+                        $.unblockUI();
+                        if (data.result === 'ok') {
+                            estaselec = false;
+                            for (elemento in data.lista) {
+                                selecc = '';
+                                if (estaselec === false) {
+                                    idprov = parseInt(data.lista[elemento][0]);
+                                    if (provper === idprov) {
+                                        estaselec = true;
+                                        selecc = 'selected';
+                                    }
+                                }
+                                $('#id_provincia').append('<option value="' + data.lista[elemento][0] + '" ' + selecc + '>' + data.lista[elemento][1] + '</option>');
+                            }
+                            $("#id_provincia").val(provper).trigger("change");
+                        } else {
+                            $("#id_provincia").val(0).trigger("change");
+                            smoke.alert(data.mensaje);
+                        }
+                    },
+                    error: function () {
+                        $.unblockUI();
+                        $("#id_provincia").val(0).trigger("change");
+                        smoke.alert("Error de conexion.");
+                    },
+                    dataType: "json"
+                });
+            }
+
+            cargar_provincia(paisper)
+
+            $('#id_pais').on('change', function () {
+                var id = parseInt($("#id_pais").val());
+                cargar_provincia(id)
+            })
+
+            $('#id_provincia').change(function () {
+                $('#id_ciudad').empty().append('<option value="">---------</option>').val(0).trigger("change");
+                var id = parseInt($("#id_provincia").val());
+                if (id > 0) {
+                    pantallaespera();
+                    $.ajax({
+                        type: "GET",
+                        url: "/consultas",
+                        data: {'action': 'cantones', 'id': id},
+                        success: function (data) {
+                            $.unblockUI();
+                            if (data.result === 'ok') {
+                                estaselec = false;
+                                for (elemento in data.lista) {
+                                    selecc = '';
+                                    if (estaselec === false) {
+                                        idcanton = parseInt(data.lista[elemento][0]);
+                                        if (cantonper === idcanton) {
+                                            estaselec = true;
+                                            selecc = 'selected';
+                                        }
+                                    }
+                                    $('#id_ciudad').append('<option value="' + data.lista[elemento][0] + '" ' + selecc + '>' + data.lista[elemento][1] + '</option>');
+                                }
+                                $("#id_ciudad").val(cantonper).trigger("change");
+                            } else {
+                                $("#id_ciudad").val(0).trigger("change");
+                                smoke.alert(data.mensaje);
+                            }
+                        },
+                        error: function () {
+                            $.unblockUI();
+                            $("#id_ciudad").val(0).trigger("change");
+                            smoke.alert("Error de conexion.");
+                        },
+                        dataType: "json"
+                    });
+                }
+            });
+
+            {% if action == 'add' or action == 'change' %}
+                $('#id_username').on('blur', function () {
+                    var username = $("#id_username").val();
+                    $.ajax({
+                        type: 'GET',
+                        url: '/ajaxrequest/consultarusername',
+                        data: {'username': username, 'pk': '{{ pk }}'},
+                        success: function (data) {
+                            var object = JSON.parse(data)
+                            if (object.state) {
+                                $("#id_username").val(object.val);
+                                mensajeWarning(`Username ${object.buscado} already exists!`)
+                            }
+                        }
+                    });
+                });
+
+                $('#id_documento').on('blur', function () {
+                    var documento = $("#id_documento").val();
+                    if (documento && (verificarCedula(documento) || (documento.length >= 5 && documento.length < 10))) {
+                        $.ajax({
+                            type: 'GET',
+                            url: '/ajaxrequest/consultarcedula',
+                            data: {'documento': documento, 'pk': '{{ pk }}'},
+                            success: function (data) {
+                                var object = JSON.parse(data)
+                                if (object.state) {
+                                    $("#id_documento").val(object.val);
+                                    mensajeWarning(`Cédula o RUC ${object.buscado} already exists`);
+                                }
+                            }
+                        });
+                    } else {
+                        $("#id_documento").val("");
+                        mensajeWarning('Cédula, RUC o Invalid passport.');
+                    }
+                });
+            {% endif %}
+
+            var foto = $('#id_foto').dropify();
+            foto.on('dropify.beforeClear', function (event, element) {
+                {% if action != 'ver' %}
+                    id = event.target.id;
+                    Swal.fire({
+                        title: "Delete photo?",
+                        text: "You will not be able to undo this operation!",
+                        type: "warning",
+                        showCancelButton: true,
+                        confirmButtonColor: "#DD6B55",
+                        confirmButtonText: "Yes, delete",
+                        cancelButtonText: "No, cancel",
+                    }).then(function (result) {
+                        if (result.value === true) {
+                            {% if action == 'change' %}
+
+                                    postPromise('{{ ruta }}', {
+                                        pk: '{{ pk }}',
+                                        action: 'eliminar_foto',
+                                        'csrfmiddlewaretoken': '{{ csrf_token }}'
+                                    }).then(function (value) {
+                                        if (value.state) {
+                                            var drEvent = foto.data('dropify');
+                                            drEvent.resetPreview();
+                                            drEvent.clearElement();
+                                            $('#id_foto').val(null);
+                                            alertaSuccess('Deleted photo');
+                                            return true;
+                                        } else {
+                                            alertaDanger(value.message);
+                                        }
+                                    });
+
+                            {% else %}
+                                var drEvent = foto.data('dropify');
+                                drEvent.resetPreview();
+                                drEvent.clearElement();
+                                $('#id_foto').val(null);
+                                alertaSuccess('Deleted photo');
+                            {% endif %}
+                        }
+                    });
+                {% endif %}
+                return false;
+            });
+        });
+    </script>
+{% endblock %}

@@ -1,0 +1,21 @@
+<footer class="footer">
+    <div class="container">
+        <div class="d-sm-flex align-items-center justify-content-between pt-4 mt-sm-0">
+            <ul class="nav justify-content-center py-1 pb-sm-2">
+                <li class="nav-item"><a class="nav-link py-2 px-3 mx-1" href="https://www.guaranda.gob.ec/">{{ nombreempresa }}</a></li>
+{#                <li class="nav-item"><a class="nav-link py-2 px-3 mx-1" href="/privacidad/">Privacidad</a></li>#}
+{#                <li class="nav-item"><a class="nav-link py-2 px-3 mx-1" href="/faq/">FAQ</a></li>#}
+            </ul>
+            <div class="d-flex justify-content-center order-sm-2 mb-4 mb-sm-0">
+                {% for l in listredessociales %}
+                    <a class="btn btn-icon btn-sm btn-secondary btn-instagram rounded-circle me-3" target="_blank"
+                       href="{{ l.href }}">
+                        <i class="{{ l.icono|safe }}"></i>
+                    </a>
+                {% endfor %}
+            </div>
+            <p class="fs-sm order-sm-1 text-center mb-0"><span
+                    class="opacity-70">Copyright © 2024</span></p>
+        </div>
+    </div>
+</footer>

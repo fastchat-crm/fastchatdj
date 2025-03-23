@@ -1,0 +1,29 @@
+{% for uc in conectados %}
+    <a href="javascript:;" class="dropdown-item media">
+        <div class="media-left">
+            <img src="{{ uc.user.get_foto }}" class="media-object">
+                    </div>
+        <div class="media-body">
+            <h6 class="media-heading">{{ uc.user.get_full_name }} <i class="fa fa-circle text-success" style="font-size: 7px; !important;"></i></h6>
+            <p>Última Conexión: <b>{{ uc.fecha_conexion|date:"SHORT_DATE_FORMAT" }} {{ uc.fecha_conexion|time:"h:i a" }}</b></p>
+            <p>Ip: <b>{{ uc.ip }}</b></p>
+            <p>Desde: <b style="text-align: justify; white-space: normal; !important;">{{ uc.dispositivo }}</b></p>
+            <div class="text-muted f-s-10">{{ uc.ultima_vez }}</div>
+        </div>
+    </a>
+{% endfor %}
+{% for uc in usuarios %}
+    <a href="javascript:;" class="dropdown-item media">
+        <div class="media-left">
+            <img src="{{ uc.get_foto }}" class="media-object avatar-offline">
+        </div>
+        <div class="media-body">
+            <h6 class="media-heading">{{ uc.user.get_full_name }} <i class="fa fa-circle text-danger" style="font-size: 7px; !important;"></i></h6>
+            <p> Última Conexión: {% if uc.ultima_actividad %}
+                <b>{{ uc.ultima_actividad|date:"SHORT_DATE_FORMAT" }} {{ uc.ultima_actividad|time:"h:i a" }}</b>{% else %}
+                <b>Sin Conexión</b>{% endif %}
+            </p>
+            <div class="text-muted f-s-10">{{ uc.ultima_vez|safe }}</div>
+        </div>
+    </a>
+{% endfor %}

@@ -1,0 +1,21 @@
+{% load templatefunctions %}
+<table class="table table-hover table-bordered">
+    <thead>
+    <tr>
+        <th>Pk</th>
+        {% for c in campos_tabla %}
+        <th>{{ c }}</th>
+        {% endfor %}
+    </tr>
+    </thead>
+    <tbody>
+        {% for d in datos %}
+        <tr>
+            <td>{{ d.pk }}</td>
+            {% for k in campos %}
+            <td>{%  ver_valor_dict d.fields k %}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

@@ -1,0 +1,433 @@
+{% extends 'base.html' %}
+{% block content %}
+    <form method="GET">
+        <div class="container-fluid">
+            <div class="form-row">
+                <div class="col-md-6 col-sm-12 offset-md-6">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" placeholder="Buscar" aria-label="Buscar"
+                               aria-describedby="button-addon2" name="criterio" value="{{ criterio }}">
+                        <div class="input-group-append">
+                            <button class="btn btn-primary" type="submit" id="button-addon2"><i
+                                    class="fa fa-search"></i></button>
+                            {% if url_vars %}
+                                <a title="Ver todo" href="{{ ruta }}?{{ dict_url_vars }}" class="btn btn-primary">
+                                    <i class="fas fa-sync-alt"></i>
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+
+    <div class="mb-3">
+        <a href="?action=add&pk=0&{{ dict_url_vars }}" class="btn btn-success"><i
+                class="fas fa-plus-circle mr-2"></i> Nuevo Registro</a>
+    </div>
+
+
+    <div class="panel panel-default">
+
+
+        <div class="panel-body">
+            <table id="tabla" class="table table-hover table-td-valign-middle table-bordered">
+                <thead>
+                <tr>
+                    <th class="text-center">
+                        Foto
+                    </th>
+                    <th class="text-center">
+                        Username
+                    </th>
+                    <th class="text-center">
+                        Nombres
+                    </th>
+                    <th class="text-center">
+                        Datos de Contacto
+                    </th>
+                    <th class="text-center">
+                        Estados
+                    </th>
+                    <th class="text-center">
+                        Fecha Registro
+                    </th>
+                    <th class="text-center">
+                        Acción
+                    </th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for l in listado %}
+                    <tr>
+                        <td style="text-align: center">
+                            {% if l.foto == '' %}
+                                <img src="{{ l.get_foto }}" width="50px" class="img-thumbnail">
+                            {% else %}
+                                <a href="{{ l.foto.url }}" data-lightbox="roadtrip"
+                                   title="{{ l.username }}">
+                                    <img id="presentaimg2" src="{{ l.foto.url }}"
+                                         class="img-thumbnail"
+                                         width="50px" align="middle"
+                                         alt="...">
+                                </a>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {{ l.username }}
+                        </td>
+                        <td class="text-left">
+                            <i class="fa fa-user"></i> {{ l }}<br>
+                            <i class="fa fa-address-card"></i>
+                            <b>{{ l.get_tipo_documento_display }}</b> {{ l.documento }}
+                            {#                            <i class="fa fa-address-card"></i> {{ l.get_tipo_documento_display }}:#}
+                            {#                            {{ l.documento }}#}
+                        </td>
+                        <td class="text-left">
+                            {% if l.fecha_nacimiento %}
+                                <i class="fa fa-birthday-cake"></i> {{ l.fecha_nacimiento|date:'d/M/Y'|safe }}<br>
+                            {% endif %}
+                            <i class="fa fa-phone"></i> <a href="javascript:void(0)"
+                                                           onclick="contactarwhatsapp('{{ l.telefono_formateado }}', '{{ l.get_full_name }}')">{{ l.telefono_formateado }}</a><br>
+                            <i class="fa fa-envelope"></i> <strong><a
+                                href="mailto:{{ l.email|default:'' }}">{{ l.email|default:'' }}</a></strong>
+                            {% if l.ciudad %}<br>
+                                <i class="fa fa-map-marked"></i> {{ l.ciudad.nombre }}, {{ l.ciudad.provincia.nombre }},
+                                {{ l.ciudad.provincia.pais.nombre }}
+                            {% endif %}
+                            {% if l.lugartrabajo %}<br>
+                                <b><i class="fa fa-building"></i> Lugar de Trabajo:</b> {{ l.lugartrabajo }}
+                            {% endif %}
+                            {% if l.posicionlaboral %}<br>
+                                <b><i class="fa fa-briefcase"></i> Posición Laboral:</b> {{ l.posicionlaboral }}
+                            {% endif %}
+                        </td>
+                        <td class="text-left">
+                            <b>¿Activo?:</b> <i class="{{ l.usuario_activo|safe }}"></i><br>
+                            <b>Perfil Administrativo:</b> {% if l.es_administrativo %}
+                            <i class="fas fa-check-circle text-success"></i>{% else %}
+                            <i class="fas fa-times-circle text-danger"></i>{% endif %}<br>
+                            <b>Perfil Persona:</b> {% if l.es_persona %}
+                            <i class="fas fa-check-circle text-success"></i>{% else %}
+                            <i class="fas fa-times-circle text-danger"></i>{% endif %}
+                        </td>
+                        <td class="text-center">{{ l.fecha_registro|date:'d/M/Y H:i'|safe }}
+                        </td>
+                        <td class="with-btn-group text-center" nowrap>
+                            <div class="btn-group dropleft">
+                                <button type="button" class="btn btn-white btn-sm width-100 dropdown-toggle"
+                                        data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                    <i class="fas fa-angle-left mr-1"></i> Acciones
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-right">
+
+                                    <a class="dropdown-item" title="Editar {{ modulo }}"
+                                       href="?pk={{ l.pk }}&action=change&{{ dict_url_vars }}">
+                                        <i class="fas fa-edit"></i> Editar
+                                    </a>
+                                    {#                                         <a class="dropdown-item"#}
+                                    {#                                           onclick="formModal({{ l.pk }}, 'Adicionar Grupo a {{ l }}', 'changegroup')"#}
+                                    {#                                           href="javascript:void(0);">#}
+                                    {#                                            <i class="fas fa-user-circle"></i> Adicionar Grupo#}
+                                    {#                                        </a>#}
+                                    {% if not l.es_administrativo %}
+                                        <a class="dropdown-item"
+                                           onclick="crearperfiladm({{ l.pk }}, '{{ l }}', 'crearperfiladm', '{{ dict_url_vars }}')"
+                                           href="javascript:void(0);">
+                                            <i class="fas fa-user-plus"></i> Crear Perfil Administrativo
+                                        </a>
+                                    {% endif %}
+                                    <a class="dropdown-item" title="Cambiar Contraseña"
+                                       href="javascript:void(0);"
+                                       onclick="cambiarcontrasena({{ l.pk }},'{{ l }}', '{{ dict_url_vars }}')">
+                                        <i class="fas fa-key"></i> Cambiar Contraseña
+                                    </a>
+
+                                    {% if l.is_active %}
+                                        <a class="dropdown-item" title="Eliminar {{ modulo }}"
+                                           onclick="eliminarajax({{ l.pk }}, '{{ l }}', 'delete', '{{ dict_url_vars }}')"
+                                           href="javascript:void(0);">
+                                            <i class="fas fa-trash"></i> Inhabilitar
+                                        </a>
+                                    {% else %}
+                                        <a class="dropdown-item" title="Activar {{ modulo }}"
+                                           onclick="activarusu({{ l.pk }}, '{{ l }}', 'activate', '{{ dict_url_vars }}')"
+                                           href="javascript:void(0);">
+                                            <i class="fas fa-check-circle"></i> Activar {{ modulo }}
+                                        </a>
+                                    {% endif %}
+
+
+                                    <a class="dropdown-item" title="Ver {{ modulo }}"
+                                       href="{{ ruta }}?pk={{ l.pk }}&action=ver&{{ dict_url_vars }}">
+                                        <i class="fas fa-eye"></i> Ver
+                                    </a>
+                                    {% if request.user.is_superuser %}
+                                        <a class="dropdown-item" title="Ver como {{ l.get_full_name }}"
+                                           href="/seguridad/cambiar-sesion/?pk={{ l.pk }}&path=/">
+                                            <i class="fas fa-sign-in-alt"></i> Ver como {{ l.get_full_name }}
+                                        </a>
+                                    {% endif %}
+
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% include "paginacion.html" %}
+
+
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalChangePassword">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <form autocomplete="off" id="frmEliminar" method="post" enctype="multipart/form-data">{% csrf_token %}
+                    <input type="hidden" id="id_dict_url_vars" name="dict_url_vars" value="">
+                    <div class="modal-header">
+                        <i class="fa fa-key"></i>&nbsp;
+                        <h4 class="modal-title"></h4>
+                        <button class="close" data-dismiss="modal" aria-label="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="pk" id="pk">
+                        <input type="hidden" name="action" id="action">
+                        <label>Nueva Clave:</label>
+                        <input type="password" name="password" class="form-control" data-toggle="password"
+                               data-placement="after" data-eye-class="fas" data-eye-open-class="fa-eye"
+                               data-eye-close-class="fa-eye-slash"><br>
+                        <div class="alert alert-info">
+                            <i class="fa fa-info-circle"></i> Recuerde que la contraseña registrada servirá como clave
+                            actual para la plataforma y el aula virtual.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-success"><i class="fa fa-save"></i> Cambiar Clave</button>
+                        <a href="javascript:;" class="btn btn-white" data-dismiss="modal"><i
+                                class="fa fa-window-close"></i> Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalActivar">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="frmActivar" method="post" enctype="multipart/form-data">{% csrf_token %}
+                    <input type="hidden" id="id_dict_url_vars" name="dict_url_vars" value="">
+                    <div class="modal-header">
+                        <h4 class="modal-title">¿Seguro desea activar este registro?</h4>
+                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info m-b-0">
+                            <h5><i class="fa fa-info-circle"></i> Atención!</h5>
+                            <p>Estas a punto de activar este registro '<b id="elimNombre"></b>'</p>
+                            <input type="hidden" name="id" id="id">
+                            <input type="hidden" name="action" id="action">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-success"><i class="fa fa-save"></i> Activar</button>
+                        <a href="javascript:;" class="btn btn-white" data-dismiss="modal"><i
+                                class="fa fa-window-close"></i> Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalCrearAdministrativo">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="frmAdmin" method="post" enctype="multipart/form-data">{% csrf_token %}
+                    <input type="hidden" id="id_dict_url_vars" name="dict_url_vars" value="">
+                    <div class="modal-header">
+                        <h4 class="modal-title">¿Seguro desea crear perfil administrativo para este usuario?</h4>
+                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-primary m-b-0">
+                            <h5><i class="fa fa-info-circle"></i> Atención!</h5>
+                            <p>Estas a punto de crear perfil administrativo para '<b id="adminNombre"></b>'</p>
+                            <input type="hidden" name="id" id="id">
+                            <input type="hidden" name="action" id="action">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="btn btn-success"><i class="fa fa-check-circle"></i> Crear</button>
+                        <a href="javascript:;" class="btn btn-white" data-dismiss="modal"><i
+                                class="fa fa-window-close"></i> Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalDetalle">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}"
+                      class="form-horizontal form-label-left">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h4 class="modal-title"><b id="modalNombre"></b></h4>
+                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+                    </div>
+                    <div class="modal-body detalleProd">
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+
+
+    <link rel="stylesheet" href="/static/lightbox/css/lightbox.min.css">
+    <script src="/static/lightbox/js/lightbox-plus-jquery.min.js"></script>
+
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/assets/plugins/bootstrap-show-password/dist/bootstrap-show-password.js?v=1"></script>
+    <script src="/static/js/forms.js?version=11"></script>
+    <script>
+        function formModal(id, text, action,) {
+            pantallaespera()
+            $.ajax({
+                type: "GET",
+                url: `{{ request.path }}`,
+                data: {
+                    'action': action,
+                    'id': id,
+                },
+                success: function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.result === true) {
+                        $('#modalNombre').html(text);
+                        $('.detalleProd').html(data.data);
+                        $('#modalDetalle').modal({backdrop: 'static'}).modal('show');
+                    } else {
+                        mensajeWarning(data.message);
+                    }
+                },
+                error: function () {
+                    setTimeout($.unblockUI, 1);
+                    mensajeWarning("Error de conexión.");
+                },
+                dataType: "json"
+            });
+        }
+    </script>
+    <script>
+
+
+        function crearperfiladm(pk, nombre, accion, dict_url_vars = "") {
+            $('#frmAdmin #id').val(pk);
+            $('#frmAdmin #adminNombre').html(nombre);
+            $('#frmAdmin #action').val(accion);
+            $('#frmAdmin #id_dict_url_vars').val(dict_url_vars);
+            $('#modalCrearAdministrativo').modal({backdrop: 'static'}).modal('show');
+        }
+
+        function consultar(pk, nombre) {
+            $.ajax({
+                type: "GET",
+                url: "{{ ruta }}",
+                data: {'action': 'consultar', 'id': pk},
+                success: function (data) {
+                    if (data.result === true) {
+                        $('.tablaaqui').html(data.data)
+                        $('#frmConsulta #nombre').html(nombre);
+                        $('#modalConsulta').modal({backdrop: 'static'}).modal('show');
+                    } else {
+                        alert(data.mensaje);
+                    }
+                },
+                error: function () {
+                    alert("Error de conexión.");
+                },
+                dataType: "json"
+            });
+        }
+
+        function activarusu(pk, nombre, accion, dict_url_vars = "") {
+            $('#frmActivar #id').val(pk);
+            $('#frmActivar #elimNombre').html(nombre);
+            $('#frmActivar #action').val(accion);
+            $('#frmActivar #id_dict_url_vars').val(dict_url_vars);
+            $('#modalActivar').modal({backdrop: 'static'}).modal('show');
+        }
+
+        const modalChangePassword = $('#modalChangePassword');
+
+        function cambiarcontrasena(pk, nombre, dict_url_vars = "") {
+            modalChangePassword.find(".modal-header").children('h4').html(`Nueva Contraseña para ${nombre}`);
+            modalChangePassword.find(".modal-body").children('input[name=password]').val('');
+            modalChangePassword.find(".modal-body").children('input[name=pk]').val(pk.toString());
+            modalChangePassword.find(".modal-body").children('input[name=action]').val('change_password');
+            modalChangePassword.find('#id_dict_url_vars').val(dict_url_vars);
+            modalChangePassword.modal('show');
+        }
+
+        $(document).ready(function () {
+            $('.cloaked').inputCloak();
+        });
+
+        function eliminarajax(pk, nombre, accion, dict_url_vars = "", titulo = `Estas a punto de eliminar este registro ${nombre}`) {
+            Swal.fire({
+                title: titulo,
+                text: "Esta acción es irreversible",
+                type: 'warning',
+                showCancelButton: true,
+                allowOutsideClick: false,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Si, deseo hacerlo!',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.value) {
+                    pantallaespera();
+                    $.ajax({
+                        type: 'POST',
+                        url: '{{ reques.path }}',
+                        async: false,
+                        data: {
+                            csrfmiddlewaretoken: '{{ csrf_token }}',
+                            action: accion,
+                            id: pk,
+                            dict_url_vars: dict_url_vars,
+                        },
+                        dataType: "json",
+                        beforeSend: function () {
+                            pantallaespera();
+                        }
+                    }).done(function (data) {
+                        setTimeout($.unblockUI, 1);
+                        if (data.error === false) {
+                            location.reload();
+                        }
+                    }).fail(function (jqXHR, textStatus, errorThrown) {
+                        setTimeout($.unblockUI, 1);
+                        mensajeWarning('Error en el servidor');
+                    }).always(function () {
+                    });
+                }
+            })
+        }
+
+    </script>
+{% endblock %}

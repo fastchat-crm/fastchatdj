@@ -1,0 +1,18 @@
+{% extends 'email/emailbase.html' %}
+{% block titulo %}{{ titulo|upper }}{% endblock %}
+{% block content %}
+    <div style="color:#555555; line-height:120%; font-family:Arial,'Helvetica Neue',Helvetica,sans-serif; padding-right:10px; padding-left:10px; padding-top:10px; padding-bottom:10px">
+        <div style="font-size:12px; line-height:14px; color:#555555; font-family:Arial,'Helvetica Neue',Helvetica,sans-serif; text-align:left">
+            <p style="margin:0; font-size:14px; line-height:17px">Hola {{ pedido.user.get_full_name }}, </p>
+            <p style="margin:0; font-size:14px; line-height:17px">Su pago de inscripción para: {{ pedido.pedido }}</p>
+            {% for item in pedido.get_detalle %}
+                <p style="margin:0; font-size:14px; line-height:17px"><b>{{ item.item.nombre }}</b></p>
+            {% endfor %}
+            <p style="margin:0; font-size:14px; line-height:17px">fue <b>{{ pedido.get_estado_display }}</b> para más
+                información acceda a nuestro sitio web.</p><br>
+            <p style="margin:0; font-size:14px; line-height:17px;text-align: center;">
+                <span><a href="{{ url_compras }}" target="_blank"><strong> Ir al sitio web </strong></a></span>
+            </p>
+        </div>
+    </div>
+{% endblock %}
