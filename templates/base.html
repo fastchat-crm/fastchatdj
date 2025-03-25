@@ -437,59 +437,6 @@
         </div>
     </div>
 </div>
-<!-- Modal Eliminar -->
-<div class="modal fade" id="modalEliminar" tabindex="-1" aria-labelledby="modalEliminarLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form id="frmEliminar" method="post" enctype="multipart/form-data">{% csrf_token %}
-                <input type="hidden" id="id_dict_url_vars" name="dict_url_vars" value="">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalEliminarLabel">¿Seguro desea eliminar este registro?</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-danger mb-0">
-                        <h5><i class="fa fa-info-circle"></i> Atención!</h5>
-                        <p>Estas a punto de eliminar este registro '<b id="elimNombre"></b>'</p>
-                        <input type="hidden" name="id" id="id">
-                        <input type="hidden" name="action" id="action">
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-danger"><i class="fa fa-trash"></i> Eliminar</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fa fa-window-close"></i> Cancelar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-<!-- Modal Eliminar Con Comentario -->
-<div class="modal fade" id="modalEliminarConComentario" tabindex="-1" aria-labelledby="modalEliminarConComentarioLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form id="frmEliminarConComentario" method="post" enctype="multipart/form-data">{% csrf_token %}
-                <input type="hidden" id="id_dict_url_vars" name="dict_url_vars" value="">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalEliminarConComentarioLabel">¿Seguro desea anular este registro?</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-danger mb-0">
-                        <h5><i class="fa fa-info-circle"></i> Atención!</h5>
-                        <p>Estas a punto de anular este registro '<b id="elimNombre"></b>'</p>
-                        <input type="hidden" name="id" id="id">
-                        <input type="hidden" name="action" id="action">
-                        <textarea name="razon" class="form-control" required placeholder="Ingrese razón de anulación"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-danger"><i class="far fa-calendar-times"></i> Anular</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fa fa-window-close"></i> Cancelar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 <!-- Modal Email Load -->
 <div class="modal fade" id="modalEmailLoad" tabindex="-1" aria-labelledby="modalEmailLoadLabel" aria-hidden="true">
     <div class="modal-dialog modal-sm">
@@ -575,7 +522,7 @@
 </div>
 
 <!-- Javascript  -->
-<script src="/static/assets_riz/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="/static/assets_riz/libs/bootstrap/js/bootstrap.bundle.min.js?1"></script>
 <script src="/static/assets_riz/libs/simplebar/simplebar.min.js"></script>
 <script src="/static/assets_riz/libs/apexcharts/apexcharts.min.js"></script>
 <script src="/static/assets_riz/data/stock-prices.js"></script>
@@ -681,27 +628,22 @@
     }
 
     var msgType = '';
-    {% if messages %}
-        document.addEventListener("DOMContentLoaded", () => {
+
+    window.onload = function () {
+        {% if messages %}
             {% for message in messages %}
-                msgType = '{% if message.tags %}{{ message.tags }}{% endif %}'.toLowerCase();
-                $.gritter.add({
-                    text: '{{ message }}',
-                    class_name: 'gritter-light',
-                    position: 'top-left',
-                    image: msgType === 'success' ? '/static/iconos/success.png' : msgType === 'warning' ? '/static/iconos/warning.png' : msgType === 'error' ? '/static/iconos/danger.png' : '/static/iconos/info.png',
-                    time: '2000',
-                });
-                $('.gritter-close').html(
-                    "Cerrar"
-                );
-                $('.gritter-image').attr(
-                    "style", "width: 24px;height: 24px;"
-                );
-                {#Swal.fire('{{ message }}', '{{ nombreempresa }}', '{% if message.tags %}{{ message.tags }}{% endif %}');#}
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    type: '{% if message.tags %}{{ message.tags }}{% endif %}',
+                    title: '{{ message }}',
+                    showConfirmButton: false,
+                    timer: 1700
+                })
+                console.log('{{ message }}')
             {% endfor %}
-        });
-    {% endif %}
+        {% endif %}
+    }
 
     function notificarEmail(action, id, titulo, ruta) {
         Swal.fire({
@@ -767,25 +709,6 @@
                 )
             }
         })
-
-    }
-
-
-    function eliminar(pk, nombre, accion, dict_url_vars = "{{ dict_url_vars|default:'' }}") {
-        $('#frmEliminar #id').val(pk);
-        $('#frmEliminar #id_dict_url_vars').val(dict_url_vars);
-        $('#frmEliminar #elimNombre').html(nombre);
-        $('#frmEliminar #action').val(accion);
-        $('#modalEliminar').modal({backdrop: 'static'}).modal('show');
-    }
-
-
-    function eliminarConComentario(pk, nombre, accion, dict_url_vars = "{{ dict_url_vars|default:'' }}") {
-        $('#frmEliminarConComentario #id').val(pk);
-        $('#frmEliminarConComentario #id_dict_url_vars').val(dict_url_vars);
-        $('#frmEliminarConComentario #elimNombre').html(nombre);
-        $('#frmEliminarConComentario #action').val(accion);
-        $('#modalEliminarConComentario').modal({backdrop: 'static'}).modal('show');
     }
 
     function eliminarajax(pk, nombre, accion, titulo=`Estas a punto de eliminar este registro ${nombre}`) {

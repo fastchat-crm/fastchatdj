@@ -16,10 +16,14 @@
                     <div class="align-self-center mb-6 mb-lg-0">
                         <div class="d-flex align-items-center flex-row flex-wrap">
                             <div class="position-relative me-3">
-                                <img src="{{ request.user.get_foto_gris }}" alt="" height="120"
-                                     class="rounded-circle">
+                                <a href="{{ request.user.get_foto_gris }}" data-fancybox="profile-image"
+                                   data-caption="Foto de perfil">
+                                    <img src="{{ request.user.get_foto_gris }}" alt="" height="120"
+                                         class="rounded-circle">
+                                </a>
                                 <a href="#"
-                                   class="thumb-md justify-content-center d-flex align-items-center bg-primary text-white rounded-circle position-absolute end-0 bottom-0 border border-3 border-card-bg">
+                                   class="thumb-md justify-content-center d-flex align-items-center bg-primary text-white rounded-circle position-absolute end-0 bottom-0 border border-3 border-card-bg"
+                                   data-bs-toggle="modal" data-bs-target="#modalUpdatePhoto">
                                     <i class="fas fa-camera"></i>
                                 </a>
                             </div>
@@ -72,41 +76,46 @@
                 </li>
             </ul>
             <div class="tab-content">
-                <div class="tab-pane active" id="audilog" role="tabpanel">
+                <div class="tab-pane p-3 active" id="audilog" role="tabpanel">
                     <div class="card">
+                        <div class="card-header">
+                            <h4 class="card-title">Cambiar contraseña</h4>
+                        </div>
                         <div class="card-body pt-0">
-                            <table id="tabla" class="table table-striped">
-                                <thead>
-                                <tr>
-                                    <th class="column-title" style="text-align: center">Fecha</th>
-                                    <th class="column-title" style="text-align: center">Hora</th>
-                                    <th class="column-title" style="text-align: center">Registro</th>
-                                    <th class="column-title" style="text-align: center">Acción</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                {% for p in auditoria %}
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
                                     <tr>
-                                        <td style="text-align: center">{{ p.action_time|date:"SHORT_DATE_FORMAT" }}</td>
-                                        <td style="text-align: center">{{ p.action_time|date:"H:i" }}</td>
-                                        <td style="text-align: center">{{ p.change_message }}</td>
-                                        <td style="text-align: center">
-                                            {% if p.action_flag == 2 %}
-                                                <i class="iconoir-edit-pencil"></i> Edit
-                                            {% elif p.action_flag == 1 %}
-                                                <i class="iconoir-plus-circle"></i> Add
-                                            {% elif p.action_flag == 3 %}
-                                                <i class="iconoir-trash"></i> Delete
-                                            {% else %}
-                                                <div class="badge badge-default"
-                                                     style="font-size: 15px;">{{ p.accion }}</div>
-                                            {% endif %}
-                                        </td>
-
+                                        <th class="column-title" style="text-align: center">Fecha</th>
+                                        <th class="column-title" style="text-align: center">Hora</th>
+                                        <th class="column-title" style="text-align: center">Registro</th>
+                                        <th class="column-title" style="text-align: center">Acción</th>
                                     </tr>
-                                {% endfor %}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                    {% for p in auditoria %}
+                                        <tr>
+                                            <td style="text-align: center">{{ p.action_time|date:"SHORT_DATE_FORMAT" }}</td>
+                                            <td style="text-align: center">{{ p.action_time|date:"H:i" }}</td>
+                                            <td style="text-align: center">{{ p.change_message }}</td>
+                                            <td style="text-align: center">
+                                                {% if p.action_flag == 2 %}
+                                                    <i class="iconoir-edit-pencil"></i> Edit
+                                                {% elif p.action_flag == 1 %}
+                                                    <i class="iconoir-plus-circle"></i> Add
+                                                {% elif p.action_flag == 3 %}
+                                                    <i class="iconoir-trash"></i> Delete
+                                                {% else %}
+                                                    <div class="badge badge-default"
+                                                         style="font-size: 15px;">{{ p.accion }}</div>
+                                                {% endif %}
+                                            </td>
+
+                                        </tr>
+                                    {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -120,69 +129,56 @@
                             </div>
                         </div>
                         <div class="card-body pt-0">
-                            <form name="frmPass" id="frmPass" method="POST" action="{{ request.path }}"
+                            <form name="frmPersonInformation" id="frmPersonInformation" method="POST"
+                                  action="{{ request.path }}"
                                   enctype="multipart/form-data"> {% csrf_token %}
-                                <div class="form-group mb-3 row">
-                                    <label class="col-xl-3 col-lg-3 text-end mb-lg-0 align-self-center form-label">Nombres</label>
-                                    <div class="col-lg-9 col-xl-8">
-                                        <input class="form-control" type="text" name="first_name"
-                                               value="{{ request.user.first_name }}">
-                                    </div>
+                                <input type="hidden" name="action" value="changeperfil">
+                                <div class="row">
+                                    {% for field in formPersona %}
+                                        {% with col=field.field.widget.attrs.col|default:"12" %}
+                                            <div class="col-md-{{ col }}">
+                                                <div class="form-group mb-3">
+                                                    <label class="form-label">{{ field.label|safe }}</label>
+                                                    <div>
+                                                        {% if field.name == 'telefono' %}
+                                                            <div class="input-group">
+                                                                <span class="input-group-text"><i
+                                                                        class="las la-phone"></i></span>
+                                                                {{ field }}
+                                                            </div>
+                                                        {% elif field.name == 'email' %}
+                                                            <div class="input-group">
+                                                                <span class="input-group-text"><i class="las la-at"></i></span>
+                                                                {{ field }}
+                                                            </div>
+                                                        {% elif field.name == 'fecha_nacimiento' %}
+                                                            <div class="input-group">
+                                                                <span class="input-group-text"><i
+                                                                        class="la la-birthday-cake"></i></span>
+                                                                {{ field }}
+                                                            </div>
+                                                        {% else %}
+                                                            {{ field }}
+                                                        {% endif %}
+
+                                                        {% if field.errors %}
+                                                            <div class="invalid-feedback" style="display: block;">
+                                                                {{ field.errors }}
+                                                            </div>
+                                                        {% endif %}
+
+                                                        {% if field.help_text %}
+                                                            <small class="form-text text-muted">{{ field.help_text }}</small>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% endwith %}
+                                    {% endfor %}
                                 </div>
-                                <div class="form-group mb-3 row">
-                                    <label class="col-xl-3 col-lg-3 text-end mb-lg-0 align-self-center form-label">Apellidos</label>
-                                    <div class="col-lg-9 col-xl-8">
-                                        <input class="form-control" type="text" name="last_name"
-                                               value="{{ request.user.last_name }}">
-                                    </div>
-                                </div>
-                                <div class="form-group mb-3 row">
-                                    <label class="col-xl-3 col-lg-3 text-end mb-lg-0 align-self-center form-label">Teléfono</label>
-                                    <div class="col-lg-9 col-xl-8">
-                                        <div class="input-group">
-                                            <span class="input-group-text"><i class="las la-phone"></i></span>
-                                            <input type="text" class="form-control" value="{{ request.user.telefono }}"
-                                                   placeholder="Teléfono" name="telefono"
-                                                   aria-describedby="basic-addon1">
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="form-group mb-3 row">
-                                    <label class="col-xl-3 col-lg-3 text-end mb-lg-0 align-self-center form-label">Correo</label>
-                                    <div class="col-lg-9 col-xl-8">
-                                        <div class="input-group">
-                                            <span class="input-group-text"><i class="las la-at"></i></span>
-                                            <input type="text" class="form-control" value="{{ request.user.email }}"
-                                                   placeholder="Correo" aria-describedby="basic-addon1">
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="form-group mb-3 row">
-                                    <label class="col-xl-3 col-lg-3 text-end mb-lg-0 align-self-center form-label">Fecha
-                                        Nacimiento</label>
-                                    <div class="col-lg-9 col-xl-8">
-                                        <div class="input-group">
-                                            <span class="input-group-text"><i class="la la-birthday-cake"></i></span>
-                                            <input type="date" class="form-control"
-                                                   value="{{ request.user.nacimiento_str }}"
-                                                   placeholder="Email" aria-describedby="basic-addon1">
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="form-group mb-3 row">
-                                    <label class="col-xl-3 col-lg-3 text-end mb-lg-0 align-self-center form-label">USA</label>
-                                    <div class="col-lg-9 col-xl-8">
-                                        <select class="form-select">
-                                            <option>London</option>
-                                            <option>India</option>
-                                            <option>USA</option>
-                                            <option>Canada</option>
-                                            <option>Thailand</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="form-group row">
-                                    <div class="col-lg-9 col-xl-8 offset-lg-3">
+
+                                <div class="form-group row mt-3">
+                                    <div class="col-12">
                                         <a class="btn btn-danger" href="{{ request.path }}">Cancelar</a>
                                         <button class="btn btn-primary" type="submit">Guardar cambios</button>
                                     </div>
@@ -197,7 +193,7 @@
                         <div class="card-body pt-0">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" value="" id="email_notificacion"
-                                      {% if request.user.notificar_por_correo %} checked {% endif %}>
+                                        {% if request.user.notificar_por_correo %} checked {% endif %}>
                                 <label class="form-check-label" for="Email_Notifications">
                                     Notificaciones por correo electrónico
                                 </label>
@@ -258,10 +254,44 @@
         </div>
     </div>
 
+    <div class="modal fade" id="modalUpdatePhoto" tabindex="-1" aria-labelledby="modalUpdatePhotoLabel"
+         aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalUpdatePhotoLabel">Actualizar foto de perfil</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formUpdatePhoto" method="POST" action="{{ request.path }}" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="updatephoto">
+
+                        <div class="text-center mb-4">
+                            <img id="previewImage" src="{{ request.user.get_foto_gris }}" class="rounded-circle mb-3"
+                                 style="width: 150px; height: 150px; object-fit: cover;">
+
+                            <div class="mb-3">
+                                <label for="photoInput" class="form-label">Seleccionar nueva imagen</label>
+                                <input class="form-control" type="file" id="photoInput" name="foto" accept="image/*"
+                                       required>
+                            </div>
+                        </div>
+
+                        <div class="text-center">
+                            <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Guardar cambios</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
 {% endblock %}
 
 {% block jscript %}
-    <script src="/static/js/forms.js?version=11"></script>
+    <script src="/static/js/forms.js?version=1"></script>
     <script src="/static/feather.min.js"></script>
     <script>
         feather.replace({
@@ -277,16 +307,6 @@
                 $(this).find("i").removeClass("fa-eye-slash").addClass("fa-eye");
                 $(this).parent().parent().find(".password").attr("type", "password");
             }
-        });
-    </script>
-    <script>
-        $(document).ready(function () {
-            $('#clave').password({
-                eyeClass: 'fa',
-                eyeOpenClass: 'fa-eye',
-                eyeCloseClass: 'fa-eye-slash',
-                btnClass: 'btn btn-outline-secondary toggle-password'
-            });
         });
     </script>
     <script>
@@ -311,5 +331,96 @@
                 });
             });
         });
+    </script>
+    <script>
+        $(function () {
+
+            var paisper = {{ request.user.ciudad.provincia.pais.id|default:1 }};
+            var provper = {{ request.user.ciudad.provincia.id|default:'0' }};
+            var cantonper = {{ request.user.ciudad.id|default:'0' }};
+
+            function cargar_provincia(id) {
+                $('#id_provincia, #id_ciudad').empty().append('<option value="">---------</option>').val(0).trigger("change");
+                var control = $(this);
+                pantallaespera();
+                $.ajax({
+                    type: "GET",
+                    url: "/consultas",
+                    data: {'action': 'provincias', 'id': id},
+                    success: function (data) {
+                        $.unblockUI();
+                        if (data.result === 'ok') {
+                            estaselec = false;
+                            for (elemento in data.lista) {
+                                selecc = '';
+                                if (estaselec === false) {
+                                    idprov = parseInt(data.lista[elemento][0]);
+                                    if (provper === idprov) {
+                                        estaselec = true;
+                                        selecc = 'selected';
+                                    }
+                                }
+                                $('#id_provincia').append('<option value="' + data.lista[elemento][0] + '" ' + selecc + '>' + data.lista[elemento][1] + '</option>');
+                            }
+                            $("#id_provincia").val(provper).trigger("change");
+                        } else {
+                            $("#id_provincia").val(0).trigger("change");
+                            {#mensajeWarning(data.mensaje);#}
+                        }
+                    },
+                    error: function () {
+                        $.unblockUI();
+                        $("#id_provincia").val(0).trigger("change");
+                        mensajeWarning("Error de conexion.");
+                    },
+                    dataType: "json"
+                });
+            }
+
+            $('#id_pais').on('change', function () {
+                var id = parseInt($("#id_pais").val());
+                cargar_provincia(id)
+            })
+
+            $('#id_provincia').change(function () {
+                $('#id_ciudad').empty().append('<option value="">---------</option>').val(0).trigger("change");
+                var id = parseInt($("#id_provincia").val());
+                if (id > 0) {
+                    pantallaespera();
+                    $.ajax({
+                        type: "GET",
+                        url: "/consultas",
+                        data: {'action': 'cantones', 'id': id},
+                        success: function (data) {
+                            $.unblockUI();
+                            if (data.result === 'ok') {
+                                estaselec = false;
+                                for (elemento in data.lista) {
+                                    selecc = '';
+                                    if (estaselec === false) {
+                                        idcanton = parseInt(data.lista[elemento][0]);
+                                        if (cantonper === idcanton) {
+                                            estaselec = true;
+                                            selecc = 'selected';
+                                        }
+                                    }
+                                    $('#id_ciudad').append('<option value="' + data.lista[elemento][0] + '" ' + selecc + '>' + data.lista[elemento][1] + '</option>');
+                                }
+                                $("#id_ciudad").val(cantonper).trigger("change");
+                            } else {
+                                $("#id_ciudad").val(0).trigger("change");
+                                {#mensajeWarning(data.mensaje);#}
+                            }
+                        },
+                        error: function () {
+                            $.unblockUI();
+                            $("#id_ciudad").val(0).trigger("change");
+                            mensajeWarning("Error de conexion.");
+                        },
+                        dataType: "json"
+                    });
+                }
+            });
+        })
     </script>
 {% endblock %}

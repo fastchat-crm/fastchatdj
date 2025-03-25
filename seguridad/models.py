@@ -302,9 +302,6 @@ class Empresa(ModeloBase):
     email = models.EmailField(blank=True, null=True, verbose_name='Email')
     logo = models.FileField(upload_to='empresa/logo/',validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])],blank=True, null=True, verbose_name='Logo')
 
-    def get_bodegas(self):
-        return self.bodega_set.filter(status=True)
-
     def __str__(self):
         return self.nombre
 

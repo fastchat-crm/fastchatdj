@@ -207,4 +207,24 @@ class GrupoUserForm(ModelFormBase):
                 self.fields[k].widget.attrs['disabled'] = 'disabled'
 
 
+class EditPersonaForm(ModelFormBase):
+    pais = forms.ModelChoiceField(label=u"Pais", required=True, queryset=Pais.objects.filter(status=True).order_by('nombre'))
+    provincia = forms.ModelChoiceField(label=u"Provincia", required=True, queryset=Provincia.objects.filter(status=True).order_by('nombre'))
 
+    class Meta:
+        model = Usuario
+        fields = ('first_name', 'last_name', 'fecha_nacimiento', 'email', 'telefono', 'pais', 'provincia', 'ciudad', 'direccion',)
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        instancia = kwargs["instance"] if 'instance' in kwargs else None
+        super(EditPersonaForm, self).__init__(*args, **kwargs)
+        for k, v in self.fields.items():
+            if k in ('direccion',):
+                self.fields[k].widget.attrs['col'] = "12"
+            else:
+                self.fields[k].widget.attrs['col'] = "6"
+            if k in ('pais', 'provincia', 'ciudad',):
+                self.fields[k].widget.attrs['class'] = "form-control jselect2"
+            else:
+                self.fields[k].widget.attrs['class'] = "form-control"

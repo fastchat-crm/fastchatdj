@@ -72,7 +72,9 @@ if ($('head').children('meta[name=formsJsValidator]').length === 0) {
                         pantallaespera();
                     }
                 }).done(function (data) {
+                        console.log(data);
                     data.forEach(function (value, index) {
+                        console.log(value);
                         if (!value.error) {
                             if (value.reload) {
                                 location.reload();
@@ -109,7 +111,6 @@ if ($('head').children('meta[name=formsJsValidator]').length === 0) {
                                         Swal.fire(value.message, '', 'error');
                                     }
                                 } catch (e) {
-
                                 }
                             } else {
                                 Swal.fire(value.message, '', 'error');
