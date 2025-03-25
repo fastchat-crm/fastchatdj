@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="/static/assets_riz/libs/jsvectormap/css/jsvectormap.min.css">
     <link href="/static/assets_riz/css/bootstrap.min.css" rel="stylesheet" type="text/css"/>
     <link href="/static/assets_riz/css/icons.min.css" rel="stylesheet" type="text/css"/>
-    <link href="/static/assets_riz/css/app.min.css?1.3" rel="stylesheet" type="text/css"/>
+    <link href="/static/assets_riz/css/app.min.css?1.4" rel="stylesheet" type="text/css"/>
     <!-- Include Moment.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
     <link href="/static/assets/plugins/bootstrap-datetimepicker/js/bootstrap-datetimepicker.min.js" rel="stylesheet"/>
@@ -47,8 +47,12 @@
                     </button>
                 </li>
                 <li class="mx-3 welcome-text">
-                    <h3 class="mb-0 fw-bold text-truncate">Bienvenido(a) {{ request.user.first_name }}!</h3>
-{#                    <h6 class="mb-0 fw-normal text-muted text-truncate fs-14">Here's your overview this week.</h6>#}
+                    {% if request.path == '/' or request.path == '/panel/' %}
+                        <h3 class="mb-0 fw-bold text-truncate">Bienvenido(a) {{ request.user.first_name }}!</h3>
+                    {% else %}
+                        <h3 class="mb-0 fw-bold text-truncate">{{ titulo }}</h3>
+                        <h6 class="mb-0 fw-normal text-muted text-truncate fs-14">{{ descripcion }}</h6>
+                    {% endif %}
                 </li>
             </ul>
             <ul class="topbar-item list-unstyled d-inline-flex align-items-center mb-0">
@@ -115,7 +119,8 @@
                                                     <i class="iconoir-apple-swift fs-4"></i>
                                                 </div>
                                                 <div class="flex-grow-1 ms-2 text-truncate">
-                                                    <h6 class="my-0 fw-normal text-dark fs-13">Meeting with designers</h6>
+                                                    <h6 class="my-0 fw-normal text-dark fs-13">Meeting with
+                                                        designers</h6>
                                                     <small class="text-muted mb-0">It is a long established fact that a
                                                         reader.</small>
                                                 </div><!--end media-body-->
@@ -163,7 +168,8 @@
                                             </div><!--end media-->
                                         </a><!--end-item-->
                                     </div>
-                                    <div class="tab-pane fade" id="Projects" role="tabpanel" aria-labelledby="projects-tab"
+                                    <div class="tab-pane fade" id="Projects" role="tabpanel"
+                                         aria-labelledby="projects-tab"
                                          tabindex="0">
                                         <!-- item-->
                                         <a href="#" class="dropdown-item py-3">
@@ -276,13 +282,14 @@
                             <small class="text-muted px-2 py-1 d-block">Configuración</small>
                             {% if sesion_anterior %}
                                 <a class="dropdown-item" href="/seguridad/regresar-sesion/"><i
-                                        class="las la-sign-in-alt fs-18 me-1 align-text-bottom"></i> Regresar a mi sesión</a>
+                                        class="las la-sign-in-alt fs-18 me-1 align-text-bottom"></i> Regresar a mi
+                                    sesión</a>
                             {% endif %}
                             {% if request.user.is_superuser %}
                                 <a class="dropdown-item" href="/admin"><i
                                         class="las la-question-circle fs-18 me-1 align-text-bottom"></i> Administración</a>
                             {% endif %}
-                                <div class="dropdown-divider mb-0"></div>
+                            <div class="dropdown-divider mb-0"></div>
                             <a class="dropdown-item text-danger" href="{% url 'logout_url' %}"><i
                                     class="las la-power-off fs-18 me-1 align-text-bottom"></i> Cerrar Sesión</a>
                         </div>
@@ -304,63 +311,91 @@
             <h3 class="logo-lg logo-dark text-black">{{ alias }}</h3></span>
         </a>
     </div>
-<div class="startbar-menu">
-    <div class="startbar-collapse" id="startbarCollapse" data-simplebar>
-        <div class="d-flex align-items-start flex-column w-100">
-            <ul class="navbar-nav mb-auto w-100">
-                <li class="menu-label pt-0 mt-0">
-                    <span>Menu</span>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="/panel/">
-                        <i class="fa fa-home menu-icon"></i>
-                        <span>Panel</span>
-                    </a>
-                </li>
+    <div class="startbar-menu">
+        <div class="startbar-collapse" id="startbarCollapse" data-simplebar>
+            <div class="d-flex align-items-start flex-column w-100">
+                <ul class="navbar-nav mb-auto w-100">
+                    <li class="menu-label pt-0 mt-0">
+                        <span>Menu</span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/panel/">
+                            <i class="fa fa-home menu-icon"></i>
+                            <span>Panel</span>
+                        </a>
+                    </li>
 
-                {% for grupo in grupos %}
-                <li class="nav-item">
-                    <a class="nav-link {% if grupo.nombre == group %}active{% endif %}" href="#sidebar{{ grupo.nombre|cut:" " }}" data-bs-toggle="collapse" role="button"
-                       aria-expanded="{% if grupo.nombre == group %}true{% else %}false{% endif %}" aria-controls="sidebar{{ grupo.nombre|cut:" " }}">
-                        <i class="{{ grupo.icono }} menu-icon"></i>
-                        <span>{{ grupo.nombre }}</span>
-                    </a>
-                    <div class="collapse {% if grupo.nombre == group %}show{% endif %}" id="sidebar{{ grupo.nombre|cut:" " }}">
-                        <ul class="nav flex-column">
-                            {% for modulo in grupo.modulos_activos %}
-                                {% if modulo.id in modulos_id %}
-                                    <li class="nav-item">
-                                        <a class="nav-link {% if ruta_val|startswith:modulo.url %}active{% endif %}" href="{{ modulo.url }}?{{ dict_url_vars_completo }}">{{ modulo.nombre }}</a>
-                                    </li>
-                                {% endif %}
-                            {% endfor %}
-                        </ul>
+                    {% for grupo in grupos %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if grupo.nombre == group %}active{% endif %}"
+                               href="#sidebar{{ grupo.nombre|cut:" " }}" data-bs-toggle="collapse" role="button"
+                               aria-expanded="{% if grupo.nombre == group %}true{% else %}false{% endif %}"
+                               aria-controls="sidebar{{ grupo.nombre|cut:" " }}">
+                                <i class="{{ grupo.icono }} menu-icon"></i>
+                                <span>{{ grupo.nombre }}</span>
+                            </a>
+                            <div class="collapse {% if grupo.nombre == group %}show{% endif %}"
+                                 id="sidebar{{ grupo.nombre|cut:" " }}">
+                                <ul class="nav flex-column">
+                                    {% for modulo in grupo.modulos_activos %}
+                                        {% if modulo.id in modulos_id %}
+                                            <li class="nav-item">
+                                                <a class="nav-link {% if ruta_val|startswith:modulo.url %}active{% endif %}"
+                                                   href="{{ modulo.url }}?{{ dict_url_vars_completo }}">{{ modulo.nombre }}</a>
+                                            </li>
+                                        {% endif %}
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+
+                <div class="update-msg text-center">
+                    <div class="d-flex justify-content-center align-items-center thumb-lg update-icon-box rounded-circle mx-auto">
+                        <i class="fas fa-lightbulb h3 align-self-center mb-0 text-primary"></i>
                     </div>
-                </li>
-                {% endfor %}
-            </ul>
-
-            <div class="update-msg text-center">
-                <div class="d-flex justify-content-center align-items-center thumb-lg update-icon-box rounded-circle mx-auto">
-                    <i class="fas fa-lightbulb h3 align-self-center mb-0 text-primary"></i>
+                    <h5 class="mt-3">¿Buscas optimizar?</h5>
+                    <p class="mb-3 text-muted">Aumenta la eficiencia de tu asistente de WhatsApp con nuestros planes
+                        premium.</p>
+                    <a href="javascript:void(0);" class="btn text-primary shadow-sm rounded-pill">Contactar a un
+                        asesor</a>
                 </div>
-                <h5 class="mt-3">¿Buscas optimizar?</h5>
-                <p class="mb-3 text-muted">Aumenta la eficiencia de tu asistente de WhatsApp con nuestros planes premium.</p>
-                <a href="javascript:void(0);" class="btn text-primary shadow-sm rounded-pill">Contactar a un asesor</a>
             </div>
         </div>
     </div>
-</div>
 </div>
 
 <div class="startbar-overlay d-print-none"></div>
 
 <div class="page-wrapper">
     <div class="page-content">
-
         <div class="container-xxl">
-            {% block content %}
+            <!-- Breadcrumb modernizado -->
+            <div class="row mb-2">
+                <div class="col-md-8">
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb mb-0 py-2">
+                            {% for rt in ruta_lista %}
+                                <li class="breadcrumb-item">
+                                    <a href="{{ rt.0 }}" class="text-muted">{{ rt.1 }}</a>
+                                </li>
+                            {% endfor %}
+                        </ol>
+                    </nav>
+                </div>
+                <div class="col-md-4 text-end">
+                    {% if not request.path == '/panel/' %}
+                        <a href="{% block atras %}{% if request.path == '/panel/' %}/
+                            {% else %}{% if not tiene_val_get %}/panel/{% else %}{{ request.path }}{% endif %}{% endif %}{% endblock %}"
+                            class="btn btn-default btn-sm">
+                            <i class="fa fa-arrow-circle-left me-1"></i>Atrás
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
 
+            {% block content %}
             {% endblock %}
         </div>
 
@@ -374,7 +409,7 @@
                                     ©
                                     <script> document.write(new Date().getFullYear()) </script>
                                     <span class="text-muted d-none d-sm-inline-block float-end">
-                                            {{ alias }}
+                                        {{ alias }}
                                     </span>
                                 </p>
                             </div>
@@ -391,11 +426,13 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalPostLabel"><i class="fas fa-eye"></i> <strong class="accion"></strong></h5>
+                <h5 class="modal-title" id="modalPostLabel"><i class="fas fa-eye"></i> <strong class="accion"></strong>
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="excluirFormAjax" action="{{ ruta }}" method="POST" enctype="multipart/form-data">{% csrf_token %}
+                <form id="excluirFormAjax" action="{{ ruta }}" method="POST"
+                      enctype="multipart/form-data">{% csrf_token %}
                     <div class="tablaaqui">
                     </div>
                 </form>
@@ -408,7 +445,8 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalGetLabel"><i class="fas fa-eye"></i> <strong class="accion"></strong></h5>
+                <h5 class="modal-title" id="modalGetLabel"><i class="fas fa-eye"></i> <strong class="accion"></strong>
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -425,7 +463,8 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalPostAjaxLabel"><i class="fas fa-eye"></i> <strong class="accion"></strong></h5>
+                <h5 class="modal-title" id="modalPostAjaxLabel"><i class="fas fa-eye"></i> <strong
+                        class="accion"></strong></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -543,7 +582,7 @@
 <!-- BlockUi -->
 <script src="/static/jquery.blockUI.js"></script>
 <!-- Select2 -->
-<link href="/static/select2/select2.min.css?1" rel="stylesheet">
+<link href="/static/select2/select2.min.css?1.3" rel="stylesheet">
 <script src="/static/select2/select2.min.js?1"></script>
 <script src="/static/select2/i18n/es.js"></script>
 <!-- Dropify -->

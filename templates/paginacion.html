@@ -1,139 +1,153 @@
 {% if page.object_list %}
-<div class="dataTables_wrapper dt-bootstrap4" style="margin-bottom: 25px">
-    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2">
-        {# Información de resultados - Estilo exacto DataTables #}
-        <div class="dataTables_info small" role="status" aria-live="polite">
-            Mostrando registros del {{ paging.desde }} al {{ paging.hasta }} de un total de {{ paging.total }} registros
-        </div>
 
-        <div class="dataTables_paginate">
-            <ul class="pagination pagination-sm mb-0">
-                {# Botón Anterior #}
-                <li class="paginate_button page-item {% if not page.has_previous %}disabled{% endif %} mr-1">
-                    <a class="page-link" href="?page={{ page.number|add:'-1' }}{{ url_vars }}"
-                        {% if not page.has_previous %}tabindex="-1" aria-disabled="true"{% endif %}>
-                        Anterior
-                    </a>
-                </li>
-                {# Números de página #}
-                {% if not paging.is_heavy_query %}
-                <div class="d-none d-md-flex">
-                    {% if paging.primera_pagina %}
-                        <li class="paginate_button page-item">
-                            <a class="page-link" href="?page=1{{ url_vars }}">1</a>
-                        </li>
-                    {% endif %}
-                    {% for pagenumber in paging.paginas %}
-                        <li class="paginate_button page-item {% if pagenumber == page.number %}active{% endif %}">
-                            <a class="page-link" href="?page={{ pagenumber }}{{ url_vars }}"
-                               {% if pagenumber == page.number %}aria-current="page"{% endif %}>
-                                {{ pagenumber }}
+    <div class="dataTables_wrapper dt-bootstrap4" style="margin-bottom: 25px; margin-top: 20px">
+        <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2">
+            {# Información de resultados #}
+            <div class="dataTables_info small" role="status" aria-live="polite">
+                Mostrando registros del {{ paging.desde }} al {{ paging.hasta }} de un total de {{ paging.total }}
+                registros
+            </div>
+
+            <div class="dataTables_paginate">
+                <nav aria-label="Page navigation">
+                    <ul class="pagination pagination-sm mb-0">
+                        {# Botón Anterior #}
+                        <li class="page-item {% if not page.has_previous %}disabled{% endif %}">
+                            <a class="page-link" href="?page={{ page.number|add:'-1' }}{{ url_vars }}"
+                               {% if not page.has_previous %}tabindex="-1" aria-disabled="true"{% endif %}
+                               aria-label="Anterior">
+                                <span aria-hidden="true">«</span>
+                                <span class="sr-only">Anterior</span>
                             </a>
                         </li>
-                    {% endfor %}
-                    {% if paging.ultima_pagina %}
-                        <li class="paginate_button page-item">
-                            <a class="page-link" href="?page={{ paging.num_pages }}{{ url_vars }}">
-                                {{ paging.num_pages }}
+
+                        {# Números de página #}
+                        {% if not paging.is_heavy_query %}
+                            {% if paging.primera_pagina %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=1{{ url_vars }}">1</a>
+                                </li>
+                                {% if paging.paginas.0 > 2 %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                {% endif %}
+                            {% endif %}
+
+                            {% for pagenumber in paging.paginas %}
+                                <li class="page-item {% if pagenumber == page.number %}active{% endif %}">
+                                    <a class="page-link" href="?page={{ pagenumber }}{{ url_vars }}"
+                                       {% if pagenumber == page.number %}aria-current="page"{% endif %}>
+                                        {{ pagenumber }}
+                                        {% if pagenumber == page.number %}
+                                            <span class="sr-only">(current)</span>{% endif %}
+                                    </a>
+                                </li>
+                            {% endfor %}
+
+                            {% if paging.ultima_pagina %}
+                                {% if paging.paginas|last < paging.num_pages|add:'-1' %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                {% endif %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ paging.num_pages }}{{ url_vars }}">
+                                        {{ paging.num_pages }}
+                                    </a>
+                                </li>
+                            {% endif %}
+                        {% endif %}
+
+                        {# Botón Siguiente #}
+                        <li class="page-item {% if not page.has_next %}disabled{% endif %}">
+                            <a class="page-link" href="?page={{ page.next_page_number }}{{ url_vars }}"
+                               {% if not page.has_next %}tabindex="-1" aria-disabled="true"{% endif %}
+                               aria-label="Siguiente">
+                                <span aria-hidden="true">»</span>
+                                <span class="sr-only">Siguiente</span>
                             </a>
                         </li>
-                    {% endif %}
-                </div>
-                {% endif %}
-                {# Botón Siguiente #}
-                <li class="paginate_button page-item {% if not page.has_next %}disabled{% endif %} ml-1">
-                    <a class="page-link" href="?page={{ page.next_page_number }}{{ url_vars }}"
-                        {% if not page.has_next %}tabindex="-1" aria-disabled="true"{% endif %}>
-                        Siguiente
-                    </a>
-                </li>
-            </ul>
+                    </ul>
+                </nav>
+            </div>
         </div>
     </div>
-</div>
 {% else %}
-<div class="text-center text-muted small mb-4">
-    <span>No existen resultados para esta búsqueda.</span>
-    <a href="{{ request.path }}" class="text-warning text-decoration-none">
-        Haz clic aquí para reiniciar
-        <i class="bi bi-arrow-clockwise ms-1"></i>
-    </a>
-</div>
+    <div class="text-center text-muted" style="margin-bottom: 25px; margin-top: 20px">
+        <span>No existen resultados para esta búsqueda.</span>
+        <a href="{{ request.path }}" class="text-success text-decoration-none">
+            Haz clic aquí para reiniciar
+            <i class="bi bi-arrow-clockwise ms-1"></i>
+        </a>
+    </div>
 {% endif %}
 
 <style>
-/* Estilos exactos de DataTables Bootstrap 4 */
-.dataTables_wrapper .dataTables_info {
-    font-weight: 600;
-    color: #6f8293;
-    padding-top: 0.5em;
-}
-
-.dataTables_wrapper .dataTables_paginate {
-    display: flex;
-}
-
-.dataTables_wrapper .dataTables_paginate .pagination {
-    margin-left: auto;
-}
-
-.dataTables_wrapper .dataTables_paginate .pagination .paginate_button a {
-    position: relative;
-    display: block;
-    padding: 8px 12px;
-    margin-left: -1px;
-    line-height: 1.25;
-    color: #6f8293;
-    background-color: #fff;
-    border: 1px solid #d5dbe0;
-    font-weight: 600;
-    text-decoration: none;
-    outline: 0;
-    border-radius: 4px;
-}
-
-.dataTables_wrapper .dataTables_paginate .pagination .paginate_button a:hover,
-.dataTables_wrapper .dataTables_paginate .pagination .paginate_button a:focus {
-    color: #2d353c;
-    background: #f2f4f5;
-    border-color: #d5dbe0;
-    z-index: 2;
-}
-
-.dataTables_wrapper .dataTables_paginate .pagination .paginate_button.active a {
-    border-color: #f59c1a;
-    background: #f59c1a;
-    color: #fff;
-    z-index: 3;
-}
-
-.dataTables_wrapper .dataTables_paginate .pagination .paginate_button.disabled a {
-    color: #9ba8b4 !important;
-    pointer-events: none;
-    cursor: auto;
-    background-color: #fff !important;
-    border-color: #d5dbe0 !important;
-}
-
-@media (max-width: 575.98px) {
+    /* Estilos adaptados para la nueva plantilla */
     .dataTables_wrapper .dataTables_info {
-        padding-bottom: 8px;
+        font-weight: 600;
+        color: #6f8293;
+        padding-top: 0.5em;
     }
-    
+
+    .dataTables_wrapper .dataTables_paginate {
+        display: flex;
+    }
+
     .dataTables_wrapper .dataTables_paginate .pagination {
         margin-left: auto;
-        margin-right: auto;
     }
-}
 
-.paginate_button + .paginate_button .page-link {
-    margin-left: 4px;
-}
+    .pagination .page-item .page-link {
+        position: relative;
+        display: block;
+        padding: 8px 12px;
+        margin-left: 4px;
+        line-height: 1.25;
+        color: #6f8293;
+        background-color: #fff;
+        border: 1px solid #d5dbe0;
+        border-radius: 4px;
+        font-weight: 600;
+        text-decoration: none;
+    }
 
-/* Ajustes específicos para Anterior/Siguiente */
-.paginate_button:first-child .page-link,
-.paginate_button:last-child .page-link {
-    {#min-width: 85px;#}
-    text-align: center;
-}
+    .pagination .page-item:first-child .page-link {
+        margin-left: 0;
+    }
+
+    .pagination .page-item .page-link:hover,
+    .pagination .page-item .page-link:focus {
+        color: #2d353c;
+        background: #f2f4f5;
+        border-color: #d5dbe0;
+        z-index: 2;
+    }
+
+    .pagination .page-item.active .page-link {
+        border-color: #22c45e;
+        background: #22C45EFF;
+        color: #fff;
+        z-index: 3;
+    }
+
+    .pagination .page-item.disabled .page-link {
+        color: #9ba8b4;
+        pointer-events: none;
+        cursor: auto;
+        background-color: #fff;
+        border-color: #d5dbe0;
+    }
+
+    @media (max-width: 575.98px) {
+        .dataTables_wrapper .dataTables_info {
+            padding-bottom: 8px;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .pagination {
+            margin-left: auto;
+            margin-right: auto;
+        }
+    }
 </style>

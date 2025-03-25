@@ -26,6 +26,7 @@ def perfilView(request):
     ruta = request.path
     data = {
         'titulo': "Perfil",
+        "descripcion": "Gestionar Perfil de Usuario",
         'modulo': 'Perfil',
         'ruta': ruta,
         'auditoria': LogEntry.objects.filter(user__id=request.user.pk).order_by('-id')[:10],

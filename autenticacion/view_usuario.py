@@ -22,7 +22,8 @@ from .models import Usuario, PerfilAdministrativo, PerfilPersona
 @secure_module
 def usuarioView(request):
     data = {
-        'titulo': 'Administrativos',
+        'titulo': 'Control de Usuarios Administrativos',
+        'descripcion': 'Crear, Editar y Eliminar Administradores',
         'modulo': 'Autenticación',
         'ruta': request.path,
         'fecha': str(date.today()),
@@ -54,7 +55,6 @@ def usuarioView(request):
                                          })
                     else:
                         raise FormError(form)
-
                 elif action == 'change':
 
                     user = model.objects.get(pk=int(request.POST['pk']))
@@ -78,7 +78,6 @@ def usuarioView(request):
                                          })
                     else:
                         raise FormError(form)
-
                 elif action == 'crearperfilpersona':
                     user = model.objects.get(pk=int(request.POST['id']))
                     if not user.es_persona():
@@ -89,8 +88,6 @@ def usuarioView(request):
                         res_json.append({'error': False, "reload": True})
                     else:
                         raise NameError(f"Usuario ya cuenta con perfil persona")
-
-
                 elif action == 'changegroup':
                     filtro = model.objects.get(pk=int(request.POST['pk']))
                     form = GrupoUserForm(request.POST, request.FILES, instance=filtro, request=request)
@@ -103,8 +100,6 @@ def usuarioView(request):
                                          "form": [{k: v[0]} for k, v in form.errors.items()],
                                          "message": "Error en el formulario"
                                          })
-
-
                 elif action == 'delete':
                     user = model.objects.get(pk=int(request.POST['id']))
                     user.is_active = False
@@ -113,7 +108,6 @@ def usuarioView(request):
                     log(f"Inhabilito usuario {user.username} - {user.get_full_name()}", request, "del")
                     messages.success(request, "Inhabilitado correctamente.")
                     res_json = {"error": False}
-
                 elif action == 'activate':
                     user = model.objects.get(pk=int(request.POST['id']))
                     user.is_active = True
@@ -133,14 +127,12 @@ def usuarioView(request):
                     messages.success(request, "Contraseña del usuario {} / {} cambiada".format(user.get_full_name(),
                                                                                                user.username))
                     return redirect(redirectAfterPostGet(request))
-
                 elif action == 'eliminar_foto':
                     user = model.objects.get(pk=int(request.POST['pk']))
                     user.foto = ""
                     user.save(request)
                     log(f"Elimino usuario {user.username} - {user.get_full_name()}", request, "del")
                     return JsonResponse({'state': True})
-
         except ValueError as ex:
             res_json.append({'error': True,
                              "message": str(ex)
@@ -156,15 +148,12 @@ def usuarioView(request):
         if 'action' in request.GET:
             data["action"] = action = request.GET['action']
             if action == 'add':
-
                 form = Formulario()
                 form.fields['provincia'].queryset = Provincia.objects.none()
                 form.fields['ciudad'].queryset = Ciudad.objects.none()
                 data["form"] = form
                 return render(request, 'autenticacion/usuario/form.html', data)
-
             elif action == 'change':
-
                 pk = int(request.GET['pk'])
                 user = model.objects.get(pk=pk)
                 data["pk"] = pk
@@ -179,7 +168,6 @@ def usuarioView(request):
                     form.fields['ciudad'].queryset = Ciudad.objects.none()
                 data["form"] = form
                 return render(request, 'autenticacion/usuario/form.html', data)
-
             elif action == 'changegroup':
                 try:
                     data['id'] = id = int(request.GET['id'])
@@ -190,9 +178,7 @@ def usuarioView(request):
                     return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:
                     pass
-
             elif action == 'ver':
-
                 pk = int(request.GET['pk'])
                 user = model.objects.get(pk=pk)
                 data["pk"] = pk
