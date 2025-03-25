@@ -2,48 +2,55 @@
 {% block atras %}{{ request.path }}{% endblock %}
 {% block content %}
 
-    <div class="panel panel-default" data-sortable-id="form-stuff-2">
-
-        <div class="panel-heading ui-sortable-handle">
-            <h4 class="panel-title">{{ titulo }} Formulario</h4>
-            <div class="panel-heading-btn">
-                <a href="javascript:;" class="btn btn-xs btn-icon btn-circle btn-default" data-click="panel-expand"><i
-                        class="fa fa-expand"></i></a>
-            </div>
-        </div>
-
-        <div class="panel-body">
-            <form method="post" enctype="multipart/form-data" action="{{ ruta }}"
-                  class="form-horizontal form-label-left">
-                {% csrf_token %}
-                <input type="hidden" name="pk" value="{{ pk|default:0 }}"/>
-                <input type="hidden" name="action" value="{{ action }}"/>
-                {{ dict_url_vars_input }}
-                {% for field in form %}
-                    {% if field.is_hidden %}
-                        {{ field }}
-                    {% else %}
-                        <div class="form-group">
-                            <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
-                            {{ field }}
-                            <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+    <div class="row justify-content-center">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <h5 class="card-title mb-0">{{ titulo }} Formulario</h5>
                         </div>
-                    {% endif %}
-                {% endfor %}
-                <div class="form-group">
-                    <a class="btn btn-danger" style="color: #ffffff;" href="{{ ruta }}?{{ dict_url_vars_completo }}">
-                        <i class="fa fa-window-close"></i> Cancelar
-                    </a>
-                    <button {% if action != 'ver' %}type="submit" id="submit"{% else %}disabled{% endif %}
-                            class="btn btn-success">
-                        <i class="fa fa-save"></i> Guardar
-                    </button>
+                    </div>
                 </div>
-            </form>
-        </div>
 
-    </div>
+                <div class="card-body py-2">
+                    <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
+                        {% csrf_token %}
+                        <input type="hidden" name="pk" value="{{ pk|default:0 }}"/>
+                        <input type="hidden" name="action" value="{{ action }}"/>
+                        {{ dict_url_vars_input }}
 
+                        <div class="row g-1">
+                            {% for field in form %}
+                                {% if field.is_hidden %}
+                                    {{ field }}
+                                {% else %}
+                                    <div class="col-lg-6">
+                                        <div class="mb-2">
+                                            <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label><br>
+                                            {{ field }}
+                                            <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+
+                        <div class="row mt-2">
+                            <div class="col-12">
+                                <a class="btn btn-danger btn-sm" href="{{ ruta }}?{{ dict_url_vars_completo }}">
+                                    <i class="fa fa-window-close me-1"></i> Cancelar
+                                </a>
+                                <button {% if action != 'ver' %}type="submit" id="submit"{% else %}disabled{% endif %} class="btn btn-success btn-sm">
+                                    <i class="fa fa-save me-1"></i> Guardar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div><!--end card-body-->
+            </div><!--end card-->
+        </div> <!--end col-->
+    </div><!--end row-->
 
 {% endblock %}
 

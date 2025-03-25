@@ -1,83 +1,81 @@
 {% extends 'base.html' %}
 {% block content %}
-    <form method="GET">
-        <div class="container-fluid-search">
-            <div class="form-row">
-                <div class="col-md col-sm-12">
-                    <div class="input-group mb-3">
-                        <input type="text" class="form-control" placeholder="Buscar" aria-label="Buscar"
-                               aria-describedby="button-addon2" name="criterio" value="{{ criterio }}">
-                        <div class="input-group-append">
-                            <button class="btn btn-primary" type="submit" id="button-addon2"><i
-                                    class="fa fa-search"></i></button>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="GET" class="mb-0">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Búsqueda general</label>
+                        <div class="input-group">
+                            <span class="input-group-text border-end-0">
+                                <i class="fa fa-search text-muted"></i>
+                            </span>
+                            <input type="text" class="form-control border-start-0"
+                                   placeholder="Buscar..." name="criterio" value="{{ criterio }}">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Acciones</label>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i>
+                            </button>
                             {% if url_vars %}
-                                <a title="Ver todo" href="{{ request.path }}" class="btn btn-default">
-                                    <i class="fa fa-sync-alt"></i>
+                                <a href="{{ request.path }}" class="btn btn-default">
+                                    <i class="fas fa-sync-alt"></i>
                                 </a>
                             {% endif %}
                         </div>
                     </div>
                 </div>
-            </div>
+            </form>
         </div>
-    </form>
-
-    <div class="mb-3">
-        <a href="javascript:void(0)" onclick="formModal(0, 'Adicionar Modulo', 'add')" class="btn btn-success"><i
-                class="fas fa-plus-circle mr-2"></i> Nuevo Modulo</a>
     </div>
 
-    <div class="panel panel-inverse">
+    <div class="row align-items-center mb-3">
+        <div class="col-md-12 mb-2 mb-md-0">
+            <a href="javascript:void(0)" onclick="formModal(0, 'Adicionar Modulo', 'add')" class="btn btn-success btn-sm">
+                <i class="fas fa-plus-circle me-2"></i> Nuevo Modulo
+            </a>
+        </div>
+    </div>
 
-
-        <div class="panel-body">
+    <div class="card">
+        <div class="card-body">
             <div class="table-responsive">
-                <table id="tabla" class="table table-bordered table-striped table-td-valign-middle">
+                <table id="tabla" class="table table-hover table-striped">
                     <thead>
                     <tr>
-                        <th class="text-center">
-                            Cod.
-                        </th>
-                        <th class="text-center">
-                            Orden
-                        </th>
-                        <th class="text-center">
-                            Nombre
-                        </th>
-                        <th class="text-center">
-                            Url
-                        </th>
-                        <th class="text-center">
-                            Acción
-                        </th>
+                        <th class="text-center">Cod.</th>
+                        <th class="text-center">Orden</th>
+                        <th class="text-center">Nombre</th>
+                        <th class="text-center">Url</th>
+                        <th class="text-center">Acción</th>
                     </tr>
                     </thead>
                     <tbody>
                     {% for mod in listado %}
                         <tr>
+                            <td class="text-center">{{ mod.id }}</td>
+                            <td class="text-center">{{ mod.orden }}</td>
+                            <td class="text-center">{{ mod.nombre }}</td>
                             <td class="text-center">
-                                {{ mod.id }}
+                                <a href="{{ mod.url }}" target="_blank" class="text-primary">{{ mod.url }}</a>
                             </td>
                             <td class="text-center">
-                                {{ mod.orden }}
-                            </td>
-                            <td class="text-center">
-                                {{ mod.nombre }}
-                            </td>
-                            <td class="text-center">
-                                <a href="{{ mod.url }}" target="_blank">{{ mod.url }}</a>
-                            </td>
-                            <td class="text-center">
-                                <a class="btn btn-mini btn-info" title="Editar {{ modulo }}"
-                                   href="javascript:void(0)"
-                                   onclick="formModal({{ mod.id }}, 'Editar {{ mod.nombre }}','change')">
-                                    <i class="fa fa-edit"></i>
-                                </a>
-                                <a class="btn btn-mini btn-danger" title="Eliminar {{ modulo }}"
-                                   onclick="eliminarajax({{ mod.pk }}, '{{ mod.nombre }}', 'delete')"
-                                   href="javascript:void(0);">
-                                    <i class="fa fa-trash"></i>
-                                </a>
+                                <div class="d-flex justify-content-center gap-2">
+                                    <a class="btn btn-sm btn-primary" title="Editar {{ modulo }}"
+                                       href="javascript:void(0)"
+                                       onclick="formModal({{ mod.id }}, 'Editar {{ mod.nombre }}','change')">
+                                        <i class="fa fa-edit"></i>
+                                    </a>
+                                    <a class="btn btn-sm btn-danger" title="Eliminar {{ modulo }}"
+                                       onclick="eliminarajax({{ mod.pk }}, '{{ mod.nombre }}', 'delete')"
+                                       href="javascript:void(0);">
+                                        <i class="fa fa-trash"></i>
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                     {% endfor %}
@@ -88,23 +86,22 @@
         </div>
     </div>
 
-    <div class="modal fade" id="modalListados">
+    <div class="modal fade" id="modalListados" tabindex="-1" aria-labelledby="modalListadosLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <button class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
+                    <h5 class="modal-title" id="modalListadosLabel">Permisos</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <table class="table table-striped table-bordered table-td-valign-middle">
+                    <table class="table table-striped table-hover">
                         <thead>
                         <tr>
                             <th>Permisos</th>
                         </tr>
                         </thead>
                         <tbody>
-
+                            <!-- Contenido dinámico -->
                         </tbody>
                     </table>
                 </div>
@@ -112,23 +109,18 @@
         </div>
     </div>
 
-    <div class="modal fade" id="modalDetalle">
+    <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
-                <form method="post" enctype="multipart/form-data" action="{{ ruta }}"
-                      class="form-horizontal form-label-left">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
                     {% csrf_token %}
                     <div class="modal-header">
-                        <h4 class="modal-title"><b id="modalNombre"></b></h4>
-                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+                        <h5 class="modal-title" id="modalNombre"></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body detalleProdModal">
+                        <!-- Contenido dinámico cargado por AJAX -->
                     </div>
-                    {#                    <div class="modal-footer" id="footerModalView">#}
-                    {#                        <a href="javascript:;" class="btn btn-white" data-dismiss="modal"><i#}
-                    {#                                class="fa fa-window-close"></i>#}
-                    {#                            Cerrar</a>#}
-                    {#                    </div>#}
                 </form>
             </div>
         </div>
@@ -138,9 +130,8 @@
 {% block jscript %}
     <script src="/static/js/forms.js?version=1"></script>
     <script>
-
         function formModal(id, text, action) {
-            pantallaespera()
+            pantallaespera();
             $.ajax({
                 type: "GET",
                 url: `{{ request.path }}`,
@@ -153,7 +144,10 @@
                     if (data.result === true) {
                         $('#modalNombre').html(text);
                         $('.detalleProdModal').html(data.data);
-                        $('#modalDetalle').modal({backdrop: 'static'}).modal('show');
+
+                        // Usar Bootstrap 5 modal
+                        const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+                        modal.show();
                     } else {
                         mensajeWarning(data.message);
                     }
@@ -165,7 +159,6 @@
                 dataType: "json"
             });
         }
-
 
         $(".descrip").blur(function () {
             var elemento = $(this);
@@ -197,5 +190,47 @@
                 });
             }
         });
+
+        function eliminarajax(pk, nombre, accion, dict_url_vars = "", titulo = `Estas a punto de eliminar este registro ${nombre}`) {
+            Swal.fire({
+                title: titulo,
+                text: "Esta acción es irreversible",
+                type: 'warning',
+                showCancelButton: true,
+                allowOutsideClick: false,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Sí, deseo hacerlo!',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.value) {
+                    pantallaespera();
+                    $.ajax({
+                        type: 'POST',
+                        url: '{{ request.path }}',
+                        async: false,
+                        data: {
+                            csrfmiddlewaretoken: '{{ csrf_token }}',
+                            action: accion,
+                            id: pk,
+                            dict_url_vars: dict_url_vars,
+                        },
+                        dataType: "json",
+                        beforeSend: function () {
+                            pantallaespera();
+                        }
+                    }).done(function (data) {
+                        setTimeout($.unblockUI, 1);
+                        if (data.error === false) {
+                            location.reload();
+                        }
+                    }).fail(function (jqXHR, textStatus, errorThrown) {
+                        setTimeout($.unblockUI, 1);
+                        mensajeWarning('Error en el servidor');
+                    }).always(function () {
+                    });
+                }
+            })
+        }
     </script>
 {% endblock %}

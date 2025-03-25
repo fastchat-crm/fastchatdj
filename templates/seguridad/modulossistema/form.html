@@ -1,4 +1,4 @@
-<div class="row">
+<div class="row g-1">
     <input type="hidden" value="{{ filtro.id }}" name="pk">
     <input type="hidden" name="action" value="{{ action }}"/>
     {% for field in form %}
@@ -6,8 +6,8 @@
             {{ field }}
         {% else %}
             <div class="col-lg-{{ field.field.widget.attrs.col }}">
-                <div class="form-group">
-                    <label class="form-label" for="id_{{ field.name }}">{{ field.label }}:</label><br>
+                <div class="mb-2">
+                    <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label><br>
                     {{ field }}
                     <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
                 </div>
@@ -16,43 +16,16 @@
     {% endfor %}
 </div>
 
-<div class="ln_solid"></div>
+<div class="border-top my-3"></div>
 
-<div class="form-group">
-    <div class="col-md-12 col-sm-12 col-xs-12 col-md-offset-3 text-right">
-        <a href="javascript:;" class="btn btn-danger" data-dismiss="modal"><i
-                class="fa fa-window-close"></i>
-            Cancelar</a>
-        <button type="submit"
-                class="btn btn-success">
-            <i class="fa fa-save"></i> Guardar
-        </button>
-    </div>
+<div class="d-flex justify-content-end">
+    <button type="button" class="btn btn-danger btn-sm me-2" data-bs-dismiss="modal">
+        <i class="fa fa-window-close me-1"></i>Cancelar
+    </button>
+    <button type="submit" class="btn btn-success btn-sm">
+        <i class="fa fa-save me-1"></i>Guardar
+    </button>
 </div>
 
-
-
-{% block jscript %}
-    {{ form.media|safe }}
-    <link href="/static/assets/plugins/switchery/switchery.min.css" rel="stylesheet"/>
-    <script src="/static/assets/plugins/switchery/switchery.min.js"></script>
-    <script src="/static/validaciones/funciones.js?v=2.2"></script>
-    <script src="/static/js/forms.js?version=1"></script>
-    <script>
-        $(function () {
-            $.fn.select2.defaults.set('language', 'es');
-            $('.select2-simple').select2();
-
-             $('.dropify').dropify({
-                messages: {
-                    default: 'Arrastre y suelte un archivo o haga clic aquí.',
-                    replace: 'Arrastre y suelte un archivo o haga clic aquí.',
-                    remove: 'Eliminar',
-                },
-                imgFileExtensions: ["jpg", "jpeg", "png", "tiff", "jfif", "svg"]
-            });
-        })
-
-
-    </script>
-{% endblock %}
+{{ form.media }}
+{% include 'base_formulario_modal.html' %}

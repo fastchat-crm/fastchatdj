@@ -1650,7 +1650,7 @@ body.swal2-toast-column .swal2-toast .swal2-validation-message {
 }
 
 .swal2-modal.swal2-popup .swal2-title {
-    margin: 1.875rem 0 1rem 0
+    margin: 0.875rem 0 10px 0;
 }
 
 .swal2-modal.swal2-popup .swal2-content {

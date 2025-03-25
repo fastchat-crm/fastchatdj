@@ -242,7 +242,7 @@
                 Swal.fire({
                     title: '¿Eliminar esta sesión?',
                     text: 'La sesión se desconectará y todos sus datos serán eliminados.',
-                    icon: 'warning',
+                    type: 'warning',
                     showCancelButton: true,
                     confirmButtonColor: '#dc3545',
                     cancelButtonColor: '#6c757d',
@@ -282,7 +282,7 @@
                 Swal.fire({
                     title: '¿Desconectar esta sesión?',
                     text: 'La sesión de WhatsApp se cerrará, pero podrá reconectarla después.',
-                    icon: 'question',
+                    type: 'question',
                     showCancelButton: true,
                     confirmButtonColor: '#ffc107',
                     cancelButtonColor: '#6c757d',
@@ -463,7 +463,7 @@
                         Swal.fire({
                             title: '¡Conectado!',
                             text: 'La sesión de WhatsApp se ha conectado correctamente.',
-                            icon: 'success',
+                            type: 'success',
                             timer: 2000,
                             showConfirmButton: false
                         }).then(() => {
