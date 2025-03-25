@@ -2,12 +2,48 @@
 {% block head %}
     <style>
         .jstree-anchor {
-            /*enable wrapping*/
             white-space: normal !important;
-            /*ensure lower nodes move down*/
             height: auto !important;
-            /*offset icon width*/
             padding-right: 24px;
+        }
+
+        /* Estilos para el selector de iconos */
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .icon-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .icon-item:hover {
+            background-color: var(--bs-primary-bg-subtle);
+        }
+
+        .icon-item i {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .icon-item .icon-name {
+            font-size: 10px;
+            text-align: center;
+            word-break: break-word;
+        }
+
+        .selected-icon {
+            background-color: var(--bs-primary-bg-subtle);
+            border: 1px solid var(--bs-primary);
         }
     </style>
 {% endblock %}
@@ -40,11 +76,15 @@
                                     <div class="col-lg-6">
                                         <div class="mb-2">
                                             <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label><br>
-                                            {{ field }}
                                             {% if field.name == 'icono' %}
-                                                {# <button id="buscarIcono" type="button" class="btn btn-light text-left btn-block mt-1">
-                                                    <i class="fas fa-search me-1"></i> Buscar Ícono
-                                                </button> #}
+                                                <div class="input-group">
+                                                    {{ field }}
+                                                    <button id="buscarIcono" type="button" class="btn btn-outline-primary">
+                                                        <i class="fas fa-search me-1"></i> Buscar Ícono
+                                                    </button>
+                                                </div>
+                                            {% else %}
+                                                {{ field }}
                                             {% endif %}
                                             {% if field.help_text %}
                                                 <div class="small text-muted mt-1">{{ field.help_text }}</div>
@@ -60,12 +100,26 @@
                             <div class="col-12">
                                 <div class="mb-3">
                                     <label class="form-label small mb-1" for="id_url_aplicaciones">URLs de Aplicaciones</label>
-                                    <select id="busqueda" multiple class="form-select select2"
-                                            data-placeholder="Buscar por Aplicación">
-                                        {% for c in urls_sistema %}
-                                            <option value="{{ c.nombre }}">{{ c.nombre }}</option>
-                                        {% endfor %}
-                                    </select>
+
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-md-6">
+                                            <select id="busqueda" multiple class="form-select select2"
+                                                    data-placeholder="Buscar por Aplicación">
+                                                {% for c in urls_sistema %}
+                                                    <option value="{{ c.nombre }}">{{ c.nombre }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="input-group">
+                                                <span class="input-group-text border-end-0">
+                                                    <i class="fa fa-search text-muted"></i>
+                                                </span>
+                                                <input type="text" id="buscarPorNombre" class="form-control border-start-0"
+                                                    placeholder="Buscar por nombre...">
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     <!-- Checkboxes ocultos -->
                                     {% for c in urls_sistema %}
@@ -94,18 +148,18 @@
                                     {% endfor %}
 
                                     <!-- Árbol de URLs -->
-                                    <div id="jstree-modulos-urls" class="border rounded p-3 mt-2">
+                                    <div id="jstree-modulos-urls" class="border rounded p-3 mt-1">
                                         {% autoescape on %}
                                             <ul>
                                                 {% for c in urls_sistema %}
-                                                    <li data-paraBuscar="{{ c.nombre }}" data-jstree='{"opened":true, "dnd":false}'>
+                                                    <li data-paraBuscar="{{ c.nombre }}" data-nombre="{{ c.nombre|lower }}" data-jstree='{"opened":true, "dnd":false}'>
                                                         <label class="me-2" for="app_{{ forloop.counter }}">{{ c.nombre }}
                                                             ({{ c.url }})</label>
                                                         {% if c.sub_urls %}
                                                             <ul>
                                                                 {% for sc in c.sub_urls %}
                                                                     {% with '/'|add:c.url|add:sc.url as link_modulo %}
-                                                                        <li data-jstree='{{ sc.dicJsTree }}'>
+                                                                        <li data-nombre="{{ sc.nombre|lower }}" data-jstree='{{ sc.dicJsTree }}'>
                                                                             {{ sc.nombre }} - (/{{ c.url }}{{ sc.url }})
                                                                         </li>
                                                                     {% endwith %}
@@ -138,36 +192,84 @@
         </div> <!--end col-->
     </div><!--end row-->
 
+    <!-- Modal para selección de iconos -->
     <div class="modal fade" id="modalIcons" tabindex="-1" aria-labelledby="modalIconsLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="modalIconsLabel">Seleccione un ícono</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body pb-2">
-                    <div class="row">
+                <div class="modal-body">
+                    <div class="row mb-3">
                         <div class="col-12">
-                            <div class="mb-3">
-                                <label class="form-label small mb-1">Buscar ícono</label>
-                                <div class="input-group">
-                                    <span class="input-group-text border-end-0">
-                                        <i class="fa fa-search text-muted"></i>
-                                    </span>
-                                    <input id="txtBuscarIcono" type="search" class="form-control border-start-0"
-                                           placeholder="Buscar (en inglés también)"/>
-                                </div>
+                            <div class="input-group">
+                                <span class="input-group-text border-end-0">
+                                    <i class="fa fa-search text-muted"></i>
+                                </span>
+                                <input id="txtBuscarIcono" type="search" class="form-control border-start-0"
+                                       placeholder="Buscar ícono..."/>
                             </div>
                         </div>
                     </div>
-
-                    <div id="iconsContainer" class="row g-2">
-                        <!-- Contenido dinámico de íconos -->
+                    <div class="nav nav-tabs mb-3" role="tablist">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-iconoir" type="button">Iconoir</button>
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-icofont" type="button">Icofont</button>
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-lineawesome" type="button">Line Awesome</button>
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-fontawesome" type="button">Font Awesome</button>
+                    </div>
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="tab-iconoir" role="tabpanel">
+                            <div id="iconoir-container" class="icon-grid">
+                                <!-- Iconos iconoir -->
+                                <div class="icon-item" data-icon="iconoir-menu-scale"><i class="iconoir-menu-scale"></i><span class="icon-name">menu-scale</span></div>
+                                <div class="icon-item" data-icon="iconoir-search"><i class="iconoir-search"></i><span class="icon-name">search</span></div>
+                                <div class="icon-item" data-icon="iconoir-wolf"><i class="iconoir-wolf"></i><span class="icon-name">wolf</span></div>
+                                <div class="icon-item" data-icon="iconoir-apple-swift"><i class="iconoir-apple-swift"></i><span class="icon-name">apple-swift</span></div>
+                                <div class="icon-item" data-icon="iconoir-birthday-cake"><i class="iconoir-birthday-cake"></i><span class="icon-name">birthday-cake</span></div>
+                                <div class="icon-item" data-icon="iconoir-drone"><i class="iconoir-drone"></i><span class="icon-name">drone</span></div>
+                                <div class="icon-item" data-icon="iconoir-user"><i class="iconoir-user"></i><span class="icon-name">user</span></div>
+                                <div class="icon-item" data-icon="iconoir-plus-circle"><i class="iconoir-plus-circle"></i><span class="icon-name">plus-circle</span></div>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="tab-icofont" role="tabpanel">
+                            <div id="icofont-container" class="icon-grid">
+                                <!-- Iconos icofont -->
+                                <div class="icon-item" data-icon="icofont-sun"><i class="icofont-sun"></i><span class="icon-name">sun</span></div>
+                                <div class="icon-item" data-icon="icofont-moon"><i class="icofont-moon"></i><span class="icon-name">moon</span></div>
+                                <div class="icon-item" data-icon="icofont-bell-alt"><i class="icofont-bell-alt"></i><span class="icon-name">bell-alt</span></div>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="tab-lineawesome" role="tabpanel">
+                            <div id="lineawesome-container" class="icon-grid">
+                                <!-- Iconos line awesome -->
+                                <div class="icon-item" data-icon="las la-user"><i class="las la-user"></i><span class="icon-name">user</span></div>
+                                <div class="icon-item" data-icon="las la-wallet"><i class="las la-wallet"></i><span class="icon-name">wallet</span></div>
+                                <div class="icon-item" data-icon="las la-cog"><i class="las la-cog"></i><span class="icon-name">cog</span></div>
+                                <div class="icon-item" data-icon="las la-lock"><i class="las la-lock"></i><span class="icon-name">lock</span></div>
+                                <div class="icon-item" data-icon="las la-question-circle"><i class="las la-question-circle"></i><span class="icon-name">question-circle</span></div>
+                                <div class="icon-item" data-icon="las la-power-off"><i class="las la-power-off"></i><span class="icon-name">power-off</span></div>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="tab-fontawesome" role="tabpanel">
+                            <div id="fontawesome-container" class="icon-grid">
+                                <!-- Iconos font awesome -->
+                                <div class="icon-item" data-icon="fa fa-search"><i class="fa fa-search"></i><span class="icon-name">search</span></div>
+                                <div class="icon-item" data-icon="fas fa-plus-circle"><i class="fas fa-plus-circle"></i><span class="icon-name">plus-circle</span></div>
+                                <div class="icon-item" data-icon="fas fa-edit"><i class="fas fa-edit"></i><span class="icon-name">edit</span></div>
+                                <div class="icon-item" data-icon="fas fa-trash"><i class="fas fa-trash"></i><span class="icon-name">trash</span></div>
+                                <div class="icon-item" data-icon="fas fa-eye"><i class="fas fa-eye"></i><span class="icon-name">eye</span></div>
+                                <div class="icon-item" data-icon="fas fa-ellipsis-v"><i class="fas fa-ellipsis-v"></i><span class="icon-name">ellipsis-v</span></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
                         <i class="fa fa-window-close me-1"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" id="seleccionarIcono">
+                        <i class="fa fa-check me-1"></i> Seleccionar
                     </button>
                 </div>
             </div>
@@ -189,33 +291,96 @@
                 width: '100%'
             });
 
-            // Manejar cambios en el selector de filtro
+            // Manejar cambios en el selector de aplicación
             $('#busqueda').change(function() {
-                var seleccionadas = $(this).children('option:selected').toArray();
-                var opciones = [];
-                for (var i = 0; i < seleccionadas.length; i++) {
-                    opciones.push($(seleccionadas[i]).val().toUpperCase())
-                }
-                if (seleccionadas.length > 0) {
-                    $('.jstree-container-ul > li').each(function() {
-                        var currentLiText = $(this).attr('data-paraBuscar').toUpperCase(),
-                            showCurrentLi = opciones.indexOf(currentLiText) !== -1;
-                        $(this).toggle(showCurrentLi);
-                    });
-                } else {
-                    $('.jstree-container-ul > li').each(function() {
-                        $(this).toggle(true);
-                    });
-                }
+                filtrarArbol();
             });
 
-            // Si está descomentado, asociar el evento del botón de buscar ícono
-            /*
+            // Manejar cambios en la búsqueda por nombre
+            $('#buscarPorNombre').on('input', function() {
+                filtrarArbol();
+            });
+
+            // Función para filtrar el árbol
+            function filtrarArbol() {
+                // Obtener aplicaciones seleccionadas
+                const appSeleccionadas = $('#busqueda').children('option:selected').toArray();
+                const opciones = [];
+                for (let i = 0; i < appSeleccionadas.length; i++) {
+                    opciones.push($(appSeleccionadas[i]).val().toUpperCase());
+                }
+
+                // Obtener texto de búsqueda
+                const textoBusqueda = $('#buscarPorNombre').val().toLowerCase();
+
+                // Aplicar filtros
+                $('.jstree-container-ul > li').each(function() {
+                    // Filtro por aplicación
+                    let mostrarPorApp = true;
+                    if (opciones.length > 0) {
+                        const appText = $(this).attr('data-paraBuscar').toUpperCase();
+                        mostrarPorApp = opciones.indexOf(appText) !== -1;
+                    }
+
+                    // Filtro por nombre (buscar en los hijos también)
+                    let mostrarPorNombre = true;
+                    if (textoBusqueda) {
+                        const nombreApp = $(this).attr('data-nombre');
+                        let encontrado = nombreApp && nombreApp.includes(textoBusqueda);
+
+                        // Buscar en los hijos
+                        if (!encontrado) {
+                            // Primero mostrar todos los hijos para poder buscar
+                            $(this).find('li').each(function() {
+                                const nombreHijo = $(this).attr('data-nombre');
+                                if (nombreHijo && nombreHijo.includes(textoBusqueda)) {
+                                    encontrado = true;
+                                    return false; // Salir del bucle
+                                }
+                            });
+                        }
+
+                        mostrarPorNombre = encontrado;
+                    }
+
+                    // Mostrar si cumple ambos filtros
+                    $(this).toggle(mostrarPorApp && mostrarPorNombre);
+                });
+            }
+
+            // Búsqueda de iconos
+            let iconoSeleccionado = '';
+
             $('#buscarIcono').on('click', function() {
                 const modal = new bootstrap.Modal(document.getElementById('modalIcons'));
                 modal.show();
             });
-            */
+
+            $('#txtBuscarIcono').on('input', function() {
+                const texto = $(this).val().toLowerCase();
+                $('.icon-item').each(function() {
+                    const nombreIcono = $(this).find('.icon-name').text().toLowerCase();
+                    const dataIcon = $(this).data('icon').toLowerCase();
+                    const mostrar = nombreIcono.includes(texto) || dataIcon.includes(texto);
+                    $(this).toggle(mostrar);
+                });
+            });
+
+            $('.icon-item').on('click', function() {
+                $('.icon-item').removeClass('selected-icon');
+                $(this).addClass('selected-icon');
+                iconoSeleccionado = $(this).data('icon');
+            });
+
+            $('#seleccionarIcono').on('click', function() {
+                if (iconoSeleccionado) {
+                    $('#id_icono').val(iconoSeleccionado);
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('modalIcons'));
+                    modal.hide();
+                } else {
+                    mensajeWarning('Por favor seleccione un ícono');
+                }
+            });
         });
     </script>
 {% endblock %}
