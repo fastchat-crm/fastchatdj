@@ -92,6 +92,68 @@ class AudiUsuarioTabla(models.Model):
         ordering = ('-fecha', 'pk')
 
 
+PRIORIDAD_NOTIFICACION = (
+    (1, u'Alta'),
+    (2, u'Media'),
+    (3, u'Baja')
+)
+
+TIPO_NOTIFICACION = (
+    (1, u'Mensaje'),
+    (2, u'Proceso'),
+    (3, u'Información'),
+    (4, u'Error')
+)
+
+
+class Notificacion(ModeloBase):
+    titulo = models.CharField(verbose_name=u'Titulo de la Notificación', max_length=300, null=True, blank=True)
+    cuerpo = models.TextField(verbose_name=u'Cuerpo de la Notificación', null=True, blank=True)
+    destinatario = models.ForeignKey('autenticacion.Usuario', verbose_name=u'Destinatario', on_delete=models.CASCADE)
+    url = models.CharField(verbose_name=u'URL de enlace directo', max_length=300, null=True, blank=True)
+    leido = models.BooleanField(default=False, verbose_name=u'Leído')
+    fecha_hora_leido = models.DateTimeField(blank=True, null=True, verbose_name=u'Fecha y hora de leido')
+    fecha_hora_visible = models.DateTimeField(blank=True, null=True, verbose_name=u'Fecha y hora visible')
+    prioridad = models.IntegerField(choices=PRIORIDAD_NOTIFICACION, null=True, blank=True, verbose_name=u'Prioridad')
+    tipo = models.IntegerField(choices=TIPO_NOTIFICACION, default=1, verbose_name=u'Tipo Notificación')
+    en_proceso = models.BooleanField(default=False, verbose_name='En Proceso')
+    error = models.BooleanField(default=False, verbose_name='Error al ejecutar el reporte')
+
+    def color_str(self):
+        color = 'text-black'
+        if self.tipo == 1:
+            color = 'text-info'
+        elif self.tipo == 2:
+            color = 'text-primary'
+        elif self.tipo == 3:
+            color = 'text-success'
+        elif self.tipo == 4:
+            color = 'text-danger'
+        return color
+
+    def __str__(self):
+        return u'Notificación: %s - Para: %s' % (self.titulo, self.destinatario)
+
+    def diasingresado(self):
+        fecha_hora_registro = datetime.combine(self.fecha_registro, self.hora_registro)
+        tiempo_actual = timezone.now()
+        tiempo_transcurrido = tiempo_actual - fecha_hora_registro
+        dias = tiempo_transcurrido.days
+        segundos = tiempo_transcurrido.seconds
+        horas = segundos // 3600
+        minutos = (segundos // 60) % 60
+        segundos = segundos % 60
+        return f"{dias} días, {horas} horas, {minutos} minutos, {segundos} segundos"
+
+    def save(self, *args, **kwargs):
+        super(Notificacion, self).save(*args, **kwargs)
+
+    class Meta:
+        verbose_name = u"Notificación"
+        verbose_name_plural = u"Notificaciones"
+        ordering = ['destinatario', 'fecha_registro', ]
+
+
 TIPO_ENTORNO = ((True, "Producción"), (False, "Test"),)
 
 

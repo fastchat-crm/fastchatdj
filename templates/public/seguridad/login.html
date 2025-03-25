@@ -7,9 +7,9 @@
         <div class="d-flex flex-column align-items-center w-lg-50 h-100 px-3 px-lg-5 pt-2">
             <div class="w-100 mt-auto" style="max-width: 526px;">
                 <h1>Iniciar Sesión</h1>
-{#                <p class="pb-3 mb-3 mb-lg-4">#}
-{#                    ¿Aún no tienes una cuenta?&nbsp;&nbsp;<a href='/register/'>Registrate ahora!</a>#}
-{#                </p>#}
+                {#                <p class="pb-3 mb-3 mb-lg-4">#}
+                {#                    ¿Aún no tienes una cuenta?&nbsp;&nbsp;<a href='/register/'>Registrate ahora!</a>#}
+                {#                </p>#}
                 <form method="post" id="frm-logear">{% csrf_token %}
                     {% if next %}
                         <input type="hidden" name="next" value="{{ next }}">
@@ -53,11 +53,50 @@
 
 {% endblock %}
 {% block jscript %}
+    <script src="/static/js/sysend.js"></script>
+    <script src="/static/js/infoClient.js"></script>
     <script>
+
+        // Sincronización de sesiones entre pestañas
+        sysend.on('login_successful', function (data) {
+            console.log('Se recibió notificación de inicio de sesión en otra pestaña', data);
+
+            // Guardar los datos de sesión recibidos
+            localStorage.clear();
+            localStorage.setItem('sessionid', data.sessionid);
+            window.name = data.sessionid;
+
+            // Mostrar mensaje de redirección
+            Swal.fire({
+                title: 'Sesión iniciada en otra ventana',
+                text: 'Redirigiendo...',
+                icon: 'info',
+                timer: 2000,
+                showConfirmButton: false,
+                customClass: {
+                    popup: 'animated-popup'
+                }
+            }).then(function () {
+                // Redirigir a la URL correspondiente
+                window.location = data.url;
+            });
+        });
+
         $('#frm-logear').on({
-            submit: function (e) {
+            submit: async function (e) {
                 e.preventDefault();
                 var frmData = new FormData($(this)[0]);
+
+                // Obtener información del cliente
+                const clientInfo = await getClientInfo();
+
+                // Añadir información al FormData
+                frmData.append('navegador', clientInfo.browser);
+                frmData.append('sistema_operativo', clientInfo.os);
+                frmData.append('tipo_dispositivo', clientInfo.deviceType);
+                frmData.append('ip_cliente_js', clientInfo.clientIP);
+                frmData.append('tamano_pantalla', clientInfo.screenSize);
+
                 $.ajax({
                     url: '/login/',
                     data: frmData,
@@ -74,7 +113,16 @@
                     setTimeout($.unblockUI, 1);
                     if (data.resp === true) {
                         if (data.redirect) {
-                            location = data.redirect;
+                            localStorage.clear();
+                            localStorage.setItem('sessionid', data.sessionid);
+                            window.name = data.sessionid;
+                            window.location = data.redirect;
+                            // Transmitir el éxito del login a todas las otras pestañas
+                            sysend.broadcast('login_successful', {
+                                sessionid: data.sessionid,
+                                url: data.url,
+                                timestamp: new Date().getTime()
+                            });
                         } else {
                             location = "/";
                         }

@@ -1,383 +1,454 @@
 {% load templatefunctions %}
 {% load static %}
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" dir="ltr" data-startbar="light" data-bs-theme="light">
+
 <head>
     <meta charset="utf-8"/>
     <title>{{ titulo }} | {{ nombreempresa }}</title>
-    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
-    <meta name="description" content="ISP">
-    <meta name="theme-color" content="#2874A6">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta content="{{ confi.descripcion }}" name="description"/>
     <meta name="keywords" content="{{ nombreempresa }}">
     <link href="{{ favicon }}" rel="shortcut icon"/>
-    <link href="/static/fonts/family-roboto/family-roboto.css" rel="stylesheet"/>
-    <link href="/static/fonts/material-icons/material-icons.css" rel="stylesheet"/>
-    {#    <link href="/static/assets/css/google/app.min.css" rel="stylesheet"/>#}
-    <link href="/static/assets/css/default/app.min.old.css?4.1" rel="stylesheet"/>
-{#    <link href="/static/assets/css/default/app.min.css?15.18" rel="stylesheet"/>#}
-{#    <link href="/static/fonts/fontawesome/css/all.css?v=6.1.1" rel="stylesheet"/>#}
-    <link href="/static/fontawesome-6.6.0/css/all.css" rel="stylesheet"/>
-    <script src="/static/fontawesome-6.6.0/js/all.js"></script>
-    <link href="/static/assets/plugins/bootstrap-datepicker/dist/css/bootstrap-datepicker.css" rel="stylesheet"/>
+    <meta name="theme-color" content="#2874A6">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+    <!-- App css -->
+    <link rel="stylesheet" href="/static/assets_riz/libs/jsvectormap/css/jsvectormap.min.css">
+    <link href="/static/assets_riz/css/bootstrap.min.css" rel="stylesheet" type="text/css"/>
+    <link href="/static/assets_riz/css/icons.min.css" rel="stylesheet" type="text/css"/>
+    <link href="/static/assets_riz/css/app.min.css?1.3" rel="stylesheet" type="text/css"/>
     <!-- Include Moment.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
     <link href="/static/assets/plugins/bootstrap-datetimepicker/js/bootstrap-datetimepicker.min.js" rel="stylesheet"/>
     <link rel="stylesheet" href="/static/assets/plugins/bootstrap-datetimepicker/css/bootstrap-datetimepicker.min.css">
     <link href="/static/assets/plugins/gritter/css/jquery.gritter.css" rel="stylesheet"/>
-{#    {% load pwa %}#}
-{#    {% progressive_web_app_meta %}#}
+    <!-- Adicionales -->
+    <link href="/static/base_adicional.css?1.1" rel="stylesheet" type="text/css"/>
+    <link href="/static/base_tablas.css?1.1" rel="stylesheet" type="text/css"/>
     <meta name="vapid-key" content="{{ vapid_key }}">
     <meta name="islogged" content="{{ request.user.is_authenticated }}">
     {% block head %}{% endblock %}
+    <script>
+        {% if activar_cambio_clave %}
+            window.location.href = "/changepass/";
+        {% endif %}
+    </script>
 </head>
-<style>
 
-    .page-sidebar-minified .has-principal > a > svg {
-        font-size: 14px !important;
-    }
-
-    .page-sidebar-minified .has-principal > a > b {
-        display: none;
-    }
-
-    .page-sidebar-minified .has-sub > a > svg {
-        font-size: 14px !important;
-    }
-
-    .page-sidebar-minified .has-sub > a > b {
-        display: none;
-    }
-
-    .select2-container .select2-selection--multiple .select2-selection__choice {
-        max-width: 100%;
-        box-sizing: border-box;
-        white-space: normal;
-        word-wrap: break-word;
-    }
-
-    .fancybox__content {
-        height: 100% !important;
-    }
-
-    .goog-te-banner-frame, #goog-gt-tt {
-        display: none !important;
-        height: 0 !important;
-        visibility: hidden !important;
-    }
-
-    @media (max-width: 767px) {
-        .btn-xs-block {
-            display: block;
-            width: 100%;
-        }
-    }
-
-    @media (min-width: 768px) and (max-width: 991px) {
-        .btn-sm-block {
-            display: block;
-            width: 100%;
-        }
-    }
-
-    @media (min-width: 992px) and (max-width: 1199px) {
-        .btn-md-block {
-            display: block;
-            width: 100%;
-        }
-    }
-
-    @media (min-width: 1200px) {
-        .btn-lg-block {
-            display: block;
-            width: 100%;
-        }
-    }
-
-    .avatar-offline {
-        -webkit-filter: grayscale(100%);
-        filter: grayscale(100%);
-    }
-
-    .btn-mini {
-        padding-top: 5px;
-        padding-bottom: 5px;
-        padding-left: 5px;
-        padding-right: 5px;
-        font-size: 10.5px;
-        -webkit-border-radius: 5px;
-        -moz-border-radius: 5px;
-        border-radius: 5px
-    }
-
-    .demo-preview {
-        padding-top: 60px;
-        padding-bottom: 10px;
-        width: 300px;
-        margin: auto;
-        text-align: center;
-
-    }
-
-    .demo-preview .label {
-        margin-right: 10px;
-        margin-bottom: 10px
-    }
-
-
-</style>
 <body>
 
-<div id="page-container"
-     class="fade page-sidebar-fixed page-header-fixed page-with-wide-sidebar page-with-light-sidebar  captura_pantalla">
-
-    <div id="header" class="header navbar-default">
-        <div class="navbar-header">
-            <button type="button" class="navbar-toggle collapsed navbar-toggle-left" data-click="sidebar-minify">
-                <span></span>
-            </button>
-            <a href="/" class="navbar-brand" style="color: #0B3C49;!important;">
-                <img src="/media/{{ confi.logo_sistema }}">&nbsp;{{ alias }}
-            </a>
-            <button type="button" class="navbar-toggle" data-click="sidebar-toggled">
-                <span class="icon-bar"></span>
-                <span class="icon-bar"></span>
-                <span class="icon-bar"></span>
-            </button>
-        </div>
-
-        <ul id="navbarPanel" class="navbar-nav d-flex flex-grow-1">
-            <li class="navbar-form flex-grow-1">
-            </li>
-             <li class="dropdown ms-2">
-                <a href="javascript:void(0);" id="panelEmpresas" class="dropdown-toggle"
-                   data-toggle="dropdown">
-                    <span class="d-md-inline tl" title="Empresa" style="font-size: 15px"><i
-                            class="fa fa-store"></i> {% if empresa_selected %}{{ empresa_selected.nombre }}{% else %}{{ empresa.nombre }}{% endif %}</span>
-                </a>
-                {% if request.user.es_administrativo %}
-                    {% if listEmpresas|length > 0 %}
-                    <div class="navdrop dropdown-menu dropdown-menu-right" style="width: 400px"
-                         aria-labelledby="panelEmpresas">
-                        <div class="mx-2 mb-3">
-                            <input type="search" id="buscarEmpresa" autocomplete="off"
-                                   class="form-control px-3 rounded-pill"
-                                   style="font-family:Arial, FontAwesome;"
-                                   placeholder=" &#xF002 Buscar nombre Empresa">
-                        </div>
-                        <ul class="listaEmpresaMenu list-group list-group-flush">
-                            {% for emp in listEmpresas %}
-                                <li class="list-group-item items-empresa_lista p-0 px-3 m-0">
-                                    <div class="row my-2">
-                                        <div class="col">
-                                            <a class="text-body empresaSelector dropdown-item"
-                                               href='javascript:void(0);' data-id='{{ emp.id|encrypt }}'>
-                                                <div class="ms-3" style="">
-                                                    <span class="text-body">
-                                                        {% if emp.id == request.session.empresa_selected.id %}
-                                                            <i class="fa fa-store text-warning tr"
-                                                               title="Empresa Actual"></i> {{ emp.nombre }}
-                                                        {% else %}
-                                                            <i class="fa fa-store"></i> {{ emp.nombre }}
-                                                        {% endif %}
-                                                    </span>
-                                                </div>
-                                            </a>
-                                        </div>
-                                    </div>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                {% endif %}
-                {% endif %}
-            </li>
-            {% if request.user.is_authenticated %}
-                <li class="dropdown navbar-user">
-                    <a style="position: relative;" href="javascript:;" class="dropdown-toggle" data-toggle="dropdown">
-                        <img src="{{ request.user.get_foto_gris }}" width="100%">
-                        <div class="d-none d-md-inline">{{ request.user.username }}</div>
-                        <b class="caret"></b>
-                    </a>
-                    <div class="dropdown-menu dropdown-menu-right">
-                        {% if sesion_anterior %}
-                            <a href="/seguridad/regresar-sesion/" class="dropdown-item"><i
-                                    class="fas fa-sign-in-alt"></i>
-                                Regresar a mi sesión</a>
-                        {% endif %}
-                        <a href="/perfilpanel/" class="dropdown-item"><i class="fa fa-user"></i> Perfil</a>
-                        {% if request.user.is_superuser == True %}
-                            <a href="/admin" target="_blank" class="dropdown-item"><i class="fa fa-lock"></i>
-                                Administración</a>
-                        {% endif %}
-                        <div class="dropdown-divider"></div>
-                        <a href="{% url 'logout_url' %}" class="dropdown-item"><i class="fa fa-sign-out-alt"></i> Cerrar
-                            Sesión</a>
-                    </div>
-                </li>
-            {% endif %}
-        </ul>
-    </div>
-
-    <div id="sidebar" class="sidebar">
-        <div data-scrollbar="true" data-height="100%">
-            <ul class="nav">
+<div class="topbar d-print-none">
+    <div class="container-xxl">
+        <nav class="topbar-custom d-flex justify-content-between" id="topbar-custom">
+            <ul class="topbar-item list-unstyled d-inline-flex align-items-center mb-0">
                 <li>
-                    <a href="javascript:void(0)">
-                        <span>
-                            <form action="" method="POST" name="search" style="width: 100%;margin-top: 2px;margin-bottom: -17px;">
-                                <div class="form-group">
-                                    <input type="text" class="form-control" id="searchGroups" placeholder='Buscar módulo' style="width: 100%;"/>
-                                </div>
-                            </form>
-                        </span>
-                    </a>
+                    <button class="nav-link mobile-menu-btn nav-icon" id="togglemenu">
+                        <i class="iconoir-menu-scale"></i>
+                    </button>
+                </li>
+                <li class="mx-3 welcome-text">
+                    <h3 class="mb-0 fw-bold text-truncate">Bienvenido(a) {{ request.user.first_name }}!</h3>
+{#                    <h6 class="mb-0 fw-normal text-muted text-truncate fs-14">Here's your overview this week.</h6>#}
                 </li>
             </ul>
-            <ul class="nav groups">
-                <li class="nav-header">Menu</li>
-                <li class="has-principal">
-                    <a href="/panel/">
-                        <i class="fa fa-home"></i>
-                        <b>Panel</b>
+            <ul class="topbar-item list-unstyled d-inline-flex align-items-center mb-0">
+                <li class="hide-phone app-search">
+                    <form role="search" action="#" method="get">
+                        <input type="search" name="search" class="form-control top-search mb-0"
+                               placeholder="Buscar módulo...">
+                        <button type="button"><i class="iconoir-search"></i></button>
+                    </form>
+                </li>
+                <li class="dropdown topbar-item">
+                    <a class="nav-link dropdown-toggle arrow-none nav-icon" data-bs-toggle="dropdown" href="#"
+                       role="button"
+                       aria-haspopup="false" aria-expanded="false">
+                        <i class="icofont-bell-alt {% if listnotification %}text-warning{% endif %}"></i>
+                        <span class="alert-badge"></span>
+                    </a>
+                    <div class="dropdown-menu stop dropdown-menu-end dropdown-lg py-0">
+                        {% for notificacion in listnotification %}
+                            <ul class="nav nav-tabs nav-tabs-custom nav-success nav-justified mb-1" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <a class="nav-link mx-0 active" data-bs-toggle="tab" href="#All" role="tab"
+                                       aria-selected="true">
+                                        All <span class="badge bg-primary-subtle text-primary badge-pill ms-1">24</span>
+                                    </a>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <a class="nav-link mx-0" data-bs-toggle="tab" href="#Projects" role="tab"
+                                       aria-selected="false" tabindex="-1">
+                                        Projects
+                                    </a>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <a class="nav-link mx-0" data-bs-toggle="tab" href="#Teams" role="tab"
+                                       aria-selected="false" tabindex="-1">
+                                        Team
+                                    </a>
+                                </li>
+                            </ul>
+                            <div class="ms-0" style="max-height:230px;" data-simplebar>
+                                <div class="tab-content" id="myTabContent">
+                                    <div class="tab-pane fade show active" id="All" role="tabpanel"
+                                         aria-labelledby="all-tab" tabindex="0">
+                                        <!-- item-->
+                                        <a href="#" class="dropdown-item py-3">
+                                            <small class="float-end text-muted ps-2">2 min ago</small>
+                                            <div class="d-flex align-items-center">
+                                                <div class="flex-shrink-0 bg-primary-subtle text-primary thumb-md rounded-circle">
+                                                    <i class="iconoir-wolf fs-4"></i>
+                                                </div>
+                                                <div class="flex-grow-1 ms-2 text-truncate">
+                                                    <h6 class="my-0 fw-normal text-dark fs-13">Your order is placed</h6>
+                                                    <small class="text-muted mb-0">Dummy text of the printing and
+                                                        industry.</small>
+                                                </div><!--end media-body-->
+                                            </div><!--end media-->
+                                        </a><!--end-item-->
+                                        <!-- item-->
+
+                                        <a href="#" class="dropdown-item py-3">
+                                            <small class="float-end text-muted ps-2">10 min ago</small>
+                                            <div class="d-flex align-items-center">
+                                                <div class="flex-shrink-0 bg-primary-subtle text-primary thumb-md rounded-circle">
+                                                    <i class="iconoir-apple-swift fs-4"></i>
+                                                </div>
+                                                <div class="flex-grow-1 ms-2 text-truncate">
+                                                    <h6 class="my-0 fw-normal text-dark fs-13">Meeting with designers</h6>
+                                                    <small class="text-muted mb-0">It is a long established fact that a
+                                                        reader.</small>
+                                                </div><!--end media-body-->
+                                            </div><!--end media-->
+                                        </a><!--end-item-->
+                                        <!-- item-->
+
+                                        <a href="#" class="dropdown-item py-3">
+                                            <small class="float-end text-muted ps-2">40 min ago</small>
+                                            <div class="d-flex align-items-center">
+                                                <div class="flex-shrink-0 bg-primary-subtle text-primary thumb-md rounded-circle">
+                                                    <i class="iconoir-birthday-cake fs-4"></i>
+                                                </div>
+                                                <div class="flex-grow-1 ms-2 text-truncate">
+                                                    <h6 class="my-0 fw-normal text-dark fs-13">UX 3 Task complete.</h6>
+                                                    <small class="text-muted mb-0">Dummy text of the printing.</small>
+                                                </div><!--end media-body-->
+                                            </div><!--end media-->
+                                        </a><!--end-item-->
+                                        <!-- item-->
+                                        <a href="#" class="dropdown-item py-3">
+                                            <small class="float-end text-muted ps-2">1 hr ago</small>
+                                            <div class="d-flex align-items-center">
+                                                <div class="flex-shrink-0 bg-primary-subtle text-primary thumb-md rounded-circle">
+                                                    <i class="iconoir-drone fs-4"></i>
+                                                </div>
+                                                <div class="flex-grow-1 ms-2 text-truncate">
+                                                    <h6 class="my-0 fw-normal text-dark fs-13">Your order is placed</h6>
+                                                    <small class="text-muted mb-0">It is a long established fact that a
+                                                        reader.</small>
+                                                </div><!--end media-body-->
+                                            </div><!--end media-->
+                                        </a><!--end-item-->
+                                        <!-- item-->
+                                        <a href="#" class="dropdown-item py-3">
+                                            <small class="float-end text-muted ps-2">2 hrs ago</small>
+                                            <div class="d-flex align-items-center">
+                                                <div class="flex-shrink-0 bg-primary-subtle text-primary thumb-md rounded-circle">
+                                                    <i class="iconoir-user fs-4"></i>
+                                                </div>
+                                                <div class="flex-grow-1 ms-2 text-truncate">
+                                                    <h6 class="my-0 fw-normal text-dark fs-13">Payment Successfull</h6>
+                                                    <small class="text-muted mb-0">Dummy text of the printing.</small>
+                                                </div><!--end media-body-->
+                                            </div><!--end media-->
+                                        </a><!--end-item-->
+                                    </div>
+                                    <div class="tab-pane fade" id="Projects" role="tabpanel" aria-labelledby="projects-tab"
+                                         tabindex="0">
+                                        <!-- item-->
+                                        <a href="#" class="dropdown-item py-3">
+                                            <small class="float-end text-muted ps-2">40 min ago</small>
+                                            <div class="d-flex align-items-center">
+                                                <div class="flex-shrink-0 bg-primary-subtle text-primary thumb-md rounded-circle">
+                                                    <i class="iconoir-birthday-cake fs-4"></i>
+                                                </div>
+                                                <div class="flex-grow-1 ms-2 text-truncate">
+                                                    <h6 class="my-0 fw-normal text-dark fs-13">UX 3 Task complete.</h6>
+                                                    <small class="text-muted mb-0">Dummy text of the printing.</small>
+                                                </div><!--end media-body-->
+                                            </div><!--end media-->
+                                        </a><!--end-item-->
+                                        <!-- item-->
+                                        <a href="#" class="dropdown-item py-3">
+                                            <small class="float-end text-muted ps-2">1 hr ago</small>
+                                            <div class="d-flex align-items-center">
+                                                <div class="flex-shrink-0 bg-primary-subtle text-primary thumb-md rounded-circle">
+                                                    <i class="iconoir-drone fs-4"></i>
+                                                </div>
+                                                <div class="flex-grow-1 ms-2 text-truncate">
+                                                    <h6 class="my-0 fw-normal text-dark fs-13">Your order is placed</h6>
+                                                    <small class="text-muted mb-0">It is a long established fact that a
+                                                        reader.</small>
+                                                </div><!--end media-body-->
+                                            </div><!--end media-->
+                                        </a><!--end-item-->
+                                        <!-- item-->
+                                        <a href="#" class="dropdown-item py-3">
+                                            <small class="float-end text-muted ps-2">2 hrs ago</small>
+                                            <div class="d-flex align-items-center">
+                                                <div class="flex-shrink-0 bg-primary-subtle text-primary thumb-md rounded-circle">
+                                                    <i class="iconoir-user fs-4"></i>
+                                                </div>
+                                                <div class="flex-grow-1 ms-2 text-truncate">
+                                                    <h6 class="my-0 fw-normal text-dark fs-13">Payment Successfull</h6>
+                                                    <small class="text-muted mb-0">Dummy text of the printing.</small>
+                                                </div><!--end media-body-->
+                                            </div><!--end media-->
+                                        </a><!--end-item-->
+                                    </div>
+                                    <div class="tab-pane fade" id="Teams" role="tabpanel" aria-labelledby="teams-tab"
+                                         tabindex="0">
+                                        <!-- item-->
+                                        <a href="#" class="dropdown-item py-3">
+                                            <small class="float-end text-muted ps-2">1 hr ago</small>
+                                            <div class="d-flex align-items-center">
+                                                <div class="flex-shrink-0 bg-primary-subtle text-primary thumb-md rounded-circle">
+                                                    <i class="iconoir-drone fs-4"></i>
+                                                </div>
+                                                <div class="flex-grow-1 ms-2 text-truncate">
+                                                    <h6 class="my-0 fw-normal text-dark fs-13">Your order is placed</h6>
+                                                    <small class="text-muted mb-0">It is a long established fact that a
+                                                        reader.</small>
+                                                </div><!--end media-body-->
+                                            </div><!--end media-->
+                                        </a><!--end-item-->
+                                        <!-- item-->
+                                        <a href="#" class="dropdown-item py-3">
+                                            <small class="float-end text-muted ps-2">2 hrs ago</small>
+                                            <div class="d-flex align-items-center">
+                                                <div class="flex-shrink-0 bg-primary-subtle text-primary thumb-md rounded-circle">
+                                                    <i class="iconoir-user fs-4"></i>
+                                                </div>
+                                                <div class="flex-grow-1 ms-2 text-truncate">
+                                                    <h6 class="my-0 fw-normal text-dark fs-13">Payment Successfull</h6>
+                                                    <small class="text-muted mb-0">Dummy text of the printing.</small>
+                                                </div><!--end media-body-->
+                                            </div><!--end media-->
+                                        </a><!--end-item-->
+                                    </div>
+                                </div>
+
+                            </div>
+                        {% empty %}
+                            <div class="ms-3" style="text-align: center">
+                                <img src="/static/iconos/notificacion.svg" style="width: 150px">
+                                <p class="mb-3" style="color: #7C7C7C">Actualmente no tiene nuevas
+                                    notificaciones</p>
+                            </div>
+                        {% endfor %}
+                        <a href="/notificaciones/" class="dropdown-item text-center text-dark fs-13 py-2">
+                            Ver mis notificaciones <i class="fi-arrow-right"></i>
+                        </a>
+                    </div>
+                </li>
+                {% if request.user.is_authenticated %}
+                    <li class="dropdown topbar-item">
+                        <a class="nav-link dropdown-toggle arrow-none nav-icon" data-bs-toggle="dropdown" href="/"
+                           role="button"
+                           aria-haspopup="false" aria-expanded="false">
+                            <img src="{{ request.user.get_foto_gris }}" alt="" class="thumb-lg rounded-circle">
+                        </a>
+                        <div class="dropdown-menu dropdown-menu-end py-0">
+                            <div class="d-flex align-items-center dropdown-item py-2 bg-secondary-subtle">
+                                <div class="flex-shrink-0">
+                                    <img src="{{ request.user.get_foto_gris }}" alt=""
+                                         class="thumb-md rounded-circle">
+                                </div>
+                                <div class="flex-grow-1 ms-2 text-truncate align-self-center">
+                                    <h6 class="my-0 fw-medium text-dark fs-13">{{ request.user.get_full_name }}</h6>
+                                    <small class="text-muted mb-0">{{ request.user.groups_str }}</small>
+                                </div>
+                            </div>
+                            <div class="dropdown-divider mt-0"></div>
+                            <small class="text-muted px-2 pb-1 d-block">Cuenta</small>
+                            <a class="dropdown-item" href="/perfilpanel/"><i
+                                    class="las la-user fs-18 me-1 align-text-bottom"></i> Perfil</a>
+                            <small class="text-muted px-2 py-1 d-block">Configuración</small>
+                            {% if sesion_anterior %}
+                                <a class="dropdown-item" href="/seguridad/regresar-sesion/"><i
+                                        class="las la-sign-in-alt fs-18 me-1 align-text-bottom"></i> Regresar a mi sesión</a>
+                            {% endif %}
+                            {% if request.user.is_superuser %}
+                                <a class="dropdown-item" href="/admin"><i
+                                        class="las la-question-circle fs-18 me-1 align-text-bottom"></i> Administración</a>
+                            {% endif %}
+                                <div class="dropdown-divider mb-0"></div>
+                            <a class="dropdown-item text-danger" href="{% url 'logout_url' %}"><i
+                                    class="las la-power-off fs-18 me-1 align-text-bottom"></i> Cerrar Sesión</a>
+                        </div>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+</div>
+
+<div class="startbar d-print-none">
+    <!--start brand-->
+    <div class="brand">
+        <a href="/" class="logo">
+            <span>
+                <img src="/media/{{ confi.logo_sistema }}" alt="logo-small" class="logo-sm">
+            </span>
+            <span>
+            <h3 class="logo-lg logo-dark text-black">{{ alias }}</h3></span>
+        </a>
+    </div>
+<div class="startbar-menu">
+    <div class="startbar-collapse" id="startbarCollapse" data-simplebar>
+        <div class="d-flex align-items-start flex-column w-100">
+            <ul class="navbar-nav mb-auto w-100">
+                <li class="menu-label pt-0 mt-0">
+                    <span>Menu</span>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/panel/">
+                        <i class="fa fa-home menu-icon"></i>
+                        <span>Panel</span>
                     </a>
                 </li>
+
                 {% for grupo in grupos %}
-                    <li class="has-sub {% if grupo.nombre == group %}active{% endif %}">
-                        <a href="javascript:;">
-                            <b class="caret"></b>
-                            <i class="{{ grupo.icono }}" style="font-size: 15px;"></i>
-                            <b>{{ grupo.nombre }}</b>
-                        </a>
-                        <ul class="sub-menu">
+                <li class="nav-item">
+                    <a class="nav-link {% if grupo.nombre == group %}active{% endif %}" href="#sidebar{{ grupo.nombre|cut:" " }}" data-bs-toggle="collapse" role="button"
+                       aria-expanded="{% if grupo.nombre == group %}true{% else %}false{% endif %}" aria-controls="sidebar{{ grupo.nombre|cut:" " }}">
+                        <i class="{{ grupo.icono }} menu-icon"></i>
+                        <span>{{ grupo.nombre }}</span>
+                    </a>
+                    <div class="collapse {% if grupo.nombre == group %}show{% endif %}" id="sidebar{{ grupo.nombre|cut:" " }}">
+                        <ul class="nav flex-column">
                             {% for modulo in grupo.modulos_activos %}
                                 {% if modulo.id in modulos_id %}
-                                    <li {% if ruta_val|startswith:modulo.url %} class="active" {% endif %}>
-                                        <a href="{{ modulo.url }}?{{ dict_url_vars_completo }}">{{ modulo.nombre }}</a>
+                                    <li class="nav-item">
+                                        <a class="nav-link {% if ruta_val|startswith:modulo.url %}active{% endif %}" href="{{ modulo.url }}?{{ dict_url_vars_completo }}">{{ modulo.nombre }}</a>
                                     </li>
                                 {% endif %}
                             {% endfor %}
                         </ul>
-                    </li>
+                    </div>
+                </li>
                 {% endfor %}
-                <li><a href="javascript:;" class="sidebar-minify-btn" data-click="sidebar-minify"><i
-                        class="fa fa-angle-double-left"></i></a></li>
             </ul>
+
+            <div class="update-msg text-center">
+                <div class="d-flex justify-content-center align-items-center thumb-lg update-icon-box rounded-circle mx-auto">
+                    <i class="fas fa-lightbulb h3 align-self-center mb-0 text-primary"></i>
+                </div>
+                <h5 class="mt-3">¿Buscas optimizar?</h5>
+                <p class="mb-3 text-muted">Aumenta la eficiencia de tu asistente de WhatsApp con nuestros planes premium.</p>
+                <a href="javascript:void(0);" class="btn text-primary shadow-sm rounded-pill">Contactar a un asesor</a>
+            </div>
         </div>
     </div>
-
-    <div class="sidebar-bg"></div>
-
-    <div id="content" class="content">
-
-        <div class="table-responsive">
-            <ol class="breadcrumb float-xl-right" style="font-weight: bold;white-space: nowrap;">
-                {% for rt in ruta_lista %}
-                    <li class="breadcrumb-item"><a href="{{ rt.0 }}">{{ rt.1 }}</a></li>
-                {% endfor %}
-                {% if not request.path == '/panel/' %}
-                    <li href="javascript:void(0)" class="breadcrumb-item active">
-                        <a href="{% block atras %}{% if request.path == '/panel/' %}/
-
-
-                            {% else %}{% if not tiene_val_get %}/panel/{% else %}{{ request.path }}{% endif %}{% endif %}{% endblock %}"
-                           class="btn btn-default"><i class="fa fa-arrow-circle-left"></i> Atras</a>
-                    </li>
-                {% endif %}
-            </ol>
-        </div>
-
-        <div class="table-responsive">
-            <h5 title="{{ titulo }}" style="white-space: nowrap;" class="page-header">{{ titulo }}</h5>
-        </div>
-
-
-        {% block content %}
-
-        {% endblock %}
-
-    </div>
-
-    <a href="javascript:;" class="btn btn-icon btn-circle btn-success btn-scroll-to-top fade" data-click="scroll-top"><i
-            class="fa fa-angle-up"></i></a>
-
 </div>
-<div class="modal fade bd-example-modal-lg" id="modalPost" tabindex="-1" role="dialog"
-     aria-labelledby="modalPost" aria-hidden="true">
+</div>
+
+<div class="startbar-overlay d-print-none"></div>
+
+<div class="page-wrapper">
+    <div class="page-content">
+
+        <div class="container-xxl">
+            {% block content %}
+
+            {% endblock %}
+        </div>
+
+        <footer class="footer text-center text-sm-start d-print-none">
+            <div class="container-xxl">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card mb-0 rounded-bottom-0">
+                            <div class="card-body">
+                                <p class="text-muted mb-0">
+                                    ©
+                                    <script> document.write(new Date().getFullYear()) </script>
+                                    <span class="text-muted d-none d-sm-inline-block float-end">
+                                            {{ alias }}
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+</div>
+
+<!-- Modal Post -->
+<div class="modal fade" id="modalPost" tabindex="-1" aria-labelledby="modalPostLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title" id="label"><i class="fas fa-eye icono"></i> <strong
-                        class="accion"></strong></h6>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true"><i class="fas fa-times"></i></span>
-                </button>
+                <h5 class="modal-title" id="modalPostLabel"><i class="fas fa-eye"></i> <strong class="accion"></strong></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="excluirFormAjax" action="{{ ruta }}" method="POST"
-                      enctype="multipart/form-data">{% csrf_token %}
+                <form id="excluirFormAjax" action="{{ ruta }}" method="POST" enctype="multipart/form-data">{% csrf_token %}
                     <div class="tablaaqui">
-
                     </div>
                 </form>
             </div>
         </div>
     </div>
 </div>
-<div class="modal fade bd-example-modal-lg" id="modalGet" tabindex="-1" role="dialog"
-     aria-labelledby="modalGet" aria-hidden="true">
+<!-- Modal Get -->
+<div class="modal fade" id="modalGet" tabindex="-1" aria-labelledby="modalGetLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title" id="label"><i class="fas fa-eye icono"></i> <strong
-                        class="accion"></strong></h6>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true"><i class="fas fa-times"></i></span>
-                </button>
+                <h5 class="modal-title" id="modalGetLabel"><i class="fas fa-eye"></i> <strong class="accion"></strong></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form action="{{ ruta }}" method="GET" enctype="multipart/form-data">{% csrf_token %}
                     <div class="tablaaqui">
-
                     </div>
                 </form>
             </div>
         </div>
     </div>
 </div>
-<div class="modal fade bd-example-modal-lg" id="modalPostAjax" tabindex="-1" role="dialog"
-     aria-labelledby="modalPostAjax" aria-hidden="true">
+<!-- Modal Post Ajax -->
+<div class="modal fade" id="modalPostAjax" tabindex="-1" aria-labelledby="modalPostAjaxLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title" id="label"><i class="fas fa-eye icono"></i> <strong
-                        class="accion"></strong></h6>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true"><i class="fas fa-times"></i></span>
-                </button>
+                <h5 class="modal-title" id="modalPostAjaxLabel"><i class="fas fa-eye"></i> <strong class="accion"></strong></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form action="{{ ruta }}" method="POST" enctype="multipart/form-data">{% csrf_token %}
                     <div class="tablaaqui">
-
                     </div>
                 </form>
             </div>
         </div>
     </div>
 </div>
-<div class="modal fade" id="modalEliminar">
+<!-- Modal Eliminar -->
+<div class="modal fade" id="modalEliminar" tabindex="-1" aria-labelledby="modalEliminarLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <form id="frmEliminar" method="post" enctype="multipart/form-data">{% csrf_token %}
                 <input type="hidden" id="id_dict_url_vars" name="dict_url_vars" value="">
                 <div class="modal-header">
-                    <h4 class="modal-title">¿Seguro desea eliminar este registro?</h4>
-                    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">
-                        <i class="fas fa-times"></i>
-                    </button>
+                    <h5 class="modal-title" id="modalEliminarLabel">¿Seguro desea eliminar este registro?</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="alert alert-danger m-b-0">
+                    <div class="alert alert-danger mb-0">
                         <h5><i class="fa fa-info-circle"></i> Atención!</h5>
                         <p>Estas a punto de eliminar este registro '<b id="elimNombre"></b>'</p>
                         <input type="hidden" name="id" id="id">
@@ -386,72 +457,62 @@
                 </div>
                 <div class="modal-footer">
                     <button type="submit" class="btn btn-danger"><i class="fa fa-trash"></i> Eliminar</button>
-                    <a href="javascript:;" class="btn btn-white" data-dismiss="modal"><i class="fa fa-window-close"></i>
-                        Cancelar</a>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fa fa-window-close"></i> Cancelar</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-
-<div class="modal fade" id="modalEliminarConComentario">
+<!-- Modal Eliminar Con Comentario -->
+<div class="modal fade" id="modalEliminarConComentario" tabindex="-1" aria-labelledby="modalEliminarConComentarioLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <form id="frmEliminarConComentario" method="post" enctype="multipart/form-data">{% csrf_token %}
                 <input type="hidden" id="id_dict_url_vars" name="dict_url_vars" value="">
                 <div class="modal-header">
-                    <h4 class="modal-title">¿Seguro desea anular este registro?</h4>
-                    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">
-                        <i class="fas fa-times"></i>
-                    </button>
+                    <h5 class="modal-title" id="modalEliminarConComentarioLabel">¿Seguro desea anular este registro?</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="alert alert-danger m-b-0">
+                    <div class="alert alert-danger mb-0">
                         <h5><i class="fa fa-info-circle"></i> Atención!</h5>
                         <p>Estas a punto de anular este registro '<b id="elimNombre"></b>'</p>
                         <input type="hidden" name="id" id="id">
                         <input type="hidden" name="action" id="action">
-                        <textarea name="razon" class="form-control" required
-                                  placeholder="Ingrese razón de anulación"></textarea>
+                        <textarea name="razon" class="form-control" required placeholder="Ingrese razón de anulación"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="submit" class="btn btn-danger"><i class="far fa-calendar-times"></i> Anular</button>
-                    <a href="javascript:;" class="btn btn-white" data-dismiss="modal"><i class="fa fa-window-close"></i>
-                        Cancelar</a>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fa fa-window-close"></i> Cancelar</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-
-<div id="modalEmailLoad" class="modal fade" role="dialog">
+<!-- Modal Email Load -->
+<div class="modal fade" id="modalEmailLoad" tabindex="-1" aria-labelledby="modalEmailLoadLabel" aria-hidden="true">
     <div class="modal-dialog modal-sm">
-        <!-- Contenido del modal -->
         <div class="modal-content">
             <div class="modal-body">
-                <center>
-                    <img width="300" class="img-responsive"
-                         src="/media/loadmail.gif"/>
+                <div class="text-center">
+                    <img width="300" class="img-fluid" src="/media/loadmail.gif"/>
                     <strong>
-                        <h2 id="codigo" style="color: #2C3E50;">
-
-                        </h2>
+                        <h2 id="codigo" style="color: #2C3E50;"></h2>
                     </strong>
-                </center>
+                </div>
             </div>
         </div>
     </div>
 </div>
-
-<div class="modal fade" id="modalConsulta">
+<!-- Modal Consulta -->
+<div class="modal fade" id="modalConsulta" tabindex="-1" aria-labelledby="modalConsultaLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form id="frmConsulta" method="post" enctype="multipart/form-data">{% csrf_token %}
                 <div class="modal-header">
-                    <h4 class="modal-title"><b id="nombre"></b></h4>
-                    <button type="button" class="close" data-dismiss="modal" aria-hidden="true"><i
-                            class="fas fa-times"></i></button>
+                    <h5 class="modal-title" id="modalConsultaLabel"><b id="nombre"></b></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body tablaaqui">
                 </div>
@@ -459,18 +520,14 @@
         </div>
     </div>
 </div>
-
-<div class="modal fade bd-example-modal-lg" id="ModalInfo" tabindex="-1" role="dialog"
-     aria-labelledby="myLargeModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-md">
-        <!-- Modal content-->
+<!-- Modal Info -->
+<div class="modal fade" id="ModalInfo" tabindex="-1" aria-labelledby="ModalInfoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-md modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h4 class="modal-title" id="label"><i id="icono" class="fas fa-eye"></i>
-                    <strong> Info. del dispositivo</strong></h4>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true"><i class="fas fa-times"></i></span>
-                </button>
+                <h5 class="modal-title" id="ModalInfoLabel"><i id="icono" class="fas fa-eye"></i>
+                    <strong> Info. del dispositivo</strong></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="table-responsive">
@@ -497,59 +554,37 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Modal Wait Panel -->
+<div class="modal fade" id="waitpanel" tabindex="-1" aria-labelledby="waitpanelLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="waitpaneltitle"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="waitpanelbody"></p>
             </div>
         </div>
     </div>
 </div>
 
-<div class="modal fade static" id="waitpanel" style="display: none;">
-    <div class="modal-header">
-        <h4 id="waitpaneltitle"></h4>
-    </div>
-    <div class="modal-body">
-        <p id="waitpanelbody"></p>
-    </div>
-</div>
+<!-- Javascript  -->
+<script src="/static/assets_riz/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="/static/assets_riz/libs/simplebar/simplebar.min.js"></script>
+<script src="/static/assets_riz/libs/apexcharts/apexcharts.min.js"></script>
+<script src="/static/assets_riz/data/stock-prices.js"></script>
+<script src="/static/assets_riz/libs/jsvectormap/js/jsvectormap.min.js"></script>
+<script src="/static/assets_riz/libs/jsvectormap/maps/world.js"></script>
+<script src="/static/assets_riz/js/app.js"></script>
+<script src="/static/jquery-3.7.1.min.js"></script>
 
-<script src="/static/assets/js/app.min.js?v=1.0"></script>
-<script src="/static/assets/js/demo/dashboard.js?v=1.0"></script>
-{#<script src="/static/assets/js/theme/google.min.js"></script>#}
-<script src="/static/assets/js/theme/default.min.js"></script>
-<script src="/static/assets/plugins/gritter/js/jquery.gritter.js"></script>
-<script src="/static/assets/plugins/flot/jquery.flot.js"></script>
-<script src="/static/assets/plugins/flot/jquery.flot.time.js"></script>
-<script src="/static/assets/plugins/flot/jquery.flot.resize.js"></script>
-<script src="/static/assets/plugins/flot/jquery.flot.pie.js"></script>
-<script src="/static/assets/plugins/jquery-sparkline/jquery.sparkline.min.js"></script>
-<script src="/static/assets/plugins/bootstrap-datepicker/dist/js/bootstrap-datepicker.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/locales/bootstrap-datepicker.es.min.js"></script>
-
-
-<!-- Datatable -->
-<link rel="stylesheet" href="/static/datatables/datatables.css">
-<script src="/static/datatables/datatables.js"></script>
-<script type="text/javascript"
-        src="https://cdn.jsdelivr.net/npm/html2canvas@1.0.0-rc.1/dist/html2canvas.min.js"></script>
-<link rel="stylesheet" type="text/css"
-      href="https://cdn.datatables.net/responsive/2.2.2/css/responsive.bootstrap.min.css"/>
-<script type="text/javascript"
-        src="https://cdn.datatables.net/responsive/2.2.2/js/dataTables.responsive.min.js"></script>
-<script type="text/javascript"
-        src="https://cdn.datatables.net/responsive/2.2.2/js/responsive.bootstrap.min.js"></script>
-<link rel="stylesheet" type="text/css"
-      href="https://cdn.datatables.net/1.10.18/css/dataTables.bootstrap.min.css"/>
-<link rel="stylesheet" type="text/css"
-      href="https://cdn.datatables.net/buttons/1.5.6/css/buttons.bootstrap.min.css"/>
-<link href="https://gitcdn.github.io/bootstrap-toggle/2.2.2/css/bootstrap-toggle.min.css" rel="stylesheet">
-<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jszip/2.5.0/jszip.min.js"></script>
-<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.36/pdfmake.min.js"></script>
-<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.36/vfs_fonts.js"></script>
-<script type="text/javascript" src="https://cdn.datatables.net/buttons/1.5.6/js/dataTables.buttons.min.js"></script>
-<script type="text/javascript" src="https://cdn.datatables.net/buttons/1.5.6/js/buttons.bootstrap.min.js"></script>
-<script type="text/javascript" src="https://cdn.datatables.net/buttons/1.5.6/js/buttons.flash.min.js"></script>
-<script type="text/javascript" src="https://cdn.datatables.net/buttons/1.5.6/js/buttons.html5.min.js"></script>
-<script type="text/javascript" src="https://cdn.datatables.net/buttons/1.5.6/js/buttons.colVis.min.js"></script>
+{% include 'datatable.html' %}
 
 <!-- TempusDominus -->
 <link href="/static/lib/tempusdominus-bootstrap-4/tempusdominus-bootstrap-4.min.css" rel="stylesheet"/>
@@ -561,34 +596,25 @@
 <!-- BlockUi -->
 <script src="/static/jquery.blockUI.js"></script>
 <!-- Select2 -->
-<link href="/static/selectmultiple/select2.min.css" rel="stylesheet">
-<script src="/static/selectmultiple/select2.min.js"></script>
-{#<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.0/js/i18n/es.js"></script>#}
-
 <link href="/static/select2/select2.min.css?1" rel="stylesheet">
 <script src="/static/select2/select2.min.js?1"></script>
 <script src="/static/select2/i18n/es.js"></script>
 <!-- Dropify -->
 <link rel="stylesheet" href="/static/dropify/css/dropify.min.css">
 <script src="/static/dropify/js/dropify.min.js"></script>
-
-<!-- Owl carousel -->
-<link rel="stylesheet" href="/static/owlcarousel2-2.3.4/dist/assets/owl.carousel.min.css">
-<link rel="stylesheet" href="/static/owlcarousel2-2.3.4/dist/assets/owl.theme.default.min.css">
-<script src="/static/owlcarousel2-2.3.4/dist/owl.carousel.min.js"></script>
-
-
 <script src="/static/js/base-admin.js?v=2"></script>
 <script src="/static/validaciones/funciones.js?v=2.2"></script>
 <script src="/static/js/dfp.min.js"></script>
+<link rel="stylesheet" href="/static/snackbar/dist/snackbar.min.css">
+<script src="/static/snackbar/dist/snackbar.min.js"></script>
+<script src="/static/js/sysend.js"></script>
+
 <script>
     function redondear(numero, decimales = 0) {
         var s = parseInt("1" + "0".repeat(decimales));
         return Math.round(numero * s) / s;
     }
 </script>
-<link rel="stylesheet" href="/static/snackbar/dist/snackbar.min.css">
-<script src="/static/snackbar/dist/snackbar.min.js"></script>
 <script>
     function copiarTextoPortapapeles(texto, mensaje = "¡Copiado al portapapeles!") {
         navigator.clipboard.writeText(texto).then(function () {
@@ -854,7 +880,7 @@
         var data = tabla.row(this).data();
     });
 
-    
+
 
     $(document).ready(function () {
 
@@ -1101,10 +1127,23 @@
     }
 
     tooltips = function () {
-        $(".tl").tooltip({placement: "left"});
-        $(".tr").tooltip({placement: "right"});
-        $(".tu").tooltip({placement: "top"});
-        $(".tb").tooltip({placement: "bottom"});
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('.tl, .tr, .tu, .tb'));
+
+        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+            var placement = 'top'; // default placement
+
+            if (tooltipTriggerEl.classList.contains('tl')) {
+                placement = 'left';
+            } else if (tooltipTriggerEl.classList.contains('tr')) {
+                placement = 'right';
+            } else if (tooltipTriggerEl.classList.contains('tb')) {
+                placement = 'bottom';
+            }
+
+            new bootstrap.Tooltip(tooltipTriggerEl, {
+                placement: placement
+            });
+        });
     };
 
     tooltips();
@@ -1204,13 +1243,6 @@
     }
 </script>
 <script>
-    {#$(document).ajaxStart(function () {#}
-    {#    pantallaespera();#}
-    {# });#}
-    {#$(document).ajaxStop(function () {#}
-    {#    $.unblockUI();#}
-    {# });#}
-
     async function subirArchivoTemporal(nombre_campo, file) {
         pantallaespera();
         let formData = new FormData();
@@ -1461,7 +1493,6 @@
         modalPostAjax.find('.tablaaqui').html('');
     });
 </script>
-<script src="/static/js/sysend.js"></script>
 <script>
     sysend.on('login', function (data) {
         location = data.location;
@@ -1529,7 +1560,6 @@
     }
 
 </script>
-
 <script>
 
 $(function() {
@@ -1574,19 +1604,19 @@ $(function() {
     });
 })
 </script>
+
 <script src="/static/assets/plugins/moment/moment.js"></script>
 <script src="/static/assets/plugins/moment/locale/es-us.js"></script>
 <!-- ================== BEGIN PAGE LEVEL JS ================== -->
 <script src="/static/assets/plugins/jquery-sparkline/jquery.sparkline.min.js"></script>
 <script src="/static/assets/plugins/jquery-knob/dist/jquery.knob.min.js"></script>
 <!-- ================== END PAGE LEVEL JS ================== -->
-{#{% include 'service_worker_unregister.html' %}#}
-{#<script src="/static/webpush/registerSw.js?v=3.0"></script>#}
-{% block jscript %}
-{% endblock %}
-
 <link rel="stylesheet" href="/static/fancyboxv4/fancybox.css?1"/>
 <link rel="stylesheet" href="/static/fancyboxv4/panzoom.css"/>
 <script src="/static/fancyboxv4/fancybox.umd.js"></script>
+
+{% block jscript %}
+{% endblock %}
+
 </body>
 </html>

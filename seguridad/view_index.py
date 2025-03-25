@@ -26,24 +26,11 @@ def index(request):
     }
     addData(request, data)
     persona = request.user
-    empresa = data['empresa']
 
     if request.method == 'POST':
         action = request.POST['action']
         res_json = []
-        if action == 'changeempresa':
-            try:
-                id_ = int(encrypt(request.POST['id']))
-                empresa_ = Empresa.objects.filter(pk=id_, status=True).order_by('-id').first()
-                request.session['empresa_selected'] = empresa_
-                # persona.empresa = empresa_
-                # persona.save(request)
-                response = JsonResponse({'resp': True}, safe=False)
-            except Exception as ex:
-                response = JsonResponse({'resp': False, 'mensaje': ex}, safe=False)
-            return response
     elif request.method == 'GET':
         if 'action' in request.GET:
             data["action"] = action = request.GET['action']
-
         return render(request, 'seguridad/index.html', data)

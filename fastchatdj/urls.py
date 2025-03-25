@@ -22,6 +22,7 @@ from seguridad.urls import seguridad_urls
 from seguridad.view_index import index
 from django.conf.urls.static import static
 from core.consultas import consultas
+from seguridad.view_notificaciones import notificacionesView
 from whatsapp.urls import whatsapp_urls
 
 confi = Configuracion.get_instancia()
@@ -66,6 +67,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', index),
     path('panel/', index),
+    path('notificaciones/', notificacionesView),
     path('perfilpanel/', perfilView),
     path('consultas/', consultas, name='Consultas API'),
     path('ajaxrequest/', ConsultasAjax.as_view(), name='Ajax Consultas v1'),

@@ -37,12 +37,17 @@ class Usuario(AbstractUser, ModeloBase):
     telcelular = models.CharField(max_length=30, verbose_name='# Teléfono Móvil', null=True, blank=True)
     telfijo = models.CharField(max_length=30, verbose_name='# Teléfono Fijo', null=True, blank=True)
     cambio_clave = models.BooleanField(default=False, verbose_name='Cambio de Contraseña Obligatorio')
-    empresa = models.ForeignKey('seguridad.Empresa', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Empresa')
+    # CONFIGURACIÓN DE USUARIO
+    notificar_por_correo = models.BooleanField(default=True, verbose_name='Recibe notificaciones por correo')
+    # empresa = models.ForeignKey('seguridad.Empresa', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Empresa')
 
     # TIPO_DOCUMENTO
     CEDULA = "C"
     RUC = "R"
     PASAPORTE = "P"
+
+    def nacimiento_str(self):
+        return str(self.fecha_nacimiento)
 
     def anios_actual(self):
         anio_actual = datetime.now().year
@@ -108,14 +113,11 @@ class Usuario(AbstractUser, ModeloBase):
     def es_persona(self):
         return self.perfilpersona_set.filter(status=True).exists()
 
-
-
     def get_perfil_adm(self):
         return self.perfiladministrativo_set.filter(status=True).first()
 
     def get_perfil_per(self):
         return self.perfilpersona_set.filter(status=True).first()
-
 
     def __str__(self):
         return "{} {} {}".format(self.documento, self.last_name, self.first_name).title()

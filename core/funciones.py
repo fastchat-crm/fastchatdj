@@ -556,7 +556,6 @@ def addData(request, data):
     data['bannerlog'] = confi.banner_login.url if confi.banner_login else ""
     data['nombreempresa'] = confi.nombre_empresa
     data['telefonoempresa'] = confi.telefono if confi.telefono else ''
-    # data['mensajeempresa'] = confi.mensaje if confi.mensaje else ''
     data['alias'] = confi.alias
     data['NOMBRE_MONEDA'] = NOMBRE_MONEDA
     data['SIMBOLO_MONEDA'] = SIMBOLO_MONEDA
@@ -567,10 +566,6 @@ def addData(request, data):
     if 'user_anterior' in request.session:
         data["sesion_anterior"] = True
     if request.user.is_authenticated:
-        if 'empresa_selected' in request.session:
-            data['empresa_selected'] = request.session['empresa_selected']
-        else:
-            data['empresa_selected'] = request.session['empresa_selected'] = Empresa.objects.filter(status=True).order_by('-id').first()
         if request.user.cambio_clave and request.path != '/changepass/':
             data['activar_cambio_clave'] = request.user.cambio_clave
         if not 'perfilprincipal' in request.session:
@@ -591,9 +586,6 @@ def addData(request, data):
         # ucc.save()
         data['ruta_val'] = request.path
         if request.user.es_administrativo():
-            data['listEmpresas'] = empresas = Empresa.objects.filter(status=True)
-            if empresas:
-                data['empresa'] = request.user.empresa if request.user.empresa else empresas.first()
             data['gruposUserLogueado'] = ", ".join(list(request.user.groups.all().values_list('name', flat=True)))
             data["modulos_id"] = modulos_id = list(
                 GroupModulo.objects.filter(group__in=request.user.groups.all()).values_list('modulos__id', flat=True))
@@ -899,3 +891,16 @@ def logCron(proceso, detalle, exito=False):
             detalle=detalle,
             conexito=exito
         )
+
+
+def notificacion(titulo, cuerpo, destinatario, url, prioridad, tipo=1, request=None):
+    from seguridad.models import Notificacion
+    notificacion = Notificacion(titulo=titulo, cuerpo=cuerpo,
+                                destinatario=destinatario, url=url,
+                                prioridad=prioridad,
+                                tipo=tipo,
+                                fecha_hora_visible=datetime.now() + timedelta(days=1))
+    if request:
+        notificacion.save(request)
+    else:
+        notificacion.save()

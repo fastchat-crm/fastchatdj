@@ -1,0 +1,351 @@
+.table tbody {
+    /*background-color: #fff !important;*/
+}
+
+.table td, .table th {
+    padding: 8px;
+    vertical-align: top;
+    border-top: 1px solid #e4e7ea
+}
+
+.table th {
+    color: rgb(0, 0, 0);
+    background-color: rgb(243, 243, 243);
+}
+
+.table thead th {
+    vertical-align: bottom;
+    /*border-bottom: 2px solid #e4e7ea*/
+}
+
+.table tbody + tbody {
+    border-top: 2px solid #e4e7ea
+}
+
+.table-sm td, .table-sm th {
+    padding: 5px
+}
+
+.table-bordered {
+    border: 1px solid #e4e7ea
+}
+
+.table-bordered td, .table-bordered th {
+    border: 1px solid #e4e7ea
+}
+
+.table-bordered thead td, .table-bordered thead th {
+    border-bottom-width: 2px
+}
+
+.table-borderless tbody + tbody, .table-borderless td, .table-borderless th, .table-borderless thead th {
+    border: 0
+}
+
+.table-hover tbody tr:hover {
+    color: #333;
+    background-color: #f2f4f5
+}
+
+.table-primary, .table-primary > td, .table-primary > th {
+    background-color: #b8e8e8
+}
+
+.table-primary tbody + tbody, .table-primary td, .table-primary th, .table-primary thead th {
+    border-color: #7ad4d4
+}
+
+.table-hover .table-primary:hover {
+    background-color: #a5e2e2
+}
+
+.table-hover .table-primary:hover > td, .table-hover .table-primary:hover > th {
+    background-color: #a5e2e2
+}
+
+.table-secondary, .table-secondary > td, .table-secondary > th {
+    background-color: #d6d8db
+}
+
+.table-secondary tbody + tbody, .table-secondary td, .table-secondary th, .table-secondary thead th {
+    border-color: #b3b7bb
+}
+
+.table-hover .table-secondary:hover {
+    background-color: #c8cbcf
+}
+
+.table-hover .table-secondary:hover > td, .table-hover .table-secondary:hover > th {
+    background-color: #c8cbcf
+}
+
+.table-success, .table-success > td, .table-success > th {
+    background-color: #b8e8e8
+}
+
+.table-success tbody + tbody, .table-success td, .table-success th, .table-success thead th {
+    border-color: #7ad4d4
+}
+
+.table-hover .table-success:hover {
+    background-color: #a5e2e2
+}
+
+.table-hover .table-success:hover > td, .table-hover .table-success:hover > th {
+    background-color: #a5e2e2
+}
+
+.table-info, .table-info > td, .table-info > th {
+    background-color: #ccebf4
+}
+
+.table-info tbody + tbody, .table-info td, .table-info th, .table-info thead th {
+    border-color: #a0d9ea
+}
+
+.table-hover .table-info:hover {
+    background-color: #b7e3ef
+}
+
+.table-hover .table-info:hover > td, .table-hover .table-info:hover > th {
+    background-color: #b7e3ef
+}
+
+.table-warning, .table-warning > td, .table-warning > th {
+    background-color: #fce3bf
+}
+
+.table-warning tbody + tbody, .table-warning td, .table-warning th, .table-warning thead th {
+    border-color: #facc88
+}
+
+.table-hover .table-warning:hover {
+    background-color: #fbd8a7
+}
+
+.table-hover .table-warning:hover > td, .table-hover .table-warning:hover > th {
+    background-color: #fbd8a7
+}
+
+.table-danger, .table-danger > td, .table-danger > th {
+    background-color: #ffd1d0
+}
+
+.table-danger tbody + tbody, .table-danger td, .table-danger th, .table-danger thead th {
+    border-color: #ffaaa8
+}
+
+.table-hover .table-danger:hover {
+    background-color: #ffb8b7
+}
+
+.table-hover .table-danger:hover > td, .table-hover .table-danger:hover > th {
+    background-color: #ffb8b7
+}
+
+.table-light, .table-light > td, .table-light > th {
+    background-color: #fbfcfc
+}
+
+.table-light tbody + tbody, .table-light td, .table-light th, .table-light thead th {
+    border-color: #f8f9f9
+}
+
+.table-hover .table-light:hover {
+    background-color: #ecf1f1
+}
+
+.table-hover .table-light:hover > td, .table-hover .table-light:hover > th {
+    background-color: #ecf1f1
+}
+
+.table-dark, .table-dark > td, .table-dark > th {
+    background-color: #c4c6c8
+}
+
+.table-dark tbody + tbody, .table-dark td, .table-dark th, .table-dark thead th {
+    border-color: #92969a
+}
+
+.table-hover .table-dark:hover {
+    background-color: #b7b9bc
+}
+
+.table-hover .table-dark:hover > td, .table-hover .table-dark:hover > th {
+    background-color: #b7b9bc
+}
+
+.table-inverse, .table-inverse > td, .table-inverse > th {
+    background-color: #c4c6c8
+}
+
+.table-inverse tbody + tbody, .table-inverse td, .table-inverse th, .table-inverse thead th {
+    border-color: #92969a
+}
+
+.table-hover .table-inverse:hover {
+    background-color: #b7b9bc
+}
+
+.table-hover .table-inverse:hover > td, .table-hover .table-inverse:hover > th {
+    background-color: #b7b9bc
+}
+
+.table-black, .table-black > td, .table-black > th {
+    background-color: #b8b8b8
+}
+
+.table-black tbody + tbody, .table-black td, .table-black th, .table-black thead th {
+    border-color: #7a7a7a
+}
+
+.table-hover .table-black:hover {
+    background-color: #ababab
+}
+
+.table-hover .table-black:hover > td, .table-hover .table-black:hover > th {
+    background-color: #ababab
+}
+
+.table-white, .table-white > td, .table-white > th {
+    background-color: #fff
+}
+
+.table-white tbody + tbody, .table-white td, .table-white th, .table-white thead th {
+    border-color: #fff
+}
+
+.table-hover .table-white:hover {
+    background-color: #f2f2f2
+}
+
+.table-hover .table-white:hover > td, .table-hover .table-white:hover > th {
+    background-color: #f2f2f2
+}
+
+.table-grey, .table-grey > td, .table-grey > th {
+    background-color: #ebeef0
+}
+
+.table-grey tbody + tbody, .table-grey td, .table-grey th, .table-grey thead th {
+    border-color: #d9dfe3
+}
+
+.table-hover .table-grey:hover {
+    background-color: #dce2e5
+}
+
+.table-hover .table-grey:hover > td, .table-hover .table-grey:hover > th {
+    background-color: #dce2e5
+}
+
+.table-muted, .table-muted > td, .table-muted > th {
+    background-color: #ebeef0
+}
+
+.table-muted tbody + tbody, .table-muted td, .table-muted th, .table-muted thead th {
+    border-color: #d9dfe3
+}
+
+.table-hover .table-muted:hover {
+    background-color: #dce2e5
+}
+
+.table-hover .table-muted:hover > td, .table-hover .table-muted:hover > th {
+    background-color: #dce2e5
+}
+
+.table-silver, .table-silver > td, .table-silver > th {
+    background-color: #ebeef0
+}
+
+.table-silver tbody + tbody, .table-silver td, .table-silver th, .table-silver thead th {
+    border-color: #d9dfe3
+}
+
+.table-hover .table-silver:hover {
+    background-color: #dce2e5
+}
+
+.table-hover .table-silver:hover > td, .table-hover .table-silver:hover > th {
+    background-color: #dce2e5
+}
+
+.table-lime, .table-lime > td, .table-lime > th {
+    background-color: #e0f0cd
+}
+
+.table-lime tbody + tbody, .table-lime td, .table-lime th, .table-lime thead th {
+    border-color: #c5e3a1
+}
+
+.table-hover .table-lime:hover {
+    background-color: #d4eab9
+}
+
+.table-hover .table-lime:hover > td, .table-hover .table-lime:hover > th {
+    background-color: #d4eab9
+}
+
+.table-aqua, .table-aqua > td, .table-aqua > th {
+    background-color: #ccebf4
+}
+
+.table-aqua tbody + tbody, .table-aqua td, .table-aqua th, .table-aqua thead th {
+    border-color: #a0d9ea
+}
+
+.table-hover .table-aqua:hover {
+    background-color: #b7e3ef
+}
+
+.table-hover .table-aqua:hover > td, .table-hover .table-aqua:hover > th {
+    background-color: #b7e3ef
+}
+
+.table-active, .table-active > td, .table-active > th {
+    background-color: #f2f4f5
+}
+
+.table-hover .table-active:hover {
+    background-color: #e4e7ea
+}
+
+.table-hover .table-active:hover > td, .table-hover .table-active:hover > th {
+    background-color: #e4e7ea
+}
+
+.table .thead-dark th {
+    color: #fff;
+    background-color: #343a40;
+    border-color: #454d55
+}
+
+.table .thead-light th {
+    color: #495057;
+    background-color: #e9ecef;
+    border-color: #e4e7ea
+}
+
+.table-dark {
+    color: #fff;
+    background-color: #343a40
+}
+
+.table-dark td, .table-dark th, .table-dark thead th {
+    border-color: #454d55
+}
+
+.table-dark.table-bordered {
+    border: 0
+}
+
+.table-dark.table-hover tbody tr:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, .075)
+}
+
+.table tbody tr:hover {
+    color: #333;
+    background-color: #f2f4f5;
+}
