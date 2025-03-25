@@ -69,6 +69,8 @@ class GroupForm(ModelFormBase):
                                       'autenticacion__codigo', 'seguridad__usuarionotificacion', 'seguridad__sessionuser']).\
             exclude(content_type__app_label__in=("dobra", "reportes"))
 
+        for k, v in self.fields.items():
+            self.fields[k].widget.attrs['col'] = "12"
 
 class ModuloGrupoForm(ModelFormBase):
     class Meta:

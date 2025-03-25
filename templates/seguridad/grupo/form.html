@@ -1,108 +1,135 @@
 {% extends 'base.html' %}
 {% load templatefunctions %}
 {% block atras %}{{ request.path }}{% endblock %}
-{% block content %}
-    <div class="panel panel-default" data-sortable-id="form-stuff-2">
-        <div class="panel-heading ui-sortable-handle">
-            <h4 class="panel-title">{{ titulo }} Formulario</h4>
-            <div class="panel-heading-btn">
-                <a href="javascript:;" class="btn btn-xs btn-icon btn-circle btn-default" data-click="panel-expand"><i
-                        class="fa fa-expand"></i></a>
-            </div>
-        </div>
-        <div class="panel-body">
-            <form method="post" enctype="multipart/form-data" action="{{ ruta }}"
-                  class="form-horizontal form-label-left">
-                {% csrf_token %}
-                <input type="hidden" name="pk" value="{{ pk|default:0 }}"/>
-                <input type="hidden" name="action" value="{{ action }}"/>
-                {{ dict_url_vars_input }}
-                {% for field in form %}
-                    {% if field.name in form.arr_hidden_input %}
-                        {{ field }}
-                    {% elif field.name == 'permissions' %}
-                        <div class="form-group">
-                            <label class="form-label" for="id_{{ field.name }}">
-                                {{ field.label }}
-                                <label style="cursor: pointer;">
-                                    <input type="checkbox"
-                                           data-render="switchery" data-theme="blue"
-                                           class="js-switch select-all"> Todos
-                                </label>
-                            </label>
-                            <div id="id_{{ field.name }}">
-                                {% for a in permisos %}
-                                    <fieldset>
-                                        <legend style="font-size: 20px;">{{ a.app }}</legend>
-                                        <ul class="row">
-                                            {% for p in a.modelos %}
-                                                <li style="list-style-type: none;" class="col-xs-12 col-sm-6 col-md-6 col-lg-4 col-xl-3">
-                                                    <div>
-                                                        <strong>{{ p.nombre }}</strong>
-                                                    </div>
-                                                    <ul>
-                                                        {% for q in p.permisos %}
-                                                            <li style="list-style-type: none;">
-                                                                <label {% if q.codename == "can_guardar_ubicacion_tracking" %}id="{{ q.codename }}"{% endif %} style="cursor: pointer;"
-                                                                       for="id_permissions_{{ q.id }}">
-                                                                    <input type="checkbox" name="permissions" value="{{ q.id }}"
-                                                                           data-render="switchery" data-theme="blue"
-                                                                           id="id_permissions_{{ q.id }}"
-                                                                           class="js-switch"
-                                                                           {% if q.id in ch_perms %}checked{% endif %}
-                                                                           {% if ver %}readonly{% endif %}>
-                                                                    {% if q.codename == "can_guardar_ubicacion_tracking" %}<mark style="background-color: yellow;">{% endif %}{% traducir_permiso q.name %}{% if q.codename == "can_guardar_ubicacion_tracking" %}</mark>{% endif %}
-                                                                </label>
-                                                            </li>
-                                                        {% endfor %}
-                                                    </ul>
-                                                </li>
-                                            {% endfor %}
-                                        </ul>
-                                    </fieldset>
-                                {% endfor %}
-                            </div>
-                            <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
-                        </div>
-                    {% else %}
-                        <div class="form-group">
-                            <label class="form-label" for="id_{{ field.name }}">{{ field.label }}</label>
-                            {{ field }}
-                            <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
-                        </div>
-                    {% endif %}
 
-                {% endfor %}
-                <div class="form-group">
-                    <a class="btn btn-danger" style="color: #ffffff;" href="{{ ruta }}?{{ dict_url_vars_completo }}">
-                        <i class="fa fa-window-close"></i> Cancelar
-                    </a>
-                    <button {% if action != 'ver' %}type="submit" id="submit"{% else %}disabled{% endif %}
-                            class="btn btn-success">
-                        <i class="fa fa-save"></i> Guardar
-                    </button>
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <h5 class="card-title mb-0">{{ titulo }} Formulario</h5>
+                        </div>
+                    </div>
                 </div>
-            </form>
-        </div>
-    </div>
+
+                <div class="card-body py-2">
+                    <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
+                        {% csrf_token %}
+                        <input type="hidden" name="pk" value="{{ pk|default:0 }}"/>
+                        <input type="hidden" name="action" value="{{ action }}"/>
+                        {{ dict_url_vars_input }}
+
+                        <div class="row g-1">
+                            {% for field in form %}
+                                {% if field.name in form.arr_hidden_input %}
+                                    {{ field }}
+                                {% elif field.name == 'permissions' %}
+                                    <div class="col-12">
+                                        <div class="mb-3">
+                                            <label class="form-label small mb-1" for="id_{{ field.name }}">
+                                                {{ field.label }}
+                                                <label style="cursor: pointer;" class="ms-2">
+                                                    <input type="checkbox" class="form-check-input select-all" id="selectAll">
+                                                    <span class="ms-1">Todos</span>
+                                                </label>
+                                            </label>
+                                            <div id="id_{{ field.name }}" class="border rounded p-3">
+                                                {% for a in permisos %}
+                                                    <div class="mb-3">
+                                                        <h6 class="border-bottom pb-2 mb-2">{{ a.app }}</h6>
+                                                        <div class="row g-3">
+                                                            {% for p in a.modelos %}
+                                                                <div class="col-md-4 col-sm-6">
+                                                                    <div class="fw-bold mb-1">{{ p.nombre }}</div>
+                                                                    <ul class="list-unstyled ps-2">
+                                                                        {% for q in p.permisos %}
+                                                                            <li class="mb-2">
+                                                                                <div class="form-check">
+                                                                                    <input type="checkbox"
+                                                                                           class="form-check-input permission-checkbox"
+                                                                                           name="permissions"
+                                                                                           value="{{ q.id }}"
+                                                                                           id="id_permissions_{{ q.id }}"
+                                                                                           {% if q.id in ch_perms %}checked{% endif %}
+                                                                                           {% if ver %}disabled{% endif %}>
+                                                                                    <label class="form-check-label"
+                                                                                           {% if q.codename == "can_guardar_ubicacion_tracking" %}id="{{ q.codename }}"{% endif %}
+                                                                                           for="id_permissions_{{ q.id }}">
+                                                                                        {% if q.codename == "can_guardar_ubicacion_tracking" %}
+                                                                                            <span class="bg-warning px-1">{% traducir_permiso q.name %}</span>
+                                                                                        {% else %}
+                                                                                            {% traducir_permiso q.name %}
+                                                                                        {% endif %}
+                                                                                    </label>
+                                                                                </div>
+                                                                            </li>
+                                                                        {% endfor %}
+                                                                    </ul>
+                                                                </div>
+                                                            {% endfor %}
+                                                        </div>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <div class="col-lg-12">
+                                        <div class="mb-2">
+                                            <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label><br>
+                                            {{ field }}
+                                            <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+
+                        <div class="row mt-2">
+                            <div class="col-12">
+                                <a class="btn btn-danger btn-sm" href="{{ ruta }}?{{ dict_url_vars_completo }}">
+                                    <i class="fa fa-window-close me-1"></i> Cancelar
+                                </a>
+                                <button {% if action != 'ver' %}type="submit" id="submit"{% else %}disabled{% endif %} class="btn btn-success btn-sm">
+                                    <i class="fa fa-save me-1"></i> Guardar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div><!--end card-body-->
+            </div><!--end card-->
+        </div> <!--end col-->
+    </div><!--end row-->
 {% endblock %}
+
 {% block jscript %}
     <script type="text/javascript">
-        $(function () {
-            if($('input[name=permissions]').length === $('input[name=permissions]:checked').length){
-                 $(".select-all").prop("checked", false).trigger('click');
-            }
-        });
+        $(function() {
+            // Inicializar estado del "seleccionar todos" al cargar
+            updateSelectAllCheckbox();
 
-        $(".select-all").click(function (){
-            {#alert($('input[name=permissions]').length);#}
-            if($(this).prop("checked")==true){
-                $('input[name=permissions]').prop("checked", false).trigger('click');
-            }else{
-                $('input[name=permissions]').prop("checked", true).trigger('click');
+            // Handler para seleccionar/deseleccionar todos
+            $("#selectAll").on("click", function() {
+                const isChecked = $(this).prop("checked");
+                $(".permission-checkbox").prop("checked", isChecked);
+            });
+
+            // Actualizar el estado del "seleccionar todos" cuando se cambia un permiso individual
+            $(".permission-checkbox").on("change", function() {
+                updateSelectAllCheckbox();
+            });
+
+            // Función para actualizar el estado del checkbox "seleccionar todos"
+            function updateSelectAllCheckbox() {
+                const totalCheckboxes = $(".permission-checkbox").length;
+                const checkedCheckboxes = $(".permission-checkbox:checked").length;
+                $("#selectAll").prop("checked", totalCheckboxes === checkedCheckboxes);
+                $("#selectAll").prop("indeterminate", checkedCheckboxes > 0 && checkedCheckboxes < totalCheckboxes);
             }
         });
     </script>
     {{ form.media }}
 {% endblock %}
-

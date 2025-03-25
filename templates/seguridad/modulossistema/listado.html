@@ -64,17 +64,26 @@
                                 <a href="{{ mod.url }}" target="_blank" class="text-primary">{{ mod.url }}</a>
                             </td>
                             <td class="text-center">
-                                <div class="d-flex justify-content-center gap-2">
-                                    <a class="btn btn-sm btn-primary" title="Editar {{ modulo }}"
-                                       href="javascript:void(0)"
-                                       onclick="formModal({{ mod.id }}, 'Editar {{ mod.nombre }}','change')">
-                                        <i class="fa fa-edit"></i>
-                                    </a>
-                                    <a class="btn btn-sm btn-danger" title="Eliminar {{ modulo }}"
-                                       onclick="eliminarajax({{ mod.pk }}, '{{ mod.nombre }}', 'delete')"
-                                       href="javascript:void(0);">
-                                        <i class="fa fa-trash"></i>
-                                    </a>
+                                <div class="dropdown">
+                                    <button class="btn btn-icon" type="button" id="dropdownMenuButton-{{ mod.pk }}"
+                                            data-bs-toggle="dropdown" aria-expanded="false"
+                                            style="background: none; border: none;">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdownMenuButton-{{ mod.pk }}">
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="formModal({{ mod.id }}, 'Editar {{ mod.nombre }}','change')">
+                                                <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="eliminarajax({{ mod.pk }}, '{{ mod.nombre }}', 'delete')">
+                                                <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                            </a>
+                                        </li>
+                                    </ul>
                                 </div>
                             </td>
                         </tr>
@@ -195,7 +204,7 @@
             Swal.fire({
                 title: titulo,
                 text: "Esta acción es irreversible",
-                type: 'warning',
+                icon: 'warning',
                 showCancelButton: true,
                 allowOutsideClick: false,
                 confirmButtonColor: '#3085d6',

@@ -1,52 +1,31 @@
 {% extends 'base.html' %}
 {% block content %}
-    {#    <form method="GET">#}
-    {#        <div class="container-fluid">#}
-    {#            <div class="form-row">#}
-    {#                <div class="col-md-4 col-sm-12 offset-md-5">#}
-    {#                    <select multiple class="form-control select2 select2-multiple" data-placeholder="Grupos de módulos"#}
-    {#                            name="modulo_grupo">#}
-    {#                        <option value="">Todos</option>#}
-    {#                        {% for lmg in list_modulo_grupo %}#}
-    {#                            <option value="{{ lmg.pk }}"#}
-    {#                                    {% if lmg.pk in modulo_grupo %}selected{% endif %}>{{ lmg.nombre }}</option>#}
-    {#                        {% endfor %}#}
-    {#                    </select>#}
-    {#                </div>#}
-    {#                <div class="col-md-3 col-sm-12">#}
-    {#                    <div class="input-group mb-3">#}
-    {#                        <input type="text" class="form-control" placeholder="Buscar" aria-label="Buscar"#}
-    {#                               aria-describedby="button-addon2" name="criterio" value="{{ criterio }}">#}
-    {#                        <div class="input-group-append">#}
-    {#                            <button class="btn btn-primary" type="submit" id="button-addon2"><i#}
-    {#                                    class="fa fa-search"></i></button>#}
-    {#                            {% if url_vars %}#}
-    {#                                <a title="Ver todo" href="{{ ruta }}?{{ dict_url_vars }}" class="btn btn-primary">#}
-    {#                                    <i class="fas fa-sync-alt"></i>#}
-    {#                                </a>#}
-    {#                            {% endif %}#}
-    {#                        </div>#}
-    {#                    </div>#}
-    {#                </div>#}
-    {#            </div>#}
-    {#        </div>#}
-    {#    </form>#}
 
-    <div class="panel panel-default">
+    <div class="card">
+        <div class="card-header py-2">
+            <div class="row align-items-center">
+                <div class="col">
+                    <h5 class="card-title mb-0">URLs del Sistema</h5>
+                </div>
+            </div>
+        </div>
 
-        <div class="panel-body">
-            <div class="table-responsive">
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label small mb-1">Filtrar por Aplicación</label>
                 <select id="busqueda" multiple class="select2 form-control" data-placeholder="Buscar por Aplicación">
                     {% for c in urls_sistema %}
                         <option value="{{ c.nombre }}">{{ c.nombre }}</option>
                     {% endfor %}
                 </select>
-                <br>
+            </div>
+
+            <div class="table-responsive mt-3">
                 <div id="jstree-listado-modulos-urls">
                     <ul>
                         {% for c in urls_sistema %}
                             <li data-paraBuscar="{{ c.nombre }}" data-jstree='{"opened":true, "dnd":false}'>
-                                <label class="mr-2" for="app_{{ forloop.counter }}">{{ c.nombre }} ({{ c.url }})</label>
+                                <label class="me-2" for="app_{{ forloop.counter }}">{{ c.nombre }} ({{ c.url }})</label>
                                 {% if c.sub_urls %}
                                     <ul>
                                         {% for sc in c.sub_urls %}
@@ -72,9 +51,13 @@
     <script src="/static/assets/plugins/jstree/dist/jstree.min.js"></script>
     <script src="/static/js/urlsymodulos/urlsymodulos.js"></script>
     <script>
-        $('.select2').select2();
-
         $(document).ready(function () {
+            // Inicializar Select2
+            $('.select2').select2({
+                width: '100%'
+            });
+
+            // Manejar cambios en el selector de filtro
             $('#busqueda').change(function () {
                 var seleccionadas = $(this).children('option:selected').toArray();
                 var opciones = [];
@@ -94,6 +77,5 @@
                 }
             });
         });
-
     </script>
 {% endblock %}
