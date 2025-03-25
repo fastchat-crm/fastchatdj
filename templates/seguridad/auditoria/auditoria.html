@@ -1,101 +1,132 @@
 {% extends 'base.html' %}
+
 {% block content %}
     <!-- Filters -->
-    <div class="container-fluid px-0">
-        <form method="GET" action="{{ ruta }}">
-            <div class="form-row align-items-center">
-                <div class="col-md mb-4">
-                    <label class="form-label">Desde</label>
-                    <input type="date" id="user-list-latest-activity" name="desde" value="{{ desde }}"
-                           class="form-control" placeholder="Buscar">
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="GET" action="{{ ruta }}" class="mb-0">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Desde</label>
+                        <div class="input-group">
+                            <span class="input-group-text border-end-0">
+                                <i class="fa fa-calendar-alt text-muted"></i>
+                            </span>
+                            <input type="date" name="desde" value="{{ desde }}"
+                                   class="form-control border-start-0" placeholder="Fecha inicial">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Hasta</label>
+                        <div class="input-group">
+                            <span class="input-group-text border-end-0">
+                                <i class="fa fa-calendar-alt text-muted"></i>
+                            </span>
+                            <input type="date" name="hasta" value="{{ hasta }}"
+                                   class="form-control border-start-0" placeholder="Fecha final">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Búsqueda general</label>
+                        <div class="input-group">
+                            <span class="input-group-text border-end-0">
+                                <i class="fa fa-search text-muted"></i>
+                            </span>
+                            <input type="text" name="criterio" value="{{ criterio }}"
+                                   class="form-control border-start-0" placeholder="Buscar...">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Acciones</label>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i>
+                            </button>
+                            {% if criterio or desde or hasta %}
+                                <a href="{{ request.path }}" class="btn btn-default">
+                                    <i class="fas fa-times"></i>
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md mb-4">
-                    <label class="form-label">Hasta</label>
-                    <input type="date" id="user-list-latest-activity" name="hasta" value="{{ hasta }}"
-                           class="form-control" placeholder="Buscar">
-                </div>
-                <div class="col-md mb-4">
-                    <label class="form-label">Buscar</label>
-                    <input type="text" id="user-list-latest-activity" name="criterio" value="{{ criterio }}"
-                           class="form-control" placeholder="Buscar">
-                </div>
-                <div class="col-md col-xl-2 mb-4">
-                    <label class="form-label d-none d-md-block">&nbsp;</label>
-                    <button class="btn btn-secondary btn-block">Buscar</button>
-                </div>
-            </div>
-        </form>
+            </form>
+        </div>
     </div>
     <!-- / Filters -->
 
-    <div class="panel panel-default">
-
-        <div class="panel-body">
+    <div class="card">
+        <div class="card-body">
             <div class="table-responsive">
-                <table id="tabla" class="table table-hover table-td-valign-middle table-bordered">
+                <table id="tabla" class="table table-hover table-striped">
                     <thead>
                     <tr>
-                        <th class="column-title">Fecha</th>
-                        <th class="column-title">Hora</th>
-                        <th class="column-title">Registro</th>
-                        <th class="column-title"><span class="nobr">Username</span></th>
-                        <th class="column-title">Grupo</th>
-                        <th class="column-title">SuperAdmin</th>
-                        <th class="column-title">Acción</th>
+                        <th class="text-center">Fecha</th>
+                        <th class="text-center">Hora</th>
+                        <th class="text-center">Registro</th>
+                        <th class="text-center">Username</th>
+                        <th class="text-center">Grupo</th>
+                        <th class="text-center">SuperAdmin</th>
+                        <th class="text-center">Acción</th>
                     </tr>
                     </thead>
                     <tbody>
                     {% for p in listado %}
                         <tr>
-                            <td>{{ p.action_time|date:"d/M/Y" }}</td>
-                            <td>{{ p.action_time|date:"H:i" }}</td>
-                            <td>{{ p.change_message }}{% if p.object_id %}<br><span class="text-muted">Registro: {{ p.object_id|default_if_none:'' }}</span>{% endif %}</td>
-                            <td>{{ p.user.username }}</td>
-                            {#                            <td>{% if p.usuario.is_staff == True %}#}
-                            {#                                SI#}
-                            {#                            {% else %}#}
-                            {#                                NO{% endif %}</td>#}
-                            <td>{{ p.user.groups.all.first.name }}</td>
-                            <td>{% if p.user.is_superuser == True %}
-                                SI
-                            {% else %}
-                                NO{% endif %}</td>
+                            <td class="text-center">{{ p.action_time|date:"d/M/Y" }}</td>
+                            <td class="text-center">{{ p.action_time|date:"H:i" }}</td>
                             <td>
-                                {% if p.action_flag == 2 %}
-                                    <div
-                                       class="badge badge-info" style="font-size: 15px;">EDITADO</div>
-                                {% elif p.action_flag == 1 %}
-                                    <div
-                                       class="badge badge-success" style="font-size: 15px;">AGREGADO</div>
-                                {% elif  p.action_flag == 3 %}
-                                    <div
-                                      class="badge badge-danger" style="font-size: 15px;">ELIMINADO</div>
+                                {{ p.change_message }}
+                                {% if p.object_id %}
+                                    <br><span class="text-muted small">Registro: {{ p.object_id|default_if_none:'' }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">{{ p.user.username }}</td>
+                            <td class="text-center">{{ p.user.groups.all.first.name }}</td>
+                            <td class="text-center">
+                                {% if p.user.is_superuser == True %}
+                                    <i class="fas fa-check-circle text-success"></i>
                                 {% else %}
-                                    <div
-                                       class="badge badge-default"
-                                       style="font-size: 15px;">{{ p.accion }}</div>
+                                    <i class="fas fa-times-circle text-danger"></i>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if p.action_flag == 2 %}
+                                    <span class="badge text-info">
+                                        <i class="fas fa-edit"></i> EDITADO
+                                    </span>
+                                {% elif p.action_flag == 1 %}
+                                    <span class="badge text-success">
+                                        <i class="fas fa-plus-circle"></i> AGREGADO
+                                    </span>
+                                {% elif p.action_flag == 3 %}
+                                    <span class="badge text-danger">
+                                        <i class="fas fa-trash"></i> ELIMINADO
+                                    </span>
+                                {% else %}
+                                    <span class="badge text-secondary">
+                                        <i class="fas fa-cog"></i> {{ p.accion }}
+                                    </span>
                                 {% endif %}
                             </td>
                         </tr>
                     {% endfor %}
                     </tbody>
                 </table>
-                <!-- paginacion  -->
                 {% include 'paginacion.html' %}
-                <!-- final de la paginacion  -->
             </div>
         </div>
     </div>
-    <div class="modal fade" id="modalDetalle">
+
+    <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <button class="close" data-dismiss="modal" aria-label="Close">
-                        <i class="fas fa-times"></i>
-                    </button>
+                    <h5 class="modal-title" id="modalDetalleLabel">Detalle de Auditoría</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div id="modalDetalleContenido" class="modal-body">
-
+                    <!-- Contenido dinámico -->
                 </div>
             </div>
         </div>
@@ -103,5 +134,9 @@
 {% endblock %}
 
 {% block jscript %}
-
+    <script>
+        $(document).ready(function() {
+            // Inicialización de scripts si fuera necesario
+        });
+    </script>
 {% endblock %}

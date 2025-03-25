@@ -296,10 +296,6 @@ class SessionUser(NormalModel):
 class Empresa(ModeloBase):
     responsable = models.ForeignKey('autenticacion.PerfilAdministrativo', on_delete=models.CASCADE, verbose_name='Responsable')
     nombre = models.CharField(max_length=100, verbose_name='Nombre')
-    api_key = models.CharField(max_length=300, verbose_name='API Key', default='')
-    dominio = models.URLField(blank=True, null=True, verbose_name='Dominio URL')
-    telefono = models.CharField(max_length=100, blank=True, null=True, verbose_name='Teléfono',validators=[solo_numeros])
-    email = models.EmailField(blank=True, null=True, verbose_name='Email')
     logo = models.FileField(upload_to='empresa/logo/',validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])],blank=True, null=True, verbose_name='Logo')
 
     def __str__(self):

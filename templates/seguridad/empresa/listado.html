@@ -2,25 +2,30 @@
 {% load templatefunctions %}
 
 {% block content %}
+
     <div class="card mb-3">
         <div class="card-body">
             <form method="GET" class="mb-0">
-                <div class="row">
-                    <div class="col-md-8">
-                        <h5 class="card-title mb-0">
-                            <i class="fas fa-building me-2"></i>Listado de {{ titulo }}
-                        </h5>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Búsqueda general</label>
+                        <div class="input-group">
+                            <span class="input-group-text border-end-0">
+                                <i class="fa fa-search text-muted"></i>
+                            </span>
+                            <input type="text" class="form-control border-start-0"
+                                   placeholder="Buscar..." name="criterio" value="{{ criterio }}">
+                        </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="input-group">
-                            <input type="text" class="form-control border-end-0" placeholder="Buscar..."
-                                   name="criterio" value="{{ criterio }}">
-                            <button class="btn btn-primary" type="submit">
-                                <i class="fa fa-search"></i>
+                        <label class="form-label">Acciones</label>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i>
                             </button>
                             {% if url_vars %}
-                                <a title="Ver todo" href="{{ request.path }}" class="btn btn-outline-secondary">
-                                    <i class="fas fa-sync-alt"></i>
+                                <a href="{{ request.path }}" class="btn btn-default">
+                                    <i class="fas fa-times"></i>
                                 </a>
                             {% endif %}
                         </div>
@@ -46,10 +51,6 @@
                     <tr>
                         <th class="text-center">Logo</th>
                         <th class="text-center">Nombre</th>
-                        <th class="text-center">Representante</th>
-                        <th class="text-center">URL</th>
-                        <th class="text-center">Contacto</th>
-                        <th class="text-center">Base de datos</th>
                         <th class="text-center">Acción</th>
                     </tr>
                     </thead>
@@ -58,7 +59,7 @@
                         <tr>
                             <td class="text-center">
                                 {% if l.logo %}
-                                    <img width="50px" height="50px" src="/media/{{ l.logo }}" class="img-thumbnail rounded-circle"
+                                    <img width="50px" height="50px" src="/media/{{ l.logo }}" class="img-thumbnail"
                                          data-fancybox="image" alt="LOGO">
                                 {% else %}
                                     <span class="text-muted"><i class="fa fa-info-circle me-1"></i>Sin registrar</span>
@@ -66,49 +67,6 @@
                             </td>
                             <td class="text-center">
                                 {{ l.nombre }}<br><span class="badge bg-secondary">Cod. {{ l.id }}</span>
-                            </td>
-                            <td class="text-center">
-                                {{ l.responsable.usuario.documento }} {{ l.responsable.usuario.datos }}
-                            </td>
-                            <td class="text-center">
-                                {% if l.dominio %}
-                                    <a href="{{ l.dominio }}" target="_blank" class="text-primary">
-                                        <i class="fa fa-link me-1"></i>Ver enlace
-                                    </a>
-                                {% else %}
-                                    <span class="text-muted"><i class="fa fa-info-circle me-1"></i>Sin registrar</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if l.telefono %}
-                                    <div class="mb-1">
-                                        <i class="fa-brands fa-whatsapp text-success me-1"></i>
-                                        <a href="javascript:void(0)" class="text-primary"
-                                           onclick="contactarwhatsapp('{{ l.telefono }}', '{{ l.nombre }}')">
-                                            +593 {{ l.telefono }}
-                                        </a>
-                                    </div>
-                                {% else %}
-                                    <div class="mb-1">
-                                        <span class="text-muted"><i class="fa fa-info-circle me-1"></i>Sin registrar teléfono</span>
-                                    </div>
-                                {% endif %}
-                                {% if l.email %}
-                                    <div>
-                                        <i class="fa fa-envelope text-primary me-1"></i>
-                                        <a href="mailto:{{ l.email }}" class="text-primary">{{ l.email }}</a>
-                                    </div>
-                                {% else %}
-                                    <div>
-                                        <span class="text-muted"><i class="fa fa-info-circle me-1"></i>Sin registrar correo</span>
-                                    </div>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
-                                <div>
-                                    <span class="fw-bold">Key:</span>
-                                    <a target="_blank" href="/api_key/{{ l.api_key }}/" class="text-primary">{{ l.api_key }}</a>
-                                </div>
                             </td>
                             <td class="text-center">
                                 <div class="dropdown">
@@ -152,7 +110,6 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body detalleProd">
-                        <!-- Contenido dinámico cargado por AJAX -->
                     </div>
                 </form>
             </div>

@@ -117,7 +117,7 @@
 
 .badge-primary {
     color: #fff;
-    background-color: #00acac
+    background-color: #22c45e
 }
 
 a.badge-primary:focus, a.badge-primary:hover {
@@ -147,7 +147,7 @@ a.badge-secondary.focus, a.badge-secondary:focus {
 
 .badge-success {
     color: #fff;
-    background-color: #00acac
+    background-color: #22C45EFF
 }
 
 a.badge-success:focus, a.badge-success:hover {

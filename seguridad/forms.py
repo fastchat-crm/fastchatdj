@@ -98,7 +98,7 @@ class GroupModuloForm(ModelFormBase):
 class EmpresaForm(ModelFormBase):
     class Meta:
         model = Empresa
-        fields = ('responsable', 'nombre', 'api_key', 'dominio', 'telefono', 'email', 'logo')
+        fields = ('nombre', 'logo')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
@@ -106,10 +106,8 @@ class EmpresaForm(ModelFormBase):
         super(EmpresaForm, self).__init__(*args, **kwargs)
         self.fields['logo'].widget.attrs['data-allowed-file-extensions'] = "jpg jpeg png tiff svg jfif"
         for k, v in self.fields.items():
+            self.fields[k].widget.attrs['col'] = "12"
             self.fields[k].widget.attrs['class'] = "form-control"
-            self.fields[k].widget.attrs['col'] = "6"
-            if k in ('responsable',):
-                self.fields[k].widget.attrs['class'] = "form-control select2-simple"
             if k in ('logo',):
                 self.fields[k].widget.attrs['class'] = "dropify"
             if ver:
