@@ -66,6 +66,10 @@ class FormModeloBase(forms.Form):
         js = (
             '/static/assets/plugins/switchery/switchery.min.js',
             '/static/js/renderSwicheryControl.js',
+            # '/static/assets/plugins/select2/js/select2.full.min.js',
+            # '/static/assets/plugins/select2/js/i18n/es.js',
+            # '/static/assets/plugins/dropify/js/dropify.min.js',
+            # '/static/js/form-controls-init.js',
             # '/static/js/forms.js?v=11',
             # '/static/panel/js/inline_forms.js?v=2',
         )

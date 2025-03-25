@@ -2,61 +2,55 @@
 {% load templatefunctions %}
 
 {% block content %}
-    <form method="GET">
-        <div class="form-row">
-            <div class="col-md-6 col-sm-12 offset-md-6">
-                <div class="input-group mb-3">
-                    <input type="text" class="form-control" placeholder="Buscar" aria-label="Buscar"
-                           aria-describedby="button-addon2" name="criterio" value="{{ criterio }}">
-                    <div class="input-group-append">
-                        <button class="btn btn-primary" type="submit" id="button-addon2"><i
-                                class="fa fa-search"></i></button>
-                        {% if url_vars %}
-                            <a title="Ver todo" href="{{ request.path }}" class="btn btn-default">
-                                <i class="fas fa-sync-alt"></i>
-                            </a>
-                        {% endif %}
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="GET" class="mb-0">
+                <div class="row">
+                    <div class="col-md-8">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-building me-2"></i>Listado de {{ titulo }}
+                        </h5>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="input-group">
+                            <input type="text" class="form-control border-end-0" placeholder="Buscar..."
+                                   name="criterio" value="{{ criterio }}">
+                            <button class="btn btn-primary" type="submit">
+                                <i class="fa fa-search"></i>
+                            </button>
+                            {% if url_vars %}
+                                <a title="Ver todo" href="{{ request.path }}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-sync-alt"></i>
+                                </a>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
-            </div>
+            </form>
         </div>
-    </form>
-
-    <div class="mb-3">
-        <a href="javascript:void(0)" onclick="formModal(0, 'Adicionar {{ titulo }}', 'add')" class="btn btn-success"><i
-                class="fas fa-plus-circle mr-2"></i> Nueva {{ titulo }}</a>
     </div>
 
-    <div class="panel panel-default">
-        <div class="panel-body">
+    <div class="row align-items-center mb-3">
+        <div class="col-md-12 mb-2 mb-md-0">
+            <a href="javascript:void(0)" onclick="formModal(0, 'Adicionar {{ titulo }}', 'add')" class="btn btn-success btn-sm">
+                <i class="fas fa-plus-circle me-2"></i> Nueva {{ titulo }}
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
             <div class="table-responsive">
-                <table id="tabla" class="table table-bordered table-hover table-td-valign-middle table-bordered">
+                <table id="tabla" class="table table-hover table-striped">
                     <thead>
                     <tr>
-                        <th class="text-center">
-                            Logo
-                        </th>
-                        <th class="text-center">
-                            Nombre
-                        </th>
-                        <th class="text-center">
-                            Representante
-                        </th>
-                        <th class="text-center">
-                            URL
-                        </th>
-                        <th class="text-center">
-                            Contacto
-                        </th>
-                        <th class="text-center">
-                            Base de datos
-                        </th>
-                        <th class="text-center">
-                            # Bodegas
-                        </th>
-                        <th class="text-center">
-                            Acción
-                        </th>
+                        <th class="text-center">Logo</th>
+                        <th class="text-center">Nombre</th>
+                        <th class="text-center">Representante</th>
+                        <th class="text-center">URL</th>
+                        <th class="text-center">Contacto</th>
+                        <th class="text-center">Base de datos</th>
+                        <th class="text-center">Acción</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -64,72 +58,79 @@
                         <tr>
                             <td class="text-center">
                                 {% if l.logo %}
-                                    <img width="50px" height="50px" src="/media/{{ l.logo }}" class="img-thumbnail"
-                                         data-fancybox="image"
-                                         alt="LOGO">
+                                    <img width="50px" height="50px" src="/media/{{ l.logo }}" class="img-thumbnail rounded-circle"
+                                         data-fancybox="image" alt="LOGO">
                                 {% else %}
-                                    <span class="text-muted"><i class="fa fa-info"></i> Sin registrar</span>
+                                    <span class="text-muted"><i class="fa fa-info-circle me-1"></i>Sin registrar</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                {{ l.nombre }}<br><b>Cod. {{ l.id }}</b>
+                                {{ l.nombre }}<br><span class="badge bg-secondary">Cod. {{ l.id }}</span>
                             </td>
                             <td class="text-center">
                                 {{ l.responsable.usuario.documento }} {{ l.responsable.usuario.datos }}
                             </td>
                             <td class="text-center">
                                 {% if l.dominio %}
-                                    <a href="{{ l.dominio }}" target="_blank" class="btn-link"><i
-                                            class="fa fa-link"></i> Ver enlace</a>
+                                    <a href="{{ l.dominio }}" target="_blank" class="text-primary">
+                                        <i class="fa fa-link me-1"></i>Ver enlace
+                                    </a>
                                 {% else %}
-                                    <span class="text-muted"><i class="fa fa-info"></i> Sin registrar</span>
+                                    <span class="text-muted"><i class="fa fa-info-circle me-1"></i>Sin registrar</span>
                                 {% endif %}
                             </td>
-                            <td class="text-center">
+                            <td>
                                 {% if l.telefono %}
-                                    <a href="javascript:void(0)"
-                                       onclick="contactarwhatsapp('{{ l.telefono }}', '{{ l.nombre }}')">
-                                        <i class="fa-brands fa-whatsapp"></i> +593 {{ l.telefono }}
-                                    </a><br>
-                                {% else %}
-                                    <span class="text-muted"><i class="fa fa-info"></i> Sin registrar teléfono </span>
-                                    <br>
-                                {% endif %}
-                                {% if l.email %}
-                                    <a href="mailto:{{ l.email }}"><i class="fa fa-envelope"></i> {{ l.email }}</a>
-                                {% else %}
-                                    <span class="text-muted"><i class="fa fa-info"></i> Sin registrar correo</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
-                                <b>Key:</b> <a target="_blank"
-                                               href="/api_key/{{ l.api_key }}/">{{ l.api_key }}</a>
-                            </td>
-                            <td class="text-center">
-                                {{ l.get_bodegas.count }}
-                            </td>
-                            <td class="with-btn-group text-center" nowrap>
-                                <div class="btn-group dropleft">
-                                    <button type="button" class="btn btn-white btn-sm width-100 dropdown-toggle"
-                                            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                        <i class="fas fa-angle-left mr-1"></i> Acciones
-                                    </button>
-                                    <div class="dropdown-menu dropdown-menu-right">
-                                        <a class="dropdown-item"
-                                           href="?action=verbodegas&id={{ l.pk|encrypt }}">
-                                            <i class="fas fa-store"></i> Bodegas ({{ l.get_bodegas.count }})
-                                        </a>
-                                        <a class="dropdown-item"
-                                           onclick="formModal({{ l.pk }}, 'Editar {{ l.nombre }}', 'change')"
-                                           href="javascript:void(0);">
-                                            <i class="fas fa-edit"></i> Editar
-                                        </a>
-                                        <a class="dropdown-item"
-                                           onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'delete')"
-                                           href="javascript:void(0);">
-                                            <i class="fas fa-trash"></i> Eliminar
+                                    <div class="mb-1">
+                                        <i class="fa-brands fa-whatsapp text-success me-1"></i>
+                                        <a href="javascript:void(0)" class="text-primary"
+                                           onclick="contactarwhatsapp('{{ l.telefono }}', '{{ l.nombre }}')">
+                                            +593 {{ l.telefono }}
                                         </a>
                                     </div>
+                                {% else %}
+                                    <div class="mb-1">
+                                        <span class="text-muted"><i class="fa fa-info-circle me-1"></i>Sin registrar teléfono</span>
+                                    </div>
+                                {% endif %}
+                                {% if l.email %}
+                                    <div>
+                                        <i class="fa fa-envelope text-primary me-1"></i>
+                                        <a href="mailto:{{ l.email }}" class="text-primary">{{ l.email }}</a>
+                                    </div>
+                                {% else %}
+                                    <div>
+                                        <span class="text-muted"><i class="fa fa-info-circle me-1"></i>Sin registrar correo</span>
+                                    </div>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div>
+                                    <span class="fw-bold">Key:</span>
+                                    <a target="_blank" href="/api_key/{{ l.api_key }}/" class="text-primary">{{ l.api_key }}</a>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <div class="dropdown">
+                                    <button class="btn btn-icon" type="button" id="dropdownMenuButton-{{ l.pk }}"
+                                            data-bs-toggle="dropdown" aria-expanded="false"
+                                            style="background: none; border: none;">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="formModal({{ l.pk }}, 'Editar {{ l.nombre }}', 'change')">
+                                                <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'delete')">
+                                                <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                            </a>
+                                        </li>
+                                    </ul>
                                 </div>
                             </td>
                         </tr>
@@ -141,38 +142,29 @@
         </div>
     </div>
 
-    <div class="modal fade" id="modalDetalle">
+    <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
-                <form method="post" enctype="multipart/form-data" action="{{ ruta }}"
-                      class="form-horizontal form-label-left">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
                     {% csrf_token %}
                     <div class="modal-header">
-                        <h4 class="modal-title"><b id="modalNombre"></b></h4>
-                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+                        <h5 class="modal-title" id="modalNombre"></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body detalleProd">
+                        <!-- Contenido dinámico cargado por AJAX -->
                     </div>
-                    {#                    <div class="modal-footer" id="footerModalView">#}
-                    {#                        <a href="javascript:;" class="btn btn-white" data-dismiss="modal"><i#}
-                    {#                                class="fa fa-window-close"></i>#}
-                    {#                            Cerrar</a>#}
-                    {#                    </div>#}
                 </form>
             </div>
         </div>
     </div>
-
-
-
-
 {% endblock %}
 
 {% block jscript %}
-    <script src="/js/forms.js?version=1"></script>
+    <script src="/static/js/forms.js?version=1"></script>
     <script>
-        function formModal(id, text, action,) {
-            pantallaespera()
+        function formModal(id, text, action) {
+            pantallaespera();
             $.ajax({
                 type: "GET",
                 url: `{{ request.path }}`,
@@ -185,7 +177,10 @@
                     if (data.result === true) {
                         $('#modalNombre').html(text);
                         $('.detalleProd').html(data.data);
-                        $('#modalDetalle').modal({backdrop: 'static'}).modal('show');
+
+                        // Usar Bootstrap 5 modal
+                        const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+                        modal.show();
                     } else {
                         mensajeWarning(data.message);
                     }
