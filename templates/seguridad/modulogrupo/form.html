@@ -233,13 +233,13 @@
 {% endblock %}
 
 {% block jscript %}
+    {{ form.media }}
+    <script src="/static/js/forms.js?version=1"></script>
     <link href="/static/assets/plugins/jstree/dist/themes/default/style.min.css" rel="stylesheet"/>
     <script src="/static/assets/plugins/jstree/dist/jstree.min.js"></script>
     <script src="/static/validaciones/funciones.js?v=2.2"></script>
     <script src="/static/js/urlsymodulos/urlsymodulos.js"></script>
     <script src="/static/js/icons/all-icons-translated.json"></script>
-    <script src="/static/js/forms.js"></script>
-    {{ form.media }}
     <script>
         $(document).ready(function () {
             // Inicializar Select2

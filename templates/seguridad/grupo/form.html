@@ -9,7 +9,7 @@
                 <div class="card-header py-2">
                     <div class="row align-items-center">
                         <div class="col">
-                            <h5 class="card-title mb-0">{{ titulo }} Formulario</h5>
+                            <h5 class="card-title mb-0">Formulario</h5>
                         </div>
                     </div>
                 </div>
@@ -106,6 +106,8 @@
 {% endblock %}
 
 {% block jscript %}
+    {{ form.media }}
+    <script src="/static/js/forms.js?version=1"></script>
     <script type="text/javascript">
         $(function() {
             // Inicializar estado del "seleccionar todos" al cargar
@@ -131,5 +133,4 @@
             }
         });
     </script>
-    {{ form.media }}
 {% endblock %}
