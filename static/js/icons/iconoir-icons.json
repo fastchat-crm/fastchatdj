@@ -1,0 +1,124 @@
+{
+  "icons": [
+    {
+      "class": "iconoir-cycling",
+      "en": "Cycling",
+      "es": "Ciclismo"
+    },
+    {
+      "class": "iconoir-cinema-old",
+      "en": "Old Cinema",
+      "es": "Cine Antiguo"
+    },
+    {
+      "class": "iconoir-flower",
+      "en": "Flower",
+      "es": "Flor"
+    },
+    {
+      "class": "iconoir-fire-flame",
+      "en": "Fire Flame",
+      "es": "Llama de Fuego"
+    },
+    {
+      "class": "iconoir-no-smoking-circle",
+      "en": "No Smoking",
+      "es": "Prohibido Fumar"
+    },
+    {
+      "class": "iconoir-palette",
+      "en": "Palette",
+      "es": "Paleta"
+    },
+    {
+      "class": "iconoir-report-columns",
+      "en": "Report Columns",
+      "es": "Columnas de Reporte"
+    },
+    {
+      "class": "iconoir-reports-solid",
+      "en": "Reports",
+      "es": "Reportes"
+    },
+    {
+      "class": "iconoir-soccer-ball",
+      "en": "Soccer Ball",
+      "es": "Bal\u00f3n de F\u00fatbol"
+    },
+    {
+      "class": "iconoir-trophy",
+      "en": "Trophy",
+      "es": "Trofeo"
+    },
+    {
+      "class": "iconoir-wolf",
+      "en": "Wolf",
+      "es": "Lobo"
+    },
+    {
+      "class": "iconoir-keyframes-couple",
+      "en": "Keyframes Couple",
+      "es": "Pareja de Fotogramas Clave"
+    },
+    {
+      "class": "iconoir-microphone",
+      "en": "Microphone",
+      "es": "Micr\u00f3fono"
+    },
+    {
+      "class": "iconoir-microphone-mute",
+      "en": "Muted Microphone",
+      "es": "Micr\u00f3fono Silenciado"
+    },
+    {
+      "class": "iconoir-priority-down",
+      "en": "Priority Down",
+      "es": "Prioridad Baja"
+    },
+    {
+      "class": "iconoir-dollar-circle",
+      "en": "Dollar Circle",
+      "es": "C\u00edrculo de D\u00f3lar"
+    },
+    {
+      "class": "iconoir-umbrella",
+      "en": "Umbrella",
+      "es": "Paraguas"
+    },
+    {
+      "class": "iconoir-quote-solid",
+      "en": "Quote",
+      "es": "Cita"
+    },
+    {
+      "class": "iconoir-suitcase",
+      "en": "Suitcase",
+      "es": "Maleta"
+    },
+    {
+      "class": "iconoir-cloud-upload",
+      "en": "Cloud Upload",
+      "es": "Subida en la Nube"
+    },
+    {
+      "class": "iconoir-bell",
+      "en": "Bell",
+      "es": "Campana"
+    },
+    {
+      "class": "iconoir-bell-off",
+      "en": "Bell Off",
+      "es": "Campana Apagada"
+    },
+    {
+      "class": "iconoir-chat-bubble",
+      "en": "Chat Bubble",
+      "es": "Burbuja de Chat"
+    },
+    {
+      "class": "iconoir-mail",
+      "en": "Mail",
+      "es": "Correo"
+    }
+  ]
+}

@@ -41,7 +41,7 @@
     --bs-blue: #0d6efd;
     --bs-light: #f4f6f9;
     --bs-dark: #2b2d3b;
-    --bs-primary-rgb: 34, 197, 94;
+    --bs-primary-rgb: 0, 129, 193;
     --bs-secondary-rgb: 149, 160, 197;
     --bs-success-rgb: 34, 197, 94;
     --bs-info-rgb: 65, 203, 216;
@@ -60,7 +60,7 @@
     --bs-danger-text-emphasis: #601f22;
     --bs-light-text-emphasis: #7a82b1;
     --bs-dark-text-emphasis: #7a82b1;
-    --bs-primary-bg-subtle: rgba(34, 197, 94, 0.1);
+    --bs-primary-bg-subtle: rgba(0, 129, 193, 0.1);
     --bs-secondary-bg-subtle: rgba(149, 160, 197, 0.1);
     --bs-success-bg-subtle: rgba(34, 197, 94, 0.1);
     --bs-info-bg-subtle: rgba(65, 203, 216, 0.1);
@@ -104,7 +104,7 @@
     --bs-tertiary-bg-rgb: 244, 246, 249;
     --bs-heading-color: inherit;
     --bs-link-color: #22c55e;
-    --bs-link-color-rgb: 34, 197, 94;
+    --bs-link-color-rgb: 0, 129, 193;
     --bs-link-decoration: none;
     --bs-link-hover-color: #1b9e4b;
     --bs-link-hover-color-rgb: 27, 158, 75;
@@ -128,7 +128,7 @@
     --bs-box-shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.075);
     --bs-focus-ring-width: 0.25rem;
     --bs-focus-ring-opacity: 0.25;
-    --bs-focus-ring-color: rgba(34, 197, 94, 0.25);
+    --bs-focus-ring-color: rgba(0, 129, 193, 0.25);
     --bs-form-valid-color: #22c5ad;
     --bs-form-valid-border-color: #22c5ad;
     --bs-form-invalid-color: #ef4d56;
@@ -159,7 +159,7 @@
     --bs-danger-text-emphasis: #f5949a;
     --bs-light-text-emphasis: #f4f6f9;
     --bs-dark-text-emphasis: #d9e1ec;
-    --bs-primary-bg-subtle: rgba(34, 197, 94, 0.2);
+    --bs-primary-bg-subtle: rgba(0, 129, 193, 0.2);
     --bs-secondary-bg-subtle: rgba(149, 160, 197, 0.2);
     --bs-success-bg-subtle: rgba(34, 197, 94, 0.2);
     --bs-info-bg-subtle: rgba(65, 203, 216, 0.2);
@@ -3820,7 +3820,7 @@ textarea.form-control-lg {
     --bs-btn-hover-color: #ffffff;
     --bs-btn-hover-bg: #0d6efd;
     --bs-btn-hover-border-color: #0d6efd;
-    --bs-btn-focus-shadow-rgb: 34, 197, 94;
+    --bs-btn-focus-shadow-rgb: 0, 129, 193;
     --bs-btn-active-color: #ffffff;
     --bs-btn-active-bg: #0d6efd;
     --bs-btn-active-border-color: #0d6efd;

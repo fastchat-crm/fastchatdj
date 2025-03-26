@@ -1,0 +1,124 @@
+{
+  "icons": [
+    {
+      "class": "lab la-accessible-icon",
+      "en": "Accessible Icon",
+      "es": "\u00cdcono de accesibilidad"
+    },
+    {
+      "class": "las la-blind",
+      "en": "Blind",
+      "es": "Ceguera"
+    },
+    {
+      "class": "las la-low-vision",
+      "en": "Low Vision",
+      "es": "Visi\u00f3n reducida"
+    },
+    {
+      "class": "las la-tty",
+      "en": "TTY",
+      "es": "Tel\u00e9fonos para sordos"
+    },
+    {
+      "class": "las la-braille",
+      "en": "Braille",
+      "es": "Braille"
+    },
+    {
+      "class": "las la-phone-volume",
+      "en": "Phone Volume",
+      "es": "Volumen del tel\u00e9fono"
+    },
+    {
+      "class": "las la-universal-access",
+      "en": "Universal Access",
+      "es": "Acceso universal"
+    },
+    {
+      "class": "lar la-question-circle",
+      "en": "Help",
+      "es": "Ayuda"
+    },
+    {
+      "class": "lar la-bell",
+      "en": "Bell",
+      "es": "Campana"
+    },
+    {
+      "class": "las la-exclamation-circle",
+      "en": "Alert",
+      "es": "Alerta"
+    },
+    {
+      "class": "las la-bell-slash",
+      "en": "",
+      "es": ""
+    },
+    {
+      "class": "las la-fish",
+      "en": "Fish",
+      "es": "Pez"
+    },
+    {
+      "class": "las la-cat",
+      "en": "Cat",
+      "es": "Gato"
+    },
+    {
+      "class": "las la-angle-down",
+      "en": "Angle Down",
+      "es": "\u00c1ngulo hacia abajo"
+    },
+    {
+      "class": "las la-angle-up",
+      "en": "Angle Up",
+      "es": "\u00c1ngulo hacia arriba"
+    },
+    {
+      "class": "las la-angle-left",
+      "en": "Angle Left",
+      "es": "\u00c1ngulo hacia la izquierda"
+    },
+    {
+      "class": "las la-angle-right",
+      "en": "Angle Right",
+      "es": "\u00c1ngulo hacia la derecha"
+    },
+    {
+      "class": "las la-arrow-circle-down",
+      "en": "Arrow Circle Down",
+      "es": "Flecha hacia abajo"
+    },
+    {
+      "class": "las la-arrow-circle-up",
+      "en": "Arrow Circle Up",
+      "es": "Flecha hacia arriba"
+    },
+    {
+      "class": "las la-arrow-circle-left",
+      "en": "Arrow Circle Left",
+      "es": "Flecha hacia la izquierda"
+    },
+    {
+      "class": "las la-arrow-circle-right",
+      "en": "Arrow Circle Right",
+      "es": "Flecha hacia la derecha"
+    },
+    {
+      "class": "lab la-facebook",
+      "en": "Facebook",
+      "es": "Facebook"
+    },
+    {
+      "class": "lab la-twitter",
+      "en": "Twitter",
+      "es": "Twitter"
+    },
+    {
+      "class": "lab la-whatsapp",
+      "en": "WhatsApp",
+      "es": "WhatsApp"
+    }
+  ]
+}

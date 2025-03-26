@@ -21,8 +21,8 @@
 }
 
 .btn-primary {
-    -webkit-box-shadow: 0 1px 2px 0 rgba(34, 197, 94, .35);
-    box-shadow: 0 1px 2px 0 rgba(34, 197, 94, .35)
+    -webkit-box-shadow: 0 1px 2px 0 rgba(0, 129, 193, .35);
+    box-shadow: 0 1px 2px 0 rgba(0, 129, 193, .35)
 }
 
 .btn-primary:hover {
@@ -1226,7 +1226,7 @@ html[data-bs-theme=dark] .datatable-container thead, html[data-bs-theme=dark] .t
 }
 
 .nav-tabs-custom .nav.nav-tabs .nav-link.active {
-    background-color: rgba(34, 197, 94, .08);
+    background-color: rgba(0, 129, 193, .08);
     border-color: #22c55e;
     color: #22c55e
 }
@@ -1690,7 +1690,7 @@ hr.hr-dashed {
 }
 
 .startbar .startbar-menu .navbar-nav .nav-item .nav-link[data-bs-toggle=collapse][aria-expanded=true] {
-    background-color: rgba(34, 197, 94, .05);
+    background-color: rgba(0, 129, 193, .05);
     border-radius: 10px
 }
 
@@ -1911,7 +1911,7 @@ html[data-bs-theme=dark] .logo-dark, html[data-startbar=dark] .logo-dark {
     padding: 1.5rem 12px;
     margin: 50px 16px 16px;
     position: relative;
-    background-color: rgba(34, 197, 94, .08)
+    background-color: rgba(0, 129, 193, .08)
 }
 
 .update-msg h5 {
@@ -1921,7 +1921,7 @@ html[data-bs-theme=dark] .logo-dark, html[data-startbar=dark] .logo-dark {
 
 .update-msg .update-icon-box {
     background-color: var(--bs-startbar-bg);
-    border: 5px solid rgba(34, 197, 94, .08);
+    border: 5px solid rgba(0, 129, 193, .08);
     margin-top: -40px
 }
 
@@ -1967,7 +1967,7 @@ html[data-bs-theme=dark] .logo-dark, html[data-startbar=dark] .logo-dark {
 .label-border .border_left:before {
     content: "";
     display: inline-block;
-    border-bottom: 2px solid rgba(34, 197, 94, .2);
+    border-bottom: 2px solid rgba(0, 129, 193, .2);
     width: 20px;
     position: relative;
     top: -7px
@@ -1976,7 +1976,7 @@ html[data-bs-theme=dark] .logo-dark, html[data-startbar=dark] .logo-dark {
 .label-border .border_left:after {
     content: "";
     display: inline-block;
-    border-bottom: 2px solid rgba(34, 197, 94, .5);
+    border-bottom: 2px solid rgba(0, 129, 193, .5);
     width: 6px;
     position: absolute;
     top: 7px;
@@ -1991,7 +1991,7 @@ html[data-bs-theme=dark] .logo-dark, html[data-startbar=dark] .logo-dark {
 .label-border .border_right:before {
     content: "";
     display: inline-block;
-    border-bottom: 2px solid rgba(34, 197, 94, .2);
+    border-bottom: 2px solid rgba(0, 129, 193, .2);
     width: 20px;
     position: relative;
     top: -1px
@@ -2000,7 +2000,7 @@ html[data-bs-theme=dark] .logo-dark, html[data-startbar=dark] .logo-dark {
 .label-border .border_right:after {
     content: "";
     display: inline-block;
-    border-bottom: 2px solid rgba(34, 197, 94, .5);
+    border-bottom: 2px solid rgba(0, 129, 193, .5);
     width: 6px;
     position: absolute;
     bottom: 10px;
@@ -2501,7 +2501,7 @@ html[data-bs-theme=light] .topbar .topbar-custom .nav-link.nav-icon .dark-mode {
     font-weight: 600;
     font-size: 9px;
     text-align: center;
-    background-color: rgba(34, 197, 94, .1);
+    background-color: rgba(0, 129, 193, .1);
     color: #22c55e;
     width: 20px;
     height: 20px;
@@ -3329,7 +3329,7 @@ html[data-bs-theme=light] .topbar .topbar-custom .nav-link.nav-icon .dark-mode {
     margin: 5px;
     padding: 7px 5px;
     text-align: center;
-    background-color: rgba(34, 197, 94, .18);
+    background-color: rgba(0, 129, 193, .18);
     color: #22c55e
 }
 
@@ -3381,7 +3381,7 @@ html[data-bs-theme=light] .topbar .topbar-custom .nav-link.nav-icon .dark-mode {
 }
 
 .fc .fc-button-primary:disabled {
-    background: rgba(34, 197, 94, .1);
+    background: rgba(0, 129, 193, .1);
     color: #22c55e;
     border-color: var(--bs-border-color);
     opacity: 1
@@ -3410,7 +3410,7 @@ html[data-bs-theme=light] .topbar .topbar-custom .nav-link.nav-icon .dark-mode {
 }
 
 .fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-frame {
-    background-color: rgba(34, 197, 94, .18);
+    background-color: rgba(0, 129, 193, .18);
     border-radius: 8px
 }
 

@@ -18,7 +18,7 @@ from django.contrib import messages
 @secure_module
 def modulo(request):
     data = {
-        'titulo': 'Url',
+        'titulo': 'Árbol de Url',
         'modulo': 'Url',
         'ruta': request.path,
         'fecha': str(date.today())

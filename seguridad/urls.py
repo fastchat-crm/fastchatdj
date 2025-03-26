@@ -30,17 +30,17 @@ seguridad_urls = (
         "vista": grupo,
     },
     {
-        "nombre": "Urls",
-        "url": 'modulo/',
-        "vista": modulo,
-    },
-    {
         "nombre": "Administrar Sidebar",
         "url": 'modulogrupo/',
         "vista": modulo_grupo,
     },
     {
-        "nombre": "Árbol Sidebar",
+        "nombre": "Árbol de Urls",
+        "url": 'arbol-de-url/',
+        "vista": modulo,
+    },
+    {
+        "nombre": "Árbol de Grupos",
         "url": 'arbol-de-grupos-url/',
         "vista": arbol_modulo_grupo
     },
