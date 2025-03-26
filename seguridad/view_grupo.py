@@ -112,8 +112,6 @@ def grupo(request):
                 # permisos = list(sorted(permisos, key=lambda i: i['app']))
                 # data["permisos"] = permisos
                 return render(request, 'seguridad/grupo/form.html', data)
-
-
             elif action == 'change':
 
                 pk = int(request.GET['pk'])
@@ -150,7 +148,6 @@ def grupo(request):
                 # ch_perms = list(group.permissions.all().values_list('id', flat=True))
                 # data["ch_perms"] = ch_perms
                 return render(request, 'seguridad/grupo/form.html', data)
-
             elif action == 'ver':
 
                 pk = int(request.GET['pk'])
@@ -188,7 +185,6 @@ def grupo(request):
                 # ch_perms = list(group.permissions.all().values_list('id', flat=True))
                 # data["ch_perms"] = ch_perms
                 return render(request, 'seguridad/grupo/form.html', data)
-
             elif action == 'ver_permisos':
                 pk = int(request.GET['pk'])
                 group = Group.objects.get(pk=pk)
