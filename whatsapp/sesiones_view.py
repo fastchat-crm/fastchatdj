@@ -1,5 +1,8 @@
 import json
 import sys
+from datetime import datetime
+
+import pytz
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q
@@ -84,6 +87,9 @@ def sesionesView(request):
                             if is_authenticated:
                                 s.numero = session_status['info']['phone']
                                 s.estado = 'conectado'
+                                dt = datetime.strptime(session_status['lastActivity'], '%Y-%m-%dT%H:%M:%S.%fZ')
+                                dt_utc = dt.replace(tzinfo=pytz.UTC)
+                                s.ultima_conexion = dt_utc
                                 s.save()
                                 response = {
                                     'error': False,
