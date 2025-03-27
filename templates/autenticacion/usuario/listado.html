@@ -13,21 +13,9 @@
                                 <i class="fa fa-search text-muted"></i>
                             </span>
                             <input type="text" class="form-control border-start-0"
-                                   placeholder="Buscar..." name="criterio" value="{{ criterio }}">
+                                   placeholder="Buscar por nombres o apellidos" name="criterio" value="{{ criterio }}">
                         </div>
                     </div>
-
-                    <div class="col-md-4">
-                        <label class="form-label">Username</label>
-                        <div class="input-group">
-                            <span class="input-group-text border-end-0">
-                                <i class="fa fa-user text-muted"></i>
-                            </span>
-                            <input type="text" class="form-control border-start-0"
-                                   placeholder="Filtrar por username" name="username" value="{{ username|default:'' }}">
-                        </div>
-                    </div>
-
                     <div class="col-md-4">
                         <label class="form-label">Documento</label>
                         <div class="input-group">
@@ -39,28 +27,38 @@
                                    value="{{ documento|default:'' }}">
                         </div>
                     </div>
-
-                    <!-- Segunda fila de filtros con botones de acción incluidos en la misma fila -->
+                    <div class="col-md-4">
+                        <label class="form-label">Ordenar Por</label>
+                        <div class="input-group">
+                            <select class="form-control select2" name="orderby" id="orderby">
+                                <option value="">TODOS</option>
+                                <option value="1" {% if orderby == '1' %} selected {% endif %}>APELLIDO ASCENDENTE</option>
+                                <option value="2" {% if orderby == '2' %} selected {% endif %}>APELLIDO DESCENDENTE</option>
+                                <option value="3" {% if orderby == '3' %} selected {% endif %}>F.CREACIÓN ASCENDENTE
+                                </option>
+                                <option value="4" {% if orderby == '4' %} selected {% endif %}>F.CREACIÓN DESCENDENTE
+                                </option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="col-md-4">
                         <label class="form-label">Estado</label>
-                        <select class="form-select" name="estado">
+                        <select class="form-select" name="status_perfil">
                             <option value="">Todos los estados</option>
-                            <option value="1" {% if estado == '1' %}selected{% endif %}>Activo</option>
-                            <option value="0" {% if estado == '0' %}selected{% endif %}>Inactivo</option>
+                            <option value="1" {% if status_perfil == '1' %}selected{% endif %}>Activo</option>
+                            <option value="0" {% if status_perfil == '0' %}selected{% endif %}>Inactivo</option>
                         </select>
                     </div>
-
                     <div class="col-md-4">
-                        <label class="form-label">Perfil</label>
-                        <select class="form-select" name="perfil">
-                            <option value="">Todos los perfiles</option>
-                            <option value="administrativo" {% if perfil == 'administrativo' %}selected{% endif %}>
-                                Administrativo
-                            </option>
-                            <option value="persona" {% if perfil == 'persona' %}selected{% endif %}>Persona</option>
+                        <label class="form-label">Grupo</label>
+                        <select multiple data-placeholder="Filtrar por Grupo"
+                                class="form-control select2" name="grupoid" id="grupoid">
+                            {% for a in gruposrol %}
+                                <option value="{{ a.pk }}"
+                                        {% if a.pk in grupoid %}selected{% endif %}>{{ a.name }}</option>
+                            {% endfor %}
                         </select>
                     </div>
-
                     <div class="col-md-4">
                         <label class="form-label">Acciones</label>
                         <div class="d-flex gap-2">
@@ -247,7 +245,7 @@
                                         {% if l.is_active %}
                                             <li>
                                                 <a class="dropdown-item" href="javascript:void(0);"
-                                                   onclick="eliminar({{ l.pk }}, '{{ l }}', 'delete', '{{ dict_url_vars }}')">
+                                                   onclick="eliminarajax({{ l.pk }}, '{{ l }}', 'delete', 'Seguro que desea desactivar el acceso a: {{ l }}')">
                                                     <i class="fas fa-trash me-2 text-danger"></i> Inhabilitar
                                                 </a>
                                             </li>
@@ -260,12 +258,6 @@
                                                 </a>
                                             </li>
                                         {% endif %}
-                                        <li>
-                                            <a class="dropdown-item"
-                                               href="{{ ruta }}?pk={{ l.pk }}&action=ver&{{ dict_url_vars }}">
-                                                <i class="fas fa-eye me-2 text-info"></i> Ver
-                                            </a>
-                                        </li>
                                         {% if request.user.is_superuser %}
                                             <li>
                                                 <a class="dropdown-item"
@@ -356,9 +348,43 @@
         </div>
     </div>
 
+    <div class="modal fade" id="modalCrearPersona" tabindex="-1" aria-labelledby="modalCrearPersonaLabel"
+         aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="frmPersona" method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" id="id_dict_url_vars" name="dict_url_vars" value="">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalCrearPersonaLabel">Crear Perfil de Cliente</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info mb-3">
+                            <h5><i class="fa fa-info-circle me-1"></i> Información</h5>
+                            <p>Estás a punto de crear un perfil de cliente para '<b id="personaNombre"></b>'</p>
+                            <input type="hidden" name="id" id="id">
+                            <input type="hidden" name="action" id="action">
+                        </div>
+                        <!-- Aquí puedes añadir campos adicionales si son necesarios -->
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fa fa-times me-1"></i> Cancelar
+                        </button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fa fa-user-plus me-1"></i> Crear Perfil
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
 {% endblock %}
 
 {% block jscript %}
+    <script src="/static/js/forms.js?version=1"></script>
     <script>
         // Inicializando Fancybox para las fotos de usuario
         Fancybox.bind('[data-fancybox="user-photos"]', {
@@ -382,7 +408,7 @@
 
         // Las funciones de javascript permanecen sin cambios
         function cambiarcontrasena(pk, nombre, dict_url_vars = "") {
-            const modalChangePassword = $('#modalChangePassword');
+            var modalChangePassword = $('#modalChangePassword');
             modalChangePassword.find(".modal-title").html(`<i class="fa fa-key me-2"></i>Nueva Contraseña para ${nombre}`);
             modalChangePassword.find("input[name=password]").val('');
             modalChangePassword.find("input[name=pk]").val(pk.toString());
@@ -390,17 +416,7 @@
             modalChangePassword.find('#id_dict_url_vars').val(dict_url_vars);
 
             // Usar BS5 modal
-            const modal = new bootstrap.Modal(document.getElementById('modalChangePassword'));
-            modal.show();
-        }
-
-        function crearusuarioMoodle(pk, nombre, accion, dict_url_vars = "") {
-            $('#frmCrearUsuarioMoodle #id').val(pk);
-            $('#frmCrearUsuarioMoodle #usuariomoodleNombre').html(nombre);
-            $('#frmCrearUsuarioMoodle #action').val(accion);
-            $('#frmCrearUsuarioMoodle #id_dict_url_vars').val(dict_url_vars);
-
-            const modal = new bootstrap.Modal(document.getElementById('modalCrearUsuarioMoodle'));
+            var modal = new bootstrap.Modal(document.getElementById('modalChangePassword'));
             modal.show();
         }
 
@@ -409,8 +425,7 @@
             $('#frmPersona #personaNombre').html(nombre);
             $('#frmPersona #action').val(accion);
             $('#frmPersona #id_dict_url_vars').val(dict_url_vars);
-
-            const modal = new bootstrap.Modal(document.getElementById('modalCrearPersona'));
+            var modal = new bootstrap.Modal(document.getElementById('modalCrearPersona'));
             modal.show();
         }
 
@@ -420,7 +435,7 @@
             $('#frmActivar #action').val(accion);
             $('#frmActivar #id_dict_url_vars').val(dict_url_vars);
 
-            const modal = new bootstrap.Modal(document.getElementById('modalActivar'));
+            var modal = new bootstrap.Modal(document.getElementById('modalActivar'));
             modal.show();
         }
     </script>

@@ -1,6 +1,7 @@
 import sys
 from datetime import date
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import Group
 from django.db import transaction
 from django.db.models import Q
 from django.http import JsonResponse
@@ -81,10 +82,17 @@ def usuarioView(request):
                 elif action == 'crearperfilpersona':
                     user = model.objects.get(pk=int(request.POST['id']))
                     if not user.es_persona():
-                        perfil_ = PerfilPersona(usuario=user)
-                        perfil_.save(request)
-                        log(f"Creo perfil usuario {user.username} - {user.get_full_name()}", request, "add")
-                        messages.success(request, "Perfil persona habilitado.")
+                        if PerfilPersona.objects.filter(usuario=user).exists():
+                            perfil_ = PerfilPersona.objects.get(usuario=user)
+                            perfil_.status = True
+                            perfil_.save(request)
+                            log(f"Activo perfil cliente usuario {user.username} - {user.get_full_name()}", request, "change")
+                            messages.success(request, "Perfil persona habilitado.")
+                        else:
+                            perfil_ = PerfilPersona(usuario=user)
+                            perfil_.save(request)
+                            log(f"Creo perfil cliente usuario {user.username} - {user.get_full_name()}", request, "add")
+                            messages.success(request, "Perfil persona habilitado.")
                         res_json.append({'error': False, "reload": True})
                     else:
                         raise NameError(f"Usuario ya cuenta con perfil persona")
@@ -108,6 +116,14 @@ def usuarioView(request):
                     log(f"Inhabilito usuario {user.username} - {user.get_full_name()}", request, "del")
                     messages.success(request, "Inhabilitado correctamente.")
                     res_json = {"error": False}
+                elif action == 'deleteperfiladm':
+                    user = model.objects.get(pk=int(request.POST['id']))
+                    perfil_ = PerfilPersona.objects.get(usuario=user)
+                    perfil_.status = False
+                    perfil_.save(request)
+                    log(f"Inhabilitado perfil cliente {user.get_full_name()}", request, "del")
+                    messages.success(request, "Perfil administrativo inhabilitado.")
+                    res_json={"error":False}
                 elif action == 'activate':
                     user = model.objects.get(pk=int(request.POST['id']))
                     user.is_active = True
@@ -186,14 +202,98 @@ def usuarioView(request):
                 data["form"] = Formulario(instance=user, ver=True)
                 return render(request, 'autenticacion/usuario/form.html', data)
 
-        criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(id__gt=0), ''
+        grupoid, status_perfil, criterio, filtros, url_vars = request.GET.getlist('grupoid', ''), request.GET.get('status_perfil', ''), request.GET.get('criterio', ''), Q(id__gt=0), ''
+        id, documento = request.GET.get('id', ''), request.GET.get('documento', '')
+        orderby = request.GET.get('orderby', '')
+
+        order = 'last_name'
+        if orderby:
+            data["orderby"] = orderby
+            url_vars += '&orderby=' + orderby
+            if orderby == '1':
+                order = 'last_name'
+            elif orderby == '2':
+                order = '-last_name'
+            elif orderby == '3':
+                order = 'date_joined'
+            elif orderby == '4':
+                order = '-date_joined'
+
+        if id:
+            data['id'] = id
+            url_vars += f'&id={id}'
+            filtros = filtros & Q(id=id)
+
+        if documento:
+            data['documento'] = documento
+            url_vars += f'&documento={documento}'
+            filtros = filtros & Q(documento=documento)
+
+        if status_perfil:
+            data['status_perfil'] = status_perfil
+            url_vars += f'&status_perfil={status_perfil}'
+            if status_perfil == '1':
+                filtros = filtros & Q(status=True)
+            if status_perfil == '0':
+                filtros = filtros & Q(status=False)
+
+        if grupoid:
+            data["grupoid"] = grupoid = list(map(lambda x: int(x), grupoid))
+            for scl in grupoid:
+                url_vars += "&grupoid={}".format(scl)
+            filtros = filtros & Q(groups__in=grupoid)
+
         if criterio:
-                filtros = filtros & (Q(username__icontains=criterio) | Q(first_name__icontains=criterio) |
-                                     Q(last_name__icontains=criterio) | Q(documento__icontains=criterio))
-                data["criterio"] = criterio
-                url_vars += '&criterio=' + criterio
-        listado = model.objects.filter(filtros).filter(perfiladministrativo__isnull=False ,status=True).order_by('last_name')
+            s = criterio.strip().split(' ')
+            if len(s) == 1:
+                filtros = filtros & (Q(first_name__icontains=criterio) | Q(last_name__icontains=criterio) | Q(
+                    username__icontains=criterio))
+            elif len(s) == 2:
+                filtros = filtros & ((Q(first_name__icontains=s[0]) & Q(last_name__icontains=s[1])) |
+                                     (Q(first_name__icontains=s[1]) & Q(last_name__icontains=s[0])) |
+                                     (Q(first_name__icontains=s[0]) & Q(first_name__icontains=s[1])) |
+                                     (Q(last_name__icontains=s[0]) & Q(last_name__icontains=s[1])))
+            elif len(s) == 3:
+                filtros = filtros & ((Q(first_name__icontains=s[0]) & Q(last_name__icontains=s[1]) & Q(
+                    last_name__icontains=s[2])) |
+                                     (Q(last_name__icontains=s[0]) & Q(last_name__icontains=s[1]) & Q(
+                                         first_name__icontains=s[2])) |
+                                     (Q(first_name__icontains=s[0]) & Q(first_name__icontains=s[1]) & Q(
+                                         last_name__icontains=s[2])))
+            elif len(s) == 4:
+                filtros = filtros & (
+                        (Q(first_name__icontains=s[0]) & Q(
+                            first_name__icontains=s[1]) & Q(
+                            last_name__icontains=s[2]) & Q(
+                            last_name__icontains=s[3])) |
+                        (Q(last_name__icontains=s[0]) & Q(
+                            last_name__icontains=s[1]) & Q(
+                            first_name__icontains=s[2]) & Q(
+                            first_name__icontains=s[3])) |
+                        (Q(first_name__icontains=s[0]) & Q(
+                            last_name__icontains=s[1]) & Q(
+                            first_name__icontains=s[2]) & Q(
+                            last_name__icontains=s[3])) |
+                        (Q(last_name__icontains=s[0]) & Q(
+                            first_name__icontains=s[1]) & Q(
+                            last_name__icontains=s[2]) & Q(
+                            first_name__icontains=s[3])) |
+                        (Q(first_name__icontains=s[0]) & Q(
+                            last_name__icontains=s[1]) & Q(
+                            last_name__icontains=s[2]) & Q(
+                            first_name__icontains=s[3])) |
+                        (Q(last_name__icontains=s[0]) & Q(
+                            first_name__icontains=s[1]) & Q(
+                            first_name__icontains=s[2]) & Q(
+                            last_name__icontains=s[3]))
+                )
+            else:
+                filtros = filtros & (Q(first_name__icontains=s[0]) & Q(last_name__icontains=s[1]) & Q(last_name__icontains=s[2]))
+
+
+        listado = model.objects.filter(filtros).filter(perfiladministrativo__isnull=False).order_by(order)
         data["url_vars"] = url_vars
         data["list_count"] = listado.count()
+        data['gruposrol'] = Group.objects.all()
         paginador(request, listado, 20, data, url_vars)
         return render(request, 'autenticacion/usuario/listado.html', data)

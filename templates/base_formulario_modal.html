@@ -6,7 +6,7 @@
 
             // Inicializar Select2 dentro del modal actual
             if ($.fn.select2) {
-                currentModal.find('.select2-simple').each(function() {
+                currentModal.find('.select2').each(function() {
                     // Verificar si este Select2 ya está inicializado
                     if (!$(this).hasClass('select2-initialized')) {
                         $(this).select2({

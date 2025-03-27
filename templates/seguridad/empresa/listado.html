@@ -37,7 +37,8 @@
 
     <div class="row align-items-center mb-3">
         <div class="col-md-12 mb-2 mb-md-0">
-            <a href="javascript:void(0)" onclick="formModal(0, 'Adicionar {{ titulo }}', 'add')" class="btn btn-success btn-sm">
+            <a href="javascript:void(0)" onclick="formModal(0, 'Adicionar {{ titulo }}', 'add')"
+               class="btn btn-success btn-sm">
                 <i class="fas fa-plus-circle me-2"></i> Nueva {{ titulo }}
             </a>
         </div>
@@ -75,7 +76,8 @@
                                             style="background: none; border: none;">
                                         <i class="fas fa-ellipsis-v"></i>
                                     </button>
-                                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                                    <ul class="dropdown-menu dropdown-menu-end"
+                                        aria-labelledby="dropdownMenuButton-{{ l.pk }}">
                                         <li>
                                             <a class="dropdown-item" href="javascript:void(0);"
                                                onclick="formModal({{ l.pk }}, 'Editar {{ l.nombre }}', 'change')">

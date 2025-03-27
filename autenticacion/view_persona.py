@@ -21,7 +21,8 @@ from .models import Usuario, PerfilAdministrativo, PerfilPersona
 @secure_module
 def personasView(request):
     data = {
-        'titulo': 'Personas',
+        'titulo': 'Clientes',
+        'descripcion': 'Crear, Editar y Eliminar Clientes, Proveedores, etc.',
         'modulo': 'Autenticación',
         'ruta': request.path,
         'fecha': str(date.today()),
@@ -55,7 +56,6 @@ def personasView(request):
                                          })
                     else:
                         raise FormError(form)
-
                 elif action == 'change':
 
                     user = model.objects.get(pk=int(request.POST['pk']))
@@ -78,14 +78,20 @@ def personasView(request):
                                          })
                     else:
                         raise FormError(form)
-
                 elif action == 'crearperfiladm':
                     user = model.objects.get(pk=int(request.POST['id']))
                     if not user.es_administrativo():
-                        perfil_ = PerfilAdministrativo(usuario=user)
-                        perfil_.save(request)
-                        log(f"Creo perfil administrativo {user.get_full_name()}", request, "add")
-                        messages.success(request, "Perfil administrativo habilitado.")
+                        if PerfilAdministrativo.objects.filter(usuario=user).exists():
+                            perfil_ = PerfilAdministrativo.objects.get(usuario=user)
+                            perfil_.status = True
+                            perfil_.save(request)
+                            log(f"Perfil administrativo habilitado {user.get_full_name()}", request, "add")
+                            messages.success(request, "Perfil administrativo habilitado.")
+                        else:
+                            perfil_ = PerfilAdministrativo(usuario=user)
+                            perfil_.save(request)
+                            log(f"Creo perfil administrativo {user.get_full_name()}", request, "add")
+                            messages.success(request, "Perfil administrativo habilitado.")
                         res_json.append({'error': False, "reload": True})
                     else:
                         raise NameError(f"Usuario ya cuenta con perfil administrativo")
@@ -112,9 +118,15 @@ def personasView(request):
 
                     messages.success(request, "Inhabilitado correctamente.")
                     res_json={"error":False}
-
+                elif action == 'deleteperfiladm':
+                    user = model.objects.get(pk=int(request.POST['id']))
+                    perfil_ = PerfilAdministrativo.objects.get(usuario=user)
+                    perfil_.status = False
+                    perfil_.save(request)
+                    log(f"Inhabilitado perfil administrativo {user.get_full_name()}", request, "del")
+                    messages.success(request, "Perfil administrativo inhabilitado.")
+                    res_json={"error":False}
                 elif action == 'activate':
-
                     user = model.objects.get(pk=int(request.POST['id']))
                     user.is_active = True
                     user.status = True
@@ -124,7 +136,6 @@ def personasView(request):
 
                     return redirect(redirectAfterPostGet(request))
                 elif action == 'change_password':
-
                     user = model.objects.get(pk=int(request.POST['pk']))
                     user.set_password(request.POST["password"])
                     user.save(request)
@@ -134,13 +145,11 @@ def personasView(request):
 
                     return redirect(redirectAfterPostGet(request))
                 elif action == 'eliminar_foto':
-
                     user = model.objects.get(pk=int(request.POST['pk']))
                     user.foto = ""
                     user.save(request)
                     log(f"Elimino foto {user.username} - {user.get_full_name()}", request, "del")
                     return JsonResponse({'state': True})
-
         except ValueError as ex:
             res_json.append({'error': True,
                              "message": str(ex)
