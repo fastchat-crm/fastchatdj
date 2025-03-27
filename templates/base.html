@@ -1006,17 +1006,31 @@
     });
 
 
-    function pantallaespera() {
+    function pantallaespera(titulo = 'Procesando', mensaje = 'Por favor espere...') {
+        const logoUrl = '/media/{{ confi.logo_sistema }}';
+        const blockMsg = `
+        <div style="text-align:center;">
+            <img src="${logoUrl}" style="height:45px; margin-bottom:15px;">
+            <div class="spinner-border text-light" style="width:1.5rem; height:1.5rem;"></div>
+            <div style="margin-top:10px; font-weight:500; color:white;">${titulo}</div>
+            <div style="margin-top:5px; font-size:14px; color:rgba(255,255,255,0.8);">${mensaje}</div>
+        </div>
+        `;
         $.blockUI({
-            message: '<span class="spinner-grow spinner-border-lg text-primary" role="status" aria-hidden="true" style="width: 5rem; height: 5rem;"></span>',
+            message: blockMsg,
             css: {
-                backgroundColor: 'transparent',
-                border: '0',
+                padding: '20px',
+                backgroundColor: 'rgba(33, 37, 41, 0.85)',
+                border: 'none',
+                borderRadius: '8px',
+                width: '280px',
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)',
                 zIndex: 9999999
             },
             overlayCSS: {
-                backgroundColor: '#fff',
-                opacity: 0.8,
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
                 zIndex: 9999990
             }
         });
