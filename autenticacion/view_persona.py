@@ -133,7 +133,6 @@ def personasView(request):
                     user.save(request)
                     log(f"Habilito persona {user.username} - {user.get_full_name()}", request, "add")
                     messages.success(request, "Habilitado correctamente.")
-
                     return redirect(redirectAfterPostGet(request))
                 elif action == 'change_password':
                     user = model.objects.get(pk=int(request.POST['pk']))
@@ -142,7 +141,6 @@ def personasView(request):
                     log(f"Cambio contraseña persona {user.username} - {user.get_full_name()}", request, "change")
                     messages.success(request, "Contraseña del usuario {} / {} cambiada".format(user.get_full_name(),
                                                                                                user.username))
-
                     return redirect(redirectAfterPostGet(request))
                 elif action == 'eliminar_foto':
                     user = model.objects.get(pk=int(request.POST['pk']))

@@ -130,9 +130,7 @@ def usuarioView(request):
                     user.status = True
                     user.save(request)
                     log(f"Habilito usuario {user.username} - {user.get_full_name()}", request, "add")
-
                     messages.success(request, "Habilitado correctamente.")
-
                     return redirect(redirectAfterPostGet(request))
                 elif action == 'change_password':
                     user = model.objects.get(pk=int(request.POST['pk']))
