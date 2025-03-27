@@ -2,6 +2,7 @@ import json
 from datetime import time, timedelta
 import random
 
+from dateutil.relativedelta import relativedelta
 from django.contrib.admin.models import DELETION, ADDITION, CHANGE, LogEntry
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage, InvalidPage
 from django.core import signing
@@ -57,6 +58,8 @@ def null_to_decimal(valor, decimales=None):
                 return float(Decimal(valor if valor else 0).quantize(Decimal('0')))
     return valor if valor else 0
 
+def default_expira_10_min():
+    return timezone.now() + relativedelta(minutes=10)
 
 def convertir_fecha(s):
     if ':' in s:

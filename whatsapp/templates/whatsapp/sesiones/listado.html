@@ -212,6 +212,7 @@
         var session_id = ''; // Guarda el ID al crear sesión
         var checkQrInterval;
         var checkStatusInterval;
+        var sessions = [];
 
         // Inicializar página
         $(document).ready(function () {
@@ -314,33 +315,6 @@
                     }
                 });
             });
-
-            // Actualizar QR de una sesión pendiente
-            $('.refresh-qr-btn').on('click', function () {
-                const sessionId = $(this).data('session-id');
-
-                pantallaespera('Procesando', 'Actualizando código QR...');
-
-                $.post('', {
-                    'action': 'refresh_qr',
-                    'session_id': sessionId,
-                    'csrfmiddlewaretoken': '{{ csrf_token }}'
-                }, function (res) {
-                    setTimeout($.unblockUI, 1);
-
-                    if (!res.error) {
-                        alertaSuccess('QR actualizado correctamente');
-                        setTimeout(function () {
-                            location.reload();
-                        }, 1000);
-                    } else {
-                        alertaDanger(res.message || 'Error al actualizar el QR');
-                    }
-                }, 'json').fail(function () {
-                    setTimeout($.unblockUI, 1);
-                    alertaDanger('Error de conexión al servidor');
-                });
-            });
         });
 
         // Modal de Nueva Sesión
@@ -357,27 +331,6 @@
             clearIntervals();
         });
 
-        // Botón para regenerar QR
-        $('#btn-regenerar-qr').on('click', function () {
-            $('#qrContent').html('<div class="spinner-border text-primary" role="status"><span class="sr-only">Cargando...</span></div><p class="mt-3">Regenerando código QR, por favor espere...</p>');
-            $(this).addClass('d-none');
-
-            // Solicitar nuevo QR
-            $.post('', {
-                'action': 'refresh_qr',
-                'session_id': session_id,
-                'csrfmiddlewaretoken': '{{ csrf_token }}'
-            }, function (res) {
-                if (!res.error) {
-                    iniciarEscaneoQR();
-                } else {
-                    $('#qrContent').html('<div class="alert alert-danger"><i class="fas fa-exclamation-circle mr-2"></i>' + res.message + '</div>');
-                }
-            }, 'json').fail(function () {
-                $('#qrContent').html('<div class="alert alert-danger"><i class="fas fa-exclamation-circle mr-2"></i>Error de conexión al servidor</div>');
-            });
-        });
-
         function iniciarNuevaSesion() {
             pantallaespera('Iniciando', 'Preparando nueva sesión de WhatsApp...');
 
@@ -390,6 +343,7 @@
 
                 if (!res.error) {
                     session_id = res.session_id;
+                    sessions.push(session_id);
                     console.log("Session ID recibido:", res.session_id);
                     iniciarEscaneoQR();
                 } else {
@@ -416,12 +370,12 @@
                     // Mostrar QR y cambiar a verificación de estado
                     clearInterval(checkQrInterval);
 
-                    $('#qrContent').html('<img src="data:image/png;base64,' + res.qr + '" class="img-fluid" style="max-width: 250px">');
+                    $('#qrContent').html('<img src="' + res.qr + '" class="img-fluid" style="max-width: 250px">');
                     $('#qrContent').append('<p class="qr-status mt-3"><i class="fas fa-info-circle text-primary mr-1"></i>Escanee este código con su WhatsApp para conectar</p>');
 
                     // Mostrar botón de regenerar después de un tiempo
                     setTimeout(function () {
-                        $('#btn-regenerar-qr').removeClass('d-none');
+                        iniciarNuevaSesion();
                     }, 30000);
 
                     // Iniciar verificación de estado
@@ -453,10 +407,12 @@
         function checkIfConnected(sessionId) {
             $.get('', {
                 'action': 'check_status',
-                'session_id': sessionId
+                'session_id': sessionId,
+                'sessions': JSON.stringify(sessions)
             }, function (res) {
                 if (!res.error) {
-                    if (res.estado === 'conectado') {
+                    if (res.is_authenticated) {
+                        session_id=res.session_id;
                         clearIntervals();
 
                         // Mostrar mensaje de éxito

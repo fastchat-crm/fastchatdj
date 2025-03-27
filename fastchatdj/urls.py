@@ -83,7 +83,7 @@ urlpatterns = [
     #webpush
     path('webpush/', include('webpush.urls')),
     # pwa
-    path('', include('pwa.urls')),
+    path('', include('for_django_projects.pwa.urls')),
 ]
 
 if settings.DEBUG:

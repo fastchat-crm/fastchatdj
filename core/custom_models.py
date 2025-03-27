@@ -8,7 +8,7 @@ from django.forms.widgets import DateTimeBaseInput
 from django.utils.html import strip_tags
 from django.utils.safestring import mark_safe
 from django_select2.forms import ModelSelect2Widget, Select2Widget, Select2MultipleWidget, ModelSelect2MultipleWidget
-from form_utils.forms import BetterModelForm, BetterForm
+from for_django_projects.form_utils.forms import BetterForm, BetterModelForm
 
 from core.constantes import SIMBOLO_MONEDA
 from core.funciones_adicionales import customgetattr

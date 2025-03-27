@@ -52,6 +52,8 @@ with open(os.path.join(BASE_DIR, 'credenciales.json')) as json_file:
     ID_GRUPO_CLIENTE = data['ID_GRUPO_CLIENTE']
     REDIS_HOST = data['REDIS_HOST']
     REDIS_PORT = data['REDIS_PORT']
+    #WHATSAPP_API_URL
+    WHATSAPP_API_URL = data['WHATSAPP_API_URL']
 
 WKHTMLTOPDF_CMD_OPTIONS = {'encoding': 'utf8', 'quiet': True, 'enable-local-file-access': True}
 
@@ -76,9 +78,9 @@ INSTALLED_APPS = [
     # packages
     'wkhtmltopdf',
     'django_select2',
-    'form_utils',
+    'for_django_projects.form_utils',
     'webpush',
-    'pwa',
+    'for_django_projects.pwa',
 ]
 
 MIDDLEWARE = [

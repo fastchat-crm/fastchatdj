@@ -18,3 +18,4 @@
 #eliminar archivos de github pero conservar en local
 #git rm --cached archivo.ext
 #git rm --cached -r carpeta
+venv

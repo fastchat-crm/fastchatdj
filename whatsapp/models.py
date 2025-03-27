@@ -1,6 +1,7 @@
 from django.db import models
 from core.custom_models import ModeloBase
 from autenticacion.models import Usuario
+from core.funciones import default_expira_10_min
 
 ESTADOS_SESION = (
     ('pendiente', 'Pendiente'),
@@ -19,6 +20,8 @@ class SesionWhatsApp(ModeloBase):
     ultima_conexion = models.DateTimeField(blank=True, null=True, verbose_name='Última conexión')
     observacion = models.TextField(blank=True, null=True, verbose_name='Observaciones')
     error_mensaje = models.TextField(blank=True, null=True, verbose_name='Último error')
+    fecha_expira_inactivo = models.DateTimeField(default=default_expira_10_min)
+    session_id = models.CharField(max_length=255, unique=True)
 
     def is_connected(self):
         return self.estado == 'conectado'
