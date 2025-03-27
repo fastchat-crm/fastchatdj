@@ -24,7 +24,7 @@ whatsapp_service = WhatsAppService()
 def sesionesView(request):
     data = {
         'titulo': 'Sesiones WhatsApp',
-        'modulo': 'Sesiones WhatsApp',
+        'descripcion': 'Control de números de teléfono para sesiones de WhatsApp',
         'ruta': request.path
     }
     addData(request, data)
