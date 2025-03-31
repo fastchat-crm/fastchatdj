@@ -9,10 +9,11 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
+from django.urls import reverse
 
 from core.funciones import addData, paginador, secure_module, redirectAfterPostGet, log
 from core.funciones_adicionales import salva_logs
-from .models import SesionWhatsApp
+from .models import SesionWhatsApp, WhatsAppWebhook
 from .redis_publish import enviar_comando_start, enviar_comando_close
 from core.custom_models import FormError
 from .services import WhatsAppService
@@ -38,10 +39,30 @@ def sesionesView(request):
                 if action == 'add':
                     # Creamos la sesión en estado pendiente sin número
                     name = request.user.get_full_name() or request.user.username
-                    result = whatsapp_service.create_session(name)
+                    webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
+
+                    webhooks = [
+                        {'url': webhook_url, 'type': 'qr_code'},
+                        {'url': webhook_url, 'type': 'ready'},
+                        {'url': webhook_url, 'type': 'authenticated'},
+                        {'url': webhook_url, 'type': 'auth_failure'},
+                        {'url': webhook_url, 'type': 'disconnected'},
+                        {'url': webhook_url, 'type': 'message'},
+                        {'url': webhook_url, 'type': 'message_sent'}
+                    ]
+
+                    # Crear sesión en la API con webhooks
+                    result = whatsapp_service.create_session_with_webhooks(name, webhooks)
                     sesion = SesionWhatsApp.objects.create(
                         estado='pendiente', usuario=request.user, session_id=result['sessionId'], qr_code=''
                     )
+
+                    for webhook in webhooks:
+                        WhatsAppWebhook.objects.create(
+                            session=sesion,
+                            url=webhook['url'],
+                            type=webhook['type']
+                        )
 
                     log(f"Inicio de sesión WhatsApp pendiente (ID: {sesion.id})", request, "add", obj=sesion.id)
                     res_json = {'error': False, 'qr': '', 'session_id': sesion.id}

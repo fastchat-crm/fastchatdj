@@ -34,6 +34,31 @@ class SesionWhatsApp(ModeloBase):
         return f"{self.numero} - {self.estado}"
 
 
+class WhatsAppWebhook(models.Model):
+    WEBHOOK_TYPES = [
+        ('qr_code', 'Código QR'),
+        ('ready', 'Sesión Lista'),
+        ('authenticated', 'Autenticado'),
+        ('auth_failure', 'Fallo de Autenticación'),
+        ('disconnected', 'Desconectado'),
+        ('message', 'Mensaje Recibido'),
+        ('message_sent', 'Mensaje Enviado'),
+    ]
+
+    session = models.ForeignKey(SesionWhatsApp, on_delete=models.CASCADE, related_name='webhooks')
+    url = models.URLField()
+    type = models.CharField(max_length=50, choices=WEBHOOK_TYPES)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('session', 'url', 'type')
+
+    def __str__(self):
+        return f"{self.get_type_display()} - {self.url}"
+
+
 class ConversacionWhatsApp(ModeloBase):
     sesion = models.ForeignKey(SesionWhatsApp, on_delete=models.CASCADE, related_name='conversaciones')
     contacto_numero = models.CharField(max_length=50, verbose_name='Número del contacto')

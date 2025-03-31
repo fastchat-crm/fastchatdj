@@ -81,11 +81,13 @@ INSTALLED_APPS = [
     'for_django_projects.form_utils',
     'webpush',
     'for_django_projects.pwa',
+    'corsheaders'
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -323,6 +325,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:8000',
     'http://localhost:8001',
     'http://localhost:8080',
+    'http://localhost:3000',
     'http://localhost',
 ]
 
@@ -332,6 +335,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 
 CORS_ORIGIN_WHITELIST = [
     # url produccion
+    'http://localhost:3000'
 ]
 
 CORS_ALLOW_METHODS = [
@@ -345,6 +349,7 @@ CORS_ALLOW_METHODS = [
 
 CSRF_TRUSTED_ORIGINS = [
     # url produccion
+    'http://localhost:3000'
 ]
 
 CORS_ALLOW_HEADERS = [
