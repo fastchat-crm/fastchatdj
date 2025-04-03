@@ -13,7 +13,7 @@ autenticacion_urls = (
         "vista": usuarioView,
     },
     {
-        "nombre": "Personas",
+        "nombre": "Clientes",
         "url": 'personas/',
         "vista": personasView,
     },
