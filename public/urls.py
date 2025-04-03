@@ -1,6 +1,6 @@
 from django.urls import path, re_path
 
-from .acerade import acercade
+from .view_acerade import acercade
 from .view_changepass import changepass
 from .view_registro import registro
 from .view_restaurar import restaurar
