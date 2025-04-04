@@ -1,0 +1,9 @@
+<div class="d-flex flex-row-reverse">
+    <img src="{{ mensaje.conversacion.sesion.usuario.get_foto_url|default:'assets/images/users/avatar-3.jpg' }}" alt="user" class="rounded-circle thumb-md">
+    <div class="me-1 chat-box w-100 reverse">
+        <div class="user-chat">
+            <p class="">{{ mensaje.mensaje }}</p>
+        </div>
+        <div class="chat-time">{{ mensaje.fecha|date:"H:i" }}</div>
+    </div>
+</div>

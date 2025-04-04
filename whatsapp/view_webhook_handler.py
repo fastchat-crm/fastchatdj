@@ -64,6 +64,9 @@ def webhook_handler(request):
                 message_type = event_data.get('type', 'texto')
                 message_timestamp = event_data.get('timestamp')
 
+                # Obtener el nombre del contacto si está disponible
+                contact_name = event_data.get('sender_name', '')
+
                 # Normalizar el número de teléfono (quitar @c.us si existe)
                 if '@c.us' in remote_jid:
                     contacto_numero = remote_jid.split('@')[0]
@@ -75,17 +78,21 @@ def webhook_handler(request):
                     sesion=sesion,
                     contacto_numero=contacto_numero,
                     defaults={
+                        'contacto_nombre': contact_name,  # Guardar el nombre al crear
                         'estado': 'activo',
                         'ultimo_mensaje': body,
                         'fecha_ultimo_mensaje': timezone.now()
                     }
                 )
 
-                if not created:
-                    # Actualizar último mensaje
-                    conversacion.ultimo_mensaje = body
-                    conversacion.fecha_ultimo_mensaje = timezone.now()
-                    conversacion.save()
+                # Si la conversación ya existía pero no tenía nombre, actualizarlo
+                if not created and not conversacion.contacto_nombre and contact_name:
+                    conversacion.contacto_nombre = contact_name
+
+                # Actualizar último mensaje
+                conversacion.ultimo_mensaje = body
+                conversacion.fecha_ultimo_mensaje = timezone.now()
+                conversacion.save()
 
                 # Determinar tipo de mensaje para nuestro modelo
                 tipo_mensaje = 'texto'
@@ -117,6 +124,54 @@ def webhook_handler(request):
                 )
 
                 logger.info(f"Mensaje {'enviado' if event_type == 'message_sent' else 'recibido'} en conversación con {contacto_numero}")
+                # Actualizar foto y nombre del remitente si están disponibles
+                sender_name = event_data.get('sender_name')
+                sender_profile_picture_base64 = event_data.get('sender_profile_picture_base64')
+
+                if (sender_name or sender_profile_picture_base64) and conversacion:
+                    actualizado = False
+                    if sender_name and (
+                            not conversacion.contacto_nombre or conversacion.contacto_nombre != sender_name):
+                        conversacion.contacto_nombre = sender_name
+                        actualizado = True
+                    if sender_profile_picture_base64:
+                        conversacion.contacto_foto = sender_profile_picture_base64
+                        actualizado = True
+
+                    if actualizado:
+                        conversacion.save()
+                        logger.info(f"Información de contacto actualizada para {contacto_numero}")
+
+            # También podemos añadir un evento específico para actualizar contactos
+            # Añadir este caso en tu webhook_handler
+            elif event_type == 'contact_update':
+                contacto_numero = event_data.get('number')
+                contacto_nombre = event_data.get('name')
+                contacto_foto_base64 = event_data.get('profile_picture_base64')
+
+                if contacto_numero:
+                    # Normalizar el número
+                    if '@c.us' in contacto_numero:
+                        contacto_numero = contacto_numero.split('@')[0]
+
+                    # Actualizar todas las conversaciones con este contacto
+                    conversaciones = ConversacionWhatsApp.objects.filter(
+                        sesion=sesion,
+                        contacto_numero=contacto_numero
+                    )
+
+                    for conv in conversaciones:
+                        actualizado = False
+                        if contacto_nombre and (not conv.contacto_nombre or conv.contacto_nombre != contacto_nombre):
+                            conv.contacto_nombre = contacto_nombre
+                            actualizado = True
+                        if contacto_foto_base64:
+                            conv.contacto_foto = contacto_foto_base64
+                            actualizado = True
+
+                        if actualizado:
+                            conv.save()
+                            logger.info(f"Contacto actualizado: {contacto_numero} - {contacto_nombre}")
 
             # Guardar los cambios en la sesión
             sesion.save()

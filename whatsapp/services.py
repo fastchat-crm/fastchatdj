@@ -113,6 +113,14 @@ class WhatsAppService:
 
         raise Exception(f"Error al enviar mensaje: {error_message}")
 
+    # whatsapp/services.py
+    def enviar_mensaje(session_id, numero, texto, archivo=None):
+        """
+        Envía un mensaje a través de la API de Node.js
+        """
+        service = WhatsAppService()
+        return service.send_message(session_id, numero, texto, archivo)
+
     def get_conversations(self, session_id, limit=50, offset=0, jid=None):
         """
         Obtiene las conversaciones de una sesión
@@ -142,3 +150,28 @@ class WhatsAppService:
         if response.status_code == 200:
             return True
         return False
+
+    # Añadir este método a la clase WhatsAppService en services.py
+    def sync_contacts(self, session_id):
+        """
+        Sincroniza los contactos de una sesión de WhatsApp
+        """
+        try:
+            response = requests.post(
+                f"{self.base_url}/sync-contacts",
+                headers=self.headers,
+                data=json.dumps({'sessionId': session_id})
+            )
+
+            if response.status_code == 200:
+                return response.json()
+
+            try:
+                error_data = response.json()
+                error_message = error_data.get('message', response.text)
+            except:
+                error_message = response.text
+
+            return {'success': False, 'message': error_message}
+        except Exception as e:
+            return {'success': False, 'message': str(e)}

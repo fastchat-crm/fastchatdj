@@ -1,0 +1,36 @@
+import requests
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
+
+from fastchatdj import settings
+from whatsapp.models import SesionWhatsApp
+from whatsapp.services import WhatsAppService
+
+
+# En views.py
+@login_required
+@csrf_exempt
+def sync_contacts_view(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Método no permitido'}, status=405)
+
+    try:
+        session_id = request.POST.get('session_id')
+        if not session_id:
+            return JsonResponse({'success': False, 'message': 'ID de sesión requerido'}, status=400)
+
+        sesion = get_object_or_404(SesionWhatsApp, id=session_id)
+
+        # Llamar al servicio para sincronizar contactos
+        service = WhatsAppService()
+        response = service.sync_contacts(sesion.session_id)
+
+        if response.get('success'):
+            return JsonResponse({'success': True, 'message': response.get('message', 'Sincronización iniciada')})
+        else:
+            return JsonResponse({'success': False, 'message': response.get('message', 'Error desconocido')})
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)

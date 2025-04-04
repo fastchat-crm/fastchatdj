@@ -63,7 +63,7 @@ class ConversacionWhatsApp(ModeloBase):
     sesion = models.ForeignKey(SesionWhatsApp, on_delete=models.CASCADE, related_name='conversaciones')
     contacto_numero = models.CharField(max_length=50, verbose_name='Número del contacto')
     contacto_nombre = models.CharField(max_length=255, blank=True, null=True)
-    contacto_foto = models.URLField(blank=True, null=True)
+    contacto_foto = models.TextField(blank=True, null=True)
     estado = models.CharField(max_length=20, choices=(('activo', 'Activo'), ('cerrado', 'Cerrado')), default='activo')
     ultimo_mensaje = models.TextField(blank=True, null=True)
     fecha_ultimo_mensaje = models.DateTimeField(blank=True, null=True)
@@ -78,7 +78,7 @@ class ConversacionWhatsApp(ModeloBase):
 
 class MensajeWhatsApp(ModeloBase):
     conversacion = models.ForeignKey(ConversacionWhatsApp, on_delete=models.CASCADE, related_name='mensajes')
-    remitente = models.CharField(max_length=20, verbose_name='Número remitente')
+    remitente = models.CharField(max_length=1000, verbose_name='Número remitente')
     mensaje = models.TextField(blank=True, null=True)
     tipo = models.CharField(max_length=20, choices=(
         ('texto', 'Texto'),
