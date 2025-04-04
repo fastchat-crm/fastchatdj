@@ -192,7 +192,6 @@ class FormParent:
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
         self.ver = kwargs.pop('ver', False)
-        self.editando = bool('instance' in kwargs and kwargs.get("instance") and kwargs.get("instance").id)
         customStep = kwargs.pop('customStep', None)
         cantCharsSelect2 = kwargs.pop('cantCharsSelect2', {})
         addDataNameInput = kwargs.pop('addDataNameInput', False)
@@ -204,9 +203,17 @@ class FormParent:
         no_switchery = kwargs.pop('no_switchery', [])#listado d campos BooleanField que no quieran q se dibujen con switchery en el form
         no_select2 = kwargs.pop('no_select2', [])#listado d campos que no quieran q se renderice con la librería select2
         inlines = kwargs.pop('inlines', [])
-        if self.editando:
-            self.instancia = kwargs['instance']
+        # Solo extrae el booleano de edición aquí, sin tocar `self.instance` aún
+        self.editando = bool('instance' in kwargs and kwargs.get("instance") and kwargs.get("instance").id)
+
+        # Llama al constructor padre PRIMERO
         super(FormParent, self).__init__(*args, **kwargs)
+
+        # AHORA puedes usar self.instance de forma segura
+        if self.editando:
+            self.instancia = self.instance  # Aquí ya existe `self.instance`
+        super(FormParent, self).__init__(*args, **kwargs)
+
         if inlines:
             self.inlines = inlines
             if self.editando and len(args) == 0:

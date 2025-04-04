@@ -1,31 +1,35 @@
 <script>
     $(function () {
-        // Inicializar Select2 de forma dinámica para cualquier modal
-        $(document).on('shown.bs.modal', '.modal', function() {
-            var currentModal = $(this);
+        $(document).on('shown.bs.modal', '.modal', function () {
+            const currentModal = $(this);
 
-            // Inicializar Select2 dentro del modal actual
-            if ($.fn.select2) {
-                currentModal.find('.select2').each(function() {
-                    // Verificar si este Select2 ya está inicializado
-                    if (!$(this).hasClass('select2-initialized')) {
-                        $(this).select2({
-                            dropdownParent: currentModal,
-                            width: '100%'
-                        }).addClass('select2-initialized');
-                    }
+            // Reiniciar Select2 (forzar reinicialización limpia)
+            currentModal.find('.select2').each(function () {
+                const $select = $(this);
+
+                // Si ya estaba inicializado, destruirlo primero
+                if ($select.hasClass("select2-hidden-accessible")) {
+                    $select.select2('destroy');
+                }
+
+                // Inicializar nuevamente con dropdown en el modal
+                $select.select2({
+                    dropdownParent: currentModal,
+                    width: '100%'
                 });
-            }
+            });
 
-            // Inicializar Dropify si está presente
+            // Inicializar Dropify si corresponde
             if ($.fn.dropify) {
-                currentModal.find('.dropify:not(.dropify-rendered)').dropify({
-                    messages: {
-                        default: 'Arrastre y suelte un archivo o haga clic aquí.',
-                        replace: 'Arrastre y suelte un archivo o haga clic aquí.',
-                        remove: 'Eliminar',
-                    },
-                    imgFileExtensions: ["jpg", "jpeg", "png", "tiff", "jfif", "svg"]
+                currentModal.find('.dropify:not(.dropify-initialized)').each(function () {
+                    $(this).dropify({
+                        messages: {
+                            default: 'Arrastre y suelte un archivo o haga clic aquí.',
+                            replace: 'Arrastre y suelte un archivo o haga clic aquí.',
+                            remove: 'Eliminar',
+                        },
+                        imgFileExtensions: ["jpg", "jpeg", "png", "tiff", "jfif", "svg"]
+                    }).addClass('dropify-initialized');
                 });
             }
         });

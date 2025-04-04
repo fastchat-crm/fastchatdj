@@ -12,11 +12,12 @@ from area_geografica.models import Ciudad, Provincia
 from core.custom_models import FormError
 from core.funciones import addData, paginador, salva_auditoria, secure_module, redirectAfterPostGet, codnombre, log
 from core.funciones_adicionales import salva_logs
-from .forms import UserForm, GrupoUserForm
+from .forms import UserForm, GrupoUserForm, ManageProfileForm
 
 from django.contrib import messages
 
 from .models import Usuario, PerfilAdministrativo, PerfilPersona
+from .view_persona import personasView
 
 
 @login_required
@@ -113,6 +114,12 @@ def usuarioView(request):
                     user.is_active = False
                     user.status = False
                     user.save(request)
+                    administrativo = user.get_admin()
+                    administrativo.status = False
+                    administrativo.save(request)
+                    cliente = user.get_client()
+                    cliente.status = False
+                    cliente.save(request)
                     log(f"Inhabilito usuario {user.username} - {user.get_full_name()}", request, "del")
                     messages.success(request, "Inhabilitado correctamente.")
                     res_json = {"error": False}
@@ -140,13 +147,31 @@ def usuarioView(request):
 
                     messages.success(request, "Contraseña del usuario {} / {} cambiada".format(user.get_full_name(),
                                                                                                user.username))
-                    return redirect(redirectAfterPostGet(request))
+                    res_json.append({'error': False,'reload': True})
                 elif action == 'eliminar_foto':
                     user = model.objects.get(pk=int(request.POST['pk']))
                     user.foto = ""
                     user.save(request)
                     log(f"Elimino usuario {user.username} - {user.get_full_name()}", request, "del")
                     return JsonResponse({'state': True})
+                elif action == 'manage_profile':
+                    user = model.objects.get(pk=int(request.POST['pk']))
+                    form = ManageProfileForm(request.POST)
+                    if not form.is_valid():
+                        raise FormError(form)
+                    user.is_active=form.cleaned_data['user_is_active']
+                    user.save(request)
+                    administrativo = user.get_admin()
+                    administrativo.status = form.cleaned_data['perfil_administrativo']
+                    administrativo.save(request)
+                    cliente = user.get_client()
+                    cliente.status = form.cleaned_data['perfil_cliente']
+                    cliente.save(request)
+                    log(f"Modifico perfil usuario {user.username} - {user.get_full_name()}", request, "change")
+                    messages.success(request, "Modificado correctamente.")
+                    res_json.append({'error': False,
+                                     "to": redirectAfterPostGet(request)
+                                     })
         except ValueError as ex:
             res_json.append({'error': True,
                              "message": str(ex)
@@ -184,12 +209,13 @@ def usuarioView(request):
                 return render(request, 'autenticacion/usuario/form.html', data)
             elif action == 'changegroup':
                 try:
-                    data['id'] = id = int(request.GET['id'])
+                    data['id'] = id = int(request.GET['pk'])
                     data['filtro'] = filtro = Usuario.objects.get(pk=id)
+                    titulo= f'Gestionar Grupos de {filtro.nombre_corto()}'
                     form = GrupoUserForm(instance=filtro)
                     data['form'] = form
                     template = get_template("autenticacion/usuario/formmodal.html")
-                    return JsonResponse({"result": True, 'data': template.render(data)})
+                    return JsonResponse({"result": True, 'data': template.render(data), 'titulo':titulo })
                 except Exception as ex:
                     pass
             elif action == 'ver':
@@ -199,6 +225,17 @@ def usuarioView(request):
                 data["object"] = user
                 data["form"] = Formulario(instance=user, ver=True)
                 return render(request, 'autenticacion/usuario/form.html', data)
+            elif action =='manage_profile':
+                data['id'] = id = int(request.GET['pk'])
+                data['filtro'] = usuario = Usuario.objects.get(pk=id)
+                titulo = f'Gestionar perfiles de {usuario.nombre_corto()}'
+                form = ManageProfileForm()
+                form.fields['perfil_administrativo'].initial = usuario.es_administrativo()
+                form.fields['perfil_cliente'].initial = usuario.es_persona()
+                form.fields['user_is_active'].initial = usuario.is_active
+                data['form'] = form
+                template = get_template("autenticacion/usuario/form_manage_profiles.html")
+                return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
 
         grupoid, status_perfil, criterio, filtros, url_vars = request.GET.getlist('grupoid', ''), request.GET.get('status_perfil', ''), request.GET.get('criterio', ''), Q(id__gt=0), ''
         id, documento = request.GET.get('id', ''), request.GET.get('documento', '')
@@ -241,52 +278,40 @@ def usuarioView(request):
                 url_vars += "&grupoid={}".format(scl)
             filtros = filtros & Q(groups__in=grupoid)
 
+        # Filtro por criterio (nombre, apellido, username)
         if criterio:
-            s = criterio.strip().split(' ')
-            if len(s) == 1:
-                filtros = filtros & (Q(first_name__icontains=criterio) | Q(last_name__icontains=criterio) | Q(
-                    username__icontains=criterio))
-            elif len(s) == 2:
-                filtros = filtros & ((Q(first_name__icontains=s[0]) & Q(last_name__icontains=s[1])) |
-                                     (Q(first_name__icontains=s[1]) & Q(last_name__icontains=s[0])) |
-                                     (Q(first_name__icontains=s[0]) & Q(first_name__icontains=s[1])) |
-                                     (Q(last_name__icontains=s[0]) & Q(last_name__icontains=s[1])))
-            elif len(s) == 3:
-                filtros = filtros & ((Q(first_name__icontains=s[0]) & Q(last_name__icontains=s[1]) & Q(
-                    last_name__icontains=s[2])) |
-                                     (Q(last_name__icontains=s[0]) & Q(last_name__icontains=s[1]) & Q(
-                                         first_name__icontains=s[2])) |
-                                     (Q(first_name__icontains=s[0]) & Q(first_name__icontains=s[1]) & Q(
-                                         last_name__icontains=s[2])))
-            elif len(s) == 4:
-                filtros = filtros & (
-                        (Q(first_name__icontains=s[0]) & Q(
-                            first_name__icontains=s[1]) & Q(
-                            last_name__icontains=s[2]) & Q(
-                            last_name__icontains=s[3])) |
-                        (Q(last_name__icontains=s[0]) & Q(
-                            last_name__icontains=s[1]) & Q(
-                            first_name__icontains=s[2]) & Q(
-                            first_name__icontains=s[3])) |
-                        (Q(first_name__icontains=s[0]) & Q(
-                            last_name__icontains=s[1]) & Q(
-                            first_name__icontains=s[2]) & Q(
-                            last_name__icontains=s[3])) |
-                        (Q(last_name__icontains=s[0]) & Q(
-                            first_name__icontains=s[1]) & Q(
-                            last_name__icontains=s[2]) & Q(
-                            first_name__icontains=s[3])) |
-                        (Q(first_name__icontains=s[0]) & Q(
-                            last_name__icontains=s[1]) & Q(
-                            last_name__icontains=s[2]) & Q(
-                            first_name__icontains=s[3])) |
-                        (Q(last_name__icontains=s[0]) & Q(
-                            first_name__icontains=s[1]) & Q(
-                            first_name__icontains=s[2]) & Q(
-                            last_name__icontains=s[3]))
-                )
+            data['criterio'] = criterio
+            url_vars += f'&criterio={criterio}'
+            palabras = criterio.strip().split()
+            q_obj = Q()
+
+            if len(palabras) == 1:
+                palabra = palabras[0]
+                q_obj |= Q(first_name__icontains=palabra)
+                q_obj |= Q(last_name__icontains=palabra)
+                q_obj |= Q(username__icontains=palabra)
+
+            elif 2 <= len(palabras) <= 4:
+                # Generar todas las combinaciones posibles de los términos
+                from itertools import permutations
+
+                for combo in permutations(palabras, len(palabras)):
+                    # Vamos alternando los campos entre first_name y last_name
+                    sub_q = Q()
+                    for i, palabra in enumerate(combo):
+                        if i % 2 == 0:
+                            sub_q &= Q(first_name__icontains=palabra)
+                        else:
+                            sub_q &= Q(last_name__icontains=palabra)
+                    q_obj |= sub_q
+
             else:
-                filtros = filtros & (Q(first_name__icontains=s[0]) & Q(last_name__icontains=s[1]) & Q(last_name__icontains=s[2]))
+                # Fallback: solo usar las 3 primeras para evitar combinaciones excesivas
+                q_obj &= (Q(first_name__icontains=palabras[0]) &
+                          Q(last_name__icontains=palabras[1]) &
+                          Q(last_name__icontains=palabras[2]))
+
+            filtros &= q_obj
 
 
         listado = model.objects.filter(filtros).filter(perfiladministrativo__isnull=False).order_by(order)

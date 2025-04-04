@@ -6,7 +6,7 @@ from django.utils.safestring import mark_safe
 
 from area_geografica.models import Pais, Ciudad, Provincia
 from autenticacion.models import Usuario, PerfilPersona
-from core.custom_models import ModelFormBase
+from core.custom_models import ModelFormBase, FormBase
 from core.validadores import es_cedula, es_ruc, es_pasaporte
 
 
@@ -202,7 +202,7 @@ class GrupoUserForm(ModelFormBase):
         for k, v in self.fields.items():
             if k in ('groups',):
                 self.fields[k].required = True
-                self.fields[k].widget.attrs['class'] = "jselect2"
+                self.fields[k].widget.attrs['class'] = "select2"
             if ver:
                 self.fields[k].widget.attrs['disabled'] = 'disabled'
 
@@ -228,3 +228,10 @@ class EditPersonaForm(ModelFormBase):
                 self.fields[k].widget.attrs['class'] = "form-control jselect2"
             else:
                 self.fields[k].widget.attrs['class'] = "form-control"
+
+
+class ManageProfileForm(FormBase):
+    user_is_active = forms.BooleanField(label="Usuario Activo?", required=False)
+    perfil_administrativo = forms.BooleanField(label="Perfil Administrativo Activo?", required=False)
+    perfil_cliente = forms.BooleanField(label="Perfil Cliente Activo?", required=False)
+

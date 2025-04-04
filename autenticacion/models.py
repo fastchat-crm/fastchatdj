@@ -119,6 +119,15 @@ class Usuario(AbstractUser, ModeloBase):
     def get_perfil_per(self):
         return self.perfilpersona_set.filter(status=True).first()
 
+    def get_admin(self):
+        return self.perfiladministrativo_set.first()
+
+    def get_client(self):
+        cliente = self.perfilpersona_set.first()
+        if not cliente:
+            cliente = PerfilPersona.objects.create(usuario=self)
+        return cliente
+
     def __str__(self):
         return "{} {} {}".format(self.documento, self.last_name, self.first_name).title()
 
