@@ -15,6 +15,9 @@
 /.vscode
 /.vscode/**
 /vapid.json
+/__pychache__/
+/__pychache__/**
+**/__pycache__/**
 #eliminar archivos de github pero conservar en local
 #git rm --cached archivo.ext
 #git rm --cached -r carpeta
