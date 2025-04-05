@@ -83,7 +83,7 @@
                         <th class="text-center">Username</th>
                         <th class="text-center">Nombres</th>
                         <th class="text-center">Datos de Contacto</th>
-                        <th class="text-center">Estados</th>
+                        <th class="text-center">Perfiles</th>
                         <th class="text-center">Fecha Registro</th>
                         <th class="text-center">Acción</th>
                     </tr>
@@ -200,6 +200,12 @@
                                         {% endif %}
                                         <li>
                                             <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="verModalPostAjax('manage_profile', '{{ l.pk }}', 'fas fa-users')">
+                                                <i class="fas fa-id-badge me-2 text-secondary"></i> Gestionar Perfiles
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
                                                onclick="cambiarcontrasena({{ l.pk }},'{{ l }}', '{{ dict_url_vars }}')">
                                                 <i class="fas fa-key me-2 text-warning"></i> Cambiar Contraseña
                                             </a>
@@ -208,8 +214,8 @@
                                         {% if l.is_active %}
                                             <li>
                                                 <a class="dropdown-item" href="javascript:void(0);"
-                                                   onclick="eliminarajax({{ l.pk }}, '{{ l }}', 'delete', '{{ dict_url_vars }}')">
-                                                    <i class="fas fa-trash me-2 text-danger"></i> Inhabilitar
+                                                   onclick="eliminarajax('{{ l.pk }}', '{{ l }}', 'delete', 'Seguro que desea desactivar el acceso por completo a: {{ l }}')">
+                                                    <i class="fas fa-trash me-2 text-danger"></i> Desactivar usuario
                                                 </a>
                                             </li>
                                         {% else %}
@@ -455,48 +461,6 @@
             // Usar Bootstrap 5 modal
             const modal = new bootstrap.Modal(document.getElementById('modalChangePassword'));
             modal.show();
-        }
-
-        // Función para eliminar/inhabilitar usuario
-        function eliminarajax(pk, nombre, accion, dict_url_vars = "", titulo = `Estas a punto de eliminar este registro ${nombre}`) {
-            Swal.fire({
-                title: titulo,
-                text: "Esta acción es irreversible",
-                icon: 'warning',
-                showCancelButton: true,
-                allowOutsideClick: false,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Si, deseo hacerlo!',
-                cancelButtonText: 'Cancelar'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    pantallaespera();
-                    $.ajax({
-                        type: 'POST',
-                        url: '{{ request.path }}',
-                        async: false,
-                        data: {
-                            csrfmiddlewaretoken: '{{ csrf_token }}',
-                            action: accion,
-                            id: pk,
-                            dict_url_vars: dict_url_vars,
-                        },
-                        dataType: "json",
-                        beforeSend: function () {
-                            pantallaespera();
-                        }
-                    }).done(function (data) {
-                        setTimeout($.unblockUI, 1);
-                        if (data.error === false) {
-                            location.reload();
-                        }
-                    }).fail(function (jqXHR, textStatus, errorThrown) {
-                        setTimeout($.unblockUI, 1);
-                        mensajeWarning('Error en el servidor');
-                    });
-                }
-            });
         }
     </script>
 {% endblock %}

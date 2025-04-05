@@ -11,7 +11,7 @@ from area_geografica.models import Provincia, Ciudad
 from core.custom_models import FormError
 from core.funciones import addData, paginador, salva_auditoria, secure_module, redirectAfterPostGet, codnombre, log
 from core.funciones_adicionales import salva_logs
-from .forms import UserForm, PersonaForm, GrupoUserForm
+from .forms import UserForm, PersonaForm, GrupoUserForm, ManageProfileForm
 from django.contrib import messages
 
 from .models import Usuario, PerfilAdministrativo, PerfilPersona
@@ -65,11 +65,7 @@ def personasView(request):
                         if 'ciudad' in request.POST:
                             form.instance.ciudad_id = request.POST['ciudad']
                         form.save()
-                        if form.instance.get_perfil_per():
-                            perfil_ = PerfilPersona.objects.get(id=form.instance.get_perfil_per().id)
-                        else:
-                            perfil_ = PerfilPersona(usuario=form.instance)
-                        perfil_.save()
+                        form.instance.get_client()
                         log(f"Edito persona {form.instance.username} - {form.instance.get_full_name()}", request,
                             "change", obj=form.instance.id)
                         messages.success(request, "Modificado correctamente.")
@@ -109,15 +105,18 @@ def personasView(request):
                                          })
                 elif action == 'delete':
                     user = model.objects.get(pk=int(request.POST['id']))
-                    qs_anterior = list(model.objects.filter(id=user.id).values())
                     user.is_active = False
                     user.status = False
                     user.save(request)
-                    log(f"Inhabilitado persona  {user.username} - {user.get_full_name()}", request,
-                        "del")
-
+                    administrativo = user.get_admin()
+                    administrativo.status = False
+                    administrativo.save(request)
+                    cliente = user.get_client()
+                    cliente.status = False
+                    cliente.save(request)
+                    log(f"Inhabilito usuario {user.username} - {user.get_full_name()}", request, "del")
                     messages.success(request, "Inhabilitado correctamente.")
-                    res_json={"error":False}
+                    res_json = {"error": False}
                 elif action == 'deleteperfiladm':
                     user = model.objects.get(pk=int(request.POST['id']))
                     perfil_ = PerfilAdministrativo.objects.get(usuario=user)
@@ -133,7 +132,7 @@ def personasView(request):
                     user.save(request)
                     log(f"Habilito persona {user.username} - {user.get_full_name()}", request, "add")
                     messages.success(request, "Habilitado correctamente.")
-                    return redirect(redirectAfterPostGet(request))
+                    res_json.append({'error': False,'reload': True})
                 elif action == 'change_password':
                     user = model.objects.get(pk=int(request.POST['pk']))
                     user.set_password(request.POST["password"])
@@ -148,6 +147,25 @@ def personasView(request):
                     user.save(request)
                     log(f"Elimino foto {user.username} - {user.get_full_name()}", request, "del")
                     return JsonResponse({'state': True})
+                elif action == 'manage_profile':
+                    user = model.objects.get(pk=int(request.POST['pk']))
+                    form = ManageProfileForm(request.POST)
+                    if not form.is_valid():
+                        raise FormError(form)
+                    user.is_active=form.cleaned_data['user_is_active']
+                    user.status = form.cleaned_data['user_is_active']
+                    user.save(request)
+                    administrativo = user.get_admin()
+                    administrativo.status = form.cleaned_data['perfil_administrativo']
+                    administrativo.save(request)
+                    cliente = user.get_client()
+                    cliente.status = form.cleaned_data['perfil_cliente']
+                    cliente.save(request)
+                    log(f"Modifico perfil usuario {user.username} - {user.get_full_name()}", request, "change")
+                    messages.success(request, "Modificado correctamente.")
+                    res_json.append({'error': False,
+                                     "to": redirectAfterPostGet(request)
+                                     })
         except ValueError as ex:
             res_json.append({'error': True,
                              "message": str(ex)
@@ -210,13 +228,89 @@ def personasView(request):
                 data["form"] = Formulario(instance=user, ver=True)
                 return render(request, 'autenticacion/personas/form.html', data)
 
-        criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(id__gt=0), ''
+            elif action == 'manage_profile':
+                data['id'] = id = int(request.GET['pk'])
+                data['filtro'] = usuario = Usuario.objects.get(pk=id)
+                titulo = f'Gestionar perfiles de {usuario.nombre_corto()}'
+                form = ManageProfileForm()
+                form.fields['perfil_administrativo'].initial = usuario.es_administrativo()
+                form.fields['perfil_cliente'].initial = usuario.es_persona()
+                form.fields['user_is_active'].initial = usuario.is_active
+                data['form'] = form
+                template = get_template("autenticacion/usuario/form_manage_profiles.html")
+                return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
+
+        status_perfil, criterio, filtros, url_vars = request.GET.get('status_perfil', ''), request.GET.get('criterio', ''), Q(id__gt=0), ''
+        id, documento = request.GET.get('id', ''), request.GET.get('documento', '')
+        orderby = request.GET.get('orderby', '')
+
+        order = 'last_name'
+        if orderby:
+            data["orderby"] = orderby
+            url_vars += '&orderby=' + orderby
+            if orderby == '1':
+                order = 'last_name'
+            elif orderby == '2':
+                order = '-last_name'
+            elif orderby == '3':
+                order = 'date_joined'
+            elif orderby == '4':
+                order = '-date_joined'
+
+        if id:
+            data['id'] = id
+            url_vars += f'&id={id}'
+            filtros = filtros & Q(id=id)
+
+        if documento:
+            data['documento'] = documento
+            url_vars += f'&documento={documento}'
+            filtros = filtros & Q(documento=documento)
+
+        if status_perfil:
+            data['status_perfil'] = status_perfil
+            url_vars += f'&status_perfil={status_perfil}'
+            if status_perfil == '1':
+                filtros = filtros & Q(status=True)
+            if status_perfil == '0':
+                filtros = filtros & Q(status=False)
+
+
+        # Filtro por criterio (nombre, apellido, username)
         if criterio:
-            filtros = filtros & (Q(username__icontains=criterio) | Q(first_name__icontains=criterio) |
-                                     Q(last_name__icontains=criterio) | Q(documento__icontains=criterio))
-            data["criterio"] = criterio
-            url_vars += '&criterio=' + criterio
-        listado = model.objects.filter(filtros).filter(perfilpersona__isnull=False, status=True).order_by('-id')
+            data['criterio'] = criterio
+            url_vars += f'&criterio={criterio}'
+            palabras = criterio.strip().split()
+            q_obj = Q()
+
+            if len(palabras) == 1:
+                palabra = palabras[0]
+                q_obj |= Q(first_name__icontains=palabra)
+                q_obj |= Q(last_name__icontains=palabra)
+                q_obj |= Q(username__icontains=palabra)
+
+            elif 2 <= len(palabras) <= 4:
+                # Generar todas las combinaciones posibles de los términos
+                from itertools import permutations
+
+                for combo in permutations(palabras, len(palabras)):
+                    # Vamos alternando los campos entre first_name y last_name
+                    sub_q = Q()
+                    for i, palabra in enumerate(combo):
+                        if i % 2 == 0:
+                            sub_q &= Q(first_name__icontains=palabra)
+                        else:
+                            sub_q &= Q(last_name__icontains=palabra)
+                    q_obj |= sub_q
+
+            else:
+                # Fallback: solo usar las 3 primeras para evitar combinaciones excesivas
+                q_obj &= (Q(first_name__icontains=palabras[0]) &
+                          Q(last_name__icontains=palabras[1]) &
+                          Q(last_name__icontains=palabras[2]))
+
+            filtros &= q_obj
+        listado = model.objects.filter(filtros).filter(perfilpersona__isnull=False).order_by('-id')
         data["url_vars"] = url_vars
         data["list_count"] = listado.count()
         paginador(request, listado, 20, data, url_vars)

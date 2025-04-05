@@ -120,7 +120,10 @@ class Usuario(AbstractUser, ModeloBase):
         return self.perfilpersona_set.filter(status=True).first()
 
     def get_admin(self):
-        return self.perfiladministrativo_set.first()
+        admin= self.perfiladministrativo_set.first()
+        if not admin:
+            admin = PerfilAdministrativo.objects.create(usuario=self)
+        return admin
 
     def get_client(self):
         cliente = self.perfilpersona_set.first()
