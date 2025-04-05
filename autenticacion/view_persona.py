@@ -310,7 +310,7 @@ def personasView(request):
                           Q(last_name__icontains=palabras[2]))
 
             filtros &= q_obj
-        listado = model.objects.filter(filtros).filter(perfilpersona__isnull=False).order_by('-id')
+        listado = model.objects.filter(filtros).filter(perfilpersona__isnull=False).order_by(order)
         data["url_vars"] = url_vars
         data["list_count"] = listado.count()
         paginador(request, listado, 20, data, url_vars)
