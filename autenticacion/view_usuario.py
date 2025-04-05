@@ -66,11 +66,7 @@ def usuarioView(request):
                         if 'ciudad' in request.POST:
                             form.instance.ciudad_id = request.POST['ciudad']
                         form.save()
-                        if form.instance.get_perfil_adm():
-                            perfil_ = PerfilAdministrativo.objects.get(id=form.instance.get_perfil_adm().id)
-                        else:
-                            perfil_ = PerfilAdministrativo(usuario=form.instance)
-                        perfil_.save()
+                        form.instance.get_admin()
                         log(f"Edito usuario {form.instance.username} - {form.instance.get_full_name()}", request,
                             "change")
 
@@ -160,6 +156,7 @@ def usuarioView(request):
                     if not form.is_valid():
                         raise FormError(form)
                     user.is_active=form.cleaned_data['user_is_active']
+                    user.status = form.cleaned_data['user_is_active']
                     user.save(request)
                     administrativo = user.get_admin()
                     administrativo.status = form.cleaned_data['perfil_administrativo']
