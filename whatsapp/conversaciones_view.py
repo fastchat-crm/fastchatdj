@@ -145,7 +145,7 @@ def conversacionesView(request):
         url_vars += '&criterio=' + criterio
 
     # Obtener las conversaciones
-    conversaciones = ConversacionWhatsApp.objects.filter(filtros).order_by('-fecha_ultimo_mensaje')
+    conversaciones = ConversacionWhatsApp.objects.filter(filtros).order_by('tiene_mensaje', '-fecha_ultimo_mensaje')
     data["conversaciones"] = conversaciones
     data["list_count"] = conversaciones.count()
     data["url_vars"] = url_vars

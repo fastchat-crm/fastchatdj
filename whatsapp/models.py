@@ -2,6 +2,7 @@ from django.db import models
 from core.custom_models import ModeloBase
 from autenticacion.models import Usuario
 from core.funciones import default_expira_10_min
+from whatsapp.models_querysetmanagers import ConversacionWhatsAppManager
 
 ESTADOS_SESION = (
     ('pendiente', 'Pendiente'),
@@ -61,6 +62,7 @@ class WhatsAppWebhook(models.Model):
 
 
 class ConversacionWhatsApp(ModeloBase):
+    objects = ConversacionWhatsAppManager()
     sesion = models.ForeignKey(SesionWhatsApp, on_delete=models.CASCADE, related_name='conversaciones')
     contacto_numero = models.CharField(max_length=50, verbose_name='Número del contacto')
     contacto_nombre = models.CharField(max_length=255, blank=True, null=True)
