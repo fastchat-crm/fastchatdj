@@ -20,6 +20,22 @@
         background-color: rgba(0,123,255,0.1);
         border-color: #007bff !important;
     }
+
+    /* Añadir estos estilos en tu CSS */
+    .deleted-message {
+        opacity: 0.7;
+        font-style: italic;
+    }
+
+    .edited-message p {
+        position: relative;
+    }
+
+    .edited-message small {
+        font-size: 0.7em;
+        margin-top: -5px;
+        display: block;
+    }
 </style>
 {% endblock %}
 
@@ -292,6 +308,24 @@
                 }
             });
         });
+
+        function actualizarMensaje(mensajeId, accion, nuevoContenido) {
+            const mensajeElement = $(`.mensaje-item[data-id="${mensajeId}"]`);
+
+            if (mensajeElement.length) {
+                if (accion === 'eliminar') {
+                    // Marcar como eliminado
+                    mensajeElement.find('.user-chat')
+                        .addClass('deleted-message')
+                        .html('<p class="text-muted"><i class="fa fa-ban"></i> Este mensaje fue eliminado</p>');
+                } else if (accion === 'editar') {
+                    // Actualizar contenido y marcar como editado
+                    mensajeElement.find('.user-chat')
+                        .addClass('edited-message')
+                        .html(`<p>${nuevoContenido}</p><small class="text-muted"><i class="fa fa-edit"></i> Editado</small>`);
+                }
+            }
+        }
 
         // Mostrar nombre del archivo seleccionado
         $('#archivo').change(function() {

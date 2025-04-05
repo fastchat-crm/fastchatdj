@@ -76,39 +76,50 @@ class ConversacionWhatsApp(ModeloBase):
     def __str__(self):
         return f"Conversación con {self.contacto_numero} ({self.sesion.numero})"
 
-
+TIPO_MENSAJE_CHOICES = (
+    ('texto', 'Texto'),
+    ('imagen', 'Imagen'),
+    ('audio', 'Audio'),
+    ('video', 'Video'),
+    ('documento', 'Documento'),
+    ('ubicacion', 'Ubicación'),
+    ('contacto', 'Contacto'),
+    ('sticker', 'Sticker'),
+    ('archivo', 'Archivo')
+)
 class MensajeWhatsApp(ModeloBase):
     conversacion = models.ForeignKey(ConversacionWhatsApp, on_delete=models.CASCADE, related_name='mensajes')
-    remitente = models.CharField(max_length=1000, verbose_name='Número remitente')
-    mensaje = models.TextField(blank=True, null=True)
-    tipo = models.CharField(max_length=20, choices=(
-        ('texto', 'Texto'),
-        ('imagen', 'Imagen'),
-        ('audio', 'Audio'),
-        ('video', 'Video'),
-        ('documento', 'Documento'),
-        ('ubicacion', 'Ubicación'),
-        ('contacto', 'Contacto'),
-        ('sticker', 'Sticker'),
-        ('archivo', 'Archivo')
-    ), default='texto')
+    remitente = models.CharField(max_length=50)  # Número de teléfono del remitente
+    mensaje = models.TextField()
+    mensaje_original = models.TextField(blank=True, null=True)  # Para guardar el mensaje original en caso de edición
+    tipo = models.CharField(max_length=20, choices=TIPO_MENSAJE_CHOICES, default='texto')
     archivo_url = models.URLField(blank=True, null=True)
-    fecha = models.DateTimeField(auto_now_add=True)
-    # Nuevos campos
+    fecha = models.DateTimeField()
     leido = models.BooleanField(default=False)
-    fecha_leido = models.DateTimeField(null=True, blank=True)
+    fecha_leido = models.DateTimeField(blank=True, null=True)
+
+    # Campos para mensajes eliminados
+    eliminado = models.BooleanField(default=False)
+    fecha_eliminacion = models.DateTimeField(blank=True, null=True)
+
+    # Campos para mensajes editados
+    editado = models.BooleanField(default=False)
+    fecha_edicion = models.DateTimeField(blank=True, null=True)
+
     # Para mensajes enviados por el sistema
     es_automatico = models.BooleanField(default=False, verbose_name='¿Enviado automáticamente?')
     ia_generado = models.BooleanField(default=False, verbose_name='¿Generado por IA?')
-    message_id = models.TextField(null=True, blank=True, default='')
+
+    # ID externo del mensaje (para poder identificarlo cuando se elimina o edita)
+    mensaje_id_externo = models.CharField(max_length=100, blank=True, null=True)
 
     class Meta:
-        verbose_name = 'Mensaje WhatsApp'
-        verbose_name_plural = 'Mensajes WhatsApp'
-        ordering = ['fecha']
+        verbose_name = "Mensaje WhatsApp"
+        verbose_name_plural = "Mensajes WhatsApp"
+        ordering = ['-fecha']
 
     def __str__(self):
-        return f"Mensaje de {self.remitente} - {self.tipo}"
+        return f"{self.remitente}: {self.mensaje[:30]}"
 
 
 class RespuestaAutomatica(ModeloBase):
