@@ -1,69 +1,87 @@
 {% for mensaje in mensajes %}
     {% if mensaje.remitente == conversacion.sesion.numero %}
-    <div class="d-flex flex-row-reverse">
-        {% if conversacion.sesion.foto %}
-            <img src="{{ conversacion.sesion.foto }}" alt="user" class="rounded-circle thumb-md">
-        {% else %}
-            <img src="{{ mensaje.conversacion.sesion.usuario.get_foto_url|default:'assets/images/users/avatar-3.jpg' }}" alt="user" class="rounded-circle thumb-md">
-        {% endif %}
-        <div class="me-1 chat-box w-100 reverse">
-            <div class="user-chat">
-                <p class="">{{ mensaje.mensaje }}</p>
-                {% if mensaje.archivo_url %}
-                    {% if mensaje.tipo == 'imagen' %}
-                        <img src="{{ mensaje.archivo_url }}" alt="imagen" class="img-fluid rounded" style="max-width: 200px;">
-                    {% elif mensaje.tipo == 'audio' %}
-                        <audio controls>
-                            <source src="{{ mensaje.archivo_url }}" type="audio/mpeg">
-                            Tu navegador no soporta el elemento de audio.
-                        </audio>
-                    {% elif mensaje.tipo == 'video' %}
-                        <video controls class="img-fluid rounded" style="max-width: 200px;">
-                            <source src="{{ mensaje.archivo_url }}" type="video/mp4">
-                            Tu navegador no soporta el elemento de video.
-                        </video>
+        <div class="d-flex flex-row-reverse">
+            {% if conversacion.sesion.foto %}
+                <img src="{{ conversacion.sesion.foto }}" alt="user" class="rounded-circle thumb-md">
+            {% else %}
+                <img src="{{ mensaje.conversacion.sesion.usuario.get_foto_url|default:'assets/images/users/avatar-3.jpg' }}" alt="user" class="rounded-circle thumb-md">
+            {% endif %}
+            <div class="me-1 chat-box w-100 reverse">
+                <div class="user-chat {% if mensaje.eliminado %}deleted-message{% endif %} {% if mensaje.editado %}edited-message{% endif %}">
+                    {% if mensaje.eliminado %}
+                        <p class="text-muted"><i class="fa fa-ban"></i> Este mensaje fue eliminado</p>
                     {% else %}
-                        <a href="{{ mensaje.archivo_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                            <i class="fa fa-download"></i> Descargar {{ mensaje.tipo }}
-                        </a>
+                        <p class="">{{ mensaje.mensaje }}</p>
+                        {% if mensaje.editado %}
+                            <small class="text-muted"><i class="fa fa-edit"></i> Editado</small>
+                        {% endif %}
                     {% endif %}
-                {% endif %}
+
+                    {% if mensaje.archivo_url and not mensaje.eliminado %}
+                        {% if mensaje.tipo == 'imagen' %}
+                            <img src="{{ mensaje.archivo_url }}" alt="imagen" class="img-fluid rounded"
+                                 style="max-width: 200px;">
+                        {% elif mensaje.tipo == 'audio' %}
+                            <audio controls>
+                                <source src="{{ mensaje.archivo_url }}" type="audio/mpeg">
+                                Tu navegador no soporta el elemento de audio.
+                            </audio>
+                        {% elif mensaje.tipo == 'video' %}
+                            <video controls class="img-fluid rounded" style="max-width: 200px;">
+                                <source src="{{ mensaje.archivo_url }}" type="video/mp4">
+                                Tu navegador no soporta el elemento de video.
+                            </video>
+                        {% else %}
+                            <a href="{{ mensaje.archivo_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                <i class="fa fa-download"></i> Descargar {{ mensaje.tipo }}
+                            </a>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                <div class="chat-time">{{ mensaje.fecha|date:"H:i" }}</div>
             </div>
-            <div class="chat-time">{{ mensaje.fecha|date:"H:i" }}</div>
         </div>
-    </div>
     {% else %}
-    <div class="d-flex">
-        {% if conversacion.contacto_foto %}
-            <img src="{{ conversacion.contacto_foto }}" alt="user" class="rounded-circle thumb-md">
-        {% else %}
-            <img src="assets/images/users/avatar-1.jpg" alt="user" class="rounded-circle thumb-md">
-        {% endif %}
-        <div class="ms-1 chat-box w-100">
-            <div class="user-chat">
-                <p class="">{{ mensaje.mensaje }}</p>
-                {% if mensaje.archivo_url %}
-                    {% if mensaje.tipo == 'imagen' %}
-                        <img src="{{ mensaje.archivo_url }}" alt="imagen" class="img-fluid rounded" style="max-width: 200px;">
-                    {% elif mensaje.tipo == 'audio' %}
-                        <audio controls>
-                            <source src="{{ mensaje.archivo_url }}" type="audio/mpeg">
-                            Tu navegador no soporta el elemento de audio.
-                        </audio>
-                    {% elif mensaje.tipo == 'video' %}
-                        <video controls class="img-fluid rounded" style="max-width: 200px;">
-                            <source src="{{ mensaje.archivo_url }}" type="video/mp4">
-                            Tu navegador no soporta el elemento de video.
-                        </video>
+        <div class="d-flex">
+            {% if conversacion.contacto_foto %}
+                <img src="{{ conversacion.contacto_foto }}" alt="user" class="rounded-circle thumb-md">
+            {% else %}
+                <img src="{{ mensaje.conversacion.sesion.usuario.get_foto_url|default:'assets/images/users/avatar-3.jpg' }}" alt="user" class="rounded-circle thumb-md">
+            {% endif %}
+            <div class="ms-1 chat-box w-100">
+                <div class="user-chat {% if mensaje.eliminado %}deleted-message{% endif %} {% if mensaje.editado %}edited-message{% endif %}">
+                    {% if mensaje.eliminado %}
+                        <p class="text-muted"><i class="fa fa-ban"></i> Este mensaje fue eliminado</p>
                     {% else %}
-                        <a href="{{ mensaje.archivo_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                            <i class="fa fa-download"></i> Descargar {{ mensaje.tipo }}
-                        </a>
+                        <p class="">{{ mensaje.mensaje }}</p>
+                        {% if mensaje.editado %}
+                            <small class="text-muted"><i class="fa fa-edit"></i> Editado</small>
+                        {% endif %}
                     {% endif %}
-                {% endif %}
+
+                    {% if mensaje.archivo_url and not mensaje.eliminado %}
+                        {% if mensaje.tipo == 'imagen' %}
+                            <img src="{{ mensaje.archivo_url }}" alt="imagen" class="img-fluid rounded"
+                                 style="max-width: 200px;">
+                        {% elif mensaje.tipo == 'audio' %}
+                            <audio controls>
+                                <source src="{{ mensaje.archivo_url }}" type="audio/mpeg">
+                                Tu navegador no soporta el elemento de audio.
+                            </audio>
+                        {% elif mensaje.tipo == 'video' %}
+                            <video controls class="img-fluid rounded" style="max-width: 200px;">
+                                <source src="{{ mensaje.archivo_url }}" type="video/mp4">
+                                Tu navegador no soporta el elemento de video.
+                            </video>
+                        {% else %}
+                            <a href="{{ mensaje.archivo_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                <i class="fa fa-download"></i> Descargar {{ mensaje.tipo }}
+                            </a>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                <div class="chat-time">{{ mensaje.fecha|date:"H:i" }}</div>
             </div>
-            <div class="chat-time">{{ mensaje.fecha|date:"H:i" }}</div>
         </div>
-    </div>
     {% endif %}
 {% endfor %}

@@ -48,7 +48,11 @@ def sesionesView(request):
                         {'url': webhook_url, 'type': 'auth_failure'},
                         {'url': webhook_url, 'type': 'disconnected'},
                         {'url': webhook_url, 'type': 'message'},
-                        {'url': webhook_url, 'type': 'message_sent'}
+                        {'url': webhook_url, 'type': 'message_sent'},
+                        {'url': webhook_url, 'type': 'profile_update'},
+                        {'url': webhook_url, 'type': 'contact_update'},
+                        {'url': webhook_url, 'type': 'message_deleted'},
+                        {'url': webhook_url, 'type': 'message_edited'}
                     ]
 
                     # Crear sesión en la API con webhooks
