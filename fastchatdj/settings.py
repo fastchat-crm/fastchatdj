@@ -54,6 +54,7 @@ with open(os.path.join(BASE_DIR, 'credenciales.json')) as json_file:
     REDIS_PORT = data['REDIS_PORT']
     #WHATSAPP_API_URL
     WHATSAPP_API_URL = data['WHATSAPP_API_URL']
+    NODE_SECRET_KEY = data['NODE_SECRET_KEY']
 
 WKHTMLTOPDF_CMD_OPTIONS = {'encoding': 'utf8', 'quiet': True, 'enable-local-file-access': True}
 
