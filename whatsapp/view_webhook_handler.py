@@ -37,12 +37,22 @@ def webhook_handler(request):
                 sesion.estado = 'conectado'
                 sesion.qr_code = None
                 sesion.error_mensaje = None
+
+                # Si hay información del perfil, guardarla
+                if event_data.get('profile_picture_base64'):
+                    sesion.foto = event_data.get('profile_picture_base64')
+
                 logger.info(f"Sesión {session_id} lista y conectada")
 
             elif event_type == 'authenticated':
                 sesion.estado = 'conectado'
                 sesion.qr_code = None
                 sesion.error_mensaje = None
+
+                # Si hay información del perfil, guardarla
+                if event_data.get('profile_picture_base64'):
+                    sesion.foto = event_data.get('profile_picture_base64')
+
                 logger.info(f"Sesión {session_id} autenticada")
 
             elif event_type == 'auth_failure':
@@ -54,6 +64,12 @@ def webhook_handler(request):
                 sesion.estado = 'desconectado'
                 sesion.error_mensaje = f"Desconectado: {event_data.get('reason', 'Razón desconocida')}"
                 logger.info(f"Sesión {session_id} desconectada: {event_data.get('reason')}")
+
+            elif event_type == 'profile_update':
+                # Evento específico para actualizar el perfil del usuario
+                if event_data.get('profile_picture_base64'):
+                    sesion.foto = event_data.get('profile_picture_base64')
+                    logger.info(f"Foto de perfil actualizada para sesión {session_id}")
 
             elif event_type == 'message' or event_type == 'message_sent':
                 # Procesar mensaje recibido o enviado
@@ -112,16 +128,18 @@ def webhook_handler(request):
                     tipo_mensaje = 'sticker'
 
                 # Crear mensaje
-                MensajeWhatsApp.objects.create(
-                    conversacion=conversacion,
-                    remitente=sesion.numero if event_type == 'message_sent' else contacto_numero,
-                    mensaje=body,
-                    tipo=tipo_mensaje,
-                    archivo_url=event_data.get('media_url'),
-                    fecha=timezone.now(),
-                    leido=event_type == 'message_sent',  # Mensajes enviados se marcan como leídos
-                    fecha_leido=timezone.now() if event_type == 'message_sent' else None
+                msgwp = MensajeWhatsApp.objects.filter(conversacion=conversacion, message_id=message_id).first() or MensajeWhatsApp(
+                    message_id=message_id
                 )
+                msgwp.conversacion = conversacion
+                msgwp.remitente = sesion.numero if event_type == 'message_sent' else contacto_numero
+                msgwp.mensaje = body
+                msgwp.tipo = tipo_mensaje
+                msgwp.archivo_url = event_data.get('media_url')
+                msgwp.fecha = timezone.now()
+                msgwp.leido = event_type == 'message_sent'
+                msgwp.fecha_leido = timezone.now() if event_type == 'message_sent' else None
+                msgwp.save()
 
                 logger.info(f"Mensaje {'enviado' if event_type == 'message_sent' else 'recibido'} en conversación con {contacto_numero}")
                 # Actualizar foto y nombre del remitente si están disponibles
@@ -172,6 +190,8 @@ def webhook_handler(request):
                         if actualizado:
                             conv.save()
                             logger.info(f"Contacto actualizado: {contacto_numero} - {contacto_nombre}")
+
+            # Resto del código para manejar mensajes y otros eventos...
 
             # Guardar los cambios en la sesión
             sesion.save()

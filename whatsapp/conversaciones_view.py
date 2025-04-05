@@ -102,7 +102,7 @@ def conversacionesView(request):
                         archivo_url = response.get('media_url')
 
                     # Guardamos en BD
-                    mensaje = MensajeWhatsApp.objects.create(
+                    mensaje = MensajeWhatsApp(
                         conversacion=conversacion,
                         remitente=conversacion.sesion.numero,
                         mensaje=texto,
@@ -112,11 +112,11 @@ def conversacionesView(request):
                         leido=True,
                         fecha_leido=timezone.now()
                     )
-
-                    # Actualizar último mensaje de la conversación
-                    conversacion.ultimo_mensaje = texto
-                    conversacion.fecha_ultimo_mensaje = timezone.now()
-                    conversacion.save()
+                    #
+                    # # Actualizar último mensaje de la conversación
+                    # conversacion.ultimo_mensaje = texto
+                    # conversacion.fecha_ultimo_mensaje = timezone.now()
+                    # conversacion.save()
 
                     log(f"Mensaje enviado a {conversacion.contacto_numero}", request, "add", obj=conversacion.id)
 
