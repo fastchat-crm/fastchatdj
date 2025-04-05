@@ -132,7 +132,7 @@ def sesionesView(request):
                     return JsonResponse({'error': True, 'message': 'Error al consultar estado'})
 
     # ====================== LISTADO SESIONES =========================
-    criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True), ''
+    criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, usuario_id=request.user.id), ''
     if criterio:
         filtros = filtros & (Q(numero__icontains=criterio))
         data["criterio"] = criterio
