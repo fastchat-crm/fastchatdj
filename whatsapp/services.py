@@ -175,3 +175,27 @@ class WhatsAppService:
             return {'success': False, 'message': error_message}
         except Exception as e:
             return {'success': False, 'message': str(e)}
+
+    def update_profile(self, session_id):
+        """
+        Actualiza la información del perfil de una sesión de WhatsApp
+        """
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/update-profile",
+                headers=self.headers,
+                data=json.dumps({'sessionId': session_id})
+            )
+
+            if response.status_code == 200:
+                return response.json()
+
+            try:
+                error_data = response.json()
+                error_message = error_data.get('message', response.text)
+            except:
+                error_message = response.text
+
+            return {'success': False, 'message': error_message}
+        except Exception as e:
+            return {'success': False, 'message': str(e)}

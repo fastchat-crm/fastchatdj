@@ -2,6 +2,7 @@ from django.urls import re_path, path
 from .sesiones_view import sesionesView
 from .conversaciones_view import conversacionesView
 from .sync_contacts import sync_contacts_view
+from .update_profile_view import update_profile_view
 from .view_webhook_handler import webhook_handler
 
 whatsapp_urls = (
@@ -20,6 +21,7 @@ whatsapp_urls = (
 urlpatterns = [
     path('webhook_handler/', webhook_handler, name='whatsapp_webhook_handler'),
     path('sync-contacts/', sync_contacts_view, name='sync_contacts'),
+    path('whatsapp/update-profile/', update_profile_view, name='update_profile'),
 ]
 
 for u in whatsapp_urls:

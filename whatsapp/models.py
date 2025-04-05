@@ -22,6 +22,7 @@ class SesionWhatsApp(ModeloBase):
     error_mensaje = models.TextField(blank=True, null=True, verbose_name='Último error')
     fecha_expira_inactivo = models.DateTimeField(default=default_expira_10_min)
     session_id = models.CharField(max_length=255, unique=True)
+    foto = models.TextField(blank=True, null=True)
 
     def is_connected(self):
         return self.estado == 'conectado'
@@ -99,6 +100,7 @@ class MensajeWhatsApp(ModeloBase):
     # Para mensajes enviados por el sistema
     es_automatico = models.BooleanField(default=False, verbose_name='¿Enviado automáticamente?')
     ia_generado = models.BooleanField(default=False, verbose_name='¿Generado por IA?')
+    message_id = models.TextField(null=True, blank=True, default='')
 
     class Meta:
         verbose_name = 'Mensaje WhatsApp'
