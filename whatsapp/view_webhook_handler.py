@@ -42,14 +42,10 @@ def webhook_handler(request):
                 sesion.estado = 'pendiente'
                 logger.info(f"QR Code actualizado para sesión {session_id}")
                 async_to_sync(channel_layer.group_send)(
-                    session_id,
+                    f'qrsession_{sesion.id}',
                     {
-                        'type': 'qr_code',
-                        'message': {
-                            'type': 'qr_code',
-                            'conversacion_id': str(session_id),
-                            'html': sesion.qr_code
-                        }
+                        'type': 'update_qrsession',
+                        'message': {'type': 'update_qrsession', 'qr_code': sesion.qr_code}
                     }
                 )
 

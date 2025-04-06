@@ -96,3 +96,38 @@ class SessionConsumer(AsyncWebsocketConsumer):
 
         # Enviar mensaje al WebSocket
         await self.send(text_data=json.dumps(message))
+
+
+class QrSessionConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.session_id = self.scope['url_route']['kwargs']['session_id']
+        self.room_group_name = f'qrsession_{self.session_id}'
+
+        # Unirse al grupo de la conversación
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+
+    async def receive(self, text_data=None, bytes_data=None):
+        text_data_json = json.loads(text_data)
+        message_type = text_data_json.get('type')
+
+        if message_type == 'update_qrsession':
+            await self.send(text_data=json.dumps({
+                'type': 'update_qrsession', "qr_code": text_data_json["qr_code"]
+            }))
+
+    async def update_qrsession(self, event):
+        message = event['message']
+
+        # Enviar mensaje al WebSocket
+        await self.send(text_data=json.dumps(message))
