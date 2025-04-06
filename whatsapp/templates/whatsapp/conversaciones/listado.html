@@ -175,8 +175,102 @@
 {% endblock %}
 
 {% block jscript %}
+<script src="/static/js/reconnecting-websocket.min.js"></script>
 <script>
     $(document).ready(function() {
+        // Configurar WebSocket
+        let chatSocket;
+        let sessionSocket;
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
+        function conectarWebSocket(conversacionId) {
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/chat/${conversacionId}/`;
+            if (chatSocket){
+                chatSocket.close();
+            }
+            chatSocket = new ReconnectingWebSocket(wsUrl, null, {reconnectInterval: 1500});
+
+            chatSocket.onopen = function(e) {
+                console.log('Conexión WebSocket establecida');
+                chatSocket.send(JSON.stringify({
+                    'type': 'request_messages'
+                }));
+            };
+
+            chatSocket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+
+                if (data.type === 'new_message' || data.type === 'messages_update') {
+                    // Actualizar los mensajes
+                    $('#mensajes-container').html(data.html);
+
+                    // Hacer scroll hacia abajo
+                    scrollToBottom();
+                }
+            };
+
+            chatSocket.onclose = function(e) {
+                console.log('Conexión WebSocket cerrada');
+            };
+
+            chatSocket.onerror = function(e) {
+                console.error('Error en WebSocket:', e);
+            };
+        }
+
+        function sessionWebSocket(sessionId) {
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/session/${sessionId}/`;
+            if (sessionSocket){
+                sessionSocket.close();
+            }
+            sessionSocket = new ReconnectingWebSocket(wsUrl, null, {reconnectInterval: 1500});
+
+            sessionSocket.onopen = function(e) {
+                console.log('Conexión SessionWebSocket establecida');
+                sessionSocket.send(JSON.stringify({
+                    'type': 'update_session'
+                }));
+            };
+
+            sessionSocket.onmessage = function(e) {
+                cargarConversaciones(sessionId);
+            };
+
+            sessionSocket.onclose = function(e) {
+                console.log('Conexión SessionWebSocket cerrada');
+            };
+
+            sessionSocket.onerror = function(e) {
+                console.error('Error en SessionWebSocket:', e);
+            };
+        }
+
+        sessionWebSocket($('#sesion-selector').val());
+
+        function scrollToBottom(smooth = true) {
+            const chatContainer = document.getElementById('chat-messages').querySelector('.simplebar-content-wrapper');
+            if (chatContainer) {
+                // Calcular la altura total del contenido
+                const scrollHeight = chatContainer.scrollHeight;
+
+                // Hacer scroll
+                if (smooth) {
+                    // En algunos dispositivos móviles, scrollTo con behavior: 'smooth' puede no funcionar
+                    try {
+                        chatContainer.scrollTo({
+                            top: scrollHeight,
+                            behavior: 'smooth'
+                        });
+                    } catch (e) {
+                        // Fallback para navegadores que no soportan scrollTo con opciones
+                        chatContainer.scrollTop = scrollHeight;
+                    }
+                } else {
+                    chatContainer.scrollTop = scrollHeight;
+                }
+            }
+        }
+
         $('#btn-sync-contacts').click(function() {
             const sesionId = $('#sesion-selector').val();
             if (!sesionId) {
@@ -220,14 +314,11 @@
 
         console.log("Inicializando chat de WhatsApp");
 
-        // Cargar conversaciones al inicio
-        cargarConversaciones();
-
         // Cambiar de sesión
         $('#sesion-selector').change(function() {
             const sesionId = $(this).val();
             console.log("Cambiando a sesión:", sesionId);
-            cargarConversaciones(sesionId);
+            sessionWebSocket(sesionId);
             // Limpiar chat actual
             $('#mensajes-container').html('<div class="text-center p-5"><i class="fa fa-comments fa-4x text-muted mb-3"></i><p>Selecciona una conversación para ver los mensajes</p></div>');
             $('#chat-footer').hide();
@@ -288,13 +379,6 @@
 
                         // Scroll al final
                         scrollToBottom();
-
-                        // Actualizar la lista de conversaciones después de un tiempo
-                        setTimeout(function() {
-                            if (conversacionActiva) {
-                                cargarConversaciones($('#sesion-selector').val());
-                            }
-                        }, 1000);
                     } else {
                         alert('Error: ' + response.message);
                     }
@@ -342,7 +426,7 @@
         // Función para cargar conversaciones
         function cargarConversaciones(sesionId = null, query = '') {
             // Mostrar indicador de carga
-            $('#lista-conversaciones').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2">Cargando conversaciones...</p></div>');
+            // $('#lista-conversaciones').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2">Cargando conversaciones...</p></div>');
 
             const url = '/whatsapp/conversaciones/' +
                         '?load_conversations=true' +
@@ -405,32 +489,13 @@
 
                     // Scroll al final
                     scrollToBottom();
+                    conectarWebSocket(response.conversacion_id);
                 },
                 error: function(xhr, status, error) {
                     $('#mensajes-container').html('<div class="p-3 text-center"><p class="text-danger">Error al cargar mensajes: ' + error + '</p></div>');
                 }
             });
         }
-
-        // Función para hacer scroll al final del chat
-        function scrollToBottom() {
-            const chatBody = document.getElementById('chat-messages');
-            chatBody.scrollTop = chatBody.scrollHeight;
-        }
-
-        // Actualizar conversaciones cada 30 segundos
-        setInterval(function() {
-            if (!buscando) {
-                cargarConversaciones($('#sesion-selector').val());
-            }
-        }, 30000);
-
-        // Actualizar mensajes de la conversación activa cada 10 segundos
-        setInterval(function() {
-            if (conversacionActiva) {
-                cargarMensajes(conversacionActiva);
-            }
-        }, 10000);
     });
 </script>
 {% endblock %}

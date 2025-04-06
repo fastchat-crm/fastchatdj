@@ -1,0 +1,133 @@
+import json
+from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.db import database_sync_to_async
+from django.template.loader import render_to_string
+from .models import ConversacionWhatsApp, MensajeWhatsApp
+
+class ChatConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.conversacion_id = self.scope['url_route']['kwargs']['conversacion_id']
+        self.room_group_name = f'chat_{self.conversacion_id}'
+
+        # Unirse al grupo de la conversación
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        # Abandonar el grupo de la conversación
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+
+    # Recibir mensaje del WebSocket
+    async def receive(self, text_data=None, bytes_data=None):
+        text_data_json = json.loads(text_data)
+        message_type = text_data_json.get('type')
+
+        if message_type == 'request_messages':
+            # El cliente solicita los mensajes de la conversación
+            html = await self.get_messages_html(self.conversacion_id)
+
+            # Enviar mensajes al WebSocket
+            await self.send(text_data=json.dumps({
+                'type': 'messages_update',
+                'html': html
+            }))
+
+    # Recibir mensaje del grupo de la conversación
+    async def chat_message(self, event):
+        message = event['message']
+
+        # Enviar mensaje al WebSocket
+        await self.send(text_data=json.dumps(message))
+
+    @database_sync_to_async
+    def get_messages_html(self, conversacion_id):
+        try:
+            conversacion = ConversacionWhatsApp.objects.get(id=conversacion_id)
+            mensajes = MensajeWhatsApp.objects.filter(
+                conversacion=conversacion
+            ).order_by('fecha')
+
+            # Renderizar la plantilla de mensajes
+            html = render_to_string('whatsapp/conversaciones/mensajes_partial.html', {
+                'mensajes': mensajes,
+                'conversacion': conversacion
+            })
+
+            return html
+        except ConversacionWhatsApp.DoesNotExist:
+            return ""
+
+
+class SessionConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.session_id = self.scope['url_route']['kwargs']['session_id']
+        self.room_group_name = f'session_{self.session_id}'
+
+        # Unirse al grupo de la conversación
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+
+    async def receive(self, text_data=None, bytes_data=None):
+        text_data_json = json.loads(text_data)
+        message_type = text_data_json.get('type')
+
+        if message_type == 'update_session':
+            await self.send(text_data=json.dumps({}))
+
+    async def update_session(self, event):
+        message = event['message']
+
+        # Enviar mensaje al WebSocket
+        await self.send(text_data=json.dumps(message))
+
+
+class QrSessionConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.session_id = self.scope['url_route']['kwargs']['session_id']
+        self.room_group_name = f'qrsession_{self.session_id}'
+
+        # Unirse al grupo de la conversación
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+
+    async def receive(self, text_data=None, bytes_data=None):
+        text_data_json = json.loads(text_data)
+        message_type = text_data_json.get('type')
+
+        if message_type == 'update_qrsession':
+            await self.send(text_data=json.dumps({
+                'type': 'update_qrsession', "qr_code": text_data_json["qr_code"]
+            }))
+
+    async def update_qrsession(self, event):
+        message = event['message']
+
+        # Enviar mensaje al WebSocket
+        await self.send(text_data=json.dumps(message))
