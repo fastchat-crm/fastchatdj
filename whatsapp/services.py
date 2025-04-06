@@ -1,13 +1,18 @@
 # whatsapp/services.py (adaptado a tus modelos)
 import requests
-from django.conf import settings
 import json
 from django.utils import timezone
+
+from fastchatdj import settings
+
 
 class WhatsAppService:
     def __init__(self):
         self.base_url = settings.WHATSAPP_API_URL
-        self.headers = {'Content-Type': 'application/json'}
+        self.headers = {
+            'Content-Type': 'application/json',
+            'X-API-Key': settings.NODE_SECRET_KEY
+        }
 
     def get_all_sessions(self):
         response = requests.get(f"{self.base_url}/sessions", headers=self.headers)
@@ -87,8 +92,7 @@ class WhatsAppService:
 
             response = requests.post(
                 f"{self.base_url}/sessions/{session_id}/send",
-                data=data,
-                files=files
+                data=data, files=files, headers=self.headers
             )
         else:
             # Si no hay archivo, usamos JSON

@@ -6,6 +6,8 @@ from django.views.decorators.http import require_POST
 import json
 from django.utils import timezone
 import logging
+
+from fastchatdj.settings import NODE_SECRET_KEY
 from .models import SesionWhatsApp, ConversacionWhatsApp, MensajeWhatsApp
 from datetime import datetime
 import pytz
@@ -13,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 @csrf_exempt
 def webhook_handler(request):
+    if request.headers.get('X-API-Key') != NODE_SECRET_KEY:
+        return JsonResponse({'message': 'No autorizado'}, status=401)
     try:
         data = json.loads(request.body)
         session_id = data.get('session_id')

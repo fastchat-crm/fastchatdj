@@ -23,7 +23,7 @@ def conversacionesView(request):
     addData(request, data)
 
     # Obtener todas las sesiones activas
-    sesiones = SesionWhatsApp.objects.filter(status=True).order_by('-ultima_conexion')
+    sesiones = SesionWhatsApp.objects.filter(usuario_id=request.user.id, status=True, estado='conectado').order_by('-ultima_conexion')
     data['sesiones'] = sesiones
 
     # Sesión seleccionada (por defecto la primera)
@@ -132,7 +132,7 @@ def conversacionesView(request):
 
     # ====================== LISTADO CONVERSACIONES =========================
     criterio = request.GET.get('criterio', '').strip()
-    filtros = Q(status=True)
+    filtros = Q(status=True, sesion__usuario__id=request.user.id)
     url_vars = ''
 
     if sesion_seleccionada:
@@ -145,7 +145,7 @@ def conversacionesView(request):
         url_vars += '&criterio=' + criterio
 
     # Obtener las conversaciones
-    conversaciones = ConversacionWhatsApp.objects.filter(filtros).order_by('-fecha_ultimo_mensaje')
+    conversaciones = ConversacionWhatsApp.objects.filter(filtros).order_by('tiene_mensaje', '-fecha_ultimo_mensaje')
     data["conversaciones"] = conversaciones
     data["list_count"] = conversaciones.count()
     data["url_vars"] = url_vars
