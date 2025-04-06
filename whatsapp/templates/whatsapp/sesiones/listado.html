@@ -171,28 +171,9 @@
                                         <i class="fas fa-ellipsis-v"></i>
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end">
-                                        {% if s.estado == 'conectado' %}
-                                            <li>
-                                                <a class="dropdown-item desconectar-btn" href="javascript:void(0);"
-                                                   data-session-id="{{ s.id }}">
-                                                    <i class="fas fa-plug me-2 text-warning"></i>Desconectar
-                                                </a>
-                                            </li>
-                                        {% endif %}
-
-                                        {% if s.estado == 'pendiente' or s.estado == 'desconectado' %}
-                                            <li>
-                                                <a class="dropdown-item refresh-qr-btn" href="javascript:void(0);"
-                                                   data-session-id="{{ s.id }}">
-                                                    <i class="fas fa-sync-alt me-2 text-info"></i>Actualizar QR
-                                                </a>
-                                            </li>
-                                        {% endif %}
-
                                         <li>
-                                            <a class="dropdown-item eliminar-btn" href="javascript:void(0);"
-                                               data-session-id="{{ s.id }}">
-                                                <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                            <a class="dropdown-item" href="javascript:void(0);" onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete')">
+                                                <i class="fas fa-trash me-2 text-danger"></i> Eliminar
                                             </a>
                                         </li>
                                     </ul>
@@ -351,86 +332,6 @@
 
                 const modalVerQR = new bootstrap.Modal(document.getElementById('modalVerQR'));
                 modalVerQR.show();
-            });
-
-            // Eliminar sesión
-            $('.eliminar-btn').on('click', function () {
-                const sessionId = $(this).data('session-id');
-
-                Swal.fire({
-                    title: '¿Eliminar esta sesión?',
-                    text: 'La sesión se desconectará y todos sus datos serán eliminados.',
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#dc3545',
-                    cancelButtonColor: '#6c757d',
-                    confirmButtonText: 'Sí, eliminar',
-                    cancelButtonText: 'Cancelar'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        pantallaespera('Procesando', 'Eliminando sesión...');
-
-                        $.post('', {
-                            'action': 'delete',
-                            'id': sessionId,
-                            'csrfmiddlewaretoken': '{{ csrf_token }}'
-                        }, function (res) {
-                            setTimeout($.unblockUI, 1);
-
-                            if (!res.error) {
-                                mensajeSuccess('Sesión eliminada correctamente');
-                                setTimeout(function () {
-                                    location.reload();
-                                }, 1500);
-                            } else {
-                                mensajeDanger(res.message || 'Error al eliminar la sesión');
-                            }
-                        }, 'json').fail(function () {
-                            setTimeout($.unblockUI, 1);
-                            mensajeDanger('Error de conexión al servidor');
-                        });
-                    }
-                });
-            });
-
-            // Desconectar sesión
-            $('.desconectar-btn').on('click', function () {
-                const sessionId = $(this).data('session-id');
-
-                Swal.fire({
-                    title: '¿Desconectar esta sesión?',
-                    text: 'La sesión de WhatsApp se cerrará, pero podrá reconectarla después.',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonColor: '#ffc107',
-                    cancelButtonColor: '#6c757d',
-                    confirmButtonText: 'Sí, desconectar',
-                    cancelButtonText: 'Cancelar'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        pantallaespera('Procesando', 'Desconectando sesión...');
-
-                        $.post('', {
-                            'action': 'disconnect',
-                            'session_id': sessionId,
-                            'csrfmiddlewaretoken': '{{ csrf_token }}'
-                        }, function (res) {
-                            setTimeout($.unblockUI, 1);
-
-                            if (!res.error) {
-                                alertaSuccess('Sesión desconectada correctamente');
-                                setTimeout(function () {
-                                    location.reload();
-                                }, 1500);
-                            } else {
-                                alertaDanger(res.message || 'Error al desconectar la sesión');
-                            }
-                        }, 'json').fail(function () {
-                            setTimeout($.unblockUI, 1);
-                            alertaDanger('Error de conexión al servidor');
-                        });
-                    }
-                });
             });
 
             // Actualizar QR

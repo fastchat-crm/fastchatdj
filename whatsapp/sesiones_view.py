@@ -1,7 +1,6 @@
 import json
 import sys
 from datetime import datetime
-
 import pytz
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -10,12 +9,8 @@ from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.urls import reverse
-
 from core.funciones import addData, paginador, secure_module, redirectAfterPostGet, log
-from core.funciones_adicionales import salva_logs
 from .models import SesionWhatsApp, WhatsAppWebhook
-from .redis_publish import enviar_comando_start, enviar_comando_close
-from core.custom_models import FormError
 from .services import WhatsAppService
 
 whatsapp_service = WhatsAppService()
@@ -75,10 +70,10 @@ def sesionesView(request):
                     filtro = model.objects.get(pk=int(request.POST['id']))
                     filtro.status = False
                     filtro.save(request)
-                    enviar_comando_close(filtro.numero)
+                    result = whatsapp_service.delete_session(filtro.session_id)
                     log(f"Eliminó sesión WhatsApp {filtro.numero}", request, "del", obj=filtro.id)
                     messages.success(request, "Sesión eliminada correctamente.")
-                    return redirect(redirectAfterPostGet(request))
+                    return JsonResponse({"error": False})
 
         except Exception as ex:
             res_json.append({'error': True, 'message': "Error, intente nuevamente."})

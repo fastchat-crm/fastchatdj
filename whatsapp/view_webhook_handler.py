@@ -41,6 +41,7 @@ def webhook_handler(request):
                 sesion.qr_code = event_data.get('qr_code')
                 sesion.estado = 'pendiente'
                 logger.info(f"QR Code actualizado para sesión {session_id}")
+                sesion.save()
                 async_to_sync(channel_layer.group_send)(
                     f'qrsession_{sesion.id}',
                     {
@@ -58,6 +59,8 @@ def webhook_handler(request):
                 if event_data.get('profile_picture_base64'):
                     sesion.foto = event_data.get('profile_picture_base64')
 
+                sesion.save()
+
                 logger.info(f"Sesión {session_id} lista y conectada")
 
             elif event_type == 'authenticated':
@@ -69,23 +72,28 @@ def webhook_handler(request):
                 if event_data.get('profile_picture_base64'):
                     sesion.foto = event_data.get('profile_picture_base64')
 
+                sesion.save()
+
                 logger.info(f"Sesión {session_id} autenticada")
 
             elif event_type == 'auth_failure':
                 sesion.estado = 'error'
                 sesion.error_mensaje = f"Error de autenticación: {event_data.get('error', 'Desconocido')}"
                 logger.error(f"Error de autenticación en sesión {session_id}: {event_data.get('error')}")
+                sesion.save()
 
             elif event_type == 'disconnected':
                 sesion.estado = 'desconectado'
                 sesion.error_mensaje = f"Desconectado: {event_data.get('reason', 'Razón desconocida')}"
                 logger.info(f"Sesión {session_id} desconectada: {event_data.get('reason')}")
+                sesion.save()
 
             elif event_type == 'profile_update':
                 # Evento específico para actualizar el perfil del usuario
                 if event_data.get('profile_picture_base64'):
                     sesion.foto = event_data.get('profile_picture_base64')
                     logger.info(f"Foto de perfil actualizada para sesión {session_id}")
+                    sesion.save()
 
 
             elif event_type == 'message' or event_type == 'message_sent':
