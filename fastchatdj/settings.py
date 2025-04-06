@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'daphne',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
     # LOCAL APPS
@@ -82,7 +83,8 @@ INSTALLED_APPS = [
     'for_django_projects.form_utils',
     'webpush',
     'for_django_projects.pwa',
-    'corsheaders'
+    'corsheaders',
+    'channels'
 ]
 
 MIDDLEWARE = [
@@ -118,6 +120,22 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'fastchatdj.wsgi.application'
+ASGI_APPLICATION = 'fastchatdj.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer'
+    }
+}
+if CACHES_REDIS:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [(REDIS_HOST, REDIS_PORT)],
+            },
+        },
+    }
 
 DATABASES = {
     'default': {

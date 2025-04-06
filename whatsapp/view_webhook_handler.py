@@ -1,12 +1,14 @@
 # whatsapp/views.py (webhook_handler adaptado a tus modelos)
 from django.db.models import Q
 from django.http import JsonResponse
+from django.template.loader import render_to_string
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 import json
 from django.utils import timezone
 import logging
-
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 from fastchatdj.settings import NODE_SECRET_KEY
 from .models import SesionWhatsApp, ConversacionWhatsApp, MensajeWhatsApp
 from datetime import datetime
@@ -23,6 +25,7 @@ def webhook_handler(request):
         event_type = data.get('event_type')
         timestamp = data.get('timestamp')
         event_data = data.get('data', {})
+        channel_layer = get_channel_layer()
 
         # Registrar el evento en el log
         logger.info(f"Webhook recibido: {event_type} para sesión {session_id}")
@@ -38,6 +41,17 @@ def webhook_handler(request):
                 sesion.qr_code = event_data.get('qr_code')
                 sesion.estado = 'pendiente'
                 logger.info(f"QR Code actualizado para sesión {session_id}")
+                async_to_sync(channel_layer.group_send)(
+                    session_id,
+                    {
+                        'type': 'qr_code',
+                        'message': {
+                            'type': 'qr_code',
+                            'conversacion_id': str(session_id),
+                            'html': sesion.qr_code
+                        }
+                    }
+                )
 
             elif event_type == 'ready':
                 sesion.estado = 'conectado'
@@ -165,6 +179,34 @@ def webhook_handler(request):
                     if actualizado:
                         conversacion.save()
                         logger.info(f"Información de contacto actualizada para {contacto_numero}")
+
+                mensajes = MensajeWhatsApp.objects.filter(
+                    conversacion=conversacion
+                ).order_by('fecha')
+
+                html = render_to_string('whatsapp/conversaciones/mensajes_partial.html', {
+                    'mensajes': mensajes,
+                    'conversacion': conversacion
+                })
+
+                async_to_sync(channel_layer.group_send)(
+                    f'chat_{conversacion.id}',
+                    {
+                        'type': 'chat_message',
+                        'message': {
+                            'type': 'new_message',
+                            'conversacion_id': str(conversacion.id),
+                            'html': html
+                        }
+                    }
+                )
+                async_to_sync(channel_layer.group_send)(
+                    f'session_{conversacion.sesion_id}',
+                    {
+                        'type': 'update_session',
+                        'message': {'type': 'update_session',}
+                    }
+                )
 
             # También podemos añadir un evento específico para actualizar contactos
             # Añadir este caso en tu webhook_handler
