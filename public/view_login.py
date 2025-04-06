@@ -25,7 +25,8 @@ def login_tienda(request):
             data['next'] = request.GET.get('next')
         if request.user.username != "":
             return redirect('/')
-        return render(request, 'public/seguridad/login.html', data)
+        # return render(request, 'public/seguridad/login.html', data)
+        return render(request, 'public/seguridad/sigin.html', data)
     datos = {'resp': False}
     try:
         addData(request, data)

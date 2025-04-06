@@ -44,8 +44,8 @@ def restaurar(request):
         if 'email' in request.POST:
             email = request.POST['email']
             try:
-                if Usuario.objects.filter(email=email, perfiladministrativo__isnull=True).exists():
-                    user = Usuario.objects.filter(email=email, perfiladministrativo__isnull=True).first()
+                user = Usuario.objects.filter(Q(perfiladministrativo__isnull=False)|Q(perfiladministrativo__status=False),email=email).first()
+                if user:
                     with transaction.atomic():
                         if user.is_active and not user.es_administrativo():
                             if user.email:
@@ -82,4 +82,5 @@ def restaurar(request):
     elif request.method == 'GET':
         # if request.user.username != "":
         #     return redirect('/')
-        return render(request, 'public/seguridad/restaurar.html', data)
+        # return render(request, 'public/seguridad/restaurar.html', data)
+        return render(request, 'public/seguridad/recover_pass.html', data)

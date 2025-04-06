@@ -1,0 +1,503 @@
+{% load templatefunctions %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8"/>
+    <title>{{ titulo }} | {{ nombreempresa }}</title>
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+    <meta name="description" content="{{ nombreempresa }}">
+    <meta name="keywords" content="{{ keywords }}">
+    <meta name="theme-color" content="#2874A6">
+    {% if request.user.is_authenticated %}
+        <meta name="user_id" content="{{ request.user.pk }}">
+    {% endif %}
+    {% load pwa %}
+    {% progressive_web_app_meta %}
+    <meta name="islogged" content="{{ request.user.is_authenticated }}">
+    <link href="{{ favicon }}" rel="shortcut icon"/>
+    <link rel="stylesheet" href="/static/form-control.css?2.18">
+    <link href="/static/fonts/fontawesome/css/all.css?v=6.1.1" rel="stylesheet"/>
+    <link rel="stylesheet" type="text/css"
+          href="/static/alertsDialogsMobile/alertDialogMaterialDesign/dist/duDialog.css">
+    <link rel="stylesheet" type="text/css"
+          href="/static/alertsDialogsMobile/alertDialogCupertino/css/component_cupertino.css">
+    <script>
+        let mode = window.localStorage.getItem('mode'),
+            root = document.getElementsByTagName('html')[0];
+        if (mode !== undefined && mode === 'dark') {
+            root.classList.add('dark-mode');
+        } else {
+            root.classList.remove('dark-mode');
+        }
+    </script>
+    <style>
+        .page-loading {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            -webkit-transition: all .4s .2s ease-in-out;
+            transition: all .4s .2s ease-in-out;
+            background-color: #fff;
+            opacity: 0;
+            visibility: hidden;
+            z-index: 9999;
+        }
+
+        .dark-mode .page-loading {
+            background-color: #121519;
+        }
+
+        .page-loading.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .page-loading-inner {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            -webkit-transform: translateY(-50%);
+            transform: translateY(-50%);
+            -webkit-transition: opacity .2s ease-in-out;
+            transition: opacity .2s ease-in-out;
+            opacity: 0;
+        }
+
+        .page-loading.active > .page-loading-inner {
+            opacity: 1;
+        }
+
+        .page-loading-inner > span {
+            display: block;
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+            font-weight: normal;
+            color: #6f788b;
+        }
+
+        .dark-mode .page-loading-inner > span {
+            color: #fff;
+            opacity: .6;
+        }
+
+        .page-spinner {
+            display: inline-block;
+            width: 2.75rem;
+            height: 2.75rem;
+            margin-bottom: .75rem;
+            vertical-align: text-bottom;
+            background-color: #d7dde2;
+            border-radius: 50%;
+            opacity: 0;
+            -webkit-animation: spinner .75s linear infinite;
+            animation: spinner .75s linear infinite;
+        }
+
+        .dark-mode .page-spinner {
+            background-color: rgba(255, 255, 255, .25);
+        }
+
+        @-webkit-keyframes spinner {
+            0% {
+                -webkit-transform: scale(0);
+                transform: scale(0);
+            }
+            50% {
+                opacity: 1;
+                -webkit-transform: none;
+                transform: none;
+            }
+        }
+
+        @keyframes spinner {
+            0% {
+                -webkit-transform: scale(0);
+                transform: scale(0);
+            }
+            50% {
+                opacity: 1;
+                -webkit-transform: none;
+                transform: none;
+            }
+        }
+
+        .select2-dropdown {
+            border-radius: 10px;
+        }
+
+    </style>
+    <!-- Import Google Font-->
+    <link rel="stylesheet" media="screen" href="/static/landing/assets/css/theme.min.css?17">
+    <link rel="stylesheet" media="screen" href="/static/extracss.css?23">
+    <link rel="stylesheet" media="screen" href="/static/loading.css?1">
+    {% block head %}{% endblock %}
+    <script>
+        {% if activar_cambio_clave %}
+            window.location.href = "/changepass/";
+        {% endif %}
+    </script>
+</head>
+
+<body {% if not url_auth %}class="bg-secondary"{% endif %}>
+
+<main class="page-wrapper">
+    {% block content %}
+    {% endblock %}
+</main>
+
+<a class="btn-scroll-top" href="#top" data-scroll>
+    <svg viewBox="0 0 40 40" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="20" cy="20" r="19" fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-miterlimit="10"></circle>
+    </svg>
+    <i class="ai-arrow-up"></i>
+</a>
+
+
+{#<script src="https://kit.fontawesome.com/a96c5b6f8d.js" crossorigin="anonymous"></script>#}
+<script src="/static/landing/assets/js/jquery-3.6.1.min.js"></script>
+<script src="/static/landing/assets/vendor/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/static/landing/assets/vendor/smooth-scroll/dist/smooth-scroll.polyfills.min.js"></script>
+<script src="/static/landing/assets/vendor/cleave.js/dist/cleave.min.js"></script>
+<script src="/static/landing/assets/vendor/imagesloaded/imagesloaded.pkgd.min.js"></script>
+<script src="/static/landing/assets/vendor/shufflejs/dist/shuffle.min.js"></script>
+<script src=/static/landing/assets/vendor/parallaxjs/dist/parallax.min.js></script>
+<script src="/static/landing/assets/vendor/swiper/swiper-bundle.min.js"></script>
+<script src="/static/landing/assets/vendor/aos/dist/aos.js"></script>
+<script src="/static/landing/assets/vendor/lightgallery/lightgallery.min.js"></script>
+<script src="/static/landing/assets/vendor/lightgallery/plugins/fullscreen/lg-fullscreen.min.js"></script>
+<script src="/static/landing/assets/vendor/lightgallery/plugins/zoom/lg-zoom.min.js"></script>
+<script src="/static/landing/assets/vendor/lightgallery/plugins/thumbnail/lg-thumbnail.min.js"></script>
+<!-- Main theme script-->
+<script src="/static/landing/assets/js/theme.min.js"></script>
+{# info device #}
+<script src="/static/device_info/ua-parser.min.js"></script>
+{#<script src="/static/js/jsencrypt/forge.min.js?v=1.5"></script>#}
+<script src="/static/js/check_os.js"></script>
+{# Alert dialogs #}
+<script type="text/javascript" src="/static/alertsDialogsMobile/alertDialogMaterialDesign/dist/duDialog.js"></script>
+<script src='/static/alertsDialogsMobile/alertDialogCupertino/js/component.js'></script>
+{# btnInstalar app #}
+<script>
+    {#let iosConfirmInstall = new ConfirmClass();#}
+    {#let iosAlert = new AlertClass();#}
+    {#var mensajeComp = true;#}
+    {##}
+    {#function recordarDespues() {#}
+    {#    var sec = parseInt(new Date().getTime() / 1000);#}
+    {#    return sec >= parseInt(localStorage.getItem("fechaRecordatorio"));#}
+    {# }#}
+    {##}
+    {#function infoDevNotComp() {#}
+    {#    if (mensajeComp) {#}
+    {#        if (isMobile.iOS()) {#}
+    {#            iosAlert.show({#}
+    {#                title: 'No compatible',#}
+    {#                content: 'Su navegador no es compatible para la instalación de la app, de preferencia use Chrome.',#}
+    {#                btnText: 'Aceptar',#}
+    {#            })#}
+    {#        } else {#}
+    {#            duDialog('No compatible', 'Su navegador no es compatible para la instalación de la app, de preferencia use Chrome.', {init: true}).show();#}
+    {#        }#}
+    {#    }#}
+    {# }#}
+    {##}
+    {#if (isMobile.Android() || isMobile.iOS() || isMobile.BlackBerry()) {#}
+    {#    const listBtnInstalarApp = $('.btnInstalarApp').toArray();#}
+    {#    window.addEventListener('DOMContentLoaded', () => {#}
+    {#        const classForIconSo = isMobile.Android() ? "fab fa-android" : (isMobile.iOS() || isMobile.Mac()) ? "fab fa-apple" : isMobile.Windows() ? "fab fa-windows" : isMobile.Linux() ? "fab fa-linux" : "fas fa-laptop-code";#}
+    {##}
+    {#        for (var i = 0; i < listBtnInstalarApp.length; i++) {#}
+    {#            var btnInstalarApp = $(listBtnInstalarApp[i]);#}
+    {#            btnInstalarApp.children('a').children('i').attr("class", classForIconSo);#}
+    {##}
+    {#            const buttonAdd = btnInstalarApp;#}
+    {#            let deferredPrompt;#}
+    {#            window.addEventListener('beforeinstallprompt', (e) => {#}
+    {#                $(buttonAdd).removeAttr('style');#}
+    {#                e.preventDefault();#}
+    {#                mensajeComp = false;#}
+    {#                deferredPrompt = e;#}
+    {#                buttonAdd.click((e) => {#}
+    {#                    deferredPrompt.prompt();#}
+    {#                    deferredPrompt.userChoice.then((choiceResult) => {#}
+    {#                        if (choiceResult.outcome === 'accepted') {#}
+    {#                        } else {#}
+    {#                        }#}
+    {#                        deferredPrompt = null;#}
+    {#                    });#}
+    {#                });#}
+    {#            });#}
+    {#        }#}
+    {#        var btnInsApp = $(listBtnInstalarApp[0]);#}
+    {#        androidConfirmInstall = duDialog('!Bienvenido(a)!', '¿Deseas instalar nuestra app?', {#}
+    {#            init: true,#}
+    {#            buttons: duDialog.OK_CANCEL,#}
+    {#            okText: 'Sí, instalar',#}
+    {#            cancelText: 'Recordar después',#}
+    {##}
+    {#            callbacks: {#}
+    {#                okClick: function (e) {#}
+    {#                    this.hide()#}
+    {#                    btnInsApp.children('a').click();#}
+    {#                },#}
+    {#                cancelClick: function (e) {#}
+    {#                    this.hide()#}
+    {#                    var tiempo = parseInt(new Date().getTime() / 1000);#}
+    {#                    var sec = tiempo + 259200;#}
+    {# despues de 3 días se le presentará el mensaje de nuevo #}
+    {#                    localStorage.setItem("fechaRecordatorio", sec.toString());#}
+    {#                },#}
+    {#            }#}
+    {#        });#}
+    {#        if (window.matchMedia('(display-mode: standalone)').matches) {#}
+    {#            btnInsApp.remove();#}
+    {#        } else {#}
+    {#            if (localStorage.getItem("fechaRecordatorio") === null || recordarDespues()) {#}
+    {#                if (isMobile.iOS()) {#}
+    {#                    iosConfirmInstall.show({#}
+    {#                        title: '¡Bievenido(a)!',#}
+    {#                        content: '¿Deseas instalar nuestra app?',#}
+    {#                        btns: [{#}
+    {#                            text: 'Sí, instalar',#}
+    {#                            callback: function (instance) {#}
+    {#                                instance.close = false;#}
+    {#                                btnInsApp.children('a').click();#}
+    {#                            }#}
+    {#                        }, {#}
+    {#                            text: 'Recordar después',#}
+    {#                            callback: function () {#}
+    {#                                var tiempo = parseInt(new Date().getTime() / 1000);#}
+    {#                                var sec = tiempo + 259200;#}
+    {# despues de 3 días se le presentará el mensaje de nuevo #}
+    {#                                localStorage.setItem("fechaRecordatorio", sec.toString());#}
+    {#                            }#}
+    {#                        }],#}
+    {#                        onShow: function () {#}
+    {##}
+    {#                        }#}
+    {#                    });#}
+    {#                } else {#}
+    {#                    androidConfirmInstall.show();#}
+    {#                }#}
+    {#            }#}
+    {#        }#}
+    {#    });#}
+</script>
+<!-- Plugins -->
+<link rel="stylesheet" href="/static/izitoast/css/iziToast.min.css">
+<script src="/static/izitoast/js/iziToast.min.js" type="text/javascript"></script>
+<script src="/static/jquery.blockUI.js"></script>
+<link rel="stylesheet" href="/static/dropify/css/dropifycitas.min.css?2.1">
+<script src="/static/dropify/js/dropify.min.js"></script>
+<script src="/static/validaciones/funciones.js?v=3"></script>
+<link rel="stylesheet" href="/static/sweetalert2/sweetalert2.css?1.0">
+<script src="/static/sweetalert2/sweetalert2.js"></script>
+<link rel="stylesheet" href="/static/autocomplement/jquery.autocomplete.css">
+<script src="/static/autocomplement/jquery.autocomplete.js"></script>
+<link rel="stylesheet" href="/static/spinner.css?0.6" type="text/css"/>
+<link rel="stylesheet" href="/static/izitoast/css/iziToast.min.css">
+<script src="/static/izitoast/js/iziToast.min.js" type="text/javascript"></script>
+{#<link href="/static/selectmultiple/select2.min.css?2.1" rel="stylesheet">#}
+{#<link href="/static/selectmultiple/select2.min.js" rel="stylesheet">#}
+<link href="/static/select2/select2.min.css?2.5" rel="stylesheet">
+<script src="/static/select2/select2.min.js?2"></script>
+<script src="/static/select2/i18n/es.js?0.2"></script>
+<!-- Datatable -->
+<link rel="stylesheet" href="/static/datatables/datatables.css">
+<script src="/static/datatables/datatables.js"></script>
+<script type="text/javascript"
+        src="https://cdn.jsdelivr.net/npm/html2canvas@1.0.0-rc.1/dist/html2canvas.min.js"></script>
+<link rel="stylesheet" type="text/css"
+      href="https://cdn.datatables.net/responsive/2.2.2/css/responsive.bootstrap.min.css"/>
+<script type="text/javascript"
+        src="https://cdn.datatables.net/responsive/2.2.2/js/dataTables.responsive.min.js"></script>
+<script type="text/javascript"
+        src="https://cdn.datatables.net/responsive/2.2.2/js/responsive.bootstrap.min.js"></script>
+<link rel="stylesheet" type="text/css"
+      href="https://cdn.datatables.net/1.10.18/css/dataTables.bootstrap.min.css"/>
+<link rel="stylesheet" type="text/css"
+      href="https://cdn.datatables.net/buttons/1.5.6/css/buttons.bootstrap.min.css"/>
+<link href="https://gitcdn.github.io/bootstrap-toggle/2.2.2/css/bootstrap-toggle.min.css" rel="stylesheet">
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jszip/2.5.0/jszip.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.36/pdfmake.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.36/vfs_fonts.js"></script>
+<script type="text/javascript" src="https://cdn.datatables.net/buttons/1.5.6/js/dataTables.buttons.min.js"></script>
+<script type="text/javascript" src="https://cdn.datatables.net/buttons/1.5.6/js/buttons.bootstrap.min.js"></script>
+<script type="text/javascript" src="https://cdn.datatables.net/buttons/1.5.6/js/buttons.flash.min.js"></script>
+<script type="text/javascript" src="https://cdn.datatables.net/buttons/1.5.6/js/buttons.html5.min.js"></script>
+<script type="text/javascript" src="https://cdn.datatables.net/buttons/1.5.6/js/buttons.colVis.min.js"></script>
+
+
+<script>
+
+    window.onload = function () {
+        {% if messages %}
+            {% for message in messages %}
+                Swal.fire('{{ message }}', '{{ nombreempresa }}', '{% if message.tags %}{{ message.tags }}{% endif %}');
+            {% endfor %}
+        {% endif %}
+    }
+
+    $(document).ready(function () {
+        $('.select2').select2({width: '100%'});
+    });
+
+    function pantallaespera() {
+        $.blockUI({
+            {#message: '<span class="spinner-grow spinner-border-lg" role="status" aria-hidden="true" style="width: 5rem; height: 5rem; background-color: #fc5c00; color: #fc5c00; !important"</span>',#}
+            message: `<div id="loader" class="m-loaders-spinner"><div class="spinner"><div class="right-side"><div class="bar"></div></div><div class="left-side"><div class="bar"></div></div></div></div>`,
+            css: {
+                backgroundColor: 'transparent',
+                border: '0',
+                zIndex: 9999999
+            },
+            overlayCSS: {
+                backgroundColor: '#21242d59',
+                opacity: 0.8,
+                zIndex: 9999990
+            }
+        });
+    }
+
+    function getPromise(url, params) {
+        return new Promise(resolve => {
+            //$.get(url, {data: JSON.stringify(params)}, function (data) {
+            $.get(url, params, function (data) {
+                resolve(data);
+            }, 'json');
+        });
+    }
+
+    function postPromise(url, params) {
+        return new Promise(resolve => {
+            $.post(url, params, function (data) {
+                resolve(data);
+            }, 'json');
+        });
+    }
+
+    function alertaSuccess(mensaje) {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            type: 'success',
+            title: mensaje,
+            showConfirmButton: false,
+            timer: 1000
+        })
+    }
+
+    function alertaWarning(mensaje) {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            type: 'warning',
+            title: mensaje,
+            showConfirmButton: false,
+            timer: 1000
+        })
+    }
+
+    function alertaDanger(mensaje) {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            type: 'error',
+            title: mensaje,
+            showConfirmButton: false,
+            timer: 1000
+        })
+    }
+
+    function mensajeSuccess(mensaje) {
+        Swal.fire('', mensaje, 'success')
+    }
+
+    function mensajeWarning(mensaje) {
+        Swal.fire('', mensaje, 'warning')
+    }
+
+    function mensajeDanger(mensaje) {
+        Swal.fire('', mensaje, 'error')
+    }
+
+    function back() {
+        history.back();
+    }
+
+    $.ajaxSetup({
+        beforeSend: function (xhr, settings) {
+            function getCookie(name) {
+                var cookieValue = null;
+                if (document.cookie && document.cookie != '') {
+                    var cookies = document.cookie.split(';');
+                    for (var i = 0; i < cookies.length; i++) {
+                        var cookie = jQuery.trim(cookies[i]);
+                        // Does this cookie string begin with the name we want?
+                        if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+
+            if (!(/^http:.*/.test(settings.url) || /^https:.*/.test(settings.url))) {
+                // Only send the token to relative URLs i.e. locally.
+                xhr.setRequestHeader("X-CSRFToken", getCookie('csrftoken'));
+            }
+        }
+    });
+
+    function toastMensaje(mensaje, timeout = 20000, icon = 'fa fa-question-circle', pauseOnHover = true, image = '', buttons = []) {
+        iziToast.show({
+            theme: 'dark',
+            icon: icon,
+            image: image,
+            title: '{{ nombreempresa }}',
+            displayMode: 2,
+            pauseOnHover: pauseOnHover,
+            message: mensaje,
+            buttons: buttons,
+            position: 'topCenter',
+            transitionIn: 'flipInX',
+            transitionOut: 'flipOutX',
+            progressBarColor: '#F4D03F',
+            layout: 2,
+            iconColor: '#F1C40F',
+            balloon: true,
+            timeout: timeout,
+        });
+    }
+
+    function contactarwhatsapp() {
+        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            let url = `https://api.whatsapp.com/send?phone=+593{{ telefonoempresa }}&text=Hola *{{ nombreempresa }}* necesito información`;
+            window.open(url);
+        } else {
+            let url = `https://web.whatsapp.com/send?l=en&phone=+593{{ telefonoempresa }}&text=Hola *{{ nombreempresa }}* necesito información`;
+            window.open(url);
+        }
+    }
+
+    $('.valnum').on('keypress', function (e) {
+        return soloNumeros(e)
+    })
+
+</script>
+{% include 'service_worker_unregister.html' %}
+{% block jscript %}
+{% endblock %}
+
+</body>
+
+</html>

@@ -1,0 +1,91 @@
+{% extends 'public/base_riz.html' %}
+{% load static %}
+{% block head %}
+    <link rel="shortcut icon" href="/static/assets_riz/images/favicon.ico">
+    <link href="/static/assets_riz/css/bootstrap.css" rel="stylesheet" type="text/css"/>
+    <link href="/static/assets_riz/css/icons.css" rel="stylesheet" type="text/css"/>
+    <link href="/static/assets_riz/css/app.css" rel="stylesheet" type="text/css"/>
+{% endblock %}
+
+{% block content %}
+<div class="container-xxl">
+    <div class="row vh-100 d-flex justify-content-center">
+        <div class="col-12 align-self-center">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-lg-4 mx-auto">
+                        <div class="card">
+                            <div class="card-body p-0 bg-black auth-header-box rounded-top">
+                                <div class="text-center p-3">
+                                    <a href="index.html" class="logo logo-admin">
+                                        <img src="/static/assets_riz/images/logo-sm.png" height="50" alt="logo" class="auth-logo">
+                                    </a>
+                                    <h4 class="mt-3 mb-1 fw-semibold text-white fs-18">Restablecer Contraseña</h4>
+                                    <p class="text-muted fw-medium mb-0">Sigue estos pasos para cambiar tu contraseña de manera segura.</p>
+                                </div>
+                            </div>
+                            <div class="card-body pt-3">
+                                <ul class="list-unstyled pb-2 text-muted text-justify">
+                                    <li><span class="text-primary fw-semibold me-2">1.</span>Ingresa tu correo electrónico abajo.</li>
+                                    <li><span class="text-primary fw-semibold me-2">2.</span>Recibirás un correo con un código temporal.</li>
+                                    <li><span class="text-primary fw-semibold me-2">3.</span>Usa el código para cambiar tu contraseña en nuestro sitio web.</li>
+                                </ul>
+                                <form class="my-4 mt-2" action="/restorepassword/" method="post" id="frm-restaurar">
+                                    {% csrf_token %}
+                                    <div class="form-group mb-2">
+                                        <label class="form-label" for="recoverEmail">Correo Electrónico</label>
+                                        <input type="email" class="form-control" id="recoverEmail" name="email"
+                                               placeholder="Ingresa tu correo electrónico" required>
+                                    </div>
+                                    <div class="form-group mb-0 row">
+                                        <div class="col-12">
+                                            <div class="d-grid mt-3">
+                                                <button class="btn btn-primary" type="submit">Recuperar Contraseña <i class="fas fa-sync ms-1"></i></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </form>
+                                <div class="text-center mb-2">
+                                    <p class="text-muted">¿Recuerdas tu contraseña? <a href="/login/" class="text-primary ms-2">Inicia sesión aquí</a></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block jscript %}
+<script src="/static/js/sysend.js"></script>
+<script src="/static/js/infoClient.js"></script>
+<script>
+    $('#frm-restaurar').on('submit', function (e) {
+        e.preventDefault();
+        var frmData = new FormData($(this)[0]);
+        $.ajax({
+            url: '{{ request.path }}',
+            data: frmData,
+            method: 'POST',
+            dataType: 'json',
+            cache: false,
+            contentType: false,
+            processData: false,
+            beforeSend: function () {
+                pantallaespera();
+            }
+        }).done(function (data) {
+            setTimeout($.unblockUI, 1);
+            if (data.resp === true) {
+                location = "/login/";
+            } else {
+                mensajeDanger(data.error);
+            }
+        }).fail(function () {
+            setTimeout($.unblockUI, 1);
+            mensajeDanger('Error de conexión.');
+        });
+    });
+</script>
+{% endblock %}

@@ -66,4 +66,5 @@ def recordarusername(request):
     elif request.method == 'GET':
         if request.user.username != "":
             return redirect('/')
-        return render(request, 'public/seguridad/recuperar_username.html', data)
+        # return render(request, 'public/seguridad/recuperar_username.html', data)
+        return render(request, 'public/seguridad/recover_username.html', data)
