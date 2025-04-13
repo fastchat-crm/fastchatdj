@@ -192,6 +192,7 @@ class FormParent:
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
         self.ver = kwargs.pop('ver', False)
+        self.instance = kwargs.pop('instance', None)
         customStep = kwargs.pop('customStep', None)
         cantCharsSelect2 = kwargs.pop('cantCharsSelect2', {})
         addDataNameInput = kwargs.pop('addDataNameInput', False)
@@ -204,7 +205,7 @@ class FormParent:
         no_select2 = kwargs.pop('no_select2', [])#listado d campos que no quieran q se renderice con la librería select2
         inlines = kwargs.pop('inlines', [])
         # Solo extrae el booleano de edición aquí, sin tocar `self.instance` aún
-        self.editando = bool('instance' in kwargs and kwargs.get("instance") and kwargs.get("instance").id)
+        self.editando = bool(self.instance)
 
         # Llama al constructor padre PRIMERO
         super(FormParent, self).__init__(*args, **kwargs)
@@ -320,7 +321,8 @@ class FormParent:
             elif not isinstance(field, forms.FileField):
                 self.fields[k].widget.attrs['class'] = "form-control"
             if isinstance(field.widget, forms.Textarea):
-                self.fields[k].widget.attrs['rows'] = "2"
+                if not 'rows' in self.fields[k].widget.attrs:
+                    self.fields[k].widget.attrs['rows'] = "2"
             if self.fields[k].required and self.fields[k].label:
                 self.fields[k].label = mark_safe(self.fields[k].label + '<span style="color:red;margin-left:2px;"><strong>*</strong></span>')
             if self.ver:

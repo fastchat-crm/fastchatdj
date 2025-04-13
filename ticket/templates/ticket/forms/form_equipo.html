@@ -1,0 +1,11 @@
+{% extends 'ajaxformmodal.html' %}
+{% block extra_js %}
+    <script>
+        $(function (){
+            let lider = $("#id_lider")
+            let integrantes = $("#id_integrantes")
+            buscarUsuario(lider,'administrativos')
+            buscarUsuario(integrantes,'administrativos')
+        })
+    </script>
+{% endblock %}

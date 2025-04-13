@@ -23,6 +23,7 @@ from seguridad.view_index import index
 from django.conf.urls.static import static
 from core.consultas import consultas
 from seguridad.view_notificaciones import notificacionesView
+from ticket.urls import ticket_urls
 from whatsapp.urls import whatsapp_urls
 
 confi = Configuracion.get_instancia()
@@ -58,6 +59,14 @@ urls_sistema = (
         "url": 'whatsapp/',
         "sub_urls": whatsapp_urls,
         "include": include('whatsapp.urls'),
+        "name": None,
+        "vista": None
+    },
+    {
+        "nombre": "Ticket",
+        "url": 'ticket/',
+        "sub_urls": ticket_urls,
+        "include": include('ticket.urls'),
         "name": None,
         "vista": None
     },

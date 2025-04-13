@@ -11,7 +11,8 @@ from area_geografica.models import *
 from django.http import JsonResponse, HttpResponse
 
 from core.funciones import convertir_fecha
-from core.funciones_api import traerApiPersona
+from core.funciones_api import traerApiPersona, filtro_persona_select
+
 
 def consultas(request):
     if request.method == 'GET':
@@ -83,6 +84,13 @@ def consultas(request):
                             } for x in qsubicacion[:50]]  # Limitamos los resultados a 50
                         }
                         return JsonResponse(data)
+                    except Exception as ex:
+                        pass
+
+                if action == 'buscarusuario':
+                    try:
+                        resp = filtro_persona_select(request)
+                        return HttpResponse(json.dumps({'status': True, 'results': resp}))
                     except Exception as ex:
                         pass
 

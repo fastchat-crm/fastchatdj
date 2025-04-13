@@ -1,0 +1,65 @@
+<div class="card">
+    <div class="card-header">
+        <div class="row align-items-center">
+            <div class="col">
+                <h4 class="card-title">Comentarios registrados</h4>
+            </div><!--end col-->
+        </div>  <!--end row-->
+    </div><!--end card-header-->
+    <div class="card-body px-0 pt-0">
+        <div class="activity p-3 pt-0 simplebar-scrollable-y" data-simplebar="init">
+            <div class="simplebar-wrapper" style="margin: 0px -24px -24px;">
+                <div class="simplebar-height-auto-observer-wrapper">
+                    <div class="simplebar-height-auto-observer"></div>
+                </div>
+                <div class="simplebar-mask">
+                    <div class="simplebar-offset" style="right: 0px; bottom: 0px;">
+                        <div class="simplebar-content-wrapper" tabindex="0" role="region"
+                             aria-label="scrollable content" style="height: 100%; overflow: hidden scroll;">
+                            <div class="simplebar-content" style="padding: 0px 24px 24px;">
+                                {% for comment in comentarios %}
+                                    <div class="activity-info">
+                                        <div class="icon-info-activity ">
+                                            <img id="presentaimg2" class="img-circle"
+                                                 src="{{ comment.usuario.get_foto_gris }}"
+                                                 style="border-radius: 50%;" width="25px"
+                                                 height="25px">
+                                        </div>
+                                        <div class="activity-info-text">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <h6 class="m-0 w-50">{{ comment.usuario.nombre_corto }}</h6>
+                                                <span class="text-muted d-block">{{ comment.fecha_registro|date:'d M Y H:m' }}</span>
+                                            </div>
+                                            <p class="text-muted mt-3 mb-2">
+                                                {{ comment.mensaje }}
+
+                                            </p>
+                                            {% if comment.archivo %}
+                                                    <div class="mt-0">
+                                                        {{ comment.component_archive|safe }}
+                                                    </div>
+                                                {% endif %}
+
+                                        </div>
+                                    </div>
+                                {% empty %}
+                                    <div class="text-center text-muted">
+                                        No existen comentarios disponibles.
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="simplebar-placeholder" style="width: 546px; height: 566px;"></div>
+            </div>
+            <div class="simplebar-track simplebar-horizontal" style="visibility: hidden;">
+                <div class="simplebar-scrollbar" style="width: 0px; display: none;"></div>
+            </div>
+            <div class="simplebar-track simplebar-vertical" style="visibility: visible;">
+                <div class="simplebar-scrollbar"
+                     style="height: 441px; transform: translate3d(0px, 0px, 0px); display: block;"></div>
+            </div>
+        </div><!--end activity-->
+    </div><!--end card-body-->
+</div>

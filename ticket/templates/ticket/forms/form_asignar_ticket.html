@@ -1,0 +1,4 @@
+{% extends 'ajaxformmodal.html' %}
+{% block block_form_seccion %}
+    {% include 'ticket/forms/detalle_ticket.html' with ticket=ticket %}
+{% endblock %}

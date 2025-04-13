@@ -84,7 +84,8 @@ INSTALLED_APPS = [
     'webpush',
     'for_django_projects.pwa',
     'corsheaders',
-    'channels'
+    'channels',
+    'ticket'
 ]
 
 MIDDLEWARE = [

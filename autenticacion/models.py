@@ -46,6 +46,9 @@ class Usuario(AbstractUser, ModeloBase):
     RUC = "R"
     PASAPORTE = "P"
 
+    def full_name(self):
+        return "{} {}".format(self.first_name, self.last_name).title()
+
     def nacimiento_str(self):
         return str(self.fecha_nacimiento)
 

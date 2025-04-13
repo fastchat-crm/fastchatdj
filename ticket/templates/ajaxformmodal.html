@@ -1,0 +1,153 @@
+{% load templatefunctions %}
+{% block replace_id %}
+    <input type="hidden" name="pk" id="id_objeto" value="{{ pk|encrypt }}"/>
+    <input type="hidden" name="args" id="id_args" value="{{ args }}"/>
+{% endblock %}
+<input type="hidden" id="id_action" name="action" value="{{ action }}"/>
+{% block header_info %}
+    {% if header_info %}
+        <div class="alert alert-primary d-flex align-items-center p-2" role="alert">
+            <svg class="bi flex-shrink-0 me-2" width="20" height="20" role="img" aria-label="Info:">
+                <use xlink:href="#info-fill"/>
+            </svg>
+            <div class="lh-15">
+                <p class="ps-2 fs-5">
+                    {{ header_info|safe }}
+                </p>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}
+<div id="contentForm" class="row {% block class_content %}{% endblock %}">
+    {% block block_form %}
+        {% if not seccionado %}
+            {% include 'ajaxformmodal_seccion.html' %}
+        {% else %}
+            <div class="{% block col_lg_left %}col-lg-6{% endblock %}">
+                <div class="row">
+                    {% include 'ajaxformmodal_seccion.html' %}
+                    {% block block_form_seccion_left %}{% endblock %}
+                </div>
+            </div>
+            <div class="{% block col_lg_rigth %}col-lg-6{% endblock %}">
+                {% block block_form_seccion %}{% endblock %}
+            </div>
+        {% endif %}
+    {% endblock %}
+    {% block extra_input %}{% endblock %}
+</div>
+{{ form.media }}
+{% block replace_button %}
+    <div class="row modal-footer px-0 border-0 pt-3">
+        <div class="d-flex justify-content-end">
+            <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
+                <i class="fa fa-window-close me-1"></i>Cancelar
+            </button>
+            <button type="submit" class="btn btn-success btn-sm">
+                <i class="fa fa-save me-1"></i>Guardar
+            </button>
+        </div>
+    </div>
+{% endblock %}
+{% block extra_input_b %}{% endblock %}
+
+<script>
+
+
+    $(function () {
+        $.fn.select2.defaults.set('language', 'es');
+        $("#contentForm .select2").select2({
+            width: '100%',
+            allowClear: true,
+            placeholder: 'Seleccione una opción...',
+            minimumResultsForSearch: 5,
+            dropdownParent: $('#contentForm')
+        })
+
+    })
+
+    function formatRepo(repo) {
+        if (repo.loading) {
+            return 'Buscando..'
+        }
+        var option = '';
+        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            option = $(`<b>${repo.text}</b>`);
+        } else {
+            option = $(`<div class="wrapper container"><div class="row"><div class="col-lg-2 text-center"><img src="${repo.foto}" width="50px" height="50px" class="w-25px rounded-circle me-2"></div><div class="col-lg-10 text-left"><b>Documento:</b> ${repo.documento}<br><b>Nombres:</b> ${repo.text} </div></div></div>`);
+        }
+        return option;
+    }
+
+    ItemsDisplayPersonas = function (item) {
+        if (item.text && item.documento) {
+            return $(`<img src="${item.foto}" width="25px" height="25px" class="w-25px rounded-circle me-2"><span>${item.text}</span>`);
+        } else if (item) {
+            return item.text;
+        } else {
+            return 'Buscar Usuarios';
+        }
+    };
+
+    function buscarUsuario(objeto, tipo, action = 'buscarusuario', args = '', modemovil = false) {
+        let url = '/consultas';
+        let name_action = 'action';
+        objeto.select2({
+            width: '100%',
+            placeholder: "Buscar Usuario",
+            dropdownParent: $('#contentForm'),
+            minimumInputLength: 1,
+            ajax: {
+                url: function (params) {
+                    return `${url}?${name_action}=${action}&q=${params.term}&tipo=${tipo}&idsagregados=${args}`;
+                },
+                dataType: 'json',
+                delay: 250,
+                data: function (params) {
+                    return {
+                        q: params.term,
+                        page: params.page
+                    };
+                },
+                processResults: function (data, params) {
+                    params.page = params.page || 1;
+                    return {
+                        results: data.results,
+                        pagination: {
+                            more: (params.page * 30) < data.total_count
+                        }
+                    };
+                },
+                cache: true
+            },
+            escapeMarkup: function (markup) {
+                return markup;
+            }, // let our custom formatter work
+            minimumInputLength: 1,
+            templateResult: function (repo) {
+                return formatRepo(repo, modemovil);
+            }, // omitted for brevity, see the source of this page
+            templateSelection: ItemsDisplayPersonas // omitted for brevity, see the source of this page
+        });
+    }
+
+</script>
+<style>
+    input[type="file"], input[type="image"], input[type="submit"], input[type="reset"], input[type="button"] {
+        width: 100%;
+    }
+
+    .input-group .doc_preview .svg-inline--fa {
+        vertical-align: -0.9em
+    }
+
+    .select2-container--open .select2-dropdown {
+        z-index: 1070;
+    }
+
+    .select2-selection {
+        pointer-events: auto!important;
+    }
+
+</style>
+{% block extra_js %}{% endblock %}
