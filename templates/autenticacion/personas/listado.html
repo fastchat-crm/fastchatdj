@@ -79,10 +79,10 @@
                 <table id="tabla" class="table table-hover table-striped">
                     <thead>
                     <tr>
-                        <th class="text-center">Foto</th>
-                        <th class="text-center">Username</th>
-                        <th class="text-center">Nombres</th>
+                        <th class="text-center">Cod</th>
+                        <th class="text-center">Persona</th>
                         <th class="text-center">Datos de Contacto</th>
+                        <th class="text-center">Grupos</th>
                         <th class="text-center">Perfiles</th>
                         <th class="text-center">Fecha Registro</th>
                         <th class="text-center">Acción</th>
@@ -91,27 +91,57 @@
                     <tbody>
                     {% for l in listado %}
                         <tr>
-                            <td class="text-center">
-                                {% if l.foto == '' %}
-                                    <img src="{{ l.get_foto }}" width="50px" class="img-thumbnail rounded-circle">
-                                {% else %}
-                                    <a href="{{ l.foto.url }}" data-fancybox="image"
-                                       title="{{ l.username }}">
-                                        <img id="presentaimg2" src="{{ l.foto.url }}"
-                                             class="img-thumbnail rounded-circle"
-                                             width="50px" alt="Foto de perfil">
-                                    </a>
-                                {% endif %}
+                            <td class="text-left">
+                                <b>Cod. User</b> {{ l.id }}<br>
                             </td>
-                            <td class="text-center">
-                                {{ l.username }}
-                            </td>
-                            <td>
-                                <div class="d-flex flex-column">
-                                    <span><i class="fa fa-user text-primary me-1"></i> {{ l }}</span>
-                                    <span class="mt-1"><i class="fa fa-address-card text-secondary me-1"></i>
-                                        <b>{{ l.get_tipo_documento_display }}</b> {{ l.documento }}
-                                    </span>
+                            <td class="text-left">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    {% with person=l %}
+                                        <div class="d-flex align-items-center">
+                                            <a href="{{ person.get_foto_gris }}"
+                                               data-fancybox="image"
+                                               data-width="2048"
+                                               data-height="1365"
+                                               title="{{ person.user.username }}">
+                                                <img id="presentaimg2" class="img-circle"
+                                                     src="{{ person.get_foto_gris }}"
+                                                     style="border-radius: 2.375rem;" width="55px"
+                                                     height="55px">
+                                            </a>
+                                            <div class="info-top ml-4">
+                                                <span><i class="fa fa-tag"></i> {{ person.username }}</span><br>
+                                                <span>{{ person.documento }}</span><br>
+                                                <span><b>{{ person.datos }}</b></span><br>
+                                                {% if person.email %}
+                                                    <a href="mailto:{{ person.email }}"><i
+                                                            class="fa fa-envelope"></i> {{ person.email }}
+                                                    </a><br>
+                                                {% endif %}
+                                                {% if person.emailinst %}
+                                                    <a href="mailto:{{ person.emailinst }}"><i
+                                                            class="fa fa-envelope"></i> {{ person.emailinst }}
+                                                    </a><br>
+                                                {% endif %}
+                                                {% if person.celular %}
+                                                    <a href="javascript:void(0)"
+                                                       onclick="contactWS('{{ person.celular }}', '{{ person.datos }}')">
+                                                        <i class="fa-brands fa-whatsapp"></i>
+                                                        +593 {{ person.celular }}
+                                                    </a><br>
+                                                {% endif %}
+                                                {% if person.celularinst %}
+                                                    <a href="javascript:void(0)"
+                                                       onclick="contactWS('{{ person.celularinst }}', '{{ person.datos }}')">
+                                                        <i class="fa-brands fa-whatsapp"></i>
+                                                        +593 {{ person.celularinst }}
+                                                    </a><br>
+                                                {% endif %}
+                                                {% if not l.es_persona %}
+                                                    <span class="text-danger"><i class="fa fa-info-circle"></i> Perfil Desactivado</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    {% endwith %}
                                 </div>
                             </td>
                             <td>
@@ -129,9 +159,8 @@
                                 </div>
                                 <div class="mb-0">
                                     <i class="fa fa-envelope text-primary me-1"></i>
-                                    <a href="mailto:{{ l.email|default:'' }}" class="text-primary">
-                                        {{ l.email|default:'' }}
-                                    </a>
+                                    <a href="mailto:{{ l.email|default:'' }}"
+                                       class="text-primary">{{ l.email|default:'' }}</a>
                                 </div>
                                 {% if l.ciudad %}
                                     <div>
@@ -139,18 +168,9 @@
                                         <small>{{ l.ciudad.nombre }}, {{ l.ciudad.provincia.nombre }}, {{ l.ciudad.provincia.pais.nombre }}</small>
                                     </div>
                                 {% endif %}
-                                {% if l.lugartrabajo %}
-                                    <div>
-                                        <i class="fa fa-building text-secondary me-1"></i>
-                                        <small><b>Lugar de Trabajo:</b> {{ l.lugartrabajo }}</small>
-                                    </div>
-                                {% endif %}
-                                {% if l.posicionlaboral %}
-                                    <div>
-                                        <i class="fa fa-briefcase text-secondary me-1"></i>
-                                        <small><b>Posición Laboral:</b> {{ l.posicionlaboral }}</small>
-                                    </div>
-                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {{ l.groups_str }}
                             </td>
                             <td>
                                 <div class="mb-0">
@@ -271,7 +291,7 @@
                         </div>
                         <div class="alert alert-info mt-3">
                             <i class="fa fa-info-circle me-1"></i> Recuerde que la contraseña registrada servirá como clave
-                            actual para la plataforma y el aula virtual.
+                            actual para la plataforma.
                         </div>
                     </div>
                     <div class="modal-footer">

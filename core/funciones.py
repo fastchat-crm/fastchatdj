@@ -416,7 +416,7 @@ def secure_module(f):
                                                                                                 flat=True))
                 ms = Modulo.objects.filter(status=True, id__in=modulos_id).annotate(
                     url_2=Value(request.path, output_field=models.CharField()))
-                if request.user.es_administrativo() or ms.filter(url_2__istartswith=F('url')).exists():
+                if ms.filter(url_2__istartswith=F('url')).exists():
                     return f(*args, **kwargs)
                 else:
                     messages.error(request, "No tienes acceso.")

@@ -109,11 +109,11 @@ class PersonaForm(ModelFormBase):
     class Meta:
         model = Usuario
         fields = ('last_name', 'first_name',  'tipo_documento', 'documento',
-                  'email', 'telefono', 'sexo', 'fecha_nacimiento', 'pais', 'provincia', 'ciudad')
+                  'groups', 'email', 'telefono', 'sexo', 'fecha_nacimiento', 'pais', 'provincia', 'ciudad')
         # widgets = {
             # "password": forms.PasswordInput(),
         # }
-        # labels = {"groups": "Roles asignados para este usuario"}
+        labels = {"groups": "Roles asignados para este usuario"}
 
     def __init__(self, *args, **kwargs):
         kwargs['requeridos'] = ('first_name', 'last_name', 'tipo_documento', 'email', 'documento',)
