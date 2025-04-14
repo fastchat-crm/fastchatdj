@@ -88,13 +88,14 @@ class ModuloGrupoForm(ModelFormBase):
 class GroupModuloForm(ModelFormBase):
     class Meta:
         model = GroupModulo
-        exclude = ( 'usuario_modificacion', 'fecha_modificacion', 'usuario_creacion', 'fecha_registro', 'status')
+        exclude = ('usuario_modificacion', 'fecha_modificacion', 'usuario_creacion', 'fecha_registro', 'status')
 
     def __init__(self, *args, **kwargs):
-        kwargs["no_requeridos"] = ["modulos"]
+        kwargs["no_requeridos"] = ["modulos", "group"]
         super(GroupModuloForm, self).__init__(*args, **kwargs)
         self.fields['modulos'].queryset = self.fields['modulos'].queryset.order_by('orden')
         self.fields["group"].widget = forms.HiddenInput()
+        self.fields["group"].required = False  # ✅ también puedes ponerlo explícito por si acaso
 
 
 class EmpresaForm(ModelFormBase):

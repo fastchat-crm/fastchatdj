@@ -36,53 +36,32 @@ def grupoUrlsView(request, pk, slug_name):
         try:
             with transaction.atomic():
                 if action == 'add':
-
-                        pass
-
+                    pass
                 elif action == 'change':
+                    instancia = model.objects.get(pk=int(request.POST['pk']))
+                    form = Formulario(request.POST, instance=instancia, request=request)
 
-                        instancia = model.objects.get(pk=int(request.POST['pk']))
-                        form = Formulario(request.POST, instance=instancia,request=request)
-                        if form.is_valid() and instancia:
-                            try:
-                                with transaction.atomic():
-                                    g = form.save()
-                                    g.group_id = group.group.pk
-                                    g.save()
-                                    log(f"Mofidico grupo url {form.instance.__str__()}", request, "change", obj=form.instance.id)
+                    if instancia:
+                        try:
+                            with transaction.atomic():
+                                if form.is_valid():
+                                    # No guardar directamente, solo actualizar los modulos
+                                    modulos = form.cleaned_data['modulos']
+                                    instancia.modulos.set(modulos)
+                                    instancia.save()
 
-                                    res_json.append({'error': False,
-                                                     "to": "/seguridad/grupo/"
-                                                     })
-                            except ValueError as e:
-                                transaction.rollback()
-                                res_json.append({'error': True,
-                                                 "message": str(e)
-                                                 })
-                            except Exception as ex:
-                                transaction.rollback()
-                        else:
-                            raise FormError(form)
+                                    log(f"Modificó módulos del grupo {instancia}", request, "change", obj=instancia.id)
 
-                elif action == 'delete':
+                                    res_json.append({'error': False, "to": "/seguridad/grupo/"})
+                                else:
+                                    raise FormError(form)
+                        except Exception as e:
+                            transaction.rollback()
+                            res_json.append({'error': True, "message": str(e)})
+                    else:
+                        raise FormError(form)
 
-                        pass
-                        # qs_anterior = model.objects.filter(pk=int(request.POST['id']))
-                        # instancia = qs_anterior.first()
-                        # qs_anterior = list(merge_values(qs_anterior.values('id', 'group__name', 'modulos__nombre', 'modulos__url')))
-                        # try:
-                        #     with transaction.atomic():
-                        #         instancia.status = False
-                        #         instancia.save()
-                        #         salva_auditoria(request, instancia, action,
-                        #                         instancia.nombre,
-                        #                         qs_anterior=qs_anterior)
-                        # except ValueError as e:
-                        #     messages.error(request, str(e))
-                        # except Exception as ex:
-                        #     pass
 
-                        return redirect(request.path)
         except ValueError as ex:
             transaction.rollback()
             res_json.append({'error': True,
@@ -110,24 +89,24 @@ def grupoUrlsView(request, pk, slug_name):
                     # return render(request, 'seguridad/grupourls/form.html', data)
 
             elif action == 'change':
-
-                    modulo = model.objects.get(pk=pk)
-                    data["pk"] = pk
-                    data["form"] = form = Formulario(instance=modulo)
-                    qs_modulos = form.fields["modulos"].queryset
-                    data["modulos_agrupados"] = ModuloGrupo.objects.filter(status=True)
-                    data["modulos_seleccionados"] = modulos_seleccionados = list(modulo.modulos.all().values_list('id', flat=True))
-                    return render(request, 'seguridad/grupourls/form.html', data)
+                modulo = model.objects.get(pk=pk)
+                data["pk"] = pk
+                form = Formulario(instance=modulo)
+                # form.fields['group'].initial = modulo.group
+                data["form"] = form
+                qs_modulos = form.fields["modulos"].queryset
+                data["modulos_agrupados"] = ModuloGrupo.objects.filter(status=True)
+                data["modulos_seleccionados"] = modulos_seleccionados = list(modulo.modulos.all().values_list('id', flat=True))
+                return render(request, 'seguridad/grupourls/form.html', data)
 
 
             elif action == 'ver':
-
-                    modulo = model.objects.get(pk=pk)
-                    data["pk"] = pk
-                    data["form"] = form = Formulario(instance=modulo, ver=True)
-                    qs_modulos = form.fields["modulos"].queryset
-                    data["modulos_seleccionados"] = modulos_seleccionados = modulo.modulos.all()
-                    return render(request, 'seguridad/grupourls/form.html', data)
+                modulo = model.objects.get(pk=pk)
+                data["pk"] = pk
+                data["form"] = form = Formulario(instance=modulo, ver=True)
+                qs_modulos = form.fields["modulos"].queryset
+                data["modulos_seleccionados"] = modulos_seleccionados = modulo.modulos.all()
+                return render(request, 'seguridad/grupourls/form.html', data)
 
             elif action == 'ver_modulos':
                 modulo = model.objects.get(pk=pk)
