@@ -15,7 +15,8 @@ from django.contrib import messages
 
 from seguridad.templatetags.templatefunctions import encrypt
 from ..forms import TicketForm, AsignarTicketForm, CambiarEstadoTicketForm
-from ..models import Ticket, Proceso
+from ..funciones import es_lider_equipo, load_teams, load_ids_empresas, load_integrantes
+from ..models import TicketAtencion, ProcesoAtencion
 
 
 @login_required
@@ -29,7 +30,7 @@ def ticketAdminView(request):
         'fecha': str(date.today()),
     }
     addData(request, data)
-    model = Ticket
+    model = TicketAtencion
     Formulario = TicketForm
 
     if request.method == 'POST':
@@ -50,7 +51,7 @@ def ticketAdminView(request):
 
                 elif action == 'editticket':
                     pk=int(encrypt(request.POST['pk']))
-                    equipo = Ticket.objects.get(id=pk)
+                    equipo = TicketAtencion.objects.get(id=pk)
                     form = Formulario(request.POST, request.FILES,data, instance=equipo)
                     if not form.is_valid():
                         raise FormError(form)
@@ -63,7 +64,7 @@ def ticketAdminView(request):
 
                 elif action == 'asignarticket':
                     pk=int(encrypt(request.POST['pk']))
-                    ticket = Ticket.objects.get(id=pk)
+                    ticket = TicketAtencion.objects.get(id=pk)
                     form = AsignarTicketForm(request.POST, request.FILES,instance=ticket)
                     if not form.is_valid():
                         raise FormError(form)
@@ -76,7 +77,7 @@ def ticketAdminView(request):
 
                 elif action == 'cambiarestado':
                     pk=int(encrypt(request.POST['pk']))
-                    ticket = Ticket.objects.get(id=pk)
+                    ticket = TicketAtencion.objects.get(id=pk)
                     form = CambiarEstadoTicketForm(request.POST, request.FILES, instance=ticket)
                     if not form.is_valid():
                         raise FormError(form)
@@ -89,7 +90,7 @@ def ticketAdminView(request):
 
                 elif action == 'delticket':
                     pk=int(request.POST['id'])
-                    equipo = Ticket.objects.get(id=pk)
+                    equipo = TicketAtencion.objects.get(id=pk)
                     equipo.status=False
                     equipo.save(request)
                     log('Ticket eliminado correctamente', request,  equipo)
@@ -123,7 +124,7 @@ def ticketAdminView(request):
             elif action == 'editticket':
                 try:
                     data['pk'] = pk = int(request.GET['pk'])
-                    ticket = Ticket.objects.get(id=pk)
+                    ticket = TicketAtencion.objects.get(id=pk)
                     form = Formulario(initial=model_to_dict(ticket))
                     data['form'] = form
                     titulo = f'Editar {ticket.titulo}'
@@ -135,12 +136,12 @@ def ticketAdminView(request):
             elif action == 'asignarticket':
                 try:
                     data['pk'] = pk = int(request.GET['pk'])
-                    data['ticket'] = ticket = Ticket.objects.get(id=pk)
+                    data['ticket'] = ticket = TicketAtencion.objects.get(id=pk)
                     form = AsignarTicketForm(initial=model_to_dict(ticket))
                     usuarios_id = ticket.proceso.ids_integrantes()
                     comentario = ticket.get_comentario_asignacion()
                     form.fields['mensaje'].initial = comentario.mensaje if comentario else 'Se asigna el ticket para su atención'
-                    form.fields['proceso'].queryset = Proceso.objects.filter(empresa=ticket.empresa, status=True)
+                    form.fields['proceso'].queryset = ProcesoAtencion.objects.filter(empresa=ticket.empresa, status=True)
                     form.fields['asignadoa'].queryset = Usuario.objects.filter(id__in=usuarios_id)
                     data['form'] = form
                     data['seccionado'] = True
@@ -154,7 +155,7 @@ def ticketAdminView(request):
             elif action == 'detalleticket':
                 try:
                     data['pk'] = pk = int(request.GET['pk'])
-                    data['ticket'] = ticket = Ticket.objects.get(id=pk)
+                    data['ticket'] = ticket = TicketAtencion.objects.get(id=pk)
                     titulo = f'Ticket | {ticket.codigo}'
                     template = get_template('ticket/forms/detalle_ticket.html')
                     return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
@@ -164,7 +165,7 @@ def ticketAdminView(request):
             elif action == 'cambiarestado':
                 try:
                     data['pk'] = pk = int(request.GET['pk'])
-                    data['ticket'] = ticket = Ticket.objects.get(id=pk)
+                    data['ticket'] = ticket = TicketAtencion.objects.get(id=pk)
                     titulo = f'Ticket | {ticket.codigo}'
                     form = CambiarEstadoTicketForm(initial=model_to_dict(ticket))
                     data['form'] = form
@@ -176,7 +177,7 @@ def ticketAdminView(request):
             elif action == 'comentarios':
                 try:
                     data['pk'] = pk = int(request.GET['pk'])
-                    data['ticket'] = ticket = Ticket.objects.get(id=pk)
+                    data['ticket'] = ticket = TicketAtencion.objects.get(id=pk)
                     data['comentarios'] = ticket.comentarios().order_by('-fecha_registro')
                     titulo = f'Comentarios de ticket | {ticket.codigo}'
                     template = get_template('ticket/forms/comments.html')
@@ -185,7 +186,25 @@ def ticketAdminView(request):
                     messages.error(request, f'Error: {ex}')
 
         criterio, filtros, url_vars, documento = request.GET.get('criterio', ''), Q(status=True), '', request.GET.get('documento', '')
+        estado = request.GET.get('estado', '')
+        data['es_lider']= es_lider = es_lider_equipo(request.user)
+        if es_lider:
+            # equipos = load_teams(request.user).values_list('id', flat=True)
+            empresas_id = load_ids_empresas(request.user)
+            filtros &= Q(empresa_id__in=empresas_id)
+            data['integrantes'] = load_integrantes(request.user)
+            integrante = request.GET.get('integrante', '')
+            if integrante:
+                data['integrante'] = int(integrante)
+                url_vars += f'&integrante={integrante}'
+                filtros &= Q(asignadoa=integrante)
+        else:
+            filtros &= Q(asignadoa=request.user)
 
+        if estado:
+            data['estado'] = int(estado)
+            url_vars += f'&estado={estado}'
+            filtros &= Q(estado=estado)
         if documento:
             data['documento'] = documento
             url_vars += f'&documento={documento}'
@@ -225,5 +244,6 @@ def ticketAdminView(request):
         listado = model.objects.filter(filtros).order_by('-codigo').distinct()
         data["url_vars"] = url_vars
         data["list_count"] = listado.count()
+        data['estados'] = model.ESTADO_TICKET
         paginador(request, listado, 20, data, url_vars)
         return render(request, 'ticket/view_admin_tickets.html', data)

@@ -15,7 +15,8 @@
                                 <i class="fa fa-search text-muted"></i>
                             </span>
                             <input type="text" class="form-control border-start-0"
-                                   placeholder="Buscar por nombres, apellidos o nombre de equipo" name="criterio" value="{{ criterio }}">
+                                   placeholder="Buscar por numero de ticket, titulo o usuario que solicita." name="criterio"
+                                   value="{{ criterio }}">
                         </div>
                     </div>
                     <div class="col-md-4">
@@ -29,7 +30,48 @@
                                    value="{{ documento|default:'' }}">
                         </div>
                     </div>
-
+                    {% if es_lider %}
+                        <div class="col-md-4">
+                            <label class="form-label">Responsables</label>
+                            <div class="input-group">
+                            <span class="input-group-text border-end-0">
+                                <i class="fa fa-users text-muted"></i>
+                            </span>
+                                <div class="input-group-append" style="width: 80%;">
+                                    <select name="integrante" id="id_integrante"
+                                            class="form-control border-start-0 select2 ">
+                                        <option value="">Todos</option>
+                                        {% for i in integrantes %}
+                                            <option value="{{ i.pk }}"
+                                                    {% if i.pk == integrante %} selected {% endif %}>
+                                                {{ i.full_name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                    <div class="col-md-4">
+                        <label class="form-label">Estado</label>
+                        <div class="input-group">
+                            <span class="input-group-text border-end-0">
+                                <i class="fa fa-circle text-muted"></i>
+                            </span>
+                            <div class="input-group-append" style="width: 80%;">
+                                <select name="estado" id="id_estado"
+                                        class="form-control border-start-0 select2 ">
+                                    <option value="">Todos</option>
+                                    {% for e in estados %}
+                                        <option value="{{ e.0}}"
+                                                {% if e.0 == estado %} selected {% endif %}>
+                                            {{ e.1 }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
                     <div class="col-md-4">
                         <label class="form-label">Acciones</label>
                         <div class="d-flex gap-2">
@@ -48,15 +90,15 @@
         </div>
     </div>
 
-    <div class="row align-items-center mb-3">
-        <div class="col-md-12 mb-2 mb-md-0">
-            <a href="javascript:void(0)"
-               onclick="verModalPostAjax('addticket', '', 'fas fa-users-plus')"
-               class="btn btn-success">
-                <i class="fas fa-plus-circle me-2"></i> Nuevo Registro
-            </a>
-        </div>
-    </div>
+    {#    <div class="row align-items-center mb-3">#}
+    {#        <div class="col-md-12 mb-2 mb-md-0">#}
+    {#            <a href="javascript:void(0)"#}
+    {#               onclick="verModalPostAjax('addticket', '', 'fas fa-users-plus')"#}
+    {#               class="btn btn-success">#}
+    {#                <i class="fas fa-plus-circle me-2"></i> Nuevo Registro#}
+    {#            </a>#}
+    {#        </div>#}
+    {#    </div>#}
 
     <div class="card">
         <div class="card-body">
@@ -87,11 +129,14 @@
                                 <h6 class="mb-0 fw-semibold">{{ l.titulo }}
                                     <a href="javascript:void(0);"
                                        onclick="verModalPostAjax('detalleticket', '{{ l.pk }}', 'fas fa-info-circle')">
-                                                <i class="fas fa-info-circle text-primary" title="Detalle del ticket" data-bs-toggle="tooltip"></i>
+                                        <i class="fas fa-info-circle text-primary" title="Detalle del ticket"
+                                           data-bs-toggle="tooltip"></i>
                                     </a>
                                 </h6>
-{#                                <p class="mb-0" data-bs-toggle="tooltip" title="{{ l.descripcion }}">{{ l.descripcion|truncatechars:"60" }}</p>#}
-                                <p class="mb-0 fs-6"><b>Prioridad: </b>  <span class="badge {{ l.get_color_prioridad }}">{{ l.get_prioridad_display }}</span></p>
+                                {#                                <p class="mb-0" data-bs-toggle="tooltip" title="{{ l.descripcion }}">{{ l.descripcion|truncatechars:"60" }}</p>#}
+                                <p class="mb-0 fs-6"><b>Prioridad: </b> <span
+                                        class="badge {{ l.get_color_prioridad }}">{{ l.get_prioridad_display }}</span>
+                                </p>
                                 <p class="mb-0 fs-6"><b>Fecha:</b> {{ l.fecha_registro|date:'d/M/Y H:i'|safe }}</p>
                             </td>
                             <td class="text-center align-middle">
@@ -121,13 +166,13 @@
                                                     </a><br>
                                                 {% endif %}
                                                 {% if person.telefono_formateado %}
-                                                     <div class="mb-0">
-                                                    <i class="fa fa-phone text-success me-1"></i>
-                                                    <a href="javascript:void(0)" class="text-primary"
-                                                       onclick="contactarwhatsapp('{{ person.telefono_formateado }}', '{{ person.get_full_name }}')">
-                                                        {{ person.telefono_formateado }}
-                                                    </a>
-                                                </div>
+                                                    <div class="mb-0">
+                                                        <i class="fa fa-phone text-success me-1"></i>
+                                                        <a href="javascript:void(0)" class="text-primary"
+                                                           onclick="contactarwhatsapp('{{ person.telefono_formateado }}', '{{ person.get_full_name }}')">
+                                                            {{ person.telefono_formateado }}
+                                                        </a>
+                                                    </div>
                                                 {% endif %}
 
                                             </div>
@@ -142,44 +187,44 @@
                             </td>
                             <td class="align-middle">
                                 <div class="mb-0"><b>Asignado a:</b>
-                                {% if l.asignadoa %}
-                                    <div class="d-flex align-items-center mt-1">
-                                        <a href="{{ l.asignadoa.get_foto_gris }}"
-                                           data-fancybox="image"
-                                           data-width="2048"
-                                           data-height="1365"
-                                           title="{self.asignadoa.username}">
-                                            <img id="presentaimg2" class="img-circle"
-                                                 src="{{ l.asignadoa.get_foto_gris }}"
-                                                 style="border-radius: 50%;" width="25px"
-                                                 height="25px">
-                                        </a>
-                                        <div class="info-top ml-2">
-                                            {{ l.asignadoa.full_name }}
+                                    {% if l.asignadoa %}
+                                        <div class="d-flex align-items-center mt-1">
+                                            <a href="{{ l.asignadoa.get_foto_gris }}"
+                                               data-fancybox="image"
+                                               data-width="2048"
+                                               data-height="1365"
+                                               title="{self.asignadoa.username}">
+                                                <img id="presentaimg2" class="img-circle"
+                                                     src="{{ l.asignadoa.get_foto_gris }}"
+                                                     style="border-radius: 50%;" width="25px"
+                                                     height="25px">
+                                            </a>
+                                            <div class="info-top ml-2">
+                                                {{ l.asignadoa.full_name }}
+                                            </div>
                                         </div>
-                                    </div>
-                                {% else %}
-                                    <span class="badge bg-secondary">Sin asignar</span>
-                                {% endif %}
+                                    {% else %}
+                                        <span class="badge bg-secondary">Sin asignar</span>
+                                    {% endif %}
                                 </div>
                                 <div class="mb-0 mt-1">
                                     <b>Asignado por:</b>
                                     {% if l.asignadopor %}
-                                    <div class="d-flex align-items-center mt-1">
-                                        <a href="{{ l.asignadopor.get_foto_gris }}"
-                                           data-fancybox="image"
-                                           data-width="2048"
-                                           data-height="1365"
-                                           title="{self.asignadoa.username}">
-                                            <img id="presentaimg2" class="img-circle"
-                                                 src="{{ l.asignadopor.get_foto_gris }}"
-                                                 style="border-radius: 50%;" width="25px"
-                                                 height="25px">
-                                        </a>
-                                        <div class="info-top ml-2">
-                                            {{ l.asignadopor.full_name }}
+                                        <div class="d-flex align-items-center mt-1">
+                                            <a href="{{ l.asignadopor.get_foto_gris }}"
+                                               data-fancybox="image"
+                                               data-width="2048"
+                                               data-height="1365"
+                                               title="{self.asignadoa.username}">
+                                                <img id="presentaimg2" class="img-circle"
+                                                     src="{{ l.asignadopor.get_foto_gris }}"
+                                                     style="border-radius: 50%;" width="25px"
+                                                     height="25px">
+                                            </a>
+                                            <div class="info-top ml-2">
+                                                {{ l.asignadopor.full_name }}
+                                            </div>
                                         </div>
-                                    </div>
                                     {% else %}
                                         <span class="badge bg-secondary">Sin asignador</span>
                                     {% endif %}
@@ -195,18 +240,20 @@
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end"
                                         aria-labelledby="dropdownMenuButton-{{ l.pk }}">
-                                          <li>
+                                        <li>
                                             <a class="dropdown-item" href="javascript:void(0);"
                                                onclick="verModalPostAjax('cambiarestado', '{{ l.pk }}', 'fas fa-refresh')">
                                                 <i class="fas fa-refresh me-2 text-success"></i> Cambiar estado
                                             </a>
                                         </li>
-                                        <li>
-                                            <a class="dropdown-item" href="javascript:void(0);"
-                                               onclick="verModalPostAjax('asignarticket', '{{ l.pk }}', 'fas fa-users', 'modal-lg')">
-                                                <i class="fas fa-ticket me-2 text-success"></i> Asignar ticket
-                                            </a>
-                                        </li>
+                                        {% if es_lider %}
+                                            <li>
+                                                <a class="dropdown-item" href="javascript:void(0);"
+                                                   onclick="verModalPostAjax('asignarticket', '{{ l.pk }}', 'fas fa-users', 'modal-lg')">
+                                                    <i class="fas fa-ticket me-2 text-success"></i> Asignar ticket
+                                                </a>
+                                            </li>
+                                        {% endif %}
                                         <li>
                                             <a class="dropdown-item" href="javascript:void(0);"
                                                onclick="verModalPostAjax('detalleticket', '{{ l.pk }}', 'fas fa-info-circle')">

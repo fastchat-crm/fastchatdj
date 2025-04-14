@@ -5,7 +5,7 @@ from autenticacion.models import Usuario
 from core.custom_models import FormBase
 from seguridad.models import Empresa
 from .funciones import generate_code_ticket, get_user_attend
-from .models import Equipo, Proceso, Ticket, ComentarioTicket
+from .models import EquipoAtencion, ProcesoAtencion, TicketAtencion, ComentarioTicketAtencion
 from core.custom_forms import FormModeloBase
 
 class EquipoForm(FormBase):
@@ -19,7 +19,7 @@ class EquipoForm(FormBase):
     def save(self, commit=True):
         cleaned_data = self.cleaned_data
         # Si existe una instancia, actualiza sus valores; de lo contrario, crea una nueva
-        equipo = self.instance if self.instance else Equipo()
+        equipo = self.instance if self.instance else EquipoAtencion()
         equipo.nombre =  cleaned_data.get('nombre', '')
         equipo.descripcion = cleaned_data.get('descripcion', '')
         equipo.lider = cleaned_data.get('lider', None)
@@ -38,12 +38,12 @@ class EquipoForm(FormBase):
 class ProcesoForm(FormBase):
     empresa = forms.ModelChoiceField(label='Empresa', queryset=Empresa.objects.filter(status=True))
     descripcion = forms.CharField(label=u"Descripción", max_length=200, widget=forms.Textarea(attrs={'placeholder': 'Describa el proceso', 'col': '12', 'rows': '4'}), required=True)
-    equipos = forms.ModelMultipleChoiceField(label='Equipos', queryset=Equipo.objects.filter(status=True))
+    equipos = forms.ModelMultipleChoiceField(label='Equipos', queryset=EquipoAtencion.objects.filter(status=True))
     automatico = forms.BooleanField(label='Distribución automática?', required=False, widget=forms.CheckboxInput(attrs={'col': '6'}))
     def save(self, commit=True):
         cleaned_data = self.cleaned_data
         # Si existe una instancia, actualiza sus valores; de lo contrario, crea una nueva
-        proceso = self.instance if self.instance else Proceso()
+        proceso = self.instance if self.instance else ProcesoAtencion()
         proceso.empresa = cleaned_data.get('empresa', None)
         proceso.descripcion = cleaned_data.get('descripcion', '')
         proceso.automatico = cleaned_data.get('automatico', False)
@@ -60,8 +60,8 @@ class TicketForm(FormBase):
     empresa = forms.ModelChoiceField(label='Empresa', queryset=Empresa.objects.filter(status=True))
     titulo = forms.CharField(label=u"Título", max_length=50, widget=forms.TextInput(attrs={'placeholder': 'Describa el título del ticket', 'col': '12'}), required=True)
     descripcion = forms.CharField(label=u"Descripción", max_length=5000, widget=forms.Textarea(attrs={'placeholder': 'Describa el proceso', 'col': '12', 'rows': '6'}), required=True)
-    prioridad = forms.ChoiceField(label='Prioridad', choices=Ticket.PRIORIDAD, initial=1)
-    tipo = forms.ChoiceField(label='Tipo', choices=Ticket.TIPO_TICKET, initial=1)
+    prioridad = forms.ChoiceField(label='Prioridad', choices=TicketAtencion.PRIORIDAD, initial=1)
+    tipo = forms.ChoiceField(label='Tipo', choices=TicketAtencion.TIPO_TICKET, initial=1)
     archivo = forms.FileField(label='Archivo', required=False)
 
 
@@ -79,7 +79,7 @@ class TicketForm(FormBase):
         # Si existe una instancia, actualiza sus valores; de lo contrario, crea una nueva
         empresa = cleaned_data.get('empresa', None)
         archivo = cleaned_data.get('archivo', None)
-        ticket = self.instance if self.instance else Ticket()
+        ticket = self.instance if self.instance else TicketAtencion()
         if not self.instance:
             codigo, numero = generate_code_ticket(empresa)
             ticket.codigo = codigo
@@ -109,7 +109,7 @@ class TicketForm(FormBase):
 
 class AsignarTicketForm(FormBase):
     asignadoa = forms.ModelChoiceField(label='Asignado a', queryset=Usuario.objects.filter(status=True))
-    proceso = forms.ModelChoiceField(label='Proceso', queryset=Proceso.objects.filter(status=True))
+    proceso = forms.ModelChoiceField(label='Proceso', queryset=ProcesoAtencion.objects.filter(status=True))
     mensaje = forms.CharField(label=u"Mensaje", max_length=1000, widget=forms.Textarea(attrs={'placeholder': 'Describa el proceso', 'col': '12', 'rows': '6'}), required=True)
     archivo = forms.FileField(label='Archivo', required=False)
 
@@ -126,12 +126,12 @@ class AsignarTicketForm(FormBase):
         cleaned_data = self.cleaned_data
         archivo = cleaned_data.get('archivo', None)
         # Si existe una instancia, actualiza sus valores; de lo contrario, crea una nueva
-        ticket = self.instance if self.instance else Ticket()
+        ticket = self.instance if self.instance else TicketAtencion()
         ticket.asignadoa = cleaned_data.get('asignadoa', None)
         ticket.asignadopor = request.user
         ticket.proceso = cleaned_data.get('proceso', None)
         comentario = ticket.get_comentario_asignacion()
-        comentario = comentario if comentario else ComentarioTicket()
+        comentario = comentario if comentario else ComentarioTicketAtencion()
         comentario.ticket = ticket
         comentario.usuario = request.user
         comentario.mensaje = cleaned_data.get('mensaje', '')
@@ -147,7 +147,7 @@ class AsignarTicketForm(FormBase):
         return ticket
 
 class CambiarEstadoTicketForm(FormBase):
-    estado = forms.ChoiceField(label='Estado', choices=Ticket.ESTADO_TICKET[1:], initial=2)
+    estado = forms.ChoiceField(label='Estado', choices=TicketAtencion.ESTADO_TICKET[1:], initial=2)
     mensaje = forms.CharField(label=u"Mensaje", max_length=1000, widget=forms.Textarea(attrs={'placeholder': 'Describa un mensaje a transmitir', 'col': '12', 'rows': '6'}), required=False)
     archivo = forms.FileField(label='Archivo', required=False)
 
@@ -170,7 +170,7 @@ class CambiarEstadoTicketForm(FormBase):
         archivo = cleaned_data.get('archivo', None)
         mensaje = cleaned_data.get('mensaje', None)
         # Si existe una instancia, actualiza sus valores; de lo contrario, crea una nueva
-        ticket = self.instance if self.instance else Ticket()
+        ticket = self.instance if self.instance else TicketAtencion()
         ticket.estado = cleaned_data.get('estado', 2)
         if ticket.estado == 2 and not ticket.finicioactividad:
             ticket.finicioactividad = hoy
@@ -180,7 +180,7 @@ class CambiarEstadoTicketForm(FormBase):
             ticket.save(request)
             if archivo or mensaje:
                 # comentario = ticket.last_commentario_integrante()
-                comentario = ComentarioTicket()
+                comentario = ComentarioTicketAtencion()
                 comentario.ticket = ticket
                 comentario.usuario = request.user
                 comentario.mensaje = cleaned_data.get('mensaje', '')

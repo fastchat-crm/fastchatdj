@@ -15,7 +15,7 @@ from django.contrib import messages
 
 from seguridad.templatetags.templatefunctions import encrypt
 from ..forms import TicketForm
-from ..models import Ticket
+from ..models import TicketAtencion
 
 
 @login_required
@@ -29,7 +29,7 @@ def ticketView(request):
         'fecha': str(date.today()),
     }
     addData(request, data)
-    model = Ticket
+    model = TicketAtencion
     Formulario = TicketForm
 
     if request.method == 'POST':
@@ -50,7 +50,7 @@ def ticketView(request):
 
                 elif action == 'editticket':
                     pk=int(encrypt(request.POST['pk']))
-                    equipo = Ticket.objects.get(id=pk)
+                    equipo = TicketAtencion.objects.get(id=pk)
                     form = Formulario(request.POST, request.FILES,data, instance=equipo)
                     if not form.is_valid():
                         raise FormError(form)
@@ -63,7 +63,7 @@ def ticketView(request):
 
                 elif action == 'delticket':
                     pk=int(request.POST['id'])
-                    equipo = Ticket.objects.get(id=pk)
+                    equipo = TicketAtencion.objects.get(id=pk)
                     equipo.status=False
                     equipo.save(request)
                     log('Ticket eliminado correctamente', request,  equipo)
@@ -97,7 +97,7 @@ def ticketView(request):
             elif action == 'editticket':
                 try:
                     data['pk'] = pk = int(request.GET['pk'])
-                    ticket = Ticket.objects.get(id=pk)
+                    ticket = TicketAtencion.objects.get(id=pk)
                     form = Formulario(initial=model_to_dict(ticket))
                     data['form'] = form
                     titulo = f'Editar {ticket.titulo}'

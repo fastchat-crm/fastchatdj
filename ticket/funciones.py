@@ -1,3 +1,7 @@
+from django.db.models import Q
+
+from autenticacion.models import Usuario
+from ticket.models import EquipoAtencion, ProcesoAtencion
 
 
 def generate_code_ticket(empresa):
@@ -7,14 +11,14 @@ def generate_code_ticket(empresa):
     """
     from unidecode import unidecode
     from django.db.models import Max
-    from .models import Ticket
+    from .models import TicketAtencion
 
     # Eliminar espacios y acentos de la empresa
     iniciales = unidecode(empresa.nombre.replace(" ", ""))[:2].upper()
     finales = unidecode(empresa.nombre.replace(" ", ""))[-2:].upper()
 
     # Obtener el contador incremental basado en los tickets existentes de la empresa
-    ultimo_ticket = Ticket.objects.filter(empresa=empresa, status=True).aggregate(Max('numero_ticket'))['numero_ticket__max']
+    ultimo_ticket = TicketAtencion.objects.filter(empresa=empresa, status=True).aggregate(Max('numero_ticket'))['numero_ticket__max']
     contador = (ultimo_ticket or 0) + 1
 
     # Formatear el código
@@ -30,7 +34,7 @@ def get_user_attend(proceso):
     que llegan a cada integrante de los equipos que conforman el proceso.
     """
     from django.db.models import Count
-    from .models import Ticket
+    from .models import TicketAtencion
     import random
     if not proceso.automatico:
         return None
@@ -43,7 +47,7 @@ def get_user_attend(proceso):
             usuarios.extend(equipo.integrantes.all())
 
         # Contar los tickets asignados a cada usuario
-        usuarios_tickets = Ticket.objects.filter(asignadoa__in=usuarios).values('asignadoa').annotate(
+        usuarios_tickets = TicketAtencion.objects.filter(asignadoa__in=usuarios).values('asignadoa').annotate(
             ticket_count=Count('id')
         )
 
@@ -63,3 +67,32 @@ def get_user_attend(proceso):
         asignadoa = random.choice(candidatos)
 
         return asignadoa
+
+
+
+def es_lider_equipo(usuario):
+    return mis_equipos_lider(usuario).exists()
+
+def mis_equipos_lider(usuario):
+    return EquipoAtencion.objects.filter(lider=usuario, status=True)
+
+def load_teams(usuario):
+    mis_equipos = EquipoAtencion.objects.filter(Q(lider=usuario)|Q(integrantes=usuario), status=True).order_by('id').distinct('id')
+    return mis_equipos
+
+def load_integrantes(usuario):
+    """
+    Carga los integrantes de los equipos a los que pertenece el usuario.
+    """
+    integrantes = []  # Lista para acumular los integrantes
+    equipos = mis_equipos_lider(usuario)
+    for equipo in equipos:
+        if not hasattr(equipo, 'integrantes'):
+            continue
+        integrantes.extend(equipo.integrantes.all())  # Agregar integrantes a la lista
+    return list(set(integrantes))
+
+def load_ids_empresas(usuario=None, equipos=None):
+    if usuario:
+        equipos = load_teams(usuario).values_list('id', flat=True)
+    return ProcesoAtencion.objects.filter(equipos__id__in=equipos, status=True).order_by('id').distinct('id').values_list('empresa_id', flat=True)

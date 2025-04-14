@@ -3,7 +3,7 @@ from django.db import models
 from autenticacion.models import Usuario
 from core.custom_models import ModeloBase
 
-class Equipo(ModeloBase):
+class EquipoAtencion(ModeloBase):
     nombre = models.CharField(default='',max_length=200, verbose_name='Nombre del equipo')
     descripcion = models.TextField(default='', verbose_name='Descripción del equipo')
     lider = models.ForeignKey('autenticacion.Usuario', on_delete=models.CASCADE, verbose_name='Líder del equipo')
@@ -18,10 +18,10 @@ class Equipo(ModeloBase):
         verbose_name = 'Equipo'
         verbose_name_plural = 'Equipos'
 
-class Proceso(ModeloBase):
+class ProcesoAtencion(ModeloBase):
     empresa = models.ForeignKey('seguridad.Empresa', on_delete=models.CASCADE, verbose_name='Empresa')
     descripcion = models.TextField(default='', verbose_name='Descripción')
-    equipos = models.ManyToManyField(Equipo, verbose_name='Equipos que participan en este proceso')
+    equipos = models.ManyToManyField(EquipoAtencion, verbose_name='Equipos que participan en este proceso')
     automatico = models.BooleanField(default=False,verbose_name='Distribución de requerimientos automática')
 
     def __str__(self):
@@ -53,12 +53,12 @@ class Proceso(ModeloBase):
         verbose_name = u"Proceso"
         verbose_name_plural = u"Procesos"
 
-class Ticket(ModeloBase):
+class TicketAtencion(ModeloBase):
     from .choices import PRIORIDAD, ESTADO_TICKET, TIPO_TICKET
     codigo = models.CharField(max_length=200, default='', verbose_name='Código de ticket')
     empresa = models.ForeignKey('seguridad.Empresa', blank=True, null=True,  on_delete=models.CASCADE, verbose_name='Empresa')
     usuario = models.ForeignKey('autenticacion.Usuario', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Usuario que crea el ticket')
-    proceso = models.ForeignKey(Proceso, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Proceso')
+    proceso = models.ForeignKey(ProcesoAtencion, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Proceso')
     titulo = models.CharField(max_length=5000, default='', verbose_name='Título')
     descripcion = models.TextField(default='', verbose_name='Descripción', blank=True, null=True)
     tipo = models.IntegerField(choices=TIPO_TICKET, default=1, verbose_name=u'Tipo de ticket')
@@ -143,22 +143,22 @@ class Ticket(ModeloBase):
             verbose_name_plural = u"Tickets"
 
     def get_comentario_asignacion(self):
-        return self.comentarioticket_set.filter(asignacion=True, status=True, usuario=self.asignadopor, rol=2).first()
+        return self.comentarioticketatencion_set.filter(asignacion=True, status=True, usuario=self.asignadopor, rol=2).first()
 
     def last_commentario_integrante(self):
-        return self.comentarioticket_set.filter(status=True, usuario=self.asignadoa, rol=3).order_by('-fecha_registro').first()
+        return self.comentarioticketatencion_set.filter(status=True, usuario=self.asignadoa, rol=3).order_by('-fecha_registro').first()
 
     def comentarios(self):
-        return self.comentarioticket_set.filter(status=True).order_by('-fecha_registro')
+        return self.comentarioticketatencion_set.filter(status=True).order_by('-fecha_registro')
 
     class Meta:
         verbose_name = u'Ticket'
         verbose_name_plural = u'Tickets'
         ordering = ('-fecha_registro',)
 
-class ComentarioTicket(ModeloBase):
+class ComentarioTicketAtencion(ModeloBase):
     from .choices import ROL_COMENTARIO
-    ticket = models.ForeignKey(Ticket, blank=True, null=True, on_delete=models.CASCADE, verbose_name=u'Ticket al que pertenece')
+    ticket = models.ForeignKey(TicketAtencion, blank=True, null=True, on_delete=models.CASCADE, verbose_name=u'Ticket al que pertenece')
     usuario = models.ForeignKey('autenticacion.Usuario', on_delete=models.CASCADE, blank=True, null=True, verbose_name=u'Usuario que crea el comentario')
     mensaje = models.TextField(default='', verbose_name=u'Comentario', blank=True, null=True)
     rol = models.IntegerField(choices=ROL_COMENTARIO, default=1, verbose_name=u'Rol del usuario')

@@ -14,7 +14,7 @@ from django.contrib import messages
 
 from seguridad.templatetags.templatefunctions import encrypt
 from ..forms import EquipoForm
-from ..models import Equipo
+from ..models import EquipoAtencion
 
 
 @login_required
@@ -28,7 +28,7 @@ def equipoView(request):
         'fecha': str(date.today()),
     }
     addData(request, data)
-    model = Equipo
+    model = EquipoAtencion
 
     if request.method == 'POST':
         res_json = []
@@ -48,7 +48,7 @@ def equipoView(request):
 
                 elif action == 'editequipo':
                     pk=int(encrypt(request.POST['pk']))
-                    equipo = Equipo.objects.get(id=pk)
+                    equipo = EquipoAtencion.objects.get(id=pk)
                     form = EquipoForm(request.POST, instance=equipo)
                     if not form.is_valid():
                         raise FormError(form)
@@ -61,7 +61,7 @@ def equipoView(request):
 
                 elif action == 'delequipo':
                     pk=int(request.POST['id'])
-                    equipo = Equipo.objects.get(id=pk)
+                    equipo = EquipoAtencion.objects.get(id=pk)
                     equipo.status=False
                     equipo.save(request)
                     log('Equipo eliminado correctamente', request,  equipo)
@@ -95,7 +95,7 @@ def equipoView(request):
             elif action == 'editequipo':
                 try:
                     data['pk'] = pk = int(request.GET['pk'])
-                    equipo = Equipo.objects.get(id=pk)
+                    equipo = EquipoAtencion.objects.get(id=pk)
                     form = EquipoForm(initial=model_to_dict(equipo))
                     form.fields['lider'].queryset = Usuario.objects.filter(id=equipo.lider.id)
                     form.fields['integrantes'].queryset = Usuario.objects.filter(id__in=equipo.integrantes.all().values_list('id', flat=True))

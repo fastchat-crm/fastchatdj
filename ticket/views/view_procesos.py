@@ -15,7 +15,7 @@ from django.contrib import messages
 
 from seguridad.templatetags.templatefunctions import encrypt
 from ..forms import ProcesoForm
-from ..models import Proceso
+from ..models import ProcesoAtencion
 
 
 @login_required
@@ -29,7 +29,7 @@ def procesoView(request):
         'fecha': str(date.today()),
     }
     addData(request, data)
-    model = Proceso
+    model = ProcesoAtencion
     Formulario = ProcesoForm
 
     if request.method == 'POST':
@@ -50,7 +50,7 @@ def procesoView(request):
 
                 elif action == 'editproceso':
                     pk=int(encrypt(request.POST['pk']))
-                    equipo = Proceso.objects.get(id=pk)
+                    equipo = ProcesoAtencion.objects.get(id=pk)
                     form = Formulario(request.POST, instance=equipo)
                     if not form.is_valid():
                         raise FormError(form)
@@ -63,7 +63,7 @@ def procesoView(request):
 
                 elif action == 'delproceso':
                     pk=int(request.POST['id'])
-                    equipo = Proceso.objects.get(id=pk)
+                    equipo = ProcesoAtencion.objects.get(id=pk)
                     equipo.status=False
                     equipo.save(request)
                     log('Proceso eliminado correctamente', request,  equipo)
@@ -97,7 +97,7 @@ def procesoView(request):
             elif action == 'editproceso':
                 try:
                     data['pk'] = pk = int(request.GET['pk'])
-                    proceso = Proceso.objects.get(id=pk)
+                    proceso = ProcesoAtencion.objects.get(id=pk)
                     form = Formulario(initial=model_to_dict(proceso))
                     data['form'] = form
                     titulo = f'Editar {proceso.descripcion}'
