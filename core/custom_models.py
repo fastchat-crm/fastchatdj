@@ -11,7 +11,6 @@ from django_select2.forms import ModelSelect2Widget, Select2Widget, Select2Multi
 from for_django_projects.form_utils.forms import BetterForm, BetterModelForm
 
 from core.constantes import SIMBOLO_MONEDA
-from core.custom_middleware import get_current_request
 from core.funciones_adicionales import customgetattr
 from fastchatdj.settings import AUTH_USER_MODEL
 
@@ -104,6 +103,7 @@ class ModeloBase(NormalModel):
     status = models.BooleanField(default=True, editable=False)
 
     def save(self, *args, **kwargs):
+        from core.custom_middleware import get_current_request
         request = kwargs.pop('request', None) or get_current_request()
         fecha_registro = fecha_modificacion = datetime.now()
         update_fields = None
