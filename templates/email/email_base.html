@@ -40,18 +40,16 @@
             border-radius: 5px;
         }
     </style>
+    {% block head %}{% endblock %}
 </head>
 <body>
     <div class="email-container">
         <div class="header">
-            <img src="logo_url" alt="Logo" style="width: 80px; height: 80px;">
-            <h1>¡Bienvenido!</h1>
+            <img src="https://protinn.sageformoodle.ec{{ confi.logo_sistema.url }}" alt="Logo" style="width: 80px; height: 80px;">
+            <h1>{% block titulo %}{% endblock %}</h1>
         </div>
         <div class="content">
-            <p>Hola, José Guachún,</p>
-            <p>Gracias por unirte a nuestra plataforma. Estamos emocionados de tenerte a bordo.</p>
-            <p>Siéntete libre de explorar y hacernos saber si tienes alguna pregunta.</p>
-            <a href="#" class="btn">Comenzar</a>
+            {% block content %}{% endblock %}
         </div>
     </div>
 </body>

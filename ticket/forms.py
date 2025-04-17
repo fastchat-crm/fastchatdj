@@ -95,7 +95,7 @@ class TicketForm(FormBase):
         ticket.prioridad = cleaned_data.get('prioridad', 1)
         ticket.tipo = cleaned_data.get('tipo', 1)
         ticket.usuario = request.user
-        procesos = empresa.proceso_set.filter(status=True)
+        procesos = empresa.procesoatencion_set.filter(status=True)
         if len(procesos) == 1:
             proceso = procesos.first()
             ticket.proceso = proceso
