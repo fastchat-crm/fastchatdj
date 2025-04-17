@@ -231,7 +231,8 @@ class EditPersonaForm(ModelFormBase):
 
 
 class ManageProfileForm(FormBase):
-    user_is_active = forms.BooleanField(label="Usuario Activo?", required=False)
-    perfil_administrativo = forms.BooleanField(label="Perfil Administrativo Activo?", required=False)
-    perfil_cliente = forms.BooleanField(label="Perfil Cliente Activo?", required=False)
+    user_is_active = forms.BooleanField(label="¿Usuario Activo?", required=False)
+    user_is_staff = forms.BooleanField(label="¿Staff Activo?", required=False)
+    perfil_administrativo = forms.BooleanField(label="¿Perfil Administrativo Activo?", required=False)
+    perfil_cliente = forms.BooleanField(label="¿Perfil Cliente Activo?", required=False)
 

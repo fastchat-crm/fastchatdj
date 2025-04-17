@@ -103,14 +103,15 @@
     <div class="card">
         <div class="card-body">
             <div class="table-responsive">
-                <table id="tabla" class="table table-hover table-striped">
+                <table id="tabla" class="table table-hover table-striped" style="min-height: 300px">
                     <thead>
                     <tr>
                         <th class="text-center w-5">N</th>
                         <th class="text-center w-30">Ticket</th>
-                        <th class="text-center w-30">Documento</th>
+                        <th class="text-center w-30">Archivo</th>
                         <th class="text-left w-20">Usuario</th>
-                        <th class="text-left w-20">Estado</th>
+                        <th class="text-left w-20 text-center">Estado</th>
+                        <th class="text-left w-20">Fechas</th>
                         <th class="text-center w-10">Responsables</th>
                         <th class="text-center w-5"></th>
                     </tr>
@@ -180,10 +181,33 @@
                                     {% endwith %}
                                 </div>
                             </td>
+                            <td class="align-middle text-center">
+                                <p class="mb-1">
+                                    <span class="badge {{ l.get_color_estado }}">
+                                        {{ l.get_estado_display }}
+                                    </span>
+                                </p>
+                                {% if l.estado == 2 and l.asignadoa == request.user %}
+                                <a href="javascript:void(0);"
+                                   onclick="actionSwal('{{ l.pk }}', '{{ l.codigo }}','iniciarticket', 'Iniciar ticket {{ l.codigo }}')"
+                                   class="btn btn-primary btn-mini"
+                                   title="Iniciar ticket" data-bs-toggle="tooltip">
+                                    <i class="fas fa-check-circle"></i> Iniciar
+                                </a>
+                                {% elif l.estado == 3 and l.asignadoa == request.user %}
+                                    <a href="javascript:void(0);"
+                                       onclick="actionSwal('{{ l.pk }}', '{{ l.codigo }}','finalizarticket', 'Finalizar ticket {{ l.codigo }}')"
+                                       class="btn btn-success btn-mini"
+                                       title="Finalizar ticket" data-bs-toggle="tooltip">
+                                        <i class="fas fa-check-circle"></i> Finalizar
+                                    </a>
+                                {% endif %}
+                            </td>
                             <td class="align-middle">
-                                <span class="badge {{ l.get_color_estado }}">
-                                    {{ l.get_estado_display }}
-                                </span>
+                                <p class="mb-0">
+                                   <b>Inicio:</b> {{ l.finicioactividad|date:'d/M/Y | H:m'|default:'Sin registro' }}
+                                </p>
+                                <p><b>Fin:</b> {{ l.ffinactividad|date:'d/M/Y | H:m'|default:'Sin registro' }}</p>
                             </td>
                             <td class="align-middle">
                                 <div class="mb-0"><b>Asignado a:</b>
@@ -204,7 +228,7 @@
                                             </div>
                                         </div>
                                     {% else %}
-                                        <span class="badge bg-secondary">Sin asignar</span>
+                                        Sin asignar
                                     {% endif %}
                                 </div>
                                 <div class="mb-0 mt-1">
@@ -226,7 +250,7 @@
                                             </div>
                                         </div>
                                     {% else %}
-                                        <span class="badge bg-secondary">Sin asignador</span>
+                                        Sin asignador
                                     {% endif %}
                                 </div>
                             </td>
@@ -240,12 +264,14 @@
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end"
                                         aria-labelledby="dropdownMenuButton-{{ l.pk }}">
-                                        <li>
-                                            <a class="dropdown-item" href="javascript:void(0);"
-                                               onclick="verModalPostAjax('cambiarestado', '{{ l.pk }}', 'fas fa-refresh')">
-                                                <i class="fas fa-refresh me-2 text-success"></i> Cambiar estado
-                                            </a>
-                                        </li>
+                                        {% if l.asignadoa == request.user or es_lider %}
+                                            <li>
+                                                <a class="dropdown-item" href="javascript:void(0);"
+                                                   onclick="verModalPostAjax('cambiarestado', '{{ l.pk }}', 'fas fa-refresh')">
+                                                    <i class="fas fa-refresh me-2 text-success"></i> Cambiar estado
+                                                </a>
+                                            </li>
+                                        {% endif %}
                                         {% if es_lider %}
                                             <li>
                                                 <a class="dropdown-item" href="javascript:void(0);"

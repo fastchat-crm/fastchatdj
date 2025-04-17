@@ -131,6 +131,41 @@
         });
     }
 
+    function cargarSelectSecundario(action, objeto_p, objeto_s) {
+    objeto_p.on("select2:select", function (evt) {
+        // Realizar la consulta AJAX utilizando el valor seleccionado
+        cargarLista(action, objeto_p, objeto_s)
+    });
+}
+    // Codependiente para cargar select secundario
+    function cargarLista(action, objeto_p, objeto_s, id='', args='') {
+        let url='{{ request.path }}';
+        let value = objeto_p.val();
+        let name_action = 'action';
+        $.ajax({
+                url: url,
+                type: 'GET',
+                data: {'id': value, [name_action]:action, 'args':args},
+                success: function (response) {
+                    $.unblockUI();
+                    // Limpiar el select secundario
+                    objeto_s.empty();
+
+                    // Llenar el select secundario con las opciones de la respuesta de la consulta AJAX
+                    $.each(response.data, function (index, option) {
+                        objeto_s.append($('<option>').text(option.text).val(option.value));
+                    });
+
+                    // Actualizar el select secundario con las nuevas opciones
+                    objeto_s.val(id).trigger('change');
+                },
+                error: function (xhr, status, error) {
+                    $.unblockUI();
+                    console.log(error)
+                    // Manejar el error de la consulta AJAX si es necesario
+                }
+            });
+    }
 </script>
 <style>
     input[type="file"], input[type="image"], input[type="submit"], input[type="reset"], input[type="button"] {

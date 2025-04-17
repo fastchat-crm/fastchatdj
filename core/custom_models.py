@@ -220,7 +220,6 @@ class FormParent:
         # AHORA puedes usar self.instance de forma segura
         if self.editando:
             self.instancia = kwargs['instance']
-
         super(FormParent, self).__init__(*args, **kwargs)
 
         if inlines:
@@ -350,8 +349,129 @@ class FormParent:
                 self.fields[k].widget.attrs['data-parsley-required-message'] = strip_tags("{} es obligatorio".format(
                     self.fields[k].label))
 
+class FormCustom:
 
-class FormBase(FormParent, BetterForm):
+    class Media:
+        css = {
+            'all': ('/static/assets/plugins/switchery/switchery.min.css', )
+        }
+        js = (
+            '/static/assets/plugins/switchery/switchery.min.js',
+            '/static/js/renderSwicheryControl.js',
+            # '/static/assets/plugins/select2/js/select2.full.min.js',
+            # '/static/assets/plugins/select2/js/i18n/es.js',
+            # '/static/assets/plugins/dropify/js/dropify.min.js',
+            # '/static/js/form-controls-init.js',
+            # '/static/js/forms.js?v=11',
+            # '/static/panel/js/inline_forms.js?v=2',
+        )
+
+    def __init__(self, *args, **kwargs):
+        self.request = kwargs.pop('request', None)
+        self.ver = kwargs.pop('ver', False)
+        self.instance = kwargs.pop('instance', None)
+        customStep = kwargs.pop('customStep', None)
+        cantCharsSelect2 = kwargs.pop('cantCharsSelect2', {})
+        addDataNameInput = kwargs.pop('addDataNameInput', False)
+        select2_req = kwargs.pop('select2_req', [])#listado d campos que deban tener select2 ajax
+        no_requeridos = kwargs.pop('no_requeridos', [])#listado d campos que no quieran q sean requeridos en el form
+        requeridos = kwargs.pop('requeridos', [])#listado d campos que x defecto son requeridos pero quiere q no lo sean en el form
+        campos = kwargs.pop('campos', [])#listado d campos con su widget customizado
+        querysets = kwargs.pop('querysets', {})#listado d campos con un queryset filtrado
+        no_switchery = kwargs.pop('no_switchery', [])#listado d campos BooleanField que no quieran q se dibujen con switchery en el form
+        no_select2 = kwargs.pop('no_select2', [])#listado d campos que no quieran q se renderice con la librería select2
+        inlines = kwargs.pop('inlines', [])
+
+        super(FormCustom, self).__init__(*args, **kwargs)
+
+        if inlines:
+            self.inlines = inlines
+            if self.instance and len(args) == 0:
+                instancia = self.instance
+                if hasattr(self, 'inlines'):
+                    for i in range(len(self.inlines)):
+                        Formset = self.inlines[i]["formset"]
+                        self.inlines[i]["formset"] = Formset(instance=instancia)
+        for w in campos:
+            self.fields[w['field']] = w['widget']
+        if type(no_requeridos).__name__.lower() in ("list", "tuple"):
+            for nr in no_requeridos:
+                self.fields[nr].required = False
+        for r in requeridos:
+            self.fields[r].required = True
+        for k, v in querysets.items():
+            self.fields[k].queryset = v
+        if hasattr(self, "Meta"):
+            Modelo = self.Meta.model
+            nombre_app, nombre_model = Modelo._meta.app_label, Modelo._meta.model_name
+        for k, v in self.fields.items():
+            field = self.fields[k]
+            if isinstance(field.widget, forms.FileInput) and hasattr(self, '_meta') and hasattr(self._meta.model._meta.get_field(k), "validators"):
+                extensions = []
+                for x in self._meta.model._meta.get_field(k).validators:
+                    if isinstance(x, FileExtensionValidator):
+                        extensions.append(",".join([f".{ext}" for ext in x.allowed_extensions]))
+                if len(extensions) > 0:
+                    self.fields[k].widget.attrs["accept"] = ",".join(extensions)
+                    self.fields[k].widget.attrs["data-allowed-file-extensions"] = " ".join(extensions).replace(".", "").replace(",", " ")
+                if self.editando and getattr(self.instance, k) and hasattr(getattr(self.instance, k), "url"):
+                    self.fields[k].widget.attrs["data-default-file"] = getattr(getattr(self.instance, k), "url")
+            if no_requeridos == "__all__":
+                self.fields[k].required = False
+            if isinstance(field, forms.DateField):
+                self.fields[k].widget = CustomDateInput()
+                self.fields[k].widget.input_type = "date"
+            if isinstance(field, forms.TimeField) or isinstance(field.widget, forms.TimeInput):
+                self.fields[k].widget.input_type = "time"
+            if (isinstance(field, forms.ModelMultipleChoiceField) or isinstance(field, forms.ModelChoiceField)) and not field.widget.is_hidden:
+                # TheMySelect2 = MySelect2MultipleWidget if isinstance(field, forms.ModelMultipleChoiceField) else MySelect2Widget
+                # TheSelect2 = Select2MultipleWidget if isinstance(field,
+                #                                                    forms.ModelMultipleChoiceField) else Select2Widget
+                if hasattr(field, 'queryset') and not k in no_select2:
+                    self.fields[k].widget.attrs['class'] = "select2"
+                else:
+                    self.fields[k].widget.attrs['class'] = "form-control"
+            elif isinstance(field, forms.TypedChoiceField):
+                if hasattr(field, 'choices'):
+                    if len(field.choices) > 10:
+                        self.fields[k].widget.attrs['class'] = "select2"
+                        # self.fields[k].widget = Select2Widget(choices=field.choices, attrs={'data-width': '100%', 'data-minimum-input-length': 1})
+                    else:
+                        self.fields[k].widget.attrs['class'] = "form-control"
+            elif isinstance(field, forms.MultipleChoiceField):
+                if hasattr(field, 'choices'):
+                    self.fields[k].widget.attrs['class'] = "select2"
+                    # self.fields[k].widget = Select2MultipleWidget(choices=field.choices, attrs={'data-width': '100%', 'data-language': 'es', 'data-minimum-input-length': 1})
+            elif isinstance(field, forms.BooleanField) and not(k in no_switchery):
+                self.fields[k].widget.attrs['class'] = "js-switch"
+                self.fields[k].widget.attrs['data-render'] = "switchery"
+                self.fields[k].widget.attrs['data-theme'] = "default"
+            elif not isinstance(field, forms.FileField):
+                self.fields[k].widget.attrs['class'] = "form-control"
+            if isinstance(field.widget, forms.Textarea):
+                if not 'rows' in self.fields[k].widget.attrs:
+                    self.fields[k].widget.attrs['rows'] = "2"
+            if self.fields[k].required and self.fields[k].label:
+                self.fields[k].label = mark_safe(self.fields[k].label + '<span style="color:red;margin-left:2px;"><strong>*</strong></span>')
+            if self.ver:
+                self.fields[k].widget.attrs['readonly'] = "readonly"
+            if not 'col' in self.fields[k].widget.attrs:
+                self.fields[k].widget.attrs['col'] = "12"
+            if addDataNameInput:
+                self.fields[k].widget.attrs['data-nameinput'] = k
+
+        for f in self.fieldsets:
+            step = f.name
+            for ff in f.boundfields:
+                k = ff.name
+                if self.fields[k].required:
+                    self.fields[k].widget.attrs['data-parsley-required'] = "true"
+                self.fields[k].widget.attrs['data-parsley-group'] = customStep or step
+                self.fields[k].widget.attrs['data-parsley-required-message'] = strip_tags("{} es obligatorio".format(
+                    self.fields[k].label))
+
+
+class FormBase(FormCustom, BetterForm):
     pass
 
 

@@ -16,7 +16,7 @@ ticket_urls = (
     },
     {
         "nombre": "Tickets",
-        "url": '',
+        "url": 'cliente/',
         "vista": ticketView,
     },
     {

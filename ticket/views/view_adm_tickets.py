@@ -1,5 +1,5 @@
 
-from datetime import date
+from datetime import date, datetime
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q
@@ -88,12 +88,32 @@ def ticketAdminView(request):
                                      'reload': True
                                      })
 
+                elif action == 'iniciarticket':
+                    pk=int(request.POST['id'])
+                    ticket = TicketAtencion.objects.get(id=pk)
+                    ticket.finicioactividad=datetime.now()
+                    ticket.estado=3
+                    ticket.save(request)
+                    messages.info(request, f'Se inicio correctamente el ticket: f{ticket.codigo}')
+                    log('Ticket eliminado correctamente', request,  ticket)
+                    return JsonResponse({'error': False})
+
+                elif action == 'finalizarticket':
+                    pk=int(request.POST['id'])
+                    ticket = TicketAtencion.objects.get(id=pk)
+                    ticket.ffinactividad=datetime.now()
+                    ticket.estado=4
+                    ticket.save(request)
+                    messages.success(request, f'Se finalizo correctamente el ticket: f{ticket.codigo}')
+                    log('Ticket eliminado correctamente', request,  ticket)
+                    return JsonResponse({'error': False})
+
                 elif action == 'delticket':
                     pk=int(request.POST['id'])
-                    equipo = TicketAtencion.objects.get(id=pk)
-                    equipo.status=False
-                    equipo.save(request)
-                    log('Ticket eliminado correctamente', request,  equipo)
+                    ticket = TicketAtencion.objects.get(id=pk)
+                    ticket.status=False
+                    ticket.save(request)
+                    log('Ticket eliminado correctamente', request,  ticket)
                     return JsonResponse({'error': False})
                 else:
                     res_json.append({'error': True, "message": 'Acción no encontrada',})
@@ -138,11 +158,14 @@ def ticketAdminView(request):
                     data['pk'] = pk = int(request.GET['pk'])
                     data['ticket'] = ticket = TicketAtencion.objects.get(id=pk)
                     form = AsignarTicketForm(initial=model_to_dict(ticket))
-                    usuarios_id = ticket.proceso.ids_integrantes()
                     comentario = ticket.get_comentario_asignacion()
                     form.fields['mensaje'].initial = comentario.mensaje if comentario else 'Se asigna el ticket para su atención'
                     form.fields['proceso'].queryset = ProcesoAtencion.objects.filter(empresa=ticket.empresa, status=True)
-                    form.fields['asignadoa'].queryset = Usuario.objects.filter(id__in=usuarios_id)
+                    if ticket.proceso:
+                        usuarios_id = ticket.proceso.ids_integrantes()
+                        form.fields['asignadoa'].queryset = Usuario.objects.filter(id__in=usuarios_id)
+                    else:
+                        form.fields['asignadoa'].queryset = Usuario.objects.none()
                     data['form'] = form
                     data['seccionado'] = True
 
@@ -184,6 +207,13 @@ def ticketAdminView(request):
                     return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
                 except Exception as ex:
                     messages.error(request, f'Error: {ex}')
+
+            elif action == 'loadusers':
+                try:
+                    proceso = ProcesoAtencion.objects.get(id=int(request.GET['id']))
+                    return JsonResponse({'result': True, 'data': proceso.lista_integrantes()})
+                except Exception as ex:
+                    pass
 
         criterio, filtros, url_vars, documento = request.GET.get('criterio', ''), Q(status=True), '', request.GET.get('documento', '')
         estado = request.GET.get('estado', '')

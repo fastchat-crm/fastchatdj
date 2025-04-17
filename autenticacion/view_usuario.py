@@ -111,6 +111,8 @@ def usuarioView(request):
                     user = model.objects.get(pk=int(request.POST['id']))
                     user.is_active = False
                     user.status = False
+                    user.is_superuser = False
+                    user.is_staff = False
                     user.save(request)
                     administrativo = user.get_admin()
                     administrativo.status = False
@@ -132,6 +134,7 @@ def usuarioView(request):
                 elif action == 'activate':
                     user = model.objects.get(pk=int(request.POST['id']))
                     user.is_active = True
+                    user.is_staff = True
                     user.status = True
                     user.save(request)
                     log(f"Habilito usuario {user.username} - {user.get_full_name()}", request, "add")
@@ -158,6 +161,7 @@ def usuarioView(request):
                     if not form.is_valid():
                         raise FormError(form)
                     user.is_active=form.cleaned_data['user_is_active']
+                    user.is_staff=form.cleaned_data['user_is_staff']
                     user.status = form.cleaned_data['user_is_active']
                     user.save(request)
                     administrativo = user.get_admin()
@@ -232,6 +236,7 @@ def usuarioView(request):
                 form.fields['perfil_administrativo'].initial = usuario.es_administrativo()
                 form.fields['perfil_cliente'].initial = usuario.es_persona()
                 form.fields['user_is_active'].initial = usuario.is_active
+                form.fields['user_is_staff'].initial = usuario.is_staff
                 data['form'] = form
                 template = get_template("autenticacion/usuario/form_manage_profiles.html")
                 return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
