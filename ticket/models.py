@@ -26,7 +26,7 @@ class ProcesoAtencion(ModeloBase):
     activo = models.BooleanField(default=True, verbose_name='Proceso activo')
 
     def __str__(self):
-        return f'{self.descripcion}'
+        return f'{self.empresa} | {self.descripcion}'
 
     def ids_lideres(self):
         lista = []

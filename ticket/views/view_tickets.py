@@ -23,7 +23,7 @@ from ..models import TicketAtencion, ProcesoAtencion
 # @secure_module
 def ticketView(request):
     data = {
-        'titulo': 'Tickets de requerimientos',
+        'titulo': 'Administración de requerimientos',
         'descripcion': 'Crear, Editar y Eliminar tickets de requerimientos',
         'modulo': 'Tickets',
         'ruta': request.path,

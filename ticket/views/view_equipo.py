@@ -21,7 +21,7 @@ from ..models import EquipoAtencion
 # @secure_module
 def equipoView(request):
     data = {
-        'titulo': 'Gestión de equipos de desarrollo',
+        'titulo': 'Gestión de equipos de atención',
         'descripcion': 'Crear, Editar y Eliminar Equipos de desarrollo',
         'modulo': 'Equipos',
         'ruta': request.path,

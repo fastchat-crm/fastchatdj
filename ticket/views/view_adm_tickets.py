@@ -13,6 +13,7 @@ from core.custom_models import FormError
 from core.funciones import addData, paginador,log
 from django.contrib import messages
 
+from seguridad.models import Empresa
 from seguridad.templatetags.templatefunctions import encrypt
 from ..forms import TicketForm, AsignarTicketForm, CambiarEstadoTicketForm
 from ..funciones import es_lider_equipo, load_teams, load_ids_empresas, load_integrantes
@@ -215,6 +216,15 @@ def ticketAdminView(request):
                 except Exception as ex:
                     pass
 
+            elif action == 'loadprocesos':
+                try:
+                    empresa = Empresa.objects.get(id=int(request.GET['id']))
+                    lista = []
+                    for p in ProcesoAtencion.objects.filter(empresa=empresa, status=True, activo=True):
+                        lista.append({'value': p.id, 'text': p.descripcion})
+                    return JsonResponse({'result': True, 'data': lista})
+                except Exception as ex:
+                    pass
         criterio, filtros, url_vars, documento = request.GET.get('criterio', ''), Q(status=True), '', request.GET.get('documento', '')
         estado = request.GET.get('estado', '')
         data['es_lider']= es_lider = es_lider_equipo(request.user)
