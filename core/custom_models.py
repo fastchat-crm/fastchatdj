@@ -204,7 +204,6 @@ class FormParent:
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
         self.ver = kwargs.pop('ver', False)
-        self.instance = kwargs.pop('instance', None)
         self.editando = bool('instance' in kwargs and kwargs.get("instance") and kwargs.get("instance").id)
         customStep = kwargs.pop('customStep', None)
         cantCharsSelect2 = kwargs.pop('cantCharsSelect2', {})
@@ -221,6 +220,7 @@ class FormParent:
         # AHORA puedes usar self.instance de forma segura
         if self.editando:
             self.instancia = kwargs['instance']
+
         super(FormParent, self).__init__(*args, **kwargs)
 
         if inlines:
