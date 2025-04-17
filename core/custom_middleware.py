@@ -1,6 +1,7 @@
 from django.utils.functional import SimpleLazyObject
-
 from core.funciones import get_client_ip
+import threading
+_local = threading.local()
 
 
 class InitialDataApp(object):
@@ -22,3 +23,15 @@ class InitialDataApp(object):
         request.is_ajax = (request.headers.get('X-Requested-With') or "").lower().replace(" ", "") == 'XMLHttpRequest'.lower()
         request.config = Configuracion.get_instancia()
         request.ipAdd = get_client_ip(request)
+
+class RequestMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        _local.request = request
+        response = self.get_response(request)
+        return response
+
+def get_current_request():
+    return getattr(_local, 'request', None)

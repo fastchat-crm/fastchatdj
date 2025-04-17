@@ -99,6 +99,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # custom middlewares
     'core.custom_middleware.InitialDataApp',
+    'core.custom_middleware.RequestMiddleware',
 ]
 
 ROOT_URLCONF = 'fastchatdj.urls'
@@ -151,24 +152,6 @@ DATABASES = {
 
 }
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
-
-# caches redis django-select2
-# if CACHES_REDIS:
-#     CACHES["django-select2"] = {
-#         "BACKEND": "django_redis.cache.RedisCache",
-#         "LOCATION": "redis://127.0.0.1:6379/0",
-#         "OPTIONS": {
-#             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-#         }
-#     }
-#     SELECT2_CACHE_BACKEND = 'django-select2'
-
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -218,109 +201,6 @@ MEDIA_URL = '/media/'
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-
-
-# PWA
-
-
-# PWA_SERVICE_WORKER_PATH = os.path.join(BASE_DIR, 'serviceworker.js')  # 'static', 'pwa', 'js', 'serviceworker.js')
-# PWA_APP_NAME = 'IMAE'
-# PWA_APP_SHORT_NAME = 'IMAE'
-# PWA_APP_DESCRIPTION = "Business School"
-# PWA_APP_THEME_COLOR = '#F1948A'
-# PWA_APP_BACKGROUND_COLOR = '#ffffff'
-# PWA_APP_DISPLAY = 'standalone'
-# PWA_APP_SCOPE = '/'
-# PWA_APP_START_URL = '/'
-# PWA_APP_STATUS_BAR_COLOR = 'default'
-# PWA_APP_ICONS = [
-#     {
-#         "src": "/static/pwalogo/72x72.png",
-#         "sizes": "72x72",
-#         "type": "image/png"
-#     },
-#     {
-#         "src": "/static/pwalogo/96x96.png",
-#         "sizes": "96x96",
-#         "type": "image/png"
-#     },
-#     {
-#         "src": "/static/pwalogo/128x128.png",
-#         "sizes": "128x128",
-#         "type": "image/png"
-#     },
-#     {
-#         "src": "/static/pwalogo/144x144.png",
-#         "sizes": "144x144",
-#         "type": "image/png"
-#     },
-#     {
-#         "src": "/static/pwalogo/152x152.png",
-#         "sizes": "152x152",
-#         "type": "image/png"
-#     },
-#     {
-#         "src": "/static/pwalogo/192x192.png",
-#         "sizes": "192x192",
-#         "type": "image/png"
-#     },
-#     {
-#         "src": "/static/pwalogo/384x384.png",
-#         "sizes": "384x384",
-#         "type": "image/png"
-#     },
-#     {
-#         "src": "/static/pwalogo/512x512.png",
-#         "sizes": "512x512",
-#         "type": "image/png"
-#     }]
-# PWA_APP_ICONS_APPLE = [
-#     {
-#         "src": "/static/pwalogo/72x72.png",
-#         "sizes": "72x72",
-#         "type": "image/png"
-#     },
-#     {
-#         "src": "/static/pwalogo/96x96.png",
-#         "sizes": "96x96",
-#         "type": "image/png"
-#     },
-#     {
-#         "src": "/static/pwalogo/128x128.png",
-#         "sizes": "128x128",
-#         "type": "image/png"
-#     },
-#     {
-#         "src": "/static/pwalogo/144x144.png",
-#         "sizes": "144x144",
-#         "type": "image/png"
-#     },
-#     {
-#         "src": "/static/pwalogo/152x152.png",
-#         "sizes": "152x152",
-#         "type": "image/png"
-#     },
-#     {
-#         "src": "/static/pwalogo/192x192.png",
-#         "sizes": "192x192",
-#         "type": "image/png"
-#     },
-#     {
-#         "src": "/static/pwalogo/384x384.png",
-#         "sizes": "384x384",
-#         "type": "image/png"
-#     },
-#     {
-#         "src": "/static/pwalogo/512x512.png",
-#         "sizes": "512x512",
-#         "type": "image/png"
-#     }]
-# PWA_APP_SPLASH_SCREEN = [{'src': '/static/pwalogo/640x1136.png',
-#                           'media': '(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)'}]
-# PWA_APP_DIR = 'ltr'
-# PWA_APP_LANG = 'es-ec'
-# PWA_APP_DEBUG_MODE = False
 
 TEST_RUNNER = 'django.test.runner.DiscoverRunner'  # If you wish to delay updates to your test suite
 SESSION_SERIALIZER = 'django.contrib.sessions.serializers.PickleSerializer'

@@ -102,29 +102,41 @@ class ModeloBase(NormalModel):
     fecha_modificacion = models.DateTimeField(verbose_name="Fecha de Registro", blank=True, null=True, editable=False)
     status = models.BooleanField(default=True, editable=False)
 
-    def fecha_hora_registro(self):
-        return self.fecha_registro
-
     def save(self, *args, **kwargs):
-        usuario = None
-        if len(args):
-            if args[0]:
-                try:
-                    if args[0].user.is_authenticated:
-                        usuario = args[0].user.id
-                except Exception as ex:
-                    pass
+        from core.custom_middleware import get_current_request
+        request = kwargs.pop('request', None) or get_current_request()
+        fecha_registro = fecha_modificacion = datetime.now()
+        update_fields = None
+        # Determinar el usuario autenticado si el request existe
+        usuario_id = None
+        if request and hasattr(request, 'user') and request.user.is_authenticated:
+            usuario_id = request.user.id
+
+        for key, value in kwargs.items():
+            if 'usuario_id' == key:
+                usuario_id = value
+            if 'fecha_modificacion' == key:
+                fecha_modificacion = value
+            if 'fecha_registro' == key:
+                fecha_registro = value
+            if 'update_fields' == key:
+                update_fields = value
 
         if self.pk:
-            self.fecha_modificacion = datetime.now()
-            if usuario:
-                self.usuario_modificacion_id = usuario
+            self.fecha_modificacion = fecha_modificacion
+            if usuario_id:
+                self.usuario_modificacion_id = usuario_id
+            if update_fields is not None:
+                update_fields = [*update_fields, 'usuario_modificacion_id', 'fecha_modificacion']
+                kwargs['update_fields'] = list(set(update_fields))
         else:
-            if usuario:
-                self.usuario_creacion_id = usuario
+            self.fecha_registro = fecha_registro.date()
+            self.hora_registro = fecha_registro.time()
+            if usuario_id:
+                self.usuario_creacion_id = usuario_id
 
         # super(ModeloBase, self).save(*args, **kwargs)
-        models.Model.save(self)
+        models.Model.save(self, update_fields=update_fields)
 
     class Meta:
         abstract = True
