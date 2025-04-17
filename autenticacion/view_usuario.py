@@ -78,6 +78,8 @@ def usuarioView(request):
                         raise FormError(form)
                 elif action == 'crearperfilpersona':
                     user = model.objects.get(pk=int(request.POST['id']))
+                    group = Group.objects.get(name='Cliente')
+                    user.groups.add(group)
                     if not user.es_persona():
                         if PerfilPersona.objects.filter(usuario=user).exists():
                             perfil_ = PerfilPersona.objects.get(usuario=user)
@@ -161,7 +163,7 @@ def usuarioView(request):
                     administrativo = user.get_admin()
                     administrativo.status = form.cleaned_data['perfil_administrativo']
                     administrativo.save(request)
-                    cliente = user.get_client()
+                    cliente = user.get_client(form.cleaned_data['perfil_cliente'])
                     cliente.status = form.cleaned_data['perfil_cliente']
                     cliente.save(request)
                     log(f"Modifico perfil usuario {user.username} - {user.get_full_name()}", request, "change")
@@ -266,8 +268,12 @@ def usuarioView(request):
             url_vars += f'&status_perfil={status_perfil}'
             if status_perfil == '1':
                 filtros = filtros & Q(status=True)
-            if status_perfil == '0':
+            elif status_perfil == '0':
                 filtros = filtros & Q(status=False)
+            elif status_perfil == '2':
+                filtros = filtros & Q(is_superuser=True)
+            elif status_perfil == '3':
+                filtros = filtros & Q(is_staff=True)
 
         if grupoid:
             data["grupoid"] = grupoid = list(map(lambda x: int(x), grupoid))
