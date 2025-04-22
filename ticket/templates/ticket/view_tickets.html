@@ -65,11 +65,11 @@
                     <thead>
                     <tr>
                         <th class="text-center w-5">N</th>
-                        <th class="text-center w-30">Ticket</th>
+                        <th class="w-30">Ticket</th>
                         <th class="text-center w-30">Documento</th>
 {#                        <th class="text-left w-20">Usuario</th>#}
                         <th class="text-left w-20">Estado</th>
-                        <th class="text-center w-10">Fecha Registro</th>
+                        <th class="w-10">Fechas</th>
                         <th class="text-center w-5"></th>
                     </tr>
                     </thead>
@@ -84,7 +84,13 @@
                                     {{ l.codigo }} | {{ l.empresa.nombre }}
 
                                 </h6>
-                                <h6 class="mb-0 fw-semibold">{{ l.titulo }} </h6>
+                                <h6 class="mb-0 fw-semibold">{{ l.titulo }}
+                                <a href="javascript:void(0);"
+                                       onclick="verModalPostAjax('detalleticket', '{{ l.pk }}', 'fas fa-info-circle')">
+                                        <i class="fas fa-info-circle text-primary" title="Detalle del ticket"
+                                           data-bs-toggle="tooltip"></i>
+                                    </a>
+                                </h6>
                                 <p class="" data-bs-toggle="tooltip" title="{{ l.descripcion }}">{{ l.descripcion|truncatechars:"60" }}</p>
                             </td>
                             <td class="text-center align-middle">
@@ -133,8 +139,15 @@
                                     {{ l.get_estado_display }}
                                 </span>
                             </td>
-                            <td class="text-center align-middle">
-                                {{ l.fecha_registro|date:'d/M/Y H:i'|safe }}
+                            <td class="align-middle">
+                                <p class="mb-0">
+                                    <b>Registro:</b>
+                                    {{ l.fecha_registro|date:'d/M/Y | H:i'|default:'Sin registro'}}
+                                </p>
+                               <p class="mb-0">
+                                   <b>Inicio:</b> {{ l.finicioactividad|date:'d/M/Y | H:m'|default:'Sin registro' }}
+                                </p>
+                                <p><b>Fin:</b> {{ l.ffinactividad|date:'d/M/Y | H:m'|default:'Sin registro' }}</p>
                             </td>
                             <td class="text-center align-middle">
                                 <!-- Menú de acciones reemplazado por el clásico de tres puntos -->
@@ -146,7 +159,14 @@
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end"
                                         aria-labelledby="dropdownMenuButton-{{ l.pk }}">
-                                        {% if l.estado == 1 %}
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="verModalPostAjax('detalleticket', '{{ l.pk }}', 'fas fa-info-circle')">
+                                                <i class="fas fa-info-circle me-2 text-primary"></i> Detalle
+                                            </a>
+                                        </li>
+
+                                        {% if l.estado == 1 or l.estado == 2 %}
                                             <li>
                                                 <a class="dropdown-item" href="javascript:void(0);"
                                                    onclick="verModalPostAjax('editticket', '{{ l.pk }}', 'fas fa-users')">

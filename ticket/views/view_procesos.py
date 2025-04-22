@@ -22,7 +22,7 @@ from ..models import ProcesoAtencion
 # @secure_module
 def procesoView(request):
     data = {
-        'titulo': 'Gestión de Procesos de Desarrollo',
+        'titulo': 'Gestión de Procesos de Atención',
         'descripcion': 'Crear, Editar y Eliminar procesos de desarrollo',
         'modulo': 'Procesos',
         'ruta': request.path,

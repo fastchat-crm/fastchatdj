@@ -13,16 +13,17 @@ from core.custom_models import FormError
 from core.funciones import addData, paginador,log
 from django.contrib import messages
 
+from seguridad.models import Empresa
 from seguridad.templatetags.templatefunctions import encrypt
 from ..forms import TicketForm
-from ..models import TicketAtencion
+from ..models import TicketAtencion, ProcesoAtencion
 
 
 @login_required
 # @secure_module
 def ticketView(request):
     data = {
-        'titulo': 'Tickets de requerimientos',
+        'titulo': 'Administración de requerimientos',
         'descripcion': 'Crear, Editar y Eliminar tickets de requerimientos',
         'modulo': 'Tickets',
         'ruta': request.path,
@@ -87,6 +88,7 @@ def ticketView(request):
             if action == 'addticket':
                 try:
                     form = Formulario()
+                    form.fields['proceso'].queryset = ProcesoAtencion.objects.none()
                     data['form'] = form
                     titulo = 'Crear Ticket'
                     template = get_template('ticket/forms/form_ticket.html')
@@ -99,6 +101,7 @@ def ticketView(request):
                     data['pk'] = pk = int(request.GET['pk'])
                     ticket = TicketAtencion.objects.get(id=pk)
                     form = Formulario(initial=model_to_dict(ticket))
+                    form.fields['proceso'].queryset = ProcesoAtencion.objects.filter(empresa=ticket.empresa, status=True, activo=True)
                     data['form'] = form
                     titulo = f'Editar {ticket.titulo}'
                     template = get_template('ticket/forms/form_ticket.html')
@@ -106,6 +109,36 @@ def ticketView(request):
                 except Exception as ex:
                     messages.error(request, f'Error: {ex}')
 
+            elif action == 'detalleticket':
+                try:
+                    data['pk'] = pk = int(request.GET['pk'])
+                    data['ticket'] = ticket = TicketAtencion.objects.get(id=pk)
+                    titulo = f'Ticket | {ticket.codigo}'
+                    template = get_template('ticket/forms/detalle_ticket.html')
+                    return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
+                except Exception as ex:
+                    messages.error(request, f'Error: {ex}')
+
+            elif action == 'comentarios':
+                try:
+                    data['pk'] = pk = int(request.GET['pk'])
+                    data['ticket'] = ticket = TicketAtencion.objects.get(id=pk)
+                    data['comentarios'] = ticket.comentarios().order_by('-fecha_registro')
+                    titulo = f'Comentarios de ticket | {ticket.codigo}'
+                    template = get_template('ticket/forms/comments.html')
+                    return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
+                except Exception as ex:
+                    messages.error(request, f'Error: {ex}')
+
+            elif action == 'loadprocesos':
+                try:
+                    empresa = Empresa.objects.get(id=int(request.GET['id']))
+                    lista = []
+                    for p in ProcesoAtencion.objects.filter(empresa=empresa, status=True, activo=True):
+                        lista.append({'value': p.id, 'text': p.descripcion})
+                    return JsonResponse({'result': True, 'data': lista})
+                except Exception as ex:
+                    pass
 
         criterio, filtros, url_vars, documento = request.GET.get('criterio', ''), Q(status=True, usuario=request.user), '', request.GET.get('documento', '')
 

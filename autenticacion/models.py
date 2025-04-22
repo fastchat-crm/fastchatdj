@@ -128,10 +128,16 @@ class Usuario(AbstractUser, ModeloBase):
             admin = PerfilAdministrativo.objects.create(usuario=self)
         return admin
 
-    def get_client(self):
+    def get_client(self, activo=True):
+        from django.contrib.auth.models import Group
         cliente = self.perfilpersona_set.first()
         if not cliente:
             cliente = PerfilPersona.objects.create(usuario=self)
+        group = Group.objects.get(name='Cliente')
+        if activo and not self.groups.filter(name='Cliente').exists():
+            self.groups.add(group)
+        elif self.groups.filter(name='Cliente').exists() :
+            self.groups.remove(group)
         return cliente
 
     def __str__(self):

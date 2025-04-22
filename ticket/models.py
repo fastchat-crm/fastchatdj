@@ -23,9 +23,10 @@ class ProcesoAtencion(ModeloBase):
     descripcion = models.TextField(default='', verbose_name='Descripción')
     equipos = models.ManyToManyField(EquipoAtencion, verbose_name='Equipos que participan en este proceso')
     automatico = models.BooleanField(default=False,verbose_name='Distribución de requerimientos automática')
+    activo = models.BooleanField(default=True, verbose_name='Proceso activo')
 
     def __str__(self):
-        return f'{self.descripcion}'
+        return f'{self.empresa} | {self.descripcion}'
 
     def ids_lideres(self):
         lista = []
@@ -36,9 +37,9 @@ class ProcesoAtencion(ModeloBase):
     def lista_integrantes(self):
         lista = []
         for p in self.equipos.all():
-            lista.append({'value': p.lider.id, 'text': p.lider.nombre_completo_minus()})
+            lista.append({'value': p.lider.id, 'text': p.lider.full_name()})
             for ir in p.integrantes.all():
-                lista.append({'value': ir.id, 'text': ir.nombre_completo_minus()})
+                lista.append({'value': ir.id, 'text': ir.full_name()})
         return lista
 
     def ids_integrantes(self):
@@ -128,7 +129,7 @@ class TicketAtencion(ModeloBase):
             <a href="{self.archivo.url}" data-fancybox="image"
                data-width="2048" data-height="1365"
                title="Visualizar imagen">
-                <img src="{self.archivo.url}" alt="Imagen cargada" style="max-width: 100px; max-height: 100px;">
+                <img src="{self.archivo.url}" alt="Imagen cargada" style="max-width: 60px; max-height: 60px;">
             </a>
             '''
         else:
@@ -150,6 +151,9 @@ class TicketAtencion(ModeloBase):
 
     def comentarios(self):
         return self.comentarioticketatencion_set.filter(status=True).order_by('-fecha_registro')
+
+    def comentarios_client(self):
+        return self.comentarioticketatencion_set.filter(status=True, rol=1).order_by('-fecha_registro')
 
     class Meta:
         verbose_name = u'Ticket'

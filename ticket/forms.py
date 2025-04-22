@@ -58,6 +58,7 @@ class ProcesoForm(FormBase):
 
 class TicketForm(FormBase):
     empresa = forms.ModelChoiceField(label='Empresa', queryset=Empresa.objects.filter(status=True))
+    proceso = forms.ModelChoiceField(label='Proceso', queryset=ProcesoAtencion.objects.filter(status=True))
     titulo = forms.CharField(label=u"Título", max_length=50, widget=forms.TextInput(attrs={'placeholder': 'Describa el título del ticket', 'col': '12'}), required=True)
     descripcion = forms.CharField(label=u"Descripción", max_length=5000, widget=forms.Textarea(attrs={'placeholder': 'Describa el proceso', 'col': '12', 'rows': '6'}), required=True)
     prioridad = forms.ChoiceField(label='Prioridad', choices=TicketAtencion.PRIORIDAD, initial=1)
@@ -79,6 +80,7 @@ class TicketForm(FormBase):
         # Si existe una instancia, actualiza sus valores; de lo contrario, crea una nueva
         empresa = cleaned_data.get('empresa', None)
         archivo = cleaned_data.get('archivo', None)
+        proceso = cleaned_data.get('proceso', None)
         ticket = self.instance if self.instance else TicketAtencion()
         if not self.instance:
             codigo, numero = generate_code_ticket(empresa)
@@ -95,21 +97,22 @@ class TicketForm(FormBase):
         ticket.prioridad = cleaned_data.get('prioridad', 1)
         ticket.tipo = cleaned_data.get('tipo', 1)
         ticket.usuario = request.user
-        procesos = empresa.proceso_set.filter(status=True)
-        if len(procesos) == 1:
-            proceso = procesos.first()
-            ticket.proceso = proceso
-            if proceso.automatico:
-                id_asignadoa = get_user_attend(proceso)
-                ticket.asignadoa_id = id_asignadoa
-                ticket.estado = 2
+        ticket.proceso = proceso
+        # procesos = empresa.procesoatencion_set.filter(status=True, activo=True)
+        # if len(procesos) == 1:
+        #     proceso = procesos.first()
+        #     ticket.proceso = proceso
+        if proceso.automatico:
+            id_asignadoa = get_user_attend(proceso)
+            ticket.asignadoa_id = id_asignadoa
+            ticket.estado = 2
         if commit:
             ticket.save(request)
         return ticket
 
 class AsignarTicketForm(FormBase):
-    asignadoa = forms.ModelChoiceField(label='Asignado a', queryset=Usuario.objects.filter(status=True))
     proceso = forms.ModelChoiceField(label='Proceso', queryset=ProcesoAtencion.objects.filter(status=True))
+    asignadoa = forms.ModelChoiceField(label='Asignado a', queryset=Usuario.objects.filter(status=True))
     mensaje = forms.CharField(label=u"Mensaje", max_length=1000, widget=forms.Textarea(attrs={'placeholder': 'Describa el proceso', 'col': '12', 'rows': '6'}), required=True)
     archivo = forms.FileField(label='Archivo', required=False)
 
@@ -125,9 +128,13 @@ class AsignarTicketForm(FormBase):
     def save(self, commit=True, request=None):
         cleaned_data = self.cleaned_data
         archivo = cleaned_data.get('archivo', None)
+        asignadoa = cleaned_data.get('asignadoa', None)
         # Si existe una instancia, actualiza sus valores; de lo contrario, crea una nueva
         ticket = self.instance if self.instance else TicketAtencion()
-        ticket.asignadoa = cleaned_data.get('asignadoa', None)
+        if asignadoa != ticket.asignadoa:
+            ticket.finicioactividad = None
+            ticket.ffinactividad = None
+        ticket.asignadoa = asignadoa
         ticket.asignadopor = request.user
         ticket.proceso = cleaned_data.get('proceso', None)
         comentario = ticket.get_comentario_asignacion()
@@ -171,11 +178,17 @@ class CambiarEstadoTicketForm(FormBase):
         mensaje = cleaned_data.get('mensaje', None)
         # Si existe una instancia, actualiza sus valores; de lo contrario, crea una nueva
         ticket = self.instance if self.instance else TicketAtencion()
-        ticket.estado = cleaned_data.get('estado', 2)
-        if ticket.estado == 2 and not ticket.finicioactividad:
+        ticket.estado = int(cleaned_data.get('estado', 2))
+        if ticket.estado == 2:
+            ticket.ffinactividad = None
+            ticket.finicioactividad = None
+        if ticket.estado == 3 and not ticket.finicioactividad:
             ticket.finicioactividad = hoy
-        if ticket.estado == 3:
+        elif ticket.estado == 4:
+            if not ticket.finicioactividad:
+                ticket.finicioactividad = hoy
             ticket.ffinactividad = hoy
+
         if commit:
             ticket.save(request)
             if archivo or mensaje:

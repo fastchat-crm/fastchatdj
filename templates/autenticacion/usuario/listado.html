@@ -47,6 +47,8 @@
                             <option value="">Todos los estados</option>
                             <option value="1" {% if status_perfil == '1' %}selected{% endif %}>Activo</option>
                             <option value="0" {% if status_perfil == '0' %}selected{% endif %}>Inactivo</option>
+                            <option value="2" {% if status_perfil == '2' %}selected{% endif %}>Super Usuario Activo</option>
+                            <option value="3" {% if status_perfil == '3' %}selected{% endif %}>Staff Activo</option>
                         </select>
                     </div>
                     <div class="col-md-4">
@@ -104,7 +106,22 @@
                     {% for l in listado %}
                         <tr>
                             <td class="text-left">
-                                <b>Cod. User</b> {{ l.id }}<br>
+                                <b>Cod. User</b> {{ l.id }}
+                                {% if l.is_active %}
+                                    <br>
+                                    <span class="badge bg-success">Activo</span>
+                                {% else %}
+                                    <br>
+                                    <span class="badge bg-danger">Inactivo</span>
+                                {% endif %}
+                                {% if l.is_superuser %}
+                                    <br>
+                                    <span class="badge bg-success">Super Usuario</span>
+                                {% endif %}
+                                {% if l.is_staff %}
+                                    <br>
+                                    <span class="badge bg-success">Staff Activo</span>
+                                {% endif %}
                             </td>
                             <td class="text-left">
                                 <div class="d-flex justify-content-between align-items-center">
@@ -121,7 +138,9 @@
                                                      height="55px">
                                             </a>
                                             <div class="info-top ml-4">
-                                                <span><i class="fa fa-tag"></i> {{ person.username }}</span><br>
+                                                <span><i class="fa fa-tag"></i>
+                                                    {{ person.username }}
+                                                </span><br>
                                                 <span>{{ person.documento }}</span><br>
                                                 <span><b>{{ person.datos }}</b></span><br>
                                                 {% if person.email %}
@@ -185,10 +204,7 @@
                                 {{ l.groups_str }}
                             </td>
                             <td>
-                                <div class="mb-0">
-                                    <span class="fw-bold">¿Activo?:</span>
-                                    <i class="{{ l.usuario_activo|safe }}"></i>
-                                </div>
+
                                 <div class="mb-0">
                                     <span class="fw-bold">Administrativo:</span>
                                     {% if l.es_administrativo %}
