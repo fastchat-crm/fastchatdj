@@ -1,6 +1,8 @@
 import json
 from datetime import datetime
 from decimal import Decimal
+import requests
+import base64
 
 
 def remover_espacios_de_mas(valor: str) -> str:
@@ -133,3 +135,16 @@ def ordenar_modulos_url(data, qs_modulos, modulos_seleccionados=[]):
 
 def round_num_dec(value, decimales=2):
     return Decimal(value).quantize(Decimal(10) ** (decimales*-1))
+
+
+def get_image_as_base64(image_url):
+    # Realizar la solicitud GET para obtener la imagen
+    response = requests.get(image_url)
+
+    # Verificar si la solicitud fue exitosa
+    if response.status_code == 200:
+        # Convertir la imagen a base64
+        image_base64 = base64.b64encode(response.content).decode('utf-8')
+        return image_base64
+    else:
+        return ""

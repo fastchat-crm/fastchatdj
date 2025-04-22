@@ -68,13 +68,15 @@ def conversacionesView(request):
                     # Crear instancia del servicio
                     service = WhatsAppService()
 
-                    # Enviar mensaje usando el servicio
-                    response = service.send_message(
-                        conversacion.sesion.session_id,  # Usar session_id en lugar de número
-                        conversacion.contacto_numero,
-                        texto,
-                        archivo
-                    )
+                    if archivo:
+                        response = service.send_media_message(
+                            conversacion.sesion.session_id, conversacion.from_number, caption=texto,
+                            file_content=archivo.read(), filename=archivo.name
+                        )
+                    else:
+                        response = service.send_text_message(
+                            conversacion.sesion.session_id, conversacion.from_number, texto
+                        )
 
                     if not response.get('success', False):
                         return JsonResponse({
@@ -103,6 +105,7 @@ def conversacionesView(request):
 
                     # Guardamos en BD
                     mensaje = MensajeWhatsApp(
+                        mensaje_id_externo=response.get('message_id'),
                         conversacion=conversacion,
                         remitente=conversacion.sesion.numero,
                         mensaje=texto,

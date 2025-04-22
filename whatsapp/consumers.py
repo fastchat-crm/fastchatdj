@@ -68,7 +68,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 class SessionConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.session_id = self.scope['url_route']['kwargs']['session_id']
-        self.room_group_name = f'session_{self.session_id}'
+        self.room_group_name = f'whatsapp_session_{self.session_id}'
 
         # Unirse al grupo de la conversación
         await self.channel_layer.group_add(
@@ -86,48 +86,17 @@ class SessionConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data=None, bytes_data=None):
         text_data_json = json.loads(text_data)
-        message_type = text_data_json.get('type')
+        message_type = text_data_json.get('event')
 
         if message_type == 'update_session':
             await self.send(text_data=json.dumps({}))
-
-    async def update_session(self, event):
-        message = event['message']
-
-        # Enviar mensaje al WebSocket
-        await self.send(text_data=json.dumps(message))
-
-
-class QrSessionConsumer(AsyncWebsocketConsumer):
-    async def connect(self):
-        self.session_id = self.scope['url_route']['kwargs']['session_id']
-        self.room_group_name = f'qrsession_{self.session_id}'
-
-        # Unirse al grupo de la conversación
-        await self.channel_layer.group_add(
-            self.room_group_name,
-            self.channel_name
-        )
-
-        await self.accept()
-
-    async def disconnect(self, close_code):
-        await self.channel_layer.group_discard(
-            self.room_group_name,
-            self.channel_name
-        )
-
-    async def receive(self, text_data=None, bytes_data=None):
-        text_data_json = json.loads(text_data)
-        message_type = text_data_json.get('type')
-
-        if message_type == 'update_qrsession':
+        elif message_type == 'qr_code':
             await self.send(text_data=json.dumps({
-                'type': 'update_qrsession', "qr_code": text_data_json["qr_code"]
+                'type': 'qr_code', "qr_code": text_data_json["qr_code"]
             }))
 
-    async def update_qrsession(self, event):
-        message = event['message']
+    async def whatsapp_event(self, event):
+        message = event
 
         # Enviar mensaje al WebSocket
         await self.send(text_data=json.dumps(message))

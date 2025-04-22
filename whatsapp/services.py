@@ -1,10 +1,12 @@
-# whatsapp/services.py (adaptado a tus modelos)
+# whatsapp/services.py
 import requests
 import json
+import base64
+import os
 from django.utils import timezone
-
-from fastchatdj import settings
-
+from django.urls import reverse
+from django.conf import settings
+from .models import SesionWhatsApp, WhatsAppWebhook
 
 class WhatsAppService:
     def __init__(self):
@@ -14,192 +16,358 @@ class WhatsAppService:
             'X-API-Key': settings.NODE_SECRET_KEY
         }
 
-    def get_all_sessions(self):
-        response = requests.get(f"{self.base_url}/sessions", headers=self.headers)
-        if response.status_code == 200:
-            return response.json()['sessions']
-        return []
+    def create_session(self, session, webhook_url):
+        """
+        Crea una nueva sesión de WhatsApp en el servidor Node.js
 
-    def create_session_with_webhooks(self, numero, webhooks):
+        Args:
+            session: Objeto SesionWhatsApp
+
+        Returns:
+            dict: Respuesta del servidor
         """
-        Crea una nueva sesión con webhooks
-        """
+
+        # Crear los webhooks para todos los tipos de eventos
+        webhooks = [
+            {'url': webhook_url, 'type': 'qr_code'},
+            {'url': webhook_url, 'type': 'ready'},
+            {'url': webhook_url, 'type': 'authenticated'},
+            {'url': webhook_url, 'type': 'auth_failure'},
+            {'url': webhook_url, 'type': 'disconnected'},
+            {'url': webhook_url, 'type': 'message'},
+            {'url': webhook_url, 'type': 'message_sent'},
+            {'url': webhook_url, 'type': 'profile_update'},
+            {'url': webhook_url, 'type': 'contact_update'},
+            {'url': webhook_url, 'type': 'message_deleted'},
+            {'url': webhook_url, 'type': 'message_edited'}
+        ]
+
+        # Datos para la solicitud
         data = {
-            'name': numero,  # Usamos el número como nombre
+            'sessionId': session.session_id,
             'webhooks': webhooks
         }
-        response = requests.post(
-            f"{self.base_url}/sessions",
-            headers=self.headers,
-            data=json.dumps(data)
-        )
-        if response.status_code == 200:
-            return response.json()
-        raise Exception(f"Error al crear sesión: {response.text}")
 
-    def register_webhooks(self, session_id, webhooks):
+        try:
+            response = requests.post(
+                f"{self.base_url}/session",
+                headers=self.headers,
+                json=data
+            )
+
+            if response.status_code == 201:
+                result = response.json()
+
+                # Actualizar la sesión con el código QR si está disponible
+                if 'qrCode' in result:
+                    session.qr_code = result['qrCode']
+
+                # Guardar los webhooks en la base de datos
+                for webhook_data in webhooks:
+                    WhatsAppWebhook.objects.get_or_create(
+                        session=session,
+                        url=webhook_data['url'],
+                        type=webhook_data['type']
+                    )
+
+                return {
+                    'success': True,
+                    'qr_code': result.get('qrCode')
+                }
+            else:
+                error_msg = f"Error al crear sesión: {response.status_code} - {response.text}"
+                return {
+                    'success': False,
+                    'error': error_msg
+                }
+        except Exception as e:
+            error_msg = f"Error de conexión: {str(e)}"
+            return {
+                'success': False,
+                'error': error_msg
+            }
+
+    def send_text_message(self, session_id, to, text):
         """
-        Registra webhooks para una sesión existente
+        Envía un mensaje de texto a través de WhatsApp
+
+        Args:
+            session_id: ID de la sesión
+            to: Número de teléfono del destinatario (con formato: 123456789@s.whatsapp.net)
+            text: Texto del mensaje
+
+        Returns:
+            dict: Respuesta del servidor
         """
         data = {
-            'webhooks': webhooks
-        }
-        response = requests.post(
-            f"{self.base_url}/sessions/{session_id}/webhooks",
-            headers=self.headers,
-            data=json.dumps(data)
-        )
-        if response.status_code == 200:
-            return response.json()
-        raise Exception(f"Error al registrar webhooks: {response.text}")
-
-    def get_qr_code(self, session_id):
-        response = requests.get(f"{self.base_url}/sessions/{session_id}/qr", headers=self.headers)
-        if response.status_code == 200:
-            return response.json().get('qrCode')
-        return None
-
-    def check_session_status(self, session_id):
-        """
-        Verifica si una sesión existe y su estado actual
-        """
-        response = requests.get(f"{self.base_url}/sessions/{session_id}/status", headers=self.headers)
-
-        if response.status_code == 200:
-            return response.json()
-        elif response.status_code == 404:
-            return {'exists': False, 'success': False}
-
-        try:
-            error_data = response.json()
-            error_message = error_data.get('error', response.text)
-        except:
-            error_message = response.text
-
-        raise Exception(f"Error al verificar estado de sesión: {error_message}")
-
-    def send_message(self, session_id, number, message, file=None):
-        """
-        Envía un mensaje a través de WhatsApp
-        """
-        if file:
-            # Si hay un archivo, no enviamos headers de Content-Type
-            data = {
-                'number': number,
-                'message': message
-            }
-            files = {'file': (file.name, file, file.content_type)}
-
-            response = requests.post(
-                f"{self.base_url}/sessions/{session_id}/send",
-                data=data, files=files, headers=self.headers
-            )
-        else:
-            # Si no hay archivo, usamos JSON
-            data = {
-                'number': number,
-                'message': message
-            }
-            response = requests.post(
-                f"{self.base_url}/sessions/{session_id}/send",
-                headers=self.headers,
-                data=json.dumps(data)
-            )
-
-        if response.status_code == 200:
-            return response.json()
-
-        try:
-            error_data = response.json()
-            error_message = error_data.get('error', response.text)
-        except:
-            error_message = response.text
-
-        raise Exception(f"Error al enviar mensaje: {error_message}")
-
-    # whatsapp/services.py
-    def enviar_mensaje(session_id, numero, texto, archivo=None):
-        """
-        Envía un mensaje a través de la API de Node.js
-        """
-        service = WhatsAppService()
-        return service.send_message(session_id, numero, texto, archivo)
-
-    def get_conversations(self, session_id, limit=50, offset=0, jid=None):
-        """
-        Obtiene las conversaciones de una sesión
-        """
-        params = {
-            'limit': limit,
-            'offset': offset
+            'sessionId': session_id,
+            'to': to,
+            'text': text
         }
 
-        if jid:
-            params['jid'] = jid
-
-        response = requests.get(
-            f"{self.base_url}/sessions/{session_id}/conversations",
-            headers=self.headers,
-            params=params
-        )
-        if response.status_code == 200:
-            return response.json()
-        raise Exception(f"Error al obtener conversaciones: {response.text}")
-
-    def delete_session(self, session_id):
-        """
-        Elimina una sesión
-        """
-        response = requests.delete(f"{self.base_url}/sessions/{session_id}", headers=self.headers)
-        if response.status_code == 200:
-            return True
-        return False
-
-    # Añadir este método a la clase WhatsAppService en services.py
-    def sync_contacts(self, session_id):
-        """
-        Sincroniza los contactos de una sesión de WhatsApp
-        """
         try:
             response = requests.post(
-                f"{self.base_url}/sync-contacts",
+                f"{self.base_url}/message/text",
                 headers=self.headers,
-                data=json.dumps({'sessionId': session_id})
+                json=data
             )
 
             if response.status_code == 200:
-                return response.json()
-
-            try:
-                error_data = response.json()
-                error_message = error_data.get('message', response.text)
-            except:
-                error_message = response.text
-
-            return {'success': False, 'message': error_message}
+                return {
+                    'success': True,
+                    'message_id': response.json().get('messageId')
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f"Error al enviar mensaje: {response.status_code} - {response.text}"
+                }
         except Exception as e:
-            return {'success': False, 'message': str(e)}
+            return {
+                'success': False,
+                'error': f"Error de conexión: {str(e)}"
+            }
 
-    def update_profile(self, session_id):
+    def send_media_message(self, session_id, to, file_path=None, file_content=None, caption=None, filename=None,
+                           media_type=None):
         """
-        Actualiza la información del perfil de una sesión de WhatsApp
+        Envía un mensaje con archivo multimedia a través de WhatsApp, detectando automáticamente el tipo de medio
+
+        Args:
+            session_id: ID de la sesión
+            to: Número de teléfono del destinatario (con formato: 123456789@s.whatsapp.net)
+            file_path: Ruta al archivo (opcional)
+            file_content: Contenido del archivo en bytes (opcional)
+            caption: Texto que acompaña al archivo (opcional)
+            filename: Nombre del archivo (opcional)
+            media_type: Tipo de archivo ('image', 'video', 'audio', 'document') (opcional, se detecta automáticamente si no se proporciona)
+
+        Returns:
+            dict: Respuesta del servidor
         """
+        # Mapeo de extensiones a tipos de medio
+        extension_to_media_type = {
+            # Imágenes
+            'jpg': 'image', 'jpeg': 'image', 'png': 'image', 'gif': 'image', 'webp': 'image', 'bmp': 'image',
+            # Videos
+            'mp4': 'video', 'mov': 'video', 'avi': 'video', 'mkv': 'video', 'webm': 'video', '3gp': 'video',
+            # Audio
+            'mp3': 'audio', 'ogg': 'audio', 'wav': 'audio', 'm4a': 'audio', 'aac': 'audio', 'flac': 'audio',
+            # Documentos
+            'pdf': 'document', 'doc': 'document', 'docx': 'document', 'xls': 'document', 'xlsx': 'document',
+            'ppt': 'document', 'pptx': 'document', 'txt': 'document', 'csv': 'document', 'rtf': 'document',
+            'zip': 'document', 'rar': 'document', '7z': 'document'
+        }
+
+        # Mapeo de tipos MIME a tipos de medio
+        mime_to_media_type = {
+            'image/': 'image',
+            'video/': 'video',
+            'audio/': 'audio',
+            'application/pdf': 'document',
+            'application/msword': 'document',
+            'application/vnd.openxmlformats-officedocument': 'document',
+            'application/vnd.ms-': 'document',
+            'text/': 'document',
+            'application/zip': 'document',
+            'application/x-rar': 'document',
+            'application/x-7z-compressed': 'document'
+        }
+
+        # Determinar el tipo MIME según la extensión
+        mime_types = {
+            'image': {
+                'jpg': 'image/jpeg',
+                'jpeg': 'image/jpeg',
+                'png': 'image/png',
+                'gif': 'image/gif',
+                'webp': 'image/webp',
+                'bmp': 'image/bmp'
+            },
+            'video': {
+                'mp4': 'video/mp4',
+                'mov': 'video/quicktime',
+                'avi': 'video/x-msvideo',
+                'mkv': 'video/x-matroska',
+                'webm': 'video/webm',
+                '3gp': 'video/3gpp'
+            },
+            'audio': {
+                'mp3': 'audio/mpeg',
+                'ogg': 'audio/ogg',
+                'wav': 'audio/wav',
+                'm4a': 'audio/mp4',
+                'aac': 'audio/aac',
+                'flac': 'audio/flac'
+            },
+            'document': {
+                'pdf': 'application/pdf',
+                'doc': 'application/msword',
+                'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'xls': 'application/vnd.ms-excel',
+                'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'ppt': 'application/vnd.ms-powerpoint',
+                'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                'txt': 'text/plain',
+                'csv': 'text/csv',
+                'rtf': 'application/rtf',
+                'zip': 'application/zip',
+                'rar': 'application/x-rar-compressed',
+                '7z': 'application/x-7z-compressed'
+            }
+        }
+
+        # Obtener el contenido del archivo
+        if file_path and not file_content:
+            with open(file_path, 'rb') as f:
+                file_content = f.read()
+                if not filename:
+                    filename = os.path.basename(file_path)
+
+        if not file_content:
+            return {
+                'success': False,
+                'error': 'No se proporcionó contenido de archivo'
+            }
+
+        # Determinar el tipo de medio automáticamente si no se proporciona
+        if not media_type:
+            # Primero intentar por el nombre del archivo
+            if filename:
+                ext = filename.split('.')[-1].lower()
+                if ext in extension_to_media_type:
+                    media_type = extension_to_media_type[ext]
+
+            # Si aún no se ha determinado, intentar con python-magic
+            if not media_type:
+                try:
+                    import magic
+                    mime = magic.Magic(mime=True)
+                    detected_mime = mime.from_buffer(file_content)
+
+                    # Buscar coincidencia en el mapeo de MIME a tipo de medio
+                    for mime_prefix, media in mime_to_media_type.items():
+                        if detected_mime.startswith(mime_prefix):
+                            media_type = media
+                            break
+                except ImportError:
+                    # Si python-magic no está disponible, usar un enfoque básico
+                    # Verificar los primeros bytes para detectar tipos comunes
+                    if file_content.startswith(b'\xff\xd8\xff'):  # JPEG
+                        media_type = 'image'
+                    elif file_content.startswith(b'\x89PNG\r\n\x1a\n'):  # PNG
+                        media_type = 'image'
+                    elif file_content.startswith(b'GIF87a') or file_content.startswith(b'GIF89a'):  # GIF
+                        media_type = 'image'
+                    elif file_content.startswith(b'%PDF'):  # PDF
+                        media_type = 'document'
+                    elif file_content.startswith(b'PK\x03\x04'):  # ZIP, DOCX, XLSX, etc.
+                        media_type = 'document'
+                    else:
+                        # Si no se puede determinar, usar documento como predeterminado
+                        media_type = 'document'
+
+        # Si aún no se ha determinado, usar documento como predeterminado
+        if not media_type:
+            media_type = 'document'
+
+        # Convertir a base64
+        media_base64 = base64.b64encode(file_content).decode('utf-8')
+
+        # Determinar el tipo MIME
+        mimetype = None
+        if filename:
+            ext = filename.split('.')[-1].lower()
+            if media_type in mime_types and ext in mime_types[media_type]:
+                mimetype = mime_types[media_type][ext]
+
+        # Si no se pudo determinar el MIME por extensión, usar un valor predeterminado según el tipo de medio
+        if not mimetype:
+            default_mimes = {
+                'image': 'image/jpeg',
+                'video': 'video/mp4',
+                'audio': 'audio/mpeg',
+                'document': 'application/octet-stream'
+            }
+            mimetype = default_mimes.get(media_type, 'application/octet-stream')
+
+        # Datos para la solicitud
+        data = {
+            'sessionId': session_id,
+            'to': to,
+            'caption': caption or '',
+            'media': media_base64,
+            'type': media_type,
+            'filename': filename,
+            'mimetype': mimetype
+        }
+
         try:
             response = requests.post(
-                f"{self.base_url}/api/update-profile",
+                f"{self.base_url}/message/media",
                 headers=self.headers,
-                data=json.dumps({'sessionId': session_id})
+                json=data
             )
 
             if response.status_code == 200:
-                return response.json()
-
-            try:
-                error_data = response.json()
-                error_message = error_data.get('message', response.text)
-            except:
-                error_message = response.text
-
-            return {'success': False, 'message': error_message}
+                return {
+                    'success': True,
+                    'message_id': response.json().get('messageId')
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f"Error al enviar archivo: {response.status_code} - {response.text}"
+                }
         except Exception as e:
-            return {'success': False, 'message': str(e)}
+            return {
+                'success': False,
+                'error': f"Error de conexión: {str(e)}"
+            }
+
+    def close_session(self, session_id):
+        """
+        Cierra una sesión de WhatsApp
+
+        Args:
+            session_id: ID de la sesión
+
+        Returns:
+            dict: Respuesta del servidor
+        """
+        try:
+            response = requests.delete(
+                f"{self.base_url}/session/{session_id}",
+                headers=self.headers
+            )
+
+            if response.status_code == 200:
+                return {
+                    'success': True
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f"Error al cerrar sesión: {response.status_code} - {response.text}"
+                }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f"Error de conexión: {str(e)}"
+            }
+
+    def format_phone_number(self, phone):
+        """
+        Formatea un número de teléfono para WhatsApp
+
+        Args:
+            phone: Número de teléfono (puede tener o no el prefijo '+')
+
+        Returns:
+            str: Número formateado para WhatsApp
+        """
+        # Eliminar caracteres no numéricos
+        clean_number = ''.join(filter(str.isdigit, phone))
+
+        # Asegurarse de que tenga el formato correcto para WhatsApp
+        return f"{clean_number}@s.whatsapp.net"
