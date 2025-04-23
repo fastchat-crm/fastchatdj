@@ -47,7 +47,7 @@ def sesionesView(request):
                 if action == 'create_session':
                     webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
                     session_id = request.POST['session_id']
-                    session = SesionWhatsApp.objects.get(id=session_id).first()
+                    session = SesionWhatsApp.objects.get(id=session_id)
                     result = whatsapp_service.create_session(session, webhook_url)
                     session.qr_code = result.get('qr_code')
                     session.save()
