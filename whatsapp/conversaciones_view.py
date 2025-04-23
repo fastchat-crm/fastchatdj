@@ -135,7 +135,7 @@ def conversacionesView(request):
 
     # ====================== LISTADO CONVERSACIONES =========================
     criterio = request.GET.get('criterio', '').strip()
-    filtros = Q(status=True, sesion__usuario__id=request.user.id)
+    filtros = Q(status=True, sesion__usuario__id=request.user.id, sesion__status=True)
     url_vars = ''
 
     if sesion_seleccionada:
