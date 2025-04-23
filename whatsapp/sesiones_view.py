@@ -14,11 +14,10 @@ from core.funciones import addData, paginador, secure_module, redirectAfterPostG
 from .models import SesionWhatsApp, WhatsAppWebhook
 from .services import WhatsAppService
 
-whatsapp_service = WhatsAppService()
-
 @login_required
 @secure_module
 def sesionesView(request):
+    whatsapp_service = WhatsAppService()
     data = {
         'titulo': 'Sesiones WhatsApp',
         'descripcion': 'Control de números de teléfono para sesiones de WhatsApp',

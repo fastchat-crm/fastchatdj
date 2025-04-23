@@ -21,6 +21,7 @@ from .models import (
     MensajeWhatsApp,
     EstadisticasConversacion
 )
+from .services import WhatsAppService
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ def webhook_handler(request):
     Manejador de webhooks para eventos de WhatsApp
     """
     # Verificar la clave API
+    whatsapp_service = WhatsAppService()
     try:
         # Parsear los datos recibidos
 
@@ -44,6 +46,7 @@ def webhook_handler(request):
             session = SesionWhatsApp.objects.get(session_id=session_id)
         except SesionWhatsApp.DoesNotExist:
             logger.error(f"Sesión no encontrada: {session_id}")
+            whatsapp_service.close_session(session_id)
             return JsonResponse({'message': 'Sesión no encontrada'}, status=404)
 
         # Obtener el channel layer para notificaciones en tiempo real
