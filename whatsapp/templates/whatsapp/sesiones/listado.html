@@ -224,7 +224,8 @@
     </div>
 
     <!-- Modal para Agregar Sesión / Mostrar QR -->
-    <div class="modal fade" data-bs-backdrop="static" id="modalAgregarSesion" tabindex="-1" aria-labelledby="modalAgregarSesionLabel"
+    <div class="modal fade" data-bs-backdrop="static" id="modalAgregarSesion" tabindex="-1"
+         aria-labelledby="modalAgregarSesionLabel"
          aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow">
@@ -239,7 +240,10 @@
                     <div class="text-center p-4 border-bottom">
                         <h6 class="mb-3 fw-normal text-muted">Escanea el código QR con tu teléfono</h6>
                         <div id="qrContent" class="qr-container bg-light p-4 rounded mx-auto">
-                            <div class="spinner-border text-success my-4" role="status" style="width: 3rem; height: 3rem;"><span class="visually-hidden">Cargando...</span></div><p class="mb-0 text-muted">Generando código QR, por favor espere...</p>
+                            <div class="spinner-border text-success my-4" role="status"
+                                 style="width: 3rem; height: 3rem;"><span class="visually-hidden">Cargando...</span>
+                            </div>
+                            <p class="mb-0 text-muted">Generando código QR, por favor espere...</p>
                         </div>
                     </div>
                     <div class="p-4 bg-light">
@@ -348,6 +352,11 @@
                     sessionSocket = new ReconnectingWebSocket(wsUrl, null, {reconnectInterval: 1500});
 
                     sessionSocket.onopen = function (e) {
+                        $.post('', {
+                            'session_id': res.session_id,
+                            'action': 'create_session',
+                            'csrfmiddlewaretoken': '{{ csrf_token }}'
+                        });
                         console.log('Conexión WebSocket establecida');
                     };
 

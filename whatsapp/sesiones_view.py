@@ -32,27 +32,26 @@ def sesionesView(request):
         try:
             with transaction.atomic():
                 if action == 'add':
-                    # Creamos la sesión en estado pendiente sin número
-                    name = request.user.get_full_name() or request.user.username
-                    webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
                     last_session_id = request.POST.get('last_session_id') or 0
                     last_session = SesionWhatsApp.objects.filter(id=last_session_id).first()
 
-                    qrFound = False
-
-                    # Crear sesión en la API con webhooks
                     session = last_session or SesionWhatsApp.objects.create(
                         estado='pendiente', usuario=request.user, session_id=str(uuid.uuid4()), qr_code=''
                     )
 
                     session.qr_code = ''
 
+                    log(f"Inicio de sesión WhatsApp pendiente (ID: {session.id})", request, "add", obj=session.id)
+                    res_json = {'error': False, 'qr': session.qr_code, 'session_id': session.id}
+                    return JsonResponse(res_json, safe=False)
+                if action == 'create_session':
+                    webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
+                    session_id = request.POST['session_id']
+                    session = SesionWhatsApp.objects.get(id=session_id).first()
                     result = whatsapp_service.create_session(session, webhook_url)
-
                     session.qr_code = result.get('qr_code')
                     session.save()
-
-                    log(f"Inicio de sesión WhatsApp pendiente (ID: {session.id})", request, "add", obj=session.id)
+                    log(f"Crear sesión WhatsApp pendiente (ID: {session.id})", request, "create_session", obj=session.id)
                     res_json = {'error': False, 'qr': session.qr_code, 'session_id': session.id}
                     return JsonResponse(res_json, safe=False)
                 elif action == 'delete':
