@@ -751,7 +751,7 @@
 
     function eliminarajax(pk, nombre, accion, titulo=`Estas a punto de eliminar este registro ${nombre}`) {
         Swal.fire({
-            title: titulo,
+            title: `${titulo}`,
             text: "Esta acción es irreversible",
             type: 'warning',
             showCancelButton: true,
@@ -763,34 +763,20 @@
         }).then((result) => {
             if (result.value) {
                 pantallaespera();
-                $.ajax({
-                    type: 'POST',
-                    url: '{{ reques.path }}',
-                    async: false,
-                    data: {
-                        csrfmiddlewaretoken: '{{ csrf_token }}',
-                        action: accion,
-                        id: pk,
-                    },
-                    dataType: "json",
-                    beforeSend: function () {
-                        pantallaespera();
-                    }
-                }).done(function (data) {
-                    setTimeout($.unblockUI, 1);
-                    if (data.error === false) {
+                $.post("{{ request.path }}", {'action': accion, 'id': pk,}, function (data) {
+                    $.unblockUI();
+                    if (data.error == false) {
                         location.reload();
-                    } else{
-                        mensajeDanger(data[0].message);
+                        $('.modal').modal('hide');
+                    } else {
+                        alertaWarning(data[0].message);
                     }
-                }).fail(function (jqXHR, textStatus, errorThrown) {
-                    setTimeout($.unblockUI, 1);
-                    mensajeWarning('Error en el servidor');
-                }).always(function () {
-                });
+                }, "json");
+            } else {
             }
         })
     }
+
     function actionSwal(pk, nombre, accion, titulo=``) {
         Swal.fire({
             title: titulo,

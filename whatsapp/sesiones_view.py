@@ -1,5 +1,6 @@
 import json
 import sys
+import uuid
 from datetime import datetime
 import pytz
 from django.contrib.auth.decorators import login_required
@@ -13,11 +14,10 @@ from core.funciones import addData, paginador, secure_module, redirectAfterPostG
 from .models import SesionWhatsApp, WhatsAppWebhook
 from .services import WhatsAppService
 
-whatsapp_service = WhatsAppService()
-
 @login_required
 @secure_module
 def sesionesView(request):
+    whatsapp_service = WhatsAppService()
     data = {
         'titulo': 'Sesiones WhatsApp',
         'descripcion': 'Control de números de teléfono para sesiones de WhatsApp',
@@ -32,45 +32,33 @@ def sesionesView(request):
         try:
             with transaction.atomic():
                 if action == 'add':
-                    # Creamos la sesión en estado pendiente sin número
-                    name = request.user.get_full_name() or request.user.username
-                    webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
+                    last_session_id = request.POST.get('last_session_id') or 0
+                    last_session = SesionWhatsApp.objects.filter(id=last_session_id).first()
 
-                    webhooks = [
-                        {'url': webhook_url, 'type': 'qr_code'},
-                        {'url': webhook_url, 'type': 'ready'},
-                        {'url': webhook_url, 'type': 'authenticated'},
-                        {'url': webhook_url, 'type': 'auth_failure'},
-                        {'url': webhook_url, 'type': 'disconnected'},
-                        {'url': webhook_url, 'type': 'message'},
-                        {'url': webhook_url, 'type': 'message_sent'},
-                        {'url': webhook_url, 'type': 'profile_update'},
-                        {'url': webhook_url, 'type': 'contact_update'},
-                        {'url': webhook_url, 'type': 'message_deleted'},
-                        {'url': webhook_url, 'type': 'message_edited'}
-                    ]
-
-                    # Crear sesión en la API con webhooks
-                    result = whatsapp_service.create_session_with_webhooks(name, webhooks)
-                    sesion = SesionWhatsApp.objects.create(
-                        estado='pendiente', usuario=request.user, session_id=result['sessionId'], qr_code=''
+                    session = last_session or SesionWhatsApp.objects.create(
+                        estado='pendiente', usuario=request.user, session_id=str(uuid.uuid4()), qr_code=''
                     )
 
-                    for webhook in webhooks:
-                        WhatsAppWebhook.objects.create(
-                            session=sesion,
-                            url=webhook['url'],
-                            type=webhook['type']
-                        )
+                    session.qr_code = ''
 
-                    log(f"Inicio de sesión WhatsApp pendiente (ID: {sesion.id})", request, "add", obj=sesion.id)
-                    res_json = {'error': False, 'qr': '', 'session_id': sesion.id}
+                    log(f"Inicio de sesión WhatsApp pendiente (ID: {session.id})", request, "add", obj=session.id)
+                    res_json = {'error': False, 'qr': session.qr_code, 'session_id': session.id}
+                    return JsonResponse(res_json, safe=False)
+                if action == 'create_session':
+                    webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
+                    session_id = request.POST['session_id']
+                    session = SesionWhatsApp.objects.get(id=session_id)
+                    result = whatsapp_service.create_session(session, webhook_url)
+                    session.qr_code = result.get('qr_code')
+                    session.save()
+                    log(f"Crear sesión WhatsApp pendiente (ID: {session.id})", request, "create_session", obj=session.id)
+                    res_json = {'error': False, 'qr': session.qr_code, 'session_id': session.id}
                     return JsonResponse(res_json, safe=False)
                 elif action == 'delete':
                     filtro = model.objects.get(pk=int(request.POST['id']))
                     filtro.status = False
                     filtro.save(request)
-                    result = whatsapp_service.delete_session(filtro.session_id)
+                    result = whatsapp_service.close_session(filtro.session_id)
                     log(f"Eliminó sesión WhatsApp {filtro.numero}", request, "del", obj=filtro.id)
                     messages.success(request, "Sesión eliminada correctamente.")
                     return JsonResponse({"error": False})
@@ -78,54 +66,6 @@ def sesionesView(request):
         except Exception as ex:
             res_json.append({'error': True, 'message': "Error, intente nuevamente."})
             return JsonResponse(res_json, safe=False)
-    else:
-        if 'action' in request.GET:
-            data["action"] = action = request.GET['action']
-            if action == 'get_qr':
-                try:
-                    sesion_id = request.GET.get('session_id')
-                    if not sesion_id:
-                        return JsonResponse({'error': True, 'message': 'ID de sesión no enviado'})
-
-                    sesion = get_object_or_404(SesionWhatsApp, id=int(sesion_id))
-                    qr_code = whatsapp_service.get_qr_code(sesion.session_id)
-                    return JsonResponse({'error': False, 'qr': qr_code})
-                except SesionWhatsApp.DoesNotExist:
-                    return JsonResponse({'error': True, 'message': 'Sesión no encontrada'})
-                except Exception as ex:
-                    return JsonResponse({'error': True, 'message': f'Error al obtener QR: {str(ex)}'})
-            elif action == 'check_status':
-                try:
-                    sessions_id = json.loads(request.GET['sessions'])
-                    sessions = SesionWhatsApp.objects.filter(id__in=sessions_id)
-                    response = {}
-                    is_authenticated = False
-                    for s in sessions:
-                        session_status = whatsapp_service.check_session_status(s.session_id)
-                        if not is_authenticated:
-                            is_authenticated = session_status.get('isReady', False)
-                            if is_authenticated:
-                                s.numero = session_status['info']['phone']
-                                s.estado = 'conectado'
-                                dt = datetime.strptime(session_status['lastActivity'], '%Y-%m-%dT%H:%M:%S.%fZ')
-                                dt_utc = dt.replace(tzinfo=pytz.UTC)
-                                s.ultima_conexion = dt_utc
-                                s.save()
-                                response = {
-                                    'error': False,
-                                    'estado': s.estado,
-                                    'numero': s.numero,
-                                    'is_authenticated': is_authenticated,
-                                    'session_id': s.id
-                                }
-
-                    if is_authenticated:
-                        SesionWhatsApp.objects.filter(id__in=sessions_id).exclude(id=response['session_id']).delete()
-
-                    return JsonResponse(response)
-                except Exception as ex:
-                    return JsonResponse({'error': True, 'message': 'Error al consultar estado'})
-
     # ====================== LISTADO SESIONES =========================
     criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, usuario_id=request.user.id), ''
     if criterio:

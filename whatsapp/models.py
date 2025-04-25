@@ -13,7 +13,7 @@ ESTADOS_SESION = (
 
 
 class SesionWhatsApp(ModeloBase):
-    numero = models.CharField(max_length=20, verbose_name='Número WhatsApp')
+    numero = models.CharField(max_length=50, verbose_name='Número WhatsApp')
     estado = models.CharField(max_length=20, choices=ESTADOS_SESION, default='pendiente')
     qr_code = models.TextField(blank=True, null=True, verbose_name='Código QR actual (Base64)')
     usuario = models.ForeignKey(Usuario, on_delete=models.PROTECT, null=True, blank=True,
@@ -64,6 +64,7 @@ class WhatsAppWebhook(models.Model):
 class ConversacionWhatsApp(ModeloBase):
     objects = ConversacionWhatsAppManager()
     sesion = models.ForeignKey(SesionWhatsApp, on_delete=models.CASCADE, related_name='conversaciones')
+    from_number = models.CharField(max_length=255, blank=True, null=True, default='')
     contacto_numero = models.CharField(max_length=50, verbose_name='Número del contacto')
     contacto_nombre = models.CharField(max_length=255, blank=True, null=True)
     contacto_foto = models.TextField(blank=True, null=True)

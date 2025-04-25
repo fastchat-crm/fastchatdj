@@ -1,7 +1,6 @@
-# whatsapp/views.py (webhook_handler adaptado a tus modelos)
+# whatsapp/views.py (webhook_handler)
 from django.db.models import Q
 from django.http import JsonResponse
-from django.template.loader import render_to_string
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 import json
@@ -9,405 +8,671 @@ from django.utils import timezone
 import logging
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-from fastchatdj.settings import NODE_SECRET_KEY
-from .models import SesionWhatsApp, ConversacionWhatsApp, MensajeWhatsApp
-from datetime import datetime
-import pytz
+import base64
+import os
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.conf import settings
+
+from core.funciones_adicionales import get_image_as_base64
+from .models import (
+    SesionWhatsApp,
+    ConversacionWhatsApp,
+    MensajeWhatsApp,
+    EstadisticasConversacion
+)
+from .services import WhatsAppService
+
 logger = logging.getLogger(__name__)
 
 @csrf_exempt
+@require_POST
 def webhook_handler(request):
-    if request.headers.get('X-API-Key') != NODE_SECRET_KEY:
-        return JsonResponse({'message': 'No autorizado'}, status=401)
+    """
+    Manejador de webhooks para eventos de WhatsApp
+    """
+    # Verificar la clave API
+    whatsapp_service = WhatsAppService()
     try:
+        # Parsear los datos recibidos
+
         data = json.loads(request.body)
-        session_id = data.get('session_id')
-        event_type = data.get('event_type')
-        timestamp = data.get('timestamp')
+        event_type = data.get('type')
         event_data = data.get('data', {})
-        channel_layer = get_channel_layer()
+        session_id = event_data.get('sessionId')
 
-        # Registrar el evento en el log
-        logger.info(f"Webhook recibido: {event_type} para sesión {session_id}")
-
+        # Obtener la sesión
         try:
-            sesion = SesionWhatsApp.objects.get(session_id=session_id)
-
-            # Actualizar la última conexión
-            sesion.ultima_conexion = timezone.now()
-
-            # Procesar según el tipo de evento
-            if event_type == 'qr_code':
-                sesion.qr_code = event_data.get('qr_code')
-                sesion.estado = 'pendiente'
-                logger.info(f"QR Code actualizado para sesión {session_id}")
-                sesion.save()
-                async_to_sync(channel_layer.group_send)(
-                    f'qrsession_{sesion.id}',
-                    {
-                        'type': 'update_qrsession',
-                        'message': {'type': 'update_qrsession', 'qr_code': sesion.qr_code}
-                    }
-                )
-
-            elif event_type == 'ready':
-                sesion.estado = 'conectado'
-                sesion.qr_code = None
-                sesion.error_mensaje = None
-
-                # Si hay información del perfil, guardarla
-                if event_data.get('profile_picture_base64'):
-                    sesion.foto = event_data.get('profile_picture_base64')
-
-                sesion.save()
-
-                logger.info(f"Sesión {session_id} lista y conectada")
-
-            elif event_type == 'authenticated':
-                sesion.estado = 'conectado'
-                sesion.qr_code = None
-                sesion.error_mensaje = None
-
-                # Si hay información del perfil, guardarla
-                if event_data.get('profile_picture_base64'):
-                    sesion.foto = event_data.get('profile_picture_base64')
-
-                sesion.save()
-
-                logger.info(f"Sesión {session_id} autenticada")
-
-            elif event_type == 'auth_failure':
-                sesion.estado = 'error'
-                sesion.error_mensaje = f"Error de autenticación: {event_data.get('error', 'Desconocido')}"
-                logger.error(f"Error de autenticación en sesión {session_id}: {event_data.get('error')}")
-                sesion.save()
-
-            elif event_type == 'disconnected':
-                sesion.estado = 'desconectado'
-                sesion.error_mensaje = f"Desconectado: {event_data.get('reason', 'Razón desconocida')}"
-                logger.info(f"Sesión {session_id} desconectada: {event_data.get('reason')}")
-                sesion.save()
-
-            elif event_type == 'profile_update':
-                # Evento específico para actualizar el perfil del usuario
-                if event_data.get('profile_picture_base64'):
-                    sesion.foto = event_data.get('profile_picture_base64')
-                    logger.info(f"Foto de perfil actualizada para sesión {session_id}")
-                    sesion.save()
-
-
-            elif event_type == 'message' or event_type == 'message_sent':
-                # Procesar mensaje recibido o enviado
-                message_id = event_data.get('message_id')
-                remote_jid = event_data.get('from') if event_type == 'message' else event_data.get('to')
-                body = event_data.get('body', '')
-                has_media = event_data.get('has_media', False)
-                message_type = event_data.get('type', 'texto')
-                message_timestamp = event_data.get('timestamp')
-
-                # Obtener el nombre del contacto si está disponible
-                contact_name = event_data.get('sender_name', '')
-
-                # Normalizar el número de teléfono (quitar @c.us si existe)
-                if '@c.us' in remote_jid:
-                    contacto_numero = remote_jid.split('@')[0]
-                else:
-                    contacto_numero = remote_jid
-
-                # Buscar o crear conversación
-                conversacion, created = ConversacionWhatsApp.objects.get_or_create(
-                    sesion=sesion,
-                    contacto_numero=contacto_numero,
-                    defaults={
-                        'contacto_nombre': contact_name,  # Guardar el nombre al crear
-                        'estado': 'activo',
-                        'ultimo_mensaje': body,
-                        'fecha_ultimo_mensaje': timezone.now()
-                    }
-                )
-
-                # Si la conversación ya existía pero no tenía nombre, actualizarlo
-                if not created and not conversacion.contacto_nombre and contact_name:
-                    conversacion.contacto_nombre = contact_name
-
-                # Actualizar último mensaje
-                conversacion.ultimo_mensaje = body
-                conversacion.fecha_ultimo_mensaje = timezone.now()
-                conversacion.save()
-
-                # Determinar tipo de mensaje para nuestro modelo
-                tipo_mensaje = 'texto'
-                if message_type == 'image':
-                    tipo_mensaje = 'imagen'
-                elif message_type == 'audio':
-                    tipo_mensaje = 'audio'
-                elif message_type == 'video':
-                    tipo_mensaje = 'video'
-                elif message_type == 'document':
-                    tipo_mensaje = 'documento'
-                elif message_type == 'location':
-                    tipo_mensaje = 'ubicacion'
-                elif message_type == 'contact':
-                    tipo_mensaje = 'contacto'
-                elif message_type == 'sticker':
-                    tipo_mensaje = 'sticker'
-
-                # Crear mensaje
-                MensajeWhatsApp.objects.create(
-                    conversacion=conversacion,
-                    remitente=sesion.numero if event_type == 'message_sent' else contacto_numero,
-                    mensaje=body,
-                    tipo=tipo_mensaje,
-                    archivo_url=event_data.get('media_url'),
-                    fecha=timezone.now(),
-                    leido=event_type == 'message_sent',  # Mensajes enviados se marcan como leídos
-                    fecha_leido=timezone.now() if event_type == 'message_sent' else None,
-                    mensaje_id_externo=message_id  # Guardar el ID externo del mensaje
-                )
-
-                logger.info(f"Mensaje {'enviado' if event_type == 'message_sent' else 'recibido'} en conversación con {contacto_numero}")
-                # Actualizar foto y nombre del remitente si están disponibles
-                sender_name = event_data.get('sender_name')
-                sender_profile_picture_base64 = event_data.get('sender_profile_picture_base64')
-
-                if (sender_name or sender_profile_picture_base64) and conversacion:
-                    actualizado = False
-                    if sender_name and (
-                            not conversacion.contacto_nombre or conversacion.contacto_nombre != sender_name):
-                        conversacion.contacto_nombre = sender_name
-                        actualizado = True
-                    if sender_profile_picture_base64:
-                        conversacion.contacto_foto = sender_profile_picture_base64
-                        actualizado = True
-
-                    if actualizado:
-                        conversacion.save()
-                        logger.info(f"Información de contacto actualizada para {contacto_numero}")
-
-                mensajes = MensajeWhatsApp.objects.filter(
-                    conversacion=conversacion
-                ).order_by('fecha')
-
-                html = render_to_string('whatsapp/conversaciones/mensajes_partial.html', {
-                    'mensajes': mensajes,
-                    'conversacion': conversacion
-                })
-
-                async_to_sync(channel_layer.group_send)(
-                    f'chat_{conversacion.id}',
-                    {
-                        'type': 'chat_message',
-                        'message': {
-                            'type': 'new_message',
-                            'conversacion_id': str(conversacion.id),
-                            'html': html
-                        }
-                    }
-                )
-                async_to_sync(channel_layer.group_send)(
-                    f'session_{conversacion.sesion_id}',
-                    {
-                        'type': 'update_session',
-                        'message': {'type': 'update_session',}
-                    }
-                )
-
-            # También podemos añadir un evento específico para actualizar contactos
-            # Añadir este caso en tu webhook_handler
-            elif event_type == 'contact_update':
-                contacto_numero = event_data.get('number')
-                contacto_nombre = event_data.get('name')
-                contacto_foto_base64 = event_data.get('profile_picture_base64')
-
-                if contacto_numero:
-                    # Normalizar el número
-                    if '@c.us' in contacto_numero:
-                        contacto_numero = contacto_numero.split('@')[0]
-
-                    # Buscar conversaciones existentes con este contacto
-                    conversaciones = ConversacionWhatsApp.objects.filter(
-                        sesion=sesion,
-                        contacto_numero=contacto_numero
-                    )
-
-                    if conversaciones.exists():
-                        # Actualizar conversaciones existentes
-                        for conv in conversaciones:
-                            actualizado = False
-                            if contacto_nombre and (
-                                    not conv.contacto_nombre or conv.contacto_nombre != contacto_nombre):
-                                conv.contacto_nombre = contacto_nombre
-                                actualizado = True
-                            if contacto_foto_base64:
-                                conv.contacto_foto = contacto_foto_base64
-                                actualizado = True
-
-                            if actualizado:
-                                conv.save()
-                                logger.info(f"Contacto actualizado: {contacto_numero} - {contacto_nombre}")
-                    else:
-                        # Crear una nueva conversación si no existe
-                        try:
-                            nueva_conversacion = ConversacionWhatsApp.objects.create(
-                                sesion=sesion,
-                                contacto_numero=contacto_numero,
-                                contacto_nombre=contacto_nombre,
-                                contacto_foto=contacto_foto_base64,
-                                estado='pendiente',  # O el estado inicial que prefieras
-                                ultimo_mensaje='',
-                                fecha_ultimo_mensaje=timezone.now()
-                            )
-                            logger.info(
-                                f"Nueva conversación creada para contacto: {contacto_numero} - {contacto_nombre}")
-                        except Exception as e:
-                            logger.error(f"Error al crear conversación para contacto {contacto_numero}: {str(e)}")
-
-            elif event_type == 'message_deleted':
-                # Procesar mensaje eliminado
-                message_id = event_data.get('message_id')
-                message_id2 = message_id
-                msgids = message_id.split('@c.us_')
-                if len(msgids) > 1:
-                    message_id2 = msgids[1]
-                remote_jid = event_data.get('from')
-                timestamp = event_data.get('timestamp')
-
-                # Normalizar el número de teléfono
-                if '@c.us' in remote_jid:
-                    contacto_numero = remote_jid.split('@')[0]
-                else:
-                    contacto_numero = remote_jid
-
-                try:
-                    # Buscar la conversación
-                    conversacion = ConversacionWhatsApp.objects.get(
-                        sesion=sesion,
-                        contacto_numero=contacto_numero
-                    )
-
-                    # Buscar el mensaje por su ID externo (si lo guardamos)
-                    # Si no guardamos el ID externo, podemos intentar buscarlo por timestamp
-                    mensaje = MensajeWhatsApp.objects.filter(
-                        Q(mensaje_id_externo=message_id) | Q(mensaje_id_externo=message_id2),
-                        conversacion=conversacion
-                    ).first()
-
-                    if not mensaje and timestamp:
-                        # Intentar buscar por timestamp si no encontramos por ID
-                        # Esto es menos preciso pero puede funcionar
-
-                        # Convertir timestamp a datetime
-                        fecha_mensaje = datetime.fromtimestamp(timestamp).replace(tzinfo=pytz.UTC)
-
-                        # Buscar mensajes cercanos a esa fecha
-                        mensajes_cercanos = MensajeWhatsApp.objects.filter(
-                            conversacion=conversacion,
-                            fecha__range=(
-                                fecha_mensaje - timezone.timedelta(minutes=1),
-                                fecha_mensaje + timezone.timedelta(minutes=1)
-                            )
-                        )
-
-                        if mensajes_cercanos.exists():
-                            mensaje = mensajes_cercanos.first()
-
-                    if mensaje:
-                        # Marcar el mensaje como eliminado
-                        mensaje.eliminado = True
-                        mensaje.fecha_eliminacion = timezone.now()
-                        mensaje.save()
-
-                        logger.info(f"Mensaje marcado como eliminado: {message_id}")
-                    else:
-                        logger.warning(f"No se encontró el mensaje a eliminar: {message_id}")
-
-                except ConversacionWhatsApp.DoesNotExist:
-                    logger.warning(f"No se encontró la conversación para el mensaje eliminado: {contacto_numero}")
-                except Exception as e:
-                    logger.error(f"Error al procesar mensaje eliminado: {str(e)}")
-
-            elif event_type == 'message_edited':
-                # Procesar mensaje editado
-                message_id = event_data.get('message_id') or ''
-                message_id2 = message_id
-                msgids = message_id.split('@c.us_')
-                if len(msgids) > 1:
-                    message_id2 = msgids[1]
-                remote_jid = event_data.get('from')
-                body = event_data.get('body', '')
-                timestamp = event_data.get('timestamp')
-                edit_timestamp = event_data.get('edit_timestamp')
-
-                # Normalizar el número de teléfono
-                if '@c.us' in remote_jid:
-                    contacto_numero = remote_jid.split('@')[0]
-                else:
-                    contacto_numero = remote_jid
-
-                try:
-                    # Buscar la conversación
-                    conversacion = ConversacionWhatsApp.objects.get(
-                        sesion=sesion,
-                        contacto_numero=contacto_numero
-                    )
-
-                    # Buscar el mensaje por su ID externo
-                    mensaje = MensajeWhatsApp.objects.filter(
-                        Q(mensaje_id_externo=message_id) | Q(mensaje_id_externo=message_id2),
-                        conversacion=conversacion
-                    ).first()
-
-                    if not mensaje and timestamp:
-                        # Intentar buscar por timestamp si no encontramos por ID
-
-                        # Convertir timestamp a datetime
-                        fecha_mensaje = datetime.fromtimestamp(timestamp).replace(tzinfo=pytz.UTC)
-
-                        # Buscar mensajes cercanos a esa fecha
-                        mensajes_cercanos = MensajeWhatsApp.objects.filter(
-                            conversacion=conversacion,
-                            fecha__range=(
-                                fecha_mensaje - timezone.timedelta(minutes=1),
-                                fecha_mensaje + timezone.timedelta(minutes=1)
-                            )
-                        )
-
-                        if mensajes_cercanos.exists():
-                            mensaje = mensajes_cercanos.first()
-
-                    if mensaje:
-                        # Guardar el mensaje original
-                        if not mensaje.mensaje_original:
-                            mensaje.mensaje_original = mensaje.mensaje
-
-                        # Actualizar el mensaje con el contenido editado
-                        mensaje.mensaje = body
-                        mensaje.editado = True
-                        mensaje.fecha_edicion = timezone.now()
-                        mensaje.save()
-
-                        logger.info(f"Mensaje editado: {message_id}")
-                    else:
-                        logger.warning(f"No se encontró el mensaje a editar: {message_id}")
-                except ConversacionWhatsApp.DoesNotExist:
-                    logger.warning(f"No se encontró la conversación para el mensaje editado: {contacto_numero}")
-                except Exception as e:
-                    logger.error(f"Error al procesar mensaje editado: {str(e)}")
-            # Resto del código para manejar mensajes y otros eventos...
-
-            # Guardar los cambios en la sesión
-            sesion.save()
-
-            return JsonResponse({'success': True})
-
-
-
+            session = SesionWhatsApp.objects.get(session_id=session_id)
         except SesionWhatsApp.DoesNotExist:
             logger.error(f"Sesión no encontrada: {session_id}")
-            return JsonResponse({'success': False, 'error': 'Sesión no encontrada'}, status=404)
+            whatsapp_service.close_session(session_id)
+            return JsonResponse({'message': 'Sesión no encontrada'}, status=404)
+
+        # Obtener el channel layer para notificaciones en tiempo real
+        channel_layer = get_channel_layer()
+
+        # Procesar el evento según su tipo
+        if event_type == 'qr_code':
+            # Actualizar el código QR en la sesión
+            session.qr_code = event_data.get('qrCode')
+            session.estado = 'pendiente'
+            session.save()
+
+            # Notificar a través de WebSockets
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_session_{session.id}",
+                {
+                    'type': 'whatsapp_event',
+                    'event': 'qr_code',
+                    'session_id': session.id,
+                    'qr_code': session.qr_code
+                }
+            )
+
+            logger.info(f"Código QR actualizado para la sesión {session_id}")
+
+        elif event_type == 'ready':
+            # Actualizar el estado de la sesión a conectado
+            session.estado = 'conectado'
+            session.ultima_conexion = timezone.now()
+            session.error_mensaje = None
+
+            # Guardar información del usuario si está disponible
+            if 'user' in event_data:
+                user_info = event_data.get('user', {})
+                if 'userImage' in event_data and event_data.get('userImage'):
+                    session.foto = f'data:image/jpg;base64,{get_image_as_base64(event_data.get("userImage"))}'
+                if 'id' in user_info:
+                    numero_list = []
+                    for x in user_info['id']:
+                        if not x.isdigit():
+                            break
+                        numero_list.append(x)
+                    session.numero = "".join(numero_list)
+
+            session.save()
+
+            # Notificar a través de WebSockets
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_session_{session.id}",
+                {
+                    'type': 'whatsapp_event',
+                    'event': 'ready',
+                    'session_id': session.id
+                }
+            )
+
+            logger.info(f"Sesión {session_id} conectada correctamente")
+
+        elif event_type == 'authenticated':
+            # Actualizar el estado de la sesión
+            session.estado = 'conectado'
+            session.ultima_conexion = timezone.now()
+            session.error_mensaje = None
+            session.save()
+
+            # Notificar a través de WebSockets
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_session_{session.id}",
+                {
+                    'type': 'whatsapp_event',
+                    'event': 'authenticated',
+                    'session_id': session.id
+                }
+            )
+
+            logger.info(f"Sesión {session_id} autenticada")
+
+        elif event_type == 'auth_failure':
+            # Actualizar el estado de la sesión
+            session.estado = 'error'
+            session.error_mensaje = "Error de autenticación"
+            session.save()
+
+            # Notificar a través de WebSockets
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_session_{session.id}",
+                {
+                    'type': 'whatsapp_event',
+                    'event': 'auth_failure',
+                    'session_id': session.id,
+                    'error': session.error_mensaje
+                }
+            )
+
+            logger.error(f"Error de autenticación en la sesión {session_id}")
+
+        elif event_type == 'disconnected':
+            # Actualizar el estado de la sesión
+            session.estado = 'desconectado'
+            session.save()
+
+            # Notificar a través de WebSockets
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_session_{session.id}",
+                {
+                    'type': 'whatsapp_event',
+                    'event': 'disconnected',
+                    'session_id': session.id,
+                    'reason': event_data.get('reason', 'unknown')
+                }
+            )
+
+            logger.info(f"Sesión {session_id} desconectada")
+
+        elif event_type == 'message':
+            # Procesar mensaje entrante
+            process_incoming_message(session, event_data, channel_layer)
+
+        elif event_type == 'message_sent':
+            # Procesar mensaje enviado
+            process_sent_message(session, event_data, channel_layer)
+
+        elif event_type == 'message_deleted':
+            # Procesar mensaje eliminado
+            process_deleted_message(session, event_data, channel_layer)
+
+        elif event_type == 'message_edited':
+            # Procesar mensaje editado
+            process_edited_message(session, event_data, channel_layer)
+
+        elif event_type == 'contact_update':
+            # Procesar actualización de contacto
+            process_contact_update(session, event_data, channel_layer)
+
+        elif event_type == 'profile_update':
+            # Procesar actualización de perfil
+            process_profile_update(session, event_data, channel_layer)
+
+        # Responder con éxito
+        return JsonResponse({'message': 'Evento procesado correctamente'})
 
     except json.JSONDecodeError:
-        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+        logger.error("Error al decodificar JSON del webhook")
+        return JsonResponse({'message': 'JSON inválido'}, status=400)
     except Exception as e:
-        logger.error(f"Error en webhook_handler: {str(e)}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        logger.exception(f"Error procesando webhook: {str(e)}")
+        return JsonResponse({'message': f'Error: {str(e)}'}, status=500)
+
+def process_incoming_message(session, event_data, channel_layer):
+    """
+    Procesa un mensaje entrante de WhatsApp
+    """
+    try:
+        # Extraer datos del mensaje
+        message_id = event_data.get('id')
+        from_number = event_data.get('from')
+        timestamp = event_data.get('timestamp')
+        push_name = event_data.get('pushName', '')
+        message_content = event_data.get('message', {})
+        userImage = event_data.get('userImage')
+
+        # Convertir timestamp a datetime
+        if isinstance(timestamp, int):
+            message_date = timezone.datetime.fromtimestamp(timestamp, tz=timezone.get_current_timezone())
+        else:
+            message_date = timezone.now()
+
+        # Limpiar el número de teléfono (quitar el @s.whatsapp.net)
+        contacto_numero = ''
+        if '@' in from_number:
+            contacto_numero = from_number.split('@')[0]
+
+        # Buscar o crear la conversación
+        conversation, created = ConversacionWhatsApp.objects.get_or_create(
+            sesion=session,
+            from_number=from_number,
+            contacto_numero=contacto_numero,
+            defaults={
+                'contacto_nombre': push_name,
+                'estado': 'activo',
+                'fecha_ultimo_mensaje': message_date
+            }
+        )
+
+        # Actualizar nombre del contacto si está disponible
+        if push_name:
+            conversation.contacto_nombre = push_name
+
+        if userImage:
+            conversation.contacto_foto = f'data:image/jpg;base64,{get_image_as_base64(userImage)}'
+
+        # Determinar el tipo de mensaje y su contenido
+        message_type = 'texto'
+        message_text = ''
+        file_url = None
+
+        # Procesar texto
+        if 'conversation' in message_content:
+            message_type = 'texto'
+            message_text = message_content.get('conversation', '')
+        elif 'extendedTextMessage' in message_content:
+            message_type = 'texto'
+            message_text = message_content.get('extendedTextMessage', {}).get('text', '')
+
+        # Procesar archivos multimedia
+        media_types = {
+            'imageMessage': ('imagen', 'fileName', 'mimetype', 'caption'),
+            'videoMessage': ('video', 'fileName', 'mimetype', 'caption'),
+            'audioMessage': ('audio', 'fileName', 'mimetype', None),
+            'documentMessage': ('documento', 'fileName', 'mimetype', 'caption'),
+            'stickerMessage': ('sticker', None, 'mimetype', None)
+        }
+
+        for media_key, (type_name, filename_key, mimetype_key, caption_key) in media_types.items():
+            if media_key in message_content:
+                media_msg = message_content.get(media_key, {})
+                message_type = type_name
+
+                # Obtener el texto del caption si existe
+                if caption_key and caption_key in media_msg:
+                    message_text = media_msg.get(caption_key, '')
+
+                # Procesar archivo multimedia si hay datos
+                if 'mediaData' in event_data:
+                    media_data = event_data.get('mediaData')
+                    filename = media_msg.get(filename_key, f"{type_name}_{message_id}")
+
+                    # Guardar el archivo
+                    file_url = save_media_file(media_data, filename, session.id, conversation.id)
+
+        # Actualizar la conversación con el último mensaje
+        conversation.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
+        conversation.fecha_ultimo_mensaje = message_date
+        conversation.save()
+
+        # Crear el mensaje
+        message = MensajeWhatsApp.objects.create(
+            conversacion=conversation,
+            remitente=from_number,
+            mensaje=message_text,
+            tipo=message_type,
+            archivo_url=file_url,
+            fecha=message_date,
+            mensaje_id_externo=message_id
+        )
+
+        # Actualizar estadísticas
+        update_conversation_stats(conversation)
+
+        # Notificar a través de WebSockets
+        async_to_sync(channel_layer.group_send)(
+            f"whatsapp_conversation_{conversation.id}",
+            {
+                'type': 'whatsapp_message',
+                'event': 'new_message',
+                'conversation_id': conversation.id,
+                'message_id': message.id,
+                'message_type': message_type,
+                'message_text': message_text,
+                'sender': from_number,
+                'timestamp': message_date.isoformat()
+            }
+        )
+
+        # También notificar a la sesión
+        async_to_sync(channel_layer.group_send)(
+            f"whatsapp_session_{session.id}",
+            {
+                'type': 'whatsapp_event',
+                'event': 'new_message',
+                'session_id': session.id,
+                'conversation_id': conversation.id,
+                'message_id': message.id
+            }
+        )
+
+        logger.info(f"Mensaje recibido de {from_number} en la sesión {session.session_id}")
+
+    except Exception as e:
+        logger.exception(f"Error procesando mensaje entrante: {str(e)}")
+
+def process_sent_message(session, event_data, channel_layer):
+    """
+    Procesa un mensaje enviado a través de WhatsApp
+    """
+    try:
+        # Extraer datos del mensaje
+        message_id = event_data.get('messageId')
+        from_number = event_data.get('to')
+        to_number = from_number.split('@')[0]
+        message_data = event_data.get('message', {})
+
+        # Buscar la conversación
+        try:
+            conversation = ConversacionWhatsApp.objects.get(
+                sesion=session,
+                contacto_numero=to_number
+            )
+        except ConversacionWhatsApp.DoesNotExist:
+            # Crear una nueva conversación si no existe
+            conversation = ConversacionWhatsApp.objects.create(
+                sesion=session,
+                contacto_numero=to_number,
+                from_number=from_number,
+                estado='activo',
+                fecha_ultimo_mensaje=timezone.now()
+            )
+
+        # Determinar el tipo y contenido del mensaje
+        message_type = message_data.get('type', 'texto')
+        message_text = message_data.get('caption', '') or message_data.get('text', '')
+
+        # Actualizar la conversación
+        conversation.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
+        conversation.fecha_ultimo_mensaje = timezone.now()
+        conversation.save()
+
+        # Crear el mensaje
+        message = MensajeWhatsApp.objects.create(
+            conversacion=conversation,
+            remitente=session.numero,  # El remitente es el número de la sesión
+            mensaje=message_text,
+            tipo=message_type,
+            archivo_url=None,  # No tenemos la URL del archivo en este punto
+            fecha=timezone.now(),
+            mensaje_id_externo=message_id,
+            leido=True,  # Marcamos como leído ya que lo enviamos nosotros
+            fecha_leido=timezone.now()
+        )
+
+        # Actualizar estadísticas
+        update_conversation_stats(conversation)
+
+        # Notificar a través de WebSockets
+        async_to_sync(channel_layer.group_send)(
+            f"whatsapp_conversation_{conversation.id}",
+            {
+                'type': 'whatsapp_message',
+                'event': 'message_sent',
+                'conversation_id': conversation.id,
+                'message_id': message.id,
+                'message_type': message_type,
+                'message_text': message_text,
+                'sender': session.numero,
+                'timestamp': timezone.now().isoformat()
+            }
+        )
+
+        logger.info(f"Mensaje enviado a {to_number} desde la sesión {session.session_id}")
+
+    except Exception as e:
+        logger.exception(f"Error procesando mensaje enviado: {str(e)}")
+
+def process_deleted_message(session, event_data, channel_layer):
+    """
+    Procesa un mensaje eliminado en WhatsApp
+    """
+    try:
+        # Extraer datos del mensaje
+        message_id = event_data.get('messageId')
+        chat = event_data.get('chat')
+
+        # Limpiar el número de teléfono
+        if '@' in chat:
+            chat = chat.split('@')[0]
+
+        # Buscar el mensaje por su ID externo
+        try:
+            message = MensajeWhatsApp.objects.get(
+                mensaje_id_externo=message_id,
+                conversacion__sesion=session,
+                conversacion__contacto_numero=chat
+            )
+
+            # Marcar como eliminado
+            message.eliminado = True
+            message.fecha_eliminacion = timezone.now()
+            message.save()
+
+            # Notificar a través de WebSockets
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_conversation_{message.conversacion.id}",
+                {
+                    'type': 'whatsapp_message',
+                    'event': 'message_deleted',
+                    'conversation_id': message.conversacion.id,
+                    'message_id': message.id,
+                    'external_message_id': message_id
+                }
+            )
+
+            logger.info(f"Mensaje {message_id} marcado como eliminado")
+
+        except MensajeWhatsApp.DoesNotExist:
+            logger.warning(f"No se encontró el mensaje {message_id} para marcar como eliminado")
+
+    except Exception as e:
+        logger.exception(f"Error procesando mensaje eliminado: {str(e)}")
+
+def process_edited_message(session, event_data, channel_layer):
+    """
+    Procesa un mensaje editado en WhatsApp
+    """
+    try:
+        # Extraer datos del mensaje
+        message_id = event_data.get('messageId')
+        chat = event_data.get('chat')
+        edited_message = event_data.get('editedMessage', {})
+
+        # Limpiar el número de teléfono
+        if '@' in chat:
+            chat = chat.split('@')[0]
+
+        # Buscar el mensaje por su ID externo
+        try:
+            message = MensajeWhatsApp.objects.get(
+                mensaje_id_externo=message_id,
+                conversacion__sesion=session,
+                conversacion__contacto_numero=chat
+            )
+
+            # Guardar el mensaje original
+            if not message.mensaje_original:
+                message.mensaje_original = message.mensaje
+
+            # Actualizar con el mensaje editado
+            new_text = ''
+            if 'conversation' in edited_message:
+                new_text = edited_message.get('conversation', '')
+            elif 'extendedTextMessage' in edited_message:
+                new_text = edited_message.get('extendedTextMessage', {}).get('text', '')
+
+            message.mensaje = new_text
+            message.editado = True
+            message.fecha_edicion = timezone.now()
+            message.save()
+
+            # Notificar a través de WebSockets
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_conversation_{message.conversacion.id}",
+                {
+                    'type': 'whatsapp_message',
+                    'event': 'message_edited',
+                    'conversation_id': message.conversacion.id,
+                    'message_id': message.id,
+                    'external_message_id': message_id,
+                    'new_text': new_text,
+                    'original_text': message.mensaje_original
+                }
+            )
+
+            logger.info(f"Mensaje {message_id} editado")
+
+        except MensajeWhatsApp.DoesNotExist:
+            logger.warning(f"No se encontró el mensaje {message_id} para editar")
+
+    except Exception as e:
+        logger.exception(f"Error procesando mensaje editado: {str(e)}")
+
+def process_contact_update(session, event_data, channel_layer):
+    """
+    Procesa una actualización de contacto en WhatsApp
+    """
+    try:
+        contact_data = event_data.get('contact', {})
+        contact_id = contact_data.get('id', '')
+
+        # Limpiar el ID del contacto
+        if '@' in contact_id:
+            contact_id = contact_id.split('@')[0]
+
+        # Buscar conversaciones con este contacto
+        conversations = ConversacionWhatsApp.objects.filter(
+            sesion=session,
+            contacto_numero=contact_id
+        )
+
+        for conversation in conversations:
+            # Actualizar nombre si está disponible
+            if 'notify' in contact_data:
+                conversation.contacto_nombre = contact_data.get('notify')
+                conversation.save()
+
+            # Notificar a través de WebSockets
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_conversation_{conversation.id}",
+                {
+                    'type': 'whatsapp_contact',
+                    'event': 'contact_update',
+                    'conversation_id': conversation.id,
+                    'contact_number': contact_id,
+                    'contact_name': conversation.contacto_nombre
+                }
+            )
+
+        logger.info(f"Contacto {contact_id} actualizado")
+
+    except Exception as e:
+        logger.exception(f"Error procesando actualización de contacto: {str(e)}")
+
+def process_profile_update(session, event_data, channel_layer):
+    """
+    Procesa una actualización de perfil en WhatsApp
+    """
+    try:
+        presence_data = event_data.get('presence', {})
+        user_id = presence_data.get('id', '')
+
+        # Limpiar el ID del usuario
+        if '@' in user_id:
+            user_id = user_id.split('@')[0]
+
+        # Buscar conversaciones con este usuario
+        conversations = ConversacionWhatsApp.objects.filter(
+            sesion=session,
+            contacto_numero=user_id
+        )
+
+        for conversation in conversations:
+            # Notificar a través de WebSockets
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_conversation_{conversation.id}",
+                {
+                    'type': 'whatsapp_contact',
+                    'event': 'profile_update',
+                    'conversation_id': conversation.id,
+                    'contact_number': user_id,
+                    'presence': presence_data
+                }
+            )
+
+        logger.info(f"Perfil de {user_id} actualizado")
+
+    except Exception as e:
+        logger.exception(f"Error procesando actualización de perfil: {str(e)}")
+
+def save_media_file(media_base64, filename, session_id, conversation_id):
+    """
+    Guarda un archivo multimedia recibido en base64
+
+    Args:
+        media_base64: Datos del archivo en base64
+        filename: Nombre del archivo
+        session_id: ID de la sesión
+        conversation_id: ID de la conversación
+
+    Returns:
+        str: URL del archivo guardado
+    """
+    try:
+        # Decodificar el base64
+        file_data = base64.b64decode(media_base64)
+
+        # Crear la ruta para guardar el archivo
+        file_path = f"whatsapp_media/{session_id}/{conversation_id}/{filename}"
+
+        # Guardar el archivo
+        path = default_storage.save(file_path, ContentFile(file_data))
+
+        # Devolver la URL
+        return default_storage.url(path)
+    except Exception as e:
+        logger.exception(f"Error guardando archivo multimedia: {str(e)}")
+        return None
+
+def update_conversation_stats(conversation):
+    """
+    Actualiza las estadísticas de una conversación
+
+    Args:
+        conversation: Objeto ConversacionWhatsApp
+    """
+    try:
+        # Obtener o crear las estadísticas
+        stats, created = EstadisticasConversacion.objects.get_or_create(
+            conversacion=conversation
+        )
+
+        # Contar mensajes
+        total_messages = MensajeWhatsApp.objects.filter(conversacion=conversation).count()
+        client_messages = MensajeWhatsApp.objects.filter(
+            conversacion=conversation,
+            remitente=conversation.contacto_numero
+        ).count()
+        advisor_messages = MensajeWhatsApp.objects.filter(
+            conversacion=conversation
+        ).exclude(
+            remitente=conversation.contacto_numero
+        ).exclude(
+            es_automatico=True
+        ).count()
+        auto_messages = MensajeWhatsApp.objects.filter(
+            conversacion=conversation,
+            es_automatico=True
+        ).count()
+        ai_messages = MensajeWhatsApp.objects.filter(
+            conversacion=conversation,
+            ia_generado=True
+        ).count()
+
+        # Actualizar estadísticas
+        stats.total_mensajes = total_messages
+        stats.mensajes_cliente = client_messages
+        stats.mensajes_asesor = advisor_messages
+        stats.mensajes_automaticos = auto_messages
+        stats.mensajes_ia = ai_messages
+
+        # Calcular tiempo de primera respuesta
+        if client_messages > 0 and advisor_messages > 0:
+            first_client_msg = MensajeWhatsApp.objects.filter(
+                conversacion=conversation,
+                remitente=conversation.contacto_numero
+            ).order_by('fecha').first()
+
+            if first_client_msg:
+                first_response = MensajeWhatsApp.objects.filter(
+                    conversacion=conversation,
+                    fecha__gt=first_client_msg.fecha
+                ).exclude(
+                    remitente=conversation.contacto_numero
+                ).order_by('fecha').first()
+
+                if first_response:
+                    stats.tiempo_primera_respuesta = first_response.fecha - first_client_msg.fecha
+
+        stats.save()
+
+    except Exception as e:
+        logger.exception(f"Error actualizando estadísticas de conversación: {str(e)}")
