@@ -419,8 +419,14 @@ class FormCustom:
             if no_requeridos == "__all__":
                 self.fields[k].required = False
             if isinstance(field, forms.DateField):
-                self.fields[k].widget = CustomDateInput()
-                self.fields[k].widget.input_type = "date"
+                attrs_ = self.fields[k].widget.attrs
+                self.fields[k].widget = CustomDateInput(attrs={'type': 'date'})
+                self.fields[k].widget.attrs = attrs_
+                # Personalizar el valor inicial si está presente en los datos iniciales del formulario
+                if k in self.initial:
+                    if self.initial.get(k):
+                        fecha_str = self.initial[k].strftime('%Y-%m-%d')
+                        self.initial[k] = fecha_str
             if isinstance(field, forms.TimeField) or isinstance(field.widget, forms.TimeInput):
                 self.fields[k].widget.input_type = "time"
             if (isinstance(field, forms.ModelMultipleChoiceField) or isinstance(field, forms.ModelChoiceField)) and not field.widget.is_hidden:

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from django import forms
 from pkg_resources import require
 
@@ -115,6 +117,7 @@ class AsignarTicketForm(FormBase):
     asignadoa = forms.ModelChoiceField(label='Asignado a', queryset=Usuario.objects.filter(status=True))
     mensaje = forms.CharField(label=u"Mensaje", max_length=1000, widget=forms.Textarea(attrs={'placeholder': 'Describa el proceso', 'col': '12', 'rows': '6'}), required=True)
     archivo = forms.FileField(label='Archivo', required=False)
+    fecha_vigencia = forms.DateField(label='Fecha de vigencia', initial=datetime.now(), required=False)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -136,6 +139,7 @@ class AsignarTicketForm(FormBase):
             ticket.ffinactividad = None
         ticket.asignadoa = asignadoa
         ticket.asignadopor = request.user
+        ticket.fecha_vigencia = cleaned_data.get('fecha_vigencia', None)
         ticket.proceso = cleaned_data.get('proceso', None)
         comentario = ticket.get_comentario_asignacion()
         comentario = comentario if comentario else ComentarioTicketAtencion()

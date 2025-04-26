@@ -162,6 +162,7 @@ def ticketAdminView(request):
                     comentario = ticket.get_comentario_asignacion()
                     form.fields['mensaje'].initial = comentario.mensaje if comentario else 'Se asigna el ticket para su atención'
                     form.fields['proceso'].queryset = ProcesoAtencion.objects.filter(empresa=ticket.empresa, status=True)
+
                     if ticket.proceso:
                         usuarios_id = ticket.proceso.ids_integrantes()
                         form.fields['asignadoa'].queryset = Usuario.objects.filter(id__in=usuarios_id)

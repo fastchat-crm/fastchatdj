@@ -26,7 +26,7 @@ ticket_urls = (
         "vista": ticketAdminView,
     },
 {
-        "nombre": "Gestion de Tickets",
+        "nombre": "Mis Tickets",
         "url": 'mis_tickets/',
         "vista": ticketIntegranteView,
     },

@@ -207,7 +207,8 @@
                                 <p class="mb-0">
                                    <b>Inicio:</b> {{ l.finicioactividad|date:'d/M/Y | H:m'|default:'Sin registro' }}
                                 </p>
-                                <p><b>Fin:</b> {{ l.ffinactividad|date:'d/M/Y | H:m'|default:'Sin registro' }}</p>
+                                <p class="mb-0"><b>Fin:</b> {{ l.ffinactividad|date:'d/M/Y | H:m'|default:'Sin registro' }}</p>
+                                <p><b>Vigencia:</b> {{ l.fecha_vigencia|date:'d/M/Y'|default:'Sin registro' }}</p>
                             </td>
                             <td class="align-middle">
                                 <div class="mb-0"><b>Asignado a:</b>
@@ -276,7 +277,7 @@
                                             <li>
                                                 <a class="dropdown-item" href="javascript:void(0);"
                                                    onclick="verModalPostAjax('asignarticket', '{{ l.pk }}', 'fas fa-users', 'modal-lg')">
-                                                    <i class="fas fa-ticket me-2 text-success"></i> Asignar ticket
+                                                    <i class="fas fa-edit me-2 text-primary"></i> Gestionar ticket
                                                 </a>
                                             </li>
                                         {% endif %}

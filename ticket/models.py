@@ -69,6 +69,7 @@ class TicketAtencion(ModeloBase):
     asignadopor = models.ForeignKey('autenticacion.Usuario', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Asignado por', related_name='+')
     finicioactividad = models.DateTimeField(default=None, blank=True, null=True, verbose_name='Fecha que inicio la actividad')
     ffinactividad = models.DateTimeField(default=None, blank=True, null=True, verbose_name='Fecha que finalizo la actividad')
+    fecha_vigencia = models.DateTimeField(default=None, blank=True, null=True, verbose_name='Fecha de vigencia')
     numero_ticket = models.IntegerField(default=1, verbose_name='Numero de ticket')
     archivo = models.FileField(upload_to='archivo_ticket/', blank=True, null=True, verbose_name=u'Archivo adjunto')
 
