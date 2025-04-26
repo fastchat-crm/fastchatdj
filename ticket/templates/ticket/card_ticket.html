@@ -24,7 +24,7 @@
                     </a>
                     <div class="dropdown-menu">
                         <a class="dropdown-item d-flex align-items-center"
-                           onclick="formModal('{{ l.id }}','Actividad','viewactv', true)"
+                           onclick="verModalPostAjax('detalleticket', '{{ l.pk }}', 'fas fa-info-circle')"
                            href="javascript:void(0)">
                             <i class="fa fa-table me-1"></i>
                             Detalle
@@ -40,9 +40,8 @@
                 </div>
             </div>
             <div>
-                <span class="btn-icon btn btn-ghost btn-sm rounded-circle"
-                      {% if l.incidencias_secundarias_count > 0 %}onclick="formModal('{{ l.id }}','Actividades Secundarias','viewactsecundarias', true)"{% endif %}>
-                    <a class="fa fa-list-alt text-muted"></a>
+                <span class="btn-icon btn btn-ghost btn-sm rounded-circle">
+                    <a class="fa fa-list-alt text-muted" onclick="verModalPostAjax('detalleticket', '{{ l.pk }}', 'fas fa-info-circle')" href="javascript:void(0)"></a>
                 </span>
 
             </div>

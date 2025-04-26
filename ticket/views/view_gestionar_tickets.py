@@ -124,8 +124,16 @@ def ticketIntegranteView(request):
     elif request.method == 'GET':
         if 'action' in request.GET:
             data["action"] = action = request.GET['action']
-
-        criterio, filtros, url_vars, documento = request.GET.get('criterio', ''), Q(status=True, asignadoa=request.user), '', request.GET.get(
+            if action == 'detalleticket':
+                try:
+                    data['pk'] = pk = int(request.GET['pk'])
+                    data['ticket'] = ticket = TicketAtencion.objects.get(id=pk)
+                    titulo = f'Ticket | {ticket.codigo}'
+                    template = get_template('ticket/forms/detalle_ticket.html')
+                    return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
+                except Exception as ex:
+                    messages.error(request, f'Error: {ex}')
+        criterio, filtros, url_vars, documento = request.GET.get('s', ''), Q(status=True, asignadoa=request.user), '', request.GET.get(
             'documento', '')
         estado = request.GET.get('estado', '')
 
@@ -138,8 +146,8 @@ def ticketIntegranteView(request):
             url_vars += f'&documento={documento}'
             filtros = filtros & Q(usuario__documento=documento)
         if criterio:
-            data['criterio'] = criterio
-            url_vars += f'&criterio={criterio}'
+            data['s'] = criterio
+            url_vars += f'&s={criterio}'
             palabras = criterio.strip().split()
             q_obj = Q()
 
