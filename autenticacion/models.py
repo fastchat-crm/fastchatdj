@@ -150,6 +150,22 @@ class Usuario(AbstractUser, ModeloBase):
             telf = f'{self.telefono}'
         return telf
 
+    def indicadores_tickets(self):
+        from django.db.models import Q, Count
+        from ticket.models import TicketAtencion
+        # Realizamos la agregación con la función `aggregate`
+        context = TicketAtencion.objects.filter(status=True, asignadoa_id=self.id).aggregate(
+            total=Count('id'),
+            pendientes=Count('id', filter=Q(estado__in=[1, 2])),
+            asignados=Count('id', filter=Q(estado=2)),
+            en_proceso=Count('id', filter=Q(estado=3)),
+            finalizados=Count('id', filter=Q(estado=4)),
+            vigentes=Count('id', filter=Q(fecha_vigencia__gte=datetime.now())),
+            vencidos=Count('id', filter=Q(fecha_vigencia__lt=datetime.now()), ffinactividad__isnull=True),
+            sin_fecha_vigencia=Count('id', filter=Q(fecha_vigencia__isnull=True)),
+        )
+        return context
+
     class Meta:
         verbose_name = 'Perfil'
         verbose_name_plural = "Perfiles"

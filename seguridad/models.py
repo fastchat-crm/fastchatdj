@@ -301,10 +301,36 @@ class Empresa(ModeloBase):
     def __str__(self):
         return self.nombre
 
+    def indicadores_tickets(self):
+        from django.db.models import Q, Count
+        # Realizamos la agregación con la función `aggregate`
+        context = self.ticketatencion_set.filter(status=True).aggregate(
+            total=Count('id'),
+            pendientes=Count('id', filter=Q(estado__in=[1, 2])),
+            asignados=Count('id', filter=Q(estado=2)),
+            en_proceso=Count('id', filter=Q(estado=3)),
+            finalizados=Count('id', filter=Q(estado=4)),
+            vigentes=Count('id', filter=Q(fecha_vigencia__gte=datetime.now(), fecha_vigencia__isnull=False)),
+            vencidos=Count('id', filter=Q(fecha_vigencia__lt=datetime.now(), ffinactividad__isnull=True)),
+        )
+        return context
+
     class Meta:
         verbose_name = 'Empresa'
         verbose_name_plural = 'Empresas'
 
+class IntegranteEmpresa(ModeloBase):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, verbose_name='Empresa')
+    usuario = models.ForeignKey("autenticacion.Usuario", on_delete=models.CASCADE, verbose_name='Usuario')
+
+
+    def __str__(self):
+        return f"{self.usuario} - {self.empresa}"
+
+    class Meta:
+        verbose_name = 'Integrante de Empresa'
+        verbose_name_plural = 'Integrantes de Empresas'
+        unique_together = ('empresa', 'usuario')
 
 class CronLogEjecucion(models.Model):
     proceso = models.TextField(verbose_name='Proceso', blank=True, null=True)

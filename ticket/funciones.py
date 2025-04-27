@@ -96,3 +96,7 @@ def load_ids_empresas(usuario=None, equipos=None):
     if usuario:
         equipos = load_teams(usuario).values_list('id', flat=True)
     return ProcesoAtencion.objects.filter(equipos__id__in=equipos, status=True).order_by('id').distinct('id').values_list('empresa_id', flat=True)
+
+def load_responsables():
+    usuarios_id = EquipoAtencion.objects.filter(status=True, integrantes__isnull=False).values_list('integrantes__id', flat=True).distinct()
+    return Usuario.objects.filter(id__in=usuarios_id)

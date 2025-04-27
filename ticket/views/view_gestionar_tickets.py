@@ -64,6 +64,7 @@ def ticketIntegranteView(request):
                         idactividad = request.POST['idactividad']
                         actividad = TicketAtencion.objects.get(pk=idactividad)
                         actividad.estado = 2
+                        actividad.finicioactividad = None
                         actividad.ffinactividad = None
                         actividad.save(request)
                         log(u'Puso en pendiente una actividad: %s' % actividad, request, "edit")
@@ -80,6 +81,7 @@ def ticketIntegranteView(request):
                         idactividad = request.POST['idactividad']
                         actividad = TicketAtencion.objects.get(pk=idactividad)
                         actividad.estado = 3
+                        actividad.finicioactividad = datetime.now()
                         actividad.ffinactividad = None
                         actividad.save(request)
                         log(u'Puso en marcha una incidencia: %s' % actividad, request, "change")
@@ -96,6 +98,10 @@ def ticketIntegranteView(request):
                         idactividad = request.POST['idactividad']
                         actividad = TicketAtencion.objects.get(pk=idactividad)
                         actividad.estado = 4
+                        if not actividad.finicioactividad:
+                            actividad.finicioactividad = datetime.now()
+                        if not actividad.fecha_vigencia:
+                            actividad.fecha_vigencia = datetime.now().replace(hour=23, minute=59, second=59, microsecond=0)
                         actividad.ffinactividad = datetime.now()
                         actividad.save(request)
 

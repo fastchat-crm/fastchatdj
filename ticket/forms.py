@@ -191,6 +191,8 @@ class CambiarEstadoTicketForm(FormBase):
         elif ticket.estado == 4:
             if not ticket.finicioactividad:
                 ticket.finicioactividad = hoy
+            if not ticket.fecha_vigencia:
+                ticket.fecha_vigencia = hoy.replace(hour=23, minute=59, second=59, microsecond=0)
             ticket.ffinactividad = hoy
 
         if commit:

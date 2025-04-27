@@ -1,8 +1,5 @@
 from django.urls import path, re_path
-
-from public.view_login import login_tienda
-from .views import equipoView, procesoView, ticketView, ticketAdminView, ticketIntegranteView
-
+from .views import equipoView, procesoView, ticketView, ticketAdminView, ticketIntegranteView, indicatorsView
 
 ticket_urls = (
     {
@@ -25,10 +22,15 @@ ticket_urls = (
         "url": 'gestor/',
         "vista": ticketAdminView,
     },
-{
+    {
         "nombre": "Mis Tickets",
         "url": 'mis_tickets/',
         "vista": ticketIntegranteView,
+    },
+    {
+        "nombre": "Indicadores de Tickets",
+        "url": 'indicadores/',
+        "vista": indicatorsView,
     },
 )
 
