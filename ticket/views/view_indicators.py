@@ -78,6 +78,27 @@ def indicatorsView(request):
             finalizado_a_tiempo = Count('id', filter=Q(fecha_vigencia__gte=F('ffinactividad'), estado=4)),
             finalizado_sin_fecha_vigencia = Count('id', filter=Q(fecha_vigencia__isnull=True, estado=4)),
         )
+        # Agrupar por año y mes para obtener la cantidad de tickets receptados
+        tickets_por_mes = (
+            TicketAtencion.objects.filter(filtros)
+            .annotate(year=F('fecha_registro__year'), month=F('fecha_registro__month'))
+            .values('year', 'month')
+            .annotate(count=Count('id'))
+            .order_by('year', 'month')
+        )
+
+        # Formatear los datos en un diccionario
+        data['tickets_por_mes'] = {
+            year: {month: 0 for month in range(1, 13)} for year in set(t['year'] for t in tickets_por_mes)
+        }
+        for t in tickets_por_mes:
+            data['tickets_por_mes'][t['year']][t['month']] = t['count']
+        anios = TicketAtencion.objects.filter(filtros).values('fecha_registro__year').distinct().order_by(
+            'fecha_registro__year')
+
+        # Crear una lista con los años
+        anios = [a['fecha_registro__year'] for a in anios]
+        data['anios'] = anios
         data['responsables'] = load_responsables()
         data['indicador'] = indicador_general
         data['empresas'] = Empresa.objects.filter(filtros).order_by('nombre')

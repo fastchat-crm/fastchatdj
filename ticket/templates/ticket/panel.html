@@ -1,8 +1,126 @@
 {% extends 'base.html' %}
-{% load templatefunctions %}
+
 {% block jscript %}
-    <script src="/static/js/forms.js?version=1"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Recibir los datos desde Django (tickets por mes)
+        var ticketsPorMes = {{ tickets_por_mes|safe }};
+
+        // Los años disponibles desde el backend
+        var availableYears = {{ anios|safe }};
+
+        // Año y mes seleccionados por defecto
+        var selectedYear = availableYears[0]; // Año predeterminado (primer año en la lista)
+        var selectedMonth = 1;   // Mes predeterminado (Enero)
+
+        // Configurar el dropdown de años
+        var yearDropdown = document.querySelector(".dropdown-menu");
+
+        // Limpiar las opciones actuales
+        yearDropdown.innerHTML = '';
+
+        // Agregar los años disponibles al dropdown
+        availableYears.forEach(function(year) {
+            var option = document.createElement("a");
+            option.classList.add("dropdown-item");
+            option.href = "#"; // Hacer clic no recargará la página
+            option.textContent = year;
+
+            // Agregar un evento para cambiar el año al hacer clic
+            option.addEventListener("click", function(event) {
+                event.preventDefault();
+                selectedYear = year;  // Cambiar el año seleccionado
+                updateChart(selectedYear, selectedMonth);  // Actualizar el gráfico con el nuevo año
+            });
+
+            // Agregar la opción al dropdown
+            yearDropdown.appendChild(option);
+        });
+
+        // Función para actualizar el gráfico con el año y mes seleccionados
+        function updateChart(year, month) {
+            var monthData = ticketsPorMes[year] ? ticketsPorMes[year] : {};
+            var dataForYear = Object.values(monthData);
+            if (dataForYear.length === 0) {
+                console.error("No hay datos para el año " + year);
+            }
+
+            // Configuración de ApexCharts
+            var options = {
+                series: [
+                    { name: "Tickets Receptados", data: dataForYear }
+                ],
+                chart: {
+                    height: 280,
+                    type: "area",
+                    toolbar: { show: false },
+                    dropShadow: {
+                        enabled: true,
+                        top: 12,
+                        left: 0,
+                        bottom: 0,
+                        right: 0,
+                        blur: 2,
+                        color: "rgba(132, 145, 183, 0.3)",
+                        opacity: 0.35
+                    }
+                },
+                annotations: {
+                    xaxis: [
+                        {
+                            x: selectedMonth, // Seleccionamos el mes con los datos
+                            strokeDashArray: 4,
+                            borderWidth: 1,
+                            borderColor: "#6c757d"
+                        }
+                    ]
+                },
+                colors: ["#22c55e"], // Verde para la serie "Tickets Receptados"
+                dataLabels: { enabled: false },
+                stroke: { show: true, curve: "smooth", width: [3] },
+                labels: ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
+                yaxis: {
+                    labels: {
+                        offsetX: -12, offsetY: 0, formatter: function(e) {
+                            return e + " Tickets";  // Personaliza la unidad de medida si lo deseas
+                        }
+                    }
+                },
+                grid: {
+                    strokeDashArray: 3,
+                    xaxis: { lines: { show: true } },
+                    yaxis: { lines: { show: false } }
+                },
+                legend: { show: true },
+                fill: {
+                    type: "gradient",
+                    gradient: {
+                        type: "vertical",
+                        shadeIntensity: 1,
+                        inverseColors: false,
+                        opacityFrom: 0.05,
+                        opacityTo: 0.05,
+                        stops: [45, 100]
+                    }
+                },
+                xaxis: {
+                    categories: ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+                }
+            };
+
+            // Crear y renderizar el gráfico con los datos dinámicos
+            var chart = new ApexCharts(document.querySelector("#audience_overview"), options);
+            chart.render();
+        }
+
+        // Inicializar el gráfico con el primer año
+        updateChart(selectedYear, selectedMonth);
+    });
+</script>
 {% endblock %}
+
+
+
 {% block content %}
 
     <div class="row">
@@ -63,7 +181,7 @@
                         </div>
                         <div class="col-3 align-self-center">
                             <div class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                               <i class="fa-solid fa-tags text-primary"></i>
+                                <i class="fa-solid fa-tags text-primary"></i>
                             </div>
                         </div>
                     </div>
@@ -85,7 +203,7 @@
                         </div>
                         <div class="col-3 align-self-center">
                             <div class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                               <i class="fa-solid fa-tags text-success"></i>
+                                <i class="fa-solid fa-tags text-success"></i>
                             </div>
                         </div>
                     </div>
@@ -137,6 +255,45 @@
         {% endfor %}
     </div>
 
+    <div class="row justify-content-center">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <h4 class="card-title">Tickets receptados</h4>
+                        </div>
+                        <!--end col-->
+                        <div class="col-auto">
+                            <div class="dropdown">
+                                <a href="#" class="btn bt btn-light dropdown-toggle"
+                                   data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                    <i class="icofont-calendar fs-5 me-1"></i>
+                                    Año: <span id="selectedYear">2025</span> <i class="las la-angle-down ms-1"></i>
+                                </a>
+                                <div class="dropdown-menu dropdown-menu-end" id="yearDropdown">
+                                    {% for anio in anios %}
+                                        <a class="dropdown-item" href="#">{{ anio }}</a>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        <!--end col-->
+                    </div>
+                    <!--end row-->
+                </div>
+                <!--end card-header-->
+                <div class="card-body pt-0">
+                    <div id="audience_overview" class="apex-charts"></div>
+                </div>
+                <!--end card-body-->
+            </div>
+            <!--end card-->
+        </div>
+
+    </div>
+
+
     <div class="row">
         <div class="col-12">
             <h4 class="text-black mb-2">Indicadores por Responsable</h4>
@@ -163,7 +320,7 @@
                                 <span class="text-success">{{ indicador.finalizados }} Finalizados</span>
                             </p>
                             <p class="mb-0 text-truncate text-muted mt-2">
-                               <span class="text-muted">{{ indicador.sin_fecha_vigencia }}</span> Sin fecha |
+                                <span class="text-muted">{{ indicador.sin_fecha_vigencia }}</span> Sin fecha |
                                 <span class="text-success">{{ indicador.vigentes }}</span> En plazo |
                                 <span class="text-danger">{{ indicador.vencidos }}</span> Retrasado
                             </p>
@@ -173,6 +330,8 @@
             </div>
         {% endfor %}
     </div>
+
+
 
 {% endblock %}
 
