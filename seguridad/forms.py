@@ -3,7 +3,10 @@ from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.db.models import Value
 from django.db.models.functions import Concat
-from core.custom_models import ModelFormBase
+
+from autenticacion.models import Usuario
+from core.custom_models import ModelFormBase, FormBase
+from core.funciones import generar_nombre
 from seguridad.models import Configuracion, Modulo, ModuloGrupo, GroupModulo, Empresa
 
 
@@ -98,20 +101,34 @@ class GroupModuloForm(ModelFormBase):
         self.fields["group"].required = False  # ✅ también puedes ponerlo explícito por si acaso
 
 
-class EmpresaForm(ModelFormBase):
-    class Meta:
-        model = Empresa
-        fields = ('nombre', 'logo')
+class EmpresaForm(FormBase):
+    nombre = forms.CharField(label='Nombre', max_length=100, required=True)
+    responsables = forms.ModelMultipleChoiceField(label='Responsables',queryset=Usuario.objects.filter(status=True))
+    logo = forms.ImageField(label='Logo', required=False)
 
-    def __init__(self, *args, **kwargs):
-        ver = kwargs.pop('ver') if 'ver' in kwargs else False
-        self.editando = 'instance' in kwargs
-        super(EmpresaForm, self).__init__(*args, **kwargs)
-        self.fields['logo'].widget.attrs['data-allowed-file-extensions'] = "jpg jpeg png tiff svg jfif"
-        for k, v in self.fields.items():
-            self.fields[k].widget.attrs['col'] = "12"
-            self.fields[k].widget.attrs['class'] = "form-control"
-            if k in ('logo',):
-                self.fields[k].widget.attrs['class'] = "dropify"
-            if ver:
-                self.fields[k].widget.attrs['disabled'] = 'disabled'
+    def clean(self):
+        cleaned_data = super().clean()
+        archivo = cleaned_data.get('logo', None)
+        if archivo:
+            # Validar tamaño del archivo (máximo 4 MB)
+            if archivo.size > 4 * 1024 * 1024:
+                self.add_error('logo', "El archivo no debe exceder los 4 MB.")
+        return cleaned_data
+
+    def save(self, commit=True, request=None):
+        cleaned_data = self.cleaned_data
+        archivo = cleaned_data.get('logo', None)
+        empresa = self.instance if self.instance else Empresa()
+        if archivo:
+            extension = archivo.name.split('.')[-1]
+            archivo._name = generar_nombre(f'logo_{empresa.id}', f'archivo.{extension}')
+            empresa.logo = archivo
+        empresa.nombre = cleaned_data.get('nombre', '')
+        if commit:
+            empresa.save(request)
+            responsables = cleaned_data.get('responsables', None)
+            if responsables:
+                empresa.responsables.set(responsables)
+            else:
+                empresa.responsables.clear()
+        return empresa

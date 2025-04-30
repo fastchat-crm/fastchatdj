@@ -294,7 +294,7 @@ class SessionUser(NormalModel):
 
 
 class Empresa(ModeloBase):
-    responsable = models.ForeignKey('autenticacion.Usuario', on_delete=models.CASCADE, verbose_name='Responsable', blank=True, null=True)
+    responsables = models.ManyToManyField('autenticacion.Usuario', verbose_name='Responsables')
     nombre = models.CharField(max_length=100, verbose_name='Nombre')
     logo = models.FileField(upload_to='empresa/logo/',validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])],blank=True, null=True, verbose_name='Logo')
 

@@ -52,6 +52,7 @@
                     <tr>
                         <th class="text-center">Logo</th>
                         <th class="text-center">Nombre</th>
+                        <th class="">Responsables</th>
                         <th class="text-center">Acción</th>
                     </tr>
                     </thead>
@@ -68,6 +69,13 @@
                             </td>
                             <td class="text-center">
                                 {{ l.nombre }}<br><span class="badge bg-secondary">Cod. {{ l.id }}</span>
+                            </td>
+                            <td>
+                                <ul>
+                                    {% for responsable in l.responsables.all %}
+                                        <li>{{ responsable.full_name }}</li>
+                                    {% endfor %}
+                                </ul>
                             </td>
                             <td class="text-center">
                                 <div class="dropdown">

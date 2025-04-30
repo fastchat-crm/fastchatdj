@@ -8,6 +8,7 @@ from django.shortcuts import render, redirect
 from django.template.loader import get_template
 
 from area_geografica.models import Provincia, Ciudad, REGION_CHOICES
+from autenticacion.models import Usuario
 from core.custom_models import FormError
 from core.funciones import addData, paginador, secure_module, log, generar_nombre, remover_caracteres_especiales_unicode
 from seguridad.templatetags.templatefunctions import encrypt
@@ -35,25 +36,15 @@ def empresaView(request):
                 if action == 'add':
                     form = Formulario(request.POST, request.FILES, request=request)
                     if form.is_valid():
-                        if 'logo' in request.FILES:
-                            file = request.FILES['logo']
-                            nombredocumento = remover_caracteres_especiales_unicode(file._name)
-                            file._name = generar_nombre(nombredocumento, file._name)
-                            form.instance.logo = file
                         form.save()
                         log(f"Registro una empresa {form.instance.__str__()}", request, "add")
                         res_json.append({'error': False, "reload": True})
                     else:
                         raise FormError(form)
                 elif action == 'change':
-                    filtro = model.objects.get(pk=int(request.POST['pk']))
+                    filtro = model.objects.get(pk=int(encrypt(request.POST['pk'])))
                     form = Formulario(request.POST, request.FILES, request=request, instance=filtro)
-                    if form.is_valid() and filtro:
-                        if 'logo' in request.FILES:
-                            file = request.FILES['logo']
-                            nombredocumento = remover_caracteres_especiales_unicode(file._name)
-                            file._name = generar_nombre(nombredocumento, file._name)
-                            form.instance.logo = file
+                    if form.is_valid():
                         form.save()
                         log(f"Edito una empresa {form.instance.__str__()}", request, "change")
                         res_json.append({'error': False, "reload": True})
@@ -80,6 +71,7 @@ def empresaView(request):
             if action == 'add':
                 try:
                     form = Formulario()
+                    form.fields['responsables'].queryset = Usuario.objects.none()
                     data['form'] = form
                     template = get_template("seguridad/empresa/form.html")
                     return JsonResponse({"result": True, 'data': template.render(data)})
@@ -87,9 +79,10 @@ def empresaView(request):
                     pass
             elif action == 'change':
                 try:
-                    data['id'] = id = int(request.GET['id'])
+                    data['pk'] = id = int(request.GET['id'])
                     data['filtro'] = filtro = model.objects.get(pk=id)
-                    form = Formulario(instance=filtro)
+                    form = Formulario(initial=model_to_dict(filtro))
+                    form.fields['responsables'].queryset = Usuario.objects.filter(id__in=filtro.responsables.all().values_list('id'))
                     data['form'] = form
                     template = get_template("seguridad/empresa/form.html")
                     return JsonResponse({"result": True, 'data': template.render(data)})
