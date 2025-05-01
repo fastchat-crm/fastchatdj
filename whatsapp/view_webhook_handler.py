@@ -125,8 +125,15 @@ def webhook_handler(request):
             logger.info(f"Sesión {session_id} autenticada")
 
         elif event_type == 'contacts_list':
-            session.contacts_list = json.dumps(event_data.get('contacts_list') or [])
-            session.contacts_length = len(event_data.get('contacts_list') or [])
+            contacts_list = json.loads(session.contacts_list or '[]')
+            new_contacts_list = []
+            ids = [x["id"] for x in event_data.get('contacts_list') or []]
+            for c in contacts_list:
+                if not c["id"] in ids:
+                    new_contacts_list.append(c)
+            contacts_list = new_contacts_list + event_data.get('contacts_list') or []
+            session.contacts_list = json.dumps(contacts_list)
+            session.contacts_length = len(contacts_list)
             session.save()
 
         elif event_type == 'auth_failure':
@@ -303,7 +310,7 @@ def process_incoming_message(session, event_data, channel_layer):
 
         # Notificar a través de WebSockets
         async_to_sync(channel_layer.group_send)(
-            f"whatsapp_conversation_{conversation.id}",
+            f"chat_{conversation.id}",
             {
                 'type': 'whatsapp_message',
                 'event': 'new_message',
@@ -313,18 +320,6 @@ def process_incoming_message(session, event_data, channel_layer):
                 'message_text': message_text,
                 'sender': from_number,
                 'timestamp': message_date.isoformat()
-            }
-        )
-
-        # También notificar a la sesión
-        async_to_sync(channel_layer.group_send)(
-            f"whatsapp_session_{session.id}",
-            {
-                'type': 'whatsapp_event',
-                'event': 'new_message',
-                'session_id': session.id,
-                'conversation_id': conversation.id,
-                'message_id': message.id
             }
         )
 
@@ -387,7 +382,7 @@ def process_sent_message(session, event_data, channel_layer):
 
         # Notificar a través de WebSockets
         async_to_sync(channel_layer.group_send)(
-            f"whatsapp_conversation_{conversation.id}",
+            f"chat_{conversation.id}",
             {
                 'type': 'whatsapp_message',
                 'event': 'message_sent',
@@ -433,7 +428,7 @@ def process_deleted_message(session, event_data, channel_layer):
 
             # Notificar a través de WebSockets
             async_to_sync(channel_layer.group_send)(
-                f"whatsapp_conversation_{message.conversacion.id}",
+                f"chat_{message.conversacion.id}",
                 {
                     'type': 'whatsapp_message',
                     'event': 'message_deleted',
@@ -491,7 +486,7 @@ def process_edited_message(session, event_data, channel_layer):
 
             # Notificar a través de WebSockets
             async_to_sync(channel_layer.group_send)(
-                f"whatsapp_conversation_{message.conversacion.id}",
+                f"chat_{message.conversacion.id}",
                 {
                     'type': 'whatsapp_message',
                     'event': 'message_edited',

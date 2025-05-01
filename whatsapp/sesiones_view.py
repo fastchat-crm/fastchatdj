@@ -1,18 +1,15 @@
-import json
-import sys
 import uuid
-from datetime import datetime
-import pytz
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q
 from django.http import JsonResponse
-from django.shortcuts import render, get_object_or_404, redirect
+from django.shortcuts import render
 from django.contrib import messages
 from django.urls import reverse
-from core.funciones import addData, paginador, secure_module, redirectAfterPostGet, log
-from .models import SesionWhatsApp, WhatsAppWebhook
+from core.funciones import addData, paginador, secure_module, log
+from .models import SesionWhatsApp
 from .services import WhatsAppService
+
 
 @login_required
 @secure_module

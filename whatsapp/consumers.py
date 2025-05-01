@@ -7,40 +7,34 @@ from .models import ConversacionWhatsApp, MensajeWhatsApp
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.conversacion_id = self.scope['url_route']['kwargs']['conversacion_id']
+        self.user = self.scope.get('user')
         self.room_group_name = f'chat_{self.conversacion_id}'
 
         # Unirse al grupo de la conversación
-        await self.channel_layer.group_add(
-            self.room_group_name,
-            self.channel_name
-        )
+        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
 
         await self.accept()
 
     async def disconnect(self, close_code):
         # Abandonar el grupo de la conversación
-        await self.channel_layer.group_discard(
-            self.room_group_name,
-            self.channel_name
-        )
+        await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
     # Recibir mensaje del WebSocket
     async def receive(self, text_data=None, bytes_data=None):
         text_data_json = json.loads(text_data)
         message_type = text_data_json.get('type')
 
-        if message_type == 'request_messages':
-            # El cliente solicita los mensajes de la conversación
-            html = await self.get_messages_html(self.conversacion_id)
+        # El cliente solicita los mensajes de la conversación
+        html = await self.get_messages_html(self.conversacion_id)
 
-            # Enviar mensajes al WebSocket
-            await self.send(text_data=json.dumps({
-                'type': 'messages_update',
-                'html': html
-            }))
+        # Enviar mensajes al WebSocket
+        await self.send(text_data=json.dumps({
+            'type': 'messages_update',
+            'html': html
+        }))
 
     # Recibir mensaje del grupo de la conversación
-    async def chat_message(self, event):
+    async def whatsapp_message(self, event):
         message = event['message']
 
         # Enviar mensaje al WebSocket
@@ -49,7 +43,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_messages_html(self, conversacion_id):
         try:
-            conversacion = ConversacionWhatsApp.objects.get(id=conversacion_id)
+            conversacion = ConversacionWhatsApp.objects.filter(sesion__usuario__id=self.user.id, id=conversacion_id).first()
             mensajes = MensajeWhatsApp.objects.filter(
                 conversacion=conversacion
             ).order_by('fecha')
@@ -69,6 +63,7 @@ class SessionConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.session_id = self.scope['url_route']['kwargs']['session_id']
         self.room_group_name = f'whatsapp_session_{self.session_id}'
+        self.user = self.scope.get('user')
 
         # Unirse al grupo de la conversación
         await self.channel_layer.group_add(
