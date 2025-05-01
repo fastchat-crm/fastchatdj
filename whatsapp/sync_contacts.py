@@ -25,12 +25,9 @@ def sync_contacts_view(request):
 
         # Llamar al servicio para sincronizar contactos
         service = WhatsAppService()
-        response = service.sync_contacts(sesion.session_id)
+        response = service.sync_contacts(sesion)
 
-        if response.get('success'):
-            return JsonResponse({'success': True, 'message': response.get('message', 'Sincronización iniciada')})
-        else:
-            return JsonResponse({'success': False, 'message': response.get('message', 'Error desconocido')})
+        return JsonResponse({'success': True, 'message': 'Sincronización iniciada'})
 
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)

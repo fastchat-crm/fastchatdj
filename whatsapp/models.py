@@ -24,6 +24,8 @@ class SesionWhatsApp(ModeloBase):
     fecha_expira_inactivo = models.DateTimeField(default=default_expira_10_min)
     session_id = models.CharField(max_length=255, unique=True)
     foto = models.TextField(blank=True, null=True)
+    contacts_list = models.TextField(default='[]')
+    contacts_length = models.PositiveIntegerField(default=0)
 
     def is_connected(self):
         return self.estado == 'conectado'

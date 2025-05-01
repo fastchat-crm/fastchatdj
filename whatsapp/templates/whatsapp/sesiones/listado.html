@@ -148,7 +148,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <span class="badge {% if s.estado == 'conectado' %}bg-success{% elif s.estado == 'pendiente' %}bg-warning text-dark{% elif s.estado == 'desconectado' %}bg-secondary{% elif s.estado == 'error' %}bg-danger{% endif %}">
+                                <span title="{{ s.contacts_length }}" class="badge {% if s.estado == 'conectado' %}bg-success{% elif s.estado == 'pendiente' %}bg-warning text-dark{% elif s.estado == 'desconectado' %}bg-secondary{% elif s.estado == 'error' %}bg-danger{% endif %}">
                                   {% if s.estado == 'conectado' %}
                                       <i class="fas fa-check-circle me-1"></i>
                                   {% elif s.estado == 'pendiente' %}

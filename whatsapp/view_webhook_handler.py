@@ -124,6 +124,11 @@ def webhook_handler(request):
 
             logger.info(f"Sesión {session_id} autenticada")
 
+        elif event_type == 'contacts_list':
+            session.contacts_list = json.dumps(event_data.get('contacts_list') or [])
+            session.contacts_length = len(event_data.get('contacts_list') or [])
+            session.save()
+
         elif event_type == 'auth_failure':
             # Actualizar el estado de la sesión
             session.estado = 'error'
