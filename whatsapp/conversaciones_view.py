@@ -149,13 +149,13 @@ def conversacionesView(request):
 
     # Obtener las conversaciones
     conversaciones = ConversacionWhatsApp.objects.filter(filtros).order_by('tiene_mensaje', '-fecha_ultimo_mensaje')
-    data["conversaciones"] = conversaciones
+    data["conversaciones"] = conversaciones[:573]
     data["list_count"] = conversaciones.count()
     data["url_vars"] = url_vars
     data["today"] = timezone.now().date()  # Para comparar fechas en la plantilla
 
     # Si es una solicitud AJAX para cargar conversaciones
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' and request.GET.get('load_conversations'):
+    if request.GET.get('load_conversations'):
         return JsonResponse({
             'html': render_to_string('whatsapp/conversaciones/conversaciones_partial.html',
                                     {'conversaciones': conversaciones, 'today': timezone.now().date()},

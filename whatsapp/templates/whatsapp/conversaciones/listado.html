@@ -323,11 +323,25 @@
             conversacionActiva = null;
         });
 
+        const buscarConversacion = debounceFunction(function (e) {
+            const criterio = $(e.target).val();
+            $.ajax({
+                url: `?load_conversations=1&criterio=${criterio}`,
+                type: 'GET',
+                success: function(response) {
+                    $('#lista-conversaciones').html(response.html);
+                }
+            });
+        }, 500);
+
         // Buscar conversaciones
         let searchTimeout;
-        $('#search-conversacion').on('keyup', function() {
-            clearTimeout(searchTimeout);
-            const query = $(this).val();
+        $('#search-conversacion').on('keyup', function(e) {
+            buscarConversacion(e);
+        });
+
+        $('#search-conversacion').on('search', function(e) {
+            buscarConversacion(e);
         });
 
         // Cargar conversación al hacer clic

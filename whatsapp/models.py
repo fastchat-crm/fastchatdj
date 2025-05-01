@@ -73,13 +73,20 @@ class ConversacionWhatsApp(ModeloBase):
     estado = models.CharField(max_length=20, choices=(('activo', 'Activo'), ('cerrado', 'Cerrado')), default='activo')
     ultimo_mensaje = models.TextField(blank=True, null=True)
     fecha_ultimo_mensaje = models.DateTimeField(blank=True, null=True)
+    order = models.PositiveIntegerField(default=0)
 
     class Meta:
         verbose_name = 'Conversación WhatsApp'
         verbose_name_plural = 'Conversaciones WhatsApp'
+        ordering = ['order']
 
     def __str__(self):
         return f"Conversación con {self.contacto_numero} ({self.sesion.numero})"
+
+    def save(self, *args, **kwargs):
+        if self.fecha_ultimo_mensaje:
+            self.order = int(round(self.fecha_ultimo_mensaje.timestamp(), 0))
+        super().save(*args, **kwargs)
 
 TIPO_MENSAJE_CHOICES = (
     ('texto', 'Texto'),
