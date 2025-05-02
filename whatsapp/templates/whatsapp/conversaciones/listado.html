@@ -274,7 +274,7 @@
         $('#btn-sync-contacts').click(function() {
             const sesionId = $('#sesion-selector').val();
             if (!sesionId) {
-                alert('Selecciona una sesión primero');
+                alertaWarning('Selecciona una sesión primero');
                 return;
             }
 
@@ -289,13 +289,13 @@
                 },
                 success: function(response) {
                     if (response.success) {
-                        alert('Sincronización de contactos iniciada. Los nombres se actualizarán en breve.');
+                        alertaWarning('Sincronización de contactos iniciada. Los nombres se actualizarán en breve.');
                     } else {
-                        alert('Error: ' + response.message);
+                        alertaWarning('Error: ' + response.message);
                     }
                 },
                 error: function(xhr, status, error) {
-                    alert('Error al sincronizar contactos: ' + error);
+                    alertaWarning('Error al sincronizar contactos: ' + error);
                 },
                 complete: function() {
                     $('#btn-sync-contacts').prop('disabled', false).html('<i class="fa fa-sync"></i> Sincronizar contactos');
@@ -385,11 +385,11 @@
                         // Scroll al final
                         scrollToBottom();
                     } else {
-                        alert('Error: ' + response.message);
+                        alertaWarning('Error: ' + response.message);
                     }
                 },
                 error: function(xhr, status, error) {
-                    alert('Error al enviar mensaje: ' + error);
+                    alertaWarning('Error al enviar mensaje: ' + error);
                 },
                 complete: function() {
                     // Restaurar el botón

@@ -33,4 +33,9 @@ def index(request):
     elif request.method == 'GET':
         if 'action' in request.GET:
             data["action"] = action = request.GET['action']
+
+        # VERIFICACIÓN DE PERFIL IA
+        mostrar_modal_ia = not hasattr(persona, 'perfil_ia') or not persona.perfil_ia.tiene_datos_basicos()
+        data['mostrar_modal_ia'] = mostrar_modal_ia
+
         return render(request, 'seguridad/index.html', data)

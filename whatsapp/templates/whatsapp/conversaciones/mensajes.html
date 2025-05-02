@@ -35,7 +35,7 @@ $('#formSend').submit(function(e){
         if(!res.error){
             location.reload();
         } else {
-            alert(res.message);
+            alertaWarning(res.message);
         }
     }, 'json');
 });

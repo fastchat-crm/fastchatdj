@@ -1,10 +1,9 @@
-# crm/models.py
 from django.db import models
 from core.custom_models import ModeloBase
 from autenticacion.models import Usuario
-from whatsapp.models import ConversacionWhatsApp  # Importando tu modelo existente
+from whatsapp.models import ConversacionWhatsApp
 
-
+# Representa las industrias generales a las que puede pertenecer un negocio
 class Industria(ModeloBase):
     nombre = models.CharField(max_length=100, unique=True)
     descripcion = models.TextField(blank=True, null=True)
@@ -17,6 +16,21 @@ class Industria(ModeloBase):
         verbose_name_plural = 'Industrias'
 
 
+# Permite especificar con más detalle a qué se dedica una empresa dentro de una industria
+class ActividadEconomica(ModeloBase):
+    nombre = models.CharField(max_length=100)
+    industria = models.ForeignKey(Industria, on_delete=models.CASCADE, related_name='actividades')
+    descripcion = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Actividad Económica'
+        verbose_name_plural = 'Actividades Económicas'
+
+    def __str__(self):
+        return f"{self.nombre} ({self.industria.nombre})"
+
+
+# Etapas de venta configurables por industria (embudo personalizado)
 class EtapaVenta(ModeloBase):
     nombre = models.CharField(max_length=100)
     orden = models.PositiveSmallIntegerField(default=0)
@@ -33,175 +47,99 @@ class EtapaVenta(ModeloBase):
         return f"{self.nombre} - {self.industria}"
 
 
-class Lead(ModeloBase):
-    conversacion = models.OneToOneField(ConversacionWhatsApp, on_delete=models.CASCADE, related_name='lead')
-    industria = models.ForeignKey(Industria, on_delete=models.PROTECT)
-    etapa_actual = models.ForeignKey(EtapaVenta, on_delete=models.SET_NULL, null=True, blank=True)
-
-    # Datos de contacto complementarios
-    correo = models.EmailField(blank=True, null=True)
-    empresa = models.CharField(max_length=200, blank=True, null=True)
-    cargo = models.CharField(max_length=100, blank=True, null=True)
-
-    # Etiquetas para clasificación
-    etiquetas = models.ManyToManyField('Etiqueta', blank=True)
-
-    # Datos de negocio
-    valor_estimado = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    probabilidad_cierre = models.PositiveSmallIntegerField(default=0, help_text="Porcentaje de 0 a 100")
-    fecha_primer_contacto = models.DateTimeField(auto_now_add=True)
-    fecha_ultima_actividad = models.DateTimeField(auto_now=True)
-    fecha_cierre_estimada = models.DateField(null=True, blank=True)
-
-    # Asignación
-    asesor_asignado = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name='leads')
-
-    # Estado
-    ESTADOS = (
-        ('nuevo', 'Nuevo'),
-        ('en_seguimiento', 'En Seguimiento'),
-        ('oportunidad', 'Oportunidad'),
-        ('ganado', 'Ganado'),
-        ('perdido', 'Perdido'),
-        ('inactivo', 'Inactivo'),
-    )
-    estado = models.CharField(max_length=20, choices=ESTADOS, default='nuevo')
+# Perfil de IA para el usuario autenticado (asesor/cliente)
+class PerfilNegocioIA(ModeloBase):
+    usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE, related_name='perfil_ia')
+    industria = models.ForeignKey(Industria, on_delete=models.SET_NULL, null=True, blank=True)
+    actividad = models.ForeignKey(ActividadEconomica, on_delete=models.SET_NULL, null=True, blank=True)
+    nombre_empresa = models.CharField(max_length=200, blank=True, null=True)
+    descripcion_empresa = models.TextField(blank=True, null=True)
+    sitio_web = models.URLField(blank=True, null=True)
+    localidad = models.CharField(max_length=100, blank=True, null=True)
+    publico_objetivo = models.TextField(blank=True, null=True)
 
     class Meta:
-        verbose_name = 'Lead'
-        verbose_name_plural = 'Leads'
+        verbose_name = "Perfil de Negocio IA"
+        verbose_name_plural = "Perfiles de Negocio IA"
 
     def __str__(self):
-        return f"Lead: {self.conversacion.contacto_nombre or self.conversacion.contacto_numero}"
+        return f"{self.usuario.get_full_name()} - {self.industria.nombre if self.industria else 'Sin industria'}"
+
+    # MÉTODOS ÚTILES
+
+    def tiene_datos_basicos(self):
+        return all([self.nombre_empresa, self.descripcion_empresa, self.industria, self.actividad])
+
+    def resumen_contexto_ia(self):
+        productos = self.productos.all()
+        servicios = self.servicios.all()
+        lista_productos = ", ".join([f"{p.nombre} (${p.precio})" for p in productos]) or "N/A"
+        lista_servicios = ", ".join([f"{s.nombre}" for s in servicios]) or "N/A"
+
+        return f"""Empresa: {self.nombre_empresa or 'No definido'}
+            Industria: {self.industria.nombre if self.industria else 'No definida'}
+            Actividad económica: {self.actividad.nombre if self.actividad else 'No definida'}
+            Ubicación: {self.localidad or 'No definida'}
+            Descripción: {self.descripcion_empresa or 'No definida'}
+            Público objetivo: {self.publico_objetivo or 'No definido'}
+            Productos ofrecidos: {lista_productos}
+            Servicios ofrecidos: {lista_servicios}
+            """.strip()
+
+    def total_productos(self):
+        return self.productos.count()
+
+    def total_servicios(self):
+        return self.servicios.count()
 
 
-class Seguimiento(ModeloBase):
-    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='seguimientos')
-    etapa = models.ForeignKey(EtapaVenta, on_delete=models.SET_NULL, null=True)
-    fecha = models.DateTimeField(auto_now_add=True)
-    notas = models.TextField()
-    usuario = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True)
-
-    # Campos para seguimiento de llamadas o interacciones
-    tipo_interaccion = models.CharField(max_length=50, choices=(
-        ('llamada', 'Llamada'),
-        ('mensaje', 'Mensaje WhatsApp'),
-        ('correo', 'Correo Electrónico'),
-        ('reunion', 'Reunión'),
-        ('otro', 'Otro'),
-    ))
-    resultado = models.CharField(max_length=50, choices=(
-        ('positivo', 'Positivo'),
-        ('neutral', 'Neutral'),
-        ('negativo', 'Negativo'),
-        ('no_respuesta', 'Sin Respuesta'),
-    ))
-    duracion = models.PositiveIntegerField(help_text="Duración en minutos", null=True, blank=True)
-
-    class Meta:
-        verbose_name = 'Seguimiento'
-        verbose_name_plural = 'Seguimientos'
-
-    def __str__(self):
-        return f"Seguimiento de {self.lead} - {self.fecha.strftime('%d/%m/%Y')}"
-
-
-class Etiqueta(ModeloBase):
-    nombre = models.CharField(max_length=50)
-    color = models.CharField(max_length=7, default="#3498db")  # Formato HEX
-    industria = models.ForeignKey(Industria, on_delete=models.CASCADE, related_name='etiquetas')
-
-    class Meta:
-        verbose_name = 'Etiqueta'
-        verbose_name_plural = 'Etiquetas'
-
-    def __str__(self):
-        return self.nombre
-
-
-class Producto(ModeloBase):
+# Productos personalizados del perfil IA
+class ProductoIA(ModeloBase):
+    perfil = models.ForeignKey(PerfilNegocioIA, on_delete=models.CASCADE, related_name='productos')
     nombre = models.CharField(max_length=200)
-    descripcion = models.TextField()
+    descripcion = models.TextField(blank=True, null=True)
     precio = models.DecimalField(max_digits=10, decimal_places=2)
-    industria = models.ForeignKey(Industria, on_delete=models.CASCADE, related_name='productos')
-    activo = models.BooleanField(default=True)
 
     class Meta:
-        verbose_name = 'Producto'
-        verbose_name_plural = 'Productos'
+        verbose_name = "Producto IA"
+        verbose_name_plural = "Productos IA"
 
     def __str__(self):
-        return self.nombre
+        return f"{self.nombre} - ${self.precio}"
 
 
-class Venta(ModeloBase):
-    lead = models.ForeignKey(Lead, on_delete=models.PROTECT, related_name='ventas')
-    fecha_venta = models.DateTimeField(auto_now_add=True)
-    valor_total = models.DecimalField(max_digits=12, decimal_places=2)
-    asesor = models.ForeignKey(Usuario, on_delete=models.PROTECT)
-
-    # Estado de la venta
-    ESTADOS = (
-        ('pendiente', 'Pendiente de Pago'),
-        ('pagado', 'Pagado'),
-        ('entregado', 'Entregado'),
-        ('cancelado', 'Cancelado'),
-    )
-    estado = models.CharField(max_length=20, choices=ESTADOS, default='pendiente')
+# Servicios personalizados del perfil IA
+class ServicioIA(ModeloBase):
+    perfil = models.ForeignKey(PerfilNegocioIA, on_delete=models.CASCADE, related_name='servicios')
+    nombre = models.CharField(max_length=200)
+    descripcion = models.TextField(blank=True, null=True)
+    precio_referencial = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     class Meta:
-        verbose_name = 'Venta'
-        verbose_name_plural = 'Ventas'
+        verbose_name = "Servicio IA"
+        verbose_name_plural = "Servicios IA"
 
     def __str__(self):
-        return f"Venta a {self.lead} - {self.fecha_venta.strftime('%d/%m/%Y')}"
+        return f"{self.nombre} - ${self.precio_referencial or 0}"
 
 
-class DetalleVenta(ModeloBase):
-    venta = models.ForeignKey(Venta, on_delete=models.CASCADE, related_name='detalles')
-    producto = models.ForeignKey(Producto, on_delete=models.PROTECT)
-    cantidad = models.PositiveIntegerField(default=1)
-    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2)
-
-    def subtotal(self):
-        return self.cantidad * self.precio_unitario
+# Preguntas y respuestas predefinidas para que la IA sepa cómo responder ante ciertos temas o comportamientos definidos por el usuario
+class RespuestaEntrenadaIA(ModeloBase):
+    perfil = models.ForeignKey(PerfilNegocioIA, on_delete=models.CASCADE, related_name='respuestas_ia')
+    pregunta_clave = models.CharField(max_length=255, help_text="Palabra o frase que activa esta respuesta")
+    respuesta_configurada = models.TextField(help_text="Respuesta sugerida por el usuario")
+    tono = models.CharField(max_length=100, choices=[
+        ('formal', 'Formal'),
+        ('informal', 'Informal'),
+        ('empatico', 'Empático'),
+        ('directo', 'Directo'),
+        ('humilde', 'Humilde'),
+        ('seguro', 'Seguro'),
+    ], default='formal', help_text="Tono sugerido para esta respuesta")
 
     class Meta:
-        verbose_name = 'Detalle de venta'
-        verbose_name_plural = 'Detalles de venta'
+        verbose_name = 'Respuesta Entrenada IA'
+        verbose_name_plural = 'Respuestas Entrenadas IA'
 
     def __str__(self):
-        return f"{self.cantidad} x {self.producto.nombre}"
-
-
-class Plantilla(ModeloBase):
-    """Plantillas de respuesta para automatización"""
-    nombre = models.CharField(max_length=100)
-    contenido = models.TextField()
-    industria = models.ForeignKey(Industria, on_delete=models.CASCADE, related_name='plantillas')
-    etapa = models.ForeignKey(EtapaVenta, on_delete=models.SET_NULL, null=True, blank=True)
-    variables = models.TextField(help_text="Variables disponibles separadas por coma", blank=True)
-
-    class Meta:
-        verbose_name = 'Plantilla'
-        verbose_name_plural = 'Plantillas'
-
-    def __str__(self):
-        return self.nombre
-
-
-class ConfiguracionIA(ModeloBase):
-    """Configuración para respuestas automáticas por IA"""
-    industria = models.ForeignKey(Industria, on_delete=models.CASCADE)
-    prompt_base = models.TextField(help_text="Prompt base para contextualizar a la IA")
-    modelo = models.CharField(max_length=100, default="gpt-3.5-turbo")
-    temperatura = models.FloatField(default=0.7)
-    max_tokens = models.PositiveIntegerField(default=150)
-    activo = models.BooleanField(default=True)
-
-    class Meta:
-        verbose_name = 'Configuración de IA'
-        verbose_name_plural = 'Configuraciones de IA'
-
-    def __str__(self):
-        return f"Config IA para {self.industria}"
+        return f"{self.pregunta_clave} → {self.tono}"
