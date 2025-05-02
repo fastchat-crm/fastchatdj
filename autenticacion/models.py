@@ -166,6 +166,9 @@ class Usuario(AbstractUser, ModeloBase):
         )
         return context
 
+    def mi_empresa(self):
+        return self.empresa_set.filter(status=True).first()
+
     class Meta:
         verbose_name = 'Perfil'
         verbose_name_plural = "Perfiles"

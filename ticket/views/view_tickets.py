@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q
 from django.forms import model_to_dict
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.template.loader import get_template
 
@@ -32,6 +32,10 @@ def ticketView(request):
     addData(request, data)
     model = TicketAtencion
     Formulario = TicketForm
+    empresa = request.user.mi_empresa()
+    if not request.user.is_superuser and not empresa:
+        messages.error(request, "No se encuentra registrado en ninguna empresa")
+        return HttpResponseRedirect('/')
 
     if request.method == 'POST':
         res_json = []
@@ -89,6 +93,12 @@ def ticketView(request):
                 try:
                     form = Formulario()
                     form.fields['proceso'].queryset = ProcesoAtencion.objects.none()
+                    if not request.user.is_superuser :
+                        form.fields['empresa'].queryset = Empresa.objects.filter(id=empresa.id)
+                        form.fields['empresa'].initial = empresa
+                        form.fields['empresa'].disabled = True
+                        form.fields['proceso'].queryset = ProcesoAtencion.objects.filter(empresa=empresa, status=True, activo=True)
+
                     data['form'] = form
                     titulo = 'Crear Ticket'
                     template = get_template('ticket/forms/form_ticket.html')
@@ -101,6 +111,10 @@ def ticketView(request):
                     data['pk'] = pk = int(request.GET['pk'])
                     ticket = TicketAtencion.objects.get(id=pk)
                     form = Formulario(initial=model_to_dict(ticket))
+                    if not request.user.is_superuser:
+                        form.fields['empresa'].queryset = Empresa.objects.filter(id=empresa.id)
+                        form.fields['empresa'].initial = empresa
+                        form.fields['empresa'].disabled = True
                     form.fields['proceso'].queryset = ProcesoAtencion.objects.filter(empresa=ticket.empresa, status=True, activo=True)
                     data['form'] = form
                     titulo = f'Editar {ticket.titulo}'

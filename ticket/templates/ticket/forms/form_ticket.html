@@ -5,6 +5,10 @@
             let empresa = $('#id_empresa');
             let proceso = $('#id_proceso');
             cargarSelectSecundario('loadprocesos', empresa, proceso)
+
         })
+        function funcionAntesDeGuardar(){
+            $('#id_empresa').removeAttr('disabled');
+        }
     </script>
 {% endblock %}
