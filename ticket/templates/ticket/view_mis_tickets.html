@@ -96,13 +96,18 @@
     <div class="container-fluid">
         <form method="GET" class="">
             <div class="row align-items-center">
-                <div class="col-lg-6"></div>
+                <div class="col-lg-6">
+                    <div class="btn-group" role="group" aria-label="View mode">
+                        <a href="{{ request.path }}" class="btn btn-primary" title="Vista de tarjetas"><i class="fas fa-th-large"></i></a>
+                        <a href="{{ request.path }}?action=listtickets" class="btn btn-outline-primary" title="Vista de lista"><i class="fas fa-list"></i></a>
+                    </div>
+                </div>
                 <div class="col-lg-6 mb-2">
                     <div class="input-group">
                         <input type="text" class="form-control" placeholder="Buscar por título de la actividad..."
                                aria-label="Buscar" aria-describedby="button-addon2" name="s" value="{{ s }}">
                         <div class="input-group-append">
-                            <button class="btn btn-primary-old" type="submit" id="button-addon2"><i
+                            <button class="btn btn-primary" type="submit" id="button-addon2"><i
                                     class="fa fa-search"></i></button>
                             {% if url_vars %}
                                 <a title="Ver todo" href="{{ request.path }}" class="btn btn-default tr">

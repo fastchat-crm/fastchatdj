@@ -39,14 +39,27 @@ def ticketIntegranteView(request):
         try:
             with transaction.atomic():
 
-                if action == 'iniciarticket':
+                if action == 'cambiarestado':
+                    pk = int(encrypt(request.POST['pk']))
+                    ticket = TicketAtencion.objects.get(id=pk)
+                    form = CambiarEstadoTicketForm(request.POST, request.FILES, instance=ticket)
+                    if not form.is_valid():
+                        raise FormError(form)
+                    form.save(request=request)
+                    log('Cambio de estado correctamente', request, 'edit')
+                    res_json.append({'error': False,
+                                     'message': 'Ticket creado correctamente',
+                                     'reload': True
+                                     })
+
+                elif action == 'iniciarticket':
                     pk = int(request.POST['id'])
                     ticket = TicketAtencion.objects.get(id=pk)
                     ticket.finicioactividad = datetime.now()
                     ticket.estado = 3
                     ticket.save(request)
                     messages.info(request, f'Se inicio correctamente el ticket: f{ticket.codigo}')
-                    log('Ticket eliminado correctamente', request, ticket)
+                    log('Ticket iniciado correctamente', request, ticket)
                     return JsonResponse({'error': False})
 
                 elif action == 'finalizarticket':
@@ -59,7 +72,7 @@ def ticketIntegranteView(request):
                     log('Ticket eliminado correctamente', request, ticket)
                     return JsonResponse({'error': False})
 
-                if action == 'do':
+                elif action == 'do':
                     try:
                         idactividad = request.POST['idactividad']
                         actividad = TicketAtencion.objects.get(pk=idactividad)
@@ -76,7 +89,7 @@ def ticketIntegranteView(request):
                         res_json = {'resp': False, "message": "Error: {}".format(ex)}
                     return JsonResponse(res_json, safe=False)
 
-                if action == 'progress':
+                elif action == 'progress':
                     try:
                         idactividad = request.POST['idactividad']
                         actividad = TicketAtencion.objects.get(pk=idactividad)
@@ -93,7 +106,7 @@ def ticketIntegranteView(request):
                         res_json = {'resp': False, "message": "Error: {}".format(ex)}
                     return JsonResponse(res_json, safe=False)
 
-                if action == 'done':
+                elif action == 'done':
                     try:
                         idactividad = request.POST['idactividad']
                         actividad = TicketAtencion.objects.get(pk=idactividad)
@@ -139,6 +152,81 @@ def ticketIntegranteView(request):
                     return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
                 except Exception as ex:
                     messages.error(request, f'Error: {ex}')
+
+            elif action == 'cambiarestado':
+                try:
+                    data['pk'] = pk = int(request.GET['pk'])
+                    data['ticket'] = ticket = TicketAtencion.objects.get(id=pk)
+                    titulo = f'Ticket | {ticket.codigo}'
+                    form = CambiarEstadoTicketForm(initial=model_to_dict(ticket))
+                    data['form'] = form
+                    template = get_template('ajaxformmodal.html')
+                    return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
+                except Exception as ex:
+                    messages.error(request, f'Error: {ex}')
+
+            elif action == 'comentarios':
+                try:
+                    data['pk'] = pk = int(request.GET['pk'])
+                    data['ticket'] = ticket = TicketAtencion.objects.get(id=pk)
+                    data['comentarios'] = ticket.comentarios().order_by('-fecha_registro')
+                    titulo = f'Comentarios de ticket | {ticket.codigo}'
+                    template = get_template('ticket/forms/comments.html')
+                    return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
+                except Exception as ex:
+                    messages.error(request, f'Error: {ex}')
+
+            elif action == 'listtickets':
+                criterio, filtros, url_vars, documento = request.GET.get('criterio', ''), Q(status=True, asignadoa=request.user), '', request.GET.get('documento', '')
+                estado = request.GET.get('estado', '')
+                if estado:
+                    data['estado'] = int(estado)
+                    url_vars += f'&estado={estado}'
+                    filtros &= Q(estado=estado)
+                if documento:
+                    data['documento'] = documento
+                    url_vars += f'&documento={documento}'
+                    filtros = filtros & Q(usuario__documento=documento)
+                if criterio:
+                    data['criterio'] = criterio
+                    url_vars += f'&criterio={criterio}'
+                    palabras = criterio.strip().split()
+                    q_obj = Q()
+
+                    if len(palabras) == 1:
+                        palabra = palabras[0]
+                        q_obj |= Q(usuario__first_name__icontains=palabra)
+                        q_obj |= Q(usuario__last_name__icontains=palabra)
+                        q_obj |= Q(usuario__username__icontains=palabra)
+                    elif 2 <= len(palabras) <= 4:
+                        # Generar todas las combinaciones posibles de los términos
+                        from itertools import permutations
+
+                        for combo in permutations(palabras, len(palabras)):
+                            # Vamos alternando los campos entre first_name y last_name
+                            sub_q = Q()
+                            for i, palabra in enumerate(combo):
+                                if i % 2 == 0:
+                                    sub_q &= Q(usuario__first_name__icontains=palabra)
+                                else:
+                                    sub_q &= Q(usuario__last_name__icontains=palabra)
+                            q_obj |= sub_q
+
+                    else:
+                        # Fallback: solo usar las 3 primeras para evitar combinaciones excesivas
+                        q_obj &= (Q(usuario__first_name__icontains=palabras[0]) &
+                                  Q(usuario__last_name__icontains=palabras[1]) &
+                                  Q(usuario__last_name__icontains=palabras[2]))
+                    palabras = criterio.strip()
+                    filtros &= q_obj | Q(codigo__icontains=palabras) | Q(numero_ticket__icontains=palabras) | Q(
+                        titulo__icontains=palabras)
+                listado = model.objects.filter(filtros).order_by('-codigo').distinct()
+                data["url_vars"] = url_vars
+                data["list_count"] = listado.count()
+                data['estados'] = model.ESTADO_TICKET[1:]
+                paginador(request, listado, 20, data, url_vars)
+                return render(request, 'ticket/views_mis_tickets_list.html', data)
+
         criterio, filtros, url_vars, documento = request.GET.get('s', ''), Q(status=True, asignadoa=request.user), '', request.GET.get(
             'documento', '')
         estado = request.GET.get('estado', '')
