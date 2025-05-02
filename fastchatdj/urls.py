@@ -14,6 +14,7 @@ from django.views.static import serve
 from autenticacion.urls import autenticacion_urls
 from autenticacion.view_perfil import perfilView
 from core.ajax import ConsultasAjax
+from crm.urls import crm_urls
 from fastchatdj.view_clearsitedata import clearSiteDataView
 from fastchatdj import settings
 from fastchatdj.view_redirect import redirectView, redirectToUrlView
@@ -67,6 +68,14 @@ urls_sistema = (
         "url": 'ticket/',
         "sub_urls": ticket_urls,
         "include": include('ticket.urls'),
+        "name": None,
+        "vista": None
+    },
+    {
+        "nombre": "Crm",
+        "url": 'crm/',
+        "sub_urls": crm_urls,
+        "include": include('crm.urls'),
         "name": None,
         "vista": None
     },

@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <style>
+        .row [class*='col-'] {
+            background-clip: content-box;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white border-bottom-0">
+    <h5 class="mb-0 text-primary"><i class="fas fa-building me-2"></i>Perfil del Negocio</h5>
+  </div>
+  <div class="card-body pb-3">
+    <div class="row g-2">
+      {% for field in form.visible_fields %}
+        <div class="col-lg-{{ field.field.widget.attrs.col|default:6 }}">
+          <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<div class="form-text text-muted">{{ field.help_text }}</div>{% endif %}
+          <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
+    <div>
+      <h5 class="mb-0 text-primary"><i class="fas fa-boxes-stacked me-2"></i>Productos y Servicios</h5>
+      <small class="text-muted">Configura lo que ofreces para que la IA pueda sugerirlo.</small>
+    </div>
+    <div>
+      <a href="javascript:void(0)" class="btn btn-sm btn-outline-primary me-1" onclick="formModal('', 'Agregar Producto', 'add_producto_ia')">
+        <i class="fa fa-plus"></i> Producto
+      </a>
+      <a href="javascript:void(0)" class="btn btn-sm btn-outline-success" onclick="formModal('', 'Agregar Servicio', 'add_servicio_ia')">
+        <i class="fa fa-plus"></i> Servicio
+      </a>
+    </div>
+  </div>
+  <div class="card-body" id="bloque_productos_servicios">
+    <div class="alert alert-info">Aún no has agregado productos ni servicios.</div>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
+    <div>
+      <h5 class="mb-0 text-primary"><i class="fas fa-comments me-2"></i>Respuestas Personalizadas</h5>
+      <small class="text-muted">Define cómo responde la IA ante preguntas comunes.</small>
+    </div>
+    <div>
+      <a href="javascript:void(0)" class="btn btn-sm btn-outline-dark" onclick="formModal('', 'Agregar Respuesta Entrenada', 'add_respuesta_ia')">
+        <i class="fa fa-plus"></i> Respuesta
+      </a>
+    </div>
+  </div>
+  <div class="card-body" id="bloque_respuestas_entrenadas">
+    <div class="alert alert-info">Todavía no has entrenado ninguna respuesta.</div>
+  </div>
+</div>
+
+    <div class="row justify-content-center">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-2">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <h5 class="card-title mb-0">Formulario</h5>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body py-2">
+                    <form autocomplete="off" method="post" enctype="multipart/form-data" action="{{ ruta }}"
+                          class="form">
+                        {% csrf_token %}
+                        <input type="hidden" name="pk" value="{{ pk|default:0 }}"/>
+                        <input type="hidden" name="action" value="{{ action }}"/>
+                        {{ dict_url_vars_input }}
+
+                        <div class="row g-1">
+                            {% for field in form %}
+                                {% if field.is_hidden %}
+                                    {{ field }}
+                                {% else %}
+                                    <div class="col-lg-{{ field.field.widget.attrs.col }}">
+                                        <div class="mb-2">
+                                            <label class="form-label small mb-1"
+                                                   for="id_{{ field.name }}">{{ field.label }}</label><br>
+                                            {{ field }}
+                                            {% if field.name == "telegram_id" %}
+                                                <div class="mt-1">
+                                                    <a target="_blank"
+                                                       href="https://t.me/matsoftnotificaciones_bot?text=/obtener_id_telegram"
+                                                       class="text-primary small">
+                                                        <i class="fa-brands fa-telegram me-1"></i> Ir a Telegram para
+                                                        obtener tu ID
+                                                    </a>
+                                                    <span class="mx-1 small">o</span>
+                                                    <a href="javascript:;"
+                                                       onclick="copiarTextoPortapapeles('@matsoftnotificaciones_bot')"
+                                                       class="text-primary small">
+                                                        <i class="fa-solid fa-copy me-1"></i> Copia el username
+                                                    </a>
+                                                </div>
+                                            {% endif %}
+                                            <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+
+                        <div class="row mt-2">
+                            <div class="col-12">
+                                <a class="btn btn-danger btn-sm me-1" href="{{ ruta }}?{{ dict_url_vars_completo }}">
+                                    <i class="fa fa-window-close me-1"></i> Cancelar
+                                </a>
+                                <button {% if action != 'ver' %}type="submit" id="submit"{% else %}disabled{% endif %}
+                                        class="btn btn-success btn-sm">
+                                    <i class="fa fa-save me-1"></i> Guardar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block jscript %}
+    {{ form.media }}
+    <script src="/static/js/forms.js?version=1"></script>
+{% endblock %}
