@@ -834,23 +834,58 @@
     </div>
 
     {% if mostrar_modal_ia %}
-        <!-- Modal de Entrenamiento IA -->
-        <div class="modal fade" id="modalEntrenamientoIA" tabindex="-1" aria-labelledby="modalEntrenamientoIALabel"
-             aria-hidden="true">
-            <div class="modal-dialog modal-lg modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Entrenamiento Inicial para IA</h5>
-                    </div>
-                    <div class="modal-body">
-                        <p>Antes de continuar, necesitamos conocer un poco más sobre tu empresa y lo que ofreces.</p>
-                        <a href="/crm/perfil/entrenamiento/" class="btn btn-primary btn-lg w-100">
-                            Completar configuración ahora
-                        </a>
+        <div class="modal fade" id="modalEntrenamientoIA" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-xl">
+                <div class="modal-content shadow-lg border-0 rounded-4">
+                    <div class="modal-body p-5">
+                        <div class="row">
+                            <!-- Panel izquierdo -->
+                            <div class="col-md-7 pe-4 border-end">
+                                <h3 class="fw-bold mb-3">🎯 ¡Conoce tu asistente inteligente!</h3>
+                                <p class="text-muted">Antes de empezar, cuéntanos un poco sobre tu negocio. Esto nos
+                                    ayudará a entrenar la IA para que hable como tú, entienda tu industria y atienda a
+                                    tus clientes como si fueras tú.</p>
+
+                                <ul class="list-unstyled mt-4">
+                                    <li class="d-flex align-items-start mb-3">
+                                        <i class="fas fa-robot fa-lg text-primary me-3 mt-1"></i>
+                                        <div>
+                                            <strong>Entrena tu IA</strong><br>
+                                            Define tu industria, tus servicios y cómo hablas.
+                                        </div>
+                                    </li>
+                                    <li class="d-flex align-items-start mb-3">
+                                        <i class="fas fa-comments fa-lg text-primary me-3 mt-1"></i>
+                                        <div>
+                                            <strong>Conversaciones reales</strong><br>
+                                            Tu IA responderá mensajes según tu estilo y tono.
+                                        </div>
+                                    </li>
+                                    <li class="d-flex align-items-start">
+                                        <i class="fas fa-chart-line fa-lg text-primary me-3 mt-1"></i>
+                                        <div>
+                                            <strong>Automatiza y gana tiempo</strong><br>
+                                            Deja que tu asistente trabaje mientras tú vendes.
+                                        </div>
+                                    </li>
+                                </ul>
+
+                                <a href="/crm/perfil/entrenamiento/" class="btn btn-primary btn-lg w-100 mt-4">
+                                    ¡Configurar ahora!
+                                </a>
+                            </div>
+
+                            <!-- Imagen ilustrativa o branding -->
+                            <div class="col-md-5 d-flex justify-content-center align-items-center">
+                                <img src="/media/{{ confi.logo_sistema }}" class="img-fluid" alt="Asistente IA"
+                                     style="max-height: 320px;">
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
+
     {% endif %}
 
 
