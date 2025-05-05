@@ -405,6 +405,9 @@ def process_sent_message(session, event_data, channel_layer):
                     media_data = event_data.get('mediaData')
                     filename = media_msg.get(filename_key, f"{type_name}_{message_id}")
 
+                    if media_key == 'stickerMessage':
+                        filename = f'{filename}.png'
+
                     # Guardar el archivo
                     file_url = save_media_file(media_data, filename, session.id, conversation.id)
 

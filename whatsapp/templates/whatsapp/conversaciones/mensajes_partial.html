@@ -18,7 +18,7 @@
                     {% endif %}
 
                     {% if mensaje.archivo_url and not mensaje.eliminado %}
-                        {% if mensaje.tipo == 'imagen' %}
+                        {% if mensaje.tipo == 'imagen' or mensaje.tipo == 'sticker' %}
                             <img src="{{ mensaje.archivo_url }}" alt="imagen" class="img-fluid rounded"
                                  style="max-width: 200px;">
                         {% elif mensaje.tipo == 'audio' %}
@@ -60,7 +60,7 @@
                     {% endif %}
 
                     {% if mensaje.archivo_url and not mensaje.eliminado %}
-                        {% if mensaje.tipo == 'imagen' %}
+                        {% if mensaje.tipo == 'imagen' or mensaje.tipo == 'sticker' %}
                             <img src="{{ mensaje.archivo_url }}" alt="imagen" class="img-fluid rounded"
                                  style="max-width: 200px;">
                         {% elif mensaje.tipo == 'audio' %}
