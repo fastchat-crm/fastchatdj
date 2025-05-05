@@ -179,6 +179,8 @@ def webhook_handler(request):
                 process_edited_message(session, event_data, channel_layer)
             elif event_data.get('message') and event_data['message'].get('protocolMessage') and event_data['message']['protocolMessage'].get('type') == 'REVOKE':
                 process_deleted_message(session, event_data, channel_layer)
+            elif event_data.get('fromMe'):
+                process_sent_message(session, event_data, channel_layer)
             else:
                 process_incoming_message(session, event_data, channel_layer)
 
@@ -223,6 +225,7 @@ def process_incoming_message(session, event_data, channel_layer):
         timestamp = event_data.get('timestamp')
         push_name = event_data.get('pushName', '')
         message_content = event_data.get('message', {})
+        from_me = bool(event_data.get('fromMe', False))
         userImage = event_data.get('userImage')
 
         # Convertir timestamp a datetime
@@ -339,10 +342,11 @@ def process_sent_message(session, event_data, channel_layer):
     """
     try:
         # Extraer datos del mensaje
-        message_id = event_data.get('messageId')
-        from_number = event_data.get('to')
+        message_id = event_data.get('messageId') or event_data.get('id')
+        from_number = event_data.get('to') or event_data.get('from')
         to_number = from_number.split('@')[0]
         message_data = event_data.get('message', {})
+        message_content = event_data.get('message', {})
 
         # Buscar la conversación
         try:
@@ -362,12 +366,47 @@ def process_sent_message(session, event_data, channel_layer):
 
         # Determinar el tipo y contenido del mensaje
         message_type = message_data.get('type', 'texto')
-        message_text = message_data.get('caption', '') or message_data.get('text', '')
+        message_text = message_data.get('caption', '') or message_data.get('text', '') or message_data.get('conversation', '')
 
         # Actualizar la conversación
         conversation.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
         conversation.fecha_ultimo_mensaje = timezone.now()
         conversation.save()
+
+        # Procesar texto
+        if 'conversation' in message_content:
+            message_type = 'texto'
+            message_text = message_content.get('conversation', '')
+        elif 'extendedTextMessage' in message_content:
+            message_type = 'texto'
+            message_text = message_content.get('extendedTextMessage', {}).get('text', '')
+
+        file_url = None
+        # Procesar archivos multimedia
+        media_types = {
+            'imageMessage': ('imagen', 'fileName', 'mimetype', 'caption'),
+            'videoMessage': ('video', 'fileName', 'mimetype', 'caption'),
+            'audioMessage': ('audio', 'fileName', 'mimetype', None),
+            'documentMessage': ('documento', 'fileName', 'mimetype', 'caption'),
+            'stickerMessage': ('sticker', None, 'mimetype', None)
+        }
+
+        for media_key, (type_name, filename_key, mimetype_key, caption_key) in media_types.items():
+            if media_key in message_content:
+                media_msg = message_content.get(media_key, {})
+                message_type = type_name
+
+                # Obtener el texto del caption si existe
+                if caption_key and caption_key in media_msg:
+                    message_text = media_msg.get(caption_key, '')
+
+                # Procesar archivo multimedia si hay datos
+                if 'mediaData' in event_data:
+                    media_data = event_data.get('mediaData')
+                    filename = media_msg.get(filename_key, f"{type_name}_{message_id}")
+
+                    # Guardar el archivo
+                    file_url = save_media_file(media_data, filename, session.id, conversation.id)
 
         # Crear el mensaje
         message = MensajeWhatsApp.objects.create(
@@ -375,7 +414,7 @@ def process_sent_message(session, event_data, channel_layer):
             remitente=session.numero,  # El remitente es el número de la sesión
             mensaje=message_text,
             tipo=message_type,
-            archivo_url=None,  # No tenemos la URL del archivo en este punto
+            archivo_url=file_url,  # No tenemos la URL del archivo en este punto
             fecha=timezone.now(),
             mensaje_id_externo=message_id,
             leido=True,  # Marcamos como leído ya que lo enviamos nosotros

@@ -206,8 +206,9 @@
                     // Actualizar los mensajes
                     $('#mensajes-container').html(data.html);
 
-                    // Hacer scroll hacia abajo
-                    scrollToBottom();
+                    setTimeout(() => {
+                        scrollToBottom();
+                    }, 1500);
                 }
             };
 
@@ -385,7 +386,9 @@
                         form.find('input[name="archivo"]').val('');
 
                         // Scroll al final
-                        scrollToBottom();
+                        setTimeout(() => {
+                            scrollToBottom();
+                        }, 1500);
                     } else {
                         alertaWarning('Error: ' + response.message);
                     }
@@ -495,7 +498,9 @@
                     $('#conversacion-id').val(response.conversacion_id);
 
                     // Scroll al final
-                    scrollToBottom();
+                    setTimeout(() => {
+                        scrollToBottom();
+                    }, 1500);
                     conectarWebSocket(response.conversacion_id);
                 },
                 error: function(xhr, status, error) {

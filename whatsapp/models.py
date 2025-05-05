@@ -78,7 +78,7 @@ class ConversacionWhatsApp(ModeloBase):
     class Meta:
         verbose_name = 'Conversación WhatsApp'
         verbose_name_plural = 'Conversaciones WhatsApp'
-        ordering = ['order']
+        ordering = ['-order']
 
     def __str__(self):
         return f"Conversación con {self.contacto_numero} ({self.sesion.numero})"

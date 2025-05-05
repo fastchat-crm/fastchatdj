@@ -35,10 +35,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     # Recibir mensaje del grupo de la conversación
     async def whatsapp_message(self, event):
-        message = event['message']
+        html = await self.get_messages_html(self.conversacion_id)
 
-        # Enviar mensaje al WebSocket
-        await self.send(text_data=json.dumps(message))
+        # Enviar mensajes al WebSocket
+        await self.send(text_data=json.dumps({
+            'type': 'messages_update',
+            'html': html
+        }))
 
     @database_sync_to_async
     def get_messages_html(self, conversacion_id):
