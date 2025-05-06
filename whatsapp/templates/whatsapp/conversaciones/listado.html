@@ -194,9 +194,6 @@
 
             chatSocket.onopen = function(e) {
                 console.log('Conexión WebSocket establecida');
-                chatSocket.send(JSON.stringify({
-                    'type': 'request_messages'
-                }));
             };
 
             chatSocket.onmessage = function(e) {
