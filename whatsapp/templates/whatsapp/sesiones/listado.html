@@ -191,21 +191,21 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                <div class="dropdown">
-                                    <button class="btn btn-icon" type="button" data-bs-toggle="dropdown"
-                                            aria-expanded="false"
-                                            style="background: none; border: none;">
-                                        <i class="fas fa-ellipsis-v"></i>
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end">
-                                        <li>
-                                            <a class="dropdown-item" href="javascript:void(0);"
-                                               onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete')">
-                                                <i class="fas fa-trash me-2 text-danger"></i> Eliminar
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </div>
+{#                                <div class="dropdown">#}
+{#                                    <button class="btn btn-icon" type="button" data-bs-toggle="dropdown"#}
+{#                                            aria-expanded="false"#}
+{#                                            style="background: none; border: none;">#}
+{#                                        <i class="fas fa-ellipsis-v"></i>#}
+{#                                    </button>#}
+{#                                    <ul class="dropdown-menu dropdown-menu-end">#}
+{#                                        <li>#}
+{#                                            <a class="dropdown-item" href="javascript:void(0);"#}
+{#                                               onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete')">#}
+{#                                                <i class="fas fa-trash me-2 text-danger"></i> Eliminar#}
+{#                                            </a>#}
+{#                                        </li>#}
+{#                                    </ul>#}
+{#                                </div>#}
                             </td>
                         </tr>
                     {% empty %}
@@ -377,6 +377,9 @@
                             case 'auth_failure':
                             case 'disconnected':
                                 $('#qrContent').html('<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i> Intentando nuevamente</div>');
+                                break;
+                            case 'error':
+                                $('#qrContent').html(`<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i> ${data.msgerror}</div>`);
                                 break;
                         }
                     };

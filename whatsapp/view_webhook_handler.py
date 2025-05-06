@@ -73,11 +73,8 @@ def webhook_handler(request):
             logger.info(f"Código QR actualizado para la sesión {session_id}")
 
         elif event_type == 'ready':
-            # Actualizar el estado de la sesión a conectado
-            session.estado = 'conectado'
-            session.ultima_conexion = timezone.now()
-            session.error_mensaje = None
-
+            guardar = True
+            msgerror = ''
             # Guardar información del usuario si está disponible
             if 'user' in event_data:
                 user_info = event_data.get('user', {})
@@ -89,21 +86,42 @@ def webhook_handler(request):
                         if not x.isdigit():
                             break
                         numero_list.append(x)
-                    session.numero = "".join(numero_list)
+                    numero = "".join(numero_list)
+                    whatsapp_id = user_info['id']
+                    if session.whatsapp_id and session.whatsapp_id != whatsapp_id:
+                        guardar = False
+                        msgerror = 'No puede registrar otra cuenta de whatsapp en esta sesión'
+                    if guardar:
+                        session.numero = numero
+                        session.whatsapp_id = whatsapp_id
 
-            session.save()
+            if guardar:
+                session.estado = 'conectado'
+                session.ultima_conexion = timezone.now()
+                session.error_mensaje = None
+                session.save()
 
-            # Notificar a través de WebSockets
-            async_to_sync(channel_layer.group_send)(
-                f"whatsapp_session_{session.id}",
-                {
-                    'type': 'whatsapp_event',
-                    'event': 'ready',
-                    'session_id': session.id
-                }
-            )
+                # Notificar a través de WebSockets
+                async_to_sync(channel_layer.group_send)(
+                    f"whatsapp_session_{session.id}",
+                    {
+                        'type': 'whatsapp_event',
+                        'event': 'ready',
+                        'session_id': session.id
+                    }
+                )
 
-            logger.info(f"Sesión {session_id} conectada correctamente")
+                logger.info(f"Sesión {session_id} conectada correctamente")
+            else:
+                async_to_sync(channel_layer.group_send)(
+                    f"whatsapp_session_{session.id}",
+                    {
+                        'type': 'whatsapp_event',
+                        'event': 'error',
+                        'session_id': session.id,
+                        'msgerror': msgerror
+                    }
+                )
 
         elif event_type == 'authenticated':
             # Actualizar el estado de la sesión
@@ -176,7 +194,9 @@ def webhook_handler(request):
         elif event_type == 'message':
             # Procesar mensaje entrante
             if event_data.get('message') and event_data['message'].get('protocolMessage') and event_data['message']['protocolMessage'].get('type') == 'MESSAGE_EDIT':
-                process_edited_message(session, event_data, channel_layer)
+                process_edited_message(session, event_data['message']['protocolMessage'], event_data['from'], channel_layer)
+            elif event_data.get('message') and event_data['message'].get('editedMessage') and event_data['message']['editedMessage']['message']['protocolMessage'].get('type') == 'MESSAGE_EDIT':
+                process_edited_message(session, event_data['message']['editedMessage']['message']['protocolMessage'], event_data['from'], channel_layer)
             elif event_data.get('message') and event_data['message'].get('protocolMessage') and event_data['message']['protocolMessage'].get('type') == 'REVOKE':
                 process_deleted_message(session, event_data, channel_layer)
             elif event_data.get('fromMe'):
@@ -191,10 +211,6 @@ def webhook_handler(request):
         elif event_type == 'message_deleted':
             # Procesar mensaje eliminado
             process_deleted_message(session, event_data, channel_layer)
-
-        elif event_type == 'message_edited':
-            # Procesar mensaje editado
-            process_edited_message(session, event_data, channel_layer)
 
         elif event_type == 'contact_update':
             # Procesar actualización de contacto
@@ -493,15 +509,15 @@ def process_deleted_message(session, event_data, channel_layer):
     except Exception as e:
         logger.exception(f"Error procesando mensaje eliminado: {str(e)}")
 
-def process_edited_message(session, event_data, channel_layer):
+def process_edited_message(session, event_data, fromchat, channel_layer):
     """
     Procesa un mensaje editado en WhatsApp
     """
     try:
         # Extraer datos del mensaje
-        message_id = event_data['message']['protocolMessage']['key']['id']
-        chat = event_data['from']
-        edited_message = event_data['message']['protocolMessage']['editedMessage']
+        message_id = event_data['key']['id']
+        chat = fromchat
+        edited_message = event_data['editedMessage']
 
         # Limpiar el número de teléfono
         if '@' in chat:
