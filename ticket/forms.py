@@ -139,6 +139,7 @@ class AsignarTicketForm(FormBase):
             ticket.ffinactividad = None
         ticket.asignadoa = asignadoa
         ticket.asignadopor = request.user
+        ticket.estado = 2
         ticket.fecha_vigencia = cleaned_data.get('fecha_vigencia', None)
         ticket.proceso = cleaned_data.get('proceso', None)
         comentario = ticket.get_comentario_asignacion()
