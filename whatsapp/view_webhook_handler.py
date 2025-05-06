@@ -175,7 +175,7 @@ def webhook_handler(request):
 
         elif event_type == 'message':
             # Procesar mensaje entrante
-            if event_data.get('message') and event_data['message'].get('editedMessage'):
+            if event_data.get('message') and event_data['message'].get('protocolMessage') and event_data['message']['protocolMessage'].get('type') == 'MESSAGE_EDIT':
                 process_edited_message(session, event_data, channel_layer)
             elif event_data.get('message') and event_data['message'].get('protocolMessage') and event_data['message']['protocolMessage'].get('type') == 'REVOKE':
                 process_deleted_message(session, event_data, channel_layer)
@@ -499,9 +499,9 @@ def process_edited_message(session, event_data, channel_layer):
     """
     try:
         # Extraer datos del mensaje
-        message_id = event_data['message'].get('editedMessage')['message']['protocolMessage']['key']['id']
+        message_id = event_data['message']['protocolMessage']['key']['id']
         chat = event_data['from']
-        edited_message = event_data['message'].get('editedMessage')['message']['protocolMessage']['editedMessage']
+        edited_message = event_data['message']['protocolMessage']['editedMessage']
 
         # Limpiar el número de teléfono
         if '@' in chat:
