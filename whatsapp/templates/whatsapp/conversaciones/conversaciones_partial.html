@@ -6,7 +6,7 @@
                 {% if conversacion.contacto_foto %}
                     <img src="{{ conversacion.contacto_foto }}" alt="" class="thumb-lg rounded-circle">
                 {% else %}
-                    <img src="assets/images/users/avatar-1.jpg" alt="" class="thumb-lg rounded-circle">
+                    <img src="/static/assets/img/avatar.svg" alt="" class="thumb-lg rounded-circle">
                 {% endif %}
                 <span class="position-absolute bottom-0 end-0">
                     <i class="fa-solid fa-circle {% if conversacion.estado == 'activo' %}text-success{% else %}text-secondary{% endif %} fs-10 border-2 border-theme-color"></i>
