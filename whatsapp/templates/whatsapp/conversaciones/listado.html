@@ -54,13 +54,15 @@
                 <!-- Añadir justo después del selector de sesiones -->
                 <div class="p-3">
                     <div class="d-flex">
-                        <select id="sesion-selector" class="form-select">
-                            {% for sesion in sesiones %}
-                                <option value="{{ sesion.id }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
-                                    {{ sesion.numero }} ({{ sesion.get_estado_display }})
-                                </option>
-                            {% endfor %}
-                        </select>
+                        <form>
+                            <select name="sesion_id" id="sesion-selector" class="form-select" onchange="this.closest('form').submit();">
+                                {% for sesion in sesiones %}
+                                    <option value="{{ sesion.id }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
+                                        {{ sesion.numero }} ({{ sesion.get_estado_display }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </form>
                         <button id="btn-sync-contacts" class="btn btn-sm btn-primary ms-2">
                             <i class="fa fa-sync"></i> Sincronizar contactos
                         </button>
@@ -105,7 +107,7 @@
                 <div class="p-3 d-flex justify-content-between align-items-center card-bg rounded" id="chat-header">
                     <a href="javascript:void(0);" class="d-flex align-self-center">
                         <div class="flex-shrink-0">
-                            <img src="assets/images/users/avatar-1.jpg" alt="user" class="rounded-circle thumb-lg" id="contacto-foto">
+                            <img src="/static/assets/img/avatar.png" alt="user" class="rounded-circle thumb-lg" id="contacto-foto">
                         </div><!-- media-left -->
                         <div class="flex-grow-1 ms-2 align-self-center">
                             <div>
@@ -192,9 +194,6 @@
 
             chatSocket.onopen = function(e) {
                 console.log('Conexión WebSocket establecida');
-                chatSocket.send(JSON.stringify({
-                    'type': 'request_messages'
-                }));
             };
 
             chatSocket.onmessage = function(e) {
@@ -204,8 +203,9 @@
                     // Actualizar los mensajes
                     $('#mensajes-container').html(data.html);
 
-                    // Hacer scroll hacia abajo
-                    scrollToBottom();
+                    setTimeout(() => {
+                        scrollToBottom();
+                    }, 1500);
                 }
             };
 
@@ -383,7 +383,9 @@
                         form.find('input[name="archivo"]').val('');
 
                         // Scroll al final
-                        scrollToBottom();
+                        setTimeout(() => {
+                            scrollToBottom();
+                        }, 1500);
                     } else {
                         alertaWarning('Error: ' + response.message);
                     }
@@ -485,7 +487,7 @@
                     if (response.contacto_foto) {
                         $('#contacto-foto').attr('src', response.contacto_foto);
                     } else {
-                        $('#contacto-foto').attr('src', 'assets/images/users/avatar-1.jpg');
+                        $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
                     }
 
                     // Mostrar footer para enviar mensajes
@@ -493,7 +495,9 @@
                     $('#conversacion-id').val(response.conversacion_id);
 
                     // Scroll al final
-                    scrollToBottom();
+                    setTimeout(() => {
+                        scrollToBottom();
+                    }, 1500);
                     conectarWebSocket(response.conversacion_id);
                 },
                 error: function(xhr, status, error) {
