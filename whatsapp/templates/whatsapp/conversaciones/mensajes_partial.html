@@ -4,7 +4,7 @@
             {% if conversacion.sesion.foto %}
                 <img src="{{ conversacion.sesion.foto }}" alt="user" class="rounded-circle thumb-md">
             {% else %}
-                <img src="{{ mensaje.conversacion.sesion.usuario.get_foto_url|default:'assets/images/users/avatar-3.jpg' }}" alt="user" class="rounded-circle thumb-md">
+                <img src="{{ mensaje.conversacion.sesion.usuario.get_foto_url|default:'/static/assets/img/avatar.png' }}" alt="user" class="rounded-circle thumb-md">
             {% endif %}
             <div class="me-1 chat-box w-100 reverse">
                 <div class="user-chat {% if mensaje.eliminado %}deleted-message{% endif %} {% if mensaje.editado %}edited-message{% endif %}">
@@ -46,7 +46,7 @@
             {% if conversacion.contacto_foto %}
                 <img src="{{ conversacion.contacto_foto }}" alt="user" class="rounded-circle thumb-md">
             {% else %}
-                <img src="{{ mensaje.conversacion.sesion.usuario.get_foto_url|default:'assets/images/users/avatar-3.jpg' }}" alt="user" class="rounded-circle thumb-md">
+                <img src="{{ mensaje.conversacion.sesion.usuario.get_foto_url|default:'/static/assets/img/avatar.png' }}" alt="user" class="rounded-circle thumb-md">
             {% endif %}
             <div class="ms-1 chat-box w-100">
                 <div class="user-chat {% if mensaje.eliminado %}deleted-message{% endif %} {% if mensaje.editado %}edited-message{% endif %}">
