@@ -1097,14 +1097,14 @@
         })
     }
 
-    function alertaDanger(mensaje) {
+    function alertaDanger(mensaje, timer=1000) {
         Swal.fire({
             toast: true,
             position: 'top-end',
             type: 'error',
             title: mensaje,
             showConfirmButton: false,
-            timer: 1000
+            timer: timer
         })
     }
 

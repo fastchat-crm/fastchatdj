@@ -92,6 +92,10 @@ class SessionConsumer(AsyncWebsocketConsumer):
             await self.send(text_data=json.dumps({
                 'type': 'qr_code', "qr_code": text_data_json["qr_code"]
             }))
+        elif message_type == 'error':
+            await self.send(text_data=json.dumps({
+                'type': 'error', "msgerror": text_data_json["msgerror"]
+            }))
 
     async def whatsapp_event(self, event):
         message = event

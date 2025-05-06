@@ -40,6 +40,7 @@ def webhook_handler(request):
         event_type = data.get('type')
         event_data = data.get('data', {})
         session_id = event_data.get('sessionId')
+        msgerror = ''
 
         # Obtener la sesión
         try:
@@ -74,7 +75,6 @@ def webhook_handler(request):
 
         elif event_type == 'ready':
             guardar = True
-            msgerror = ''
             # Guardar información del usuario si está disponible
             if 'user' in event_data:
                 user_info = event_data.get('user', {})
@@ -122,6 +122,7 @@ def webhook_handler(request):
                         'msgerror': msgerror
                     }
                 )
+                whatsapp_service.close_session(session.session_id)
 
         elif event_type == 'authenticated':
             # Actualizar el estado de la sesión
@@ -167,7 +168,8 @@ def webhook_handler(request):
                     'type': 'whatsapp_event',
                     'event': 'auth_failure',
                     'session_id': session.id,
-                    'error': session.error_mensaje
+                    'error': session.error_mensaje,
+                    'msgerror': msgerror
                 }
             )
 
@@ -185,7 +187,8 @@ def webhook_handler(request):
                     'type': 'whatsapp_event',
                     'event': 'disconnected',
                     'session_id': session.id,
-                    'reason': event_data.get('reason', 'unknown')
+                    'reason': event_data.get('reason', 'unknown'),
+                    'msgerror': msgerror
                 }
             )
 
