@@ -1,3 +1,4 @@
+{% load humanize %}
 {% for conversacion in conversaciones %}
 <div class="p-2 border-dashed border-theme-color rounded mb-2 conversacion-item" style="order: -{{ conversacion.order }};" data-id="{{ conversacion.id }}">
     <a href="javascript:void(0);" class="cargar-conversacion" data-id="{{ conversacion.id }}">
@@ -21,11 +22,7 @@
                     {% endif %}
                     <small class="float-end text-muted fs-11">
                         {% if conversacion.fecha_ultimo_mensaje %}
-                            {% if conversacion.fecha_ultimo_mensaje.date == today %}
-                                {{ conversacion.fecha_ultimo_mensaje|date:"H:i" }}
-                            {% else %}
-                                {{ conversacion.fecha_ultimo_mensaje|date:"d/m/Y" }}
-                            {% endif %}
+                            {{ conversacion.fecha_ultimo_mensaje|naturaltime }}
                         {% endif %}
                     </small>
                 </h6>
