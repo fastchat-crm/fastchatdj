@@ -323,13 +323,7 @@
 
         const buscarConversacion = debounceFunction(function (e) {
             const criterio = $(e.target).val();
-            $.ajax({
-                url: `?load_conversations=1&criterio=${criterio}`,
-                type: 'GET',
-                success: function(response) {
-                    $('#lista-conversaciones').html(response.html);
-                }
-            });
+            cargarConversaciones($('#sesion-selector').val(), criterio);
         }, 500);
 
         // Buscar conversaciones

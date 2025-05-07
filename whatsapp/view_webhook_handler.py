@@ -258,6 +258,9 @@ def process_incoming_message(session, event_data, channel_layer):
         if '@' in from_number:
             contacto_numero = from_number.split('@')[0]
 
+        if session.numero == contacto_numero:
+            return
+
         # Buscar o crear la conversación
         conversation = ConversacionWhatsApp.objects.filter(sesion=session, from_number=from_number).first() or\
         ConversacionWhatsApp(sesion=session, from_number=from_number)
@@ -376,6 +379,9 @@ def process_sent_message(session, event_data, channel_layer):
         to_number = from_number.split('@')[0]
         message_data = event_data.get('message', {})
         message_content = event_data.get('message', {})
+
+        if session.numero == to_number:
+            return
 
         # Buscar la conversación
         try:
