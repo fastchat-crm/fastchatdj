@@ -51,14 +51,12 @@ def sesionesView(request):
                     log(f"Crear sesión WhatsApp pendiente (ID: {session.id})", request, "create_session", obj=session.id)
                     res_json = {'error': False, 'qr': session.qr_code, 'session_id': session.id}
                     return JsonResponse(res_json, safe=False)
-                # elif action == 'delete':
-                #     filtro = model.objects.get(pk=int(request.POST['id']))
-                #     filtro.status = False
-                #     filtro.save(request)
-                #     result = whatsapp_service.close_session(filtro.session_id)
-                #     log(f"Eliminó sesión WhatsApp {filtro.numero}", request, "del", obj=filtro.id)
-                #     messages.success(request, "Sesión eliminada correctamente.")
-                #     return JsonResponse({"error": False})
+                elif action == 'delete':
+                    filtro = model.objects.get(pk=int(request.POST['id']))
+                    result = whatsapp_service.close_session(filtro.session_id)
+                    log(f"Sesión de WhatsApp {filtro.numero} Cerrada", request, "del", obj=filtro.id)
+                    messages.success(request, "Sesión cerrada correctamente.")
+                    return JsonResponse({"error": False})
 
         except Exception as ex:
             res_json.append({'error': True, 'message': "Error, intente nuevamente."})
