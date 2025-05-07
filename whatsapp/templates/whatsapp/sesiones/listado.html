@@ -187,6 +187,7 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
+                                {% if s.estado == 'conectado' %}
                                 <div class="dropdown">
                                     <button class="btn btn-icon" type="button" data-bs-toggle="dropdown"
                                             aria-expanded="false"
@@ -202,6 +203,7 @@
                                         </li>
                                     </ul>
                                 </div>
+                                {% endif %}
                             </td>
                         </tr>
                     {% empty %}
