@@ -1,5 +1,5 @@
 {% for conversacion in conversaciones %}
-<div class="p-2 border-dashed border-theme-color rounded mb-2 conversacion-item" data-id="{{ conversacion.id }}">
+<div class="p-2 border-dashed border-theme-color rounded mb-2 conversacion-item" style="order: -{{ conversacion.order }};" data-id="{{ conversacion.id }}">
     <a href="javascript:void(0);" class="cargar-conversacion" data-id="{{ conversacion.id }}">
         <div class="d-flex align-items-start">
             <div class="position-relative">
