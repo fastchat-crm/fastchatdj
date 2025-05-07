@@ -215,9 +215,9 @@ def webhook_handler(request):
             # Procesar mensaje eliminado
             process_deleted_message(session, event_data, channel_layer)
 
-        elif event_type == 'contact_update':
-            # Procesar actualización de contacto
-            process_contact_update(session, event_data, channel_layer)
+        # elif event_type == 'contact_update':
+        #     # Procesar actualización de contacto
+        #     process_contact_update(session, event_data, channel_layer)
 
         elif event_type == 'profile_update':
             # Procesar actualización de perfil
