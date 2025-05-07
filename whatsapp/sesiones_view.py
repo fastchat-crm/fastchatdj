@@ -54,8 +54,8 @@ def sesionesView(request):
                 elif action == 'delete':
                     filtro = model.objects.get(pk=int(request.POST['id']))
                     result = whatsapp_service.close_session(filtro.session_id)
-                    log(f"Sesión de WhatsApp {filtro.numero} Cerrada", request, "del", obj=filtro.id)
-                    messages.success(request, "Sesión cerrada correctamente.")
+                    log(f"Sesión de WhatsApp {filtro.numero} desconectada", request, "del", obj=filtro.id)
+                    messages.success(request, "Sesión desconectada correctamente.")
                     return JsonResponse({"error": False})
 
         except Exception as ex:
