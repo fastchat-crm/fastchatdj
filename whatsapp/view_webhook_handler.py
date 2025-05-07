@@ -259,20 +259,18 @@ def process_incoming_message(session, event_data, channel_layer):
             contacto_numero = from_number.split('@')[0]
 
         # Buscar o crear la conversación
-        conversation, created = ConversacionWhatsApp.objects.get_or_create(
-            sesion=session,
-            from_number=from_number,
-            contacto_numero=contacto_numero,
-            defaults={
-                'contacto_nombre': push_name,
-                'estado': 'activo',
-                'fecha_ultimo_mensaje': message_date
-            }
-        )
+        conversation = ConversacionWhatsApp.objects.filter(sesion=session, from_number=from_number).first() or\
+        ConversacionWhatsApp(sesion=session, from_number=from_number)
+        conversation.estado = 'activo'
 
         # Actualizar nombre del contacto si está disponible
-        if push_name:
+        if not conversation.contacto_nombre:
+            contacts_list = [c.get('name') or c.get('notify') or '' for c in json.loads(session.contacts_list or '[]') if c["id"] == from_number]
             conversation.contacto_nombre = push_name
+            if contacts_list and contacts_list[0]:
+                conversation.contacto_nombre = contacts_list[0]
+        if not conversation.contacto_numero:
+            conversation.contacto_numero = contacto_numero
 
         if userImage:
             conversation.contacto_foto = f'data:image/jpg;base64,{get_image_as_base64(userImage)}'

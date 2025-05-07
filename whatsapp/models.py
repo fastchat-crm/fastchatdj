@@ -81,6 +81,11 @@ class ConversacionWhatsApp(ModeloBase):
         verbose_name = 'Conversación WhatsApp'
         verbose_name_plural = 'Conversaciones WhatsApp'
         ordering = ['-order']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['sesion', 'from_number'], name='whatsapp_conversacion_sesion_from_number_unique'
+            )
+        ]
 
     def __str__(self):
         return f"Conversación con {self.contacto_numero} ({self.sesion.numero})"
