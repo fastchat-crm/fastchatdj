@@ -219,9 +219,6 @@
 
             sessionSocket.onopen = function(e) {
                 console.log('Conexión SessionWebSocket establecida');
-                sessionSocket.send(JSON.stringify({
-                    'type': 'update_session'
-                }));
             };
 
             sessionSocket.onmessage = function(e) {
