@@ -304,7 +304,9 @@ def process_incoming_message(session, event_data, channel_layer):
 
                 # Obtener el texto del caption si existe
                 if caption_key and caption_key in media_msg:
-                    message_text = media_msg.get(caption_key, '')
+                    message_text = media_msg.get(caption_key, '') or type_name or ''
+
+                message_text = message_text or type_name
 
                 # Procesar archivo multimedia si hay datos
                 if 'mediaData' in event_data:
@@ -385,10 +387,6 @@ def process_sent_message(session, event_data, channel_layer):
         message_type = message_data.get('type', 'texto')
         message_text = message_data.get('caption', '') or message_data.get('text', '') or message_data.get('conversation', '')
 
-        # Actualizar la conversación
-        conversation.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
-        conversation.fecha_ultimo_mensaje = timezone.now()
-        conversation.save()
 
         # Procesar texto
         if 'conversation' in message_content:
@@ -415,7 +413,9 @@ def process_sent_message(session, event_data, channel_layer):
 
                 # Obtener el texto del caption si existe
                 if caption_key and caption_key in media_msg:
-                    message_text = media_msg.get(caption_key, '')
+                    message_text = media_msg.get(caption_key, '') or type_name or ''
+
+                message_text = message_text or type_name
 
                 # Procesar archivo multimedia si hay datos
                 if 'mediaData' in event_data:
@@ -427,6 +427,11 @@ def process_sent_message(session, event_data, channel_layer):
 
                     # Guardar el archivo
                     file_url = save_media_file(media_data, filename, session.id, conversation.id)
+
+        # Actualizar la conversación
+        conversation.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
+        conversation.fecha_ultimo_mensaje = timezone.now()
+        conversation.save()
 
         # Crear el mensaje
         message = MensajeWhatsApp.objects.create(
@@ -674,7 +679,7 @@ def save_media_file(media_base64, filename, session_id, conversation_id):
         return default_storage.url(path)
     except Exception as e:
         logger.exception(f"Error guardando archivo multimedia: {str(e)}")
-        return None
+        return ''
 
 def update_conversation_stats(conversation):
     """
