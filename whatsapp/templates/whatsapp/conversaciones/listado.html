@@ -54,15 +54,13 @@
                 <!-- Añadir justo después del selector de sesiones -->
                 <div class="p-3">
                     <div class="d-flex">
-                        <form>
-                            <select name="sesion_id" id="sesion-selector" class="form-select" onchange="this.closest('form').submit();">
+                        <select id="sesion-selector" class="form-select">
                                 {% for sesion in sesiones %}
                                     <option value="{{ sesion.id }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
                                         {{ sesion.numero }} ({{ sesion.get_estado_display }})
                                     </option>
                                 {% endfor %}
                             </select>
-                        </form>
                         <button id="btn-sync-contacts" class="btn btn-sm btn-primary ms-2">
                             <i class="fa fa-sync"></i> Sincronizar contactos
                         </button>
@@ -87,7 +85,7 @@
                     <div class="tab-content" id="pills-tabContent">
                         <div class="tab-pane fade show active" id="messages_chat">
                             <div class="row">
-                                <div class="col" id="lista-conversaciones">
+                                <div class="col" id="lista-conversaciones" style="display: flex; flex-direction: column;">
                                 </div><!--end col-->
                             </div><!--end row-->
                         </div><!--end general chat-->
@@ -211,7 +209,7 @@
         }
 
         function sessionWebSocket(sessionId) {
-            const wsUrl = `${wsProtocol}//${window.location.host}/ws/session/${sessionId}/`;
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/sessionroom/${sessionId}/`;
             if (sessionSocket){
                 sessionSocket.close();
             }
@@ -222,7 +220,16 @@
             };
 
             sessionSocket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
 
+                if ((data.type === 'new_message' || data.type === 'messages_update') && data.html) {
+                    const conversacion = $(`#lista-conversaciones div[data-id=${data.conversacion_id}]`);
+                    if (conversacion) {
+                        conversacion.replaceWith(data.html);
+                    } else {
+                        $(`#lista-conversaciones`).append(data.html);
+                    }
+                }
             };
 
             sessionSocket.onclose = function(e) {

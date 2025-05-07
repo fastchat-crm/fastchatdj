@@ -350,6 +350,16 @@ def process_incoming_message(session, event_data, channel_layer):
             }
         )
 
+        async_to_sync(channel_layer.group_send)(
+            f"whatsapp_sessionroom_{session.id}",
+            {
+                'type': 'whatsapp_event',
+                'event': 'new_message',
+                'conversation_id': conversation.id,
+                'timestamp': message_date.isoformat()
+            }
+        )
+
         logger.info(f"Mensaje recibido de {from_number} en la sesión {session.session_id}")
 
     except Exception as e:
@@ -463,6 +473,14 @@ def process_sent_message(session, event_data, channel_layer):
                 'timestamp': timezone.now().isoformat()
             }
         )
+        async_to_sync(channel_layer.group_send)(
+            f"whatsapp_sessionroom_{session.id}",
+            {
+                'type': 'whatsapp_event',
+                'event': 'new_message',
+                'conversation_id': conversation.id
+            }
+        )
 
         logger.info(f"Mensaje enviado a {to_number} desde la sesión {session.session_id}")
 
@@ -504,6 +522,14 @@ def process_deleted_message(session, event_data, channel_layer):
                     'conversation_id': message.conversacion.id,
                     'message_id': message.id,
                     'external_message_id': message_id
+                }
+            )
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_sessionroom_{session.id}",
+                {
+                    'type': 'whatsapp_event',
+                    'event': 'new_message',
+                    'conversation_id': message.conversacion.id
                 }
             )
 
@@ -564,6 +590,14 @@ def process_edited_message(session, event_data, fromchat, channel_layer):
                     'external_message_id': message_id,
                     'new_text': new_text,
                     'original_text': message.mensaje_original
+                }
+            )
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_sessionroom_{session.id}",
+                {
+                    'type': 'whatsapp_event',
+                    'event': 'new_message',
+                    'conversation_id': message.conversation.id
                 }
             )
 

@@ -19,20 +19,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
         # Abandonar el grupo de la conversación
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
-    # Recibir mensaje del WebSocket
-    async def receive(self, text_data=None, bytes_data=None):
-        text_data_json = json.loads(text_data)
-        message_type = text_data_json.get('type')
-
-        # El cliente solicita los mensajes de la conversación
-        html = await self.get_messages_html(self.conversacion_id)
-
-        # Enviar mensajes al WebSocket
-        await self.send(text_data=json.dumps({
-            'type': 'messages_update',
-            'html': html
-        }))
-
     # Recibir mensaje del grupo de la conversación
     async def whatsapp_message(self, event):
         html = await self.get_messages_html(self.conversacion_id)
@@ -102,3 +88,46 @@ class SessionConsumer(AsyncWebsocketConsumer):
 
         # Enviar mensaje al WebSocket
         await self.send(text_data=json.dumps(message))
+
+
+class SessionRoomConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.session_id = self.scope['url_route']['kwargs']['session_id']
+        self.room_group_name = f'whatsapp_sessionroom_{self.session_id}'
+        self.user = self.scope.get('user')
+
+        # Unirse al grupo de la conversación
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+
+    @database_sync_to_async
+    def get_conversacion_html(self, conversacion_id):
+        try:
+            conversacion = ConversacionWhatsApp.objects.filter(sesion__usuario__id=self.user.id, id=conversacion_id).first()
+            conversacion_html = render_to_string('whatsapp/conversaciones/conversacion_item.html', {
+                'conversacion': conversacion
+            })
+            return conversacion_html
+        except Exception as ex:
+            ''
+
+    async def whatsapp_event(self, event):
+        text_data_json = event
+        conversacion_id = text_data_json['conversation_id']
+
+        conversacion_html = await self.get_conversacion_html(conversacion_id)
+
+        await self.send(text_data=json.dumps({
+            'type': 'messages_update',
+            'html': conversacion_html, 'conversacion_id': conversacion_id
+        }))
