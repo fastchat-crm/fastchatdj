@@ -88,7 +88,7 @@ def webhook_handler(request):
                         numero_list.append(x)
                     numero = "".join(numero_list)
                     whatsapp_id = user_info['id']
-                    if session.whatsapp_id and session.whatsapp_id != whatsapp_id:
+                    if session.numero and session.numero != numero:
                         guardar = False
                         msgerror = 'No puede registrar otra cuenta de whatsapp en esta sesión'
                     if guardar:
