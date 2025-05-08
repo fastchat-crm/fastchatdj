@@ -258,6 +258,9 @@ def process_incoming_message(session, event_data, channel_layer):
         if '@' in from_number:
             contacto_numero = from_number.split('@')[0]
 
+        if session.numero == contacto_numero:
+            return
+
         # Buscar o crear la conversación
         conversation = ConversacionWhatsApp.objects.filter(sesion=session, from_number=from_number).first() or\
         ConversacionWhatsApp(sesion=session, from_number=from_number)
@@ -304,7 +307,9 @@ def process_incoming_message(session, event_data, channel_layer):
 
                 # Obtener el texto del caption si existe
                 if caption_key and caption_key in media_msg:
-                    message_text = media_msg.get(caption_key, '')
+                    message_text = media_msg.get(caption_key, '') or type_name or ''
+
+                message_text = message_text or type_name
 
                 # Procesar archivo multimedia si hay datos
                 if 'mediaData' in event_data:
@@ -348,6 +353,16 @@ def process_incoming_message(session, event_data, channel_layer):
             }
         )
 
+        async_to_sync(channel_layer.group_send)(
+            f"whatsapp_sessionroom_{session.id}",
+            {
+                'type': 'whatsapp_event',
+                'event': 'new_message',
+                'conversation_id': conversation.id,
+                'timestamp': message_date.isoformat()
+            }
+        )
+
         logger.info(f"Mensaje recibido de {from_number} en la sesión {session.session_id}")
 
     except Exception as e:
@@ -364,6 +379,9 @@ def process_sent_message(session, event_data, channel_layer):
         to_number = from_number.split('@')[0]
         message_data = event_data.get('message', {})
         message_content = event_data.get('message', {})
+
+        if session.numero == to_number:
+            return
 
         # Buscar la conversación
         try:
@@ -385,10 +403,6 @@ def process_sent_message(session, event_data, channel_layer):
         message_type = message_data.get('type', 'texto')
         message_text = message_data.get('caption', '') or message_data.get('text', '') or message_data.get('conversation', '')
 
-        # Actualizar la conversación
-        conversation.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
-        conversation.fecha_ultimo_mensaje = timezone.now()
-        conversation.save()
 
         # Procesar texto
         if 'conversation' in message_content:
@@ -415,7 +429,9 @@ def process_sent_message(session, event_data, channel_layer):
 
                 # Obtener el texto del caption si existe
                 if caption_key and caption_key in media_msg:
-                    message_text = media_msg.get(caption_key, '')
+                    message_text = media_msg.get(caption_key, '') or type_name or ''
+
+                message_text = message_text or type_name
 
                 # Procesar archivo multimedia si hay datos
                 if 'mediaData' in event_data:
@@ -427,6 +443,11 @@ def process_sent_message(session, event_data, channel_layer):
 
                     # Guardar el archivo
                     file_url = save_media_file(media_data, filename, session.id, conversation.id)
+
+        # Actualizar la conversación
+        conversation.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
+        conversation.fecha_ultimo_mensaje = timezone.now()
+        conversation.save()
 
         # Crear el mensaje
         message = MensajeWhatsApp.objects.create(
@@ -456,6 +477,14 @@ def process_sent_message(session, event_data, channel_layer):
                 'message_text': message_text,
                 'sender': session.numero,
                 'timestamp': timezone.now().isoformat()
+            }
+        )
+        async_to_sync(channel_layer.group_send)(
+            f"whatsapp_sessionroom_{session.id}",
+            {
+                'type': 'whatsapp_event',
+                'event': 'new_message',
+                'conversation_id': conversation.id
             }
         )
 
@@ -499,6 +528,14 @@ def process_deleted_message(session, event_data, channel_layer):
                     'conversation_id': message.conversacion.id,
                     'message_id': message.id,
                     'external_message_id': message_id
+                }
+            )
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_sessionroom_{session.id}",
+                {
+                    'type': 'whatsapp_event',
+                    'event': 'new_message',
+                    'conversation_id': message.conversacion.id
                 }
             )
 
@@ -559,6 +596,14 @@ def process_edited_message(session, event_data, fromchat, channel_layer):
                     'external_message_id': message_id,
                     'new_text': new_text,
                     'original_text': message.mensaje_original
+                }
+            )
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_sessionroom_{session.id}",
+                {
+                    'type': 'whatsapp_event',
+                    'event': 'new_message',
+                    'conversation_id': message.conversation.id
                 }
             )
 
@@ -674,7 +719,7 @@ def save_media_file(media_base64, filename, session_id, conversation_id):
         return default_storage.url(path)
     except Exception as e:
         logger.exception(f"Error guardando archivo multimedia: {str(e)}")
-        return None
+        return ''
 
 def update_conversation_stats(conversation):
     """

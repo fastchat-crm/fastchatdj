@@ -102,6 +102,8 @@ MIDDLEWARE = [
     'core.custom_middleware.RequestMiddleware',
 ]
 
+DATA_UPLOAD_MAX_MEMORY_SIZE = 2621440 * 10
+
 ROOT_URLCONF = 'fastchatdj.urls'
 
 TEMPLATES = [

@@ -18,7 +18,15 @@
                     {% endif %}
 
                     {% if mensaje.archivo_url and not mensaje.eliminado %}
-                        {% if mensaje.tipo == 'imagen' or mensaje.tipo == 'sticker' %}
+                        {% if mensaje.tipo == 'imagen' %}
+                            <a href="{{ mensaje.archivo_url }}"
+                               data-fancybox="image"
+                               data-width="2048"
+                               data-height="1365">
+                                <img src="{{ mensaje.archivo_url }}" alt="imagen" class="img-fluid rounded"
+                                 style="max-width: 200px;">
+                            </a>
+                        {% elif mensaje.tipo == 'sticker' %}
                             <img src="{{ mensaje.archivo_url }}" alt="imagen" class="img-fluid rounded"
                                  style="max-width: 200px;">
                         {% elif mensaje.tipo == 'audio' %}
@@ -60,7 +68,15 @@
                     {% endif %}
 
                     {% if mensaje.archivo_url and not mensaje.eliminado %}
-                        {% if mensaje.tipo == 'imagen' or mensaje.tipo == 'sticker' %}
+                        {% if mensaje.tipo == 'imagen' %}
+                            <a href="{{ mensaje.archivo_url }}"
+                               data-fancybox="image"
+                               data-width="2048"
+                               data-height="1365">
+                                <img src="{{ mensaje.archivo_url }}" alt="imagen" class="img-fluid rounded"
+                                 style="max-width: 200px;">
+                            </a>
+                        {% elif mensaje.tipo == 'sticker' %}
                             <img src="{{ mensaje.archivo_url }}" alt="imagen" class="img-fluid rounded"
                                  style="max-width: 200px;">
                         {% elif mensaje.tipo == 'audio' %}
