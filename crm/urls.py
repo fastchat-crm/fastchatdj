@@ -1,5 +1,7 @@
 from django.urls import path, re_path
 
+from .view_actividad_economica import actividadEconomicaView
+from .view_industria import industriaView
 from .view_mientrenamiento import entrenamiento_ia_view
 
 crm_urls = (
@@ -7,6 +9,16 @@ crm_urls = (
         "nombre": "Entrenaramiento IA",
         "url": 'entrenamiento/',
         "vista": entrenamiento_ia_view,
+    },
+    {
+        "nombre": "Industria",
+        "url": 'industria/',
+        "vista": industriaView,
+    },
+    {
+        "nombre": "Actividad Economica",
+        "url": 'actividad_economica/',
+        "vista": actividadEconomicaView,
     },
 )
 

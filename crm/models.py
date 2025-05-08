@@ -92,6 +92,15 @@ class PerfilNegocioIA(ModeloBase):
     def total_servicios(self):
         return self.servicios.count()
 
+    def get_productos(self):
+        return self.productos.filter(status=True)
+
+    def get_servicios(self):
+        return self.servicios.filter(status=True)
+
+    def get_respuestas(self):
+        return self.respuestas_ia.filter(status=True)
+
 
 # Productos personalizados del perfil IA
 class ProductoIA(ModeloBase):

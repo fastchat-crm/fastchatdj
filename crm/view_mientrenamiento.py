@@ -1,10 +1,14 @@
 import sys
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
+from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from crm.forms import PerfilNegocioIAForm
-from crm.models import PerfilNegocioIA
+from django.template.loader import get_template
+
+from core.custom_forms import FormError
+from crm.forms import PerfilNegocioIAForm, ProductoIAForm, ServicioIAForm, RespuestaEntrenadaIAForm
+from crm.models import PerfilNegocioIA, ProductoIA, ServicioIA, RespuestaEntrenadaIA
 from core.funciones import addData, secure_module, log
 
 @login_required
@@ -21,18 +25,180 @@ def entrenamiento_ia_view(request):
         perfil, creado = PerfilNegocioIA.objects.get_or_create(usuario=request.user)
 
         if request.method == 'POST':
-            form = PerfilNegocioIAForm(request.POST, instance=perfil)
-            if form.is_valid():
+            res_json = []
+            action = request.POST['action']
+            try:
                 with transaction.atomic():
-                    form.save()
-                    log(f"Usuario actualizó su perfil IA: {form.instance}", request, 'change')
-                    messages.success(request, "Información guardada correctamente.")
-                    return redirect('/panel/')  # o donde quieras redirigir
-            else:
-                data['form'] = form
-                messages.error(request, "Error en el formulario.")
+                    if action == 'actualizar_perfil_negocio':
+                        form = PerfilNegocioIAForm(request.POST, instance=perfil)
+                        if form.is_valid():
+                            with transaction.atomic():
+                                form.save()
+                                log(f"Usuario actualizó su perfil IA: {form.instance}", request, 'change')
+                                messages.success(request, "Información guardada correctamente.")
+                                res_json.append({'error': False, 'reload': True})
+                        else:
+                            raise FormError(form)
+                    elif action == 'addproducto':
+                        form = ProductoIAForm(request.POST, request=request)
+                        if form.is_valid():
+                            form.instance.perfil = perfil
+                            form.save()
+                            log(f"Registro un producto IA {form.instance.__str__()}", request, "add",
+                                obj=form.instance.id)
+                            res_json.append({'error': False, "reload": True})
+                        else:
+                            raise FormError(form)
+                    elif action == 'changeproducto':
+                        filtro = ProductoIA.objects.get(pk=int(request.POST['pk']))
+                        form = ProductoIAForm(request.POST, instance=filtro, request=request)
+                        if form.is_valid() and filtro:
+                            form.save()
+                            log(f"Edito un producto IA  {form.instance.__str__()}", request, "change",
+                                obj=form.instance.id)
+                            res_json.append({'error': False, "reload": True})
+                        else:
+                            raise FormError(form)
+
+                    elif action == 'deleteproducto':
+                        filtro = ProductoIA.objects.get(pk=int(request.POST['id']))
+                        filtro.status = False
+                        filtro.save(request)
+                        log(f"Elimino un producto IA {filtro.__str__()}", request, "del", obj=filtro.id)
+                        messages.success(request, f"Registro Eliminado")
+                        res_json = {"error": False}
+
+                    elif action == 'addservicio':
+                        form = ServicioIAForm(request.POST, request=request)
+                        if form.is_valid():
+                            form.instance.perfil = perfil
+                            form.save()
+                            log(f"Registro un servicio IA {form.instance.__str__()}", request, "add",
+                                obj=form.instance.id)
+                            res_json.append({'error': False, "reload": True})
+                        else:
+                            raise FormError(form)
+                    elif action == 'changeservicio':
+                        filtro = ServicioIA.objects.get(pk=int(request.POST['pk']))
+                        form = ServicioIAForm(request.POST, instance=filtro, request=request)
+                        if form.is_valid() and filtro:
+                            form.save()
+                            log(f"Edito un servicio IA  {form.instance.__str__()}", request, "change",
+                                obj=form.instance.id)
+                            res_json.append({'error': False, "reload": True})
+                        else:
+                            raise FormError(form)
+
+                    elif action == 'deleteservicio':
+                        filtro = ServicioIA.objects.get(pk=int(request.POST['id']))
+                        filtro.status = False
+                        filtro.save(request)
+                        log(f"Elimino un servicio IA {filtro.__str__()}", request, "del", obj=filtro.id)
+                        messages.success(request, f"Registro Eliminado")
+                        res_json = {"error": False}
+
+                    elif action == 'addrespuesta':
+                        form = RespuestaEntrenadaIAForm(request.POST, request=request)
+                        if form.is_valid():
+                            form.instance.perfil = perfil
+                            form.save()
+                            log(f"Registro un respuesta IA {form.instance.__str__()}", request, "add",
+                                obj=form.instance.id)
+                            res_json.append({'error': False, "reload": True})
+                        else:
+                            raise FormError(form)
+                    elif action == 'changerespuesta':
+                        filtro = RespuestaEntrenadaIA.objects.get(pk=int(request.POST['pk']))
+                        form = RespuestaEntrenadaIAForm(request.POST, instance=filtro, request=request)
+                        if form.is_valid() and filtro:
+                            form.save()
+                            log(f"Edito un respuesta IA  {form.instance.__str__()}", request, "change",
+                                obj=form.instance.id)
+                            res_json.append({'error': False, "reload": True})
+                        else:
+                            raise FormError(form)
+
+                    elif action == 'deleterespuesta':
+                        filtro = RespuestaEntrenadaIA.objects.get(pk=int(request.POST['id']))
+                        filtro.status = False
+                        filtro.save(request)
+                        log(f"Elimino un respuesta IA {filtro.__str__()}", request, "del", obj=filtro.id)
+                        messages.success(request, f"Registro Eliminado")
+                        res_json = {"error": False}
+
+            except ValueError as ex:
+                res_json.append({'error': True, "message": str(ex)})
+            except FormError as ex:
+                res_json.append(ex.dict_error)
+            except Exception as ex:
+                res_json.append({'error': True, "message": f"Intente Nuevamente: {ex}"})
+            return JsonResponse(res_json, safe=False)
+
         else:
+            if 'action' in request.GET:
+                data["action"] = action = request.GET['action']
+                if action == 'addproducto':
+                    try:
+                        data["form"] = ProductoIAForm()
+                        template = get_template("crm/entrenamiento/producto/form.html")
+                        return JsonResponse({"result": True, 'data': template.render(data)})
+                    except Exception as ex:
+                        return JsonResponse({"result": False, 'message': str(ex)})
+
+                elif action == 'changeproducto':
+                    try:
+                        pk = int(request.GET['id'])
+                        filtro = ProductoIA.objects.get(pk=pk)
+                        data["filtro"] = filtro
+                        data["form"] = ProductoIAForm(instance=filtro)
+                        template = get_template("crm/entrenamiento/producto/form.html")
+                        return JsonResponse({"result": True, 'data': template.render(data)})
+                    except Exception as ex:
+                        return JsonResponse({"result": False, 'message': str(ex)})
+
+                elif action == 'addservicio':
+                    try:
+                        data["form"] = ServicioIAForm()
+                        template = get_template("crm/entrenamiento/servicio/form.html")
+                        return JsonResponse({"result": True, 'data': template.render(data)})
+                    except Exception as ex:
+                        return JsonResponse({"result": False, 'message': str(ex)})
+
+                elif action == 'changeservicio':
+                    try:
+                        pk = int(request.GET['id'])
+                        filtro = ServicioIA.objects.get(pk=pk)
+                        data["filtro"] = filtro
+                        data["form"] = ServicioIAForm(instance=filtro)
+                        template = get_template("crm/entrenamiento/servicio/form.html")
+                        return JsonResponse({"result": True, 'data': template.render(data)})
+                    except Exception as ex:
+                        return JsonResponse({"result": False, 'message': str(ex)})
+
+                elif action == 'addrespuesta':
+                    try:
+                        data["form"] = RespuestaEntrenadaIAForm()
+                        template = get_template("crm/entrenamiento/respuesta/form.html")
+                        return JsonResponse({"result": True, 'data': template.render(data)})
+                    except Exception as ex:
+                        return JsonResponse({"result": False, 'message': str(ex)})
+
+                elif action == 'changerespuesta':
+                    try:
+                        pk = int(request.GET['id'])
+                        filtro = RespuestaEntrenadaIA.objects.get(pk=pk)
+                        data["filtro"] = filtro
+                        data["form"] = RespuestaEntrenadaIAForm(instance=filtro)
+                        template = get_template("crm/entrenamiento/respuesta/form.html")
+                        return JsonResponse({"result": True, 'data': template.render(data)})
+                    except Exception as ex:
+                        return JsonResponse({"result": False, 'message': str(ex)})
+
+
             data['form'] = PerfilNegocioIAForm(instance=perfil)
+            data['productos'] = perfil.get_productos()
+            data['servicios'] = perfil.get_servicios()
+            data['respuestas'] = perfil.get_respuestas()
 
     except Exception as ex:
         error_line = sys.exc_info()[-1].tb_lineno
