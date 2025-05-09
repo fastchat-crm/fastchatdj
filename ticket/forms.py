@@ -7,7 +7,7 @@ from autenticacion.models import Usuario
 from core.custom_models import FormBase
 from seguridad.models import Empresa
 from .funciones import generate_code_ticket, get_user_attend
-from .models import EquipoAtencion, ProcesoAtencion, TicketAtencion, ComentarioTicketAtencion
+from .models import EquipoAtencion, ProcesoAtencion, TicketAtencion, ComentarioTicketAtencion, TipoTicketAtencion
 from core.custom_forms import FormModeloBase
 
 class EquipoForm(FormBase):
@@ -64,7 +64,7 @@ class TicketForm(FormBase):
     titulo = forms.CharField(label=u"Título", max_length=50, widget=forms.TextInput(attrs={'placeholder': 'Describa el título del ticket', 'col': '12'}), required=True)
     descripcion = forms.CharField(label=u"Descripción", max_length=5000, widget=forms.Textarea(attrs={'placeholder': 'Describa el proceso', 'col': '12', 'rows': '6'}), required=True)
     prioridad = forms.ChoiceField(label='Prioridad', choices=TicketAtencion.PRIORIDAD, initial=1)
-    tipo = forms.ChoiceField(label='Tipo', choices=TicketAtencion.TIPO_TICKET, initial=1)
+    tipo = forms.ModelChoiceField(label='Tipo', queryset=TipoTicketAtencion.objects.filter(status=True))
     archivo = forms.FileField(label='Archivo', required=False)
 
 

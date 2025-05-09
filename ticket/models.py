@@ -54,6 +54,17 @@ class ProcesoAtencion(ModeloBase):
         verbose_name = u"Proceso"
         verbose_name_plural = u"Procesos"
 
+class TipoTicketAtencion(ModeloBase):
+    nombre = models.CharField(max_length=200, default='', verbose_name='Nombre del tipo de ticket')
+
+    def __str__(self):
+        return self.nombre
+
+    class Meta:
+        verbose_name = u"Tipo de Ticket"
+        verbose_name_plural = u"Tipos de Tickets"
+
+
 class TicketAtencion(ModeloBase):
     from .choices import PRIORIDAD, ESTADO_TICKET, TIPO_TICKET
     codigo = models.CharField(max_length=200, default='', verbose_name='Código de ticket')
@@ -62,7 +73,7 @@ class TicketAtencion(ModeloBase):
     proceso = models.ForeignKey(ProcesoAtencion, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Proceso')
     titulo = models.CharField(max_length=5000, default='', verbose_name='Título')
     descripcion = models.TextField(default='', verbose_name='Descripción', blank=True, null=True)
-    tipo = models.IntegerField(choices=TIPO_TICKET, default=1, verbose_name=u'Tipo de ticket')
+    tipo = models.ForeignKey(TipoTicketAtencion, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Tipo de ticket')
     prioridad = models.IntegerField(choices=PRIORIDAD, default=1, verbose_name=u'Prioridad')
     estado = models.IntegerField(choices=ESTADO_TICKET, default=1, verbose_name=u'Estado')
     asignadoa = models.ForeignKey('autenticacion.Usuario', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Asignado a', related_name='+')
