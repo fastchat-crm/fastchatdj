@@ -4,6 +4,23 @@
 {% endblock %}
 {% block content %}
 
+    {% if not PUEDE_VER %}
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <img class="mb-2" src="/media/{{ confi.imagen_landing }}" style="width: 150px">
+                        <h3>{{ confi.titulo }}</h3>
+                        <p class="mb-3">Para comenzar a gestionar tickets, necesitas ser <b>responsable</b> de una empresa o <b>super usuario</b>.</p>
+                        <a href="javascript:void(0)"
+                           onclick="contactWS('{{ confi.telefono_empresa }}', '{{ nombreempresa }}')"
+                           class="btn btn-success"><i class="fab fa-whatsapp"></i> Contactar un asesor</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% else %}
+
     <div class="card mb-3">
         <div class="card-body">
             <form method="GET" class="mb-0">
@@ -192,6 +209,7 @@
         </div>
     </div>
 
+    {% endif %}
 
 {% endblock %}
 

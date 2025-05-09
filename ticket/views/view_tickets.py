@@ -10,7 +10,7 @@ from django.template.loader import get_template
 
 
 from core.custom_models import FormError
-from core.funciones import addData, paginador,log
+from core.funciones import addData, paginador, log, secure_module
 from django.contrib import messages
 
 from seguridad.models import Empresa
@@ -33,10 +33,12 @@ def ticketView(request):
     model = TicketAtencion
     Formulario = TicketForm
     empresa = request.user.mi_empresa()
+    data['PUEDE_VER'] = True
     if not request.user.is_superuser and not empresa:
-        messages.error(request, "No se encuentra registrado en ninguna empresa")
-        return HttpResponseRedirect('/')
-
+        # messages.error(request, "No se encuentra registrado en ninguna empresa")
+        # return HttpResponseRedirect('/panel/')
+        data['PUEDE_VER'] = False
+        return render(request, 'ticket/view_tickets.html', data)
     if request.method == 'POST':
         res_json = []
         action = request.POST['action']
