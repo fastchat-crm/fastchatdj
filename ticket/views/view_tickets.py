@@ -1,4 +1,4 @@
-
+import json
 from datetime import date
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -10,13 +10,13 @@ from django.template.loader import get_template
 
 
 from core.custom_models import FormError
-from core.funciones import addData, paginador, log, secure_module
+from core.funciones import addData, paginador, log, secure_module, generar_nombre
 from django.contrib import messages
 
 from seguridad.models import Empresa
 from seguridad.templatetags.templatefunctions import encrypt
 from ..forms import TicketForm
-from ..models import TicketAtencion, ProcesoAtencion
+from ..models import TicketAtencion, ProcesoAtencion, DetalleArchivoTicketAtencion
 
 
 @login_required
@@ -45,24 +45,97 @@ def ticketView(request):
         try:
             with transaction.atomic():
                 if action == 'addticket':
-                    form = Formulario(request.POST, request.FILES, data)
+                    form = Formulario(request.POST, request.FILES)
                     if not form.is_valid():
                         raise FormError(form)
-                    form.save(request=request)
+
+                    ticket = form.save(request=request)
+
+                    documentos = request.FILES.getlist('archivo')
+                    lista_items1 = json.loads(request.POST['lista_items1'])
+                    for d in documentos:
+                        items = [item for item in lista_items1 if item.get('archivo') == d._name]
+
+                        if not items:
+                            raise ValueError(f"No se encontró metadata para el archivo: {d._name}")
+
+                        # Accede al nombre usando .get() para manejar casos donde la clave no existe
+                        nombre_archivo = items[0].get('nombre', 'sin_nombre')  # Valor por defecto si 'nombre' no existe
+
+                        if d.size > 4194304:
+                            raise NameError(f"El archivo es mayor a 4 Mb. Nombre: {nombre_archivo}")
+
+                        d._name = generar_nombre(f"file_{nombre_archivo}_", d._name)
+                        doc = DetalleArchivoTicketAtencion(ticket=ticket, archivo=d)
+                        doc.save(request)
+
                     log('Ticket creado correctamente', request, 'add')
-                    res_json.append({'error': False,
-                                     'message': 'Ticket creado correctamente',
-                                     'reload': True
-                                     })
+                    res_json.append({'error': False, 'message': 'Ticket creado correctamente', 'reload': True})
 
                 elif action == 'editticket':
                     pk=int(encrypt(request.POST['pk']))
-                    equipo = TicketAtencion.objects.get(id=pk)
-                    form = Formulario(request.POST, request.FILES,data, instance=equipo)
+                    ticket = TicketAtencion.objects.get(id=pk)
+                    form = Formulario(request.POST, request.FILES,data, instance=ticket)
                     if not form.is_valid():
                         raise FormError(form)
+
+                    documentos = request.FILES.getlist('archivo')
+                    lista_items1 = json.loads(request.POST.get('lista_items1', '[]'))
+
+                    # Diccionario para búsqueda rápida
+                    items_by_archivo = {item['archivo']: item for item in lista_items1 if 'archivo' in item}
+
+                    # Identificar archivos a mantener (actualizar o conservar)
+                    ids_to_keep = [int(item['id_archivo']) for item in lista_items1
+                                   if 'id_archivo' in item and item['id_archivo'] and item['id_archivo'].isdigit()]
+
+                    # Marcar como inactivos los archivos no incluidos
+                    DetalleArchivoTicketAtencion.objects.filter(ticket=ticket).exclude(
+                        id__in=ids_to_keep
+                    ).update(status=False)
+
+                    # Procesar archivos nuevos y actualizaciones
+                    for d in documentos:
+                        item = items_by_archivo.get(d._name)
+
+                        if not item:
+                            raise ValueError(f"No se encontraron metadatos para: {d._name}")
+
+                        nombre_archivo = 'evidencia'
+
+                        if d.size > 4194304:
+                            raise ValueError(f"Archivo '{nombre_archivo}' excede 4MB")
+
+                        d._name = generar_nombre(f"file_{nombre_archivo}_", d._name)
+
+                        if 'id_archivo' in item and item['id_archivo']:
+                            # Actualizar archivo existente
+                            DetalleArchivoTicketAtencion.objects.filter(
+                                id=item['id_archivo'],
+                                ticket=ticket
+                            ).update(
+                                archivo=d,
+                                status=True
+                            )
+                        else:
+                            # Crear nuevo registro
+                            DetalleArchivoTicketAtencion.objects.create(
+                                ticket=ticket,
+                                archivo=d,
+                            )
+
+                    # Actualizar descripciones de archivos existentes (sin cambiar el archivo)
+                    for item in lista_items1:
+                        if item.get('id_archivo') and not item.get('archivo'):
+                            DetalleArchivoTicketAtencion.objects.filter(
+                                id=item['id_archivo'],
+                                ticket=ticket
+                            ).update(
+                                status=True
+                            )
+
                     form.save(request=request)
-                    log('Ticket modificado correctamente', request, equipo)
+                    log('Ticket modificado correctamente', request, ticket)
                     res_json.append({'error': False,
                                      'message': 'Ticket creado correctamente',
                                      'reload': True
@@ -103,7 +176,7 @@ def ticketView(request):
 
                     data['form'] = form
                     titulo = 'Crear Ticket'
-                    template = get_template('ticket/forms/form_ticket.html')
+                    template = get_template('ticket/forms/form_add.html')
                     return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
                 except Exception as ex:
                     messages.error(request, f'Error: {ex}')
@@ -111,16 +184,17 @@ def ticketView(request):
             elif action == 'editticket':
                 try:
                     data['pk'] = pk = int(request.GET['pk'])
-                    ticket = TicketAtencion.objects.get(id=pk)
+                    data['filtro'] = ticket = TicketAtencion.objects.get(id=pk)
                     form = Formulario(initial=model_to_dict(ticket))
                     if not request.user.is_superuser:
                         form.fields['empresa'].queryset = Empresa.objects.filter(id=empresa.id)
                         form.fields['empresa'].initial = empresa
                         form.fields['empresa'].disabled = True
                     form.fields['proceso'].queryset = ProcesoAtencion.objects.filter(empresa=ticket.empresa, status=True, activo=True)
+                    data['archivos_precargar'] = list(ticket.detallearchivoticketatencion_set.all())
                     data['form'] = form
                     titulo = f'Editar {ticket.titulo}'
-                    template = get_template('ticket/forms/form_ticket.html')
+                    template = get_template('ticket/forms/form_add.html')
                     return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
                 except Exception as ex:
                     messages.error(request, f'Error: {ex}')

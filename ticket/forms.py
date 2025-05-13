@@ -65,7 +65,6 @@ class TicketForm(FormBase):
     descripcion = forms.CharField(label=u"Descripción", max_length=5000, widget=forms.Textarea(attrs={'placeholder': 'Describa el proceso', 'col': '12', 'rows': '6'}), required=True)
     prioridad = forms.ChoiceField(label='Prioridad', choices=TicketAtencion.PRIORIDAD, initial=1)
     tipo = forms.ModelChoiceField(label='Tipo', queryset=TipoTicketAtencion.objects.filter(status=True))
-    archivo = forms.FileField(label='Archivo', required=False)
 
 
     def clean(self):

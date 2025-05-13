@@ -47,12 +47,18 @@
         </span>
     </p>
     <p class="mb-0"><b>Fecha de registro: </b> {{ ticket.fecha_registro|date:'d/M/Y | H:m'|safe }}</p>
-    {% if ticket.archivo %}
-    <p class="mb-0"><b>Archivo adjunto: </b> <br>
-     {{ ticket.component_archive|safe }}
+    {% if ticket.get_archivos %}
+    <p class="mb-0"><b>Archivos adjuntos: </b> <br>
     </p>
+        <div class="d-flex flex-wrap gap-2 p-2">  <!-- Contenedor flex padre -->
+        {% for documento in ticket.get_archivos %}
+            <div class="flex-shrink-0">  <!-- Contenedor hijo para cada elemento -->
+                {{ documento.component_archive|safe }}
+            </div>
+        {% endfor %}
+    </div>
     {% endif %}
-    <div class="mt-2">
+    <div class="">
         <h6 class="fw-semibold fs-5 mb-0">{{ ticket.titulo }}</h6>
         <p>{{ ticket.descripcion }}</p>
     </div>

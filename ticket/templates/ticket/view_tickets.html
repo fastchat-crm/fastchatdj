@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block jscript %}
-    <script src="/static/js/forms.js?version=1"></script>
+    <script src="/static/js/forms.js?version=1.1"></script>
 {% endblock %}
 {% block content %}
 
@@ -68,7 +68,7 @@
     <div class="row align-items-center mb-3">
         <div class="col-md-12 mb-2 mb-md-0">
             <a href="javascript:void(0)"
-               onclick="verModalPostAjax('addticket', '', 'fas fa-users-plus')"
+               onclick="verModalPostAjax('addticket', '', 'fas fa-users-plus', 'modal-xl')"
                class="btn btn-success">
                 <i class="fas fa-plus-circle me-2"></i> Nuevo Registro
             </a>
@@ -80,15 +80,15 @@
             <div class="table-responsive">
                 <table id="tabla" class="table table-hover table-striped">
                     <thead>
-                    <tr>
-                        <th class="text-center w-5">N</th>
-                        <th class="w-30">Ticket</th>
-                        <th class="text-center w-30">Documento</th>
-{#                        <th class="text-left w-20">Usuario</th>#}
-                        <th class="text-left w-20">Estado</th>
-                        <th class="w-10">Fechas</th>
-                        <th class="text-center w-5"></th>
-                    </tr>
+                        <tr>
+                            <th class="text-center w-5">N</th>
+                            <th class="w-30">Ticket</th>
+                            <th class="text-center w-30">Documento</th>
+    {#                        <th class="text-left w-20">Usuario</th>#}
+                            <th class="text-left w-20">Estado</th>
+                            <th class="w-10">Fechas</th>
+                            <th class="text-center w-5"></th>
+                        </tr>
                     </thead>
                     <tbody>
                     {% for l in listado %}
@@ -103,15 +103,17 @@
                                 </h6>
                                 <h6 class="mb-0 fw-semibold">{{ l.titulo }}
                                 <a href="javascript:void(0);"
-                                       onclick="verModalPostAjax('detalleticket', '{{ l.pk }}', 'fas fa-info-circle')">
-                                        <i class="fas fa-info-circle text-primary" title="Detalle del ticket"
-                                           data-bs-toggle="tooltip"></i>
-                                    </a>
+                                   onclick="verModalPostAjax('detalleticket', '{{ l.pk }}', 'fas fa-info-circle')">
+                                    <i class="fas fa-info-circle text-primary" title="Detalle del ticket"
+                                       data-bs-toggle="tooltip"></i>
+                                </a>
                                 </h6>
                                 <p class="" data-bs-toggle="tooltip" title="{{ l.descripcion }}">{{ l.descripcion|truncatechars:"60" }}</p>
                             </td>
                             <td class="text-center align-middle">
-                                {{ l.component_archive|safe }}
+                                {% for documento in l.get_archivos %}
+                                    {{ documento.component_archive|safe }}
+                                {% endfor %}
                             </td>
 {#                            <td class="text-left align-middle">#}
 {#                                <div class="d-flex justify-content-between align-items-center">#}
@@ -186,7 +188,7 @@
                                         {% if l.estado == 1 or l.estado == 2 %}
                                             <li>
                                                 <a class="dropdown-item" href="javascript:void(0);"
-                                                   onclick="verModalPostAjax('editticket', '{{ l.pk }}', 'fas fa-users')">
+                                                   onclick="verModalPostAjax('editticket', '{{ l.pk }}', 'fas fa-users', 'modal-xl')">
                                                     <i class="fas fa-edit me-2 text-primary"></i> Editar
                                                 </a>
                                             </li>

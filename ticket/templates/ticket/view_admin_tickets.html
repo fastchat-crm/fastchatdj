@@ -2,6 +2,16 @@
 {% block jscript %}
     <script src="/static/js/forms.js?version=1"></script>
 {% endblock %}
+{% block head %}
+    <style>
+    .select2-container {
+        width: 87% !important;
+    }
+    .input-group-text {
+        width: 45px;
+    }
+    </style>
+{% endblock %}
 {% block content %}
 
     <div class="card mb-3">
@@ -34,42 +44,36 @@
                         <div class="col-md-4">
                             <label class="form-label">Responsables</label>
                             <div class="input-group">
-                            <span class="input-group-text border-end-0">
-                                <i class="fa fa-users text-muted"></i>
-                            </span>
-                                <div class="input-group-append" style="width: 80%;">
-                                    <select name="integrante" id="id_integrante"
-                                            class="form-control border-start-0 select2 ">
-                                        <option value="">Todos</option>
-                                        {% for i in integrantes %}
-                                            <option value="{{ i.pk }}"
-                                                    {% if i.pk == integrante %} selected {% endif %}>
-                                                {{ i.full_name }}
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
+                                <span class="input-group-text">
+                                    <i class="fa fa-users text-muted"></i>
+                                </span>
+                               <select name="integrante" id="id_integrante"
+                                        class="form-control border-start-0 select2 ">
+                                    <option value="">Todos</option>
+                                    {% for i in integrantes %}
+                                        <option value="{{ i.pk }}"
+                                                {% if i.pk == integrante %} selected {% endif %}>
+                                            {{ i.full_name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
                             </div>
                         </div>
                     {% endif %}
                     <div class="col-md-4">
                         <label class="form-label">Estado</label>
                         <div class="input-group">
-                            <span class="input-group-text border-end-0">
+                            <span class="input-group-text">
                                 <i class="fa fa-circle text-muted"></i>
                             </span>
-                            <div class="input-group-append" style="width: 80%;">
-                                <select name="estado" id="id_estado"
-                                        class="form-control border-start-0 select2 ">
-                                    <option value="">Todos</option>
-                                    {% for e in estados %}
-                                        <option value="{{ e.0}}"
-                                                {% if e.0 == estado %} selected {% endif %}>
-                                            {{ e.1 }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
+                            <select name="estado" id="id_estado" class="form-control border-start-0 select2">
+                                <option value="">Todos</option>
+                                {% for e in estados %}
+                                    <option value="{{ e.0 }}" {% if e.0 == estado %}selected{% endif %}>
+                                        {{ e.1 }}
+                                    </option>
+                                {% endfor %}
+                            </select>
                         </div>
                     </div>
                     <div class="col-md-4">
@@ -103,7 +107,7 @@
     <div class="card">
         <div class="card-body">
             <div class="table-responsive">
-                <table id="tabla" class="table table-hover table-striped" style="min-height: 300px">
+                <table id="tabla" class="table table-hover table-striped" style="">
                     <thead>
                     <tr>
                         <th class="text-center w-5">N</th>
@@ -141,7 +145,9 @@
                                 <p class="mb-0 fs-6"><b>Fecha:</b> {{ l.fecha_registro|date:'d/M/Y H:i'|safe }}</p>
                             </td>
                             <td class="text-center align-middle">
-                                {{ l.component_archive|safe }}
+                                {% for documento in l.get_archivos %}
+                                    {{ documento.component_archive|safe }}
+                                {% endfor %}
                             </td>
                             <td class="text-left align-middle">
                                 <div class="d-flex justify-content-between align-items-center">
