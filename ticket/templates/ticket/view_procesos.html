@@ -66,7 +66,7 @@
                     <thead>
                     <tr>
                         <th class="text-center w-5">N</th>
-                        <th class="text-center w-30">Proceso</th>
+                        <th class="text-left w-30">Proceso</th>
                         <th class="text-left w-20">Empresa</th>
                         <th class="text-left w-20">Equipos encargados</th>
                         <th class="text-center w-10">Fecha Registro</th>
@@ -82,9 +82,9 @@
                             <td class="align-middle">
                                 <h6 class="mb-0 fw-semibold">{{ l.descripcion }}</h6>
                                 <p class="mb-0">{% if l.automatico %}
-                                    <span class="badge bg-success">Distribución automática</span>
+                                    <span class="badge bg-success fs-6">Distribución automática</span>
                                 {% else %}
-                                    <span class="badge bg-primary">Líderes distribuye los requerimientos</span>
+                                    <span class="badge bg-primary fs-6">Líderes distribuye los requerimientos</span>
                                 {% endif %}</p>
                             </td>
                             <td class="text-left align-middle">
@@ -92,25 +92,28 @@
                                 <div class="d-flex justify-content-between align-items-center">
                                     {% with person=l.empresa.responsable.usuario %}
                                         <div class="d-flex align-items-center">
-                                            <a href="{{ person.get_foto_gris }}"
-                                               data-fancybox="image"
-                                               data-width="2048"
-                                               data-height="1365"
-                                               title="{{ person.user.username }}">
-                                                <img id="presentaimg2" class="img-circle"
-                                                     src="{{ person.get_foto_gris }}"
-                                                     style="border-radius: 50%;" width="35px"
-                                                     height="35px">
-                                            </a>
+                                            {% if person.get_foto_gris %}
+                                                <a href="{{ person.get_foto_gris }}"
+                                                   data-fancybox="image"
+                                                   data-width="2048"
+                                                   data-height="1365"
+                                                   title="{{ person.user.username }}">
+                                                    <img id="presentaimg2" class="img-circle"
+                                                         src="{{ person.get_foto_gris }}"
+                                                         style="border-radius: 50%;" width="35px"
+                                                         height="35px">
+                                                </a>
+                                            {% endif %}
                                             <div class="info-top ml-4">
-
-                                                <span><b>{{ person.full_name }}</b></span><br>
+                                                <span><b>{{ person.full_name }}</b></span>
                                                 {% if person.email %}
+                                                    <br>
                                                     <a href="mailto:{{ person.email }}"><i
                                                             class="fa fa-envelope"></i> {{ person.email }}
                                                     </a><br>
                                                 {% endif %}
                                                 {% if l.telefono_formateado %}
+                                                    <br>
                                                     <div class="mb-0">
                                                         <i class="fa fa-phone text-success me-1"></i>
                                                         <a href="javascript:void(0)" class="text-primary"

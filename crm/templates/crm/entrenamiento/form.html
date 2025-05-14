@@ -18,6 +18,10 @@
             <a class="nav-link fw-medium" data-bs-toggle="tab" href="#mantenimientos" role="tab"
                aria-selected="false">Mantenimientos</a>
         </li>
+        <li class="nav-item">
+            <a class="nav-link fw-medium" data-bs-toggle="tab" href="#preguntas" role="tab"
+               aria-selected="false">Respuestas personalizadas</a>
+        </li>
     </ul>
     <div class="tab-content">
         <div class="tab-pane active" id="perfil" role="tabpanel">
@@ -31,7 +35,7 @@
                         {% csrf_token %}
                         <input type="hidden" name="action" value="actualizar_perfil_negocio">
                         {% for field in form.visible_fields %}
-                            <div class="col-lg-{{ field.field.widget.attrs.col|default:6 }}">
+                            <div class="col-lg-{{ field.field.widget.attrs.col|default:6 }} mb-2">
                                 <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label>
                                 {{ field }}
                                 {% if field.help_text %}
@@ -41,10 +45,10 @@
                         {% endfor %}
                         <div class="form-group text-right">
                             <div class="col-12 d-flex justify-content-end mt-3">
-                                <a href="javascript:;" class="btn btn-danger me-2" data-bs-dismiss="modal">
+                                <a href="javascript:;" class="btn btn-danger btn-sm me-2" data-bs-dismiss="modal">
                                     <i class="fa fa-window-close"></i> Cancelar
                                 </a>
-                                <button type="submit" class="btn btn-success">
+                                <button type="submit" class="btn btn-success btn-sm">
                                     <i class="fa fa-save"></i> Guardar
                                 </button>
                             </div>
@@ -62,11 +66,11 @@
                 <small class="text-muted">Configura lo que ofreces para que la IA pueda sugerirlo.</small>
             </div>
             <div>
-                <a href="javascript:void(0)" class="btn btn-sm btn-outline-primary me-1"
+                <a href="javascript:void(0)" class="btn btn-sm btn-info me-1"
                    onclick="formModal('', 'Agregar Producto', 'addproducto')">
                     <i class="fa fa-plus"></i> Producto
                 </a>
-                <a href="javascript:void(0)" class="btn btn-sm btn-outline-success"
+                <a href="javascript:void(0)" class="btn btn-sm btn-success"
                    onclick="formModal('', 'Agregar Servicio', 'addservicio')">
                     <i class="fa fa-plus"></i> Servicio
                 </a>
@@ -210,6 +214,9 @@
         </div>
     </div>
 
+
+        </div>
+        <div class="tab-pane" id="preguntas" role="tabpanel">
             <div class="card shadow-sm mb-4">
         <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
             <div>
@@ -217,7 +224,7 @@
                 <small class="text-muted">Define cómo responde la IA ante preguntas comunes.</small>
             </div>
             <div>
-                <a href="javascript:void(0)" class="btn btn-sm btn-outline-dark"
+                <a href="javascript:void(0)" class="btn btn-sm btn-dark"
                    onclick="formModal('', 'Agregar Respuesta Entrenada', 'addrespuesta')">
                     <i class="fa fa-plus"></i> Respuesta
                 </a>
@@ -355,7 +362,7 @@
         document.querySelectorAll('.nav-tabs > .nav-item > .nav-link').forEach(tab => {
             tab.addEventListener('shown.bs.tab', function (e) {
                 const href = e.target.getAttribute('href');
-                if (['#perfil', '#mantenimientos'].includes(href)) {
+                if (['#perfil', '#mantenimientos', '#preguntas'].includes(href)) {
                     localStorage.setItem('mainTab', href);
                 } else if (['#productos', '#servicios'].includes(href)) {
                     localStorage.setItem('subTab', href);
