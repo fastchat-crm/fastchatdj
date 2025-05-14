@@ -4,7 +4,7 @@ from django import forms
 from pkg_resources import require
 
 from autenticacion.models import Usuario
-from core.custom_models import FormBase
+from core.custom_models import FormBase, ModelFormBase
 from seguridad.models import Empresa
 from .funciones import generate_code_ticket, get_user_attend
 from .models import EquipoAtencion, ProcesoAtencion, TicketAtencion, ComentarioTicketAtencion, TipoTicketAtencion
@@ -210,3 +210,17 @@ class CambiarEstadoTicketForm(FormBase):
                     comentario.archivo = archivo
                 comentario.save(request)
         return ticket
+
+
+class TipoTicketAtencionForm(ModelFormBase):
+    class Meta:
+        model = TipoTicketAtencion
+        exclude = ('usuario_modificacion', 'fecha_modificacion', 'usuario_creacion', 'fecha_registro', 'status')
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super(TipoTicketAtencionForm, self).__init__(*args, **kwargs)
+        for k, v in self.fields.items():
+            self.fields[k].widget.attrs['class'] = 'form-control'
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'

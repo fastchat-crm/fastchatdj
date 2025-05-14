@@ -1,22 +1,22 @@
 from core.custom_models import ModelFormBase
 from crm.models import PerfilNegocioIA, ActividadEconomica, Industria, ProductoIA, ServicioIA, RespuestaEntrenadaIA
-from ticket.models import TipoTicketAtencion
 
 
 class PerfilNegocioIAForm(ModelFormBase):
     class Meta:
         model = PerfilNegocioIA
         fields = (
-            'industria', 'actividad', 'nombre_empresa',
-            'descripcion_empresa', 'sitio_web', 'localidad',
-            'publico_objetivo'
+            'industria', 'actividad', 'nombre_empresa', 'sitio_web', 'localidad',
+            'publico_objetivo', 'descripcion_empresa',
         )
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
         super().__init__(*args, **kwargs)
         self.fields['industria'].queryset = Industria.objects.filter(status=True)
+        self.fields['industria'].widget.attrs['data-urladd'] = "/crm/industria/?action=addnew"
         self.fields['actividad'].queryset = ActividadEconomica.objects.filter(status=True)
+        self.fields['actividad'].widget.attrs['data-urladd'] = "/crm/industria/?action=addnew"
         for k, v in self.fields.items():
             self.fields[k].widget.attrs['class'] = 'form-control'
             self.fields[k].required = True
@@ -24,6 +24,8 @@ class PerfilNegocioIAForm(ModelFormBase):
                 self.fields[k].widget.attrs['rows'] = 3
             if k in ('industria', 'actividad'):
                 self.fields[k].widget.attrs['class'] = 'form-control select2'
+            if k in ('industria', 'actividad', 'nombre_empresa', 'sitio_web', 'localidad'):
+                self.fields[k].widget.attrs['col'] = '6'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 
@@ -100,15 +102,3 @@ class RespuestaEntrenadaIAForm(ModelFormBase):
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 
 
-class TipoTicketAtencionForm(ModelFormBase):
-    class Meta:
-        model = TipoTicketAtencion
-        exclude = ('usuario_modificacion', 'fecha_modificacion', 'usuario_creacion', 'fecha_registro', 'status')
-
-    def __init__(self, *args, **kwargs):
-        ver = kwargs.pop('ver') if 'ver' in kwargs else False
-        super(TipoTicketAtencionForm, self).__init__(*args, **kwargs)
-        for k, v in self.fields.items():
-            self.fields[k].widget.attrs['class'] = 'form-control'
-            if ver:
-                self.fields[k].widget.attrs['readonly'] = 'readonly'

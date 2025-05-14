@@ -1,4 +1,6 @@
 from django.urls import path, re_path
+
+from .view_tipo_ticket import tipoTicketView
 from .views import equipoView, procesoView, ticketView, ticketAdminView, ticketIntegranteView, indicatorsView
 
 ticket_urls = (
@@ -31,6 +33,11 @@ ticket_urls = (
         "nombre": "Indicadores de Tickets",
         "url": 'indicadores/',
         "vista": indicatorsView,
+    },
+    {
+        "nombre": "Tipo Ticket de Atención",
+        "url": 'tipo_ticket/',
+        "vista": tipoTicketView,
     },
 )
 

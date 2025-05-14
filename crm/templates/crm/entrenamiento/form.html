@@ -21,7 +21,7 @@
         </li>
         <li class="nav-item">
             <a class="nav-link fw-medium" data-bs-toggle="tab" href="#mantenimientos" role="tab"
-               aria-selected="false">Mantenimientos</a>
+               aria-selected="false">Productos y Servicios</a>
         </li>
         <li class="nav-item">
             <a class="nav-link fw-medium" data-bs-toggle="tab" href="#preguntas" role="tab"
@@ -39,16 +39,29 @@
                         <form method="post" enctype="multipart/form-data" action="{{ ruta }}">
                             {% csrf_token %}
                             <input type="hidden" name="action" value="actualizar_perfil_negocio">
-                            {% for field in form.visible_fields %}
-                                <div class="col-lg-{{ field.field.widget.attrs.col|default:6 }} mb-2">
-                                    <label class="form-label small mb-1"
-                                           for="id_{{ field.name }}">{{ field.label }}</label>
-                                    {{ field }}
-                                    {% if field.help_text %}
-                                        <div class="form-text text-muted">{{ field.help_text }}</div>{% endif %}
-                                    <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
-                                </div>
-                            {% endfor %}
+                            <div class="row g-2">
+                                {% for field in form.visible_fields %}
+                                    <div class="col-lg-{{ field.field.widget.attrs.col|default:6 }} mb-2">
+                                        <label class="form-label small mb-1"
+                                               for="id_{{ field.name }}">{{ field.label }}</label>
+                                        {{ field }}
+                                        {% if field.name in "'industria','actividad'" %}
+                                            <small style="text-align: right;display:block;float:right;width:50%;margin-left:10px;">
+                                                <a class="btn-link add-with-popup"
+                                                   id="popup_id_{{ field.name }}"
+                                                   data-idinput="id_{{ field.name }}"
+                                                   href="javascript:void(0);">
+                                                    <i class="fas fa-plus-circle"></i> Agregar
+                                                    más {{ field.label }}
+                                                </a>
+                                            </small>
+                                        {% endif %}
+                                        {% if field.help_text %}
+                                            <div class="form-text text-muted">{{ field.help_text }}</div>{% endif %}
+                                        <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                                    </div>
+                                {% endfor %}
+                            </div>
                             <div class="form-group text-right">
                                 <div class="col-12 d-flex justify-content-end mt-3">
                                     <a href="javascript:;" class="btn btn-danger btn-sm me-2" data-bs-dismiss="modal">
@@ -68,7 +81,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
                     <div>
-                        <h5 class="mb-0 text-primary"><i class="fas fa-boxes-stacked me-2"></i>Productos y Servicios
+                        <h5 class="mb-0 text-primary"><i class="fas fa-boxes-stacked me-2"></i>Productos
                         </h5>
                         <small class="text-muted">Configura lo que ofreces para que la IA pueda sugerirlo.</small>
                     </div>
@@ -77,6 +90,74 @@
                            onclick="formModal('', 'Agregar Producto', 'addproducto')">
                             <i class="fa fa-plus"></i> Producto
                         </a>
+                    </div>
+                </div>
+                <div class="card-body" id="bloque_productos_servicios">
+                    <div class="card-body pt-0">
+                        <div class="table-responsive">
+                            <table class="table table-striped tabla_paginada">
+                                <thead>
+                                <tr>
+                                    <th class="column-title" style="text-align: center">Nombre</th>
+                                    <th class="column-title" style="text-align: center">Descripción</th>
+                                    <th class="column-title" style="text-align: center">Precio</th>
+                                    <th class="column-title" style="text-align: center">Acción</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for l in productos %}
+                                    <tr>
+                                        <td style="text-align: center">{{ l.nombre|default:'' }}</td>
+                                        <td style="text-align: center">{{ l.descripcion|default:'' }}</td>
+                                        <td style="text-align: center">{{ l.precio|floatformat:2 }}</td>
+                                        <td class="text-center">
+                                            <div class="dropdown">
+                                                <button class="btn btn-icon" type="button"
+                                                        id="dropdownMenuButton-{{ l.pk }}"
+                                                        data-bs-toggle="dropdown" aria-expanded="false"
+                                                        style="background: none; border: none;">
+                                                    <i class="fas fa-ellipsis-v"></i>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end"
+                                                    aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                                                    <li>
+                                                        <a class="dropdown-item"
+                                                           onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeproducto')"
+                                                           href="javascript:void(0);">
+                                                            <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="javascript:void(0);"
+                                                           onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteproducto')">
+                                                            <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% empty %}
+                                    <tr>
+                                        <td colspan="10">Sin registros</td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {#    <div class="alert alert-info">Aún no has agregado productos ni servicios.</div>#}
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0 text-primary"><i class="fas fa-wrench me-2"></i>Servicios
+                        </h5>
+                        <small class="text-muted">Configura lo que ofreces para que la IA pueda sugerirlo.</small>
+                    </div>
+                    <div>
                         <a href="javascript:void(0)" class="btn btn-sm btn-success"
                            onclick="formModal('', 'Agregar Servicio', 'addservicio')">
                             <i class="fa fa-plus"></i> Servicio
@@ -84,84 +165,7 @@
                     </div>
                 </div>
                 <div class="card-body" id="bloque_productos_servicios">
-                    <ul class="nav nav-tabs mb-3" role="tablist">
-                        <li class="nav-item">
-                            <a class="nav-link fw-medium active" data-bs-toggle="tab" href="#productos" role="tab"
-                               aria-selected="true">Productos</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link fw-medium" data-bs-toggle="tab" href="#servicios" role="tab"
-                               aria-selected="false">Servicios</a>
-                        </li>
-                    </ul>
-                    <div class="tab-content">
-                        <div class="tab-pane active" id="productos" role="tabpanel">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h4 class="card-title">Productos</h4>
-                                </div>
-                                <div class="card-body pt-0">
-                                    <div class="table-responsive">
-                                        <table class="table table-striped tabla_paginada">
-                                            <thead>
-                                            <tr>
-                                                <th class="column-title" style="text-align: center">Nombre</th>
-                                                <th class="column-title" style="text-align: center">Descripción</th>
-                                                <th class="column-title" style="text-align: center">Precio</th>
-                                                <th class="column-title" style="text-align: center">Acción</th>
-                                            </tr>
-                                            </thead>
-                                            <tbody>
-                                            {% for l in productos %}
-                                                <tr>
-                                                    <td style="text-align: center">{{ l.nombre|default:'' }}</td>
-                                                    <td style="text-align: center">{{ l.descripcion|default:'' }}</td>
-                                                    <td style="text-align: center">{{ l.precio|floatformat:2 }}</td>
-                                                    <td class="text-center">
-                                                        <div class="dropdown">
-                                                            <button class="btn btn-icon" type="button"
-                                                                    id="dropdownMenuButton-{{ l.pk }}"
-                                                                    data-bs-toggle="dropdown" aria-expanded="false"
-                                                                    style="background: none; border: none;">
-                                                                <i class="fas fa-ellipsis-v"></i>
-                                                            </button>
-                                                            <ul class="dropdown-menu dropdown-menu-end"
-                                                                aria-labelledby="dropdownMenuButton-{{ l.pk }}">
-                                                                <li>
-                                                                    <a class="dropdown-item"
-                                                                       onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeproducto')"
-                                                                       href="javascript:void(0);">
-                                                                        <i class="fas fa-edit me-2 text-primary"></i>Editar
-                                                                    </a>
-                                                                </li>
-                                                                <li>
-                                                                    <a class="dropdown-item" href="javascript:void(0);"
-                                                                       onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteproducto')">
-                                                                        <i class="fas fa-trash me-2 text-danger"></i>Eliminar
-                                                                    </a>
-                                                                </li>
-                                                            </ul>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            {% empty %}
-                                                <tr>
-                                                    <td colspan="10">Sin registros</td>
-                                                </tr>
-                                            {% endfor %}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="tab-pane" id="servicios" role="tabpanel">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h4 class="card-title">Servicios</h4>
-                                </div>
-                                <div class="card-body pt-0">
+                    <div class="card-body pt-0">
                                     <div class="table-responsive">
                                         <table class="table table-striped tabla_paginada">
                                             <thead>
@@ -215,13 +219,8 @@
                                         </table>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                    {#    <div class="alert alert-info">Aún no has agregado productos ni servicios.</div>#}
                 </div>
             </div>
-
 
         </div>
         <div class="tab-pane" id="preguntas" role="tabpanel">
@@ -379,5 +378,80 @@
                 });
             });
         });
+    </script>
+    {#  ABRIR EN POPUP EL MANTENIMIENTO  #}
+    <script>
+        $(document).ready(function () {
+            $('.add-with-popup').click(function (e) {
+                e.preventDefault();
+                showAddAnotherPopup($(this));
+            });
+        });
+
+        function showAddAnotherPopup(triggeringLink) {
+            var name = triggeringLink.attr('id');
+            const idSelect = triggeringLink.attr('data-idinput');
+            name = id_to_windowname(name);
+            {#var href = triggeringLink.parent().parent().children(`#${idSelect}`).attr('data-urladd');#}
+            var href = $(`#${idSelect}`).attr('data-urladd');
+            if (href.indexOf('?') === -1) {
+                href += '?popup=1';
+            } else {
+                href += '&popup=1';
+            }
+            href += '&winName=' + name;
+            var win = window.open(href, name, 'height=500,width=900,resizable=yes,scrollbars=yes');
+            win.focus();
+            $(win).on('beforeunload', function () {
+                var ids = [];
+                var listadoOptions = $(`#${idSelect}`).children('option').toArray();
+                for (var i = 0; i < listadoOptions.length; i++) {
+                    var value = $(listadoOptions[i]).val();
+                    if (value) {
+                        ids.push(parseInt(value));
+                    }
+                }
+                $.ajax({
+                    type: "GET",
+                    url: href.substring(0, href.indexOf('?')),
+                    data: {'action': 'datos_popup', 'ids': JSON.stringify(ids)},
+                    success: function (data) {
+                        if (data.result === true) {
+                            if (data.nuevo_registro) {
+                                if (data.usaa_jax) {
+                                    Swal.fire({
+                                        toast: true,
+                                        position: 'top-end',
+                                        type: 'success',
+                                        title: 'Registro Guardado',
+                                        showConfirmButton: false,
+                                        timer: 4000
+                                    })
+                                } else {
+                                    $(`#${idSelect}`).children('option').remove();
+                                    $(`#${idSelect}`).append(data.data);
+                                    $(`#${idSelect}`).select2();
+                                }
+                            }
+                        } else {
+                            mensajeDanger(data.mensaje);
+                        }
+                    },
+                    error: function () {
+                        mensajeDanger("Error de conexión.");
+                    },
+                    dataType: "json"
+                });
+            });
+            return false;
+        }
+
+        function id_to_windowname(text) {
+            text = text.replace(/\./g, '__dot__');
+            text = text.replace(/\-/g, '__dash__');
+            text = text.replace(/\[/g, '__braceleft__');
+            text = text.replace(/\]/g, '__braceright__');
+            return text;
+        }
     </script>
 {% endblock %}
