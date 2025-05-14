@@ -196,8 +196,8 @@
                                     </div>
                                 {% endif %}
                                 <div>
-                                    <h5 class="card-title mb-0">{{ s.nombre }}</h5>
-                                    <h5 class="card-title mb-0">{{ s.numero }}</h5>
+                                    <h5 class="card-title mb-0">{{ s.nombre|default:'SIN NOMBRE' }}</h5>
+                                    <h5 class="card-title mb-0">{{ s.numero|default:'' }}</h5>
                                     {% if s.observacion %}
                                         <small class="text-muted">
                                             <i class="fas fa-info-circle me-1"></i>{{ s.observacion }}
