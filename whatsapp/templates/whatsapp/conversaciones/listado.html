@@ -43,12 +43,66 @@
     <div class="row">
         <div class="col-12">
             <div class="chat-box-left">
+                <!-- Tabs principales -->
                 <ul class="nav nav-tabs nav-justified" id="myTab" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <a class="nav-link py-2 active" id="messages_chat_tab" data-bs-toggle="tab"
-                           href="#messages_chat" role="tab">Conversaciones</a>
+                        <button class="nav-link py-2 active" id="open_chats_tab" data-bs-toggle="tab"
+                               data-bs-target="#open_chats_content" type="button" role="tab">Abiertos</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link py-2" id="resolved_chats_tab" data-bs-toggle="tab"
+                               data-bs-target="#resolved_chats_content" type="button" role="tab">Resueltos</button>
                     </li>
                 </ul>
+
+                <!-- Contenido de tabs principales -->
+                <div class="tab-content">
+                    <!-- Contenido de Abiertos -->
+                    <div class="tab-pane fade show active" id="open_chats_content" role="tabpanel">
+                        <!-- Submenú de Abiertos -->
+                        <ul class="nav nav-tabs nav-justified mt-2 submenu-tabs" id="openChatsSubMenu">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link py-2 active" id="my_chats_tab" data-bs-toggle="tab"
+                                       data-bs-target="#my_chats" type="button" role="tab">Mis chats</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link py-2" id="waiting_chats_tab" data-bs-toggle="tab"
+                                       data-bs-target="#waiting_chats" type="button" role="tab">En espera</button>
+                            </li>
+                        </ul>
+
+                        <!-- Contenido de submenú Abiertos -->
+                        <div class="tab-content mt-3">
+                            <div class="tab-pane fade show active" id="my_chats" role="tabpanel">
+                                <h5>Mis chats</h5>
+                                <!-- Contenido de mis chats -->
+                            </div>
+                            <div class="tab-pane fade" id="waiting_chats" role="tabpanel">
+                                <h5>Chats en espera</h5>
+                                <!-- Contenido de chats en espera -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contenido de Resueltos -->
+                    <div class="tab-pane fade" id="resolved_chats_content" role="tabpanel">
+                        <!-- Submenú de Resueltos -->
+                        <ul class="nav nav-tabs nav-justified mt-2 submenu-tabs" id="resolvedChatsSubMenu">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link py-2 active" id="my_resolved_chats_tab" data-bs-toggle="tab"
+                                       data-bs-target="#my_resolved_chats" type="button" role="tab">Mis chats resueltos</button>
+                            </li>
+                        </ul>
+
+                        <!-- Contenido de submenú Resueltos -->
+                        <div class="tab-content mt-3">
+                            <div class="tab-pane fade show active" id="my_resolved_chats" role="tabpanel">
+                                <h5>Mis chats resueltos</h5>
+                                <!-- Contenido de chats resueltos -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Selector de sesiones -->
                 <!-- Añadir justo después del selector de sesiones -->
@@ -100,23 +154,25 @@
                             <div>
                                 <h6 class="my-0 fw-medium text-dark fs-14" id="contacto-nombre">Selecciona una conversación</h6>
                                 <p class="text-muted mb-0" id="contacto-numero"></p>
-                                <p class="text-muted mb-0"><b>Lead</b> <span id="contacto-hashedId"></span></p>
+                                <p class="text-muted mb-0"><span id="contacto-hashedId"></span></p>
                             </div>
                         </div><!-- end media-body -->
                     </a><!--end media-->
                     <div class="d-none d-sm-inline-block align-self-center">
-                        <a href="javascript:void(0)" class="fs-22 me-2 text-muted marcar-resuelto"
+                        <a href="javascript:void(0)" class="btn btn-sm btn-default me-2 text-muted marcar-resuelto"
                            data-bs-toggle="tooltip"
                            data-bs-placement="top" data-bs-title="Marcar como resuelto"
                            data-bs-custom-class="tooltip-primary">
-                            <i class="fa fa-check-circle"></i>
+                            <i class="fa fa-check-circle"></i> Resolver
                         </a>
-                        <a href="javascript:void(0)" class="fs-22 me-2 text-muted" data-bs-toggle="tooltip"
-                           data-bs-placement="top" data-bs-title="Eliminar" data-bs-custom-class="tooltip-primary">
-                            <i class="fa fa-trash"></i>
+                        <a href="javascript:void(0)" class="btn btn-sm btn-default me-2 text-muted marcar-resuelto"
+                           data-bs-toggle="tooltip"
+                           data-bs-placement="top" data-bs-title="Marcar como resuelto"
+                           data-bs-custom-class="tooltip-primary">
+                            <i class="fa fa-trash"></i> Marcar como no interesado
                         </a>
                         <div class="dropdown d-inline">
-                            <a href="javascript:void(0)" class="fs-22 text-muted" data-bs-toggle="dropdown">
+                            <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" data-bs-toggle="dropdown">
                                 <i class="fa fa-ellipsis-v"></i>
                             </a>
                             <div class="dropdown-menu">
@@ -125,6 +181,9 @@
                                 </a>
                                 <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida">
                                     <i class="fa fa-times me-2"></i> Terminar sin despedida
+                                </a>
+                                <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida">
+                                    <i class="fa fa-trash text-danger me-2"></i> Eliminar Lead
                                 </a>
                             </div>
                         </div>
