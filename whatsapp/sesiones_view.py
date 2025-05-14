@@ -6,7 +6,10 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.contrib import messages
 from django.urls import reverse
+
+from core.custom_forms import FormError
 from core.funciones import addData, paginador, secure_module, log
+from .forms import SesionWhatsAppForm
 from .models import SesionWhatsApp
 from .services import WhatsAppService
 
@@ -33,7 +36,8 @@ def sesionesView(request):
                     last_session = SesionWhatsApp.objects.filter(id=last_session_id).first()
 
                     session = last_session or SesionWhatsApp.objects.create(
-                        estado='pendiente', usuario=request.user, session_id=str(uuid.uuid4()), qr_code=''
+                        estado='pendiente', usuario=request.user, session_id=str(uuid.uuid4()), qr_code='',
+                        whatsapp_id=''
                     )
 
                     session.qr_code = ''
@@ -57,11 +61,29 @@ def sesionesView(request):
                     log(f"Sesión de WhatsApp {filtro.numero} desconectada", request, "del", obj=filtro.id)
                     messages.success(request, "Sesión desconectada correctamente.")
                     return JsonResponse({"error": False})
+                elif action == 'change':
+                    instance = SesionWhatsApp.objects.get(id=request.POST['pk'])
+                    form = SesionWhatsAppForm(request.POST, request.FILES, instance=instance)
 
+                    if not form.is_valid():
+                        raise FormError(form)
+
+                    obj = form.save()
+
+                    res_json.append({'error': False})
+                    return JsonResponse(res_json, safe=False)
+
+        except FormError as ex:
+            res_json.append(ex.dict_error)
         except Exception as ex:
             res_json.append({'error': True, 'message': "Error, intente nuevamente."})
             return JsonResponse(res_json, safe=False)
     # ====================== LISTADO SESIONES =========================
+    data['action'] = action = request.GET.get('action')
+    if action == 'change':
+        data['instance'] = instance = SesionWhatsApp.objects.get(id=request.GET['pk'])
+        data['form'] = SesionWhatsAppForm(instance=instance)
+        return render(request, 'whatsapp/sesiones/form.html', data)
     criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, usuario_id=request.user.id), ''
     if criterio:
         filtros = filtros & (Q(numero__icontains=criterio))

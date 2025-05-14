@@ -17,7 +17,7 @@ from django.conf import settings
 from core.funciones_adicionales import get_image_as_base64
 from .models import (
     SesionWhatsApp,
-    ConversacionWhatsApp,
+    ConversacionWhatsApp, Contacto,
     MensajeWhatsApp,
     EstadisticasConversacion
 )
@@ -94,6 +94,7 @@ def webhook_handler(request):
                     if guardar:
                         session.numero = numero
                         session.whatsapp_id = whatsapp_id
+                        session.nombre = user_info.get('pushName') or user_info.get('verifiedBizName') or user_info.get('name') or user_info.get('notify') or user_info.get('verifiedName') or ''
 
             if guardar:
                 session.estado = 'conectado'
@@ -262,21 +263,24 @@ def process_incoming_message(session, event_data, channel_layer):
             return
 
         # Buscar o crear la conversación
-        conversation = ConversacionWhatsApp.objects.filter(sesion=session, from_number=from_number).first() or\
-        ConversacionWhatsApp(sesion=session, from_number=from_number)
-        conversation.estado = 'activo'
+        contacto = Contacto.objects.filter(sesion=session, from_number=from_number).first() or Contacto(
+            sesion=session, from_number=from_number
+        )
+        contacto.estado = 'activo'
 
         # Actualizar nombre del contacto si está disponible
-        if not conversation.contacto_nombre:
+        if not contacto.contacto_nombre:
             contacts_list = [c.get('name') or c.get('notify') or '' for c in json.loads(session.contacts_list or '[]') if c["id"] == from_number]
-            conversation.contacto_nombre = push_name
+            contacto.contacto_nombre = push_name
             if contacts_list and contacts_list[0]:
-                conversation.contacto_nombre = contacts_list[0]
-        if not conversation.contacto_numero:
-            conversation.contacto_numero = contacto_numero
+                contacto.contacto_nombre = contacts_list[0]
+        if not contacto.contacto_numero:
+            contacto.contacto_numero = contacto_numero
 
         if userImage:
-            conversation.contacto_foto = f'data:image/jpg;base64,{get_image_as_base64(userImage)}'
+            contacto.contacto_foto = f'data:image/jpg;base64,{get_image_as_base64(userImage)}'
+
+        contacto.save()
 
         # Determinar el tipo de mensaje y su contenido
         message_type = 'texto'
@@ -317,12 +321,15 @@ def process_incoming_message(session, event_data, channel_layer):
                     filename = media_msg.get(filename_key, f"{type_name}_{message_id}")
 
                     # Guardar el archivo
-                    file_url = save_media_file(media_data, filename, session.id, conversation.id)
+                    file_url = save_media_file(media_data, filename, session.id, contacto.id)
 
         # Actualizar la conversación con el último mensaje
-        conversation.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
-        conversation.fecha_ultimo_mensaje = message_date
-        conversation.save()
+        contacto.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
+        contacto.fecha_ultimo_mensaje = message_date
+        contacto.save()
+
+        conversation = ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).first() or \
+                       ConversacionWhatsApp.objects.create(contacto=contacto)
 
         # Crear el mensaje
         message = MensajeWhatsApp.objects.create(
@@ -338,6 +345,12 @@ def process_incoming_message(session, event_data, channel_layer):
         # Actualizar estadísticas
         update_conversation_stats(conversation)
 
+        if not conversation.bienvenida_enviado:
+            if conversation.sesion.mensaje_bienvenida:
+                whatsapp_service = WhatsAppService()
+                whatsapp_service.send_text_message(conversation.sesion.session_id, from_number, conversation.sesion.mensaje_bienvenida)
+            conversation.bienvenida_enviado = True
+            conversation.save()
         # Notificar a través de WebSockets
         async_to_sync(channel_layer.group_send)(
             f"chat_{conversation.id}",
@@ -385,13 +398,13 @@ def process_sent_message(session, event_data, channel_layer):
 
         # Buscar la conversación
         try:
-            conversation = ConversacionWhatsApp.objects.get(
+            contacto = Contacto.objects.get(
                 sesion=session,
                 contacto_numero=to_number
             )
-        except ConversacionWhatsApp.DoesNotExist:
+        except Contacto.DoesNotExist:
             # Crear una nueva conversación si no existe
-            conversation = ConversacionWhatsApp.objects.create(
+            contacto = Contacto.objects.create(
                 sesion=session,
                 contacto_numero=to_number,
                 from_number=from_number,
@@ -442,12 +455,15 @@ def process_sent_message(session, event_data, channel_layer):
                         filename = f'{filename}.png'
 
                     # Guardar el archivo
-                    file_url = save_media_file(media_data, filename, session.id, conversation.id)
+                    file_url = save_media_file(media_data, filename, session.id, contacto.id)
 
         # Actualizar la conversación
-        conversation.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
-        conversation.fecha_ultimo_mensaje = timezone.now()
-        conversation.save()
+        contacto.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
+        contacto.fecha_ultimo_mensaje = timezone.now()
+        contacto.save()
+
+        conversation = ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).first() or \
+                       ConversacionWhatsApp.objects.create(contacto=contacto)
 
         # Crear el mensaje
         message = MensajeWhatsApp.objects.create(
@@ -461,6 +477,13 @@ def process_sent_message(session, event_data, channel_layer):
             leido=True,  # Marcamos como leído ya que lo enviamos nosotros
             fecha_leido=timezone.now()
         )
+
+        if not conversation.bienvenida_enviado:
+            if conversation.sesion.mensaje_bienvenida:
+                whatsapp_service = WhatsAppService()
+                whatsapp_service.send_text_message(conversation.sesion.session_id, from_number, conversation.sesion.mensaje_bienvenida)
+            conversation.bienvenida_enviado = True
+            conversation.save()
 
         # Actualizar estadísticas
         update_conversation_stats(conversation)
@@ -628,28 +651,16 @@ def process_contact_update(session, event_data, channel_layer):
             contact_id = contact_id.split('@')[0]
 
         # Buscar conversaciones con este contacto
-        conversations = ConversacionWhatsApp.objects.filter(
+        contactos = Contacto.objects.filter(
             sesion=session,
             contacto_numero=contact_id
         )
 
-        for conversation in conversations:
+        for contacto in contactos:
             # Actualizar nombre si está disponible
             if 'notify' in contact_data:
-                conversation.contacto_nombre = contact_data.get('notify')
-                conversation.save()
-
-            # Notificar a través de WebSockets
-            async_to_sync(channel_layer.group_send)(
-                f"whatsapp_conversation_{conversation.id}",
-                {
-                    'type': 'whatsapp_contact',
-                    'event': 'contact_update',
-                    'conversation_id': conversation.id,
-                    'contact_number': contact_id,
-                    'contact_name': conversation.contacto_nombre
-                }
-            )
+                contacto.contacto_nombre = contact_data.get('notify')
+                contacto.save()
 
         logger.info(f"Contacto {contact_id} actualizado")
 
@@ -669,23 +680,10 @@ def process_profile_update(session, event_data, channel_layer):
             user_id = user_id.split('@')[0]
 
         # Buscar conversaciones con este usuario
-        conversations = ConversacionWhatsApp.objects.filter(
+        contactos = Contacto.objects.filter(
             sesion=session,
             contacto_numero=user_id
         )
-
-        for conversation in conversations:
-            # Notificar a través de WebSockets
-            async_to_sync(channel_layer.group_send)(
-                f"whatsapp_conversation_{conversation.id}",
-                {
-                    'type': 'whatsapp_contact',
-                    'event': 'profile_update',
-                    'conversation_id': conversation.id,
-                    'contact_number': user_id,
-                    'presence': presence_data
-                }
-            )
 
         logger.info(f"Perfil de {user_id} actualizado")
 

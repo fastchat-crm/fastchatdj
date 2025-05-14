@@ -9,7 +9,8 @@ from django.conf import settings
 
 from core.decoradores import sync_to_async_function
 from core.funciones_adicionales import get_image_as_base64
-from .models import SesionWhatsApp, WhatsAppWebhook
+from .models import SesionWhatsApp, WhatsAppWebhook, Contacto
+
 
 class WhatsAppService:
     def __init__(self):
@@ -113,7 +114,6 @@ class WhatsAppService:
 
     @sync_to_async_function
     def sync_contacts(self, session):
-        from whatsapp.models import ConversacionWhatsApp
         from django.db import connection
         try:
             contacts_list = json.loads(session.contacts_list or '[]')
@@ -124,14 +124,14 @@ class WhatsAppService:
                 if '@' in from_number:
                     contacto_numero = from_number.split('@')[0]
                 photo = self.get_user_image(session.session_id, from_number)
-                conversation = ConversacionWhatsApp.objects.filter(
+                contacto = Contacto.objects.filter(
                     sesion=session, from_number=from_number,
-                ).first() or ConversacionWhatsApp(sesion=session, from_number=from_number)
-                conversation.contacto_numero = contacto_numero
-                conversation.contacto_nombre = c.get('name') or c.get('notify') or ''
+                ).first() or Contacto(sesion=session, from_number=from_number)
+                contacto.contacto_numero = contacto_numero
+                contacto.contacto_nombre = c.get('name') or c.get('notify') or ''
                 if photo:
-                    conversation.contacto_foto = f'data:image/jpg;base64,{get_image_as_base64(photo)}'
-                conversation.save()
+                    contacto.contacto_foto = f'data:image/jpg;base64,{get_image_as_base64(photo)}'
+                contacto.save()
         except Exception as ex:
             print(ex)
         finally:

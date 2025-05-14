@@ -32,7 +32,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_messages_html(self, conversacion_id):
         try:
-            conversacion = ConversacionWhatsApp.objects.filter(sesion__usuario__id=self.user.id, id=conversacion_id).first()
+            conversacion = ConversacionWhatsApp.objects.filter(contacto__sesion__usuario__id=self.user.id, id=conversacion_id).first()
             mensajes = MensajeWhatsApp.objects.filter(
                 conversacion=conversacion
             ).order_by('fecha')
@@ -113,7 +113,7 @@ class SessionRoomConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_conversacion_html(self, conversacion_id):
         try:
-            conversacion = ConversacionWhatsApp.objects.filter(sesion__usuario__id=self.user.id, id=conversacion_id).first()
+            conversacion = ConversacionWhatsApp.objects.filter(contacto__sesion__usuario__id=self.user.id, id=conversacion_id).first()
             conversacion_html = render_to_string('whatsapp/conversaciones/conversacion_item.html', {
                 'conversacion': conversacion
             })

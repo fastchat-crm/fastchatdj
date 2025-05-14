@@ -1,10 +1,11 @@
 from django.db.models import Manager, Exists, OuterRef, Subquery, Case, BooleanField, When, Q
 from django.db.models.functions import Coalesce
 from django.db.models import IntegerField
+from django.utils import timezone
 
 from core.custom_models import CustomValueDb
 
-class ConversacionWhatsAppManager(Manager):
+class ContactoManager(Manager):
     def get_queryset(self):
         return super().get_queryset().annotate(
             tiene_mensaje=Case(
@@ -12,3 +13,17 @@ class ConversacionWhatsAppManager(Manager):
                 default=CustomValueDb(0)
             )
         )
+
+
+class ConversacionWhatsAppManager(Manager):
+    def get_queryset(self):
+        return super().get_queryset().annotate(
+            expirado=Case(
+                When(Q(fecha_hora_expira__lt=timezone.now()), then=CustomValueDb(True)),
+                default=CustomValueDb(False)
+            )
+        )
+
+    @property
+    def sin_expirar(self):
+        return self.get_queryset().filter(expirado=False)

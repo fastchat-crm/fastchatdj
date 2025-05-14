@@ -135,15 +135,15 @@ def conversacionesView(request):
 
     # ====================== LISTADO CONVERSACIONES =========================
     criterio = request.GET.get('criterio', '').strip()
-    filtros = Q(status=True, sesion__usuario__id=request.user.id, sesion__status=True)
+    filtros = Q(contacto__status=True, status=True, contacto__sesion__usuario__id=request.user.id, contacto__sesion__status=True)
     url_vars = ''
 
     if sesion_seleccionada:
-        filtros = filtros & Q(sesion=sesion_seleccionada)
+        filtros = filtros & Q(contacto__sesion=sesion_seleccionada)
         url_vars += f'&sesion_id={sesion_seleccionada.id}'
 
     if criterio:
-        filtros = filtros & (Q(contacto_numero__icontains=criterio) | Q(contacto_nombre__icontains=criterio))
+        filtros = filtros & (Q(contacto__contacto_numero__icontains=criterio) | Q(contacto__contacto_nombre__icontains=criterio))
         data["criterio"] = criterio
         url_vars += '&criterio=' + criterio
 
@@ -153,7 +153,7 @@ def conversacionesView(request):
     # Si es una solicitud AJAX para cargar conversaciones
     if request.GET.get('load_conversations'):
         # Obtener las conversaciones
-        conversaciones = ConversacionWhatsApp.objects.filter(filtros)
+        conversaciones = ConversacionWhatsApp.objects.sin_expirar.filter(filtros)
         data["conversaciones"] = conversaciones
         data["list_count"] = conversaciones.count()
         return JsonResponse({

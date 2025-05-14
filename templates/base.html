@@ -1451,6 +1451,109 @@ $(function() {
 <link rel="stylesheet" href="/static/fancyboxv4/fancybox.css?1"/>
 <link rel="stylesheet" href="/static/fancyboxv4/panzoom.css"/>
 <script src="/static/fancyboxv4/fancybox.umd.js"></script>
+<div class="modal fade" id="modalForm">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <form id="frmModal" method="post" enctype="multipart/form-data">{% csrf_token %}
+                <input type="hidden" id="id_dict_url_vars" name="dict_url_vars" value="{{ dict_url_vars|default:'' }}">
+                <input type="hidden" id="id_origen" name="origen_full_url" value="{{ full_url }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"></h5>
+                    <button type="button" class="btn-close close" data-dismiss="modal" data-bs-dismiss="modal" aria-label="Close">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-success"><i class="fa fa-save"></i> Guardar</button>
+                    <a href="javascript:;" class="btn btn-white" data-dismiss="modal" data-bs-dismiss="modal"><i class="fa fa-window-close"></i>
+                        Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="modalDetail">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"></h5>
+                <button type="button" class="btn-close close" data-dismiss="modal" data-bs-dismiss="modal" aria-label="Close">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+
+            </div>
+            <div class="modal-footer">
+                <a href="javascript:;" class="btn btn-light" data-dismiss="modal" data-bs-dismiss="modal">
+                    <i class="fa fa-window-close"></i> Cerrar
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    const modalForm = document.querySelector('div#modalForm');
+    document.addEventListener("DOMContentLoaded", () => {
+        document.querySelector('html').addEventListener('click', async function (e) {
+            const aTag = e.target.closest('a.formmodal');
+            if (!aTag || !aTag.classList.contains('formmodal')) return;
+            e.preventDefault();
+            try {
+                pantallaespera();
+                $(modalForm).find('form').attr('action', '');
+                $(modalForm).find('.modal-title').html('');
+                if(aTag.dataset.action) {
+                    $(modalForm).find('form').attr('action', aTag.dataset.action);
+                }
+                if(aTag.dataset.modalTitle) {
+                    $(modalForm).find('.modal-title').html(aTag.dataset.modalTitle);
+                } else {
+                    $(modalForm).find('.modal-title').html(aTag.innerHTML);
+                }
+                const response = await fetch(aTag.href);
+                if (!response.ok) return;
+                const text = await response.text();
+                $('.modal').modal('hide');
+                $(modalForm).find('.modal-body').html(text);
+                $(modalForm).modal({backdrop: 'static'}).modal('show');
+            } catch (e) {
+                alertaDanger(e.toString());
+            } finally {
+                $.unblockUI();
+            }
+        });
+    });
+    const modalDetail = document.querySelector('div#modalDetail');
+    document.addEventListener("DOMContentLoaded", () => {
+        document.querySelector('html').addEventListener('click', async function (e) {
+            const aTag = e.target.closest('a.detailviewmodal');
+            if (!aTag || !aTag.classList.contains('detailviewmodal')) return;
+            e.preventDefault();
+            try {
+                pantallaespera();
+                const response = await fetch(aTag.href);
+                if (!response.ok) return;
+                const text = await response.text();
+                if(aTag.dataset.modalTitle) {
+                    $(modalDetail).find('.modal-title').html(aTag.dataset.modalTitle);
+                } else {
+                    $(modalDetail).find('.modal-title').html(aTag.innerHTML);
+                }
+                $('.modal').modal('hide');
+                $(modalDetail).find('.modal-body').html(text);
+                $(modalDetail).modal('show');
+            } catch (e) {
+                alertaDanger(e.toString());
+            } finally {
+                $.unblockUI();
+            }
+        });
+    });
+</script>
 
 {% block jscript %}
 {% endblock %}
