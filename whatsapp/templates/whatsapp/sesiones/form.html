@@ -16,3 +16,20 @@
     {% endif %}
 {% endfor %}
 {{ form.media }}
+<link href="/static/assets/plugins/summernote/dist/summernote.css" rel="stylesheet"/>
+<script src="/static/assets/plugins/summernote/dist/summernote.min.js"></script>
+
+
+<script>
+    $(document).ready(function () {
+    $('#id_mensaje_bienvenida, #id_mensaje_despedida').summernote({
+        placeholder: 'Ingresar Descripción',
+        height: 250,
+        toolbar: [
+            ['style', ['bold', 'italic', 'underline']],
+            ['insert', ['emoji']]
+        ]
+    });
+    console.log('asdsa', $.summernote.plugins);
+});
+</script>
