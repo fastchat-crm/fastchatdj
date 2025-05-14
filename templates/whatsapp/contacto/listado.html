@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+{% block content %}
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="GET" class="mb-0">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Búsqueda general</label>
+                        <div class="input-group">
+                            <span class="input-group-text border-end-0">
+                                <i class="fa fa-search text-muted"></i>
+                            </span>
+                            <input type="text" class="form-control border-start-0"
+                                   placeholder="Buscar..." name="criterio" value="{{ criterio }}">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Acciones</label>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i>
+                            </button>
+                            {% if url_vars %}
+                                <a href="{{ ruta }}?{{ dict_url_vars }}" class="btn btn-default">
+                                    <i class="fas fa-sync-alt"></i>
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+{#    <div class="row align-items-center mb-3">#}
+{#        <div class="col-md-12 mb-2 mb-md-0">#}
+{#            <a href="javascript:void(0);" class="btn btn-success btn-sm" onclick="formModal(0, 'Agregar {{ titulo }}', 'add')">#}
+{#                <i class="fas fa-plus-circle me-2"></i> Nuevo {{ titulo }}#}
+{#            </a>#}
+{#        </div>#}
+{#    </div>#}
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table id="tabla" class="table table-hover table-striped">
+                    <thead>
+                    <tr>
+                        <th class="text-center">Nombre</th>
+                        <th class="text-center">Whatsapp</th>
+                        <th class="text-center">Último mensaje</th>
+                        <th class="text-center">Estado</th>
+                        <th class="text-center">Acción</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for l in listado %}
+                        <tr>
+                            <td class="text-center">{{ l.contacto_nombre|default:'' }}</td>
+                            <td class="text-center">{{ l.from_number|default:'' }}</td>
+                            <td class="text-center">{{ l.fecha_ultimo_mensaje|date:'d/m/Y H:i' }}</td>
+                            <td class="text-center">
+                                <span class="badge bg-{{ l.get_estado_color }} fs-6">
+                                    {{ l.get_estado_display }}
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <div class="dropdown">
+                                    <button class="btn btn-icon" type="button" id="dropdownMenuButton-{{ l.pk }}"
+                                            data-bs-toggle="dropdown" aria-expanded="false"
+                                            style="background: none; border: none;">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                                        <li>
+                                            <a class="dropdown-item"
+                                            href="javascript:void(0);" onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'change')">
+                                                <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'delete')">
+                                                <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% include "paginacion.html" %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalNombre"></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body detalleProd">
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/forms.js?version=1"></script>
+    <script>
+    function formModal(id, text, action) {
+        pantallaespera();
+        $.ajax({
+            type: "GET",
+            url: `{{ request.path }}`,
+            data: {
+                'action': action,
+                'id': id,
+            },
+            success: function (data) {
+                setTimeout($.unblockUI, 1);
+                if (data.result === true) {
+                    $('#modalNombre').html(text);
+                    $('.detalleProd').html(data.data);
+
+                    // Usar Bootstrap 5 modal
+                    const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+                    modal.show();
+                } else {
+                    console.log('asdasd');
+                    console.log(data.message);
+                    mensajeWarning(data.message);
+                }
+            },
+            error: function () {
+                setTimeout($.unblockUI, 1);
+                mensajeWarning("Error de conexión.");
+            },
+            dataType: "json"
+        });
+    }
+    </script>
+{% endblock %}
