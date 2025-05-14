@@ -189,6 +189,7 @@ class ConversacionWhatsApp(ModeloBase):
             self.fecha_hora_expira = timezone.now() + relativedelta(minutes=self.contacto.sesion.min_sesion)
         super().save(*args, **kwargs)
 
+
 TIPO_MENSAJE_CHOICES = (
     ('texto', 'Texto'),
     ('imagen', 'Imagen'),
@@ -200,6 +201,8 @@ TIPO_MENSAJE_CHOICES = (
     ('sticker', 'Sticker'),
     ('archivo', 'Archivo')
 )
+
+
 class MensajeWhatsApp(ModeloBase):
     conversacion = models.ForeignKey(ConversacionWhatsApp, on_delete=models.CASCADE, related_name='mensajes')
     remitente = models.CharField(max_length=50)  # Número de teléfono del remitente
@@ -235,46 +238,6 @@ class MensajeWhatsApp(ModeloBase):
         return f"{self.remitente}: {self.mensaje[:30]}"
 
 
-class RespuestaAutomatica(ModeloBase):
-    sesion = models.ForeignKey(SesionWhatsApp, on_delete=models.CASCADE, related_name='respuestas_automaticas')
-    palabra_clave = models.CharField(max_length=100, help_text="Palabra o frase que activa esta respuesta")
-    respuesta = models.TextField()
-    activo = models.BooleanField(default=True)
-    prioridad = models.IntegerField(default=0, help_text="Mayor número = mayor prioridad")
-
-    class Meta:
-        verbose_name = 'Respuesta automática'
-        verbose_name_plural = 'Respuestas automáticas'
-        ordering = ['-prioridad']
-
-    def __str__(self):
-        return f"Auto-respuesta: {self.palabra_clave[:20]}"
-
-
-class MensajeProgramado(ModeloBase):
-    conversacion = models.ForeignKey(ConversacionWhatsApp, on_delete=models.CASCADE,
-                                     related_name='mensajes_programados')
-    mensaje = models.TextField()
-    tipo = models.CharField(max_length=20, choices=(
-        ('texto', 'Texto'),
-        ('imagen', 'Imagen'),
-        ('archivo', 'Archivo')
-    ), default='texto')
-    archivo_url = models.URLField(blank=True, null=True)
-    fecha_programada = models.DateTimeField()
-    enviado = models.BooleanField(default=False)
-    fecha_envio = models.DateTimeField(null=True, blank=True)
-    programado_por = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True)
-
-    class Meta:
-        verbose_name = 'Mensaje programado'
-        verbose_name_plural = 'Mensajes programados'
-        ordering = ['fecha_programada']
-
-    def __str__(self):
-        return f"Programado: {self.fecha_programada.strftime('%d/%m/%Y %H:%M')}"
-
-
 class EstadisticasConversacion(ModeloBase):
     conversacion = models.OneToOneField(ConversacionWhatsApp, on_delete=models.CASCADE, related_name='estadisticas')
     total_mensajes = models.IntegerField(default=0)
@@ -292,73 +255,3 @@ class EstadisticasConversacion(ModeloBase):
 
     def __str__(self):
         return f"Estadísticas: {self.conversacion}"
-
-
-class UsoDeLaIA(ModeloBase):
-    sesion = models.ForeignKey(SesionWhatsApp, on_delete=models.CASCADE, related_name='uso_ia')
-    fecha = models.DateField(auto_now_add=True)
-    mensajes_procesados = models.IntegerField(default=0)
-    mensajes_respondidos = models.IntegerField(default=0)
-    tokens_consumidos = models.IntegerField(default=0)
-    costo_estimado = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-
-    class Meta:
-        verbose_name = 'Uso de IA'
-        verbose_name_plural = 'Uso de IA'
-        unique_together = ['sesion', 'fecha']
-
-    def __str__(self):
-        return f"Uso IA: {self.sesion} - {self.fecha}"
-
-
-class AsignacionChat(ModeloBase):
-    conversacion = models.ForeignKey(ConversacionWhatsApp, on_delete=models.CASCADE, related_name='asignaciones')
-    asesor = models.ForeignKey(Usuario, on_delete=models.CASCADE)
-    fecha_asignacion = models.DateTimeField(auto_now_add=True)
-    fecha_fin = models.DateTimeField(null=True, blank=True)
-    asignado_por = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True,
-                                     related_name='asignaciones_realizadas')
-    MOTIVO_FIN = (
-        ('reasignacion', 'Reasignación'),
-        ('finalizacion', 'Finalización de la conversación'),
-        ('desconexion', 'Desconexión del asesor'),
-        ('otro', 'Otro motivo')
-    )
-    motivo_fin = models.CharField(max_length=20, choices=MOTIVO_FIN, null=True, blank=True)
-
-    class Meta:
-        verbose_name = 'Asignación de chat'
-        verbose_name_plural = 'Asignaciones de chat'
-
-    def __str__(self):
-        return f"Asignación: {self.conversacion} a {self.asesor}"
-
-
-class TemplateWhatsApp(ModeloBase):
-    """Plantillas oficiales de WhatsApp Business API"""
-    nombre = models.CharField(max_length=100)
-    namespace = models.CharField(max_length=100, blank=True, null=True)
-    idioma = models.CharField(max_length=10, default='es')
-    categoria = models.CharField(max_length=50, choices=(
-        ('marketing', 'Marketing'),
-        ('utilidad', 'Utilidad'),
-        ('autenticacion', 'Autenticación')
-    ))
-    contenido = models.TextField()
-    variables = models.TextField(help_text="Variables en formato {{1}}, {{2}}, etc.", blank=True)
-    header_type = models.CharField(max_length=20, choices=(
-        ('none', 'Ninguno'),
-        ('text', 'Texto'),
-        ('image', 'Imagen'),
-        ('document', 'Documento'),
-        ('video', 'Video')
-    ), default='none')
-    header_text = models.CharField(max_length=255, blank=True, null=True)
-    aprobado = models.BooleanField(default=False)
-
-    class Meta:
-        verbose_name = 'Template WhatsApp'
-        verbose_name_plural = 'Templates WhatsApp'
-
-    def __str__(self):
-        return f"Template: {self.nombre}"
