@@ -221,7 +221,7 @@
 
                 if ((data.type === 'new_message' || data.type === 'messages_update') && data.html) {
                     const conversacion = $(`#lista-conversaciones div[data-id=${data.conversacion_id}]`);
-                    if (conversacion) {
+                    if (conversacion.length) {
                         conversacion.replaceWith(data.html);
                     } else {
                         $(`#lista-conversaciones`).append(data.html);
