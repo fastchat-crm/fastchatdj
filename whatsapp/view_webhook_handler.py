@@ -348,7 +348,7 @@ def process_incoming_message(session, event_data, channel_layer):
         if not conversation.bienvenida_enviado:
             if conversation.sesion.mensaje_bienvenida:
                 whatsapp_service = WhatsAppService()
-                whatsapp_service.send_text_message(conversation.sesion.session_id, from_number, conversation.sesion.mensaje_bienvenida)
+                whatsapp_service.send_text_message(conversation.sesion.session_id, contacto.from_number, conversation.sesion.mensaje_bienvenida)
             conversation.bienvenida_enviado = True
             conversation.save()
         # Notificar a través de WebSockets
@@ -481,7 +481,7 @@ def process_sent_message(session, event_data, channel_layer):
         if not conversation.bienvenida_enviado:
             if conversation.sesion.mensaje_bienvenida:
                 whatsapp_service = WhatsAppService()
-                whatsapp_service.send_text_message(conversation.sesion.session_id, from_number, conversation.sesion.mensaje_bienvenida)
+                whatsapp_service.send_text_message(conversation.sesion.session_id, contacto.from_number, conversation.sesion.mensaje_bienvenida)
             conversation.bienvenida_enviado = True
             conversation.save()
 
