@@ -42,6 +42,55 @@
             }
         }
     </style>
+    <style>
+        .session-card {
+            transition: transform 0.2s;
+        }
+
+        .session-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card {
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .card-header {
+            border-bottom: none;
+            font-weight: 500;
+        }
+
+        .dropdown-toggle::after {
+            display: none;
+        }
+
+        .badge {
+            font-weight: 500;
+            padding: 0.35em 0.65em;
+        }
+
+        /* Animación para el estado */
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .bg-success i.fa-check-circle {
+            animation: pulse 2s infinite;
+        }
+
+        .bg-warning i.fa-clock {
+            animation: pulse 1.5s infinite;
+        }
+    </style>
 {% endblock %}
 
 {% block content %}
@@ -102,359 +151,168 @@
             </button>
         </div>
     </div>
-<div class="container-fluid">
-    <div class="row g-4" id="tablaSesiones">
-        {% for s in listado %}
-        <div class="col-12 col-md-6 col-lg-4 col-xl-3 session-card" data-session-id="{{ s.id }}">
-            <div class="card h-100 shadow-sm border-0">
-                <!-- Estado de la sesión en header -->
-                <div class="card-header text-white {% if s.estado == 'conectado' %}bg-success{% elif s.estado == 'pendiente' %}bg-warning text-dark{% elif s.estado == 'desconectado' %}bg-secondary{% elif s.estado == 'error' %}bg-danger{% endif %}">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="fw-bold">
-                            {% if s.estado == 'conectado' %}
-                                <i class="fas fa-check-circle me-1"></i>
-                            {% elif s.estado == 'pendiente' %}
-                                <i class="fas fa-clock me-1"></i>
-                            {% elif s.estado == 'desconectado' %}
-                                <i class="fas fa-times-circle me-1"></i>
-                            {% elif s.estado == 'error' %}
-                                <i class="fas fa-exclamation-triangle me-1"></i>
-                            {% endif %}
-                            {{ s.get_estado_display }}
-                        </span>
-                        <span class="small">#{{ s.id }}</span>
-                    </div>
-                </div>
-
-                <div class="card-body">
-                    <!-- Foto y número -->
-                    <div class="d-flex align-items-center mb-3">
-                        {% if s.foto %}
-                            <a href="{{ s.foto }}"
-                               data-fancybox="image"
-                               data-width="2048"
-                               data-height="1365"
-                               title="{{ s.numero }}">
-                                <img class="rounded-circle me-3"
-                                     src="{{ s.foto }}"
-                                     width="60"
-                                     height="60"
-                                     alt="{{ s.numero }}">
-                            </a>
-                        {% else %}
-                            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
-                                 style="width: 60px; height: 60px;">
-                                <i class="fas fa-user fa-2x text-secondary"></i>
+    <div class="container-fluid">
+        <div class="row g-4" id="tablaSesiones">
+            {% for s in listado %}
+                <div class="col-12 col-md-6 col-lg-4 col-xl-3 session-card" data-session-id="{{ s.id }}">
+                    <div class="card h-100 shadow-sm border-0">
+                        <!-- Estado de la sesión en header -->
+                        <div class="card-header text-white {% if s.estado == 'conectado' %}bg-success{% elif s.estado == 'pendiente' %}bg-warning text-dark{% elif s.estado == 'desconectado' %}bg-secondary{% elif s.estado == 'error' %}bg-danger{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-bold">
+                                    {% if s.estado == 'conectado' %}
+                                        <i class="fas fa-check-circle me-1"></i>
+                                    {% elif s.estado == 'pendiente' %}
+                                        <i class="fas fa-clock me-1"></i>
+                                    {% elif s.estado == 'desconectado' %}
+                                        <i class="fas fa-times-circle me-1"></i>
+                                    {% elif s.estado == 'error' %}
+                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                    {% endif %}
+                                    {{ s.get_estado_display }}
+                                </span>
+                                <b class="small">#{{ s.id }}</b>
                             </div>
-                        {% endif %}
-
-                        <div>
-                            <h5 class="card-title mb-0">{{ s.numero }}</h5>
-                            {% if s.observacion %}
-                                <small class="text-muted">
-                                    <i class="fas fa-info-circle me-1"></i>{{ s.observacion }}
-                                </small>
-                            {% endif %}
                         </div>
-                    </div>
-
-                    <!-- Información adicional -->
-                    <div class="small text-muted">
-                        <div class="mb-2">
-                            <i class="fas fa-calendar-alt me-1"></i>
-                            Registrado: {{ s.fecha_registro|date:"d/m/Y H:i" }}
-                        </div>
-                        {% if s.ultima_conexion %}
-                        <div class="mb-2">
-                            <i class="fas fa-clock me-1"></i>
-                            Última conexión: {{ s.ultima_conexion|date:"d/m/Y H:i" }}
-                        </div>
-                        {% endif %}
-                        <div class="mb-2">
-                            <i class="fas fa-user-tie me-1"></i>
-                            Asesor:
-                            {% if s.usuario %}
-                                <span class="badge bg-info">{{ s.usuario }}</span>
-                            {% else %}
-                                <span class="badge bg-secondary">Sin asignar</span>
-                            {% endif %}
-                        </div>
-                        {% if s.contacts_length %}
-                        <div>
-                            <i class="fas fa-address-book me-1"></i>
-                            Contactos: {{ s.contacts_length }}
-                        </div>
-                        {% endif %}
-                    </div>
-
-                    <!-- Error mensaje si existe -->
-                    {% if s.error_mensaje and s.estado == 'error' %}
-                    <div class="alert alert-danger small mt-3 mb-0 py-2">
-                        <i class="fas fa-exclamation-circle me-1"></i>
-                        {{ s.error_mensaje }}
-                    </div>
-                    {% endif %}
-                </div>
-
-                <div class="card-footer bg-light">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <!-- Botón QR si está pendiente o desconectado -->
-                        {% if s.estado == 'pendiente' or s.estado == 'desconectado' %}
-                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal"
-                                    data-bs-target="#modalAgregarSesion"
-                                    data-qr="{{ s.qr_code }}" data-session-id="{{ s.id }}">
-                                <i class="fas fa-qrcode me-1"></i> Ver QR
-                            </button>
-                        {% else %}
-                            <div></div>
-                        {% endif %}
-
-                        <!-- Menú de acciones -->
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-light" type="button" data-bs-toggle="dropdown"
-                                    aria-expanded="false">
-                                <i class="fas fa-ellipsis-v"></i>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                {% if s.estado == 'conectado' %}
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0);"
-                                           onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete', '¿Desconectar esta sesión?')">
-                                            <i class="fa-solid fa-plug-circle-minus me-2 text-danger"></i>
-                                            Desconectar sesión
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0);"
-                                           onclick="sincronizarContactos({{ s.id }})">
-                                            <i class="fa fa-sync me-2 text-success"></i>
-                                            Sincronizar contactos
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="?action=change&pk={{ s.id }}"
-                                           class="dropdown-item formmodal">
-                                            <i class="fa-solid fa-pen-to-square me-2 text-success"></i>
-                                            Modificar
-                                        </a>
-                                    </li>
-                                {% endif %}
-                                {% if s.is_empty_session %}
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0);"
-                                           onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete_force', '¿Deseas eliminar esta sesión?')">
-                                            <i class="fa-solid fa-plug-circle-minus me-2 text-danger"></i>
-                                            Eliminar sesión
-                                        </a>
-                                    </li>
-                                {% endif %}
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% empty %}
-        <div class="col-12">
-            <div class="text-center py-5">
-                <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
-                <p class="text-muted">No hay sesiones disponibles</p>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-
-    <!-- Paginación -->
-    <div class="row mt-4">
-        <div class="col-12">
-            {% include 'paginacion.html' %}
-        </div>
-    </div>
-</div>
-
-<!-- Estilos adicionales opcionales -->
-<style>
-    .session-card {
-        transition: transform 0.2s;
-    }
-
-    .session-card:hover {
-        transform: translateY(-5px);
-    }
-
-    .card {
-        border-radius: 12px;
-        overflow: hidden;
-    }
-
-    .card-header {
-        border-bottom: none;
-        font-weight: 500;
-    }
-
-    .dropdown-toggle::after {
-        display: none;
-    }
-
-    .badge {
-        font-weight: 500;
-        padding: 0.35em 0.65em;
-    }
-
-    /* Animación para el estado */
-    @keyframes pulse {
-        0% {
-            opacity: 1;
-        }
-        50% {
-            opacity: 0.5;
-        }
-        100% {
-            opacity: 1;
-        }
-    }
-
-    .bg-success i.fa-check-circle {
-        animation: pulse 2s infinite;
-    }
-
-    .bg-warning i.fa-clock {
-        animation: pulse 1.5s infinite;
-    }
-</style>
-    <div class="card">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover table-striped mb-0">
-                    <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Foto</th>
-                        <th>Fecha Registro</th>
-                        <th>Número</th>
-                        <th>Estado</th>
-                        <th class="text-center">QR</th>
-                        <th>Última Conexión</th>
-                        <th>Asesor</th>
-                        <th class="text-center">Acciones</th>
-                    </tr>
-                    </thead>
-                    <tbody id="tablaSesiones">
-                    {% for s in listado %}
-                        <tr class="session-row" data-session-id="{{ s.id }}">
-                            <td>{{ s.id }}</td>
-                            <td>
+                        <div class="card-body">
+                            <!-- Foto y número -->
+                            <div class="d-flex align-items-center mb-3">
                                 {% if s.foto %}
                                     <a href="{{ s.foto }}"
                                        data-fancybox="image"
                                        data-width="2048"
                                        data-height="1365"
                                        title="{{ s.numero }}">
-                                        <img class="img-circle"
+                                        <img class="rounded-circle me-3"
                                              src="{{ s.foto }}"
-                                             style="border-radius: 2.375rem;" width="55px"
-                                             height="55px">
+                                             width="60"
+                                             height="60"
+                                             alt="{{ s.numero }}">
                                     </a>
+                                {% else %}
+                                    <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
+                                         style="width: 60px; height: 60px;">
+                                        <i class="fas fa-user fa-2x text-secondary"></i>
+                                    </div>
                                 {% endif %}
-                            </td>
-                            <td>{{ s.fecha_registro|date:"d/m/Y H:i" }}</td>
-                            <td>
-                                <strong>{{ s.numero }}</strong>
-                                {% if s.observacion %}
-                                    <i class="fas fa-info-circle text-info ms-1" data-bs-toggle="tooltip"
-                                       title="{{ s.observacion }}"></i>
+
+                                <div>
+                                    <h5 class="card-title mb-0">{{ s.numero }}</h5>
+                                    {% if s.observacion %}
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle me-1"></i>{{ s.observacion }}
+                                        </small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <!-- Información adicional -->
+                            <div class="small text-muted">
+                                <div class="mb-2">
+                                    <i class="fas fa-calendar-alt me-1"></i>
+                                    Registrado: {{ s.fecha_registro|date:"d/m/Y H:i" }}
+                                </div>
+                                {% if s.ultima_conexion %}
+                                    <div class="mb-2">
+                                        <i class="fas fa-clock me-1"></i>
+                                        Última conexión: {{ s.ultima_conexion|date:"d/m/Y H:i" }}
+                                    </div>
                                 {% endif %}
-                            </td>
-                            <td>
-                                <span title="{{ s.contacts_length }}"
-                                      class="text-white badge {% if s.estado == 'conectado' %}bg-success{% elif s.estado == 'pendiente' %}bg-warning text-dark{% elif s.estado == 'desconectado' %}bg-secondary{% elif s.estado == 'error' %}bg-danger{% endif %} fs-6">
-                                  {% if s.estado == 'conectado' %}
-                                      <i class="fas fa-check-circle me-1"></i>
-                                  {% elif s.estado == 'pendiente' %}
-                                      <i class="fas fa-clock me-1"></i>
-                                  {% elif s.estado == 'desconectado' %}
-                                      <i class="fas fa-times-circle me-1"></i>
-                                  {% elif s.estado == 'error' %}
-                                      <i class="fas fa-exclamation-triangle me-1"></i>
-                                  {% endif %}
-                                    {{ s.get_estado_display }}
-                                </span>
-                                {% if s.error_mensaje and s.estado == 'error' %}
-                                    <i class="fas fa-exclamation-circle text-danger ms-1" data-bs-toggle="tooltip"
-                                       title="{{ s.error_mensaje }}"></i>
+                                <div class="mb-2">
+                                    <i class="fas fa-user-tie me-1"></i>
+                                    Asesor:
+                                    {% if s.usuario %}
+                                        <span class="badge bg-info">{{ s.usuario }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Sin asignar</span>
+                                    {% endif %}
+                                </div>
+                                {% if s.contacts_length %}
+                                    <div>
+                                        <i class="fas fa-address-book me-1"></i>
+                                        Contactos: {{ s.contacts_length }}
+                                    </div>
                                 {% endif %}
-                            </td>
-                            <td class="text-center">
+                            </div>
+                            <!-- Error mensaje si existe -->
+                            {% if s.error_mensaje and s.estado == 'error' %}
+                                <div class="alert alert-danger small mt-3 mb-0 py-2">
+                                    <i class="fas fa-exclamation-circle me-1"></i>
+                                    {{ s.error_mensaje }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="card-footer">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <!-- Botón QR si está pendiente o desconectado -->
                                 {% if s.estado == 'pendiente' or s.estado == 'desconectado' %}
-                                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal"
+                                    <button class="btn btn-success btn-sm" data-bs-toggle="modal" style="width: 100%;"
                                             data-bs-target="#modalAgregarSesion"
                                             data-qr="{{ s.qr_code }}" data-session-id="{{ s.id }}">
                                         <i class="fas fa-qrcode me-1"></i> Ver QR
                                     </button>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if s.ultima_conexion %}
-                                    {{ s.ultima_conexion|date:"d/m/Y H:i" }}
                                 {% else %}
-                                    -
+                                    <div></div>
                                 {% endif %}
-                            </td>
-                            <td>
-                                {% if s.usuario %}
-                                    <span class="badge bg-info fs-6">{{ s.usuario }}</span>
-                                {% else %}
-                                    <span class="badge bg-secondary fs-6">Sin asignar</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
+                                <!-- Menú de acciones -->
                                 <div class="dropdown">
-                                    <button class="btn btn-icon" type="button" data-bs-toggle="dropdown"
-                                            aria-expanded="false"
-                                            style="background: none; border: none;">
+                                    <button class="btn btn-sm btn-light" type="button" data-bs-toggle="dropdown"
+                                            aria-expanded="false">
                                         <i class="fas fa-ellipsis-v"></i>
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end">
-                                        <li>
-                                            {% if s.estado == 'conectado' %}
+                                        {% if s.estado == 'conectado' %}
+                                            <li>
                                                 <a class="dropdown-item" href="javascript:void(0);"
                                                    onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete', '¿Desconectar esta sesión?')">
                                                     <i class="fa-solid fa-plug-circle-minus me-2 text-danger"></i>
                                                     Desconectar sesión
                                                 </a>
+                                            </li>
+                                            <li>
                                                 <a class="dropdown-item" href="javascript:void(0);"
                                                    onclick="sincronizarContactos({{ s.id }})">
-                                                    <i class="fa fa-sync me-2 text-success"></i> Sincronizar contactos
+                                                    <i class="fa fa-sync me-2 text-success"></i>
+                                                    Sincronizar contactos
                                                 </a>
+                                            </li>
+                                            <li>
                                                 <a href="?action=change&pk={{ s.id }}"
                                                    class="dropdown-item formmodal">
                                                     <i class="fa-solid fa-pen-to-square me-2 text-success"></i>
                                                     Modificar
                                                 </a>
-                                            {% endif %}
-                                            {% if s.is_empty_session %}
+                                            </li>
+                                        {% endif %}
+                                        {% if s.is_empty_session %}
+                                            <li>
                                                 <a class="dropdown-item" href="javascript:void(0);"
                                                    onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete_force', '¿Deseas eliminar esta sesión?')">
                                                     <i class="fa-solid fa-plug-circle-minus me-2 text-danger"></i>
                                                     Eliminar sesión
                                                 </a>
-                                            {% endif %}
-                                        </li>
+                                            </li>
+                                        {% endif %}
                                     </ul>
                                 </div>
-                            </td>
-                        </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="10" class="text-center">
-                                <i class="fas fa-info-circle me-1"></i> No hay sesiones disponibles
-                            </td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% empty %}
+                <div class="col-12">
+                    <div class="text-center py-5">
+                        <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No hay sesiones disponibles</p>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- Paginación -->
+        <div class="row mt-4">
+            <div class="col-12">
+                {% include 'paginacion.html' %}
             </div>
-            {% include 'paginacion.html' %}
         </div>
     </div>
 
