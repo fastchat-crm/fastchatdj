@@ -217,6 +217,45 @@ class WhatsAppService:
                 'error': f"Error de conexión: {str(e)}"
             }
 
+    def quit_presence_update(self, session_id, to):
+        """
+        Envía un mensaje de texto a través de WhatsApp
+
+        Args:
+            session_id: ID de la sesión
+            to: Número de teléfono del destinatario (con formato: 123456789@s.whatsapp.net)
+            text: Texto del mensaje
+
+        Returns:
+            dict: Respuesta del servidor
+        """
+        data = {
+            'sessionId': session_id,
+            'to': to
+        }
+
+        try:
+            response = requests.post(
+                f"{self.base_url}/message/quitPresenceUpdate",
+                headers=self.headers,
+                json=data
+            )
+
+            if response.status_code == 200:
+                return {
+                    'success': True
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f"Error al enviar mensaje: {response.status_code} - {response.text}"
+                }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f"Error de conexión: {str(e)}"
+            }
+
     def send_media_message(self, session_id, to, file_path=None, file_content=None, caption=None, filename=None,
                            media_type=None):
         """

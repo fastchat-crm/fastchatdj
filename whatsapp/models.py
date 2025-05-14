@@ -1,3 +1,4 @@
+from email.policy import default
 from functools import cached_property
 
 from dateutil.relativedelta import relativedelta
@@ -6,7 +7,7 @@ from django.utils import timezone
 
 from core.custom_models import ModeloBase
 from autenticacion.models import Usuario
-from core.funciones import default_expira_10_min
+from core.funciones import default_expira_10_min, get_encrypt
 from core.funciones_adicionales import remover_espacios_de_mas
 from whatsapp.models_querysetmanagers import ContactoManager, ConversacionWhatsAppManager
 
@@ -132,6 +133,7 @@ class Contacto(ModeloBase):
 
 class ConversacionWhatsApp(ModeloBase):
     objects = ConversacionWhatsAppManager()
+    hashed_id = models.TextField(default='')
     contacto = models.ForeignKey(Contacto, on_delete=models.CASCADE)
     order = models.PositiveIntegerField(default=0)
     fecha_hora_expira = models.DateTimeField('Fecha y Hora que expira la conversación')
@@ -187,6 +189,8 @@ class ConversacionWhatsApp(ModeloBase):
             self.order = int(round(self.contacto.fecha_ultimo_mensaje.timestamp(), 0))
         if not self.fecha_hora_expira:
             self.fecha_hora_expira = timezone.now() + relativedelta(minutes=self.contacto.sesion.min_sesion)
+        if not self.hashed_id:
+            self.hashed_id = get_encrypt(self.id)[1]
         super().save(*args, **kwargs)
 
 TIPO_MENSAJE_CHOICES = (
