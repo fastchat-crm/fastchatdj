@@ -38,7 +38,7 @@ class SesionWhatsApp(ModeloBase):
     mensaje_bienvenida = models.TextField(blank=True, null=True, verbose_name='Mensaje de bienvenida')
     mensaje_despedida = models.TextField(blank=True, null=True, verbose_name='Mensaje de despedida')
     min_sesion = models.IntegerField(default=0, verbose_name='Minutos de sesión')
-
+    
     def is_connected(self):
         return self.estado == 'conectado'
 
@@ -48,6 +48,13 @@ class SesionWhatsApp(ModeloBase):
 
     def __str__(self):
         return f"{self.numero} - {self.estado}"
+
+    def is_empty_session(self):
+        from django.utils import timezone
+        if not self.numero and self.contacts_length == 0:
+            tiempo_transcurrido = timezone.now() - self.fecha_registro
+            return tiempo_transcurrido.total_seconds() > 900  # 15 minutos
+        return False
 
     def save(self, *args, **kwargs):
         if self.estado == 'conectado':

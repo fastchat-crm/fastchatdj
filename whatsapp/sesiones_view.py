@@ -45,7 +45,7 @@ def sesionesView(request):
                     log(f"Inicio de sesión WhatsApp pendiente (ID: {session.id})", request, "add", obj=session.id)
                     res_json = {'error': False, 'qr': session.qr_code, 'session_id': session.id}
                     return JsonResponse(res_json, safe=False)
-                if action == 'create_session':
+                elif action == 'create_session':
                     webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
                     session_id = request.POST['session_id']
                     session = SesionWhatsApp.objects.get(id=session_id)
@@ -72,7 +72,22 @@ def sesionesView(request):
 
                     res_json.append({'error': False, 'to': redirectAfterPostGet(request)})
                     return JsonResponse(res_json, safe=False)
-
+                elif action == 'delete_force':
+                    session_id = request.POST.get('id')
+                    session = SesionWhatsApp.objects.filter(id=session_id).first()
+                    if session:
+                        from django.utils import timezone
+                        tiempo_sin_numero = timezone.now() - session.fecha_registro
+                        if tiempo_sin_numero.total_seconds() > 600:  # 10 minutos
+                            session.delete()
+                            log(f"Sesión eliminada forzadamente por inactividad sin número (ID: {session_id})", request,
+                                "delete_force", obj=session_id)
+                            return JsonResponse({'error': False, 'message': 'Sesión eliminada forzadamente.'})
+                        else:
+                            return JsonResponse(
+                                {'error': True, 'message': 'La sesión no supera los 10 minutos sin número.'})
+                    else:
+                        return JsonResponse({'error': True, 'message': 'Sesión no encontrada o ya tiene número.'})
         except FormError as ex:
             res_json.append(ex.dict_error)
         except Exception as ex:
