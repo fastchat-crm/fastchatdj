@@ -17,9 +17,7 @@ class SesionWhatsApp(ModeloBase):
     whatsapp_id = models.CharField(max_length=250, verbose_name='WhatsApp ID', default='')
     estado = models.CharField(max_length=20, choices=ESTADOS_SESION, default='pendiente')
     qr_code = models.TextField(blank=True, null=True, verbose_name='Código QR actual (Base64)')
-    usuario = models.ForeignKey(
-        Usuario, on_delete=models.PROTECT, null=True, blank=True, verbose_name='Asesor asignado'
-    )
+    usuario = models.ForeignKey(Usuario, on_delete=models.PROTECT, null=True, blank=True, verbose_name='Asesor asignado')
     ultima_conexion = models.DateTimeField(blank=True, null=True, verbose_name='Última conexión')
     observacion = models.TextField(blank=True, null=True, verbose_name='Observaciones')
     error_mensaje = models.TextField(blank=True, null=True, verbose_name='Último error')
@@ -31,6 +29,7 @@ class SesionWhatsApp(ModeloBase):
     # Campos para la gestión de mensajes
     mensaje_bienvenida = models.TextField(blank=True, null=True, verbose_name='Mensaje de bienvenida')
     mensaje_despedida = models.TextField(blank=True, null=True, verbose_name='Mensaje de despedida')
+    min_sesion = models.IntegerField(default=0, verbose_name='Minutos de sesión')
 
     def is_connected(self):
         return self.estado == 'conectado'
@@ -41,6 +40,22 @@ class SesionWhatsApp(ModeloBase):
 
     def __str__(self):
         return f"{self.numero} - {self.estado}"
+
+    def save(self, *args, **kwargs):
+        if self.estado == 'conectado':
+            self.ultima_conexion = models.DateTimeField(auto_now=True)
+        else:
+            self.ultima_conexion = None
+        if self.estado == 'pendiente':
+            self.qr_code = None if not self.qr_code else self.qr_code
+            self.whatsapp_id = None if not self.whatsapp_id else self.whatsapp_id
+            self.session_id = None if not self.session_id else self.session_id
+            self.foto = None if not self.foto else self.foto
+            self.contacts_list = '[]' if not self.contacts_list else self.contacts_list
+        # Validar que min_sesion no supere 180 minutos (3 horas)
+        if self.min_sesion > 180:
+            raise ValueError("El tiempo de sesión no puede superar las 3 horas (180 minutos).")        
+        super().save(*args, **kwargs)
 
 
 class WhatsAppWebhook(models.Model):
