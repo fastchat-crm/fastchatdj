@@ -152,3 +152,11 @@ class RespuestaEntrenadaIA(ModeloBase):
 
     def __str__(self):
         return f"{self.pregunta_clave} → {self.tono}"
+
+
+class PerfilNegocioChatBot(ModeloBase):
+    pass
+
+
+class PerfilNegocioPreguntaChatBot(ModeloBase):
+    pass
