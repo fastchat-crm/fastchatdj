@@ -61,6 +61,11 @@ class SesionWhatsApp(ModeloBase):
         # Validar que min_sesion no supere 180 minutos (3 horas)
         if self.min_sesion > 180:
             raise ValueError("El tiempo de sesión no puede superar las 3 horas (180 minutos).")
+        if not self.min_sesion:
+            self.min_sesion = 60
+        if not self.nombre:
+            self.nombre = self.numero.strip()
+        # Limpiar espacios en blanco de los mensajes
         self.mensaje_bienvenida = remover_espacios_de_mas(self.mensaje_bienvenida)
         self.mensaje_despedida = remover_espacios_de_mas(self.mensaje_despedida)
         super().save(*args, **kwargs)
