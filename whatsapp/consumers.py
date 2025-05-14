@@ -31,7 +31,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'html': html
         }))
 
-    @database_sync_to_async
     async def receive(self, text_data=None, bytes_data=None):
         text_data_json = json.loads(text_data)
         message_type = text_data_json.get('event')
