@@ -114,6 +114,13 @@ class Contacto(ModeloBase):
     ultimo_mensaje = models.TextField(blank=True, null=True)
     fecha_ultimo_mensaje = models.DateTimeField(blank=True, null=True)
 
+    def get_estado_color(self):
+        if self.estado == 'activo':
+            return 'success'
+        elif self.estado == 'cerrado':
+            return 'danger'
+        return 'default'  # Por si acaso hay otro valor inesperado
+
     def __str__(self):
         return f"{self.contacto_numero} ({self.sesion.numero})"
 
