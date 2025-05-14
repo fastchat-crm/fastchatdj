@@ -9,6 +9,11 @@
 {% endblock %}
 
 {% block content %}
+    <div class="alert alert-info" role="alert">
+        <i class="fa fa-comment"></i> Aquí puedes configurar la inteligencia artificial de tu empresa: personaliza el perfil del negocio, agrega
+        productos y servicios, y define respuestas a preguntas frecuentes para entrenar la IA según tus criterios.
+    </div>
+
     <ul class="nav nav-tabs mb-3" role="tablist">
         <li class="nav-item">
             <a class="nav-link fw-medium active" data-bs-toggle="tab" href="#perfil" role="tab"
@@ -26,265 +31,269 @@
     <div class="tab-content">
         <div class="tab-pane active" id="perfil" role="tabpanel">
             <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white border-bottom-0">
-                <h5 class="mb-0 text-primary"><i class="fas fa-building me-2"></i>Perfil del Negocio</h5>
-            </div>
-            <div class="card-body pb-3">
-                <div class="row g-2">
-                    <form method="post" enctype="multipart/form-data" action="{{ ruta }}">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="actualizar_perfil_negocio">
-                        {% for field in form.visible_fields %}
-                            <div class="col-lg-{{ field.field.widget.attrs.col|default:6 }} mb-2">
-                                <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label>
-                                {{ field }}
-                                {% if field.help_text %}
-                                    <div class="form-text text-muted">{{ field.help_text }}</div>{% endif %}
-                                <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
-                            </div>
-                        {% endfor %}
-                        <div class="form-group text-right">
-                            <div class="col-12 d-flex justify-content-end mt-3">
-                                <a href="javascript:;" class="btn btn-danger btn-sm me-2" data-bs-dismiss="modal">
-                                    <i class="fa fa-window-close"></i> Cancelar
-                                </a>
-                                <button type="submit" class="btn btn-success btn-sm">
-                                    <i class="fa fa-save"></i> Guardar
-                                </button>
-                            </div>
-                        </div>
-                    </form>
+                <div class="card-header bg-white border-bottom-0">
+                    <h5 class="mb-0 text-primary"><i class="fas fa-building me-2"></i>Perfil del Negocio</h5>
                 </div>
-            </div>
+                <div class="card-body pb-3">
+                    <div class="row g-2">
+                        <form method="post" enctype="multipart/form-data" action="{{ ruta }}">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="actualizar_perfil_negocio">
+                            {% for field in form.visible_fields %}
+                                <div class="col-lg-{{ field.field.widget.attrs.col|default:6 }} mb-2">
+                                    <label class="form-label small mb-1"
+                                           for="id_{{ field.name }}">{{ field.label }}</label>
+                                    {{ field }}
+                                    {% if field.help_text %}
+                                        <div class="form-text text-muted">{{ field.help_text }}</div>{% endif %}
+                                    <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                                </div>
+                            {% endfor %}
+                            <div class="form-group text-right">
+                                <div class="col-12 d-flex justify-content-end mt-3">
+                                    <a href="javascript:;" class="btn btn-danger btn-sm me-2" data-bs-dismiss="modal">
+                                        <i class="fa fa-window-close"></i> Cancelar
+                                    </a>
+                                    <button type="submit" class="btn btn-success btn-sm">
+                                        <i class="fa fa-save"></i> Guardar
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="tab-pane" id="mantenimientos" role="tabpanel">
             <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
-            <div>
-                <h5 class="mb-0 text-primary"><i class="fas fa-boxes-stacked me-2"></i>Productos y Servicios</h5>
-                <small class="text-muted">Configura lo que ofreces para que la IA pueda sugerirlo.</small>
-            </div>
-            <div>
-                <a href="javascript:void(0)" class="btn btn-sm btn-info me-1"
-                   onclick="formModal('', 'Agregar Producto', 'addproducto')">
-                    <i class="fa fa-plus"></i> Producto
-                </a>
-                <a href="javascript:void(0)" class="btn btn-sm btn-success"
-                   onclick="formModal('', 'Agregar Servicio', 'addservicio')">
-                    <i class="fa fa-plus"></i> Servicio
-                </a>
-            </div>
-        </div>
-        <div class="card-body" id="bloque_productos_servicios">
-            <ul class="nav nav-tabs mb-3" role="tablist">
-                <li class="nav-item">
-                    <a class="nav-link fw-medium active" data-bs-toggle="tab" href="#productos" role="tab"
-                       aria-selected="true">Productos</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link fw-medium" data-bs-toggle="tab" href="#servicios" role="tab"
-                       aria-selected="false">Servicios</a>
-                </li>
-            </ul>
-            <div class="tab-content">
-                <div class="tab-pane active" id="productos" role="tabpanel">
-                    <div class="card">
-                        <div class="card-header">
-                            <h4 class="card-title">Productos</h4>
-                        </div>
-                        <div class="card-body pt-0">
-                            <div class="table-responsive">
-                                <table class="table table-striped tabla_paginada">
-                                    <thead>
-                                    <tr>
-                                        <th class="column-title" style="text-align: center">Nombre</th>
-                                        <th class="column-title" style="text-align: center">Descripción</th>
-                                        <th class="column-title" style="text-align: center">Precio</th>
-                                        <th class="column-title" style="text-align: center">Acción</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody>
-                                    {% for l in productos %}
-                                        <tr>
-                                            <td style="text-align: center">{{ l.nombre|default:'' }}</td>
-                                            <td style="text-align: center">{{ l.descripcion|default:'' }}</td>
-                                            <td style="text-align: center">{{ l.precio|floatformat:2 }}</td>
-                                            <td class="text-center">
-                                                <div class="dropdown">
-                                                    <button class="btn btn-icon" type="button"
-                                                            id="dropdownMenuButton-{{ l.pk }}"
-                                                            data-bs-toggle="dropdown" aria-expanded="false"
-                                                            style="background: none; border: none;">
-                                                        <i class="fas fa-ellipsis-v"></i>
-                                                    </button>
-                                                    <ul class="dropdown-menu dropdown-menu-end"
-                                                        aria-labelledby="dropdownMenuButton-{{ l.pk }}">
-                                                        <li>
-                                                            <a class="dropdown-item"
-                                                               onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeproducto')"
-                                                               href="javascript:void(0);">
-                                                                <i class="fas fa-edit me-2 text-primary"></i>Editar
-                                                            </a>
-                                                        </li>
-                                                        <li>
-                                                            <a class="dropdown-item" href="javascript:void(0);"
-                                                               onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteproducto')">
-                                                                <i class="fas fa-trash me-2 text-danger"></i>Eliminar
-                                                            </a>
-                                                        </li>
-                                                    </ul>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    {% empty %}
-                                        <tr>
-                                            <td colspan="10">Sin registros</td>
-                                        </tr>
-                                    {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0 text-primary"><i class="fas fa-boxes-stacked me-2"></i>Productos y Servicios
+                        </h5>
+                        <small class="text-muted">Configura lo que ofreces para que la IA pueda sugerirlo.</small>
+                    </div>
+                    <div>
+                        <a href="javascript:void(0)" class="btn btn-sm btn-info me-1"
+                           onclick="formModal('', 'Agregar Producto', 'addproducto')">
+                            <i class="fa fa-plus"></i> Producto
+                        </a>
+                        <a href="javascript:void(0)" class="btn btn-sm btn-success"
+                           onclick="formModal('', 'Agregar Servicio', 'addservicio')">
+                            <i class="fa fa-plus"></i> Servicio
+                        </a>
                     </div>
                 </div>
+                <div class="card-body" id="bloque_productos_servicios">
+                    <ul class="nav nav-tabs mb-3" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link fw-medium active" data-bs-toggle="tab" href="#productos" role="tab"
+                               aria-selected="true">Productos</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link fw-medium" data-bs-toggle="tab" href="#servicios" role="tab"
+                               aria-selected="false">Servicios</a>
+                        </li>
+                    </ul>
+                    <div class="tab-content">
+                        <div class="tab-pane active" id="productos" role="tabpanel">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h4 class="card-title">Productos</h4>
+                                </div>
+                                <div class="card-body pt-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-striped tabla_paginada">
+                                            <thead>
+                                            <tr>
+                                                <th class="column-title" style="text-align: center">Nombre</th>
+                                                <th class="column-title" style="text-align: center">Descripción</th>
+                                                <th class="column-title" style="text-align: center">Precio</th>
+                                                <th class="column-title" style="text-align: center">Acción</th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            {% for l in productos %}
+                                                <tr>
+                                                    <td style="text-align: center">{{ l.nombre|default:'' }}</td>
+                                                    <td style="text-align: center">{{ l.descripcion|default:'' }}</td>
+                                                    <td style="text-align: center">{{ l.precio|floatformat:2 }}</td>
+                                                    <td class="text-center">
+                                                        <div class="dropdown">
+                                                            <button class="btn btn-icon" type="button"
+                                                                    id="dropdownMenuButton-{{ l.pk }}"
+                                                                    data-bs-toggle="dropdown" aria-expanded="false"
+                                                                    style="background: none; border: none;">
+                                                                <i class="fas fa-ellipsis-v"></i>
+                                                            </button>
+                                                            <ul class="dropdown-menu dropdown-menu-end"
+                                                                aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                                                                <li>
+                                                                    <a class="dropdown-item"
+                                                                       onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeproducto')"
+                                                                       href="javascript:void(0);">
+                                                                        <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                                                    </a>
+                                                                </li>
+                                                                <li>
+                                                                    <a class="dropdown-item" href="javascript:void(0);"
+                                                                       onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteproducto')">
+                                                                        <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                                                    </a>
+                                                                </li>
+                                                            </ul>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            {% empty %}
+                                                <tr>
+                                                    <td colspan="10">Sin registros</td>
+                                                </tr>
+                                            {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                <div class="tab-pane" id="servicios" role="tabpanel">
-                    <div class="card">
-                        <div class="card-header">
-                            <h4 class="card-title">Servicios</h4>
-                        </div>
-                        <div class="card-body pt-0">
-                            <div class="table-responsive">
-                                <table class="table table-striped tabla_paginada">
-                                    <thead>
-                                    <tr>
-                                        <th class="column-title" style="text-align: center">Nombre</th>
-                                        <th class="column-title" style="text-align: center">Descripción</th>
-                                        <th class="column-title" style="text-align: center">Precio Referencial</th>
-                                        <th class="column-title" style="text-align: center">Acción</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody>
-                                    {% for l in servicios %}
-                                        <tr>
-                                            <td style="text-align: center">{{ l.nombre|default:'' }}</td>
-                                            <td style="text-align: center">{{ l.descripcion|default:'' }}</td>
-                                            <td style="text-align: center">{{ l.precio_referencial|floatformat:2 }}</td>
-                                            <td class="text-center">
-                                                <div class="dropdown">
-                                                    <button class="btn btn-icon" type="button"
-                                                            id="dropdownMenuButton-{{ l.pk }}"
-                                                            data-bs-toggle="dropdown" aria-expanded="false"
-                                                            style="background: none; border: none;">
-                                                        <i class="fas fa-ellipsis-v"></i>
-                                                    </button>
-                                                    <ul class="dropdown-menu dropdown-menu-end"
-                                                        aria-labelledby="dropdownMenuButton-{{ l.pk }}">
-                                                        <li>
-                                                            <a class="dropdown-item"
-                                                               onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeservicio')"
-                                                               href="javascript:void(0);">
-                                                                <i class="fas fa-edit me-2 text-primary"></i>Editar
-                                                            </a>
-                                                        </li>
-                                                        <li>
-                                                            <a class="dropdown-item" href="javascript:void(0);"
-                                                               onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteservicio')">
-                                                                <i class="fas fa-trash me-2 text-danger"></i>Eliminar
-                                                            </a>
-                                                        </li>
-                                                    </ul>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    {% empty %}
-                                        <tr>
-                                            <td colspan="10">Sin registros</td>
-                                        </tr>
-                                    {% endfor %}
-                                    </tbody>
-                                </table>
+                        <div class="tab-pane" id="servicios" role="tabpanel">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h4 class="card-title">Servicios</h4>
+                                </div>
+                                <div class="card-body pt-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-striped tabla_paginada">
+                                            <thead>
+                                            <tr>
+                                                <th class="column-title" style="text-align: center">Nombre</th>
+                                                <th class="column-title" style="text-align: center">Descripción</th>
+                                                <th class="column-title" style="text-align: center">Precio Referencial
+                                                </th>
+                                                <th class="column-title" style="text-align: center">Acción</th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            {% for l in servicios %}
+                                                <tr>
+                                                    <td style="text-align: center">{{ l.nombre|default:'' }}</td>
+                                                    <td style="text-align: center">{{ l.descripcion|default:'' }}</td>
+                                                    <td style="text-align: center">{{ l.precio_referencial|floatformat:2 }}</td>
+                                                    <td class="text-center">
+                                                        <div class="dropdown">
+                                                            <button class="btn btn-icon" type="button"
+                                                                    id="dropdownMenuButton-{{ l.pk }}"
+                                                                    data-bs-toggle="dropdown" aria-expanded="false"
+                                                                    style="background: none; border: none;">
+                                                                <i class="fas fa-ellipsis-v"></i>
+                                                            </button>
+                                                            <ul class="dropdown-menu dropdown-menu-end"
+                                                                aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                                                                <li>
+                                                                    <a class="dropdown-item"
+                                                                       onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeservicio')"
+                                                                       href="javascript:void(0);">
+                                                                        <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                                                    </a>
+                                                                </li>
+                                                                <li>
+                                                                    <a class="dropdown-item" href="javascript:void(0);"
+                                                                       onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteservicio')">
+                                                                        <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                                                    </a>
+                                                                </li>
+                                                            </ul>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            {% empty %}
+                                                <tr>
+                                                    <td colspan="10">Sin registros</td>
+                                                </tr>
+                                            {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
+                    {#    <div class="alert alert-info">Aún no has agregado productos ni servicios.</div>#}
                 </div>
             </div>
-            {#    <div class="alert alert-info">Aún no has agregado productos ni servicios.</div>#}
-        </div>
-    </div>
 
 
         </div>
         <div class="tab-pane" id="preguntas" role="tabpanel">
             <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
-            <div>
-                <h5 class="mb-0 text-primary"><i class="fas fa-comments me-2"></i>Respuestas Personalizadas</h5>
-                <small class="text-muted">Define cómo responde la IA ante preguntas comunes.</small>
-            </div>
-            <div>
-                <a href="javascript:void(0)" class="btn btn-sm btn-dark"
-                   onclick="formModal('', 'Agregar Respuesta Entrenada', 'addrespuesta')">
-                    <i class="fa fa-plus"></i> Respuesta
-                </a>
-            </div>
-        </div>
-        <div class="card-body" id="bloque_respuestas_entrenadas">
-            <div class="card-body pt-0">
-                <div class="table-responsive">
-                    <table class="table table-striped tabla_paginada">
-                        <thead>
-                        <tr>
-                            <th class="column-title" style="text-align: center">Pregunta clave</th>
-                            <th class="column-title" style="text-align: center">Respuesta configurada</th>
-                            <th class="column-title" style="text-align: center">Tono</th>
-                            <th class="column-title" style="text-align: center">Acción</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {% for l in respuestas %}
-                            <tr>
-                                <td style="text-align: center">{{ l.pregunta_clave|default:'' }}</td>
-                                <td style="text-align: center">{{ l.respuesta_configurada|default:'' }}</td>
-                                <td style="text-align: center">{{ l.get_tono_display }}</td>
-                                <td class="text-center">
-                                    <div class="dropdown">
-                                        <button class="btn btn-icon" type="button" id="dropdownMenuButton-{{ l.pk }}"
-                                                data-bs-toggle="dropdown" aria-expanded="false"
-                                                style="background: none; border: none;">
-                                            <i class="fas fa-ellipsis-v"></i>
-                                        </button>
-                                        <ul class="dropdown-menu dropdown-menu-end"
-                                            aria-labelledby="dropdownMenuButton-{{ l.pk }}">
-                                            <li>
-                                                <a class="dropdown-item"
-                                                   onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changerespuesta')"
-                                                   href="javascript:void(0);">
-                                                    <i class="fas fa-edit me-2 text-primary"></i>Editar
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <a class="dropdown-item" href="javascript:void(0);"
-                                                   onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleterespuesta')">
-                                                    <i class="fas fa-trash me-2 text-danger"></i>Eliminar
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </div>
-                                </td>
-                            </tr>
-                        {% empty %}
-                            <tr>
-                                <td colspan="10">Sin registros</td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
+                <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0 text-primary"><i class="fas fa-comments me-2"></i>Respuestas Personalizadas</h5>
+                        <small class="text-muted">Define cómo responde la IA ante preguntas comunes.</small>
+                    </div>
+                    <div>
+                        <a href="javascript:void(0)" class="btn btn-sm btn-dark"
+                           onclick="formModal('', 'Agregar Respuesta Entrenada', 'addrespuesta')">
+                            <i class="fa fa-plus"></i> Respuesta
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body" id="bloque_respuestas_entrenadas">
+                    <div class="card-body pt-0">
+                        <div class="table-responsive">
+                            <table class="table table-striped tabla_paginada">
+                                <thead>
+                                <tr>
+                                    <th class="column-title" style="text-align: center">Pregunta clave</th>
+                                    <th class="column-title" style="text-align: center">Respuesta configurada</th>
+                                    <th class="column-title" style="text-align: center">Tono</th>
+                                    <th class="column-title" style="text-align: center">Acción</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for l in respuestas %}
+                                    <tr>
+                                        <td style="text-align: center">{{ l.pregunta_clave|default:'' }}</td>
+                                        <td style="text-align: center">{{ l.respuesta_configurada|default:'' }}</td>
+                                        <td style="text-align: center">{{ l.get_tono_display }}</td>
+                                        <td class="text-center">
+                                            <div class="dropdown">
+                                                <button class="btn btn-icon" type="button"
+                                                        id="dropdownMenuButton-{{ l.pk }}"
+                                                        data-bs-toggle="dropdown" aria-expanded="false"
+                                                        style="background: none; border: none;">
+                                                    <i class="fas fa-ellipsis-v"></i>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end"
+                                                    aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                                                    <li>
+                                                        <a class="dropdown-item"
+                                                           onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changerespuesta')"
+                                                           href="javascript:void(0);">
+                                                            <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="javascript:void(0);"
+                                                           onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleterespuesta')">
+                                                            <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% empty %}
+                                    <tr>
+                                        <td colspan="10">Sin registros</td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
-    </div>
         </div>
     </div>
 
@@ -343,32 +352,32 @@
         }
     </script>
     <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        // Restaurar pestañas al cargar la página
-        const mainTab = localStorage.getItem('mainTab');
-        const subTab = localStorage.getItem('subTab');
+        document.addEventListener('DOMContentLoaded', function () {
+            // Restaurar pestañas al cargar la página
+            const mainTab = localStorage.getItem('mainTab');
+            const subTab = localStorage.getItem('subTab');
 
-        if (mainTab) {
-            const mainTabElement = document.querySelector(`a[href="${mainTab}"]`);
-            if (mainTabElement) new bootstrap.Tab(mainTabElement).show();
-        }
+            if (mainTab) {
+                const mainTabElement = document.querySelector(`a[href="${mainTab}"]`);
+                if (mainTabElement) new bootstrap.Tab(mainTabElement).show();
+            }
 
-        if (subTab) {
-            const subTabElement = document.querySelector(`a[href="${subTab}"]`);
-            if (subTabElement) new bootstrap.Tab(subTabElement).show();
-        }
+            if (subTab) {
+                const subTabElement = document.querySelector(`a[href="${subTab}"]`);
+                if (subTabElement) new bootstrap.Tab(subTabElement).show();
+            }
 
-        // Guardar selección de pestaña principal
-        document.querySelectorAll('.nav-tabs > .nav-item > .nav-link').forEach(tab => {
-            tab.addEventListener('shown.bs.tab', function (e) {
-                const href = e.target.getAttribute('href');
-                if (['#perfil', '#mantenimientos', '#preguntas'].includes(href)) {
-                    localStorage.setItem('mainTab', href);
-                } else if (['#productos', '#servicios'].includes(href)) {
-                    localStorage.setItem('subTab', href);
-                }
+            // Guardar selección de pestaña principal
+            document.querySelectorAll('.nav-tabs > .nav-item > .nav-link').forEach(tab => {
+                tab.addEventListener('shown.bs.tab', function (e) {
+                    const href = e.target.getAttribute('href');
+                    if (['#perfil', '#mantenimientos', '#preguntas'].includes(href)) {
+                        localStorage.setItem('mainTab', href);
+                    } else if (['#productos', '#servicios'].includes(href)) {
+                        localStorage.setItem('subTab', href);
+                    }
+                });
             });
         });
-    });
-</script>
+    </script>
 {% endblock %}
