@@ -100,6 +100,7 @@
                             <div>
                                 <h6 class="my-0 fw-medium text-dark fs-14" id="contacto-nombre">Selecciona una conversación</h6>
                                 <p class="text-muted mb-0" id="contacto-numero"></p>
+                                <p class="text-muted mb-0" id="contacto-hashedId"></p>
                             </div>
                         </div><!-- end media-body -->
                     </a><!--end media-->
@@ -283,12 +284,20 @@
             $('#chat-footer').hide();
             $('#contacto-nombre').text('Selecciona una conversación');
             $('#contacto-numero').text('');
+            $('#contacto-hashedId').text('');
             conversacionActiva = null;
         });
 
         const buscarConversacion = debounceFunction(function (e) {
             const criterio = $(e.target).val();
             cargarConversaciones($('#sesion-selector').val(), criterio);
+        }, 500);
+
+        const quitPresenceUpdate = debounceFunction(function (e) {
+            if (!chatSocket) return;
+            chatSocket.send(JSON.stringify({
+              event: "quitPresenceUpdate"
+            }));
         }, 500);
 
         // Buscar conversaciones
@@ -317,6 +326,7 @@
             chatSocket.send(JSON.stringify({
               event: "sendPresenceUpdate"
             }));
+            quitPresenceUpdate();
         });
 
         // Enviar mensaje
@@ -446,6 +456,7 @@
                     // Actualizar información de contacto
                     $('#contacto-nombre').text(response.contacto_nombre || response.contacto_numero);
                     $('#contacto-numero').text(response.contacto_numero);
+                    $('#contacto-hashedId').text(response.hashed_id && `#${response.hashed_id}` || '');
 
                     // Actualizar foto de contacto si está disponible
                     if (response.contacto_foto) {

@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block content %}
+
+    <div class="card">
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
+                {% csrf_token %}
+                <input type="hidden" name="pk" value="{{ pk|default:0 }}"/>
+                <input type="hidden" name="action" value="{{ action }}"/>
+                {{ dict_url_vars_input }}
+
+                <div class="row g-1">
+                    {% for field in form %}
+                        {% if field.is_hidden %}
+                            {{ field }}
+                        {% else %}
+                            <div class="col-lg-{{ field.field.widget.attrs.col }}">
+                                <div class="mb-2">
+                                    <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label>
+                                    {{ field }}
+                                    <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+
+                <div class="row mt-2">
+                    <div class="col-12">
+                        <a class="btn btn-danger btn-sm me-1" href="{{ ruta }}?{{ dict_url_vars_completo }}">
+                            <i class="fa fa-window-close me-1"></i> Cancelar
+                        </a>
+                        <button {% if action != 'ver' %}type="submit" id="submit"{% else %}disabled{% endif %} class="btn btn-success btn-sm">
+                            <i class="fa fa-save me-1"></i> Guardar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/forms.js?version=1"></script>
+{% endblock %}

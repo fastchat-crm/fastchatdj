@@ -8,11 +8,9 @@ from django.shortcuts import render, redirect
 from django.template.loader import get_template
 
 from core.custom_models import FormError
-from core.funciones import addData, paginador, salva_auditoria, secure_module, redirectAfterPostGet, log
-from core.funciones_adicionales import salva_logs, customgetattr
+from core.funciones import addData, paginador, secure_module, log
 from ticket.models import TipoTicketAtencion
-from .forms import IndustriaForm, TipoTicketAtencionForm
-from .models import Industria
+from .forms import TipoTicketAtencionForm
 from django.contrib import messages
 
 

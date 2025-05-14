@@ -51,7 +51,8 @@ def conversacionesView(request):
                 'conversacion_id': conversacion.id,
                 'contacto_nombre': conversacion.contacto_nombre or '',
                 'contacto_numero': conversacion.contacto_numero,
-                'contacto_foto': conversacion.contacto_foto or ''
+                'contacto_foto': conversacion.contacto_foto or '',
+                'hashed_id': conversacion.hashed_id or ''
             })
 
     # ====================== ENVIAR MENSAJE =========================
