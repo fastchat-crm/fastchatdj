@@ -137,7 +137,7 @@ class WhatsAppService:
         finally:
             connection.close()
 
-    def send_text_message(self, session_id, to, text):
+    def send_text_message(self, session_id, to, text, simularEscritura=False):
         """
         Envía un mensaje de texto a través de WhatsApp
 
@@ -152,7 +152,7 @@ class WhatsAppService:
         data = {
             'sessionId': session_id,
             'to': to,
-            'text': text
+            'text': text, 'simularEscritura': simularEscritura
         }
 
         try:
