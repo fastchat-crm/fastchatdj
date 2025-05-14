@@ -195,8 +195,8 @@
                                         <i class="fas fa-user fa-2x text-secondary"></i>
                                     </div>
                                 {% endif %}
-
                                 <div>
+                                    <h5 class="card-title mb-0">{{ s.nombre }}</h5>
                                     <h5 class="card-title mb-0">{{ s.numero }}</h5>
                                     {% if s.observacion %}
                                         <small class="text-muted">
@@ -221,9 +221,9 @@
                                     <i class="fas fa-user-tie me-1"></i>
                                     Asesor:
                                     {% if s.usuario %}
-                                        <span class="badge bg-info">{{ s.usuario }}</span>
+                                        <span class="text-info">{{ s.usuario }}</span>
                                     {% else %}
-                                        <span class="badge bg-secondary">Sin asignar</span>
+                                        <span class="text-warning">Sin asignar</span>
                                     {% endif %}
                                 </div>
                                 {% if s.contacts_length %}
