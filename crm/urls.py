@@ -6,7 +6,7 @@ from .view_mientrenamiento import entrenamiento_ia_view
 
 crm_urls = (
     {
-        "nombre": "Entrenaramiento IA",
+        "nombre": "Entrenamiento IA",
         "url": 'entrenamiento/',
         "vista": entrenamiento_ia_view,
     },
