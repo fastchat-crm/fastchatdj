@@ -13,6 +13,7 @@ ESTADOS_SESION = (
 
 
 class SesionWhatsApp(ModeloBase):
+    nombre = models.CharField(max_length=150, blank=True, null=True, verbose_name='Nombre')
     numero = models.CharField(max_length=50, verbose_name='Número WhatsApp', default='')
     whatsapp_id = models.CharField(max_length=250, verbose_name='WhatsApp ID', default='')
     estado = models.CharField(max_length=20, choices=ESTADOS_SESION, default='pendiente')
