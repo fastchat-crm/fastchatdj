@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.urls import reverse
 
 from core.custom_forms import FormError
-from core.funciones import addData, paginador, secure_module, log
+from core.funciones import addData, paginador, secure_module, log, redirectAfterPostGet
 from .forms import SesionWhatsAppForm
 from .models import SesionWhatsApp
 from .services import WhatsAppService
@@ -70,7 +70,7 @@ def sesionesView(request):
 
                     obj = form.save()
 
-                    res_json.append({'error': False})
+                    res_json.append({'error': False, 'to': redirectAfterPostGet(request)})
                     return JsonResponse(res_json, safe=False)
 
         except FormError as ex:
