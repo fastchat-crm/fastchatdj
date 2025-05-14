@@ -14,7 +14,7 @@
         var selectedMonth = 1;   // Mes predeterminado (Enero)
 
         // Configurar el dropdown de años
-        var yearDropdown = document.querySelector(".dropdown-menu");
+        var yearDropdown = document.querySelector(".dropdown-menu-tickets");
 
         // Limpiar las opciones actuales
         yearDropdown.innerHTML = '';
@@ -118,8 +118,6 @@
     });
 </script>
 {% endblock %}
-
-
 
 {% block content %}
 
@@ -271,7 +269,7 @@
                                     <i class="icofont-calendar fs-5 me-1"></i>
                                     Año: <span id="selectedYear">2025</span> <i class="las la-angle-down ms-1"></i>
                                 </a>
-                                <div class="dropdown-menu dropdown-menu-end" id="yearDropdown">
+                                <div class="dropdown-menu dropdown-menu-end dropdown-menu-tickets" id="yearDropdown">
                                     {% for anio in anios %}
                                         <a class="dropdown-item" href="#">{{ anio }}</a>
                                     {% endfor %}
@@ -334,5 +332,6 @@
 
 
 {% endblock %}
+
 
 

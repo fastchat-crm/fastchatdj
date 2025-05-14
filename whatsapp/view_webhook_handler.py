@@ -40,6 +40,7 @@ def webhook_handler(request):
         event_type = data.get('type')
         event_data = data.get('data', {})
         session_id = event_data.get('sessionId')
+        msgerror = ''
 
         # Obtener la sesión
         try:
@@ -73,11 +74,7 @@ def webhook_handler(request):
             logger.info(f"Código QR actualizado para la sesión {session_id}")
 
         elif event_type == 'ready':
-            # Actualizar el estado de la sesión a conectado
-            session.estado = 'conectado'
-            session.ultima_conexion = timezone.now()
-            session.error_mensaje = None
-
+            guardar = True
             # Guardar información del usuario si está disponible
             if 'user' in event_data:
                 user_info = event_data.get('user', {})
@@ -89,21 +86,43 @@ def webhook_handler(request):
                         if not x.isdigit():
                             break
                         numero_list.append(x)
-                    session.numero = "".join(numero_list)
+                    numero = "".join(numero_list)
+                    whatsapp_id = user_info['id']
+                    if session.numero and session.numero != numero:
+                        guardar = False
+                        msgerror = 'No puede registrar otra cuenta de whatsapp en esta sesión'
+                    if guardar:
+                        session.numero = numero
+                        session.whatsapp_id = whatsapp_id
 
-            session.save()
+            if guardar:
+                session.estado = 'conectado'
+                session.ultima_conexion = timezone.now()
+                session.error_mensaje = None
+                session.save()
 
-            # Notificar a través de WebSockets
-            async_to_sync(channel_layer.group_send)(
-                f"whatsapp_session_{session.id}",
-                {
-                    'type': 'whatsapp_event',
-                    'event': 'ready',
-                    'session_id': session.id
-                }
-            )
+                # Notificar a través de WebSockets
+                async_to_sync(channel_layer.group_send)(
+                    f"whatsapp_session_{session.id}",
+                    {
+                        'type': 'whatsapp_event',
+                        'event': 'ready',
+                        'session_id': session.id
+                    }
+                )
 
-            logger.info(f"Sesión {session_id} conectada correctamente")
+                logger.info(f"Sesión {session_id} conectada correctamente")
+            else:
+                async_to_sync(channel_layer.group_send)(
+                    f"whatsapp_session_{session.id}",
+                    {
+                        'type': 'whatsapp_event',
+                        'event': 'error',
+                        'session_id': session.id,
+                        'msgerror': msgerror
+                    }
+                )
+                whatsapp_service.close_session(session.session_id)
 
         elif event_type == 'authenticated':
             # Actualizar el estado de la sesión
@@ -149,7 +168,8 @@ def webhook_handler(request):
                     'type': 'whatsapp_event',
                     'event': 'auth_failure',
                     'session_id': session.id,
-                    'error': session.error_mensaje
+                    'error': session.error_mensaje,
+                    'msgerror': msgerror
                 }
             )
 
@@ -167,7 +187,8 @@ def webhook_handler(request):
                     'type': 'whatsapp_event',
                     'event': 'disconnected',
                     'session_id': session.id,
-                    'reason': event_data.get('reason', 'unknown')
+                    'reason': event_data.get('reason', 'unknown'),
+                    'msgerror': msgerror
                 }
             )
 
@@ -175,10 +196,14 @@ def webhook_handler(request):
 
         elif event_type == 'message':
             # Procesar mensaje entrante
-            if event_data.get('message') and event_data['message'].get('editedMessage'):
-                process_edited_message(session, event_data, channel_layer)
+            if event_data.get('message') and event_data['message'].get('protocolMessage') and event_data['message']['protocolMessage'].get('type') == 'MESSAGE_EDIT':
+                process_edited_message(session, event_data['message']['protocolMessage'], event_data['from'], channel_layer)
+            elif event_data.get('message') and event_data['message'].get('editedMessage') and event_data['message']['editedMessage']['message']['protocolMessage'].get('type') == 'MESSAGE_EDIT':
+                process_edited_message(session, event_data['message']['editedMessage']['message']['protocolMessage'], event_data['from'], channel_layer)
             elif event_data.get('message') and event_data['message'].get('protocolMessage') and event_data['message']['protocolMessage'].get('type') == 'REVOKE':
                 process_deleted_message(session, event_data, channel_layer)
+            elif event_data.get('fromMe'):
+                process_sent_message(session, event_data, channel_layer)
             else:
                 process_incoming_message(session, event_data, channel_layer)
 
@@ -190,13 +215,9 @@ def webhook_handler(request):
             # Procesar mensaje eliminado
             process_deleted_message(session, event_data, channel_layer)
 
-        elif event_type == 'message_edited':
-            # Procesar mensaje editado
-            process_edited_message(session, event_data, channel_layer)
-
-        elif event_type == 'contact_update':
-            # Procesar actualización de contacto
-            process_contact_update(session, event_data, channel_layer)
+        # elif event_type == 'contact_update':
+        #     # Procesar actualización de contacto
+        #     process_contact_update(session, event_data, channel_layer)
 
         elif event_type == 'profile_update':
             # Procesar actualización de perfil
@@ -223,6 +244,7 @@ def process_incoming_message(session, event_data, channel_layer):
         timestamp = event_data.get('timestamp')
         push_name = event_data.get('pushName', '')
         message_content = event_data.get('message', {})
+        from_me = bool(event_data.get('fromMe', False))
         userImage = event_data.get('userImage')
 
         # Convertir timestamp a datetime
@@ -236,21 +258,22 @@ def process_incoming_message(session, event_data, channel_layer):
         if '@' in from_number:
             contacto_numero = from_number.split('@')[0]
 
+        if session.numero == contacto_numero:
+            return
+
         # Buscar o crear la conversación
-        conversation, created = ConversacionWhatsApp.objects.get_or_create(
-            sesion=session,
-            from_number=from_number,
-            contacto_numero=contacto_numero,
-            defaults={
-                'contacto_nombre': push_name,
-                'estado': 'activo',
-                'fecha_ultimo_mensaje': message_date
-            }
-        )
+        conversation = ConversacionWhatsApp.objects.filter(sesion=session, from_number=from_number).first() or\
+        ConversacionWhatsApp(sesion=session, from_number=from_number)
+        conversation.estado = 'activo'
 
         # Actualizar nombre del contacto si está disponible
-        if push_name:
+        if not conversation.contacto_nombre:
+            contacts_list = [c.get('name') or c.get('notify') or '' for c in json.loads(session.contacts_list or '[]') if c["id"] == from_number]
             conversation.contacto_nombre = push_name
+            if contacts_list and contacts_list[0]:
+                conversation.contacto_nombre = contacts_list[0]
+        if not conversation.contacto_numero:
+            conversation.contacto_numero = contacto_numero
 
         if userImage:
             conversation.contacto_foto = f'data:image/jpg;base64,{get_image_as_base64(userImage)}'
@@ -284,7 +307,9 @@ def process_incoming_message(session, event_data, channel_layer):
 
                 # Obtener el texto del caption si existe
                 if caption_key and caption_key in media_msg:
-                    message_text = media_msg.get(caption_key, '')
+                    message_text = media_msg.get(caption_key, '') or type_name or ''
+
+                message_text = message_text or type_name
 
                 # Procesar archivo multimedia si hay datos
                 if 'mediaData' in event_data:
@@ -328,6 +353,16 @@ def process_incoming_message(session, event_data, channel_layer):
             }
         )
 
+        async_to_sync(channel_layer.group_send)(
+            f"whatsapp_sessionroom_{session.id}",
+            {
+                'type': 'whatsapp_event',
+                'event': 'new_message',
+                'conversation_id': conversation.id,
+                'timestamp': message_date.isoformat()
+            }
+        )
+
         logger.info(f"Mensaje recibido de {from_number} en la sesión {session.session_id}")
 
     except Exception as e:
@@ -339,10 +374,14 @@ def process_sent_message(session, event_data, channel_layer):
     """
     try:
         # Extraer datos del mensaje
-        message_id = event_data.get('messageId')
-        from_number = event_data.get('to')
+        message_id = event_data.get('messageId') or event_data.get('id')
+        from_number = event_data.get('to') or event_data.get('from')
         to_number = from_number.split('@')[0]
         message_data = event_data.get('message', {})
+        message_content = event_data.get('message', {})
+
+        if session.numero == to_number:
+            return
 
         # Buscar la conversación
         try:
@@ -362,7 +401,48 @@ def process_sent_message(session, event_data, channel_layer):
 
         # Determinar el tipo y contenido del mensaje
         message_type = message_data.get('type', 'texto')
-        message_text = message_data.get('caption', '') or message_data.get('text', '')
+        message_text = message_data.get('caption', '') or message_data.get('text', '') or message_data.get('conversation', '')
+
+
+        # Procesar texto
+        if 'conversation' in message_content:
+            message_type = 'texto'
+            message_text = message_content.get('conversation', '')
+        elif 'extendedTextMessage' in message_content:
+            message_type = 'texto'
+            message_text = message_content.get('extendedTextMessage', {}).get('text', '')
+
+        file_url = None
+        # Procesar archivos multimedia
+        media_types = {
+            'imageMessage': ('imagen', 'fileName', 'mimetype', 'caption'),
+            'videoMessage': ('video', 'fileName', 'mimetype', 'caption'),
+            'audioMessage': ('audio', 'fileName', 'mimetype', None),
+            'documentMessage': ('documento', 'fileName', 'mimetype', 'caption'),
+            'stickerMessage': ('sticker', None, 'mimetype', None)
+        }
+
+        for media_key, (type_name, filename_key, mimetype_key, caption_key) in media_types.items():
+            if media_key in message_content:
+                media_msg = message_content.get(media_key, {})
+                message_type = type_name
+
+                # Obtener el texto del caption si existe
+                if caption_key and caption_key in media_msg:
+                    message_text = media_msg.get(caption_key, '') or type_name or ''
+
+                message_text = message_text or type_name
+
+                # Procesar archivo multimedia si hay datos
+                if 'mediaData' in event_data:
+                    media_data = event_data.get('mediaData')
+                    filename = media_msg.get(filename_key, f"{type_name}_{message_id}")
+
+                    if media_key == 'stickerMessage':
+                        filename = f'{filename}.png'
+
+                    # Guardar el archivo
+                    file_url = save_media_file(media_data, filename, session.id, conversation.id)
 
         # Actualizar la conversación
         conversation.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
@@ -375,7 +455,7 @@ def process_sent_message(session, event_data, channel_layer):
             remitente=session.numero,  # El remitente es el número de la sesión
             mensaje=message_text,
             tipo=message_type,
-            archivo_url=None,  # No tenemos la URL del archivo en este punto
+            archivo_url=file_url,  # No tenemos la URL del archivo en este punto
             fecha=timezone.now(),
             mensaje_id_externo=message_id,
             leido=True,  # Marcamos como leído ya que lo enviamos nosotros
@@ -397,6 +477,14 @@ def process_sent_message(session, event_data, channel_layer):
                 'message_text': message_text,
                 'sender': session.numero,
                 'timestamp': timezone.now().isoformat()
+            }
+        )
+        async_to_sync(channel_layer.group_send)(
+            f"whatsapp_sessionroom_{session.id}",
+            {
+                'type': 'whatsapp_event',
+                'event': 'new_message',
+                'conversation_id': conversation.id
             }
         )
 
@@ -442,6 +530,14 @@ def process_deleted_message(session, event_data, channel_layer):
                     'external_message_id': message_id
                 }
             )
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_sessionroom_{session.id}",
+                {
+                    'type': 'whatsapp_event',
+                    'event': 'new_message',
+                    'conversation_id': message.conversacion.id
+                }
+            )
 
             logger.info(f"Mensaje {message_id} marcado como eliminado")
 
@@ -451,15 +547,15 @@ def process_deleted_message(session, event_data, channel_layer):
     except Exception as e:
         logger.exception(f"Error procesando mensaje eliminado: {str(e)}")
 
-def process_edited_message(session, event_data, channel_layer):
+def process_edited_message(session, event_data, fromchat, channel_layer):
     """
     Procesa un mensaje editado en WhatsApp
     """
     try:
         # Extraer datos del mensaje
-        message_id = event_data['message'].get('editedMessage')['message']['protocolMessage']['key']['id']
-        chat = event_data['from']
-        edited_message = event_data['message'].get('editedMessage')['message']['protocolMessage']['editedMessage']
+        message_id = event_data['key']['id']
+        chat = fromchat
+        edited_message = event_data['editedMessage']
 
         # Limpiar el número de teléfono
         if '@' in chat:
@@ -500,6 +596,14 @@ def process_edited_message(session, event_data, channel_layer):
                     'external_message_id': message_id,
                     'new_text': new_text,
                     'original_text': message.mensaje_original
+                }
+            )
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_sessionroom_{session.id}",
+                {
+                    'type': 'whatsapp_event',
+                    'event': 'new_message',
+                    'conversation_id': message.conversation.id
                 }
             )
 
@@ -615,7 +719,7 @@ def save_media_file(media_base64, filename, session_id, conversation_id):
         return default_storage.url(path)
     except Exception as e:
         logger.exception(f"Error guardando archivo multimedia: {str(e)}")
-        return None
+        return ''
 
 def update_conversation_stats(conversation):
     """

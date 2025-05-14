@@ -13,10 +13,13 @@ ESTADOS_SESION = (
 
 
 class SesionWhatsApp(ModeloBase):
-    numero = models.CharField(max_length=50, verbose_name='Número WhatsApp')
+    numero = models.CharField(max_length=50, verbose_name='Número WhatsApp', default='')
+    whatsapp_id = models.CharField(max_length=250, verbose_name='WhatsApp ID', default='')
     estado = models.CharField(max_length=20, choices=ESTADOS_SESION, default='pendiente')
     qr_code = models.TextField(blank=True, null=True, verbose_name='Código QR actual (Base64)')
-    usuario = models.ForeignKey(Usuario, on_delete=models.PROTECT, null=True, blank=True, verbose_name='Asesor asignado')
+    usuario = models.ForeignKey(
+        Usuario, on_delete=models.PROTECT, null=True, blank=True, verbose_name='Asesor asignado'
+    )
     ultima_conexion = models.DateTimeField(blank=True, null=True, verbose_name='Última conexión')
     observacion = models.TextField(blank=True, null=True, verbose_name='Observaciones')
     error_mensaje = models.TextField(blank=True, null=True, verbose_name='Último error')
@@ -80,7 +83,12 @@ class ConversacionWhatsApp(ModeloBase):
     class Meta:
         verbose_name = 'Conversación WhatsApp'
         verbose_name_plural = 'Conversaciones WhatsApp'
-        ordering = ['order']
+        ordering = ['-order']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['sesion', 'from_number'], name='whatsapp_conversacion_sesion_from_number_unique'
+            )
+        ]
 
     def __str__(self):
         return f"Conversación con {self.contacto_numero} ({self.sesion.numero})"

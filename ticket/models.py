@@ -54,6 +54,17 @@ class ProcesoAtencion(ModeloBase):
         verbose_name = u"Proceso"
         verbose_name_plural = u"Procesos"
 
+class TipoTicketAtencion(ModeloBase):
+    nombre = models.CharField(max_length=200, default='', verbose_name='Nombre del tipo de ticket')
+
+    def __str__(self):
+        return self.nombre
+
+    class Meta:
+        verbose_name = u"Tipo de Ticket"
+        verbose_name_plural = u"Tipos de Tickets"
+
+
 class TicketAtencion(ModeloBase):
     from .choices import PRIORIDAD, ESTADO_TICKET, TIPO_TICKET
     codigo = models.CharField(max_length=200, default='', verbose_name='Código de ticket')
@@ -62,7 +73,7 @@ class TicketAtencion(ModeloBase):
     proceso = models.ForeignKey(ProcesoAtencion, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Proceso')
     titulo = models.CharField(max_length=5000, default='', verbose_name='Título')
     descripcion = models.TextField(default='', verbose_name='Descripción', blank=True, null=True)
-    tipo = models.IntegerField(choices=TIPO_TICKET, default=1, verbose_name=u'Tipo de ticket')
+    tipo = models.ForeignKey(TipoTicketAtencion, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Tipo de ticket')
     prioridad = models.IntegerField(choices=PRIORIDAD, default=1, verbose_name=u'Prioridad')
     estado = models.IntegerField(choices=ESTADO_TICKET, default=1, verbose_name=u'Estado')
     asignadoa = models.ForeignKey('autenticacion.Usuario', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Asignado a', related_name='+')
@@ -71,7 +82,6 @@ class TicketAtencion(ModeloBase):
     ffinactividad = models.DateTimeField(default=None, blank=True, null=True, verbose_name='Fecha que finalizo la actividad')
     fecha_vigencia = models.DateTimeField(default=None, blank=True, null=True, verbose_name='Fecha de vigencia')
     numero_ticket = models.IntegerField(default=1, verbose_name='Numero de ticket')
-    archivo = models.FileField(upload_to='archivo_ticket/', blank=True, null=True, verbose_name=u'Archivo adjunto')
 
     def __str__(self):
         return '{}'.format(self.titulo)
@@ -96,6 +106,32 @@ class TicketAtencion(ModeloBase):
         else:
             return 'bg-secondary'
 
+    def get_archivos(self):
+        return self.detallearchivoticketatencion_set.filter(status=True).order_by('-fecha_registro')
+
+    def get_comentario_asignacion(self):
+        return self.comentarioticketatencion_set.filter(asignacion=True, status=True, usuario=self.asignadopor, rol=2).first()
+
+    def last_commentario_integrante(self):
+        return self.comentarioticketatencion_set.filter(status=True, usuario=self.asignadoa, rol=3).order_by('-fecha_registro').first()
+
+    def comentarios(self):
+        return self.comentarioticketatencion_set.filter(status=True).order_by('-fecha_registro')
+
+    def comentarios_client(self):
+        return self.comentarioticketatencion_set.filter(status=True, rol=1).order_by('-fecha_registro')
+
+    class Meta:
+        verbose_name = u'Ticket'
+        verbose_name_plural = u'Tickets'
+        ordering = ('-fecha_registro',)
+
+
+class DetalleArchivoTicketAtencion(ModeloBase):
+    ticket = models.ForeignKey(TicketAtencion, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Ticket')
+    archivo = models.FileField(upload_to='archivo_ticket/', blank=True, null=True, verbose_name=u'Archivo adjunto')
+
+
     def tipo_archivo(self):
         namefile = self.archivo.name
         ext = namefile[namefile.rfind("."):].lower()
@@ -112,7 +148,7 @@ class TicketAtencion(ModeloBase):
 
     def component_archive(self):
         if not self.archivo:
-            return ''
+            return 's'
         tipo = self.tipo_archivo()
         if tipo['formato'] == 'pdf':
             return f'''
@@ -140,26 +176,11 @@ class TicketAtencion(ModeloBase):
             </a>
             '''
 
-        class Meta:
-            verbose_name = u"Ticket"
-            verbose_name_plural = u"Tickets"
-
-    def get_comentario_asignacion(self):
-        return self.comentarioticketatencion_set.filter(asignacion=True, status=True, usuario=self.asignadopor, rol=2).first()
-
-    def last_commentario_integrante(self):
-        return self.comentarioticketatencion_set.filter(status=True, usuario=self.asignadoa, rol=3).order_by('-fecha_registro').first()
-
-    def comentarios(self):
-        return self.comentarioticketatencion_set.filter(status=True).order_by('-fecha_registro')
-
-    def comentarios_client(self):
-        return self.comentarioticketatencion_set.filter(status=True, rol=1).order_by('-fecha_registro')
-
     class Meta:
-        verbose_name = u'Ticket'
-        verbose_name_plural = u'Tickets'
-        ordering = ('-fecha_registro',)
+        verbose_name = u'Archivo adjunto'
+        verbose_name_plural = u'Archivos adjuntos'
+        ordering = ('fecha_registro',)
+
 
 class ComentarioTicketAtencion(ModeloBase):
     from .choices import ROL_COMENTARIO

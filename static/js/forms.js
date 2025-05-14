@@ -56,6 +56,13 @@ if ($('head').children('meta[name=formsJsValidator]').length === 0) {
                         _form.set(listInputsEnc[i], doRSA(_form.get(listInputsEnc[i])));
                     }
                 }
+
+                try {
+                    _form.append("lista_items1", JSON.stringify(lista_items1));
+                } catch (err) {
+                    console.log('asd');
+                }
+
                 var inputsNoValidos = [];
                 $.ajax({
                     type: method_req,

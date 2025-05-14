@@ -3,7 +3,8 @@
 {% block head %}
 {% endblock %}
 {% block content %}
-    <div class="row justify-content-center">
+    {% if PERFIL_EXISTE %}
+        <div class="row justify-content-center">
         <div class="col-md-6 col-lg-4">
             <div class="card">
                 <div class="card-body">
@@ -86,752 +87,773 @@
         </div>
         <!--end col-->
     </div>
-    <div class="row justify-content-center">
-        <div class="col-md-6 col-lg-8">
-            <div class="card">
-                <div class="card-header">
-                    <div class="row align-items-center">
-                        <div class="col">
-                            <h4 class="card-title">Resumen de Interacciones</h4>
-                        </div>
-                        <!--end col-->
-                        <div class="col-auto">
-                            <div class="dropdown">
-                                <a href="#" class="btn bt btn-light dropdown-toggle"
-                                   data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                    <i class="icofont-calendar fs-5 me-1"></i>
-                                    Este mes<i class="las la-angle-down ms-1"></i>
-                                </a>
-                                <div class="dropdown-menu dropdown-menu-end">
-                                    <a class="dropdown-item" href="#">Hoy</a>
-                                    <a class="dropdown-item" href="#">Última Semana</a>
-                                    <a class="dropdown-item" href="#">Último Mes</a>
-                                    <a class="dropdown-item" href="#">Este Año</a>
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <h4 class="card-title">Resumen de Interacciones</h4>
+                            </div>
+                            <!--end col-->
+                            <div class="col-auto">
+                                <div class="dropdown">
+                                    <a href="#" class="btn bt btn-light dropdown-toggle"
+                                       data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                        <i class="icofont-calendar fs-5 me-1"></i>
+                                        Este mes<i class="las la-angle-down ms-1"></i>
+                                    </a>
+                                    <div class="dropdown-menu dropdown-menu-end">
+                                        <a class="dropdown-item" href="#">Hoy</a>
+                                        <a class="dropdown-item" href="#">Última Semana</a>
+                                        <a class="dropdown-item" href="#">Último Mes</a>
+                                        <a class="dropdown-item" href="#">Este Año</a>
+                                    </div>
                                 </div>
                             </div>
+                            <!--end col-->
                         </div>
-                        <!--end col-->
+                        <!--end row-->
                     </div>
-                    <!--end row-->
+                    <!--end card-header-->
+                    <div class="card-body pt-0">
+                        <div id="audience_overview" class="apex-charts"></div>
+                    </div>
+                    <!--end card-body-->
                 </div>
-                <!--end card-header-->
-                <div class="card-body pt-0">
-                    <div id="audience_overview" class="apex-charts"></div>
-                </div>
-                <!--end card-body-->
+                <!--end card-->
             </div>
-            <!--end card-->
-        </div>
-        <!--end col-->
-        <div class="col-md-6 col-lg-4">
-            <div class="card">
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col">
-                            <p class="text-dark mb-0 fw-semibold fs-14">Nuevos Clientes</p>
-                            <h2 class="mt-0 mb-0 fw-bold">42</h2>
-                        </div>
-                        <!--end col-->
-                        <div class="col-auto align-self-center">
-                            <div class="img-group d-flex">
-                                <a class="user-avatar position-relative d-inline-block" href="#">
-                                    <img src="/static/assets_riz/images/users/avatar-1.jpg" alt="avatar"
-                                         class="thumb-md shadow-sm rounded-circle">
-                                </a>
-                                <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
-                                    <img src="/static/assets_riz/images/users/avatar-2.jpg" alt="avatar"
-                                         class="thumb-md shadow-sm rounded-circle">
-                                </a>
-                                <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
-                                    <img src="/static/assets_riz/images/users/avatar-4.jpg" alt="avatar"
-                                         class="thumb-md shadow-sm rounded-circle">
-                                </a>
-                                <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
-                                    <img src="/static/assets_riz/images/users/avatar-3.jpg" alt="avatar"
-                                         class="thumb-md shadow-sm rounded-circle">
-                                </a>
-                                <a href class="user-avatar position-relative d-inline-block ms-1">
-                                                <span
-                                                        class="thumb-md shadow-sm justify-content-center d-flex align-items-center bg-info-subtle rounded-circle fw-semibold fs-6">+8</span>
-                                </a>
+            <!--end col-->
+            <div class="col-md-6 col-lg-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <p class="text-dark mb-0 fw-semibold fs-14">Nuevos Clientes</p>
+                                <h2 class="mt-0 mb-0 fw-bold">42</h2>
                             </div>
-                            <small class="text-muted">Nuevos
-                                contactos</small>
-                        </div>
-                        <!--end col-->
-                    </div>
-                    <!--end row-->
-                    <div id="visitors_report" class="apex-charts mb-2"></div>
-                    <button type="button" class="btn btn-primary w-100 btn-lg fs-14">Ver
-                        Detalles <i class="fa-solid fa-arrow-right-long"></i>
-                    </button>
-                </div>
-                <!--end card-body-->
-            </div>
-            <!--end card-->
-        </div>
-        <!--end col-->
-    </div>
-    <div class="row">
-        <div class="col-md-6 col-lg-3">
-            <div class="card">
-                <div class="card-body">
-                    <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
-                        <div class="col-9">
-                            <p class="text-dark mb-0 fw-semibold fs-14">Contactos Registrados</p>
-                            <h3 class="mt-2 mb-0 fw-bold">1,247</h3>
-                        </div>
-                        <div class="col-3 align-self-center">
-                            <div class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                                <i class="iconoir-user h1 align-self-center mb-0 text-secondary"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">+18</span>
-                        Nuevos contactos hoy</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6 col-lg-3">
-            <div class="card">
-                <div class="card-body">
-                    <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
-                        <div class="col-9">
-                            <p class="text-dark mb-0 fw-semibold fs-14">Citas Agendadas</p>
-                            <h3 class="mt-2 mb-0 fw-bold">38</h3>
-                        </div>
-                        <div class="col-3 align-self-center">
-                            <div class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                                <i class="iconoir-calendar h1 align-self-center mb-0 text-secondary"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">+5</span>
-                        Citas confirmadas hoy</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6 col-lg-3">
-            <div class="card">
-                <div class="card-body">
-                    <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
-                        <div class="col-9">
-                            <p class="text-dark mb-0 fw-semibold fs-14">Proyectos Cerrados</p>
-                            <h3 class="mt-2 mb-0 fw-bold">26</h3>
-                        </div>
-                        <div class="col-3 align-self-center">
-                            <div class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                                <i class="iconoir-check-circle h1 align-self-center mb-0 text-secondary"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">+3</span>
-                        Nuevos cierres esta semana</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6 col-lg-3">
-            <div class="card">
-                <div class="card-body">
-                    <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
-                        <div class="col-9">
-                            <p class="text-dark mb-0 fw-semibold fs-14">Valor Promedio</p>
-                            <h3 class="mt-2 mb-0 fw-bold">€1,850</h3>
-                        </div>
-                        <div class="col-3 align-self-center">
-                            <div class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                                <i class="iconoir-currency-euro h1 align-self-center mb-0 text-secondary"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">12.4%</span>
-                        Incremento este mes</p>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="row">
-        <div class="col-lg-6">
-            <div class="card card-h-100">
-                <div class="card-header">
-                    <div class="row align-items-center">
-                        <div class="col">
-                            <h4 class="card-title">Intenciones Detectadas</h4>
-                        </div>
-                        <!--end col-->
-                    </div>
-                    <!--end row-->
-                </div>
-                <!--end card-header-->
-                <div class="card-body pt-0">
-                    <div class="table-responsive browser_users">
-                        <table class="table mb-0">
-                            <thead class="table-light">
-                            <tr>
-                                <th class="border-top-0">Intención</th>
-                                <th class="border-top-0">Frecuencia</th>
-                                <th class="border-top-0">Tasa de Respuesta</th>
-                                <th class="border-top-0">Conversiones</th>
-                            </tr>
-                            <!--end tr-->
-                            </thead>
-                            <tbody>
-                            <tr>
-                                <td><i class="fas fa-info-circle me-2 text-primary"></i>Información de servicios
-                                </td>
-                                <td>457<small class="text-muted">(38%)</small></td>
-                                <td>92.5%</td>
-                                <td>78<small class="text-muted">(17%)</small></td>
-                            </tr>
-                            <!--end tr-->
-                            <tr>
-                                <td><i class="fas fa-dollar-sign me-2 text-success"></i>Consulta de precios
-                                </td>
-                                <td>325<small class="text-muted">(27%)</small></td>
-                                <td>89.2%</td>
-                                <td>65<small class="text-muted">(20%)</small></td>
-                            </tr>
-                            <!--end tr-->
-                            <tr>
-                                <td><i class="fas fa-calendar-alt me-2 text-warning"></i>Agendar cita
-                                </td>
-                                <td>186<small class="text-muted">(15%)</small></td>
-                                <td>95.4%</td>
-                                <td>124<small class="text-muted">(67%)</small></td>
-                            </tr>
-                            <!--end tr-->
-                            <tr>
-                                <td><i class="fas fa-question-circle me-2 text-info"></i>Soporte técnico
-                                </td>
-                                <td>142<small class="text-muted">(12%)</small></td>
-                                <td>87.3%</td>
-                                <td>52<small class="text-muted">(37%)</small></td>
-                            </tr>
-                            <!--end tr-->
-                            <tr>
-                                <td><i class="fas fa-file-invoice me-2 text-danger"></i>Facturación
-                                </td>
-                                <td>98<small class="text-muted">(8%)</small></td>
-                                <td>91.8%</td>
-                                <td>37<small class="text-muted">(38%)</small></td>
-                            </tr>
-                            <!--end tr-->
-                            </tbody>
-                        </table>
-                        <!--end table-->
-                    </div>
-                    <!--end /div-->
-                </div>
-                <!--end card-body-->
-            </div>
-            <!--end card-->
-        </div>
-        <!--end col-->
-        <div class="col-lg-6">
-            <div class="card card-h-100">
-                <div class="card-header">
-                    <div class="row align-items-center">
-                        <div class="col">
-                            <h4 class="card-title">Fuentes de Contacto</h4>
-                        </div>
-                        <!--end col-->
-                    </div>
-                    <!--end row-->
-                </div>
-                <!--end card-header-->
-                <div class="card-body pt-0">
-                    <div class="table-responsive">
-                        <table class="table mb-0">
-                            <thead class="table-light">
-                            <tr>
-                                <th class="border-top-0">Canal</th>
-                                <th class="border-top-0">Contactos</th>
-                                <th class="border-top-0">Periodo Anterior</th>
-                                <th class="border-top-0">% Cambio</th>
-                            </tr>
-                            <!--end tr-->
-                            </thead>
-                            <tbody>
-                            <tr>
-                                <td><a href class="text-primary">Sitio Web</a></td>
-                                <td>324<small class="text-muted">(42%)</small></td>
-                                <td>287<small class="text-muted">(38%)</small></td>
-                                <td>12.89% <i class="fas fa-caret-up text-success font-16"></i></td>
-                            </tr>
-                            <!--end tr-->
-                            <tr>
-                                <td><a href class="text-primary">Redes Sociales</a></td>
-                                <td>256<small class="text-muted">(33%)</small></td>
-                                <td>231<small class="text-muted">(31%)</small></td>
-                                <td>10.82% <i class="fas fa-caret-up text-success font-16"></i></td>
-                            </tr>
-                            <!--end tr-->
-                            <tr>
-                                <td><a href class="text-primary">Recomendaciones</a></td>
-                                <td>103<small class="text-muted">(13%)</small></td>
-                                <td>117<small class="text-muted">(16%)</small></td>
-                                <td>-11.97% <i class="fas fa-caret-down text-danger font-16"></i></td>
-
-                            </tr>
-                            <!--end tr-->
-                            <tr>
-                                <td><a href class="text-primary">Contacto Directo</a></td>
-                                <td>87<small class="text-muted">(11%)</small></td>
-                                <td>92<small class="text-muted">(12%)</small></td>
-                                <td>-5.43% <i class="fas fa-caret-down text-danger font-16"></i></td>
-                            </tr>
-                            <!--end tr-->
-                            <tr>
-                                <td><a href class="text-primary">Campañas Email</a></td>
-                                <td>8<small class="text-muted">(1%)</small></td>
-                                <td>21<small class="text-muted">(3%)</small></td>
-                                <td>-61.90% <i class="fas fa-caret-down text-danger"></i></td>
-                            </tr>
-                            <!--end tr-->
-                            </tbody>
-                        </table>
-                        <!--end table-->
-                    </div>
-                    <!--end /div-->
-                    <p class="m-0 fs-12 fst-italic ps-2 text-muted">Datos actualizados hace 5 minutos <a
-                            href="#!" class="link-danger ms-1 "><i
-                            class="align-middle iconoir-refresh"></i></a></p>
-                </div>
-                <!--end card-body-->
-            </div>
-            <!--end card-->
-        </div>
-        <!--end col-->
-    </div>
-    <div class="row justify-content-center">
-        <div class="col-md-6 col-lg-4">
-            <div class="card">
-                <div class="card-header">
-                    <div class="row align-items-center">
-                        <div class="col">
-                            <h4 class="card-title">Sentimiento de Conversaciones</h4>
-                        </div>
-                        <!--end col-->
-                        <div class="col-auto">
-                            <div class="dropdown">
-                                <a href="#" class="btn bt btn-light dropdown-toggle"
-                                   data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                    <i class="fas fa-filter fs-5 me-1"></i>
-                                    Todos<i class="las la-angle-down ms-1"></i>
-                                </a>
-                                <div class="dropdown-menu dropdown-menu-end">
-                                    <a class="dropdown-item" href="#">Positivo</a>
-                                    <a class="dropdown-item" href="#">Neutral</a>
-                                    <a class="dropdown-item" href="#">Negativo</a>
-                                    <a class="dropdown-item" href="#">Todos</a>
+                            <!--end col-->
+                            <div class="col-auto align-self-center">
+                                <div class="img-group d-flex">
+                                    <a class="user-avatar position-relative d-inline-block" href="#">
+                                        <img src="/static/assets_riz/images/users/avatar-1.jpg" alt="avatar"
+                                             class="thumb-md shadow-sm rounded-circle">
+                                    </a>
+                                    <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
+                                        <img src="/static/assets_riz/images/users/avatar-2.jpg" alt="avatar"
+                                             class="thumb-md shadow-sm rounded-circle">
+                                    </a>
+                                    <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
+                                        <img src="/static/assets_riz/images/users/avatar-4.jpg" alt="avatar"
+                                             class="thumb-md shadow-sm rounded-circle">
+                                    </a>
+                                    <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
+                                        <img src="/static/assets_riz/images/users/avatar-3.jpg" alt="avatar"
+                                             class="thumb-md shadow-sm rounded-circle">
+                                    </a>
+                                    <a href class="user-avatar position-relative d-inline-block ms-1">
+                                                    <span
+                                                            class="thumb-md shadow-sm justify-content-center d-flex align-items-center bg-info-subtle rounded-circle fw-semibold fs-6">+8</span>
+                                    </a>
                                 </div>
+                                <small class="text-muted">Nuevos
+                                    contactos</small>
                             </div>
+                            <!--end col-->
                         </div>
-                        <!--end col-->
-                    </div>
-                    <!--end row-->
-                </div>
-                <!--end card-header-->
-                <div class="card-body pt-0">
-                    <div class>
-                        <div id="traffic_sources" class="apex-charts d-block w-90 mx-auto"></div>
-                        <hr class="hr-dashed border-secondary w-25 mt-0 mx-auto">
-                    </div>
-                    <div class="text-center">
-                        <h4>Análisis de Sentimiento</h4>
-                        <p class="text-muted mt-2">El 68% de las conversaciones tienen un sentimiento positivo, lo que
-                            indica una buena percepción del servicio</p>
-                        <button type="button" class="btn btn-outline-primary px-3 mt-2">Ver detalles
+                        <!--end row-->
+                        <div id="visitors_report" class="apex-charts mb-2"></div>
+                        <button type="button" class="btn btn-primary w-100 btn-lg fs-14">Ver
+                            Detalles <i class="fa-solid fa-arrow-right-long"></i>
                         </button>
                     </div>
+                    <!--end card-body-->
                 </div>
-                <!--end card-body-->
+                <!--end card-->
             </div>
-            <!--end card-->
+            <!--end col-->
         </div>
-        <!--end col-->
-        <div class="col-md-6 col-lg-8">
-            <div class="card">
-                <div class="card-header">
-                    <div class="row align-items-center">
-                        <div class="col">
-                            <h4 class="card-title">Distribución Geográfica de Clientes</h4>
-                        </div>
-                        <!--end col-->
-                        <div class="col-auto">
-                            <div class="dropdown">
-                                <a href="#" class="btn bt btn-light dropdown-toggle"
-                                   data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                    <i class="icofont-calendar fs-5 me-1"></i>
-                                    Este mes<i class="las la-angle-down ms-1"></i>
-                                </a>
-                                <div class="dropdown-menu dropdown-menu-end">
-                                    <a class="dropdown-item" href="#">Hoy</a>
-                                    <a class="dropdown-item" href="#">Última Semana</a>
-                                    <a class="dropdown-item" href="#">Último Mes</a>
-                                    <a class="dropdown-item" href="#">Este Año</a>
+        <div class="row">
+            <div class="col-md-6 col-lg-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
+                            <div class="col-9">
+                                <p class="text-dark mb-0 fw-semibold fs-14">Contactos Registrados</p>
+                                <h3 class="mt-2 mb-0 fw-bold">1,247</h3>
+                            </div>
+                            <div class="col-3 align-self-center">
+                                <div class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
+                                    <i class="iconoir-user h1 align-self-center mb-0 text-secondary"></i>
                                 </div>
                             </div>
                         </div>
-                        <!--end col-->
+                        <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">+18</span>
+                            Nuevos contactos hoy</p>
                     </div>
-                    <!--end row-->
                 </div>
-                <!--end card-header-->
-                <div class="card-body pt-0">
-                    <div class="row">
-                        <div class="col-lg-8">
-                            <div id="map_2" class style="height:320px"></div>
-                        </div>
-                        <!--end col-->
-                        <div class="col-lg-4 align-self-center">
-                            <div class="d-flex align-items-center my-3">
-                                <img src="/static/assets_riz/images/flags/us_flag.jpg"
-                                     class="thumb-sm align-self-center rounded-circle" alt="...">
-                                <div class="flex-grow-1 ms-2">
-                                    <h5 class="mb-1">126</h5>
-                                    <p class="text-muted mb-0">Madrid
-                                        . Este mes
-                                        <span class="text-success">3.6%
-                                                        <i class="mdi mdi-arrow-up"></i></span>
-                                    </p>
-                                </div>
-                                <!--end media-body-->
-                            </div>
-                            <!--end media-->
-                            <div class="d-flex align-items-center my-3">
-                                <img src="/static/assets_riz/images/flags/germany_flag.jpg"
-                                     class="thumb-sm align-self-center rounded-circle" alt="...">
-                                <div class="flex-grow-1 ms-2">
-                                    <h5 class="mb-1">92</h5>
-                                    <p class="text-muted mb-0">Barcelona
-                                        . Este mes
-                                        <span class="text-success">2.8%
-                                                        <i class="mdi mdi-arrow-up"></i></span>
-                                    </p>
-                                </div>
-                                <!--end media-body-->
-                            </div>
-                            <!--end media-->
-                            <div class="d-flex align-items-center my-3">
-                                <img src="/static/assets_riz/images/flags/spain_flag.jpg"
-                                     class="thumb-sm align-self-center rounded-circle" alt="...">
-                                <div class="flex-grow-1 ms-2">
-                                    <h5 class="mb-1">75</h5>
-                                    <p class="text-muted mb-0">Valencia
-                                        . Este mes
-                                        <span class="text-success">1.7%
-                                                        <i class="mdi mdi-arrow-up"></i></span>
-                                    </p>
-                                </div>
-                                <!--end media-body-->
-                            </div>
-                            <!--end media-->
-                            <div class="d-flex align-items-center my-3">
-                                <img src="/static/assets_riz/images/flags/baha_flag.jpg"
-                                     class="thumb-sm align-self-center rounded-circle" alt="...">
-                                <div class="flex-grow-1 ms-2">
-                                    <h5 class="mb-1">52</h5>
-                                    <p class="text-muted mb-0">Sevilla
-                                        . Este mes
-                                        <span class="text-danger">-0.6%
-                                                        <i class="mdi mdi-arrow-down"></i></span>
-                                    </p>
-                                </div>
-                                <!--end media-body-->
-                            </div>
-                            <!--end media-->
-                        </div>
-                        <!--end col-->
-                    </div>
-                    <!--end row-->
+            </div>
 
-                </div>
-                <!--end card-body-->
-            </div>
-            <!--end card-->
-        </div>
-        <!--end col-->
-    </div>
-    <div class="row">
-        <div class="col-lg-6">
-            <div class="card">
-                <div class="card-header">
-                    <div class="row align-items-center">
-                        <div class="col">
-                            <h4 class="card-title">Clientes Frecuentes</h4>
+            <div class="col-md-6 col-lg-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
+                            <div class="col-9">
+                                <p class="text-dark mb-0 fw-semibold fs-14">Citas Agendadas</p>
+                                <h3 class="mt-2 mb-0 fw-bold">38</h3>
+                            </div>
+                            <div class="col-3 align-self-center">
+                                <div class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
+                                    <i class="iconoir-calendar h1 align-self-center mb-0 text-secondary"></i>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-auto">
-                            <div class="dropdown">
-                                <a href="#" class="btn btn-light dropdown-toggle" data-bs-toggle="dropdown"
-                                   aria-expanded="false">
-                                    <i class="fas fa-sort fs-5 me-1"></i> Frecuencia
-                                </a>
-                                <div class="dropdown-menu dropdown-menu-end">
-                                    <a class="dropdown-item" href="#">Mayor frecuencia</a>
-                                    <a class="dropdown-item" href="#">Mayor valor</a>
-                                    <a class="dropdown-item" href="#">Recientes</a>
+                        <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">+5</span>
+                            Citas confirmadas hoy</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
+                            <div class="col-9">
+                                <p class="text-dark mb-0 fw-semibold fs-14">Proyectos Cerrados</p>
+                                <h3 class="mt-2 mb-0 fw-bold">26</h3>
+                            </div>
+                            <div class="col-3 align-self-center">
+                                <div class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
+                                    <i class="iconoir-check-circle h1 align-self-center mb-0 text-secondary"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">+3</span>
+                            Nuevos cierres esta semana</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
+                            <div class="col-9">
+                                <p class="text-dark mb-0 fw-semibold fs-14">Valor Promedio</p>
+                                <h3 class="mt-2 mb-0 fw-bold">€1,850</h3>
+                            </div>
+                            <div class="col-3 align-self-center">
+                                <div class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
+                                    <i class="iconoir-currency-euro h1 align-self-center mb-0 text-secondary"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">12.4%</span>
+                            Incremento este mes</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card card-h-100">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <h4 class="card-title">Intenciones Detectadas</h4>
+                            </div>
+                            <!--end col-->
+                        </div>
+                        <!--end row-->
+                    </div>
+                    <!--end card-header-->
+                    <div class="card-body pt-0">
+                        <div class="table-responsive browser_users">
+                            <table class="table mb-0">
+                                <thead class="table-light">
+                                <tr>
+                                    <th class="border-top-0">Intención</th>
+                                    <th class="border-top-0">Frecuencia</th>
+                                    <th class="border-top-0">Tasa de Respuesta</th>
+                                    <th class="border-top-0">Conversiones</th>
+                                </tr>
+                                <!--end tr-->
+                                </thead>
+                                <tbody>
+                                <tr>
+                                    <td><i class="fas fa-info-circle me-2 text-primary"></i>Información de servicios
+                                    </td>
+                                    <td>457<small class="text-muted">(38%)</small></td>
+                                    <td>92.5%</td>
+                                    <td>78<small class="text-muted">(17%)</small></td>
+                                </tr>
+                                <!--end tr-->
+                                <tr>
+                                    <td><i class="fas fa-dollar-sign me-2 text-success"></i>Consulta de precios
+                                    </td>
+                                    <td>325<small class="text-muted">(27%)</small></td>
+                                    <td>89.2%</td>
+                                    <td>65<small class="text-muted">(20%)</small></td>
+                                </tr>
+                                <!--end tr-->
+                                <tr>
+                                    <td><i class="fas fa-calendar-alt me-2 text-warning"></i>Agendar cita
+                                    </td>
+                                    <td>186<small class="text-muted">(15%)</small></td>
+                                    <td>95.4%</td>
+                                    <td>124<small class="text-muted">(67%)</small></td>
+                                </tr>
+                                <!--end tr-->
+                                <tr>
+                                    <td><i class="fas fa-question-circle me-2 text-info"></i>Soporte técnico
+                                    </td>
+                                    <td>142<small class="text-muted">(12%)</small></td>
+                                    <td>87.3%</td>
+                                    <td>52<small class="text-muted">(37%)</small></td>
+                                </tr>
+                                <!--end tr-->
+                                <tr>
+                                    <td><i class="fas fa-file-invoice me-2 text-danger"></i>Facturación
+                                    </td>
+                                    <td>98<small class="text-muted">(8%)</small></td>
+                                    <td>91.8%</td>
+                                    <td>37<small class="text-muted">(38%)</small></td>
+                                </tr>
+                                <!--end tr-->
+                                </tbody>
+                            </table>
+                            <!--end table-->
+                        </div>
+                        <!--end /div-->
+                    </div>
+                    <!--end card-body-->
+                </div>
+                <!--end card-->
+            </div>
+            <!--end col-->
+            <div class="col-lg-6">
+                <div class="card card-h-100">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <h4 class="card-title">Fuentes de Contacto</h4>
+                            </div>
+                            <!--end col-->
+                        </div>
+                        <!--end row-->
+                    </div>
+                    <!--end card-header-->
+                    <div class="card-body pt-0">
+                        <div class="table-responsive">
+                            <table class="table mb-0">
+                                <thead class="table-light">
+                                <tr>
+                                    <th class="border-top-0">Canal</th>
+                                    <th class="border-top-0">Contactos</th>
+                                    <th class="border-top-0">Periodo Anterior</th>
+                                    <th class="border-top-0">% Cambio</th>
+                                </tr>
+                                <!--end tr-->
+                                </thead>
+                                <tbody>
+                                <tr>
+                                    <td><a href class="text-primary">Sitio Web</a></td>
+                                    <td>324<small class="text-muted">(42%)</small></td>
+                                    <td>287<small class="text-muted">(38%)</small></td>
+                                    <td>12.89% <i class="fas fa-caret-up text-success font-16"></i></td>
+                                </tr>
+                                <!--end tr-->
+                                <tr>
+                                    <td><a href class="text-primary">Redes Sociales</a></td>
+                                    <td>256<small class="text-muted">(33%)</small></td>
+                                    <td>231<small class="text-muted">(31%)</small></td>
+                                    <td>10.82% <i class="fas fa-caret-up text-success font-16"></i></td>
+                                </tr>
+                                <!--end tr-->
+                                <tr>
+                                    <td><a href class="text-primary">Recomendaciones</a></td>
+                                    <td>103<small class="text-muted">(13%)</small></td>
+                                    <td>117<small class="text-muted">(16%)</small></td>
+                                    <td>-11.97% <i class="fas fa-caret-down text-danger font-16"></i></td>
+
+                                </tr>
+                                <!--end tr-->
+                                <tr>
+                                    <td><a href class="text-primary">Contacto Directo</a></td>
+                                    <td>87<small class="text-muted">(11%)</small></td>
+                                    <td>92<small class="text-muted">(12%)</small></td>
+                                    <td>-5.43% <i class="fas fa-caret-down text-danger font-16"></i></td>
+                                </tr>
+                                <!--end tr-->
+                                <tr>
+                                    <td><a href class="text-primary">Campañas Email</a></td>
+                                    <td>8<small class="text-muted">(1%)</small></td>
+                                    <td>21<small class="text-muted">(3%)</small></td>
+                                    <td>-61.90% <i class="fas fa-caret-down text-danger"></i></td>
+                                </tr>
+                                <!--end tr-->
+                                </tbody>
+                            </table>
+                            <!--end table-->
+                        </div>
+                        <!--end /div-->
+                        <p class="m-0 fs-12 fst-italic ps-2 text-muted">Datos actualizados hace 5 minutos <a
+                                href="#!" class="link-danger ms-1 "><i
+                                class="align-middle iconoir-refresh"></i></a></p>
+                    </div>
+                    <!--end card-body-->
+                </div>
+                <!--end card-->
+            </div>
+            <!--end col-->
+        </div>
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <h4 class="card-title">Sentimiento de Conversaciones</h4>
+                            </div>
+                            <!--end col-->
+                            <div class="col-auto">
+                                <div class="dropdown">
+                                    <a href="#" class="btn bt btn-light dropdown-toggle"
+                                       data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                        <i class="fas fa-filter fs-5 me-1"></i>
+                                        Todos<i class="las la-angle-down ms-1"></i>
+                                    </a>
+                                    <div class="dropdown-menu dropdown-menu-end">
+                                        <a class="dropdown-item" href="#">Positivo</a>
+                                        <a class="dropdown-item" href="#">Neutral</a>
+                                        <a class="dropdown-item" href="#">Negativo</a>
+                                        <a class="dropdown-item" href="#">Todos</a>
+                                    </div>
+                                </div>
+                            </div>
+                            <!--end col-->
+                        </div>
+                        <!--end row-->
+                    </div>
+                    <!--end card-header-->
+                    <div class="card-body pt-0">
+                        <div class>
+                            <div id="traffic_sources" class="apex-charts d-block w-90 mx-auto"></div>
+                            <hr class="hr-dashed border-secondary w-25 mt-0 mx-auto">
+                        </div>
+                        <div class="text-center">
+                            <h4>Análisis de Sentimiento</h4>
+                            <p class="text-muted mt-2">El 68% de las conversaciones tienen un sentimiento positivo, lo que
+                                indica una buena percepción del servicio</p>
+                            <button type="button" class="btn btn-outline-primary px-3 mt-2">Ver detalles
+                            </button>
+                        </div>
+                    </div>
+                    <!--end card-body-->
+                </div>
+                <!--end card-->
+            </div>
+            <!--end col-->
+            <div class="col-md-6 col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <h4 class="card-title">Distribución Geográfica de Clientes</h4>
+                            </div>
+                            <!--end col-->
+                            <div class="col-auto">
+                                <div class="dropdown">
+                                    <a href="#" class="btn bt btn-light dropdown-toggle"
+                                       data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                        <i class="icofont-calendar fs-5 me-1"></i>
+                                        Este mes<i class="las la-angle-down ms-1"></i>
+                                    </a>
+                                    <div class="dropdown-menu dropdown-menu-end">
+                                        <a class="dropdown-item" href="#">Hoy</a>
+                                        <a class="dropdown-item" href="#">Última Semana</a>
+                                        <a class="dropdown-item" href="#">Último Mes</a>
+                                        <a class="dropdown-item" href="#">Este Año</a>
+                                    </div>
+                                </div>
+                            </div>
+                            <!--end col-->
+                        </div>
+                        <!--end row-->
+                    </div>
+                    <!--end card-header-->
+                    <div class="card-body pt-0">
+                        <div class="row">
+                            <div class="col-lg-8">
+                                <div id="map_2" class style="height:320px"></div>
+                            </div>
+                            <!--end col-->
+                            <div class="col-lg-4 align-self-center">
+                                <div class="d-flex align-items-center my-3">
+                                    <img src="/static/assets_riz/images/flags/us_flag.jpg"
+                                         class="thumb-sm align-self-center rounded-circle" alt="...">
+                                    <div class="flex-grow-1 ms-2">
+                                        <h5 class="mb-1">126</h5>
+                                        <p class="text-muted mb-0">Madrid
+                                            . Este mes
+                                            <span class="text-success">3.6%
+                                                            <i class="mdi mdi-arrow-up"></i></span>
+                                        </p>
+                                    </div>
+                                    <!--end media-body-->
+                                </div>
+                                <!--end media-->
+                                <div class="d-flex align-items-center my-3">
+                                    <img src="/static/assets_riz/images/flags/germany_flag.jpg"
+                                         class="thumb-sm align-self-center rounded-circle" alt="...">
+                                    <div class="flex-grow-1 ms-2">
+                                        <h5 class="mb-1">92</h5>
+                                        <p class="text-muted mb-0">Barcelona
+                                            . Este mes
+                                            <span class="text-success">2.8%
+                                                            <i class="mdi mdi-arrow-up"></i></span>
+                                        </p>
+                                    </div>
+                                    <!--end media-body-->
+                                </div>
+                                <!--end media-->
+                                <div class="d-flex align-items-center my-3">
+                                    <img src="/static/assets_riz/images/flags/spain_flag.jpg"
+                                         class="thumb-sm align-self-center rounded-circle" alt="...">
+                                    <div class="flex-grow-1 ms-2">
+                                        <h5 class="mb-1">75</h5>
+                                        <p class="text-muted mb-0">Valencia
+                                            . Este mes
+                                            <span class="text-success">1.7%
+                                                            <i class="mdi mdi-arrow-up"></i></span>
+                                        </p>
+                                    </div>
+                                    <!--end media-body-->
+                                </div>
+                                <!--end media-->
+                                <div class="d-flex align-items-center my-3">
+                                    <img src="/static/assets_riz/images/flags/baha_flag.jpg"
+                                         class="thumb-sm align-self-center rounded-circle" alt="...">
+                                    <div class="flex-grow-1 ms-2">
+                                        <h5 class="mb-1">52</h5>
+                                        <p class="text-muted mb-0">Sevilla
+                                            . Este mes
+                                            <span class="text-danger">-0.6%
+                                                            <i class="mdi mdi-arrow-down"></i></span>
+                                        </p>
+                                    </div>
+                                    <!--end media-body-->
+                                </div>
+                                <!--end media-->
+                            </div>
+                            <!--end col-->
+                        </div>
+                        <!--end row-->
+
+                    </div>
+                    <!--end card-body-->
+                </div>
+                <!--end card-->
+            </div>
+            <!--end col-->
+        </div>
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <h4 class="card-title">Clientes Frecuentes</h4>
+                            </div>
+                            <div class="col-auto">
+                                <div class="dropdown">
+                                    <a href="#" class="btn btn-light dropdown-toggle" data-bs-toggle="dropdown"
+                                       aria-expanded="false">
+                                        <i class="fas fa-sort fs-5 me-1"></i> Frecuencia
+                                    </a>
+                                    <div class="dropdown-menu dropdown-menu-end">
+                                        <a class="dropdown-item" href="#">Mayor frecuencia</a>
+                                        <a class="dropdown-item" href="#">Mayor valor</a>
+                                        <a class="dropdown-item" href="#">Recientes</a>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="card-body pt-0">
-                    <div class="table-responsive">
-                        <table class="table mb-0">
-                            <thead class="table-light">
-                            <tr>
-                                <th>Cliente</th>
-                                <th>Teléfono</th>
-                                <th>Interacciones</th>
-                                <th>Última conversación</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <tr>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <img src="/static/assets_riz/images/users/avatar-1.jpg" alt="user"
-                                             class="rounded-circle me-2" width="40">
-                                        <div>
-                                            <h6 class="mb-0">Carlos Méndez</h6>
-                                            <p class="mb-0 text-muted small">Empresa ABC</p>
+                    <div class="card-body pt-0">
+                        <div class="table-responsive">
+                            <table class="table mb-0">
+                                <thead class="table-light">
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th>Teléfono</th>
+                                    <th>Interacciones</th>
+                                    <th>Última conversación</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <img src="/static/assets_riz/images/users/avatar-1.jpg" alt="user"
+                                                 class="rounded-circle me-2" width="40">
+                                            <div>
+                                                <h6 class="mb-0">Carlos Méndez</h6>
+                                                <p class="mb-0 text-muted small">Empresa ABC</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                                <td>+34 612 345 678</td>
-                                <td>32 <small class="text-success">(+5)</small></td>
-                                <td>Hoy <small class="text-muted">10:23</small></td>
-                                <td><span class="badge bg-success">Activo</span></td>
-                                <td>
-                                    <div class="dropdown">
-                                        <a href="#" class="dropdown-toggle card-drop" data-bs-toggle="dropdown"
-                                           aria-expanded="false">
-                                            <i class="fas fa-ellipsis-v font-18"></i>
-                                        </a>
-                                        <div class="dropdown-menu dropdown-menu-end">
-                                            <a class="dropdown-item" href="#">Ver historial</a>
-                                            <a class="dropdown-item" href="#">Enviar mensaje</a>
-                                            <a class="dropdown-item" href="#">Agendar cita</a>
+                                    </td>
+                                    <td>+34 612 345 678</td>
+                                    <td>32 <small class="text-success">(+5)</small></td>
+                                    <td>Hoy <small class="text-muted">10:23</small></td>
+                                    <td><span class="badge bg-success">Activo</span></td>
+                                    <td>
+                                        <div class="dropdown">
+                                            <a href="#" class="dropdown-toggle card-drop" data-bs-toggle="dropdown"
+                                               aria-expanded="false">
+                                                <i class="fas fa-ellipsis-v font-18"></i>
+                                            </a>
+                                            <div class="dropdown-menu dropdown-menu-end">
+                                                <a class="dropdown-item" href="#">Ver historial</a>
+                                                <a class="dropdown-item" href="#">Enviar mensaje</a>
+                                                <a class="dropdown-item" href="#">Agendar cita</a>
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <img src="/static/assets_riz/images/users/avatar-2.jpg" alt="user"
-                                             class="rounded-circle me-2" width="40">
-                                        <div>
-                                            <h6 class="mb-0">María García</h6>
-                                            <p class="mb-0 text-muted small">Consultora Independiente</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <img src="/static/assets_riz/images/users/avatar-2.jpg" alt="user"
+                                                 class="rounded-circle me-2" width="40">
+                                            <div>
+                                                <h6 class="mb-0">María García</h6>
+                                                <p class="mb-0 text-muted small">Consultora Independiente</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                                <td>+34 623 456 789</td>
-                                <td>28 <small class="text-success">(+2)</small></td>
-                                <td>Ayer <small class="text-muted">16:42</small></td>
-                                <td><span class="badge bg-warning">Pendiente</span></td>
-                                <td>
-                                    <div class="dropdown">
-                                        <a href="#" class="dropdown-toggle card-drop" data-bs-toggle="dropdown"
-                                           aria-expanded="false">
-                                            <i class="fas fa-ellipsis-v font-18"></i>
-                                        </a>
-                                        <div class="dropdown-menu dropdown-menu-end">
-                                            <a class="dropdown-item" href="#">Ver historial</a>
-                                            <a class="dropdown-item" href="#">Enviar mensaje</a>
-                                            <a class="dropdown-item" href="#">Agendar cita</a>
+                                    </td>
+                                    <td>+34 623 456 789</td>
+                                    <td>28 <small class="text-success">(+2)</small></td>
+                                    <td>Ayer <small class="text-muted">16:42</small></td>
+                                    <td><span class="badge bg-warning">Pendiente</span></td>
+                                    <td>
+                                        <div class="dropdown">
+                                            <a href="#" class="dropdown-toggle card-drop" data-bs-toggle="dropdown"
+                                               aria-expanded="false">
+                                                <i class="fas fa-ellipsis-v font-18"></i>
+                                            </a>
+                                            <div class="dropdown-menu dropdown-menu-end">
+                                                <a class="dropdown-item" href="#">Ver historial</a>
+                                                <a class="dropdown-item" href="#">Enviar mensaje</a>
+                                                <a class="dropdown-item" href="#">Agendar cita</a>
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <img src="/static/assets_riz/images/users/avatar-4.jpg" alt="user"
-                                             class="rounded-circle me-2" width="40">
-                                        <div>
-                                            <h6 class="mb-0">Javier Fernández</h6>
-                                            <p class="mb-0 text-muted small">Grupo XYZ</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <img src="/static/assets_riz/images/users/avatar-4.jpg" alt="user"
+                                                 class="rounded-circle me-2" width="40">
+                                            <div>
+                                                <h6 class="mb-0">Javier Fernández</h6>
+                                                <p class="mb-0 text-muted small">Grupo XYZ</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                                <td>+34 634 567 890</td>
-                                <td>24 <small class="text-success">(+0)</small></td>
-                                <td>14/05 <small class="text-muted">09:15</small></td>
-                                <td><span class="badge bg-success">Activo</span></td>
-                                <td>
-                                    <div class="dropdown">
-                                        <a href="#" class="dropdown-toggle card-drop" data-bs-toggle="dropdown"
-                                           aria-expanded="false">
-                                            <i class="fas fa-ellipsis-v font-18"></i>
-                                        </a>
-                                        <div class="dropdown-menu dropdown-menu-end">
-                                            <a class="dropdown-item" href="#">Ver historial</a>
-                                            <a class="dropdown-item" href="#">Enviar mensaje</a>
-                                            <a class="dropdown-item" href="#">Agendar cita</a>
+                                    </td>
+                                    <td>+34 634 567 890</td>
+                                    <td>24 <small class="text-success">(+0)</small></td>
+                                    <td>14/05 <small class="text-muted">09:15</small></td>
+                                    <td><span class="badge bg-success">Activo</span></td>
+                                    <td>
+                                        <div class="dropdown">
+                                            <a href="#" class="dropdown-toggle card-drop" data-bs-toggle="dropdown"
+                                               aria-expanded="false">
+                                                <i class="fas fa-ellipsis-v font-18"></i>
+                                            </a>
+                                            <div class="dropdown-menu dropdown-menu-end">
+                                                <a class="dropdown-item" href="#">Ver historial</a>
+                                                <a class="dropdown-item" href="#">Enviar mensaje</a>
+                                                <a class="dropdown-item" href="#">Agendar cita</a>
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <img src="/static/assets_riz/images/users/avatar-3.jpg" alt="user"
-                                             class="rounded-circle me-2" width="40">
-                                        <div>
-                                            <h6 class="mb-0">Ana Martínez</h6>
-                                            <p class="mb-0 text-muted small">Empresa DEF</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <img src="/static/assets_riz/images/users/avatar-3.jpg" alt="user"
+                                                 class="rounded-circle me-2" width="40">
+                                            <div>
+                                                <h6 class="mb-0">Ana Martínez</h6>
+                                                <p class="mb-0 text-muted small">Empresa DEF</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                                <td>+34 645 678 901</td>
-                                <td>19 <small class="text-success">(+1)</small></td>
-                                <td>12/05 <small class="text-muted">14:30</small></td>
-                                <td><span class="badge bg-danger">Inactivo</span></td>
-                                <td>
-                                    <div class="dropdown">
-                                        <a href="#" class="dropdown-toggle card-drop" data-bs-toggle="dropdown"
-                                           aria-expanded="false">
-                                            <i class="fas fa-ellipsis-v font-18"></i>
-                                        </a>
-                                        <div class="dropdown-menu dropdown-menu-end">
-                                            <a class="dropdown-item" href="#">Ver historial</a>
-                                            <a class="dropdown-item" href="#">Enviar mensaje</a>
-                                            <a class="dropdown-item" href="#">Agendar cita</a>
+                                    </td>
+                                    <td>+34 645 678 901</td>
+                                    <td>19 <small class="text-success">(+1)</small></td>
+                                    <td>12/05 <small class="text-muted">14:30</small></td>
+                                    <td><span class="badge bg-danger">Inactivo</span></td>
+                                    <td>
+                                        <div class="dropdown">
+                                            <a href="#" class="dropdown-toggle card-drop" data-bs-toggle="dropdown"
+                                               aria-expanded="false">
+                                                <i class="fas fa-ellipsis-v font-18"></i>
+                                            </a>
+                                            <div class="dropdown-menu dropdown-menu-end">
+                                                <a class="dropdown-item" href="#">Ver historial</a>
+                                                <a class="dropdown-item" href="#">Enviar mensaje</a>
+                                                <a class="dropdown-item" href="#">Agendar cita</a>
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                            </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="text-end mt-3">
-                        <a href="#" class="btn btn-outline-primary btn-sm">Ver todos los clientes <i
-                                class="fas fa-arrow-right ms-1"></i></a>
+                                    </td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-end mt-3">
+                            <a href="#" class="btn btn-outline-primary btn-sm">Ver todos los clientes <i
+                                    class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="col-lg-6">
-            <div class="card">
-                <div class="card-header">
-                    <div class="row align-items-center">
-                        <div class="col">
-                            <h4 class="card-title">Gestión de Agenda</h4>
-                        </div>
-                        <div class="col-auto">
-                            <button class="btn btn-sm btn-primary"><i class="fas fa-plus me-1"></i> Nueva cita</button>
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <h4 class="card-title">Gestión de Agenda</h4>
+                            </div>
+                            <div class="col-auto">
+                                <button class="btn btn-sm btn-primary"><i class="fas fa-plus me-1"></i> Nueva cita</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="card-body pt-0">
-                    <div class="table-responsive">
-                        <table class="table mb-0">
-                            <thead class="table-light">
-                            <tr>
-                                <th>Cliente</th>
-                                <th>Fecha y Hora</th>
-                                <th>Tipo</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <tr>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <img src="/static/assets_riz/images/users/avatar-1.jpg" alt="user"
-                                             class="rounded-circle me-2" width="40">
-                                        <div>Carlos Méndez</div>
-                                    </div>
-                                </td>
-                                <td>Hoy, 16:30</td>
-                                <td><span class="badge bg-info">Presentación</span></td>
-                                <td><span class="badge bg-warning">Pendiente</span></td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-success me-1"><i class="fas fa-check"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></button>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <img src="/static/assets_riz/images/users/avatar-2.jpg" alt="user"
-                                             class="rounded-circle me-2" width="40">
-                                        <div>María García</div>
-                                    </div>
-                                </td>
-                                <td>Mañana, 10:00</td>
-                                <td><span class="badge bg-primary">Seguimiento</span></td>
-                                <td><span class="badge bg-success">Confirmada</span></td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-success me-1"><i class="fas fa-check"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></button>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <img src="/static/assets_riz/images/users/avatar-4.jpg" alt="user"
-                                             class="rounded-circle me-2" width="40">
-                                        <div>Javier Fernández</div>
-                                    </div>
-                                </td>
-                                <td>16/05, 14:15</td>
-                                <td><span class="badge bg-warning">Propuesta</span></td>
-                                <td><span class="badge bg-success">Confirmada</span></td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-success me-1"><i class="fas fa-check"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></button>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <img src="/static/assets_riz/images/users/avatar-3.jpg" alt="user"
-                                             class="rounded-circle me-2" width="40">
-                                        <div>Ana Martínez</div>
-                                    </div>
-                                </td>
-                                <td>18/05, 11:30</td>
-                                <td><span class="badge bg-success">Cierre</span></td>
-                                <td><span class="badge bg-warning">Pendiente</span></td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-success me-1"><i class="fas fa-check"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></button>
-                                </td>
-                            </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="text-end mt-3">
-                        <a href="#" class="btn btn-outline-primary btn-sm">Ver agenda completa <i
-                                class="fas fa-arrow-right ms-1"></i></a>
+                    <div class="card-body pt-0">
+                        <div class="table-responsive">
+                            <table class="table mb-0">
+                                <thead class="table-light">
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th>Fecha y Hora</th>
+                                    <th>Tipo</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <img src="/static/assets_riz/images/users/avatar-1.jpg" alt="user"
+                                                 class="rounded-circle me-2" width="40">
+                                            <div>Carlos Méndez</div>
+                                        </div>
+                                    </td>
+                                    <td>Hoy, 16:30</td>
+                                    <td><span class="badge bg-info">Presentación</span></td>
+                                    <td><span class="badge bg-warning">Pendiente</span></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-success me-1"><i class="fas fa-check"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <img src="/static/assets_riz/images/users/avatar-2.jpg" alt="user"
+                                                 class="rounded-circle me-2" width="40">
+                                            <div>María García</div>
+                                        </div>
+                                    </td>
+                                    <td>Mañana, 10:00</td>
+                                    <td><span class="badge bg-primary">Seguimiento</span></td>
+                                    <td><span class="badge bg-success">Confirmada</span></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-success me-1"><i class="fas fa-check"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <img src="/static/assets_riz/images/users/avatar-4.jpg" alt="user"
+                                                 class="rounded-circle me-2" width="40">
+                                            <div>Javier Fernández</div>
+                                        </div>
+                                    </td>
+                                    <td>16/05, 14:15</td>
+                                    <td><span class="badge bg-warning">Propuesta</span></td>
+                                    <td><span class="badge bg-success">Confirmada</span></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-success me-1"><i class="fas fa-check"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <img src="/static/assets_riz/images/users/avatar-3.jpg" alt="user"
+                                                 class="rounded-circle me-2" width="40">
+                                            <div>Ana Martínez</div>
+                                        </div>
+                                    </td>
+                                    <td>18/05, 11:30</td>
+                                    <td><span class="badge bg-success">Cierre</span></td>
+                                    <td><span class="badge bg-warning">Pendiente</span></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-success me-1"><i class="fas fa-check"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></button>
+                                    </td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-end mt-3">
+                            <a href="#" class="btn btn-outline-primary btn-sm">Ver agenda completa <i
+                                    class="fas fa-arrow-right ms-1"></i></a>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+    {% else %}
+        <!-- Mensaje si el usuario no tiene perfil -->
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body text-center">
+                        {#                        <i class="iconoir-profile-circle display-4 text-warning mb-3"></i>#}
+                        <img class="mb-2" src="/media/{{ confi.imagen_landing }}" style="width: 150px">
+                        <h3>{{ confi.titulo }}</h3>
+                        <p class="mb-3">Para comenzar a con tus actividades, necesitas completar tu
+                            perfil.</p>
+                        <a href="javascript:void(0)"
+                           onclick="contactWS('{{ confi.telefono_empresa }}', '{{ nombreempresa }}')"
+                           class="btn btn-success"><i class="fab fa-whatsapp"></i> Contactar un asesor</a>
+                        <br><br>
+                            <span class="text-muted"><i class="fa fa-info-circle"></i> No cuenta con perfil administrativo</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
 
     {% if mostrar_modal_ia %}
         <div class="modal fade" id="modalEntrenamientoIA" tabindex="-1" aria-hidden="true">

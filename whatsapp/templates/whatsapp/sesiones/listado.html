@@ -97,8 +97,7 @@
 
     <div class="row align-items-center mb-3">
         <div class="col-md-12 mb-2 mb-md-0">
-            <button id="btn-agregar-sesion" class="btn btn-success btn-sm" data-bs-toggle="modal"
-                    data-bs-target="#modalAgregarSesion">
+            <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalAgregarSesion">
                 <i class="fas fa-plus-circle me-2"></i> Nueva Sesión de WhatsApp
             </button>
         </div>
@@ -166,15 +165,11 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                {% if s.estado == 'pendiente' %}
-                                    {% if s.qr_code %}
-                                        <button class="btn btn-sm btn-outline-primary ver-qr-btn"
-                                                data-qr="{{ s.qr_code }}" data-session-id="{{ s.id }}">
-                                            <i class="fas fa-qrcode me-1"></i> Ver QR
-                                        </button>
-                                    {% else %}
-                                        -
-                                    {% endif %}
+                                {% if s.estado == 'pendiente' or s.estado == 'desconectado' %}
+                                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalAgregarSesion"
+                                            data-qr="{{ s.qr_code }}" data-session-id="{{ s.id }}">
+                                        <i class="fas fa-qrcode me-1"></i> Ver QR
+                                    </button>
                                 {% endif %}
                             </td>
                             <td>
@@ -192,6 +187,7 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
+                                {% if s.estado == 'conectado' %}
                                 <div class="dropdown">
                                     <button class="btn btn-icon" type="button" data-bs-toggle="dropdown"
                                             aria-expanded="false"
@@ -201,12 +197,13 @@
                                     <ul class="dropdown-menu dropdown-menu-end">
                                         <li>
                                             <a class="dropdown-item" href="javascript:void(0);"
-                                               onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete')">
-                                                <i class="fas fa-trash me-2 text-danger"></i> Eliminar
+                                               onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete', '¿Desconectar esta sesión?')">
+                                                <i class="fa-solid fa-plug-circle-minus me-2 text-danger"></i> Desconectar sesión
                                             </a>
                                         </li>
                                     </ul>
                                 </div>
+                                {% endif %}
                             </td>
                         </tr>
                     {% empty %}
@@ -335,10 +332,11 @@
         var session_id = '';
         const modalAgregarSesion = document.getElementById('modalAgregarSesion');
 
-        modalAgregarSesion.addEventListener('shown.bs.modal', function () {
+        modalAgregarSesion.addEventListener('shown.bs.modal', function (e) {
             if (sessionSocket) sessionSocket.close();
+            const sessionId = e.relatedTarget.getAttribute('data-session-id') || session_id;
             $.post('', {
-                'last_session_id': session_id,
+                'last_session_id': sessionId,
                 'action': 'add',
                 'csrfmiddlewaretoken': '{{ csrf_token }}'
             }, function (res) {
@@ -376,8 +374,15 @@
                                 break;
                             case 'auth_failure':
                             case 'disconnected':
-                                $('#qrContent').html('<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i> Intentando nuevamente</div>');
+                                $('#qrContent').html(`<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i> ${data.msgerror || 'Intentando nuevamente'}</div>`);
                                 break;
+                            case 'error':
+                                $('#qrContent').html(`<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i> ${data.msgerror}</div>`);
+                                break;
+                        }
+
+                        if (data.msgerror) {
+                            alertaDanger(data.msgerror, 3000);
                         }
                     };
 

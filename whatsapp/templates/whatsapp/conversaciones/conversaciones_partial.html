@@ -1,48 +1,6 @@
+{% load humanize %}
 {% for conversacion in conversaciones %}
-<div class="p-2 border-dashed border-theme-color rounded mb-2 conversacion-item" data-id="{{ conversacion.id }}">
-    <a href="javascript:void(0);" class="cargar-conversacion" data-id="{{ conversacion.id }}">
-        <div class="d-flex align-items-start">
-            <div class="position-relative">
-                {% if conversacion.contacto_foto %}
-                    <img src="{{ conversacion.contacto_foto }}" alt="" class="thumb-lg rounded-circle">
-                {% else %}
-                    <img src="assets/images/users/avatar-1.jpg" alt="" class="thumb-lg rounded-circle">
-                {% endif %}
-                <span class="position-absolute bottom-0 end-0">
-                    <i class="fa-solid fa-circle {% if conversacion.estado == 'activo' %}text-success{% else %}text-secondary{% endif %} fs-10 border-2 border-theme-color"></i>
-                </span>
-            </div>
-            <div class="flex-grow-1 ms-2 text-truncate align-self-center">
-                <h6 class="my-0 fw-medium text-dark fs-14">
-                    {% if conversacion.contacto_nombre %}
-                        {{ conversacion.contacto_nombre }}
-                    {% else %}
-                        {{ conversacion.contacto_numero }}
-                    {% endif %}
-                    <small class="float-end text-muted fs-11">
-                        {% if conversacion.fecha_ultimo_mensaje %}
-                            {% if conversacion.fecha_ultimo_mensaje.date == today %}
-                                {{ conversacion.fecha_ultimo_mensaje|date:"H:i" }}
-                            {% else %}
-                                {{ conversacion.fecha_ultimo_mensaje|date:"d/m/Y" }}
-                            {% endif %}
-                        {% endif %}
-                    </small>
-                </h6>
-                <p class="text-muted mb-0">
-                    {{ conversacion.ultimo_mensaje|truncatechars:30 }}
-                    {% with no_leidos=conversacion.mensajes.filter.count %}
-                        {% if no_leidos > 0 %}
-                            <span class="badge float-end rounded text-white bg-success">
-                                {{ no_leidos }}
-                            </span>
-                        {% endif %}
-                    {% endwith %}
-                </p>
-            </div>
-        </div>
-    </a>
-</div>
+    {% include 'whatsapp/conversaciones/conversacion_item.html' with conversacion=conversacion %}
 {% empty %}
 <div class="p-3 text-center">
     <p class="text-muted">No hay conversaciones disponibles</p>

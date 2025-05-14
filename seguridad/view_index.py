@@ -34,8 +34,12 @@ def index(request):
         if 'action' in request.GET:
             data["action"] = action = request.GET['action']
 
-        # VERIFICACIÓN DE PERFIL IA
-        mostrar_modal_ia = not hasattr(persona, 'perfil_ia') or not persona.perfil_ia.tiene_datos_basicos()
-        data['mostrar_modal_ia'] = mostrar_modal_ia
 
+        if persona.es_administrativo():
+            data['PERFIL_EXISTE'] = True
+            # VERIFICACIÓN DE PERFIL IA
+            mostrar_modal_ia = not hasattr(persona, 'perfil_ia') or not persona.perfil_ia.tiene_datos_basicos()
+            data['mostrar_modal_ia'] = mostrar_modal_ia
+        else:
+            data['PERFIL_EXISTE'] = False
         return render(request, 'seguridad/index.html', data)
