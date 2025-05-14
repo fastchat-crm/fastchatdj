@@ -326,6 +326,7 @@
             chatSocket.send(JSON.stringify({
               event: "sendPresenceUpdate"
             }));
+            quitPresenceUpdate();
         });
 
         // Enviar mensaje
