@@ -312,6 +312,13 @@
             $(this).closest('.conversacion-item').addClass('active');
         });
 
+        $('form input[name="mensaje"]').keyup(function(e) {
+            if (!chatSocket) return;
+            chatSocket.send(JSON.stringify({
+              event: "sendPresenceUpdate"
+            }));
+        });
+
         // Enviar mensaje
         $('#form-enviar-mensaje').submit(function(e) {
             e.preventDefault();
