@@ -36,7 +36,7 @@ class SesionWhatsApp(ModeloBase):
     # Campos para la gestión de mensajes
     mensaje_bienvenida = models.TextField(blank=True, null=True, verbose_name='Mensaje de bienvenida')
     mensaje_despedida = models.TextField(blank=True, null=True, verbose_name='Mensaje de despedida')
-    min_sesion = models.IntegerField(default=15, verbose_name='Minutos de sesión')
+    min_sesion = models.IntegerField(default=0, verbose_name='Minutos de sesión')
 
     def is_connected(self):
         return self.estado == 'conectado'
