@@ -61,9 +61,6 @@
                                     </option>
                                 {% endfor %}
                             </select>
-                        <button id="btn-sync-contacts" class="btn btn-sm btn-primary ms-2">
-                            <i class="fa fa-sync"></i> Sincronizar contactos
-                        </button>
                     </div>
                 </div>
 
@@ -224,7 +221,7 @@
 
                 if ((data.type === 'new_message' || data.type === 'messages_update') && data.html) {
                     const conversacion = $(`#lista-conversaciones div[data-id=${data.conversacion_id}]`);
-                    if (conversacion) {
+                    if (conversacion.length) {
                         conversacion.replaceWith(data.html);
                     } else {
                         $(`#lista-conversaciones`).append(data.html);
@@ -268,38 +265,6 @@
                 }
             }
         }
-
-        $('#btn-sync-contacts').click(function() {
-            const sesionId = $('#sesion-selector').val();
-            if (!sesionId) {
-                alertaWarning('Selecciona una sesión primero');
-                return;
-            }
-
-            $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Sincronizando...');
-
-            $.ajax({
-                url: '{% url "sync_contacts" %}',
-                type: 'POST',
-                data: {
-                    session_id: sesionId,
-                    csrfmiddlewaretoken: '{{ csrf_token }}'
-                },
-                success: function(response) {
-                    if (response.success) {
-                        alertaWarning('Sincronización de contactos iniciada. Los nombres se actualizarán en breve.');
-                    } else {
-                        alertaWarning('Error: ' + response.message);
-                    }
-                },
-                error: function(xhr, status, error) {
-                    alertaWarning('Error al sincronizar contactos: ' + error);
-                },
-                complete: function() {
-                    $('#btn-sync-contacts').prop('disabled', false).html('<i class="fa fa-sync"></i> Sincronizar contactos');
-                }
-            });
-        });
 
         // Variables globales
        // Variables globales
@@ -345,6 +310,13 @@
             // Marcar como activa
             $('.conversacion-item').removeClass('active');
             $(this).closest('.conversacion-item').addClass('active');
+        });
+
+        $('form input[name="mensaje"]').keyup(function(e) {
+            if (!chatSocket) return;
+            chatSocket.send(JSON.stringify({
+              event: "sendPresenceUpdate"
+            }));
         });
 
         // Enviar mensaje

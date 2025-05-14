@@ -197,7 +197,7 @@ class FormParent:
             # '/static/assets/plugins/select2/js/i18n/es.js',
             # '/static/assets/plugins/dropify/js/dropify.min.js',
             # '/static/js/form-controls-init.js',
-            # '/static/js/forms.js?v=11',
+            '/static/js/forms.js?v=11',
             # '/static/panel/js/inline_forms.js?v=2',
         )
 

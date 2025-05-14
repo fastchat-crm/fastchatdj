@@ -3,6 +3,8 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.template.loader import render_to_string
 from .models import ConversacionWhatsApp, MensajeWhatsApp
+from .services import WhatsAppService
+
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -29,10 +31,25 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'html': html
         }))
 
+    async def receive(self, text_data=None, bytes_data=None):
+        text_data_json = json.loads(text_data)
+        message_type = text_data_json.get('event')
+        if message_type == 'sendPresenceUpdate':
+            await self.send_presence_update(self.conversacion_id)
+
+
+    @database_sync_to_async
+    def send_presence_update(self, conversacion_id):
+        conversacion = ConversacionWhatsApp.objects.filter(
+            contacto__sesion__usuario__id=self.user.id, id=conversacion_id
+        ).first()
+        whatsapp_service = WhatsAppService()
+        whatsapp_service.send_presence_update(conversacion.sesion.session_id, conversacion.from_number)
+
     @database_sync_to_async
     def get_messages_html(self, conversacion_id):
         try:
-            conversacion = ConversacionWhatsApp.objects.filter(sesion__usuario__id=self.user.id, id=conversacion_id).first()
+            conversacion = ConversacionWhatsApp.objects.filter(contacto__sesion__usuario__id=self.user.id, id=conversacion_id).first()
             mensajes = MensajeWhatsApp.objects.filter(
                 conversacion=conversacion
             ).order_by('fecha')
@@ -113,7 +130,7 @@ class SessionRoomConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_conversacion_html(self, conversacion_id):
         try:
-            conversacion = ConversacionWhatsApp.objects.filter(sesion__usuario__id=self.user.id, id=conversacion_id).first()
+            conversacion = ConversacionWhatsApp.objects.filter(contacto__sesion__usuario__id=self.user.id, id=conversacion_id).first()
             conversacion_html = render_to_string('whatsapp/conversaciones/conversacion_item.html', {
                 'conversacion': conversacion
             })

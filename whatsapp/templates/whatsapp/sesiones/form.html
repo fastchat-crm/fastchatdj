@@ -1,20 +1,18 @@
-{% extends 'base.html' %}
-{% block head %}{% endblock %}
-
-{% block content %}
-<div class="container">
-    <h3>{{ titulo }}</h3>
-    <form method="post">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="{{ action }}">
-        {% if action == 'change' %}
-        <input type="hidden" name="pk" value="{{ pk }}">
-        {% endif %}
-        {{ form.as_p }}
-        <button type="submit" class="btn btn-success">Guardar</button>
-        <a href="{{ ruta }}" class="btn btn-secondary">Cancelar</a>
-    </form>
-</div>
-{% endblock %}
-
-{% block jscript %}{% endblock %}
+<input type="hidden" name="pk" value="{{ instance.id }}">
+<input type="hidden" name="action" value="{{ action }}">
+{% for field in form %}
+    {% if field.is_hidden %}
+        {{ field }}
+    {% else %}
+        <div id="fieldset_{{ field.name }}" class="col-lg-12">
+            <div class="mb-3">
+                {{ field.label_tag }}
+                <div>
+                    {{ field }}
+                    <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+{% endfor %}
+{{ form.media }}

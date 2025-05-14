@@ -200,6 +200,14 @@
                                                onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete', '¿Desconectar esta sesión?')">
                                                 <i class="fa-solid fa-plug-circle-minus me-2 text-danger"></i> Desconectar sesión
                                             </a>
+                                            <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="sincronizarContactos({{ s.id }})">
+                                                <i class="fa fa-sync me-2 text-success"></i> Sincronizar contactos
+                                            </a>
+                                            <a href="?action=change&pk={{ s.id }}"
+                                               class="dropdown-item formmodal">
+                                                <i class="fa-solid fa-pen-to-square me-2 text-success"></i> Modificar
+                                            </a>
                                         </li>
                                     </ul>
                                 </div>
@@ -405,5 +413,37 @@
         modalAgregarSesion.addEventListener('hidden.bs.modal', function () {
             if (sessionSocket) sessionSocket.close();
         });
+    </script>
+    <script>
+        function sincronizarContactos(sesionId) {
+            if (!sesionId) {
+                alertaWarning('Selecciona una sesión primero');
+                return;
+            }
+
+            $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Sincronizando...');
+
+            $.ajax({
+                url: '{% url "sync_contacts" %}',
+                type: 'POST',
+                data: {
+                    session_id: sesionId,
+                    csrfmiddlewaretoken: '{{ csrf_token }}'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        alertaWarning('Sincronización de contactos iniciada. Los nombres se actualizarán en breve.');
+                    } else {
+                        alertaWarning('Error: ' + response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alertaWarning('Error al sincronizar contactos: ' + error);
+                },
+                complete: function() {
+                    $('#btn-sync-contacts').prop('disabled', false).html('<i class="fa fa-sync"></i> Sincronizar contactos');
+                }
+            });
+        }
     </script>
 {% endblock %}

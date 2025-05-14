@@ -1,8 +1,14 @@
+from functools import cached_property
+
+from dateutil.relativedelta import relativedelta
 from django.db import models
+from django.utils import timezone
+
 from core.custom_models import ModeloBase
 from autenticacion.models import Usuario
 from core.funciones import default_expira_10_min
-from whatsapp.models_querysetmanagers import ConversacionWhatsAppManager
+from core.funciones_adicionales import remover_espacios_de_mas
+from whatsapp.models_querysetmanagers import ContactoManager, ConversacionWhatsAppManager
 
 ESTADOS_SESION = (
     ('pendiente', 'Pendiente'),
@@ -15,7 +21,7 @@ ESTADOS_SESION = (
 class SesionWhatsApp(ModeloBase):
     nombre = models.CharField(max_length=150, blank=True, null=True, verbose_name='Nombre')
     numero = models.CharField(max_length=50, verbose_name='Número WhatsApp', default='')
-    whatsapp_id = models.CharField(max_length=250, verbose_name='WhatsApp ID', default='')
+    whatsapp_id = models.CharField(max_length=250, verbose_name='WhatsApp ID', default='', blank=True)
     estado = models.CharField(max_length=20, choices=ESTADOS_SESION, default='pendiente')
     qr_code = models.TextField(blank=True, null=True, verbose_name='Código QR actual (Base64)')
     usuario = models.ForeignKey(Usuario, on_delete=models.PROTECT, null=True, blank=True, verbose_name='Asesor asignado')
@@ -44,18 +50,19 @@ class SesionWhatsApp(ModeloBase):
 
     def save(self, *args, **kwargs):
         if self.estado == 'conectado':
-            self.ultima_conexion = models.DateTimeField(auto_now=True)
+            self.ultima_conexion = timezone.now()
         else:
             self.ultima_conexion = None
         if self.estado == 'pendiente':
             self.qr_code = None if not self.qr_code else self.qr_code
-            self.whatsapp_id = None if not self.whatsapp_id else self.whatsapp_id
             self.session_id = None if not self.session_id else self.session_id
             self.foto = None if not self.foto else self.foto
             self.contacts_list = '[]' if not self.contacts_list else self.contacts_list
         # Validar que min_sesion no supere 180 minutos (3 horas)
         if self.min_sesion > 180:
-            raise ValueError("El tiempo de sesión no puede superar las 3 horas (180 minutos).")        
+            raise ValueError("El tiempo de sesión no puede superar las 3 horas (180 minutos).")
+        self.mensaje_bienvenida = remover_espacios_de_mas(self.mensaje_bienvenida)
+        self.mensaje_despedida = remover_espacios_de_mas(self.mensaje_despedida)
         super().save(*args, **kwargs)
 
 
@@ -84,34 +91,97 @@ class WhatsAppWebhook(models.Model):
         return f"{self.get_type_display()} - {self.url}"
 
 
-class ConversacionWhatsApp(ModeloBase):
-    objects = ConversacionWhatsAppManager()
-    sesion = models.ForeignKey(SesionWhatsApp, on_delete=models.CASCADE, related_name='conversaciones')
-    from_number = models.CharField(max_length=255, blank=True, null=True, default='')
-    contacto_numero = models.CharField(max_length=50, verbose_name='Número del contacto')
+class Contacto(ModeloBase):
+    objects = ContactoManager()
+    sesion = models.ForeignKey(SesionWhatsApp, on_delete=models.CASCADE)
+    from_number = models.CharField(max_length=255, blank=True, null=True, default='', editable=False)
+    contacto_numero = models.CharField(max_length=50, verbose_name='Número del contacto', editable=False)
     contacto_nombre = models.CharField(max_length=255, blank=True, null=True)
     contacto_foto = models.TextField(blank=True, null=True)
+    numero_telefono = models.CharField(max_length=50, verbose_name='Número de teléfono', default='')
     estado = models.CharField(max_length=20, choices=(('activo', 'Activo'), ('cerrado', 'Cerrado')), default='activo')
     ultimo_mensaje = models.TextField(blank=True, null=True)
     fecha_ultimo_mensaje = models.DateTimeField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.contacto_numero} ({self.sesion.numero})"
+
+    class Meta:
+        verbose_name = 'Contacto WhatsApp'
+        verbose_name_plural = 'Contactos WhatsApp'
+        ordering = ['contacto_nombre']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['sesion', 'from_number'], name='whatsapp_contacto_sesion_from_number_unique'
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.numero_telefono:
+            self.numero_telefono = self.contacto_numero
+        else:
+            self.contacto_numero = "".join([x for x in self.numero_telefono if x.isdigit()])
+            self.from_number = f"{self.contacto_numero}@s.whatsapp.net"
+        super().save(*args, **kwargs)
+
+
+class ConversacionWhatsApp(ModeloBase):
+    objects = ConversacionWhatsAppManager()
+    contacto = models.ForeignKey(Contacto, on_delete=models.CASCADE)
     order = models.PositiveIntegerField(default=0)
+    fecha_hora_expira = models.DateTimeField('Fecha y Hora que expira la conversación')
+    bienvenida_enviado = models.BooleanField('Bienvenida Enviado', default=False)
+    despedida_enviado = models.BooleanField('Despedida Enviado', default=False)
 
     class Meta:
         verbose_name = 'Conversación WhatsApp'
         verbose_name_plural = 'Conversaciones WhatsApp'
         ordering = ['-order']
-        constraints = [
-            models.UniqueConstraint(
-                fields=['sesion', 'from_number'], name='whatsapp_conversacion_sesion_from_number_unique'
-            )
-        ]
+
+    @cached_property
+    def sesion(self):
+        return self.contacto.sesion
+
+    @cached_property
+    def sesion_id(self):
+        return self.contacto.sesion_id
+
+    @cached_property
+    def from_number(self):
+        return self.contacto.from_number
+
+    @cached_property
+    def contacto_numero(self):
+        return self.contacto.contacto_numero
+
+    @cached_property
+    def contacto_nombre(self):
+        return self.contacto.contacto_nombre
+
+    @cached_property
+    def contacto_foto(self):
+        return self.contacto.contacto_foto
+
+    @cached_property
+    def estado(self):
+        return self.contacto.estado
+
+    @cached_property
+    def ultimo_mensaje(self):
+        return self.contacto.ultimo_mensaje
+
+    @cached_property
+    def fecha_ultimo_mensaje(self):
+        return self.contacto.fecha_ultimo_mensaje
 
     def __str__(self):
-        return f"Conversación con {self.contacto_numero} ({self.sesion.numero})"
+        return f"Conversación con {self.contacto}"
 
     def save(self, *args, **kwargs):
-        if self.fecha_ultimo_mensaje:
-            self.order = int(round(self.fecha_ultimo_mensaje.timestamp(), 0))
+        if self.contacto.fecha_ultimo_mensaje:
+            self.order = int(round(self.contacto.fecha_ultimo_mensaje.timestamp(), 0))
+        if not self.fecha_hora_expira:
+            self.fecha_hora_expira = timezone.now() + relativedelta(minutes=self.contacto.sesion.min_sesion)
         super().save(*args, **kwargs)
 
 TIPO_MENSAJE_CHOICES = (
