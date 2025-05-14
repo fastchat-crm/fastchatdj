@@ -16,16 +16,18 @@ class SesionWhatsApp(ModeloBase):
     numero = models.CharField(max_length=50, verbose_name='Número WhatsApp')
     estado = models.CharField(max_length=20, choices=ESTADOS_SESION, default='pendiente')
     qr_code = models.TextField(blank=True, null=True, verbose_name='Código QR actual (Base64)')
-    usuario = models.ForeignKey(Usuario, on_delete=models.PROTECT, null=True, blank=True,
-                                verbose_name='Asesor asignado')
+    usuario = models.ForeignKey(Usuario, on_delete=models.PROTECT, null=True, blank=True, verbose_name='Asesor asignado')
     ultima_conexion = models.DateTimeField(blank=True, null=True, verbose_name='Última conexión')
     observacion = models.TextField(blank=True, null=True, verbose_name='Observaciones')
     error_mensaje = models.TextField(blank=True, null=True, verbose_name='Último error')
-    fecha_expira_inactivo = models.DateTimeField(default=default_expira_10_min)
-    session_id = models.CharField(max_length=255, unique=True)
-    foto = models.TextField(blank=True, null=True)
-    contacts_list = models.TextField(default='[]')
-    contacts_length = models.PositiveIntegerField(default=0)
+    fecha_expira_inactivo = models.DateTimeField(default=default_expira_10_min, verbose_name='Fecha de expiración por inactividad')
+    session_id = models.CharField(max_length=255, unique=True, verbose_name='ID de sesión')
+    foto = models.TextField(blank=True, null=True, verbose_name='Foto')
+    contacts_list = models.TextField(default='[]', verbose_name='Lista de Contactos')
+    contacts_length = models.PositiveIntegerField(default=0, verbose_name='Cantidad de contactos')
+    # Campos para la gestión de mensajes
+    mensaje_bienvenida = models.TextField(blank=True, null=True, verbose_name='Mensaje de bienvenida')
+    mensaje_despedida = models.TextField(blank=True, null=True, verbose_name='Mensaje de despedida')
 
     def is_connected(self):
         return self.estado == 'conectado'
