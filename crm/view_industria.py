@@ -40,14 +40,7 @@ def industriaView(request):
                         res_json.append({'error': False, "reload": True})
                     else:
                         raise FormError(form)
-                if action == 'addnew':
-                    form = Formulario(request.POST, request=request)
-                    if form.is_valid():
-                        form.save()
-                        log(f"Registro una industria {form.instance.__str__()}", request, "add", obj=form.instance.id)
-                        res_json.append({'error': False, "to": f'{request.path}?id={form.instance.id}'})
-                    else:
-                        raise FormError(form)
+
                 elif action == 'change':
                     filtro = model.objects.get(pk=int(request.POST['pk']))
                     form = Formulario(request.POST, instance=filtro, request=request)
@@ -87,14 +80,6 @@ def industriaView(request):
                 except Exception as ex:
                     return JsonResponse({"result": False, 'message': str(ex)})
 
-            if action == 'addnew':
-                try:
-                    data['titulo'] = f'Formulario de Industria'
-                    data["form"] = Formulario()
-                    return render(request, 'crm/industria/form_href.html', data)
-                except Exception as ex:
-                    pass
-
             elif action == 'change':
                 try:
                     pk = int(request.GET['id'])
@@ -113,17 +98,6 @@ def industriaView(request):
                 data["pk"] = pk
                 data["form"] = Formulario(instance=filtro, ver=True)
                 return render(request, 'crm/industria/form.html', data)
-
-            elif action == 'datos_popup':
-                ids = json.loads(request.GET['ids'])
-                data["listado"] = listado = model.objects.filter(status=True)
-                if listado.exclude(id__in=ids).exists():
-                    data["ids"] = list(listado.exclude(id__in=ids).values_list('id', flat=True))
-                    template = get_template("crm/industria/popup.html")
-                    json_content = template.render(data)
-                    return JsonResponse({"result": True, 'data': json_content, 'nuevo_registro': True})
-                else:
-                    return JsonResponse({"result": True, 'nuevo_registro': False})
 
 
         criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True), ''

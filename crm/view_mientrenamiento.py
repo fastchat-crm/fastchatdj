@@ -1,3 +1,4 @@
+import json
 import sys
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -7,8 +8,9 @@ from django.contrib import messages
 from django.template.loader import get_template
 
 from core.custom_forms import FormError
-from crm.forms import PerfilNegocioIAForm, ProductoIAForm, ServicioIAForm, RespuestaEntrenadaIAForm
-from crm.models import PerfilNegocioIA, ProductoIA, ServicioIA, RespuestaEntrenadaIA
+from crm.forms import PerfilNegocioIAForm, ProductoIAForm, ServicioIAForm, RespuestaEntrenadaIAForm, IndustriaForm, \
+    ActividadEconomicaForm
+from crm.models import PerfilNegocioIA, ProductoIA, ServicioIA, RespuestaEntrenadaIA, Industria, ActividadEconomica
 from core.funciones import addData, secure_module, log
 
 @login_required
@@ -125,6 +127,25 @@ def entrenamiento_ia_view(request):
                         log(f"Elimino un respuesta IA {filtro.__str__()}", request, "del", obj=filtro.id)
                         messages.success(request, f"Registro Eliminado")
                         res_json = {"error": False}
+                    elif action == 'add_new_industria':
+                        form = IndustriaForm(request.POST, request=request)
+                        if form.is_valid():
+                            form.save()
+                            log(f"Registro una industria {form.instance.__str__()}", request, "add",
+                                obj=form.instance.id)
+                            res_json.append({'error': False, 'reload': True, 'close_popup': True, 'message': 'Registro creado exitosamente'})
+                        else:
+                            raise FormError(form)
+
+                    elif action == 'add_new_actividad':
+                        form = ActividadEconomicaForm(request.POST, request=request)
+                        if form.is_valid():
+                            form.save()
+                            log(f"Registro una actividad economica {form.instance.__str__()}", request, "add",
+                                obj=form.instance.id)
+                            res_json.append({'error': False, 'reload': True, 'close_popup': True, 'message': 'Registro creado exitosamente'})
+                        else:
+                            raise FormError(form)
 
             except ValueError as ex:
                 res_json.append({'error': True, "message": str(ex)})
@@ -193,6 +214,44 @@ def entrenamiento_ia_view(request):
                         return JsonResponse({"result": True, 'data': template.render(data)})
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})
+
+                elif action == 'add_new_industria':
+                    try:
+                        data['titulo'] = f'Formulario de Industria'
+                        data["form"] = IndustriaForm()
+                        return render(request, 'crm/industria/form_href.html', data)
+                    except Exception as ex:
+                        pass
+
+                elif action == 'datos_popup_industria':
+                    ids = json.loads(request.GET['ids'])
+                    data["listado"] = listado = Industria.objects.filter(status=True)
+                    if listado.exclude(id__in=ids).exists():
+                        data["ids"] = list(listado.exclude(id__in=ids).values_list('id', flat=True))
+                        template = get_template("crm/industria/popup.html")
+                        json_content = template.render(data)
+                        return JsonResponse({"result": True, 'data': json_content, 'nuevo_registro': True})
+                    else:
+                        return JsonResponse({"result": True, 'nuevo_registro': False})
+
+                elif action == 'add_new_actividad':
+                    try:
+                        data['titulo'] = f'Formulario de Industria'
+                        data["form"] = ActividadEconomicaForm()
+                        return render(request, 'crm/actividad_economica/form_href.html', data)
+                    except Exception as ex:
+                        pass
+
+                elif action == 'datos_popup_actividad':
+                    ids = json.loads(request.GET['ids'])
+                    data["listado"] = listado = ActividadEconomica.objects.filter(status=True)
+                    if listado.exclude(id__in=ids).exists():
+                        data["ids"] = list(listado.exclude(id__in=ids).values_list('id', flat=True))
+                        template = get_template("crm/actividad_economica/popup.html")
+                        json_content = template.render(data)
+                        return JsonResponse({"result": True, 'data': json_content, 'nuevo_registro': True})
+                    else:
+                        return JsonResponse({"result": True, 'nuevo_registro': False})
 
 
             data['form'] = PerfilNegocioIAForm(instance=perfil)

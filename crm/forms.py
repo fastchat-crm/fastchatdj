@@ -19,9 +19,9 @@ class PerfilNegocioIAForm(ModelFormBase):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
         super().__init__(*args, **kwargs)
         self.fields['industria'].queryset = Industria.objects.filter(status=True)
-        self.fields['industria'].widget.attrs['data-urladd'] = "/crm/industria/?action=addnew"
+        self.fields['industria'].widget.attrs['data-urladd'] = "/crm/entrenamiento/?action=add_new_industria"
         self.fields['actividad'].queryset = ActividadEconomica.objects.filter(status=True)
-        self.fields['actividad'].widget.attrs['data-urladd'] = "/crm/industria/?action=addnew"
+        self.fields['actividad'].widget.attrs['data-urladd'] = "/crm/entrenamiento/?action=add_new_actividad"
         for k, v in self.fields.items():
             self.fields[k].widget.attrs['class'] = 'form-control'
             self.fields[k].required = True

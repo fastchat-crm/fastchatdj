@@ -12,7 +12,7 @@ from core.custom_models import FormError
 from core.funciones import addData, paginador, secure_module, log
 from seguridad.templatetags.templatefunctions import encrypt
 from .forms import ContactoForm
-from .models import Contacto
+from .models import Contacto, SesionWhatsApp
 from django.contrib import messages
 
 
@@ -102,15 +102,23 @@ def contactoView(request):
 
         criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, sesion__usuario__id=request.user.id), ''
         id = request.GET.get('id', '')
+        sesion_id = request.GET.get('sesion_id', '')
+        if not request.user.is_superuser:
+            filtros = filtros & (Q(sesion__usuario=request.user))
         if criterio:
-            filtros = filtros & (Q(contacto_nombre__icontains=criterio))
+            filtros = filtros & (Q(contacto_nombre__icontains=criterio) | Q(contacto_numero__icontains=criterio))
             data["criterio"] = criterio
             url_vars += '&criterio=' + criterio
         if id:
             filtros = filtros & (Q(id=id))
             data["id"] = id
             url_vars += '&id=' + id
+        if sesion_id:
+            filtros = filtros & (Q(id=sesion_id))
+            data["sesion_id"] = int(sesion_id)
+            url_vars += '&sesion_id=' + sesion_id
         listado = model.objects.filter(filtros)
+        data["mis_sesiones"] = SesionWhatsApp.objects.filter(status=True, usuario=request.user).distinct()
         data["list_count"] = listado.count()
         data["url_vars"] = url_vars
         paginador(request, listado.order_by('contacto_nombre'), 20, data, url_vars)

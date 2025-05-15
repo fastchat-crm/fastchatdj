@@ -115,6 +115,17 @@ class Contacto(ModeloBase):
     ultimo_mensaje = models.TextField(blank=True, null=True)
     fecha_ultimo_mensaje = models.DateTimeField(blank=True, null=True)
 
+    def get_foto_gris(self):
+        try:
+            if not self.contacto_foto:
+                inicial = self.contacto_nombre[0].upper() if self.contacto_nombre else ''
+                if inicial and inicial.isalpha():
+                    return f"/static/images/initials/gris/{inicial}.png"
+                return "/static/foto_defaultd.png"
+            return self.contacto_foto
+        except Exception:
+            return "/static/foto_defaultd.png"
+
     def get_estado_color(self):
         if self.estado == 'activo':
             return 'success'
