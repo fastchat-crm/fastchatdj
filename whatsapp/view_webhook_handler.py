@@ -94,7 +94,8 @@ def webhook_handler(request):
                     if guardar:
                         session.numero = numero
                         session.whatsapp_id = whatsapp_id
-                        session.nombre = user_info.get('pushName') or user_info.get('verifiedBizName') or user_info.get('name') or user_info.get('notify') or user_info.get('verifiedName') or ''
+                        if not session.nombre:
+                            session.nombre = user_info.get('pushName') or user_info.get('verifiedBizName') or user_info.get('name') or user_info.get('notify') or user_info.get('verifiedName') or ''
 
             if guardar:
                 session.estado = 'conectado'
@@ -148,12 +149,20 @@ def webhook_handler(request):
             contacts_list = json.loads(session.contacts_list or '[]')
             new_contacts_list = []
             ids = [x["id"] for x in event_data.get('contacts_list') or []]
+            numbers = ["".join([y for y in x["id"] if y.isdigit()]) for x in event_data.get('contacts_list') or []]
             for c in contacts_list:
                 if not c["id"] in ids:
+                    if numbers and c.get("contacto_numero") and c['contacto_numero'] in numbers:
+                        continue
                     new_contacts_list.append(c)
             contacts_list = new_contacts_list + event_data.get('contacts_list') or []
-            session.contacts_list = json.dumps(contacts_list)
-            session.contacts_length = len(contacts_list)
+            new_contacts_list = []
+            for i, c in enumerate(contacts_list):
+                contacts_list[i]['contacto_numero'] = "".join([y for y in (c.get('id') or '') if y.isdigit()])
+                if c.get('id'):
+                    new_contacts_list.append(contacts_list[i])
+            session.contacts_list = json.dumps(new_contacts_list)
+            session.contacts_length = len(new_contacts_list)
             session.save()
 
         elif event_type == 'auth_failure':

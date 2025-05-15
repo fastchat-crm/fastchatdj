@@ -119,10 +119,10 @@ class WhatsAppService:
             contacts_list = json.loads(session.contacts_list or '[]')
             for c in contacts_list:
                 print(c)
-                from_number = c['id']
-                contacto_numero = ''
-                if '@' in from_number:
-                    contacto_numero = from_number.split('@')[0]
+                from_number = c.get('id') or ''
+                if not from_number:
+                    continue
+                contacto_numero = "".join([x for x in from_number if x.isdigit()])
                 photo = self.get_user_image(session.session_id, from_number)
                 contacto = Contacto.objects.filter(
                     sesion=session, from_number=from_number,
