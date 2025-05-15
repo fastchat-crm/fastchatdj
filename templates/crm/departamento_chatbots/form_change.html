@@ -1,0 +1,214 @@
+<div class="row g-2">
+    <input type="hidden" value="{{ filtro.pk }}" name="pk">
+    <input type="hidden" name="action" value="{{ action }}"/>
+    {% for field in form %}
+        {% if field.is_hidden %}
+            {{ field }}
+        {% else %}
+            <div class="col-lg-{{ field.field.widget.attrs.col }}">
+                <div class="mb-2">
+                    <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label>
+                    {{ field }}
+                    <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                </div>
+            </div>
+        {% endif %}
+    {% endfor %}
+</div>
+<div class="border-top my-3"></div>
+
+
+<div class="mb-2">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <label class="form-label fw-semibold">Opciones del ChatBot</label>
+        <button type="button" class="btn btn-sm btn-primary" onclick="agregarOpcionRaiz()">
+            <i class="fa fa-plus"></i> Agregar opción
+        </button>
+    </div>
+    <ul id="arbolOpciones" class="list-unstyled ps-1 border-start border-2 border-primary-subtle"></ul>
+</div>
+
+<div class="border-top my-3"></div>
+
+<div class="d-flex justify-content-end">
+    <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
+        <i class="fa fa-window-close me-1"></i>Cancelar
+    </button>
+    <a onclick="saveForm()" href="javascript:void(0)" class="btn btn-success btn-sm">
+        <i class="fa fa-save me-1"></i>Guardar
+    </a>
+    <div class="box_submit" style="display: none">
+        <button type="submit" class="btn btn-success btn-sm" id="btnSubmit">
+            <i class="fa fa-save me-1"></i>Guardar
+        </button>
+    </div>
+
+</div>
+
+{{ form.media }}
+
+{% include 'base_formulario_modal.html' %}
+
+
+<script>
+    const opcionesCargadas = JSON.parse('{{ opciones_json|safe }}');
+
+    function cargarOpcionesDesdeBackend(lista, $ul) {
+        lista.forEach(op => {
+            const $nodo = $(crearNodo(op.nombre, op.respuesta));
+            $nodo.data('id', op.id); // guardar ID para saber que ya existe
+            $ul.append($nodo);
+
+            if (op.hijos && op.hijos.length > 0) {
+                const $subul = $nodo.find('ul').first();
+                cargarOpcionesDesdeBackend(op.hijos, $subul);
+            }
+        });
+    }
+
+    cargarOpcionesDesdeBackend(opcionesCargadas, $('#arbolOpciones'));
+
+    function agregarOpcionRaiz() {
+        const $ul = $('#arbolOpciones');
+        $ul.append(crearNodo());
+        actualizarOrden();
+    }
+
+    function crearNodo(nombre = '', respuesta = '') {
+        const $li = $('<li class="mb-3"></li>');
+
+        const html = `
+        <div class="ms-2 border-start ps-3">
+            <div class="row align-items-center mb-1">
+                <div class="col-auto small text-muted orden-label fw-semibold">1</div>
+                <div class="col-8 pe-0">
+                    <input type="text" class="form-control form-control-sm border-0 border-bottom rounded-0 shadow-none" placeholder="Nombre de la opción" value="${nombre}">
+                </div>
+                <div class="col-3 text-end ps-1">
+                    <button type="button" class="btn btn-sm btn-link text-success px-1" onclick="agregarSubopcion(this)" title="Agregar subopción">
+                        <i class="fa fa-plus"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-link text-danger px-1" onclick="eliminarNodo(this)" title="Eliminar">
+                        <i class="fa fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-12">
+                    <textarea class="form-control form-control-sm border-0 border-bottom rounded-0 shadow-none bg-light" rows="2" placeholder="Respuesta">${respuesta}</textarea>
+                </div>
+            </div>
+            <ul class="list-unstyled ms-4 border-start border-1 border-secondary-subtle ps-2 mt-2"></ul>
+        </div>
+    `;
+
+        $li.html(html);
+        return $li[0]; // devuelve el elemento <li>
+    }
+
+    function agregarSubopcion(boton) {
+        const $li = $(boton).closest('li');
+        const nombre = $li.find('input').first().val().trim();
+        const respuesta = $li.find('textarea').first().val().trim();
+
+        if (!nombre || !respuesta) {
+            alertaWarning("Debes ingresar nombre y respuesta antes de agregar subopciones.");
+            return;
+        }
+
+        const $sublista = $li.find('ul').first();
+        $sublista.append(crearNodo());
+        actualizarOrden();
+    }
+
+    function eliminarNodo(boton) {
+        $(boton).closest('li').remove();
+        actualizarOrden();
+    }
+
+    function actualizarOrden() {
+        function asignarOrden($ul, prefijo = '') {
+            let contador = 1;
+            $ul.children('li').each(function () {
+                const actual = prefijo ? `${prefijo}.${contador}` : `${contador}`;
+                $(this).find('.orden-label').first().text(actual);
+
+                const $hijosUl = $(this).find('ul').first();
+                asignarOrden($hijosUl, actual);
+
+                contador++;
+            });
+        }
+
+        asignarOrden($('#arbolOpciones'));
+    }
+
+    function serializar($ul) {
+        const resultado = [];
+
+        $ul.children('li').each(function () {
+            const $li = $(this);
+            const nombre = $li.find('input').first().val().trim();
+            const respuesta = $li.find('textarea').first().val().trim();
+            const $hijosUl = $li.find('ul').first();
+
+            if (nombre || respuesta) {
+                resultado.push({
+                    nombre: nombre,
+                    respuesta: respuesta,
+                    hijos: serializar($hijosUl)
+                });
+            }
+        });
+
+        return resultado;
+    }
+
+    function saveForm() {
+        const $form = $('#frmDepartamento');
+        console.log($form)
+        const $opciones = $('#arbolOpciones li');
+        let valido = true;
+
+        $opciones.each(function () {
+            const $input = $(this).find('input').first();
+            const $textarea = $(this).find('textarea').first();
+
+            if ($input.val().trim() === '') {
+                alertaWarning('Todas las opciones deben tener un nombre.');
+                $input.focus();
+                valido = false;
+                return false;
+            }
+
+            if ($textarea.val().trim() === '') {
+                alertaWarning('Todas las opciones deben tener una respuesta.');
+                $textarea.focus();
+                valido = false;
+                return false;
+            }
+        });
+
+        if (!valido) return;
+
+        // Generar JSON
+        const jsonData = serializar($('#arbolOpciones'));
+
+        // Eliminar input hidden previo (si existe)
+        $form.find('input[name="arbol_json"]').remove();
+
+        // Crear input hidden con el JSON
+        const $inputHidden = $('<input>', {
+            type: 'hidden',
+            name: 'arbol_json',
+            value: JSON.stringify(jsonData)
+        });
+
+        $form.append($inputHidden);
+
+        // Enviar formulario
+        $('#btnSubmit').click();
+    }
+</script>
+
+

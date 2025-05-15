@@ -154,9 +154,60 @@ class RespuestaEntrenadaIA(ModeloBase):
         return f"{self.pregunta_clave} → {self.tono}"
 
 
-class PerfilNegocioChatBot(ModeloBase):
-    pass
+class DepartamentoChatBot(ModeloBase):
+    nombre = models.CharField(max_length=100, verbose_name="Nombre")
+    color = models.CharField(max_length=100, verbose_name="Color", default='')
+    mensaje_saludo = models.TextField(verbose_name="Mensaje de saludo", default='')
+
+    class Meta:
+        verbose_name = 'Departamento ChatBot'
+        verbose_name_plural = 'Departamentos ChatBot'
+
+    def __str__(self):
+        return self.nombre
+
+    def obtener_arbol_opciones(self):
+        def construir_arbol(opciones):
+            resultado = []
+            for opcion in opciones:
+                resultado.append({
+                    'id': opcion.id,
+                    'nombre': opcion.nombre,
+                    'respuesta': opcion.respuesta,
+                    'orden': opcion.orden,
+                    'hijos': construir_arbol(opcion.subopciones.filter(status=True).order_by('orden'))
+                })
+            return resultado
+
+        opciones_raiz = self.opciondepartamentochatbot_set.filter(opcion_padre__isnull=True, status=True).order_by('orden')
+        return construir_arbol(opciones_raiz)
+
+    def obtener_perfiles(self):
+        return self.perfildepartamentochatbot_set.filter(status=True).order_by('usuario__first_name')
 
 
-class PerfilNegocioPreguntaChatBot(ModeloBase):
-    pass
+class OpcionDepartamentoChatBot(ModeloBase):
+    departamento = models.ForeignKey(DepartamentoChatBot, on_delete=models.CASCADE, verbose_name="Departamento")
+    orden = models.PositiveSmallIntegerField(default=0, verbose_name="Orden")
+    nombre = models.CharField(max_length=100, verbose_name="Nombre")
+    respuesta = models.TextField(verbose_name="Respuesta", default='')
+    opcion_padre = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subopciones', verbose_name="Opción padre")
+
+    class Meta:
+        verbose_name = 'Opción Departamento ChatBot'
+        verbose_name_plural = 'Opciones Departamentos ChatBot'
+
+    def __str__(self):
+        return f"{self.departamento.nombre} - {self.nombre}"
+
+
+class PerfilDepartamentoChatBot(ModeloBase):
+    departamento = models.ForeignKey(DepartamentoChatBot, on_delete=models.SET_NULL, null=True, blank=True)
+    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE)
+
+    class Meta:
+        verbose_name = 'Perfil Negocio ChatBot'
+        verbose_name_plural = 'Perfiles Negocios ChatBot'
+
+    def __str__(self):
+        return f"{self.usuario.get_full_name()} - {self.departamento.nombre if self.departamento else 'Sin departamento'}"

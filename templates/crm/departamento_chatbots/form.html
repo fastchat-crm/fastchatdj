@@ -1,0 +1,310 @@
+<div class="row g-2">
+    <input type="hidden" value="{{ filtro.pk }}" name="pk">
+    <input type="hidden" name="action" value="{{ action }}"/>
+    {% for field in form %}
+        {% if field.is_hidden %}
+            {{ field }}
+        {% else %}
+            <div class="col-lg-{{ field.field.widget.attrs.col }}">
+                <div class="mb-2">
+                    <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label>
+                    {{ field }}
+                    <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                </div>
+            </div>
+        {% endif %}
+    {% endfor %}
+</div>
+<div class="border-top my-3"></div>
+
+
+<div class="mb-2">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <label class="form-label fw-semibold">Opciones del ChatBot</label>
+        <button type="button" class="btn btn-sm btn-primary" onclick="agregarOpcionRaiz()">
+            <i class="fa fa-plus"></i> Agregar opción
+        </button>
+    </div>
+    <ul id="arbolOpciones" class="list-unstyled ps-1 border-start border-2 border-primary-subtle"></ul>
+</div>
+
+<div class="border-top my-3"></div>
+
+<div class="d-flex justify-content-end">
+    <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
+        <i class="fa fa-window-close me-1"></i>Cancelar
+    </button>
+    <a onclick="saveForm()" href="javascript:void(0)" class="btn btn-success btn-sm">
+        <i class="fa fa-save me-1"></i>Guardar
+    </a>
+    <div class="box_submit" style="display: none">
+        <button type="submit" class="btn btn-success btn-sm" id="btnSubmit">
+            <i class="fa fa-save me-1"></i>Guardar
+        </button>
+    </div>
+
+</div>
+
+{{ form.media }}
+
+{% include 'base_formulario_modal.html' %}
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="/static/editor_emoji_picker/editor-emoji-picker.js"></script>
+<link rel="stylesheet" href="/static/editor_emoji_picker/editor-emoji.picker.css">
+
+<script>
+
+    editorEmojiPicker('id_mensaje_saludo');
+    var opcionesCargadas;
+    try {
+        opcionesCargadas = JSON.parse('{{ opciones_json|safe }}');
+    } catch (e) {
+        opcionesCargadas = [];
+    }
+
+    function initArbolOpciones() {
+        const $ul = $('#arbolOpciones');
+        $ul.empty();
+        cargarOpcionesDesdeBackend(opcionesCargadas, $ul);
+        actualizarOrden();
+        initSortable($ul);
+    }
+
+    function cargarOpcionesDesdeBackend(lista, $ul) {
+        lista.forEach(op => {
+            const $nodo = $(crearNodo(op.nombre, op.respuesta, false));
+            $nodo.data('id', op.id);
+            $ul.append($nodo);
+            if (op.hijos && op.hijos.length > 0) {
+                const $subul = $nodo.find('ul').first();
+                cargarOpcionesDesdeBackend(op.hijos, $subul);
+            }
+        });
+    }
+
+    function agregarOpcionRaiz() {
+        const $nodo = $(crearNodo('', '', true));
+        $('#arbolOpciones').append($nodo);
+        actualizarOrden();
+        initSortable($('#arbolOpciones'));
+    }
+
+    function crearNodo(nombre = '', respuesta = '', modoEdicion = false) {
+        const $li = $('<li class="mb-3"></li>');
+
+        const editableHTML = modoEdicion
+            ? `<input type="text" class="form-control form-control-sm editable-input" value="${nombre}">`
+            : `
+        <span class="editable-text">${nombre}</span>
+        <input type="text" class="form-control form-control-sm d-none editable-input" value="${nombre}">
+        <button type="button" class="btn btn-sm btn-link text-primary px-1 btn-edit" title="Editar">
+            <i class="fa fa-pencil"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-link text-success d-none px-1 btn-save" title="Guardar">
+            <i class="fa fa-check"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-link text-danger d-none px-1 btn-cancel" title="Cancelar">
+            <i class="fa fa-times"></i>
+        </button>`;
+
+        const html = `
+        <div class="ms-2 border-start ps-3">
+            <div class="row align-items-center mb-1">
+                <div class="col-auto d-flex align-items-center gap-1 orden-label text-muted fw-semibold user-select-none" title="Arrastrar para mover" style="cursor: grab;">
+                    <i class="fa fa-grip-lines fa-lg text-secondary"></i>
+                    <span class="orden-numero">1</span>
+                </div>
+                <div class="col-8 pe-0">
+                    <div class="d-flex align-items-center gap-2 editable-wrapper">
+                        ${editableHTML}
+                    </div>
+                </div>
+                <div class="col-3 text-end ps-1">
+                    <button type="button" class="btn btn-sm btn-link text-success px-1" onclick="agregarSubopcion(this)" title="Agregar subopción">
+                        <i class="fa fa-plus"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-link text-danger px-1" onclick="eliminarNodo(this)" title="Eliminar">
+                        <i class="fa fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-12">
+                    <textarea class="form-control form-control-sm border-0 border-bottom rounded-0 shadow-none bg-light" rows="2" placeholder="Respuesta">${respuesta}</textarea>
+                </div>
+            </div>
+            <ul class="list-unstyled ms-4 border-start border-1 border-secondary-subtle ps-2 mt-2"></ul>
+        </div>
+    `;
+
+        $li.html(html);
+        if (!modoEdicion) agregarEventosEdicion($li);
+        return $li[0];
+    }
+
+    function agregarEventosEdicion($li) {
+        const $wrapper = $li.find('.editable-wrapper');
+        const $text = $wrapper.find('.editable-text');
+        const $input = $wrapper.find('.editable-input');
+        const $btnEdit = $wrapper.find('.btn-edit');
+        const $btnSave = $wrapper.find('.btn-save');
+        const $btnCancel = $wrapper.find('.btn-cancel');
+
+        let valorOriginal = $input.val();
+
+        $btnEdit.on('click', function () {
+            valorOriginal = $text.text().trim();
+            $text.addClass('d-none');
+            $input.removeClass('d-none').val(valorOriginal).focus();
+            $btnEdit.addClass('d-none');
+            $btnSave.removeClass('d-none');
+            $btnCancel.removeClass('d-none');
+        });
+
+        $btnSave.on('click', function () {
+            const nuevoValor = $input.val().trim();
+            if (nuevoValor !== '') {
+                $text.text(nuevoValor);
+            }
+            $input.addClass('d-none');
+            $text.removeClass('d-none');
+            $btnSave.addClass('d-none');
+            $btnCancel.addClass('d-none');
+            $btnEdit.removeClass('d-none');
+        });
+
+        $btnCancel.on('click', function () {
+            $input.val(valorOriginal);
+            $input.addClass('d-none');
+            $text.removeClass('d-none');
+            $btnSave.addClass('d-none');
+            $btnCancel.addClass('d-none');
+            $btnEdit.removeClass('d-none');
+        });
+    }
+
+    function agregarSubopcion(boton) {
+        const $li = $(boton).closest('li');
+        const nombre = $li.find('.editable-text').first().text().trim() || $li.find('.editable-input').val().trim();
+        const respuesta = $li.find('textarea').first().val().trim();
+
+        if (!nombre || !respuesta) {
+            alertaWarning("Debes ingresar nombre y respuesta antes de agregar subopciones.");
+            return;
+        }
+
+        const $nodo = $(crearNodo('', '', true));
+        const $subul = $li.find('ul').first();
+        $subul.append($nodo);
+        initSortable($subul);
+        actualizarOrden();
+    }
+
+    function eliminarNodo(boton) {
+        $(boton).closest('li').remove();
+        actualizarOrden();
+    }
+
+    function actualizarOrden() {
+        function asignarOrden($ul, prefijo = '') {
+            let contador = 1;
+            $ul.children('li').each(function () {
+                const actual = prefijo ? `${prefijo}.${contador}` : `${contador}`;
+                $(this).find('.orden-numero').first().text(actual);
+                asignarOrden($(this).find('ul').first(), actual);
+                contador++;
+            });
+        }
+
+        asignarOrden($('#arbolOpciones'));
+    }
+
+    function initSortable($ul) {
+        new Sortable($ul[0], {
+            group: 'chatbot',
+            handle: '.orden-label',
+            animation: 150,
+            fallbackOnBody: true,
+            swapThreshold: 0.65,
+            onEnd: function () {
+                actualizarOrden();
+            }
+        });
+
+        $ul.find('ul').each(function () {
+            initSortable($(this));
+        });
+    }
+
+    function serializar($ul) {
+        const resultado = [];
+        $ul.children('li').each(function () {
+            const $li = $(this);
+            const id = $li.data('id') || null;
+            const nombre = $li.find('.editable-text').first().text().trim() || $li.find('.editable-input').val().trim();
+            const respuesta = $li.find('textarea').first().val().trim();
+            const hijos = serializar($li.find('ul').first());
+
+            if (nombre || respuesta) {
+                const item = {nombre, respuesta, hijos};
+                if (id) item.id = id;
+                resultado.push(item);
+            }
+        });
+        return resultado;
+    }
+
+    function saveForm() {
+        const $form = $('#frmDepartamento');
+        const $opciones = $('#arbolOpciones li');
+        let valido = true;
+
+        $opciones.each(function () {
+            const nombre = $(this).find('.editable-text').first().text().trim() || $(this).find('.editable-input').val().trim();
+            const respuesta = $(this).find('textarea').first().val().trim();
+
+            if (!nombre) {
+                alertaWarning('Todas las opciones deben tener un nombre.');
+                $(this).find('.editable-input, .editable-text').first().focus();
+                valido = false;
+                return false;
+            }
+            if (!respuesta) {
+                alertaWarning('Todas las opciones deben tener una respuesta.');
+                $(this).find('textarea').first().focus();
+                valido = false;
+                return false;
+            }
+        });
+
+        if (!valido) return;
+
+        const jsonData = serializar($('#arbolOpciones'));
+        $form.find('input[name="arbol_json"]').remove();
+
+        const $inputHidden = $('<input>', {
+            type: 'hidden',
+            name: 'arbol_json',
+            value: JSON.stringify(jsonData)
+        });
+
+        $form.append($inputHidden);
+        $form.submit();
+    }
+
+    $('#modalDetalle').on('hidden.bs.modal', function () {
+        $('#arbolOpciones').empty();
+    });
+
+    $('#modalDetalle').on('shown.bs.modal', function () {
+        initArbolOpciones();
+    });
+</script>
+
+
+
+
+
+
+

@@ -1,0 +1,233 @@
+<style>
+    .select2-search__field {
+        width: 100% !important;
+    }
+
+    .select2-container--open {
+        z-index: 9999 !important;
+    }
+</style>
+
+<div class="row g-2">
+    <input type="hidden" value="{{ filtro.pk }}" name="pk">
+    <input type="hidden" name="action" value="{{ action }}"/>
+    {% for field in form %}
+        {% if field.is_hidden %}
+            {{ field }}
+        {% else %}
+            <div class="col-lg-{{ field.field.widget.attrs.col }}">
+                <div class="mb-2">
+                    <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label>
+                    {{ field }}
+                    <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                </div>
+            </div>
+        {% endif %}
+    {% endfor %}
+</div>
+
+
+<div class="table-resposive  mb-4">
+    <table class="table table-bordered table-td-valign-middle tableUsuarios">
+        <thead>
+        <tr>
+            <th class="text-center">Usuario</th>
+            <th class="text-center">Acción</th>
+        </tr>
+        </thead>
+        <tbody id="tbody_participantes">
+        {% for s in filtro.obtener_perfiles %}
+            <tr>
+                <td class="text-left">
+                    <div class="d-flex justify-content-between align-items-center">
+                        {% with person=s.usuario %}
+                            <div class="d-flex align-items-center">
+                                {% if person.foto %}
+                                    <a href="{{ person.foto }}"
+                                       data-fancybox="image"
+                                       data-width="2048"
+                                       data-height="1365"
+                                       title="{{ person.numero }}">
+                                        <img class="rounded-circle me-3"
+                                             src="{{ person.foto }}"
+                                             width="60"
+                                             height="60"
+                                             alt="{{ person.numero }}">
+                                    </a>
+                                {% else %}
+                                    <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
+                                         style="width: 60px; height: 60px;">
+                                        <i class="fas fa-user fa-2x text-secondary"></i>
+                                    </div>
+                                {% endif %}
+                                <div class="info-top ml-2">
+                                    <span>{{ person.documento }}</span><br>
+                                    <span><b>{{ person.full_name }}</b></span>
+                                    {% if person.email %}<br>
+                                        <a href="mailto:{{ person.email }}"><i
+                                                class="fa fa-envelope"></i> {{ person.email }}
+                                        </a>
+                                    {% endif %}
+                                    {% if person.telcelular %}<br>
+                                        <a href="javascript:void(0)"
+                                           onclick="contactWS('{{ person.telcelular }}', '{{ person.full_name }}')">
+                                            <i class="fa-brands fa-whatsapp"></i>
+                                            +593 {{ person.telcelular }}
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endwith %}
+                    </div>
+                </td>
+                <td class="text-center">
+                    <a href="javascript:void(0)" onclick="eliminarajaxusuarios({{ s.id }}, '', 'eliminar_usuario', this)"
+                       class="btn btn-danger btn-mini"><i class="fa fa-trash"></i></a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="border-top my-3"></div>
+
+<div class="d-flex justify-content-end">
+    <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
+        <i class="fa fa-window-close me-1"></i>Cancelar
+    </button>
+    <a href="javascript:void(0)" class="btn btn-success btn-sm" onclick="guardarUsuarios('{{ filtro.pk }}')">
+        <i class="fa fa-save me-1"></i>Guardar
+    </a>
+</div>
+
+{{ form.media }}
+
+<script>
+    $(function () {
+
+        function formatRepo(repo) {
+            if (repo.loading) {
+                return 'Buscando...';
+            }
+
+            let fotoHtml = '';
+            const tieneFoto = repo.foto && repo.foto !== '';
+
+            if (tieneFoto) {
+                fotoHtml = `
+            <a href="${repo.foto}"
+               data-fancybox="image"
+               data-width="2048"
+               data-height="1365"
+               title="${repo.documento}">
+                <img class="rounded-circle me-3"
+                     src="${repo.foto}"
+                     width="60"
+                     height="60"
+                     alt="${repo.documento}">
+            </a>`;
+            } else {
+                fotoHtml = `
+            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
+                 style="width: 60px; height: 60px;">
+                <i class="fas fa-user fa-2x text-secondary"></i>
+            </div>`;
+            }
+
+            const html = `
+        <div class="d-flex align-items-center" style="padding: 6px;">
+            ${fotoHtml}
+            <div class="text-start">
+                <div><b>Documento:</b> ${repo.documento}</div>
+                <div><b>Nombres:</b> ${repo.text}</div>
+            </div>
+        </div>
+    `;
+
+            return $(html);
+        }
+
+        ItemsDisplay = function (item) {
+            if (item && item.text && item.documento) {
+                const tieneFoto = item.foto && item.foto !== '';
+                let fotoHtml = '';
+
+                if (tieneFoto) {
+                    fotoHtml = `
+                        <img src="${item.foto}"
+                             width="25"
+                             height="25"
+                             class="rounded-circle me-2"
+                             alt="${item.documento}">`;
+                } else {
+                    fotoHtml = `
+                <div class="rounded-circle bg-light d-inline-flex align-items-center justify-content-center me-2"
+                     style="width: 25px; height: 25px;">
+                    <i class="fas fa-user text-secondary" style="font-size: 0.9rem;"></i>
+                </div>`;
+                }
+
+                return $(`${fotoHtml}<span>${item.text}</span>`);
+            } else if (item) {
+                return item.text;
+            } else {
+                return 'Consultar Personas';
+            }
+        };
+
+        $("#id_usuarios").select2({
+            width: '100%',
+            placeholder: "Consultar Personas",
+            allowClear: true,
+            data: {},
+            ajax: {
+                url: function (params) {
+                    return "{{ request.path }}?action=buscarpersonas&q=" + params.term;
+                },
+                dataType: 'json',
+                delay: 250,
+                data: function (params) {
+                    return {
+                        q: params.term,
+                        page: params.page
+                    };
+                },
+                processResults: function (data, params) {
+                    params.page = params.page || 1;
+                    return {
+                        results: data.results,
+                        pagination: {
+                            more: (params.page * 30) < data.total_count
+                        }
+                    };
+                },
+                cache: true
+            },
+            escapeMarkup: function (markup) {
+                return markup;
+            }, // let our custom formatter work
+            minimumInputLength: 1,
+            templateResult: formatRepo, // omitted for brevity, see the source of this page
+            templateSelection: ItemsDisplay // omitted for brevity, see the source of this page
+        })
+
+        $('.tableUsuarios').DataTable({
+            responsive: false,
+            bInfo: false,
+            ordering: false,
+            searching: false,
+            {#dom: "<'row'<'col-sm-12 col-lg-3'f><'col-sm-12 col-lg-3'l><'col-sm-12 col-md-4'B>>" +#}
+            {#    "<'row'<'col-sm-12'tr>>" +#}
+            {#    "<'row'<'col-md-5 col-sm-12'i><'col-md-7 col-sm-12'p>>",#}
+            dom: 'Bfrtip',
+            language: {
+                "url": '/static/js/i18n/Spanish.json'
+            },
+            pageLength: 10,
+            buttons: []
+        });
+    })
+
+
+</script>

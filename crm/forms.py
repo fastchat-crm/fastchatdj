@@ -1,5 +1,10 @@
+from django import forms
+
+from autenticacion.models import Usuario
+from core.custom_forms import FormModeloBase
 from core.custom_models import ModelFormBase
-from crm.models import PerfilNegocioIA, ActividadEconomica, Industria, ProductoIA, ServicioIA, RespuestaEntrenadaIA
+from crm.models import PerfilNegocioIA, ActividadEconomica, Industria, ProductoIA, ServicioIA, RespuestaEntrenadaIA, \
+    DepartamentoChatBot
 
 
 class PerfilNegocioIAForm(ModelFormBase):
@@ -102,3 +107,30 @@ class RespuestaEntrenadaIAForm(ModelFormBase):
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 
 
+
+class DepartamentoChatBotForm(ModelFormBase):
+    class Meta:
+        model = DepartamentoChatBot
+        exclude = ('usuario_modificacion', 'fecha_modificacion', 'usuario_creacion', 'fecha_registro', 'status')
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super(DepartamentoChatBotForm, self).__init__(*args, **kwargs)
+        for k, v in self.fields.items():
+            self.fields[k].widget.attrs['class'] = 'form-control'
+            if k in ('nombre',):
+                self.fields[k].widget.attrs['col'] = '8'
+            elif k in ('color',):
+                self.fields[k].widget.attrs['col'] = '4'
+                self.fields[k].widget = forms.TextInput(attrs={
+                    'type': 'color',
+                    'class': 'form-control',
+                    'col': '4'
+                })
+
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+
+class AddPerfilDepartamentoChatBotForm(FormModeloBase):
+    usuarios = forms.ModelMultipleChoiceField(label='Personas', queryset=Usuario.objects.filter(status=True))

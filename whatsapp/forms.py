@@ -14,7 +14,7 @@ class SesionWhatsAppForm(ModelFormBase):
         for k, v in self.fields.items():
             self.fields[k].widget.attrs['class'] = 'form-control'
             if k in ('mensaje_bienvenida', 'mensaje_despedida',):
-                self.fields[k].widget.attrs['rows'] = '3'
+                self.fields[k].widget.attrs['rows'] = '10'
                 self.fields[k].widget.attrs['class'] = "summernote"
             if k in ('min_sesion',):
                 self.fields[k].widget.attrs['col'] = '3'

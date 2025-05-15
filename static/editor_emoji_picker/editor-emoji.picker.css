@@ -1,0 +1,51 @@
+.whatsapp-editor-container {
+  position: relative;
+}
+
+.editor-toolbar-minimal {
+  position: absolute;
+  bottom: 6px;
+  left: 10px;
+  display: flex;
+  gap: 12px;
+  padding: 2px 0;
+  font-size: 16px;
+  z-index: 10;
+}
+
+.editor-toolbar-minimal .btn-icon {
+  background-color: transparent;
+  border: none;
+  color: #bbb;
+  font-size: 18px;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.editor-toolbar-minimal .btn-icon:hover {
+  background-color: #25d36633; /* verde whatsapp con opacidad */
+  color: #25d366;
+}
+
+.editor-toolbar-minimal .btn-icon:active {
+  background-color: #25d366;
+  color: #fff;
+}
+
+.whatsapp-editor-container textarea.form-control {
+  padding-bottom: 3rem !important;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.emoji-picker-popup {
+  position: absolute;
+  bottom: 42px;
+  left: 0;
+  z-index: 9999;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}

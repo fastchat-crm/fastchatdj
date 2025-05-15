@@ -1,0 +1,281 @@
+{% extends 'base.html' %}
+{% block content %}
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="GET" class="mb-0">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Búsqueda general</label>
+                        <div class="input-group">
+                            <span class="input-group-text border-end-0">
+                                <i class="fa fa-search text-muted"></i>
+                            </span>
+                            <input type="text" class="form-control border-start-0"
+                                   placeholder="Buscar..." name="criterio" value="{{ criterio }}">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Acciones</label>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i>
+                            </button>
+                            {% if url_vars %}
+                                <a href="{{ ruta }}?{{ dict_url_vars }}" class="btn btn-default">
+                                    <i class="fas fa-sync-alt"></i>
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row align-items-center mb-3">
+        <div class="col-md-12 mb-2 mb-md-0">
+            <a href="javascript:void(0);" class="btn btn-success btn-sm"
+               onclick="formModal(0, 'Agregar {{ titulo }}', 'add')">
+                <i class="fas fa-plus-circle me-2"></i> Nuevo {{ titulo }}
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table id="tabla" class="table table-hover table-striped">
+                    <thead>
+                    <tr>
+                        <th class="text-center">Nombre</th>
+                        <th class="text-center">Color</th>
+                        <th class="text-center">Mensaje de Saludo</th>
+                        <th class="text-center">Acción</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for l in listado %}
+                        <tr>
+                            <td class="text-center">{{ l.nombre|default:'' }}</td>
+                            <td class="text-center"><span
+                                    style="display:inline-block; width:25px; height:25px; border-radius:5px; border:1px solid #ccc; background-color:{{ l.color }};"></span>
+                            </td>
+                            <td class="text-center">{{ l.mensaje_saludo|default:'' }}</td>
+                            <td class="text-center">
+                                <div class="dropdown">
+                                    <button class="btn btn-icon" type="button" id="dropdownMenuButton-{{ l.pk }}"
+                                            data-bs-toggle="dropdown" aria-expanded="false"
+                                            style="background: none; border: none;">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end"
+                                        aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+
+                                        <li>
+                                            <a class="dropdown-item"
+                                               onclick="formModal({{ l.pk }}, 'Asignación de usuarios {{ l }}', 'addUsers')"
+                                               href="javascript:void(0);">
+                                                <i class="fas fa-users me-2 text-success"></i>Usuarios
+                                            </a>
+                                        </li>
+                                        <li class="dropdown-divider"></li>
+                                        <li>
+                                            <a class="dropdown-item"
+                                               onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'change')"
+                                               href="javascript:void(0);">
+                                                <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'delete')">
+                                                <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% include "paginacion.html" %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-xl">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form" id="frmDepartamento">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalNombre"></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body detalleProd">
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/forms.js?version=1"></script>
+    <script>
+        function formModal(id, text, action) {
+            pantallaespera();
+            $.ajax({
+                type: "GET",
+                url: `{{ request.path }}`,
+                data: {
+                    'action': action,
+                    'id': id,
+                },
+                success: function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.result === true) {
+                        $('#modalNombre').html(text);
+                        $('.detalleProd').html(data.data);
+
+                        // Usar Bootstrap 5 modal
+                        const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+                        modal.show();
+                    } else {
+                        console.log('asdasd');
+                        console.log(data.message);
+                        mensajeWarning(data.message);
+                    }
+                },
+                error: function () {
+                    setTimeout($.unblockUI, 1);
+                    mensajeWarning("Error de conexión.");
+                },
+                dataType: "json"
+            });
+        }
+
+
+        function guardarUsuarios(pk) {
+            const $select = $('#id_usuarios');
+            const userIds = $select.val();
+
+            if (!userIds || userIds.length === 0) {
+                alertaWarning('Debes seleccionar al menos un usuario.');
+                return;
+            }
+
+
+            $.ajax({
+                type: 'POST',
+                url: '{{ request.path }}',
+                async: false,
+                data: {
+                    csrfmiddlewaretoken: '{{ csrf_token }}',
+                    action: 'guardar_usuarios',
+                    pk: pk,
+                    usuarios: JSON.stringify(userIds),
+                },
+                dataType: "json",
+                beforeSend: function () {
+                    pantallaespera();
+                },
+            }).done(function (response) {
+                setTimeout($.unblockUI, 1);
+                if (response.result) {
+                    $select.val(null).trigger('change');
+
+                    const table = $('.tableUsuarios').DataTable();
+
+                    response.usuarios.forEach(function (user) {
+                        const existe = $(`#tbody_participantes tr[data-usuario-id="${user.id}"]`).length > 0;
+                        if (!existe) {
+                            const fotoHtml = user.foto
+                                ? `<a href="${user.foto}" data-fancybox="image" data-width="2048" data-height="1365" title="${user.documento}">
+                                            <img class="rounded-circle me-3" src="${user.foto}" width="60" height="60" alt="${user.documento}">
+                                       </a>`
+                                : `<div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
+                                           style="width: 60px; height: 60px;">
+                                           <i class="fas fa-user fa-2x text-secondary"></i>
+                                       </div>`;
+
+                            const nombreHtml = `
+                                    <div class="d-flex align-items-center">
+                                        ${fotoHtml}
+                                        <div class="info-top">
+                                            <span>${user.documento}</span><br>
+                                            <span><b>${user.nombre}</b></span>
+                                            ${user.email ? `<br><a href="mailto:${user.email}"><i class="fa fa-envelope"></i> ${user.email}</a>` : ''}
+                                            ${user.telcelular ? `<br><a href="javascript:void(0)" onclick="contactWS('${user.telcelular}', '${user.nombre}')">
+                                                                    <i class="fa-brands fa-whatsapp"></i> +593 ${user.telcelular}</a>` : ''}
+                                        </div>
+                                    </div>`;
+
+                            const accionHtml = `
+                                    <a href="javascript:void(0)" onclick="eliminarajaxusuarios(${user.id_relacion}, '', 'eliminar_usuario', this)" class="btn btn-danger btn-mini">
+                                        <i class="fa fa-trash"></i>
+                                    </a>`;
+
+                            const rowNode = table.row.add([
+                                nombreHtml,
+                                accionHtml
+                            ]).draw(false).node();
+                            $(rowNode).find('td:eq(1)').addClass('text-center');
+                            $(rowNode).attr('data-usuario-id', user.id).hide().fadeIn('slow');
+                        }
+                    });
+
+                    alertaSuccess('Usuarios agregados correctamente.');
+                } else {
+                    alertaWarning(response.message || 'Ocurrió un error.');
+                }
+            }).fail(function (jqXHR, textStatus, errorThrown) {
+                setTimeout($.unblockUI, 1);
+                mensajeWarning('Error en el servidor');
+            }).always(function () {
+            });
+        }
+
+        function eliminarajaxusuarios(pk, nombre, accion, btn = null, titulo = `Estas a punto de eliminar este registro ${nombre}`) {
+            Swal.fire({
+                title: `${titulo}`,
+                text: "Esta acción es irreversible",
+                type: 'warning',
+                showCancelButton: true,
+                allowOutsideClick: false,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Sí, deseo hacerlo!',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.value) {
+                    pantallaespera();
+                    $.post("{{ request.path }}", {'action': accion, 'id': pk}, function (data) {
+                        setTimeout($.unblockUI, 1);
+                        if (data.error === false) {
+                            if (btn) {
+                                const $row = $(btn).closest('tr');
+                                $row.fadeOut(200, function () {
+                                    $row.remove();
+                                });
+                            }
+                            alertaSuccess('Registro eliminado correctamente');
+                        } else {
+                            alertaWarning(data.message || "Ocurrió un error");
+                        }
+                    }, "json");
+                }
+            });
+        }
+
+
+        $(function () {
+            $('#modalDetalle').on('hidden.bs.modal', function () {
+                $('#arbolOpciones').empty();
+            });
+
+        })
+    </script>
+{% endblock %}

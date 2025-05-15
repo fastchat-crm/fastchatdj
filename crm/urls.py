@@ -3,6 +3,7 @@ from django.urls import path, re_path
 from .view_actividad_economica import actividadEconomicaView
 from .view_industria import industriaView
 from .view_mientrenamiento import entrenamiento_ia_view
+from .view_departamento_chatbot import departamentoChatbotsView
 
 crm_urls = (
     {
@@ -19,6 +20,11 @@ crm_urls = (
         "nombre": "Actividad Economica",
         "url": 'actividad_economica/',
         "vista": actividadEconomicaView,
+    },
+    {
+        "nombre": "Departamentos & Chatbots",
+        "url": 'departamentos_chatbots/',
+        "vista": departamentoChatbotsView,
     },
 )
 

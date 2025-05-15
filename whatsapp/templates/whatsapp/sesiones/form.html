@@ -16,20 +16,11 @@
     {% endfor %}
 </div>
 {{ form.media }}
-<link href="/static/assets/plugins/summernote/dist/summernote.css" rel="stylesheet"/>
-<script src="/static/assets/plugins/summernote/dist/summernote.min.js"></script>
 
 
+
+<script src="/static/editor_emoji_picker/editor-emoji-picker.js"></script>
+<link rel="stylesheet" href="/static/editor_emoji_picker/editor-emoji.picker.css">
 <script>
-    $(document).ready(function () {
-        $('#id_mensaje_bienvenida, #id_mensaje_despedida').summernote({
-            placeholder: 'Ingresar Descripción',
-            height: 150,
-            toolbar: [
-                ['style', ['bold', 'italic', 'underline']],
-                ['insert', ['emoji']]
-            ]
-        });
-        console.log('asdsa', $.summernote.plugins);
-    });
+   ['id_mensaje_bienvenida', 'id_mensaje_despedida'].forEach(editorEmojiPicker);
 </script>
