@@ -40,7 +40,7 @@ def departamentoChatbotsView(request):
                         form.save()
                         opciones_json = json.loads(request.POST.get('arbol_json'))
                         if opciones_json:
-                            registrar_opciones_recursivas(opciones_json, departamento=form.instance)
+                            sincronizar_opciones(form.instance, opciones_json)
                         log(f"Registro un departamento {form.instance.__str__()}", request, "add", obj=form.instance.id)
                         res_json.append({'error': False, "reload": True})
                     else:
@@ -57,7 +57,7 @@ def departamentoChatbotsView(request):
 
                             ids_existentes = list(filtro.opciondepartamentochatbot_set.filter(status=True).values_list('id', flat=True))
 
-                            ids_actualizados = sincronizar_opciones(filtro, opciones_json, padre=None,existentes_ids=ids_existentes)
+                            ids_actualizados = sincronizar_opciones(filtro, opciones_json)
 
                             ids_eliminados = set(ids_existentes) - set(ids_actualizados)
                             if ids_eliminados:
@@ -142,7 +142,6 @@ def departamentoChatbotsView(request):
                 except Exception as ex:
                     return JsonResponse({"result": False, 'message': str(ex)})
 
-
             elif action == 'ver':
                 pk = int(request.GET['id'])
                 filtro = model.objects.get(pk=pk)
@@ -202,39 +201,23 @@ def departamentoChatbotsView(request):
         return render(request, 'crm/departamento_chatbots/view.html', data)
 
 
-
-def registrar_opciones_recursivas(lista_opciones, departamento, padre=None):
-    for index, item in enumerate(lista_opciones, 1):
-        opcion = OpcionDepartamentoChatBot.objects.create(
-            departamento=departamento,
-            opcion_padre=padre,
-            orden=index,
-            nombre=item.get('nombre', '').strip(),
-            respuesta=item.get('respuesta', '').strip()
-        )
-        hijos = item.get('hijos', [])
-        if hijos:
-            registrar_opciones_recursivas(hijos, departamento, padre=opcion)
-
-
-def sincronizar_opciones(departamento, lista, padre=None, existentes_ids=None):
+def sincronizar_opciones(departamento, lista, padre=None):
     nuevos_ids = []
 
     for index, item in enumerate(lista, 1):
-        opcion_id = item.get('id')
+        opcion_id = item.get('id', None)
         if opcion_id and OpcionDepartamentoChatBot.objects.filter(id=opcion_id, departamento=departamento).exists():
             opcion = OpcionDepartamentoChatBot.objects.get(id=opcion_id)
-            opcion.nombre = item['nombre']
-            opcion.respuesta = item['respuesta']
+            opcion.nombre = item.get('nombre', '').strip()
+            opcion.respuesta = item.get('respuesta', '').strip()
             opcion.orden = index
             opcion.opcion_padre = padre
-            opcion.status = True
             opcion.save()
         else:
             opcion = OpcionDepartamentoChatBot.objects.create(
                 departamento=departamento,
-                nombre=item['nombre'],
-                respuesta=item['respuesta'],
+                nombre=item.get('nombre', '').strip(),
+                respuesta=item.get('respuesta', '').strip(),
                 orden=index,
                 opcion_padre=padre
             )
@@ -242,7 +225,7 @@ def sincronizar_opciones(departamento, lista, padre=None, existentes_ids=None):
 
         hijos = item.get('hijos', [])
         if hijos:
-            nuevos_ids += sincronizar_opciones(departamento, hijos, padre=opcion, existentes_ids=existentes_ids)
+            nuevos_ids += sincronizar_opciones(departamento, hijos, padre=opcion)
 
     return nuevos_ids
 
