@@ -181,8 +181,17 @@ def departamentoChatbotsView(request):
                             (Q(first_name__contains=s[0]) & Q(last_name__contains=s[1])) |
                             (Q(first_name__contains=s[0]) & Q(first_name__contains=s[1]))).filter(
                             status=True).distinct()[:15]
-                    data = {"result": "ok", "results": [
-                        {"id": x.pk, "documento": f"{x.documento}", "text": x.full_name(), "foto": x.foto if x.foto else ""} for x in qspersona]}
+                    data = {
+                        "result": "ok",
+                        "results": [
+                            {
+                                "id": x.pk,
+                                "documento": f"{x.documento if x.documento else 'Sin documento'}",
+                                "text": x.full_name(),
+                                "foto": x.get_foto_gris()
+                            } for x in qspersona
+                        ]
+                    }
                     return JsonResponse(data)
                 except Exception as ex:
                     data = {"result": "ok", "results": []}
