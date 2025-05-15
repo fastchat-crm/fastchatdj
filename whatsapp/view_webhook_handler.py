@@ -158,8 +158,8 @@ def webhook_handler(request):
             contacts_list = new_contacts_list + event_data.get('contacts_list') or []
             new_contacts_list = []
             for i, c in enumerate(contacts_list):
-                contacts_list[i]['contacto_numero'] = "".join([y for y in (c.get('id') or '') if y.isdigit()])
-                if c.get('id'):
+                contacts_list[i]['contacto_numero'] = contacto_numero = "".join([y for y in (c.get('id') or '') if y.isdigit()])
+                if contacto_numero:
                     new_contacts_list.append(contacts_list[i])
             session.contacts_list = json.dumps(new_contacts_list)
             session.contacts_length = len(new_contacts_list)
