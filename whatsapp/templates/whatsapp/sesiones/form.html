@@ -1,3 +1,13 @@
+<style>
+    .select2-search__field {
+        width: 100% !important;
+    }
+
+    .select2-container--open {
+        z-index: 9999 !important;
+    }
+</style>
+
 <div class="row g-2">
     <input type="hidden" name="pk" value="{{ instance.id }}">
     <input type="hidden" name="action" value="{{ action }}">
@@ -18,9 +28,18 @@
 {{ form.media }}
 
 
-
 <script src="/static/editor_emoji_picker/editor-emoji-picker.js"></script>
 <link rel="stylesheet" href="/static/editor_emoji_picker/editor-emoji.picker.css">
 <script>
-   ['id_mensaje_bienvenida', 'id_mensaje_despedida'].forEach(editorEmojiPicker);
+    ['id_mensaje_bienvenida', 'id_mensaje_despedida'].forEach(editorEmojiPicker);
+
+
+    $(function () {
+        $('.jselect2').select2({
+            width: '100%',
+            placeholder: 'Seleccione una o multiples opciones',
+            allowClear: true,
+        });
+
+    })
 </script>

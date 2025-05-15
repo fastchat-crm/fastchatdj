@@ -38,7 +38,8 @@ class SesionWhatsApp(ModeloBase):
     mensaje_bienvenida = models.TextField(blank=True, null=True, verbose_name='Mensaje de bienvenida')
     mensaje_despedida = models.TextField(blank=True, null=True, verbose_name='Mensaje de despedida')
     min_sesion = models.IntegerField(default=0, verbose_name='Minutos de sesión')
-    
+    departamentos = models.ManyToManyField('crm.DepartamentoChatBot', verbose_name='Departamentos', blank=True)
+
     def is_connected(self):
         return self.estado == 'conectado'
 

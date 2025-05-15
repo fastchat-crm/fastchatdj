@@ -22,6 +22,7 @@ from django.contrib import messages
 @secure_module
 def departamentoChatbotsView(request):
     data = {'titulo': 'Departamentos & Chatbots',
+            'descripcion': 'Gestión de departamentos, preguntas y respuestas rapidas para el chatbot',
             'modulo': 'CRM',
             'ruta': request.path,
             'fecha': str(date.today())
@@ -167,8 +168,7 @@ def departamentoChatbotsView(request):
                     qspersona = Usuario.objects.filter(status=True).order_by('last_name')
                     s = q.split(" ")
                     if len(s) == 1:
-                        qspersona = qspersona.filter(
-                            (Q(first_name__icontains=q) | Q(last_name__icontains=q) | Q(documento__icontains=q)), Q(status=True)).distinct()[:15]
+                        qspersona = qspersona.filter((Q(first_name__icontains=q) | Q(last_name__icontains=q) | Q(documento__icontains=q)), Q(status=True)).distinct()[:15]
                     elif len(s) == 2:
                         qspersona = qspersona.filter((Q(last_name__contains=s[0])) |
                                                      (Q(first_name__icontains=s[0]) & Q(
