@@ -50,6 +50,7 @@
                                                 <a class="btn-link add-with-popup"
                                                    id="popup_id_{{ field.name }}"
                                                    data-idinput="id_{{ field.name }}"
+                                                   data-action="datos_popup_{{ field.name }}"
                                                    href="javascript:void(0);">
                                                     <i class="fas fa-plus-circle"></i> Agregar
                                                     más {{ field.label }}
@@ -381,77 +382,105 @@
     </script>
     {#  ABRIR EN POPUP EL MANTENIMIENTO  #}
     <script>
-        $(document).ready(function () {
-            $('.add-with-popup').click(function (e) {
-                e.preventDefault();
-                showAddAnotherPopup($(this));
-            });
+    $(document).ready(function () {
+        $('.add-with-popup').click(function (e) {
+            e.preventDefault();
+            showAddAnotherPopup($(this));
         });
+    });
 
-        function showAddAnotherPopup(triggeringLink) {
-            var name = triggeringLink.attr('id');
-            const idSelect = triggeringLink.attr('data-idinput');
-            name = id_to_windowname(name);
-            {#var href = triggeringLink.parent().parent().children(`#${idSelect}`).attr('data-urladd');#}
-            var href = $(`#${idSelect}`).attr('data-urladd');
-            if (href.indexOf('?') === -1) {
-                href += '?popup=1';
-            } else {
-                href += '&popup=1';
-            }
-            href += '&winName=' + name;
-            var win = window.open(href, name, 'height=500,width=900,resizable=yes,scrollbars=yes');
-            win.focus();
-            $(win).on('beforeunload', function () {
-                var ids = [];
-                var listadoOptions = $(`#${idSelect}`).children('option').toArray();
-                for (var i = 0; i < listadoOptions.length; i++) {
-                    var value = $(listadoOptions[i]).val();
-                    if (value) {
-                        ids.push(parseInt(value));
-                    }
+    function showAddAnotherPopup(triggeringLink) {
+        var name = triggeringLink.attr('id');
+        const idSelect = triggeringLink.attr('data-idinput');
+        const action = triggeringLink.attr('data-action');
+        name = id_to_windowname(name);
+        var href = $(`#${idSelect}`).attr('data-urladd');
+
+        if (href.indexOf('?') === -1) {
+            href += '?popup=1';
+        } else {
+            href += '&popup=1';
+        }
+        href += '&winName=' + name;
+
+        var win = window.open(href, name, 'height=500,width=900,resizable=yes,scrollbars=yes');
+        win.focus();
+
+        // Verificar periódicamente si el popup debe cerrarse
+        var checkPopup = setInterval(function() {
+            try {
+                if (win.closed) {
+                    clearInterval(checkPopup);
+                    checkForNewOptions(idSelect, action, href);
+                    return;
                 }
-                $.ajax({
-                    type: "GET",
-                    url: href.substring(0, href.indexOf('?')),
-                    data: {'action': 'datos_popup', 'ids': JSON.stringify(ids)},
-                    success: function (data) {
-                        if (data.result === true) {
-                            if (data.nuevo_registro) {
-                                if (data.usaa_jax) {
-                                    Swal.fire({
-                                        toast: true,
-                                        position: 'top-end',
-                                        type: 'success',
-                                        title: 'Registro Guardado',
-                                        showConfirmButton: false,
-                                        timer: 4000
-                                    })
-                                } else {
-                                    $(`#${idSelect}`).children('option').remove();
-                                    $(`#${idSelect}`).append(data.data);
-                                    $(`#${idSelect}`).select2();
-                                }
-                            }
-                        } else {
-                            mensajeDanger(data.mensaje);
-                        }
-                    },
-                    error: function () {
-                        mensajeDanger("Error de conexión.");
-                    },
-                    dataType: "json"
-                });
-            });
-            return false;
+
+                // Si el popup ha marcado que se completó el guardado
+                if (win.formSubmitted) {
+                    clearInterval(checkPopup);
+                    win.close();
+                    checkForNewOptions(idSelect, action, href);
+                }
+            } catch(e) {
+                // Si no se puede acceder al popup (posiblemente cerrado)
+                clearInterval(checkPopup);
+                checkForNewOptions(idSelect, action, href);
+            }
+        }, 500);
+
+        return false;
+    }
+
+    function checkForNewOptions(selectId, action, baseUrl) {
+        var ids = [];
+        var listadoOptions = $(`#${selectId}`).children('option').toArray();
+        for (var i = 0; i < listadoOptions.length; i++) {
+            var value = $(listadoOptions[i]).val();
+            if (value) {
+                ids.push(parseInt(value));
+            }
         }
 
-        function id_to_windowname(text) {
-            text = text.replace(/\./g, '__dot__');
-            text = text.replace(/\-/g, '__dash__');
-            text = text.replace(/\[/g, '__braceleft__');
-            text = text.replace(/\]/g, '__braceright__');
-            return text;
-        }
-    </script>
+        $.ajax({
+            type: "GET",
+            url: baseUrl.split('?')[0],
+            data: {'action': action, 'ids': JSON.stringify(ids)},
+            success: function (data) {
+                if (data.result === true) {
+                    if (data.nuevo_registro) {
+                        if (data.usaa_jax) {
+                            Swal.fire({
+                                toast: true,
+                                position: 'top-end',
+                                icon: 'success',
+                                title: 'Registro Guardado',
+                                showConfirmButton: false,
+                                timer: 4000
+                            });
+                        } else {
+                            $(`#${selectId}`).children('option').remove();
+                            $(`#${selectId}`).append(data.data);
+                            $(`#${selectId}`).select2();
+
+                        }
+                    }
+                } else {
+                    mensajeDanger(data.mensaje);
+                }
+            },
+            error: function () {
+                mensajeDanger("Error de conexión.");
+            },
+            dataType: "json"
+        });
+    }
+
+    function id_to_windowname(text) {
+        text = text.replace(/\./g, '__dot__');
+        text = text.replace(/\-/g, '__dash__');
+        text = text.replace(/\[/g, '__braceleft__');
+        text = text.replace(/\]/g, '__braceright__');
+        return text;
+    }
+</script>
 {% endblock %}

@@ -1,0 +1,4 @@
+<option value>---------</option>
+{% for l in listado %}
+    <option value="{{ l.id }}" {% if l.id in ids %}selected{% endif %}>{{ l.nombre }}</option>
+{% endfor %}
