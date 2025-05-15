@@ -26,7 +26,7 @@ class ActividadEconomica(ModeloBase):
         verbose_name_plural = 'Actividades Económicas'
 
     def __str__(self):
-        return f"{self.nombre} ({self.industria.nombre})"
+        return f"{self.nombre}"
 
 
 # Etapas de venta configurables por industria (embudo personalizado)

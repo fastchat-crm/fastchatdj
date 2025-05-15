@@ -53,7 +53,7 @@
                                                    data-action="datos_popup_{{ field.name }}"
                                                    href="javascript:void(0);">
                                                     <i class="fas fa-plus-circle"></i> Agregar
-                                                    más {{ field.label }}
+                                                    más {% if field.name == 'industria' %}industrias{% elif field.name == 'actividad' %}actividades{% endif %}
                                                 </a>
                                             </small>
                                         {% endif %}
