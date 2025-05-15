@@ -100,7 +100,7 @@ def contactoView(request):
                 return render(request, 'whatsapp/contacto/form.html', data)
 
 
-        criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True), ''
+        criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, sesion__usuario__id=request.user.id), ''
         id = request.GET.get('id', '')
         if criterio:
             filtros = filtros & (Q(contacto_nombre__icontains=criterio))
