@@ -19,7 +19,6 @@ class Industria(ModeloBase):
 # Permite especificar con más detalle a qué se dedica una empresa dentro de una industria
 class ActividadEconomica(ModeloBase):
     nombre = models.CharField(max_length=100)
-    industria = models.ForeignKey(Industria, on_delete=models.CASCADE, related_name='actividades')
     descripcion = models.TextField(blank=True, null=True)
 
     class Meta:

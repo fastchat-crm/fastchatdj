@@ -59,8 +59,6 @@ class ActividadEconomicaForm(ModelFormBase):
         super(ActividadEconomicaForm, self).__init__(*args, **kwargs)
         for k, v in self.fields.items():
             self.fields[k].widget.attrs['class'] = 'form-control'
-            if k in ('industria',):
-                self.fields[k].widget.attrs['class'] = 'form-control select2'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 
