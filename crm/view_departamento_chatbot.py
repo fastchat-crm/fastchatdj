@@ -191,7 +191,7 @@ def departamentoChatbotsView(request):
 
         criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True), ''
         if criterio:
-            filtros = filtros & (Q(nombre__icontains=criterio) | Q(descripcion__icontains=criterio))
+            filtros = filtros & (Q(nombre__icontains=criterio))
             data["criterio"] = criterio
             url_vars += '&criterio=' + criterio
         listado = model.objects.filter(filtros)
