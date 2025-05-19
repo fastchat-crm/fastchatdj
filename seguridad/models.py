@@ -301,20 +301,6 @@ class Empresa(ModeloBase):
     def __str__(self):
         return self.nombre
 
-    def indicadores_tickets(self):
-        from django.db.models import Q, Count
-        # Realizamos la agregación con la función `aggregate`
-        context = self.ticketatencion_set.filter(status=True).aggregate(
-            total=Count('id'),
-            pendientes=Count('id', filter=Q(estado__in=[1, 2])),
-            asignados=Count('id', filter=Q(estado=2)),
-            en_proceso=Count('id', filter=Q(estado=3)),
-            finalizados=Count('id', filter=Q(estado=4)),
-            vigentes=Count('id', filter=Q(fecha_vigencia__gte=datetime.now(), fecha_vigencia__isnull=False)),
-            vencidos=Count('id', filter=Q(fecha_vigencia__lt=datetime.now(), ffinactividad__isnull=True)),
-        )
-        return context
-
     class Meta:
         verbose_name = 'Empresa'
         verbose_name_plural = 'Empresas'

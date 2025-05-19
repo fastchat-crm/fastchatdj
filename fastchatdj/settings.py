@@ -85,7 +85,6 @@ INSTALLED_APPS = [
     'for_django_projects.pwa',
     'corsheaders',
     'channels',
-    'ticket'
 ]
 
 MIDDLEWARE = [
