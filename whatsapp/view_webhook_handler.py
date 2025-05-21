@@ -325,8 +325,8 @@ def process_incoming_message(session, event_data, channel_layer):
                 message_text = message_text or type_name
 
                 # Procesar archivo multimedia si hay datos
-                if 'mediaData' in event_data:
-                    media_data = event_data.get('mediaData')
+                if 'mediaData' in event_data and event_data.get('mediaData'):
+                    media_data = event_data['mediaData']
                     filename = media_msg.get(filename_key, f"{type_name}_{message_id}")
 
                     # Guardar el archivo
