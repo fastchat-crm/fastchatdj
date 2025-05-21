@@ -12,7 +12,7 @@ from whatsapp.services import WhatsAppService
 
 
 conversaciones = ConversacionWhatsApp.objects.expirado.filter(
-    despedida_enviado=False, conversacion_finalizada=False
+    despedida_enviado=False, conversacion_finalizada=False, fromMe=False
 ).select_related('contacto', 'contacto__sesion')
 whatsapp_service = WhatsAppService()
 

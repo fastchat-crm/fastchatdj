@@ -472,7 +472,7 @@ def process_sent_message(session, event_data, channel_layer):
         contacto.save()
 
         conversation = ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).first() or \
-                       ConversacionWhatsApp.objects.create(contacto=contacto)
+                       ConversacionWhatsApp.objects.create(contacto=contacto, fromMe=True)
 
         # Crear el mensaje
         message = MensajeWhatsApp.objects.create(

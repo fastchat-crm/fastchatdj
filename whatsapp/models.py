@@ -167,6 +167,7 @@ class ConversacionWhatsApp(ModeloBase):
     fecha_hora_expira = models.DateTimeField('Fecha y Hora que expira la conversación')
     fecha_fin_conversacion = models.DateTimeField('Fecha y Hora de cierre de la conversación', blank=True, null=True)
     duracion_conversacion = models.DurationField('Duración de la conversación', blank=True, null=True)
+    fromMe = models.BooleanField('¿From Me?', default=False)
 
     class Meta:
         verbose_name = 'Conversación WhatsApp'
