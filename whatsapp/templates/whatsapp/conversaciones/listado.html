@@ -61,59 +61,13 @@
                 <ul class="nav nav-tabs nav-justified" id="myTab" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link py-2 active" id="open_chats_tab" data-bs-toggle="tab"
-                               data-bs-target="#open_chats_content" type="button" role="tab">Abiertos</button>
+                               data-bs-target="#open_chats_content" type="button" role="tab">Conversaciones Abiertas</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link py-2" id="resolved_chats_tab" data-bs-toggle="tab"
-                               data-bs-target="#resolved_chats_content" type="button" role="tab">Resueltos</button>
+                        <a href="?action=conversationfinished" class="nav-link py-2" id="resolved_chats_tab" target="_blank">Conversaciones Finalizadas</a>
                     </li>
                 </ul>
 
-                <!-- Contenido de tabs principales -->
-                <div class="tab-content">
-                    <!-- Contenido de Abiertos -->
-                    <div class="tab-pane fade show active" id="open_chats_content" role="tabpanel">
-                        <!-- Submenú de Abiertos -->
-                        <ul class="nav nav-tabs nav-justified mt-2 submenu-tabs" id="openChatsSubMenu">
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link py-2 active" id="my_chats_tab" data-bs-toggle="tab"
-                                       data-bs-target="#my_chats" type="button" role="tab">Mis chats</button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link py-2" id="waiting_chats_tab" data-bs-toggle="tab"
-                                       data-bs-target="#waiting_chats" type="button" role="tab">En espera</button>
-                            </li>
-                        </ul>
-
-                        <!-- Contenido de submenú Abiertos -->
-                        <div class="tab-content mt-3">
-                            <div class="tab-pane fade show active" id="my_chats" role="tabpanel">
-                                <!-- Contenido de mis chats -->
-                            </div>
-                            <div class="tab-pane fade" id="waiting_chats" role="tabpanel">
-                                <!-- Contenido de chats en espera -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Contenido de Resueltos -->
-                    <div class="tab-pane fade" id="resolved_chats_content" role="tabpanel">
-                        <!-- Submenú de Resueltos -->
-                        <ul class="nav nav-tabs nav-justified mt-2 submenu-tabs" id="resolvedChatsSubMenu">
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link py-2 active" id="my_resolved_chats_tab" data-bs-toggle="tab"
-                                       data-bs-target="#my_resolved_chats" type="button" role="tab">Mis chats resueltos</button>
-                            </li>
-                        </ul>
-
-                        <!-- Contenido de submenú Resueltos -->
-                        <div class="tab-content mt-3">
-                            <div class="tab-pane fade show active" id="my_resolved_chats" role="tabpanel">
-                                <!-- Contenido de chats resueltos -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
                 <div class="chat-search p-3">
                     <div class="p-1 bg-light rounded rounded-pill">
