@@ -172,6 +172,40 @@ class ConversacionWhatsApp(ModeloBase):
         verbose_name_plural = 'Conversaciones WhatsApp'
         ordering = ['-order']
 
+    def traer_ultimo_mensaje(self):
+        return self.mensajes.last()
+
+    def get_foto_gris(self):
+        try:
+            if not self.contacto.contacto_foto:
+                inicial = self.contacto.contacto_nombre[0].upper() if self.contacto.contacto_nombre else ''
+                if inicial and inicial.isalpha():
+                    return f"/static/images/initials/gris/{inicial}.png"
+                return "/static/foto_defaultd.png"
+            return self.contacto.contacto_foto
+        except Exception:
+            return "/static/foto_defaultd.png"
+
+    def get_estado_color(self):
+        if self.contacto.estado == 'activo':
+            return 'success'
+        elif self.contacto.estado == 'cerrado':
+            return 'danger'
+        return 'default'
+
+    def get_estado_color_conversacion(self):
+        if self.estado == 'activo':
+            return 'success'
+        elif self.estado == 'cerrado':
+            return 'danger'
+        return 'default'
+
+    def numero_telefono(self):
+        return self.contacto.numero_telefono
+
+    def num_mensajes(self):
+        return self.mensajes.count()
+
     @cached_property
     def sesion(self):
         return self.contacto.sesion
