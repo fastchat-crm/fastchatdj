@@ -157,12 +157,15 @@ class Contacto(ModeloBase):
 
 class ConversacionWhatsApp(ModeloBase):
     objects = ConversacionWhatsAppManager()
-    hashed_id = models.TextField(default='')
-    contacto = models.ForeignKey(Contacto, on_delete=models.CASCADE)
-    order = models.PositiveIntegerField(default=0)
-    fecha_hora_expira = models.DateTimeField('Fecha y Hora que expira la conversación')
+    hashed_id = models.TextField(default='', verbose_name='ID encriptado', blank=True, null=True)
+    contacto = models.ForeignKey(Contacto, on_delete=models.CASCADE, verbose_name='Contacto', related_name='conversaciones')
+    order = models.PositiveIntegerField(default=0, verbose_name='Orden')
     bienvenida_enviado = models.BooleanField('Bienvenida Enviado', default=False)
     despedida_enviado = models.BooleanField('Despedida Enviado', default=False)
+    # Campos para la gestión de mensajes
+    fecha_hora_expira = models.DateTimeField('Fecha y Hora que expira la conversación')
+    fecha_fin_conversacion = models.DateTimeField('Fecha y Hora de cierre de la conversación', blank=True, null=True)
+    duracion_conversacion = models.DurationField('Duración de la conversación', blank=True, null=True)
 
     class Meta:
         verbose_name = 'Conversación WhatsApp'
