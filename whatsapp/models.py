@@ -163,6 +163,7 @@ class ConversacionWhatsApp(ModeloBase):
     bienvenida_enviado = models.BooleanField('Bienvenida Enviado', default=False)
     despedida_enviado = models.BooleanField('Despedida Enviado', default=False)
     # Campos para la gestión de mensajes
+    conversacion_finalizada = models.BooleanField('Conversación finalizada', default=False)
     fecha_hora_expira = models.DateTimeField('Fecha y Hora que expira la conversación')
     fecha_fin_conversacion = models.DateTimeField('Fecha y Hora de cierre de la conversación', blank=True, null=True)
     duracion_conversacion = models.DurationField('Duración de la conversación', blank=True, null=True)
