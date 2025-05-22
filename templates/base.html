@@ -1013,6 +1013,11 @@
             dataType: "json"
         });
     })
+
+    $('.bloqueo_pantalla').on('click', function () {
+        pantallaespera()
+    })
+
     showWaiting = function (titulo, mensaje, close) {
         var panel = $("#waitpanel");
         $("#waitpaneltitle").html(titulo);
