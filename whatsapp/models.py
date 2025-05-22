@@ -155,6 +155,20 @@ class Contacto(ModeloBase):
         super().save(*args, **kwargs)
 
 
+ESTADOS_CLASIFICACION = (
+    (0, 'Sin Clasificar'),
+    (1, 'Lead'),
+    (2, 'Prospecto'),
+    (3, 'Oportunidad'),
+    (4, 'Cliente'),
+    (5, 'No Interesado')
+)
+
+ESTADOS_CONVERSACION = (
+    (0, 'Activo'),
+    (1, 'Cerrado'),
+)
+
 class ConversacionWhatsApp(ModeloBase):
     objects = ConversacionWhatsAppManager()
     hashed_id = models.TextField(default='', verbose_name='ID encriptado', blank=True, null=True)
@@ -162,6 +176,8 @@ class ConversacionWhatsApp(ModeloBase):
     order = models.PositiveIntegerField(default=0, verbose_name='Orden')
     bienvenida_enviado = models.BooleanField('Bienvenida Enviado', default=False)
     despedida_enviado = models.BooleanField('Despedida Enviado', default=False)
+    # Campos para la gestión de la conversación
+    clasificacion = models.IntegerField(choices=ESTADOS_CLASIFICACION, default=0, verbose_name='Clasificación')
     # Campos para la gestión de mensajes
     conversacion_finalizada = models.BooleanField('Conversación finalizada', default=False)
     fecha_hora_expira = models.DateTimeField('Fecha y Hora que expira la conversación')
@@ -172,6 +188,33 @@ class ConversacionWhatsApp(ModeloBase):
         verbose_name = 'Conversación WhatsApp'
         verbose_name_plural = 'Conversaciones WhatsApp'
         ordering = ['-order']
+
+    def get_estado_color(self):
+        if self.estado == 0:
+            return 'success'
+        elif self.estado == 1:
+            return 'danger'
+        return 'default'
+
+    def get_estado_color_conversacion(self):
+        if self.conversacion_finalizada:
+            return 'danger'
+        return 'success'
+
+    def get_estado_color_clasificacion(self):
+        if self.clasificacion == 0:
+            return 'default'
+        elif self.clasificacion == 1:
+            return 'info'
+        elif self.clasificacion == 2:
+            return 'warning'
+        elif self.clasificacion == 3:
+            return 'primary'
+        elif self.clasificacion == 4:
+            return 'success'
+        elif self.clasificacion == 5:
+            return 'danger'
+        return 'default'
 
     def traer_ultimo_mensaje(self):
         return self.mensajes.last()
