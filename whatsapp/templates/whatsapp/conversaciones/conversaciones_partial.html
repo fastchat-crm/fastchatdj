@@ -1,6 +1,6 @@
 {% load humanize %}
 {% for conversacion in conversaciones %}
-    {% include 'whatsapp/conversaciones/conversacion_item.html' with conversacion=conversacion %}
+    {% include 'whatsapp/conversaciones/conversacion_item.html' with conversacion=conversacion show_date=show_date %}
 {% empty %}
 <div class="p-3 text-center">
     <p class="text-muted">No hay conversaciones disponibles</p>

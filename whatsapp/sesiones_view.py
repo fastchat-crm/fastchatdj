@@ -5,6 +5,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.contrib import messages
+from django.template.loader import get_template
 from django.urls import reverse
 
 from core.custom_forms import FormError
@@ -72,6 +73,17 @@ def sesionesView(request):
 
                     res_json.append({'error': False, 'to': redirectAfterPostGet(request)})
                     return JsonResponse(res_json, safe=False)
+                elif action == 'change_modal':
+                    instance = SesionWhatsApp.objects.get(id=request.POST['pk'])
+                    form = SesionWhatsAppForm(request.POST, request.FILES, instance=instance)
+
+                    if not form.is_valid():
+                        raise FormError(form)
+
+                    obj = form.save()
+                    res_json.append({'error': False, 'reload': True})
+                    return JsonResponse(res_json, safe=False)
+
                 elif action == 'delete_force':
                     session_id = request.POST.get('id')
                     session = SesionWhatsApp.objects.filter(id=session_id).first()
@@ -99,6 +111,14 @@ def sesionesView(request):
         data['instance'] = instance = SesionWhatsApp.objects.get(id=request.GET['pk'])
         data['form'] = SesionWhatsAppForm(instance=instance)
         return render(request, 'whatsapp/sesiones/form.html', data)
+    if action == 'change_modal':
+        try:
+            data['instance'] = instance = SesionWhatsApp.objects.get(id=request.GET['pk'])
+            data['form'] = SesionWhatsAppForm(instance=instance)
+            template = get_template("whatsapp/sesiones/form_modal.html")
+            return JsonResponse({"result": True, 'data': template.render(data)})
+        except Exception as ex:
+            return JsonResponse({"result": False, 'message': str(ex)})
     criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, usuario_id=request.user.id), ''
     if criterio:
         filtros = filtros & (Q(numero__icontains=criterio))

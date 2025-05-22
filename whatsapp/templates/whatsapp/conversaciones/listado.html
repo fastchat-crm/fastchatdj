@@ -5,10 +5,12 @@
         height: calc(100vh - 250px);
         overflow-y: auto;
     }
+
     .chat-body-left {
-        height: calc(100vh - 200px);
+        height: calc(100vh - 500px) !important;
         overflow-y: auto;
     }
+
     .conversacion-item {
         cursor: pointer;
         transition: all 0.3s;
@@ -64,7 +66,7 @@
                                data-bs-target="#open_chats_content" type="button" role="tab">Conversaciones Abiertas</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <a href="?action=conversationfinished" class="nav-link py-2 bloqueo_pantalla" id="resolved_chats_tab">Conversaciones Finalizadas</a>
+                        <a href="/whatsapp/conversaciones-finalizadas/" class="nav-link py-2 bloqueo_pantalla" id="resolved_chats_tab">Conversaciones Finalizadas</a>
                     </li>
                 </ul>
 
@@ -110,31 +112,30 @@
                         </div><!-- end media-body -->
                     </a><!--end media-->
                     <div class="d-none d-sm-inline-block align-self-center">
-                        <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted marcar-resuelto"
-                           data-bs-toggle="tooltip"
-                           data-bs-placement="top" data-bs-title="Marcar como resuelto"
-                           data-bs-custom-class="tooltip-primary">
-                            <i class="fa fa-check-circle"></i> Resolver
-                        </a>
-                        <div class="dropdown d-inline">
+                        <div class="btn-group d-none" id="resolver-btn">
+                            <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" id="marcar-resuelto"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="top" data-bs-title="Marcar como resuelto"
+                               data-bs-custom-class="tooltip-primary">
+                                <i class="fa fa-check-circle"></i> Terminar
+                            </a>
+                        </div>
+                        <div class="dropdown d-inline d-none" id="dropdowns-btn">
                             <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" data-bs-toggle="dropdown">
                                 <i class="fa fa-ellipsis-v"></i>
                             </a>
                             <div class="dropdown-menu">
-                                <a href="javascript:void(0)" class="dropdown-item" id="cambiar-nombre-contacto">
+                                <a href="javascript:void(0)" class="dropdown-item form_modal" id="cambiar-nombre-contacto" title="Cambiar nombre de contacto">
                                     <i class="fa fa-user-edit"></i> Cambiar nombre de contacto
                                 </a>
-                                <a href="javascript:void(0)" class="dropdown-item" id="marcar-no-interesado">
-                                    <i class="fa fa-trash"></i> Marcar como no interesado
+                                <a href="javascript:void(0)" class="dropdown-item form_modal" id="cambiar-clasificacion" title="Cambiar clasificacion">
+                                    <i class="fa fa-sync"></i> Cambiar clasificacion
                                 </a>
-                                <a class="dropdown-item" href="javascript:void(0)" id="asignar-conversacion">
+                                <a class="dropdown-item form_modal" href="javascript:void(0)" id="asignar-conversacion" title="Asignar a otro usuario">
                                     <i class="fa fa-user-plus"></i> Asignar a otro usuario
                                 </a>
-                                <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida">
+                                <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida" title="Terminar sin despedida">
                                     <i class="fa fa-times"></i> Terminar sin despedida
-                                </a>
-                                <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida">
-                                    <i class="fa fa-trash text-danger"></i> Eliminar Lead
                                 </a>
                             </div>
                         </div>
@@ -180,12 +181,60 @@
             </div><!--end chat-box-right -->
         </div> <!-- end col -->
     </div><!-- end row -->
+
+    <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalNombre"></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body detalleProd">
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block jscript %}
 <script src="/static/js/reconnecting-websocket.min.js"></script>
+<script src="/static/js/forms.js?version=2"></script>
+<script>
+    function formModal(id, text, action) {
+        pantallaespera();
+        $.ajax({
+            type: "GET",
+            url: `{{ request.path }}`,
+            data: {
+                'action': action,
+                'id': id,
+            },
+            success: function (data) {
+                setTimeout($.unblockUI, 1);
+                if (data.result === true) {
+                    $('#modalNombre').html(text);
+                    $('.detalleProd').html(data.data);
+
+                    const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+                    modal.show();
+                } else {
+                    mensajeWarning(data.message);
+                }
+            },
+            error: function () {
+                setTimeout($.unblockUI, 1);
+                mensajeWarning("Error de conexión.");
+            },
+            dataType: "json"
+        });
+    }
+</script>
 <script>
     $(document).ready(function() {
+        $('#btnBlock').hide();
         // Configurar WebSocket
         let chatSocket;
         let sessionSocket;
@@ -456,7 +505,13 @@
             });
         }
 
-        // Función para cargar mensajes
+        const $btnsAction = ['#cambiar-nombre-contacto',
+                            '#cambiar-clasificacion',
+                            '#asignar-conversacion',
+                            '#terminar-sin-despedida',
+                            '#marcar-resuelto',
+                            ]
+
         // Función para cargar mensajes
         function cargarMensajes(conversacionId) {
             conversacionActiva = conversacionId;
@@ -483,6 +538,12 @@
                         $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
                     }
 
+                    $btnsAction.forEach(btn => $(`${btn}`).attr('data-id', conversacionId));
+
+                    response.estado_active ? $('#resolver-btn').removeClass('d-none') : $('#resolver-btn').addClass('d-none');
+
+                    $('#dropdowns-btn').removeClass('d-none')
+
                     // Mostrar footer para enviar mensajes
                     $('#chat-footer').show();
                     $('#conversacion-id').val(response.conversacion_id);
@@ -498,6 +559,86 @@
                 }
             });
         }
+
+        let conversacionId = '{{ conversacion_selected.id }}';
+        if (conversacionId) {
+            cargarMensajes(conversacionId);
+        }
+
+
+        $('.form_modal').on('click', function(e) {
+            e.preventDefault();
+            const id = $(this).data('id');
+            const title = $(this).attr('title');
+            const action = $(this).attr('id');
+            formModal(id, title, action);
+        });
+
+        $('#marcar-resuelto').on('click', function(e) {
+            e.preventDefault();
+            const id = $(this).data('id');
+            const action = $(this).attr('id');
+            if (id) {
+            Swal.fire({
+                title: '¿Esta seguro que deseas marcar como resuelta esta conversación?',
+                text: "Esta acción es irreversible.",
+                type: 'warning',
+                showCancelButton: true,
+                allowOutsideClick: false,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Aceptar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.value) {
+                    pantallaespera();
+                    $.post("{{ request.path }}", { action , id,}, function (data) {
+                        $.unblockUI();
+                        const data_ = data[0]
+                            console.log(data_)
+                        if (!data_.error) {
+                            window.location.href = data_.url;
+                        } else {
+                            mensajeWarning(data_.message)
+                        }
+                    }, "json");
+                }
+            })
+        }
+        });
+
+        $('#terminar-sin-despedida').on('click', function(e) {
+            e.preventDefault();
+            const id = $(this).data('id');
+            const action = $(this).attr('id');
+            if (id) {
+            Swal.fire({
+                title: '¿Estas seguro de que deseas terminar esta conversación sin enviar un mensaje de despedida?',
+                text: "Esta acción es irreversible.",
+                type: 'warning',
+                showCancelButton: true,
+                allowOutsideClick: false,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Aceptar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.value) {
+                    pantallaespera();
+                    $.post("{{ request.path }}", { action , id,}, function (data) {
+                        $.unblockUI();
+                        const data_ = data[0]
+                            console.log(data_)
+                        if (!data_.error) {
+                            window.location.href = data_.url;
+                        } else {
+                            mensajeWarning(data_.message)
+                        }
+                    }, "json");
+                }
+            })
+        }
+        });
     });
 </script>
 {% endblock %}

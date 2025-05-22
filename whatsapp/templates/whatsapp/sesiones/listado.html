@@ -430,10 +430,58 @@
             </div>
         </div>
     </div>
+
+
+    <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalNombre"></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body detalleProd">
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block jscript %}
     <script src="/static/js/reconnecting-websocket.min.js"></script>
+    <script src="/static/js/forms.js?version=1"></script>
+    <script>
+        function formModal(id, text, action) {
+            pantallaespera();
+            $.ajax({
+                type: "GET",
+                url: `{{ request.path }}`,
+                data: {
+                    'action': action,
+                    'pk': id,
+                },
+                success: function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.result === true) {
+                        $('#modalNombre').html(text);
+                        $('.detalleProd').html(data.data);
+
+                        const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+                        modal.show();
+                    } else {
+                        mensajeWarning(data.message);
+                    }
+                },
+                error: function () {
+                    setTimeout($.unblockUI, 1);
+                    mensajeWarning("Error de conexión.");
+                },
+                dataType: "json"
+            });
+        }
+    </script>
     <script>
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         var sessionSocket = null;
@@ -468,7 +516,7 @@
 
                     sessionSocket.onmessage = function (e) {
                         const data = JSON.parse(e.data);
-
+                        console.log(data)
                         switch (data.event) {
                             case 'qr_code':
 
@@ -478,7 +526,20 @@
                             case 'ready':
                             case 'authenticated':
                                 $('#qrContent').html('<div class="alert alert-success">Sesión iniciada correctamente</div>');
-                                setTimeout(() => location.reload(), 1500);
+
+                                const modalAgregarSesion = document.getElementById('modalAgregarSesion');
+                                const bsModal = bootstrap.Modal.getInstance(modalAgregarSesion);
+
+                                if (bsModal) {
+                                    setTimeout(() => {
+                                        modalAgregarSesion.addEventListener('hidden.bs.modal', function handler() {
+                                            modalAgregarSesion.removeEventListener('hidden.bs.modal', handler);
+
+                                            formModal(`${data.session_id}`, 'Editar datos de sesión', 'change_modal');
+                                        });
+                                        bsModal.hide();
+                                    }, 3000);
+                                }
                                 break;
                             case 'auth_failure':
                             case 'disconnected':

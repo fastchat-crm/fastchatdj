@@ -1,7 +1,7 @@
 from django import forms
 from core.custom_models import ModelFormBase
 from crm.models import DepartamentoChatBot
-from .models import SesionWhatsApp, Contacto
+from .models import SesionWhatsApp, Contacto, ConversacionWhatsApp
 
 
 class SesionWhatsAppForm(ModelFormBase):
@@ -45,5 +45,37 @@ class ContactoForm(ModelFormBase):
                 self.fields[k].widget.input_type = 'file'
                 self.fields[k].widget.attrs['dropify'] = 'dropify'
                 self.fields[k].widget.attrs['accept'] = 'image/*'
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+
+class CambiarClasificacionForm(ModelFormBase):
+    class Meta:
+        model = ConversacionWhatsApp
+        fields = ('clasificacion',)
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super(CambiarClasificacionForm, self).__init__(*args, **kwargs)
+        for k, v in self.fields.items():
+            self.fields[k].widget.attrs['class'] = 'form-control'
+            self.fields[k].widget.attrs['col'] = '12'
+            if k in ('clasificacion',):
+                self.fields[k].widget.attrs['class'] = 'jselect2'
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+
+class CambiarNombreContactoForm(ModelFormBase):
+    class Meta:
+        model = Contacto
+        fields = ('contacto_nombre',)
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super(CambiarNombreContactoForm, self).__init__(*args, **kwargs)
+        for k, v in self.fields.items():
+            self.fields[k].widget.attrs['class'] = 'form-control'
+            self.fields[k].widget.attrs['col'] = '12'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'

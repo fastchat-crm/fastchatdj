@@ -1,4 +1,6 @@
 from django.urls import re_path, path
+
+from .conversaciones_finalizadas_view import conversacionesFinalizadasView
 from .sesiones_view import sesionesView
 from .conversaciones_view import conversacionesView
 from .sync_contacts import sync_contacts_view
@@ -16,6 +18,11 @@ whatsapp_urls = (
         "nombre": "Conversaciones",
         "url": 'conversaciones/',
         "vista": conversacionesView,
+    },
+    {
+        "nombre": "Conversaciones finalizadas",
+        "url": 'conversaciones-finalizadas/',
+        "vista": conversacionesFinalizadasView,
     },
     {
         "nombre": "Contactos",

@@ -1,5 +1,5 @@
 <div class="d-flex flex-row-reverse">
-    <img src="{{ mensaje.conversacion.sesion.usuario.get_foto_url|default:'/static/assets/img/avatar.png' }}" alt="user" class="rounded-circle thumb-md">
+    <img src="{{ mensaje.conversacion.contacto.sesion.usuario.contacto_foto|default:'/static/assets/img/avatar.png' }}" alt="user" class="rounded-circle thumb-md">
     <div class="me-1 chat-box w-100 reverse">
         <div class="user-chat">
             <p class="">{{ mensaje.mensaje }}</p>

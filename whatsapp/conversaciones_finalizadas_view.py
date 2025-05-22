@@ -3,20 +3,19 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q
 from django.contrib import messages
-from django.template.loader import render_to_string, get_template
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.http import JsonResponse
 
 from core.funciones import addData, paginador, secure_module, log
 from seguridad.templatetags.templatefunctions import encrypt
-from .forms import CambiarClasificacionForm, CambiarNombreContactoForm
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp
 # Importar el servicio en lugar de redis_publish
 from .services import WhatsAppService
 
 @login_required
 @secure_module
-def conversacionesView(request):
+def conversacionesFinalizadasView(request):
     data = {
         'titulo': 'Conversaciones WhatsApp',
         'modulo': 'Conversaciones WhatsApp',
@@ -49,7 +48,7 @@ def conversacionesView(request):
 
     # ====================== VER MENSAJES =========================
     if request.method == 'GET' and 'action' in request.GET:
-        data['action'] = action = request.GET['action']
+        action = request.GET['action']
         if action == 'ver_mensajes':
             pk = int(request.GET['pk'])
             conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
@@ -64,31 +63,10 @@ def conversacionesView(request):
                 'contacto_foto': conversacion.contacto_foto or '',
                 'hashed_id': conversacion.hashed_id or '',
                 'estado_active': conversacion.estado_conversacion == 0,
+                'show_date': True,
+                'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y') or '',
+                'fecha_fin': conversacion.fecha_fin_conversacion.strftime('%d/%m/%Y') or '',
             })
-        elif action == 'cambiar-clasificacion':
-            try:
-                filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
-                form = CambiarClasificacionForm(instance=filtro)
-                data.update({
-                    'form': form,
-                    'filtro': filtro,
-                })
-                template = get_template("whatsapp/conversaciones/form.html")
-                return JsonResponse({"result": True, 'data': template.render(data)})
-            except Exception as ex:
-                return JsonResponse({"result": False, 'message': str(ex)})
-        elif action == 'cambiar-nombre-contacto':
-            try:
-                filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
-                form = CambiarNombreContactoForm(instance=filtro.contacto)
-                data.update({
-                    'form': form,
-                    'filtro': filtro,
-                })
-                template = get_template("whatsapp/conversaciones/form.html")
-                return JsonResponse({"result": True, 'data': template.render(data)})
-            except Exception as ex:
-                return JsonResponse({"result": False, 'message': str(ex)})
 
     # ====================== ENVIAR MENSAJE =========================
     if request.method == 'POST':
@@ -167,77 +145,29 @@ def conversacionesView(request):
                                                         {'mensaje': mensaje},
                                                         request=request)
                     })
-                elif action == 'cambiar-clasificacion':
-                    try:
-                        filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['pk']))
-                    except Exception as ex:
-                        raise NameError(f'No se encontró la conversación: {ex}')
-                    form = CambiarClasificacionForm(request.POST, instance=filtro, request=request)
-                    if form.is_valid():
-                        form.save()
-                        log(f"Clasificación cambiada para la conversación {filtro.id}", request, "edit", obj=filtro.id)
-                        res_json.append({'error': False, 'reload': True})
-                        messages.success(request, 'Clasificación cambiada correctamente.')
-                        return JsonResponse(res_json, safe=False)
-                    else:
-                        raise NameError(f'Error al guardar la clasificación: {form.errors}')
-                elif action == 'cambiar-nombre-contacto':
-                    try:
-                        filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['pk']))
-                    except Exception as ex:
-                        raise NameError(f'No se encontró la conversación: {ex}')
-                    contacto = filtro.contacto
-                    form = CambiarNombreContactoForm(request.POST, instance=contacto, request=request)
-                    if form.is_valid():
-                        form.save()
-                        log(f"Nombre de contacto {contacto.__str__()} cambiado para la conversación {filtro.id}", request, "change", obj=filtro.id)
-                        res_json.append({'error': False, 'reload': True})
-                        messages.success(request, 'Nombre de contacto cambiada correctamente.')
-                        return JsonResponse(res_json, safe=False)
-                    else:
-                        raise NameError(f'Error al guardar la clasificación: {form.errors}')
-                elif action == 'marcar-resuelto':
+                elif action == 'marcar-reactivar':
                     try:
                         filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))
                     except Exception as ex:
                         raise NameError(f'No se encontró la conversación: {ex}')
-                    contacto = filtro.contacto
-                    if contacto.sesion.mensaje_despedida:
-                        from_number = contacto.from_number
-                        session_id = contacto.sesion.session_id
-                        # Crear instancia del servicio
-                        service = WhatsAppService()
-                        result = service.send_text_message(session_id, from_number, contacto.sesion.mensaje_despedida, simularEscritura=True)
-                        if not result.get('success'):
-                            raise NameError(f'{result.get("error", "Error desconocido")}')
-                        filtro.despedida_enviado = True
-                    filtro.estado_conversacion = 1
-                    filtro.fecha_fin_conversacion = timezone.now()
-                    res_json.append({ 'error':False, 'url': f'/whatsapp/conversaciones-finalizadas/' })
-                    request.session['contactoId'] = encrypt(filtro.id)
+                    filtro.estado_conversacion = 0
+                    filtro.fecha_fin_conversacion = None
+                    filtro.despedida_enviado = False
+                    filtro.conversacion_finalizada = False
+                    filtro.fecha_hora_expira = None
+                    filtro.duracion_conversacion = None
                     filtro.save(request)
-                    log(f"Conversación marcada como resuelta {filtro.id}", request, "change", obj=filtro.id)
-                    return JsonResponse(res_json, safe=False)
-                elif action == 'terminar-sin-despedida':
-                    try:
-                        filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))
-                    except Exception as ex:
-                        raise NameError(f'No se encontró la conversación: {ex}')
-                    filtro.estado_conversacion = 1
-                    filtro.fecha_fin_conversacion = timezone.now()
-                    res_json.append({ 'error':False, 'url': f'/whatsapp/conversaciones-finalizadas/' })
                     request.session['contactoId'] = encrypt(filtro.id)
-                    filtro.save(request)
-                    log(f"Conversación marcada como resuelta {filtro.id}", request, "change", obj=filtro.id)
+                    res_json.append({'error': False, 'url': '/whatsapp/conversaciones/'})
+                    log(f"Conversación marcada como reactivada {filtro.id}", request, "change", obj=filtro.id)
+                    messages.success(request, f'Conversación reactivada correctamente.')
                     return JsonResponse(res_json, safe=False)
-
-
         except Exception as ex:
             return JsonResponse({'error': True, 'message': str(ex)})
 
     # ====================== LISTADO CONVERSACIONES =========================
     criterio = request.GET.get('criterio', '').strip()
-    filtros = Q(contacto__status=True, status=True, contacto__sesion__usuario__id=request.user.id, contacto__sesion__status=True, estado_conversacion=0)
+    filtros = Q(contacto__status=True, status=True, contacto__sesion__usuario__id=request.user.id, contacto__sesion__status=True)
     url_vars = ''
 
     if sesion_seleccionada:
@@ -249,20 +179,17 @@ def conversacionesView(request):
         data["criterio"] = criterio
         url_vars += '&criterio=' + criterio
 
-    data["url_vars"] = url_vars
     data['conversacion_selected'] = conversacion_selected
+    data["url_vars"] = url_vars
     data["today"] = timezone.now().date()  # Para comparar fechas en la plantilla
 
     # Si es una solicitud AJAX para cargar conversaciones
     if request.GET.get('load_conversations'):
-        # Obtener las conversaciones
-        conversaciones = ConversacionWhatsApp.objects.sin_expirar.filter(filtros)
+        conversaciones = ConversacionWhatsApp.objects.expirado.filter(filtros)
         data["conversaciones"] = conversaciones
         data["list_count"] = conversaciones.count()
         return JsonResponse({
-            'html': render_to_string('whatsapp/conversaciones/conversaciones_partial.html',
-                                    {'conversaciones': conversaciones, 'today': timezone.now().date()},
-                                    request=request)
+            'html': render_to_string('whatsapp/conversaciones/conversaciones_partial.html', {'conversaciones': conversaciones, 'today': timezone.now().date(), 'show_date':True},
+                                     request=request)
         })
-
-    return render(request, 'whatsapp/conversaciones/listado.html', data)
+    return render(request, 'whatsapp/conversaciones/listado_expirado.html', data)

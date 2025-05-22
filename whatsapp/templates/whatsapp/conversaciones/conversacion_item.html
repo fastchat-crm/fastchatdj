@@ -1,40 +1,80 @@
 {% load humanize %}
-<div class="p-2 border-dashed border-theme-color rounded mb-2 conversacion-item" style="order: -{{ conversacion.order }};" data-id="{{ conversacion.id }}">
-    <a href="javascript:void(0);" class="cargar-conversacion" data-id="{{ conversacion.id }}">
+<style>
+    .estado-contacto {
+        position: absolute;
+        bottom: 4px;
+        right: 4px;
+        width: 12px;
+        height: 12px;
+        border-width: 2px;
+        border-style: solid;
+    }
+</style>
+<div class="p-2 border border-dashed rounded mb-2 conversacion-item border-theme-color"
+     style="order: -{{ conversacion.order }};" data-id="{{ conversacion.id }}">
+    <a href="javascript:void(0);" class="cargar-conversacion text-decoration-none text-dark"
+       data-id="{{ conversacion.id }}">
         <div class="d-flex align-items-start">
+
+            <!-- Imagen del contacto -->
             <div class="position-relative">
                 {% if conversacion.contacto_foto %}
                     <img src="{{ conversacion.contacto_foto }}" alt="" class="thumb-lg rounded-circle">
                 {% else %}
                     <img src="/static/assets/img/avatar.png" alt="" class="thumb-lg rounded-circle">
                 {% endif %}
-                <span class="position-absolute bottom-0 end-0">
-                    <i class="fa-solid fa-circle {% if conversacion.estado == 'activo' %}text-success{% else %}text-secondary{% endif %} fs-10 border-2 border-theme-color"></i>
-                </span>
+
+                <!-- Estado visual estilo WhatsApp -->
+                <span class="estado-contacto rounded-circle border border-white bg-{% if conversacion.estado_conversacion == 0 %}success{% else %}secondary{% endif %}"></span>
             </div>
-            <div class="flex-grow-1 ms-2 text-truncate align-self-center">
-                <h6 class="my-0 fw-medium text-dark fs-14">
-                    {% if conversacion.contacto_nombre %}
-                        {{ conversacion.contacto_nombre }}
-                    {% else %}
-                        {{ conversacion.contacto_numero }}
-                    {% endif %}
-                    <small class="float-end text-muted fs-11">
+
+            <!-- Contenido de la conversación -->
+            <div class="flex-grow-1 ms-2 align-self-center w-100">
+                <!-- Primera línea: nombre + fecha -->
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex flex-column">
+                        <small class="badge badge-{{ conversacion.get_estado_color_clasificacion }} mb-1">
+                            {{ conversacion.get_clasificacion_display }}
+                        </small>
+                        <h6 class="my-0 fw-medium fs-14 text-truncate">
+                            {% if conversacion.contacto_nombre %}
+                                {{ conversacion.contacto_nombre }}
+                            {% else %}
+                                {{ conversacion.contacto_numero }}
+                            {% endif %}
+                        </h6>
+                    </div>
+                    <small class="text-muted fs-11 text-end ms-2">
                         {% if conversacion.fecha_ultimo_mensaje %}
                             {{ conversacion.fecha_ultimo_mensaje|naturaltime }}
                         {% endif %}
                     </small>
-                </h6>
-                <p class="text-muted mb-0 mt-2">
-                    {{ conversacion.ultimo_mensaje|truncatechars:30 }}
+                </div>
+
+                <!-- Segunda línea: mensaje + fecha extra + contador -->
+                <div class="d-flex justify-content-between align-items-center mt-1">
+                    <div class="text-muted text-truncate">
+                        {% if show_date %}
+                            <small>
+                                <i class="fa fa-calendar"></i>
+                                {{ conversacion.fecha_registro|date:'d/m/Y' }}
+                                {% if conversacion.fecha_fin_conversacion %}
+                                    - {{ conversacion.fecha_fin_conversacion|date:'d/m/Y' }}
+                                {% endif %}
+                            </small><br>
+                        {% endif %}
+                        {{ conversacion.ultimo_mensaje|truncatechars:30 }}
+                    </div>
+
                     {% with no_leidos=conversacion.mensajes.filter.count %}
                         {% if no_leidos > 0 %}
-                            <span class="badge float-end rounded text-white bg-success">
+                            <span class="mensaje-badge badge rounded-pill bg-success text-white">
                                 {{ no_leidos }}
                             </span>
                         {% endif %}
                     {% endwith %}
-                </p>
+                </div>
+
             </div>
         </div>
     </a>

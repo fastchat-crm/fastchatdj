@@ -26,7 +26,7 @@ if ($('head').children('meta[name=formsJsValidator]').length === 0) {
         $('#submit').click(function () {
             $('input[name=_add]').remove();
         });
-        $('form:not(#frmEliminar, #excluirFormAjax, #frmVisita, #frmVisible, #frmEliPrg, #frmRespuesta, #frmGestion, #frmReactivar, #frmEliminarConComentario, #frmQuitarBestseller, #frmHacerBestseller, #frmActivarProducto, [method=GET], [method=get])').submit(function (e) {
+        $('form:not(#frmEliminar, #excluirFormAjax, #frmVisita, #frmVisible, #frmEliPrg, #frmRespuesta, #frmGestion, #frmReactivar, #frmEliminarConComentario, #frmQuitarBestseller, #frmHacerBestseller, #frmActivarProducto, #form-enviar-mensaje, [method=GET], [method=get])').submit(function (e) {
             if ($(this).attr('id') !== "excluirFormAjax" && $(this).attr('method').toLowerCase() === "post") {
                 e.preventDefault();
                 if (typeof funcionAntesDeGuardar === 'function') {

@@ -178,6 +178,7 @@ class ConversacionWhatsApp(ModeloBase):
     despedida_enviado = models.BooleanField('Despedida Enviado', default=False)
     # Campos para la gestión de la conversación
     clasificacion = models.IntegerField(choices=ESTADOS_CLASIFICACION, default=0, verbose_name='Clasificación')
+    estado_conversacion = models.IntegerField(choices=ESTADOS_CONVERSACION, default=0, verbose_name='Estado de la conversación')
     # Campos para la gestión de mensajes
     conversacion_finalizada = models.BooleanField('Conversación finalizada', default=False)
     fecha_hora_expira = models.DateTimeField('Fecha y Hora que expira la conversación')
@@ -204,7 +205,7 @@ class ConversacionWhatsApp(ModeloBase):
 
     def get_estado_color_clasificacion(self):
         if self.clasificacion == 0:
-            return 'default'
+            return 'secondary'
         elif self.clasificacion == 1:
             return 'info'
         elif self.clasificacion == 2:
@@ -215,7 +216,7 @@ class ConversacionWhatsApp(ModeloBase):
             return 'success'
         elif self.clasificacion == 5:
             return 'danger'
-        return 'default'
+        return 'secondary'
 
     def traer_ultimo_mensaje(self):
         return self.mensajes.last()
