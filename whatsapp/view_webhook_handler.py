@@ -472,7 +472,7 @@ def process_sent_message(session, event_data, channel_layer):
         contacto.save()
 
         conversation = ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).first() or \
-                       ConversacionWhatsApp.objects.create(contacto=contacto)
+                       ConversacionWhatsApp.objects.create(contacto=contacto, fromMe=True)
 
         # Crear el mensaje
         message = MensajeWhatsApp.objects.create(
@@ -487,12 +487,12 @@ def process_sent_message(session, event_data, channel_layer):
             fecha_leido=timezone.now()
         )
 
-        if not conversation.bienvenida_enviado:
-            if conversation.sesion.mensaje_bienvenida:
-                whatsapp_service = WhatsAppService()
-                whatsapp_service.send_text_message(conversation.sesion.session_id, contacto.from_number, conversation.sesion.mensaje_bienvenida, simularEscritura=True)
-            conversation.bienvenida_enviado = True
-            conversation.save()
+        # if not conversation.bienvenida_enviado:
+        #     if conversation.sesion.mensaje_bienvenida:
+        #         whatsapp_service = WhatsAppService()
+        #         whatsapp_service.send_text_message(conversation.sesion.session_id, contacto.from_number, conversation.sesion.mensaje_bienvenida, simularEscritura=True)
+        #     conversation.bienvenida_enviado = True
+        #     conversation.save()
 
         # Actualizar estadísticas
         update_conversation_stats(conversation)

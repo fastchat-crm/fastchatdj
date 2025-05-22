@@ -9,7 +9,8 @@ from django.shortcuts import render
 from django.template.loader import get_template
 
 from core.custom_models import FormError
-from core.funciones import addData, paginador, secure_module, log
+from core.funciones import addData, paginador, secure_module, log, remover_caracteres_especiales_unicode, generar_nombre
+from core.funciones_adicionales import convertir_archivo_a_base64
 from seguridad.templatetags.templatefunctions import encrypt
 from .forms import ContactoForm
 from .models import Contacto, SesionWhatsApp
@@ -45,6 +46,12 @@ def contactoView(request):
                     filtro = model.objects.get(pk=int(encrypt(request.POST['pk'])))
                     form = Formulario(request.POST, instance=filtro, request=request)
                     if form.is_valid() and filtro:
+                        if 'contacto_foto' in request.FILES:
+                            file = request.FILES['contacto_foto']
+                            nombredocumento = remover_caracteres_especiales_unicode(file.name)
+                            file.name = generar_nombre(nombredocumento, file.name)
+                            imagen_base64 = convertir_archivo_a_base64(file)
+                            form.instance.contacto_foto = imagen_base64
                         form.save()
                         log(f"Edito un contacto  {form.instance.__str__()}", request, "change", obj=form.instance.id)
                         res_json.append({'error': False, "reload": True})

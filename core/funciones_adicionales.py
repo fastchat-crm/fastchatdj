@@ -162,3 +162,12 @@ def get_image_as_contentfile(image_url):
         return image_base64
     else:
         return ""
+
+
+def convertir_archivo_a_base64(file):
+    """Convierte un archivo en base64 incluyendo el encabezado MIME."""
+    if file:
+        mime_type = file.content_type  # Ej. 'image/jpeg'
+        base64_str = base64.b64encode(file.read()).decode('utf-8')
+        return f'data:{mime_type};base64,{base64_str}'
+    return ""

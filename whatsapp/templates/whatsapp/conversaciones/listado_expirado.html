@@ -60,11 +60,10 @@
                 <!-- Tabs principales -->
                 <ul class="nav nav-tabs nav-justified" id="myTab" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link py-2 active" id="open_chats_tab" data-bs-toggle="tab"
-                               data-bs-target="#open_chats_content" type="button" role="tab">Conversaciones Abiertas</button>
+                         <a href="{{ request.path }}" class="nav-link py-2 bloqueo_pantalla" id="resolved_chats_tab">Conversaciones Abiertas</a>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <a href="?action=conversationfinished" class="nav-link py-2 bloqueo_pantalla" id="resolved_chats_tab">Conversaciones Finalizadas</a>
+                        <a href="javascript:void(0)" class="nav-link py-2 active" id="resolved_chats_tab">Conversaciones Finalizadas</a>
                     </li>
                 </ul>
 
@@ -88,6 +87,7 @@
                         <div class="tab-pane fade show active" id="messages_chat">
                             <div class="row">
                                 <div class="col" id="lista-conversaciones" style="display: flex; flex-direction: column;">
+{#                                    {% include 'whatsapp/conversaciones/conversaciones_partial.html' %}#}
                                 </div><!--end col-->
                             </div><!--end row-->
                         </div><!--end general chat-->
@@ -109,36 +109,36 @@
                             </div>
                         </div><!-- end media-body -->
                     </a><!--end media-->
-                    <div class="d-none d-sm-inline-block align-self-center">
-                        <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted marcar-resuelto"
-                           data-bs-toggle="tooltip"
-                           data-bs-placement="top" data-bs-title="Marcar como resuelto"
-                           data-bs-custom-class="tooltip-primary">
-                            <i class="fa fa-check-circle"></i> Resolver
-                        </a>
-                        <div class="dropdown d-inline">
-                            <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" data-bs-toggle="dropdown">
-                                <i class="fa fa-ellipsis-v"></i>
-                            </a>
-                            <div class="dropdown-menu">
-                                <a href="javascript:void(0)" class="dropdown-item" id="cambiar-nombre-contacto">
-                                    <i class="fa fa-user-edit"></i> Cambiar nombre de contacto
-                                </a>
-                                <a href="javascript:void(0)" class="dropdown-item" id="marcar-no-interesado">
-                                    <i class="fa fa-trash"></i> Marcar como no interesado
-                                </a>
-                                <a class="dropdown-item" href="javascript:void(0)" id="asignar-conversacion">
-                                    <i class="fa fa-user-plus"></i> Asignar a otro usuario
-                                </a>
-                                <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida">
-                                    <i class="fa fa-times"></i> Terminar sin despedida
-                                </a>
-                                <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida">
-                                    <i class="fa fa-trash text-danger"></i> Eliminar Lead
-                                </a>
-                            </div>
-                        </div>
-                    </div>
+{#                    <div class="d-none d-sm-inline-block align-self-center">#}
+{#                        <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted marcar-resuelto"#}
+{#                           data-bs-toggle="tooltip"#}
+{#                           data-bs-placement="top" data-bs-title="Marcar como resuelto"#}
+{#                           data-bs-custom-class="tooltip-primary">#}
+{#                            <i class="fa fa-check-circle"></i> Resolver#}
+{#                        </a>#}
+{#                        <div class="dropdown d-inline">#}
+{#                            <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" data-bs-toggle="dropdown">#}
+{#                                <i class="fa fa-ellipsis-v"></i>#}
+{#                            </a>#}
+{#                            <div class="dropdown-menu">#}
+{#                                <a href="javascript:void(0)" class="dropdown-item" id="cambiar-nombre-contacto">#}
+{#                                    <i class="fa fa-user-edit"></i> Cambiar nombre de contacto#}
+{#                                </a>#}
+{#                                <a href="javascript:void(0)" class="dropdown-item" id="marcar-no-interesado">#}
+{#                                    <i class="fa fa-trash"></i> Marcar como no interesado#}
+{#                                </a>#}
+{#                                <a class="dropdown-item" href="javascript:void(0)" id="asignar-conversacion">#}
+{#                                    <i class="fa fa-user-plus"></i> Asignar a otro usuario#}
+{#                                </a>#}
+{#                                <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida">#}
+{#                                    <i class="fa fa-times"></i> Terminar sin despedida#}
+{#                                </a>#}
+{#                                <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida">#}
+{#                                    <i class="fa fa-trash text-danger"></i> Eliminar Lead#}
+{#                                </a>#}
+{#                            </div>#}
+{#                        </div>#}
+{#                    </div>#}
                 </div><!-- end chat-header -->
 
                 <div class="chat-body" data-simplebar id="chat-messages">
@@ -152,30 +152,7 @@
                 </div><!-- end chat-body -->
 
                 <!-- Formulario para enviar mensajes -->
-                <div class="chat-footer p-3 bg-light" id="chat-footer" style="display: none;">
-                    <form id="form-enviar-mensaje" enctype="multipart/form-data">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="send">
-                        <input type="hidden" name="pk" id="conversacion-id" value="">
-                        <div class="row">
-                            <div class="col-9">
-                                <div class="input-group">
-                                    <input type="text" class="form-control" name="mensaje" placeholder="Escribe un mensaje..." required>
-                                    <div class="input-group-append">
-                                        <label for="archivo" class="btn btn-light border">
-                                            <i class="fa fa-paperclip"></i>
-                                        </label>
-                                        <input type="file" id="archivo" name="archivo" style="display: none;">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-3">
-                                <button type="submit" class="btn btn-primary w-100">
-                                    <i class="fa fa-paper-plane"></i> Enviar
-                                </button>
-                            </div>
-                        </div>
-                    </form>
+                <div class="chat-footer p-3 bg-light w-100" id="chat-footer" style="display: none;">
                 </div>
             </div><!--end chat-box-right -->
         </div> <!-- end col -->
@@ -339,76 +316,6 @@
             $(this).closest('.conversacion-item').addClass('active');
         });
 
-        $('form input[name="mensaje"]').keyup(function(e) {
-            if (!chatSocket) return;
-            chatSocket.send(JSON.stringify({
-              event: "sendPresenceUpdate"
-            }));
-            quitPresenceUpdate();
-        });
-
-        // Enviar mensaje
-        $('#form-enviar-mensaje').submit(function(e) {
-            e.preventDefault();
-
-            const form = $(this);
-            const formData = new FormData(form[0]);
-
-            // Deshabilitar el botón de envío
-            const submitBtn = form.find('button[type="submit"]');
-            const originalBtnText = submitBtn.html();
-            submitBtn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Enviando...');
-
-            $.ajax({
-                url: '/whatsapp/conversaciones/',
-                type: 'POST',
-                data: formData,
-                processData: false,  // Importante para FormData
-                contentType: false,  // Importante para FormData
-                success: function(response) {
-                    if (!response.error) {
-                        // Añadir el mensaje al chat
-                        $('#mensajes-container').append(response.mensaje_html);
-
-                        // Limpiar el formulario
-                        form.find('input[name="mensaje"]').val('');
-                        form.find('input[name="archivo"]').val('');
-
-                        // Scroll al final
-                        setTimeout(() => {
-                            scrollToBottom();
-                        }, 1500);
-                    } else {
-                        alertaWarning('Error: ' + response.message);
-                    }
-                },
-                error: function(xhr, status, error) {
-                    alertaWarning('Error al enviar mensaje: ' + error);
-                },
-                complete: function() {
-                    // Restaurar el botón
-                    submitBtn.prop('disabled', false).html(originalBtnText);
-                }
-            });
-        });
-
-        function actualizarMensaje(mensajeId, accion, nuevoContenido) {
-            const mensajeElement = $(`.mensaje-item[data-id="${mensajeId}"]`);
-
-            if (mensajeElement.length) {
-                if (accion === 'eliminar') {
-                    // Marcar como eliminado
-                    mensajeElement.find('.user-chat')
-                        .addClass('deleted-message')
-                        .html('<p class="text-muted"><i class="fa fa-ban"></i> Este mensaje fue eliminado</p>');
-                } else if (accion === 'editar') {
-                    // Actualizar contenido y marcar como editado
-                    mensajeElement.find('.user-chat')
-                        .addClass('edited-message')
-                        .html(`<p>${nuevoContenido}</p><small class="text-muted"><i class="fa fa-edit"></i> Editado</small>`);
-                }
-            }
-        }
 
         // Mostrar nombre del archivo seleccionado
         $('#archivo').change(function() {
@@ -428,7 +335,7 @@
             $('#lista-conversaciones').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2">Cargando conversaciones...</p></div>');
 
             const url = '/whatsapp/conversaciones/' +
-                        '?load_conversations=true' +
+                        '?action=conversationfinished&load_conversations=true' +
                         (sesionId ? '&sesion_id=' + sesionId : '') +
                         (query ? '&criterio=' + encodeURIComponent(query) : '');
 
