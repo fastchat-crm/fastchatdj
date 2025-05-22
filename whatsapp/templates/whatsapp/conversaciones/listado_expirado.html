@@ -224,40 +224,40 @@
             };
         }
 
-        function sessionWebSocket(sessionId) {
-            const wsUrl = `${wsProtocol}//${window.location.host}/ws/sessionroom/${sessionId}/`;
-            if (sessionSocket){
-                sessionSocket.close();
-            }
-            sessionSocket = new ReconnectingWebSocket(wsUrl, null, {reconnectInterval: 1500});
-
-            sessionSocket.onopen = function(e) {
-                console.log('Conexión SessionWebSocket establecida');
-            };
-
-            sessionSocket.onmessage = function(e) {
-                const data = JSON.parse(e.data);
-
-                if ((data.type === 'new_message' || data.type === 'messages_update') && data.html) {
-                    const conversacion = $(`#lista-conversaciones div[data-id=${data.conversacion_id}]`);
-                    if (conversacion.length) {
-                        conversacion.replaceWith(data.html);
-                    } else {
-                        $(`#lista-conversaciones`).append(data.html);
-                    }
-                }
-            };
-
-            sessionSocket.onclose = function(e) {
-                console.log('Conexión SessionWebSocket cerrada');
-            };
-
-            sessionSocket.onerror = function(e) {
-                console.error('Error en SessionWebSocket:', e);
-            };
-
-            cargarConversaciones(sessionId);
-        }
+        {#function sessionWebSocket(sessionId) {#}
+        {#    const wsUrl = `${wsProtocol}//${window.location.host}/ws/sessionroom/${sessionId}/`;#}
+        {#    if (sessionSocket){#}
+        {#        sessionSocket.close();#}
+        {#    }#}
+        {#    sessionSocket = new ReconnectingWebSocket(wsUrl, null, {reconnectInterval: 1500});#}
+        {##}
+        {#    sessionSocket.onopen = function(e) {#}
+        {#        console.log('Conexión SessionWebSocket establecida');#}
+        {#    };#}
+        {##}
+        {#    sessionSocket.onmessage = function(e) {#}
+        {#        const data = JSON.parse(e.data);#}
+        {##}
+        {#        if ((data.type === 'new_message' || data.type === 'messages_update') && data.html) {#}
+        {#            const conversacion = $(`#lista-conversaciones div[data-id=${data.conversacion_id}]`);#}
+        {#            if (conversacion.length) {#}
+        {#                conversacion.replaceWith(data.html);#}
+        {#            } else {#}
+        {#                $(`#lista-conversaciones`).append(data.html);#}
+        {#            }#}
+        {#        }#}
+        {#    };#}
+        {##}
+        {#    sessionSocket.onclose = function(e) {#}
+        {#        console.log('Conexión SessionWebSocket cerrada');#}
+        {#    };#}
+        {##}
+        {#    sessionSocket.onerror = function(e) {#}
+        {#        console.error('Error en SessionWebSocket:', e);#}
+        {#    };#}
+        {##}
+        {#    cargarConversaciones(sessionId);#}
+        {#}#}
 
         sessionWebSocket($('#sesion-selector').val());
 
@@ -306,10 +306,10 @@
             conversacionActiva = null;
         });
 
-        const buscarConversacion = debounceFunction(function (e) {
-            const criterio = $(e.target).val();
-            cargarConversaciones($('#sesion-selector').val(), criterio);
-        }, 500);
+        {#const buscarConversacion = debounceFunction(function (e) {#}
+        {#    const criterio = $(e.target).val();#}
+        {#    cargarConversaciones($('#sesion-selector').val(), criterio);#}
+        {#}, 500);#}
 
         const quitPresenceUpdate = debounceFunction(function (e) {
             if (!chatSocket) return;
