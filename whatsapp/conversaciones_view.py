@@ -54,6 +54,29 @@ def conversacionesView(request):
                 'contacto_foto': conversacion.contacto_foto or '',
                 'hashed_id': conversacion.hashed_id or ''
             })
+        elif action == 'conversationfinished':
+            criterio = request.GET.get('criterio', '').strip()
+            filtros = Q(contacto__status=True, status=True, contacto__sesion__usuario__id=request.user.id, contacto__sesion__status=True)
+            url_vars = f'&action={action}'
+
+            if sesion_seleccionada:
+                filtros = filtros & Q(contacto__sesion=sesion_seleccionada)
+                url_vars += f'&sesion_id={sesion_seleccionada.id}'
+
+            if criterio:
+                filtros = filtros & (Q(contacto__contacto_numero__icontains=criterio) | Q(contacto__contacto_nombre__icontains=criterio))
+                data["criterio"] = criterio
+                url_vars += '&criterio=' + criterio
+
+            data["url_vars"] = url_vars
+            data["today"] = timezone.now().date()  # Para comparar fechas en la plantilla
+
+            conversaciones = ConversacionWhatsApp.objects.expirados.filter(filtros)
+            data["conversaciones"] = conversaciones
+            data["list_count"] = conversaciones.count()
+            return render(request, 'whatsapp/conversaciones/listado_expirado.html', data)
+
+
 
     # ====================== ENVIAR MENSAJE =========================
     if request.method == 'POST':

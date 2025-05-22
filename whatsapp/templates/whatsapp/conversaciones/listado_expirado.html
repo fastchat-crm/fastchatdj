@@ -1,0 +1,503 @@
+{% extends 'base.html' %}
+{% block head %}
+<style>
+    .chat-body {
+        height: calc(100vh - 250px);
+        overflow-y: auto;
+    }
+    .chat-body-left {
+        height: calc(100vh - 200px);
+        overflow-y: auto;
+    }
+    .conversacion-item {
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    .conversacion-item:hover {
+        background-color: rgba(0,0,0,0.05);
+    }
+    .conversacion-item.active {
+        background-color: rgba(0,123,255,0.1);
+        border-color: #007bff !important;
+    }
+
+    /* Añadir estos estilos en tu CSS */
+    .deleted-message {
+        opacity: 0.7;
+        font-style: italic;
+    }
+
+    .edited-message p {
+        position: relative;
+    }
+
+    .edited-message small {
+        font-size: 0.7em;
+        margin-top: -5px;
+        display: block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-12">
+            <div class="chat-box-left">
+
+                <!-- Selector de sesiones -->
+                <div class="p-3">
+                    <div class="d-flex">
+                        <select id="sesion-selector" class="form-select">
+                                {% for sesion in sesiones %}
+                                    <option value="{{ sesion.id }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
+                                        {{ sesion.numero }} ({{ sesion.get_estado_display }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                    </div>
+                </div>
+
+                <!-- Tabs principales -->
+                <ul class="nav nav-tabs nav-justified" id="myTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                         <a href="{{ request.path }}" class="nav-link py-2" id="resolved_chats_tab">Conversaciones Abiertas</a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <a href="?action=conversationfinished" class="nav-link py-2 active" id="resolved_chats_tab" target="_blank">Conversaciones Finalizadas</a>
+                    </li>
+                </ul>
+
+
+                <div class="chat-search p-3">
+                    <div class="p-1 bg-light rounded rounded-pill">
+                        <div class="input-group">
+                            <div class="input-group-prepend">
+                                <button id="button-search" type="button" class="btn btn-link text-secondary">
+                                    <i class="fa fa-search"></i>
+                                </button>
+                            </div>
+                            <input type="search" id="search-conversacion" placeholder="Buscar conversación..."
+                                   aria-describedby="button-search" class="form-control border-0 bg-light">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chat-body-left px-3" data-simplebar id="conversaciones-container">
+                    <div class="tab-content" id="pills-tabContent">
+                        <div class="tab-pane fade show active" id="messages_chat">
+                            <div class="row">
+                                <div class="col" id="lista-conversaciones" style="display: flex; flex-direction: column;">
+                                    {% include 'whatsapp/conversaciones/conversaciones_partial.html' %}
+                                </div><!--end col-->
+                            </div><!--end row-->
+                        </div><!--end general chat-->
+                    </div><!--end tab-content-->
+                </div>
+            </div><!--end chat-box-left -->
+
+            <div class="chat-box-right">
+                <div class="p-3 d-flex justify-content-between align-items-center card-bg rounded" id="chat-header">
+                    <a href="javascript:void(0);" class="d-flex align-self-center">
+                        <div class="flex-shrink-0">
+                            <img src="/static/assets/img/avatar.png" alt="user" class="rounded-circle thumb-lg" id="contacto-foto">
+                        </div><!-- media-left -->
+                        <div class="flex-grow-1 ms-2 align-self-center">
+                            <div>
+                                <h6 class="my-0 fw-medium text-dark fs-14" id="contacto-nombre">Selecciona una conversación</h6>
+                                <p class="text-muted mb-0" id="contacto-numero"></p>
+                                <p class="text-muted mb-0"><span id="contacto-hashedId"></span></p>
+                            </div>
+                        </div><!-- end media-body -->
+                    </a><!--end media-->
+{#                    <div class="d-none d-sm-inline-block align-self-center">#}
+{#                        <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted marcar-resuelto"#}
+{#                           data-bs-toggle="tooltip"#}
+{#                           data-bs-placement="top" data-bs-title="Marcar como resuelto"#}
+{#                           data-bs-custom-class="tooltip-primary">#}
+{#                            <i class="fa fa-check-circle"></i> Resolver#}
+{#                        </a>#}
+{#                        <div class="dropdown d-inline">#}
+{#                            <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" data-bs-toggle="dropdown">#}
+{#                                <i class="fa fa-ellipsis-v"></i>#}
+{#                            </a>#}
+{#                            <div class="dropdown-menu">#}
+{#                                <a href="javascript:void(0)" class="dropdown-item" id="cambiar-nombre-contacto">#}
+{#                                    <i class="fa fa-user-edit"></i> Cambiar nombre de contacto#}
+{#                                </a>#}
+{#                                <a href="javascript:void(0)" class="dropdown-item" id="marcar-no-interesado">#}
+{#                                    <i class="fa fa-trash"></i> Marcar como no interesado#}
+{#                                </a>#}
+{#                                <a class="dropdown-item" href="javascript:void(0)" id="asignar-conversacion">#}
+{#                                    <i class="fa fa-user-plus"></i> Asignar a otro usuario#}
+{#                                </a>#}
+{#                                <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida">#}
+{#                                    <i class="fa fa-times"></i> Terminar sin despedida#}
+{#                                </a>#}
+{#                                <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida">#}
+{#                                    <i class="fa fa-trash text-danger"></i> Eliminar Lead#}
+{#                                </a>#}
+{#                            </div>#}
+{#                        </div>#}
+{#                    </div>#}
+                </div><!-- end chat-header -->
+
+                <div class="chat-body" data-simplebar id="chat-messages">
+                    <div class="chat-detail" id="mensajes-container">
+                        <!-- Aquí se cargarán los mensajes dinámicamente -->
+                        <div class="text-center p-5">
+                            <i class="fa fa-comments fa-4x text-muted mb-3"></i>
+                            <p>Selecciona una conversación para ver los mensajes</p>
+                        </div>
+                    </div>  <!-- end chat-detail -->
+                </div><!-- end chat-body -->
+
+                <!-- Formulario para enviar mensajes -->
+                <div class="chat-footer p-3 bg-light" id="chat-footer" style="display: none;">
+                    <form id="form-enviar-mensaje" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="send">
+                        <input type="hidden" name="pk" id="conversacion-id" value="">
+                        <div class="row">
+                            <div class="col-9">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" name="mensaje" placeholder="Escribe un mensaje..." required>
+                                    <div class="input-group-append">
+                                        <label for="archivo" class="btn btn-light border">
+                                            <i class="fa fa-paperclip"></i>
+                                        </label>
+                                        <input type="file" id="archivo" name="archivo" style="display: none;">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="fa fa-paper-plane"></i> Enviar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div><!--end chat-box-right -->
+        </div> <!-- end col -->
+    </div><!-- end row -->
+{% endblock %}
+
+{% block jscript %}
+<script src="/static/js/reconnecting-websocket.min.js"></script>
+<script>
+    $(document).ready(function() {
+        // Configurar WebSocket
+        let chatSocket;
+        let sessionSocket;
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
+        function conectarWebSocket(conversacionId) {
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/chat/${conversacionId}/`;
+            if (chatSocket){
+                chatSocket.close();
+            }
+            chatSocket = new ReconnectingWebSocket(wsUrl, null, {reconnectInterval: 1500});
+
+            chatSocket.onopen = function(e) {
+                console.log('Conexión WebSocket establecida');
+            };
+
+            chatSocket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+
+                if (data.type === 'new_message' || data.type === 'messages_update') {
+                    // Actualizar los mensajes
+                    $('#mensajes-container').html(data.html);
+
+                    setTimeout(() => {
+                        scrollToBottom();
+                    }, 1500);
+                }
+            };
+
+            chatSocket.onclose = function(e) {
+                console.log('Conexión WebSocket cerrada');
+            };
+
+            chatSocket.onerror = function(e) {
+                console.error('Error en WebSocket:', e);
+            };
+        }
+
+        function sessionWebSocket(sessionId) {
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/sessionroom/${sessionId}/`;
+            if (sessionSocket){
+                sessionSocket.close();
+            }
+            sessionSocket = new ReconnectingWebSocket(wsUrl, null, {reconnectInterval: 1500});
+
+            sessionSocket.onopen = function(e) {
+                console.log('Conexión SessionWebSocket establecida');
+            };
+
+            sessionSocket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+
+                if ((data.type === 'new_message' || data.type === 'messages_update') && data.html) {
+                    const conversacion = $(`#lista-conversaciones div[data-id=${data.conversacion_id}]`);
+                    if (conversacion.length) {
+                        conversacion.replaceWith(data.html);
+                    } else {
+                        $(`#lista-conversaciones`).append(data.html);
+                    }
+                }
+            };
+
+            sessionSocket.onclose = function(e) {
+                console.log('Conexión SessionWebSocket cerrada');
+            };
+
+            sessionSocket.onerror = function(e) {
+                console.error('Error en SessionWebSocket:', e);
+            };
+
+            cargarConversaciones(sessionId);
+        }
+
+        sessionWebSocket($('#sesion-selector').val());
+
+        function scrollToBottom(smooth = true) {
+            const chatContainer = document.getElementById('chat-messages').querySelector('.simplebar-content-wrapper');
+            if (chatContainer) {
+                // Calcular la altura total del contenido
+                const scrollHeight = chatContainer.scrollHeight;
+
+                // Hacer scroll
+                if (smooth) {
+                    // En algunos dispositivos móviles, scrollTo con behavior: 'smooth' puede no funcionar
+                    try {
+                        chatContainer.scrollTo({
+                            top: scrollHeight,
+                            behavior: 'smooth'
+                        });
+                    } catch (e) {
+                        // Fallback para navegadores que no soportan scrollTo con opciones
+                        chatContainer.scrollTop = scrollHeight;
+                    }
+                } else {
+                    chatContainer.scrollTop = scrollHeight;
+                }
+            }
+        }
+
+        // Variables globales
+       // Variables globales
+        let conversacionActiva = null;
+        let buscando = false;
+
+        console.log("Inicializando chat de WhatsApp");
+
+        // Cambiar de sesión
+        $('#sesion-selector').change(function() {
+            const sesionId = $(this).val();
+            console.log("Cambiando a sesión:", sesionId);
+            sessionWebSocket(sesionId);
+            // Limpiar chat actual
+            $('#mensajes-container').html('<div class="text-center p-5"><i class="fa fa-comments fa-4x text-muted mb-3"></i><p>Selecciona una conversación para ver los mensajes</p></div>');
+            $('#chat-footer').hide();
+            $('#contacto-nombre').text('Selecciona una conversación');
+            $('#contacto-numero').text('');
+            $('#contacto-hashedId').text('');
+            conversacionActiva = null;
+        });
+
+        const buscarConversacion = debounceFunction(function (e) {
+            const criterio = $(e.target).val();
+            cargarConversaciones($('#sesion-selector').val(), criterio);
+        }, 500);
+
+        const quitPresenceUpdate = debounceFunction(function (e) {
+            if (!chatSocket) return;
+            chatSocket.send(JSON.stringify({
+              event: "quitPresenceUpdate"
+            }));
+        }, 500);
+
+        // Buscar conversaciones
+        let searchTimeout;
+        $('#search-conversacion').on('keyup', function(e) {
+            buscarConversacion(e);
+        });
+
+        $('#search-conversacion').on('search', function(e) {
+            buscarConversacion(e);
+        });
+
+        // Cargar conversación al hacer clic
+        $(document).on('click', '.cargar-conversacion', function(e) {
+            e.preventDefault();
+            const conversacionId = $(this).data('id');
+            cargarMensajes(conversacionId);
+
+            // Marcar como activa
+            $('.conversacion-item').removeClass('active');
+            $(this).closest('.conversacion-item').addClass('active');
+        });
+
+        $('form input[name="mensaje"]').keyup(function(e) {
+            if (!chatSocket) return;
+            chatSocket.send(JSON.stringify({
+              event: "sendPresenceUpdate"
+            }));
+            quitPresenceUpdate();
+        });
+
+        // Enviar mensaje
+        $('#form-enviar-mensaje').submit(function(e) {
+            e.preventDefault();
+
+            const form = $(this);
+            const formData = new FormData(form[0]);
+
+            // Deshabilitar el botón de envío
+            const submitBtn = form.find('button[type="submit"]');
+            const originalBtnText = submitBtn.html();
+            submitBtn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Enviando...');
+
+            $.ajax({
+                url: '/whatsapp/conversaciones/',
+                type: 'POST',
+                data: formData,
+                processData: false,  // Importante para FormData
+                contentType: false,  // Importante para FormData
+                success: function(response) {
+                    if (!response.error) {
+                        // Añadir el mensaje al chat
+                        $('#mensajes-container').append(response.mensaje_html);
+
+                        // Limpiar el formulario
+                        form.find('input[name="mensaje"]').val('');
+                        form.find('input[name="archivo"]').val('');
+
+                        // Scroll al final
+                        setTimeout(() => {
+                            scrollToBottom();
+                        }, 1500);
+                    } else {
+                        alertaWarning('Error: ' + response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alertaWarning('Error al enviar mensaje: ' + error);
+                },
+                complete: function() {
+                    // Restaurar el botón
+                    submitBtn.prop('disabled', false).html(originalBtnText);
+                }
+            });
+        });
+
+        function actualizarMensaje(mensajeId, accion, nuevoContenido) {
+            const mensajeElement = $(`.mensaje-item[data-id="${mensajeId}"]`);
+
+            if (mensajeElement.length) {
+                if (accion === 'eliminar') {
+                    // Marcar como eliminado
+                    mensajeElement.find('.user-chat')
+                        .addClass('deleted-message')
+                        .html('<p class="text-muted"><i class="fa fa-ban"></i> Este mensaje fue eliminado</p>');
+                } else if (accion === 'editar') {
+                    // Actualizar contenido y marcar como editado
+                    mensajeElement.find('.user-chat')
+                        .addClass('edited-message')
+                        .html(`<p>${nuevoContenido}</p><small class="text-muted"><i class="fa fa-edit"></i> Editado</small>`);
+                }
+            }
+        }
+
+        // Mostrar nombre del archivo seleccionado
+        $('#archivo').change(function() {
+            const fileName = $(this).val().split('\\').pop();
+            if (fileName) {
+                // Mostrar el nombre del archivo junto al campo de mensaje
+                const messageInput = $('input[name="mensaje"]');
+                if (!messageInput.val()) {
+                    messageInput.val('Archivo adjunto: ' + fileName);
+                }
+            }
+        });
+
+        // Función para cargar conversaciones
+        function cargarConversaciones(sesionId = null, query = '') {
+            // Mostrar indicador de carga
+            $('#lista-conversaciones').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2">Cargando conversaciones...</p></div>');
+
+            const url = '/whatsapp/conversaciones/' +
+                        '?load_conversations=true' +
+                        (sesionId ? '&sesion_id=' + sesionId : '') +
+                        (query ? '&criterio=' + encodeURIComponent(query) : '');
+
+            $.ajax({
+                url: url,
+                type: 'GET',
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
+                success: function(response) {
+                    $('#lista-conversaciones').html(response.html);
+
+                    // Si hay una conversación activa, marcarla
+                    if (conversacionActiva) {
+                        $(`.conversacion-item[data-id="${conversacionActiva}"]`).addClass('active');
+                    }
+
+                    // Si no hay conversaciones, mostrar mensaje
+                    if ($('#lista-conversaciones .conversacion-item').length === 0) {
+                        $('#lista-conversaciones').html('<div class="p-3 text-center"><p class="text-muted">No hay conversaciones disponibles</p></div>');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#lista-conversaciones').html('<div class="p-3 text-center"><p class="text-danger">Error al cargar conversaciones: ' + error + '</p></div>');
+                    console.error("Error cargando conversaciones:", xhr.responseText);
+                }
+            });
+        }
+
+        // Función para cargar mensajes
+        // Función para cargar mensajes
+        function cargarMensajes(conversacionId) {
+            conversacionActiva = conversacionId;
+
+            // Mostrar indicador de carga
+            $('#mensajes-container').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2">Cargando mensajes...</p></div>');
+
+            $.ajax({
+                url: '/whatsapp/conversaciones/?action=ver_mensajes&pk=' + conversacionId,
+                type: 'GET',
+                success: function(response) {
+                    // Actualizar mensajes
+                    $('#mensajes-container').html(response.html);
+
+                    // Actualizar información de contacto
+                    $('#contacto-nombre').text(response.contacto_nombre || response.contacto_numero);
+                    $('#contacto-numero').text(response.contacto_numero);
+                    $('#contacto-hashedId').text(response.hashed_id && `#${response.hashed_id}` || '');
+
+                    // Actualizar foto de contacto si está disponible
+                    if (response.contacto_foto) {
+                        $('#contacto-foto').attr('src', response.contacto_foto);
+                    } else {
+                        $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
+                    }
+
+                    // Mostrar footer para enviar mensajes
+                    $('#chat-footer').show();
+                    $('#conversacion-id').val(response.conversacion_id);
+
+                    // Scroll al final
+                    setTimeout(() => {
+                        scrollToBottom();
+                    }, 1500);
+                    conectarWebSocket(response.conversacion_id);
+                },
+                error: function(xhr, status, error) {
+                    $('#mensajes-container').html('<div class="p-3 text-center"><p class="text-danger">Error al cargar mensajes: ' + error + '</p></div>');
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

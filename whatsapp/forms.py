@@ -33,7 +33,7 @@ class SesionWhatsAppForm(ModelFormBase):
 class ContactoForm(ModelFormBase):
     class Meta:
         model = Contacto
-        fields = ('numero_telefono',)
+        fields = ('numero_telefono','contacto_nombre','contacto_foto')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
