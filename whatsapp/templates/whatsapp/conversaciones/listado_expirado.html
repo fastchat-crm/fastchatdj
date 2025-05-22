@@ -306,10 +306,10 @@
             conversacionActiva = null;
         });
 
-        {#const buscarConversacion = debounceFunction(function (e) {#}
-        {#    const criterio = $(e.target).val();#}
-        {#    cargarConversaciones($('#sesion-selector').val(), criterio);#}
-        {#}, 500);#}
+        const buscarConversacion = debounceFunction(function (e) {
+            const criterio = $(e.target).val();
+            cargarConversaciones($('#sesion-selector').val(), criterio);
+        }, 500);
 
         const quitPresenceUpdate = debounceFunction(function (e) {
             if (!chatSocket) return;
