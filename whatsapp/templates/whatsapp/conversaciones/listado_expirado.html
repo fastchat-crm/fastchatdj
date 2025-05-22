@@ -87,7 +87,7 @@
                         <div class="tab-pane fade show active" id="messages_chat">
                             <div class="row">
                                 <div class="col" id="lista-conversaciones" style="display: flex; flex-direction: column;">
-                                    {% include 'whatsapp/conversaciones/conversaciones_partial.html' %}
+{#                                    {% include 'whatsapp/conversaciones/conversaciones_partial.html' %}#}
                                 </div><!--end col-->
                             </div><!--end row-->
                         </div><!--end general chat-->
@@ -224,40 +224,40 @@
             };
         }
 
-        {#function sessionWebSocket(sessionId) {#}
-        {#    const wsUrl = `${wsProtocol}//${window.location.host}/ws/sessionroom/${sessionId}/`;#}
-        {#    if (sessionSocket){#}
-        {#        sessionSocket.close();#}
-        {#    }#}
-        {#    sessionSocket = new ReconnectingWebSocket(wsUrl, null, {reconnectInterval: 1500});#}
-        {##}
-        {#    sessionSocket.onopen = function(e) {#}
-        {#        console.log('Conexión SessionWebSocket establecida');#}
-        {#    };#}
-        {##}
-        {#    sessionSocket.onmessage = function(e) {#}
-        {#        const data = JSON.parse(e.data);#}
-        {##}
-        {#        if ((data.type === 'new_message' || data.type === 'messages_update') && data.html) {#}
-        {#            const conversacion = $(`#lista-conversaciones div[data-id=${data.conversacion_id}]`);#}
-        {#            if (conversacion.length) {#}
-        {#                conversacion.replaceWith(data.html);#}
-        {#            } else {#}
-        {#                $(`#lista-conversaciones`).append(data.html);#}
-        {#            }#}
-        {#        }#}
-        {#    };#}
-        {##}
-        {#    sessionSocket.onclose = function(e) {#}
-        {#        console.log('Conexión SessionWebSocket cerrada');#}
-        {#    };#}
-        {##}
-        {#    sessionSocket.onerror = function(e) {#}
-        {#        console.error('Error en SessionWebSocket:', e);#}
-        {#    };#}
-        {##}
-        {#    cargarConversaciones(sessionId);#}
-        {#}#}
+        function sessionWebSocket(sessionId) {
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/sessionroom/${sessionId}/`;
+            if (sessionSocket){
+                sessionSocket.close();
+            }
+            sessionSocket = new ReconnectingWebSocket(wsUrl, null, {reconnectInterval: 1500});
+
+            sessionSocket.onopen = function(e) {
+                console.log('Conexión SessionWebSocket establecida');
+            };
+
+            sessionSocket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+
+                if ((data.type === 'new_message' || data.type === 'messages_update') && data.html) {
+                    const conversacion = $(`#lista-conversaciones div[data-id=${data.conversacion_id}]`);
+                    if (conversacion.length) {
+                        conversacion.replaceWith(data.html);
+                    } else {
+                        $(`#lista-conversaciones`).append(data.html);
+                    }
+                }
+            };
+
+            sessionSocket.onclose = function(e) {
+                console.log('Conexión SessionWebSocket cerrada');
+            };
+
+            sessionSocket.onerror = function(e) {
+                console.error('Error en SessionWebSocket:', e);
+            };
+
+            cargarConversaciones(sessionId);
+        }
 
         sessionWebSocket($('#sesion-selector').val());
 
@@ -428,7 +428,7 @@
             $('#lista-conversaciones').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2">Cargando conversaciones...</p></div>');
 
             const url = '/whatsapp/conversaciones/' +
-                        '?load_conversations=true' +
+                        '?action=conversationfinished&load_conversations=true' +
                         (sesionId ? '&sesion_id=' + sesionId : '') +
                         (query ? '&criterio=' + encodeURIComponent(query) : '');
 

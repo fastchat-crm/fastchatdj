@@ -71,9 +71,15 @@ def conversacionesView(request):
             data["url_vars"] = url_vars
             data["today"] = timezone.now().date()  # Para comparar fechas en la plantilla
 
-            conversaciones = ConversacionWhatsApp.objects.expirado.filter(filtros)
-            data["conversaciones"] = conversaciones
-            data["list_count"] = conversaciones.count()
+            if request.GET.get('load_conversations'):
+                conversaciones = ConversacionWhatsApp.objects.expirado.filter(filtros)
+                data["conversaciones"] = conversaciones
+                data["list_count"] = conversaciones.count()
+                return JsonResponse({
+                    'html': render_to_string('whatsapp/conversaciones/conversaciones_partial.html',
+                                             {'conversaciones': conversaciones, 'today': timezone.now().date()},
+                                             request=request)
+                })
             return render(request, 'whatsapp/conversaciones/listado_expirado.html', data)
 
 
