@@ -9,7 +9,82 @@
         border-width: 2px;
         border-style: solid;
     }
+
+    /* Estilos para hacer el contenedor más responsivo */
+    .conversacion-item {
+        position: relative;
+        overflow: hidden; /* Evita que elementos se salgan */
+    }
+
+    .conversacion-content {
+        min-width: 0; /* Permite que el contenido se comprima */
+        flex: 1;
+    }
+
+    .conversacion-header {
+        min-width: 0; /* Permite truncamiento */
+    }
+
+    /* Badge de contador posicionado abajo a la derecha */
+    .mensaje-badge-container {
+        position: absolute;
+        bottom: 8px;
+        right: 8px;
+        z-index: 2;
+    }
+
+    .mensaje-badge {
+        min-width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        padding: 0.2rem 0.4rem;
+        line-height: 1;
+    }
+
+    /* Estilos para el mensaje debajo de la imagen */
+    .mensaje-abajo {
+        margin-top: 0.5rem;
+        padding-right: 45px; /* Espacio para el badge */
+    }
+
+    /* Fecha último mensaje posicionada arriba a la derecha */
+    .conversacion-fecha {
+        position: absolute !important;
+        top: 8px;
+        right: 8px;
+        z-index: 1;
+    }
+
+    /* Responsividad para pantallas pequeñas */
+    @media (max-width: 576px) {
+        .conversacion-header {
+            flex-direction: column;
+            align-items: flex-start !important;
+        }
+
+        .conversacion-fecha {
+            position: absolute !important;
+            top: 6px;
+            right: 6px;
+            align-self: auto !important;
+            margin-top: 0;
+        }
+
+        .mensaje-badge {
+            font-size: 0.65rem;
+            min-width: 18px;
+            height: 18px;
+        }
+
+        .mensaje-abajo {
+            padding-right: 40px;
+        }
+    }
 </style>
+
 <div class="p-2 border border-dashed rounded mb-2 conversacion-item border-theme-color"
      style="order: -{{ conversacion.order }};" data-id="{{ conversacion.id }}">
     <a href="javascript:void(0);" class="cargar-conversacion text-decoration-none text-dark"
@@ -17,7 +92,7 @@
         <div class="d-flex align-items-start">
 
             <!-- Imagen del contacto -->
-            <div class="position-relative">
+            <div class="position-relative flex-shrink-0">
                 {% if conversacion.contacto_foto %}
                     <img src="{{ conversacion.contacto_foto }}" alt="" class="thumb-lg rounded-circle">
                 {% else %}
@@ -29,11 +104,11 @@
             </div>
 
             <!-- Contenido de la conversación -->
-            <div class="flex-grow-1 ms-2 align-self-center w-100">
-                <!-- Primera línea: nombre + fecha -->
-                <div class="d-flex justify-content-between align-items-center">
-                    <div class="d-flex flex-column">
-                        <small class="badge badge-{{ conversacion.get_estado_color_clasificacion }} mb-1">
+            <div class="conversacion-content ms-2 align-self-center">
+                <!-- Primera línea: badge y nombre -->
+                <div class="d-flex align-items-start conversacion-header">
+                    <div class="d-flex flex-column min-w-0 flex-grow-1">
+                        <small class="badge badge-{{ conversacion.get_estado_color_clasificacion }} mb-1 align-self-start">
                             {{ conversacion.get_clasificacion_display }}
                         </small>
                         <h6 class="my-0 fw-medium fs-14 text-truncate">
@@ -44,38 +119,43 @@
                             {% endif %}
                         </h6>
                     </div>
-                    <small class="text-muted fs-11 text-end ms-2">
-                        {% if conversacion.fecha_ultimo_mensaje %}
-                            {{ conversacion.fecha_ultimo_mensaje|naturaltime }}
-                        {% endif %}
-                    </small>
-                </div>
-
-                <!-- Segunda línea: mensaje + fecha extra + contador -->
-                <div class="d-flex justify-content-between align-items-center mt-1">
-                    <div class="text-muted text-truncate">
-                        {% if show_date %}
-                            <small>
-                                <i class="fa fa-calendar"></i>
-                                {{ conversacion.fecha_registro|date:'d/m/Y' }}
-                                {% if conversacion.fecha_fin_conversacion %}
-                                    - {{ conversacion.fecha_fin_conversacion|date:'d/m/Y' }}
-                                {% endif %}
-                            </small><br>
-                        {% endif %}
-                        {{ conversacion.ultimo_mensaje|truncatechars:30 }}
-                    </div>
-
-                    {% with no_leidos=conversacion.mensajes.filter.count %}
-                        {% if no_leidos > 0 %}
-                            <span class="mensaje-badge badge rounded-pill bg-success text-white">
-                                {{ no_leidos }}
-                            </span>
-                        {% endif %}
-                    {% endwith %}
                 </div>
 
             </div>
         </div>
+
+        <!-- Fecha último mensaje posicionada arriba a la derecha -->
+        <small class="text-muted fs-11 conversacion-fecha">
+            {% if conversacion.fecha_ultimo_mensaje %}
+                {{ conversacion.fecha_ultimo_mensaje|naturaltime }}
+            {% endif %}
+        </small>
+
+        <!-- Mensaje y fecha DEBAJO DE LA IMAGEN -->
+        <div class="mensaje-abajo">
+            <div class="text-muted text-truncate">
+                {% if show_date %}
+                    <small class="d-block">
+                        <i class="fa fa-calendar"></i>
+                        {{ conversacion.fecha_registro|date:'d/m/Y' }}
+                        {% if conversacion.fecha_fin_conversacion %}
+                            - {{ conversacion.fecha_fin_conversacion|date:'d/m/Y' }}
+                        {% endif %}
+                    </small>
+                {% endif %}
+                <span class="d-block">{{ conversacion.ultimo_mensaje|truncatechars:30 }}</span>
+            </div>
+        </div>
+
+        <!-- Badge de contador posicionado abajo a la derecha -->
+        {% with no_leidos=conversacion.mensajes.filter.count %}
+            {% if no_leidos > 0 %}
+                <div class="mensaje-badge-container">
+                    <span class="mensaje-badge badge rounded-pill bg-success text-white">
+                        {{ no_leidos }}
+                    </span>
+                </div>
+            {% endif %}
+        {% endwith %}
     </a>
 </div>
