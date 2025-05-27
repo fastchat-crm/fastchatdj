@@ -408,7 +408,7 @@ def process_incoming_message(session, event_data, channel_layer):
                 conversation.save()
         elif conversation.estado_mensaje == 'DEPARTAMENTO_ESCOGIDO':
             departamento = conversation.modelo
-            opcionesdepartamento = departamento.opciondepartamentochatbot_set.annotate(
+            opcionesdepartamento = departamento.opciondepartamentochatbot_set.filter(opcion_padre__isnull=True).annotate(
                 numero_opcion=Window(
                     expression=RowNumber(),
                     order_by='orden'
@@ -422,7 +422,7 @@ def process_incoming_message(session, event_data, channel_layer):
                         order_by='orden'
                     )
                 )
-                msg = opcion.respuesta
+                msg = f'{opcion.respuesta}\n'
                 msg += "\n".join([f'{get_numero_emoji_ws(x.numero_opcion)}. {x.nombre}' for x in subopciones])
                 whatsapp_service.send_text_message(
                     conversation.sesion.session_id, contacto.from_number,
@@ -451,7 +451,7 @@ def process_incoming_message(session, event_data, channel_layer):
                         order_by='orden'
                     )
                 )
-                msg = opcion.respuesta
+                msg = f'{opcion.respuesta}\n'
                 msg += "\n".join([f'{get_numero_emoji_ws(x.numero_opcion)}. {x.nombre}' for x in subopciones])
                 whatsapp_service.send_text_message(
                     conversation.sesion.session_id, contacto.from_number,
