@@ -2,6 +2,7 @@ from email.policy import default
 from functools import cached_property
 
 from dateutil.relativedelta import relativedelta
+from django.contrib.contenttypes.fields import GenericForeignKey
 from django.db import models
 from django.utils import timezone
 
@@ -169,6 +170,12 @@ ESTADOS_CONVERSACION = (
     (1, 'Cerrado'),
 )
 
+ESTADO_MENSAJE_CHOICES = (
+    ("MENU_DEPARTAMENTOS", "Menú Departamentos"),
+    ("DEPARTAMENTO_ESCOGIDO", "Departamento Escogido"),
+    ("OPCION_ESCOGIDA", "Opción Escogida"),
+)
+
 class ConversacionWhatsApp(ModeloBase):
     objects = ConversacionWhatsAppManager()
     hashed_id = models.TextField(default='', verbose_name='ID encriptado', blank=True, null=True)
@@ -184,6 +191,14 @@ class ConversacionWhatsApp(ModeloBase):
     fecha_hora_expira = models.DateTimeField('Fecha y Hora que expira la conversación')
     fecha_fin_conversacion = models.DateTimeField('Fecha y Hora de cierre de la conversación', blank=True, null=True)
     duracion_conversacion = models.DurationField('Duración de la conversación', blank=True, null=True)
+    estado_mensaje = models.CharField(
+        'Estado actual del Mensaje', max_length=100, choices=ESTADO_MENSAJE_CHOICES, default="MENU_DEPARTAMENTOS"
+    )
+    # GenericForeignKey
+    content_type = models.ForeignKey("contenttypes.ContentType", on_delete=models.SET_NULL, null=True, blank=True)
+    object_id = models.PositiveIntegerField(null=True, blank=True)
+    modelo = GenericForeignKey('content_type', 'object_id')
+    # ----------------------------------------------------------------
     fromMe = models.BooleanField('¿From Me?', default=False)
 
     class Meta:

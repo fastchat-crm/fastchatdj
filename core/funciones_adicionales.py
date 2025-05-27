@@ -171,3 +171,9 @@ def convertir_archivo_a_base64(file):
         base64_str = base64.b64encode(file.read()).decode('utf-8')
         return f'data:{mime_type};base64,{base64_str}'
     return ""
+
+
+def get_numero_emoji_ws(_num):
+    num = str(_num)
+    f = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
+    return "".join([f[int(v)] for v in num])
