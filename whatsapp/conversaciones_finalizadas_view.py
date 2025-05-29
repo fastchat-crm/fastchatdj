@@ -50,23 +50,26 @@ def conversacionesFinalizadasView(request):
     if request.method == 'GET' and 'action' in request.GET:
         action = request.GET['action']
         if action == 'ver_mensajes':
-            pk = int(request.GET['pk'])
-            conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
-            mensajes = MensajeWhatsApp.objects.filter(conversacion=conversacion).order_by('fecha')
-            data['conversacion'] = conversacion
-            data['mensajes'] = mensajes
-            return JsonResponse({
-                'html': render_to_string('whatsapp/conversaciones/mensajes_partial.html', data, request=request),
-                'conversacion_id': conversacion.id,
-                'contacto_nombre': conversacion.contacto_nombre or '',
-                'contacto_numero': conversacion.contacto_numero,
-                'contacto_foto': conversacion.contacto_foto or '',
-                'hashed_id': conversacion.hashed_id or '',
-                'estado_active': conversacion.estado_conversacion == 0,
-                'show_date': True,
-                'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y') or '',
-                'fecha_fin': conversacion.fecha_fin_conversacion.strftime('%d/%m/%Y') or '',
-            })
+            try:
+                pk = int(request.GET['pk'])
+                conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+                mensajes = MensajeWhatsApp.objects.filter(conversacion=conversacion).order_by('fecha')
+                data['conversacion'] = conversacion
+                data['mensajes'] = mensajes
+                return JsonResponse({
+                    'html': render_to_string('whatsapp/conversaciones/mensajes_partial.html', data, request=request),
+                    'conversacion_id': conversacion.id,
+                    'contacto_nombre': conversacion.contacto_nombre or '',
+                    'contacto_numero': conversacion.contacto_numero,
+                    'contacto_foto': conversacion.contacto_foto or '',
+                    'hashed_id': conversacion.hashed_id or '',
+                    'estado_active': conversacion.estado_conversacion == 0,
+                    'show_date': True,
+                    'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y') if conversacion.fecha_registro else '',
+                    'fecha_fin': conversacion.fecha_fin_conversacion.strftime('%d/%m/%Y') if conversacion.fecha_fin_conversacion else '',
+                })
+            except Exception as ex:
+                pass
 
     # ====================== ENVIAR MENSAJE =========================
     if request.method == 'POST':
