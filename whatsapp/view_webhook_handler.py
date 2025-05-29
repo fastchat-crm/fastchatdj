@@ -220,8 +220,7 @@ def webhook_handler(request):
 
         elif event_type == 'message_sent':
             # Procesar mensaje enviado
-            # process_sent_message(session, event_data, channel_layer)
-            pass
+            process_sent_message(session, event_data, channel_layer)
 
         elif event_type == 'message_deleted':
             # Procesar mensaje eliminado
