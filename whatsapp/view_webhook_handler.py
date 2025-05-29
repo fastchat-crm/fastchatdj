@@ -1,5 +1,6 @@
 # whatsapp/views.py (webhook_handler)
-from django.db.models import Q
+from django.db.models import Q, Window
+from django.db.models.functions import RowNumber
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -14,7 +15,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.conf import settings
 
-from core.funciones_adicionales import get_image_as_base64
+from core.funciones_adicionales import get_image_as_base64, get_numero_emoji_ws
 from .models import (
     SesionWhatsApp,
     ConversacionWhatsApp, Contacto,
@@ -219,7 +220,8 @@ def webhook_handler(request):
 
         elif event_type == 'message_sent':
             # Procesar mensaje enviado
-            process_sent_message(session, event_data, channel_layer)
+            # process_sent_message(session, event_data, channel_layer)
+            pass
 
         elif event_type == 'message_deleted':
             # Procesar mensaje eliminado
@@ -248,6 +250,7 @@ def process_incoming_message(session, event_data, channel_layer):
     Procesa un mensaje entrante de WhatsApp
     """
     try:
+        print('process_incoming_message', event_data)
         # Extraer datos del mensaje
         message_id = event_data.get('id')
         from_number = event_data.get('from')
@@ -354,13 +357,118 @@ def process_incoming_message(session, event_data, channel_layer):
         # Actualizar estadísticas
         update_conversation_stats(conversation)
 
+        whatsapp_service = WhatsAppService()
+        primer_mensaje = not conversation.bienvenida_enviado
+        numero_opcion_respondido = (message_text or '').replace(' ', '')
+        numero_opcion_respondido = numero_opcion_respondido.isdigit() and numero_opcion_respondido or -1
         if not conversation.bienvenida_enviado:
-            if conversation.sesion.mensaje_bienvenida:
-                whatsapp_service = WhatsAppService()
-                whatsapp_service.send_text_message(conversation.sesion.session_id, contacto.from_number, conversation.sesion.mensaje_bienvenida, simularEscritura=True)
             conversation.bienvenida_enviado = True
             conversation.save()
-        # Notificar a través de WebSockets
+            if conversation.sesion.mensaje_bienvenida:
+                whatsapp_service.send_text_message(conversation.sesion.session_id, contacto.from_number, conversation.sesion.mensaje_bienvenida, simularEscritura=True)
+        departamentos = conversation.sesion.departamentos.all().annotate(
+            numero_opcion=Window(
+                expression=RowNumber(),
+                order_by='id'
+            )
+        )
+        departamentos_msg = 'Escribe el número del departamento para continuar:\n'
+        if departamentos and conversation.estado_mensaje == 'MENU_DEPARTAMENTOS':
+            departamentos_msg += '\n'.join([f'{get_numero_emoji_ws(x.numero_opcion)}. {x.nombre}' for x in departamentos])
+            departamento = departamentos.filter(numero_opcion=numero_opcion_respondido).first()
+            if primer_mensaje:
+                whatsapp_service.send_text_message(
+                    conversation.sesion.session_id, contacto.from_number,
+                    departamentos_msg, not primer_mensaje
+                )
+            elif not departamento:
+                whatsapp_service.send_text_message(
+                    conversation.sesion.session_id, contacto.from_number,
+                    departamentos_msg, not primer_mensaje
+                )
+            elif departamento:
+                opcionesdepartamento = departamento.opciondepartamentochatbot_set.filter(opcion_padre__isnull=True).annotate(
+                    numero_opcion=Window(
+                        expression=RowNumber(),
+                        order_by='orden'
+                    )
+                )
+                opciones_msg = f'{departamento.mensaje_saludo}\n'
+                opciones_msg += "\n".join([f'{get_numero_emoji_ws(x.numero_opcion)}. {x.nombre}' for x in opcionesdepartamento])
+                whatsapp_service.send_text_message(
+                    conversation.sesion.session_id, contacto.from_number,
+                    opciones_msg, True
+                )
+                if opcionesdepartamento:
+                    conversation.estado_mensaje = 'DEPARTAMENTO_ESCOGIDO'
+                    conversation.modelo = departamento
+                else:
+                    conversation.estado_mensaje = 'MENU_DEPARTAMENTOS'
+                    conversation.modelo = None
+                conversation.save()
+        elif conversation.estado_mensaje == 'DEPARTAMENTO_ESCOGIDO':
+            departamento = conversation.modelo
+            opcionesdepartamento = departamento.opciondepartamentochatbot_set.filter(opcion_padre__isnull=True).annotate(
+                numero_opcion=Window(
+                    expression=RowNumber(),
+                    order_by='orden'
+                )
+            )
+            opcion = opcionesdepartamento.filter(numero_opcion=numero_opcion_respondido).first()
+            if opcion:
+                subopciones = opcion.subopciones.all().annotate(
+                    numero_opcion=Window(
+                        expression=RowNumber(),
+                        order_by='orden'
+                    )
+                )
+                msg = f'{opcion.respuesta}\n'
+                msg += "\n".join([f'{get_numero_emoji_ws(x.numero_opcion)}. {x.nombre}' for x in subopciones])
+                whatsapp_service.send_text_message(
+                    conversation.sesion.session_id, contacto.from_number,
+                    msg, True
+                )
+                if subopciones:
+                    conversation.estado_mensaje = 'OPCION_ESCOGIDA'
+                    conversation.modelo = opcion
+                else:
+                    conversation.estado_mensaje = 'MENU_DEPARTAMENTOS'
+                    conversation.modelo = None
+                conversation.save()
+        elif conversation.estado_mensaje == 'OPCION_ESCOGIDA':
+            opcion = conversation.modelo
+            opciones = opcion.subopciones.annotate(
+                numero_opcion=Window(
+                    expression=RowNumber(),
+                    order_by='orden'
+                )
+            )
+            opcion = opciones.filter(numero_opcion=numero_opcion_respondido).first()
+            if opcion:
+                subopciones = opcion.subopciones.all().annotate(
+                    numero_opcion=Window(
+                        expression=RowNumber(),
+                        order_by='orden'
+                    )
+                )
+                msg = f'{opcion.respuesta}\n'
+                msg += "\n".join([f'{get_numero_emoji_ws(x.numero_opcion)}. {x.nombre}' for x in subopciones])
+                whatsapp_service.send_text_message(
+                    conversation.sesion.session_id, contacto.from_number,
+                    msg, True
+                )
+                if subopciones:
+                    conversation.estado_mensaje = 'OPCION_ESCOGIDA'
+                    conversation.modelo = opcion
+                else:
+                    conversation.estado_mensaje = 'MENU_DEPARTAMENTOS'
+                    conversation.modelo = None
+                conversation.save()
+
+
+
+
+            # Notificar a través de WebSockets
         async_to_sync(channel_layer.group_send)(
             f"chat_{conversation.id}",
             {
@@ -395,6 +503,7 @@ def process_sent_message(session, event_data, channel_layer):
     Procesa un mensaje enviado a través de WhatsApp
     """
     try:
+        print('process_sent_message', event_data)
         # Extraer datos del mensaje
         message_id = event_data.get('messageId') or event_data.get('id')
         from_number = event_data.get('to') or event_data.get('from')
@@ -487,12 +596,9 @@ def process_sent_message(session, event_data, channel_layer):
             fecha_leido=timezone.now()
         )
 
-        # if not conversation.bienvenida_enviado:
-        #     if conversation.sesion.mensaje_bienvenida:
-        #         whatsapp_service = WhatsAppService()
-        #         whatsapp_service.send_text_message(conversation.sesion.session_id, contacto.from_number, conversation.sesion.mensaje_bienvenida, simularEscritura=True)
-        #     conversation.bienvenida_enviado = True
-        #     conversation.save()
+        if not conversation.bienvenida_enviado:
+            conversation.bienvenida_enviado = True
+            conversation.save()
 
         # Actualizar estadísticas
         update_conversation_stats(conversation)

@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from core.custom_models import CustomValueDb
 
+
 class ContactoManager(Manager):
     def get_queryset(self):
         return super().get_queryset().annotate(
@@ -27,8 +28,8 @@ class ConversacionWhatsAppManager(Manager):
     @property
     def sin_expirar(self):
         return self.get_queryset().filter(
-        expirado=False,
-        conversacion_finalizada=False
+            expirado=False,
+            conversacion_finalizada=False
         )
 
     @property
