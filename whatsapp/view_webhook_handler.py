@@ -579,7 +579,7 @@ def process_sent_message(session, event_data, channel_layer):
         contacto.fecha_ultimo_mensaje = timezone.now()
         contacto.save()
 
-        conversation = ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).first() or \
+        conversation = ConversacionWhatsApp.objects.filter(contacto=contacto).order_by('-id').first() or \
                        ConversacionWhatsApp.objects.create(contacto=contacto, fromMe=True)
 
         # Crear el mensaje
