@@ -22,7 +22,7 @@ class SesionWhatsAppForm(ModelFormBase):
             if k in ('departamentos',):
                 self.fields[k].widget.attrs['col'] = '12'
                 self.fields[k].widget.attrs['class'] = "jselect2"
-                self.fields[k].required= False
+                self.fields[k].required = False
             if k in ('nombre',):
                 self.fields[k].widget.attrs['col'] = '9'
             if ver:
@@ -32,7 +32,7 @@ class SesionWhatsAppForm(ModelFormBase):
 class ContactoForm(ModelFormBase):
     class Meta:
         model = Contacto
-        fields = ('numero_telefono','contacto_nombre','contacto_foto')
+        fields = ('numero_telefono', 'contacto_nombre', 'contacto_foto')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
