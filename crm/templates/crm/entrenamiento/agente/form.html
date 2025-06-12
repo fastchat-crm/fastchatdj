@@ -1,0 +1,232 @@
+<div class="row g-2">
+    <input type="hidden" value="{{ filtro.pk }}" name="pk">
+    <input type="hidden" name="action" value="{{ action }}"/>
+    <!-- Campo hidden para los detalles JSON -->
+    <input type="hidden" name="detalles_json" id="detalles_json" value="">
+
+    {% for field in form %}
+        {% if field.is_hidden %}
+            {{ field }}
+        {% else %}
+            <div class="col-lg-{{ field.field.widget.attrs.col }}">
+                <div class="mb-2">
+                    <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label>
+                    {{ field }}
+                    <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                </div>
+            </div>
+        {% endif %}
+    {% endfor %}
+</div>
+
+<div class="border-top my-3"></div>
+
+<!-- Sección de Detalles -->
+<div class="mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0">Detalles del Agente</h6>
+        <button type="button" class="btn btn-primary btn-sm" id="btnAgregarDetalle">
+            <i class="fa fa-plus me-1"></i>Agregar Detalle
+        </button>
+    </div>
+
+    <div id="contenedorDetalles">
+        <!-- Los detalles se agregarán aquí dinámicamente -->
+    </div>
+</div>
+
+<div class="border-top my-3"></div>
+
+<div class="d-flex justify-content-end">
+    <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
+        <i class="fa fa-window-close me-1"></i>Cancelar
+    </button>
+    <button type="submit" class="btn btn-success btn-sm">
+        <i class="fa fa-save me-1"></i>Guardar
+    </button>
+</div>
+
+{{ form.media }}
+
+{% include 'base_formulario_modal.html' %}
+
+<script>
+    // Use window properties to avoid redeclaration errors in modals
+    window.contadorDetalles = window.contadorDetalles || 0;
+    window.lista_items1 = window.lista_items1 || [];
+
+    // Reset variables when modal opens
+    function resetearVariables() {
+        window.contadorDetalles = 0;
+        window.lista_items1 = [];
+    }
+
+    // Datos existentes para edición (se mantienen constantes)
+    window.DATOS_ORIGINALES = {
+        detalles: {% if filtro and filtro.pk %}{{ detalles_existentes|safe }}{% else %}[]{% endif %},
+        tieneFiltro: {% if filtro and filtro.pk %}true{% else %}false{% endif %}
+    };
+
+    function agregarDetalle(detalleExistente = null) {
+        window.contadorDetalles++;
+        const tipo = detalleExistente ? detalleExistente.tipo : 1;
+        const enlace = detalleExistente ? detalleExistente.enlace : '';
+        const archivoUrl = detalleExistente ? detalleExistente.archivo_url : '';
+
+        const detalleHtml = `
+            <div class="row g-2 mb-1" id="detalle${window.contadorDetalles}">
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Tipo</label>
+                    <select class="form-select detalle-tipo" data-detalle="${window.contadorDetalles}" onchange="cambiarTipoDetalle(${window.contadorDetalles})">
+                        <option value="1" ${tipo == 1 ? 'selected' : ''}>Enlace</option>
+                        <option value="2" ${tipo == 2 ? 'selected' : ''}>Archivo</option>
+                    </select>
+                </div>
+                <div class="col-md-8" id="campoDetalle${window.contadorDetalles}">
+                    ${tipo == 1 ?
+                        `<label class="form-label small mb-1">Enlace</label>
+                         <input type="url" class="form-control detalle-enlace" data-detalle="${window.contadorDetalles}" value="${enlace}" placeholder="https://ejemplo.com" onchange="actualizarDetallesJSON()">` :
+                        `<label class="form-label small mb-1">Archivo</label>
+                         <input type="file" class="form-control detalle-archivo" data-detalle="${window.contadorDetalles}" name="detalle_archivo_${window.contadorDetalles}" onchange="actualizarDetallesJSON()">
+                         ${archivoUrl ? `<small class="text-muted">Archivo actual: <a href="${archivoUrl}" target="_blank">Ver archivo</a></small>` : ''}`
+                    }
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small mb-1">&nbsp;</label>
+                    <button type="button" class="btn btn-danger btn-sm w-100" onclick="eliminarDetalle(${window.contadorDetalles})">
+                        <i class="fa fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+
+        $('#contenedorDetalles').append(detalleHtml);
+        actualizarDetallesJSON();
+    }
+
+    function eliminarDetalle(id) {
+        $(`#detalle${id}`).remove();
+        actualizarDetallesJSON();
+    }
+
+    function cambiarTipoDetalle(id) {
+        const tipo = $(`select[data-detalle="${id}"]`).val();
+        const $campoDetalle = $(`#campoDetalle${id}`);
+
+        if (tipo === '1') {
+            $campoDetalle.html(`
+                <label class="form-label small mb-1">Enlace</label>
+                <input type="url" class="form-control detalle-enlace" data-detalle="${id}" placeholder="https://ejemplo.com" onchange="actualizarDetallesJSON()">
+            `);
+        } else {
+            $campoDetalle.html(`
+                <label class="form-label small mb-1">Archivo</label>
+                <input type="file" class="form-control detalle-archivo" data-detalle="${id}" name="detalle_archivo_${id}" onchange="actualizarDetallesJSON()">
+            `);
+        }
+
+        actualizarDetallesJSON();
+    }
+
+    function actualizarDetallesJSON() {
+        window.lista_items1 = [];
+
+        $('#contenedorDetalles .card').each(function(index) {
+            const $card = $(this);
+            const detalleId = $card.attr('id').replace('detalle', '');
+            const $tipoSelect = $card.find('.detalle-tipo');
+            const tipo = parseInt($tipoSelect.val());
+
+            let detalleData = {
+                id: detalleId,
+                tipo: tipo,
+                enlace: '',
+                archivo_nombre: '',
+                archivo_index: index
+            };
+
+            if (tipo === 1) {
+                const $enlaceInput = $card.find('.detalle-enlace');
+                detalleData.enlace = $enlaceInput.val() || '';
+            } else {
+                const $archivoInput = $card.find('.detalle-archivo');
+                if ($archivoInput.length > 0 && $archivoInput[0].files.length > 0) {
+                    detalleData.archivo_nombre = $archivoInput[0].files[0].name;
+                }
+            }
+
+            window.lista_items1.push(detalleData);
+        });
+
+        const jsonString = JSON.stringify(window.lista_items1);
+        $('#detalles_json').val(jsonString);
+    }
+
+    function funcionAntesDeGuardar() {
+        actualizarDetallesJSON();
+        return true;
+    }
+
+    function inicializarEventos() {
+        // Limpiar event listeners previos
+        $('#btnAgregarDetalle').off('click');
+
+        $('#btnAgregarDetalle').on('click', function() {
+            agregarDetalle();
+        });
+
+        // Usar delegación de eventos para campos dinámicos
+        $(document).off('change', '.detalle-enlace, .detalle-archivo');
+        $(document).on('change', '.detalle-enlace, .detalle-archivo', function() {
+            actualizarDetallesJSON();
+        });
+
+        $(document).off('change', '.detalle-tipo');
+        $(document).on('change', '.detalle-tipo', function() {
+            const detalleId = $(this).data('detalle');
+            cambiarTipoDetalle(detalleId);
+        });
+    }
+
+    function inicializarDetalles() {
+        // Reset variables
+        resetearVariables();
+
+        // Limpiar contenedor
+        $('#contenedorDetalles').empty();
+        $('#detalles_json').val('[]');
+
+        if (window.DATOS_ORIGINALES.tieneFiltro) {
+            if (window.DATOS_ORIGINALES.detalles && Array.isArray(window.DATOS_ORIGINALES.detalles) && window.DATOS_ORIGINALES.detalles.length > 0) {
+                $.each(window.DATOS_ORIGINALES.detalles, function(index, detalle) {
+                    agregarDetalle(detalle);
+                });
+            } else {
+                agregarDetalle();
+            }
+        }
+    }
+
+    // Inicialización con jQuery - usar $(document).ready() más robusto
+    $(document).ready(function() {
+        inicializarEventos();
+        inicializarDetalles();
+    });
+
+    // Limpiar cuando se cierre el modal
+    $(document).on('hidden.bs.modal', function(e) {
+        if ($(e.target).find('#contenedorDetalles').length > 0) {
+            resetearVariables();
+            $('#contenedorDetalles').empty();
+            $('#detalles_json').val('[]');
+        }
+    });
+
+    // Reinicializar cuando se abra el modal
+    $(document).on('shown.bs.modal', function(e) {
+        if ($(e.target).find('#contenedorDetalles').length > 0) {
+            inicializarEventos();
+            inicializarDetalles();
+        }
+    });
+</script>

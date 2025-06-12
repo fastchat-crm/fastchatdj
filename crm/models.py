@@ -1,3 +1,5 @@
+import json
+
 from django.db import models
 from core.custom_models import ModeloBase
 from autenticacion.models import Usuario
@@ -100,6 +102,11 @@ class PerfilNegocioIA(ModeloBase):
     def get_respuestas(self):
         return self.respuestas_ia.filter(status=True)
 
+    def get_agentes(self):
+        return self.agentesia_set.filter(status=True)
+
+    def get_apis(self):
+        return self.apikeyia_set.filter(status=True)
 
 # Productos personalizados del perfil IA
 class ProductoIA(ModeloBase):
@@ -151,6 +158,64 @@ class RespuestaEntrenadaIA(ModeloBase):
 
     def __str__(self):
         return f"{self.pregunta_clave} → {self.tono}"
+
+
+class AgentesIA(ModeloBase):
+    perfil = models.ForeignKey(PerfilNegocioIA, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Perfil Negocio IA')
+    nombre = models.CharField(max_length=255, verbose_name="Nombre de agente")
+    descripcion = models.TextField(verbose_name="Descripcion del agente")
+
+    class Meta:
+        verbose_name = 'Respuesta Entrenada IA'
+        verbose_name_plural = 'Respuestas Entrenadas IA'
+
+    def obtener_detalles_agente(self):
+        """
+        Función para obtener los detalles existentes de un agente
+        """
+        detalles = self.detalleagentesai_set.filter(status=True)
+        detalles_json = []
+
+        for detalle in detalles:
+            detalle_data = {
+                'tipo': detalle.tipo,
+                'enlace': detalle.enlace or '',
+                'archivo_url': detalle.archivo.url if detalle.archivo else ''
+            }
+            detalles_json.append(detalle_data)
+
+        return json.dumps(detalles_json)
+
+    def __str__(self):
+        return f"{self.nombre}"
+
+
+TIPO_DETALLE_AGENTE_AI = (
+    (1, 'ENLACE'),
+    (2, 'ARCHIVO'),
+)
+
+class DetalleAgentesAI(ModeloBase):
+    agente = models.ForeignKey(AgentesIA, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Agente')
+    tipo = models.PositiveSmallIntegerField(choices=TIPO_DETALLE_AGENTE_AI, default=1, verbose_name='Tipo de detalle')
+    enlace = models.URLField(blank=True, null=True, verbose_name='Enlace')
+    archivo = models.FileField(upload_to='detalles_agentes/', blank=True, null=True, verbose_name='Archivo adjunto')
+
+    class Meta:
+        verbose_name = 'Respuesta Entrenada IA'
+        verbose_name_plural = 'Respuestas Entrenadas IA'
+
+
+class ApiKeyIA(ModeloBase):
+    perfil = models.ForeignKey(PerfilNegocioIA, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Perfil Negocio IA')
+    descripcion = models.CharField(max_length=255, help_text="Api Key para la IA")
+
+    class Meta:
+        verbose_name = 'Api Keys IA'
+        verbose_name_plural = 'Apis Keys IA'
+
+    def __str__(self):
+        return f"{self.descripcion}"
 
 
 class DepartamentoChatBot(ModeloBase):
