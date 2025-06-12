@@ -133,7 +133,10 @@ class Usuario(AbstractUser, ModeloBase):
         cliente = self.perfilpersona_set.first()
         if not cliente:
             cliente = PerfilPersona.objects.create(usuario=self)
-        group = Group.objects.get(name='Cliente')
+        try:
+            group = Group.objects.get(name='Cliente')
+        except Group.DoesNotExist:
+            group = Group.objects.create(name='Cliente')
         if activo and not self.groups.filter(name='Cliente').exists():
             self.groups.add(group)
         elif self.groups.filter(name='Cliente').exists() :
