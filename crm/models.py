@@ -178,8 +178,10 @@ class AgentesIA(ModeloBase):
 
         for detalle in detalles:
             detalle_data = {
+                'id': detalle.id,
                 'tipo': detalle.tipo,
                 'enlace': detalle.enlace or '',
+                'tipo_dato_enlace': detalle.tipo_dato_enlace,
                 'archivo_url': detalle.archivo.url if detalle.archivo else ''
             }
             detalles_json.append(detalle_data)
@@ -195,20 +197,35 @@ TIPO_DETALLE_AGENTE_AI = (
     (2, 'ARCHIVO'),
 )
 
+TIPO_DATO_ENLACE = (
+    (1, 'TEXT'),
+    (2, 'HTML'),
+    (3, 'JSON'),
+    (4, 'EXCEL'),
+    (5, 'CSV'),
+)
+
 class DetalleAgentesAI(ModeloBase):
     agente = models.ForeignKey(AgentesIA, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Agente')
     tipo = models.PositiveSmallIntegerField(choices=TIPO_DETALLE_AGENTE_AI, default=1, verbose_name='Tipo de detalle')
     enlace = models.URLField(blank=True, null=True, verbose_name='Enlace')
+    tipo_dato_enlace = models.PositiveSmallIntegerField(choices=TIPO_DATO_ENLACE, default=1, verbose_name='Tipo de dato retorna')
     archivo = models.FileField(upload_to='detalles_agentes/', blank=True, null=True, verbose_name='Archivo adjunto')
 
     class Meta:
         verbose_name = 'Respuesta Entrenada IA'
         verbose_name_plural = 'Respuestas Entrenadas IA'
 
+PROVEEDOR_CHOICES = (
+    (1, 'IA'),
+    (2, 'GEMINI'),
+    (3, 'OPEN IA'),
+)
 
 class ApiKeyIA(ModeloBase):
     perfil = models.ForeignKey(PerfilNegocioIA, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Perfil Negocio IA')
-    descripcion = models.CharField(max_length=255, help_text="Api Key para la IA")
+    descripcion = models.CharField(max_length=255, verbose_name="Api Key")
+    proveedor = models.IntegerField(choices=PROVEEDOR_CHOICES, default=1, verbose_name='Proveedor')
 
     class Meta:
         verbose_name = 'Api Keys IA'

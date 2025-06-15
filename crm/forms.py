@@ -154,7 +154,7 @@ class AgentesIAForm(ModelFormBase):
 class ApiKeyIAForm(ModelFormBase):
     class Meta:
         model = ApiKeyIA
-        fields = ('descripcion',)
+        fields = ('descripcion', 'proveedor',)
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
@@ -164,6 +164,8 @@ class ApiKeyIAForm(ModelFormBase):
             self.fields[k].widget.attrs['col'] = '12'
             if k in ('descripcion',):
                 self.fields[k].widget.attrs['col'] = '12'
+            if k in ('proveedor',):
+                self.fields[k].widget.attrs['class'] = "form-control jselect"
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 

@@ -16,23 +16,42 @@ from core.funciones import addData, secure_module, log
 
 
 def guardar_detalles_agente(agente, detalles_data, archivos):
-    """
-    Función para guardar los detalles del agente
-    """
-    for i, detalle_data in enumerate(detalles_data):
-        detalle = DetalleAgentesAI()
+    # Lista para guardar los IDs de detalles que deben conservarse
+    ids_a_mantener = []
+
+    for detalle_data in detalles_data:
+        detalle_id = detalle_data.get('id')
+
+        # Obtener o crear el detalle
+        if detalle_id:
+            detalle = DetalleAgentesAI.objects.filter(pk=detalle_id, agente=agente).first() or DetalleAgentesAI()
+        else:
+            detalle = DetalleAgentesAI()
+
         detalle.agente = agente
         detalle.tipo = detalle_data.get('tipo', 1)
 
         if detalle.tipo == 1:  # ENLACE
-            detalle.enlace = detalle_data.get('enlace', '')
+            enlace = detalle_data.get('enlace', '').strip()
+            if enlace:
+                detalle.enlace = enlace
+                detalle.tipo_dato_enlace = detalle_data.get('tipo_dato_enlace', 1)
+                detalle.archivo = None  # Limpiar archivo si cambia a ENLACE
+                detalle.save()
+                ids_a_mantener.append(detalle.id)
         elif detalle.tipo == 2:  # ARCHIVO
-            # Buscar el archivo correspondiente en request.FILES
-            archivo_key = f'detalle_archivo_{i}'
+            archivo_key = f'detalle_archivo_{detalle_data.get("id_frontend")}'
+
             if archivo_key in archivos:
                 detalle.archivo = archivos[archivo_key]
+                detalle.save()
+                ids_a_mantener.append(detalle.id)
+            elif detalle.pk:  # Mantener archivo existente
+                detalle.save()
+                ids_a_mantener.append(detalle.id)
 
-        detalle.save()
+    # Eliminar solo los detalles que no están en la lista de IDs a mantener
+    DetalleAgentesAI.objects.filter(agente=agente).exclude(id__in=ids_a_mantener).delete()
 
 @login_required
 @secure_module
@@ -191,7 +210,6 @@ def entrenamiento_ia_view(request):
 
                             # Eliminar detalles existentes y crear los nuevos
                             if 'detalles_json' in request.POST:
-                                DetalleAgentesAI.objects.filter(agente=agente).delete()
                                 detalles_data = json.loads(request.POST['detalles_json'])
                                 guardar_detalles_agente(agente, detalles_data, request.FILES)
 
