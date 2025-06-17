@@ -236,3 +236,7 @@ class ManageProfileForm(FormBase):
     perfil_administrativo = forms.BooleanField(label="¿Perfil Administrativo Activo?", required=False)
     perfil_cliente = forms.BooleanField(label="¿Perfil Cliente Activo?", required=False)
 
+
+class ChangeUsernameForm(FormBase):
+    username = forms.CharField(label="Nuevo nombre de usuario", max_length=150, required=True)
+

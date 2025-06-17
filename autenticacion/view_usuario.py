@@ -12,7 +12,7 @@ from area_geografica.models import Ciudad, Provincia
 from core.custom_models import FormError
 from core.funciones import addData, paginador, salva_auditoria, secure_module, redirectAfterPostGet, codnombre, log
 from core.funciones_adicionales import salva_logs
-from .forms import UserForm, GrupoUserForm, ManageProfileForm
+from .forms import UserForm, GrupoUserForm, ManageProfileForm, ChangeUsernameForm
 
 from django.contrib import messages
 
@@ -175,6 +175,20 @@ def usuarioView(request):
                     res_json.append({'error': False,
                                      "to": redirectAfterPostGet(request)
                                      })
+                elif action == 'change_username':
+                    user = model.objects.get(pk=int(request.POST['pk']))
+                    form = ChangeUsernameForm(request.POST)
+                    if not form.is_valid():
+                        raise FormError(form)
+                    if Usuario.objects.filter(username=form.cleaned_data['username']).exists():
+                        raise ValueError("Ya existe un usuario con ese nombre de usuario.")
+                    user.username = form.cleaned_data['username']
+                    user.save(request)
+                    log(f"Modifico nombre de usuario {user.username} - {user.get_full_name()}", request, "change")
+                    messages.success(request, "Modificado correctamente.")
+                    res_json.append({'error': False,
+                                     "reload": True
+                                     })
         except ValueError as ex:
             res_json.append({'error': True,
                              "message": str(ex)
@@ -240,6 +254,17 @@ def usuarioView(request):
                 data['form'] = form
                 template = get_template("autenticacion/usuario/form_manage_profiles.html")
                 return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
+            elif action =='change_username':
+                try:
+                    data['id'] = id = int(request.GET['pk'])
+                    data['filtro'] = usuario = Usuario.objects.get(pk=id)
+                    titulo = f'Cambiar nombre de usuario de {usuario.nombre_corto()}'
+                    form = ChangeUsernameForm()
+                    data['form'] = form
+                    template = get_template("autenticacion/usuario/form_change_username.html")
+                    return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
+                except Exception as ex:
+                    return JsonResponse({"result": False, "message": f"Error: {ex}."})
 
         grupoid, status_perfil, criterio, filtros, url_vars = request.GET.getlist('grupoid', ''), request.GET.get('status_perfil', ''), request.GET.get('criterio', ''), Q(id__gt=0), ''
         id, documento = request.GET.get('id', ''), request.GET.get('documento', '')
