@@ -216,6 +216,7 @@ class FormParent:
         no_switchery = kwargs.pop('no_switchery', [])#listado d campos BooleanField que no quieran q se dibujen con switchery en el form
         no_select2 = kwargs.pop('no_select2', [])#listado d campos que no quieran q se renderice con la librería select2
         inlines = kwargs.pop('inlines', [])
+        select2_simple = kwargs.pop('select2_simple', [])
 
         # AHORA puedes usar self.instance de forma segura
         if self.editando:
@@ -338,6 +339,8 @@ class FormParent:
                 self.fields[k].widget.attrs['col'] = "12"
             if addDataNameInput:
                 self.fields[k].widget.attrs['data-nameinput'] = k
+            if k in select2_simple:
+                self.fields[k].widget.attrs['class'] = "jselect2"
 
         for f in self.fieldsets:
             step = f.name
@@ -380,6 +383,7 @@ class FormCustom:
         querysets = kwargs.pop('querysets', {})#listado d campos con un queryset filtrado
         no_switchery = kwargs.pop('no_switchery', [])#listado d campos BooleanField que no quieran q se dibujen con switchery en el form
         no_select2 = kwargs.pop('no_select2', [])#listado d campos que no quieran q se renderice con la librería select2
+        select2_simple = kwargs.pop('select2_simple', [])
         inlines = kwargs.pop('inlines', [])
 
         super(FormCustom, self).__init__(*args, **kwargs)
@@ -465,6 +469,8 @@ class FormCustom:
                 self.fields[k].widget.attrs['col'] = "12"
             if addDataNameInput:
                 self.fields[k].widget.attrs['data-nameinput'] = k
+            if k in select2_simple:
+                self.fields[k].widget.attrs['class'] = "jselect2"
 
         for f in self.fieldsets:
             step = f.name

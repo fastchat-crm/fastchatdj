@@ -2,6 +2,7 @@ from email.policy import default
 from functools import cached_property
 
 from dateutil.relativedelta import relativedelta
+from django.conf.global_settings import LANGUAGES
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.db import models
 from django.utils import timezone
@@ -40,6 +41,8 @@ class SesionWhatsApp(ModeloBase):
     mensaje_despedida = models.TextField(blank=True, null=True, verbose_name='Mensaje de despedida')
     min_sesion = models.IntegerField(default=0, verbose_name='Minutos de sesión')
     departamentos = models.ManyToManyField('crm.DepartamentoChatBot', verbose_name='Departamentos', blank=True)
+    #IDIOMA
+    language = models.CharField('Idioma', max_length=50, choices=LANGUAGES, default='es')
 
     def is_connected(self):
         return self.estado == 'conectado'
@@ -354,6 +357,8 @@ class MensajeWhatsApp(ModeloBase):
 
     # ID externo del mensaje (para poder identificarlo cuando se elimina o edita)
     mensaje_id_externo = models.CharField(max_length=100, blank=True, null=True)
+    #IDIOMA
+    language = models.CharField('Language', max_length=255, default='')
 
     class Meta:
         verbose_name = "Mensaje WhatsApp"

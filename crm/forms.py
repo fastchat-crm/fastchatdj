@@ -4,7 +4,7 @@ from autenticacion.models import Usuario
 from core.custom_forms import FormModeloBase
 from core.custom_models import ModelFormBase
 from crm.models import PerfilNegocioIA, ActividadEconomica, Industria, ProductoIA, ServicioIA, RespuestaEntrenadaIA, \
-    DepartamentoChatBot
+    DepartamentoChatBot, AgentesIA, ApiKeyIA
 
 
 class PerfilNegocioIAForm(ModelFormBase):
@@ -132,3 +132,42 @@ class DepartamentoChatBotForm(ModelFormBase):
 
 class AddPerfilDepartamentoChatBotForm(FormModeloBase):
     usuarios = forms.ModelMultipleChoiceField(label='Personas', queryset=Usuario.objects.filter(status=True))
+
+
+class AgentesIAForm(ModelFormBase):
+    class Meta:
+        model = AgentesIA
+        fields = ('nombre', 'descripcion',)
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super().__init__(*args, **kwargs)
+        for k, v in self.fields.items():
+            self.fields[k].widget.attrs['class'] = 'form-control'
+            self.fields[k].widget.attrs['col'] = '12'
+            if k in ('descripcion',):
+                self.fields[k].widget.attrs['col'] = '12'
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+
+class ApiKeyIAForm(ModelFormBase):
+    class Meta:
+        model = ApiKeyIA
+        fields = ('descripcion', 'proveedor',)
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super().__init__(*args, **kwargs)
+        for k, v in self.fields.items():
+            self.fields[k].widget.attrs['class'] = 'form-control'
+            self.fields[k].widget.attrs['col'] = '12'
+            if k in ('descripcion',):
+                self.fields[k].widget.attrs['col'] = '12'
+            if k in ('proveedor',):
+                self.fields[k].widget.attrs['class'] = "form-control jselect"
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+
+

@@ -7,14 +7,13 @@ from .models import SesionWhatsApp, Contacto, ConversacionWhatsApp
 class SesionWhatsAppForm(ModelFormBase):
     class Meta:
         model = SesionWhatsApp
-        fields = ('nombre', 'min_sesion', 'departamentos', 'mensaje_bienvenida', 'mensaje_despedida',)
+        fields = ('nombre', 'min_sesion', 'language', 'departamentos', 'mensaje_bienvenida', 'mensaje_despedida',)
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
         super(SesionWhatsAppForm, self).__init__(*args, **kwargs)
         self.fields['departamentos'].queryset = DepartamentoChatBot.objects.filter(status=True).order_by('nombre')
         for k, v in self.fields.items():
-            self.fields[k].widget.attrs['class'] = 'form-control'
             if k in ('mensaje_bienvenida', 'mensaje_despedida',):
                 self.fields[k].widget.attrs['rows'] = '10'
                 self.fields[k].widget.attrs['class'] = "summernote"
@@ -23,7 +22,7 @@ class SesionWhatsAppForm(ModelFormBase):
             if k in ('departamentos',):
                 self.fields[k].widget.attrs['col'] = '12'
                 self.fields[k].widget.attrs['class'] = "jselect2"
-                self.fields[k].required= False
+                self.fields[k].required = False
             if k in ('nombre',):
                 self.fields[k].widget.attrs['col'] = '9'
             if ver:
@@ -33,7 +32,7 @@ class SesionWhatsAppForm(ModelFormBase):
 class ContactoForm(ModelFormBase):
     class Meta:
         model = Contacto
-        fields = ('numero_telefono','contacto_nombre','contacto_foto')
+        fields = ('numero_telefono', 'contacto_nombre', 'contacto_foto')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False

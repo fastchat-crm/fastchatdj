@@ -220,8 +220,7 @@ def webhook_handler(request):
 
         elif event_type == 'message_sent':
             # Procesar mensaje enviado
-            # process_sent_message(session, event_data, channel_layer)
-            pass
+            process_sent_message(session, event_data, channel_layer)
 
         elif event_type == 'message_deleted':
             # Procesar mensaje eliminado
@@ -580,7 +579,7 @@ def process_sent_message(session, event_data, channel_layer):
         contacto.fecha_ultimo_mensaje = timezone.now()
         contacto.save()
 
-        conversation = ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).first() or \
+        conversation = ConversacionWhatsApp.objects.filter(contacto=contacto).order_by('-id').first() or \
                        ConversacionWhatsApp.objects.create(contacto=contacto, fromMe=True)
 
         # Crear el mensaje

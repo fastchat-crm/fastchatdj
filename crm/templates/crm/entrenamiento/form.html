@@ -27,6 +27,14 @@
             <a class="nav-link fw-medium" data-bs-toggle="tab" href="#preguntas" role="tab"
                aria-selected="false">Respuestas personalizadas</a>
         </li>
+        <li class="nav-item">
+            <a class="nav-link fw-medium" data-bs-toggle="tab" href="#agentes" role="tab"
+               aria-selected="false">Agentes</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link fw-medium" data-bs-toggle="tab" href="#apikeys" role="tab"
+               aria-selected="false">Apis</a>
+        </li>
     </ul>
     <div class="tab-content">
         <div class="tab-pane active" id="perfil" role="tabpanel">
@@ -93,10 +101,10 @@
                         </a>
                     </div>
                 </div>
-                <div class="card-body" id="bloque_productos_servicios">
+                <div class="card-body" id="bloque_productos">
                     <div class="card-body pt-0">
                         <div class="table-responsive">
-                            <table class="table table-striped tabla_paginada">
+                            <table class="table table-striped" id="tablaProductos">
                                 <thead>
                                 <tr>
                                     <th class="column-title" style="text-align: center">Nombre</th>
@@ -165,10 +173,10 @@
                         </a>
                     </div>
                 </div>
-                <div class="card-body" id="bloque_productos_servicios">
+                <div class="card-body" id="bloque_servicios">
                     <div class="card-body pt-0">
                                     <div class="table-responsive">
-                                        <table class="table table-striped tabla_paginada">
+                                        <table class="table table-striped">
                                             <thead>
                                             <tr>
                                                 <th class="column-title" style="text-align: center">Nombre</th>
@@ -241,7 +249,7 @@
                 <div class="card-body" id="bloque_respuestas_entrenadas">
                     <div class="card-body pt-0">
                         <div class="table-responsive">
-                            <table class="table table-striped tabla_paginada">
+                            <table class="table table-striped">
                                 <thead>
                                 <tr>
                                     <th class="column-title" style="text-align: center">Pregunta clave</th>
@@ -276,6 +284,146 @@
                                                     <li>
                                                         <a class="dropdown-item" href="javascript:void(0);"
                                                            onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleterespuesta')">
+                                                            <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% empty %}
+                                    <tr>
+                                        <td colspan="10">Sin registros</td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane" id="agentes" role="tabpanel">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0 text-primary"><i class="fas fa-comments me-2"></i>Agentes AI</h5>
+                        <small class="text-muted">Define cómo responde la IA ante agentes comunes.</small>
+                    </div>
+                    <div>
+                        <a href="javascript:void(0)" class="btn btn-sm btn-dark"
+                           onclick="formModal('', 'Agregar Agente Entrenado', 'addagente')">
+                            <i class="fa fa-plus"></i> Agente
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body" id="bloque_agentes_ia">
+                    <div class="card-body pt-0">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                <tr>
+                                    <th class="column-title" style="text-align: center">Nombre</th>
+                                    <th class="column-title" style="text-align: center">Descripcion</th>
+                                    <th class="column-title" style="text-align: center">Acción</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for l in agentes %}
+                                    <tr>
+                                        <td style="text-align: center">{{ l.nombre|default:'' }} {{ l.pk }}</td>
+                                        <td style="text-align: center">{{ l.descripcion|default:'' }}</td>
+                                        <td class="text-center">
+                                            <div class="dropdown">
+                                                <button class="btn btn-icon" type="button"
+                                                        id="dropdownMenuButton-{{ l.pk }}"
+                                                        data-bs-toggle="dropdown" aria-expanded="false"
+                                                        style="background: none; border: none;">
+                                                    <i class="fas fa-ellipsis-v"></i>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end"
+                                                    aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                                                    <li>
+                                                        <a class="dropdown-item"
+                                                           onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeagente')"
+                                                           href="javascript:void(0);">
+                                                            <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="javascript:void(0);"
+                                                           onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteagente')">
+                                                            <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% empty %}
+                                    <tr>
+                                        <td colspan="10">Sin registros</td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane" id="apikeys" role="tabpanel">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0 text-primary"><i class="fas fa-comments me-2"></i>Agentes AI</h5>
+                        <small class="text-muted">Define cómo responde la IA ante agentes comunes.</small>
+                    </div>
+                    <div>
+                        <a href="javascript:void(0)" class="btn btn-sm btn-dark"
+                           onclick="formModal('', 'Agregar Api Key', 'addapikey')">
+                            <i class="fa fa-plus"></i> Api
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body" id="bloque_apis_ia">
+                    <div class="card-body pt-0">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                <tr>
+                                    <th class="column-title" style="text-align: center">Api Key</th>
+                                    <th class="column-title" style="text-align: center">Proveedor</th>
+                                    <th class="column-title" style="text-align: center">Acción</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for l in apis %}
+                                    <tr>
+                                        <td style="text-align: center">{{ l.descripcion|default:'' }}</td>
+                                        <td style="text-align: center">{{ l.get_proveedor_display|default:'' }}</td>
+                                        <td class="text-center">
+                                            <div class="dropdown">
+                                                <button class="btn btn-icon" type="button"
+                                                        id="dropdownMenuButton-{{ l.pk }}"
+                                                        data-bs-toggle="dropdown" aria-expanded="false"
+                                                        style="background: none; border: none;">
+                                                    <i class="fas fa-ellipsis-v"></i>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end"
+                                                    aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                                                    <li>
+                                                        <a class="dropdown-item"
+                                                           onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeapikey')"
+                                                           href="javascript:void(0);">
+                                                            <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="javascript:void(0);"
+                                                           onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteapikey')">
                                                             <i class="fas fa-trash me-2 text-danger"></i>Eliminar
                                                         </a>
                                                     </li>
@@ -371,9 +519,9 @@
             document.querySelectorAll('.nav-tabs > .nav-item > .nav-link').forEach(tab => {
                 tab.addEventListener('shown.bs.tab', function (e) {
                     const href = e.target.getAttribute('href');
-                    if (['#perfil', '#mantenimientos', '#preguntas'].includes(href)) {
+                    if (['#perfil', '#mantenimientos', '#preguntas', '#agentes', '#apikeys'].includes(href)) {
                         localStorage.setItem('mainTab', href);
-                    } else if (['#productos', '#servicios'].includes(href)) {
+                    } else if (['#productos', '#servicios',].includes(href)) {
                         localStorage.setItem('subTab', href);
                     }
                 });
