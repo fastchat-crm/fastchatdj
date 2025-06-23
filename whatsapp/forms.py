@@ -19,7 +19,7 @@ class SesionWhatsAppForm(ModelFormBase):
                 self.fields[k].widget.attrs['class'] = "summernote"
             if k in ('min_sesion',):
                 self.fields[k].widget.attrs['col'] = '3'
-            if k in ('departamentos',):
+            if k in ('departamentos','language',):
                 self.fields[k].widget.attrs['col'] = '12'
                 self.fields[k].widget.attrs['class'] = "jselect2"
                 self.fields[k].required = False
