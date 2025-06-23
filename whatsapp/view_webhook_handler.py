@@ -15,6 +15,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.conf import settings
 
+from core.funciones import save_log_entry
 from core.funciones_adicionales import get_image_as_base64, get_numero_emoji_ws
 from .models import (
     SesionWhatsApp,
@@ -61,6 +62,8 @@ def webhook_handler(request):
             session.estado = 'pendiente'
             session.save()
 
+            save_log_entry(f'HS: SESION {session_id} QR CODE GENERADO', request, event_type, obj=session)
+
             # Notificar a través de WebSockets
             async_to_sync(channel_layer.group_send)(
                 f"whatsapp_session_{session.id}",
@@ -104,6 +107,8 @@ def webhook_handler(request):
                 session.error_mensaje = None
                 session.save()
 
+                save_log_entry(f'HS: SESION {session_id} READY', request, event_type, obj=session)
+
                 # Notificar a través de WebSockets
                 async_to_sync(channel_layer.group_send)(
                     f"whatsapp_session_{session.id}",
@@ -133,6 +138,8 @@ def webhook_handler(request):
             session.ultima_conexion = timezone.now()
             session.error_mensaje = None
             session.save()
+
+            save_log_entry(f'HS: SESION {session_id} authenticated'.upper(), request, event_type, obj=session)
 
             # Notificar a través de WebSockets
             async_to_sync(channel_layer.group_send)(
@@ -172,6 +179,8 @@ def webhook_handler(request):
             session.error_mensaje = "Error de autenticación"
             session.save()
 
+            save_log_entry(f'HS: SESION {session_id} auth_failure'.upper(), request, event_type, obj=session)
+
             # Notificar a través de WebSockets
             async_to_sync(channel_layer.group_send)(
                 f"whatsapp_session_{session.id}",
@@ -190,6 +199,8 @@ def webhook_handler(request):
             # Actualizar el estado de la sesión
             session.estado = 'desconectado'
             session.save()
+
+            save_log_entry(f'HS: SESION {session_id} disconnected'.upper(), request, event_type, obj=session)
 
             # Notificar a través de WebSockets
             async_to_sync(channel_layer.group_send)(

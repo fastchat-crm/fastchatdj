@@ -91,6 +91,14 @@ class NormalModel(models.Model):
             object_id=self.id
         )
 
+    def get_log_entries(self):
+        from django.contrib.contenttypes.models import ContentType
+        from django.contrib.admin.models import LogEntry
+        return LogEntry.objects.filter(
+            content_type_id=ContentType.objects.get_for_model(self).id,
+            object_id=self.id
+        )
+
     class Meta:
         abstract = True
 
