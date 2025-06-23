@@ -857,7 +857,7 @@ def save_log_entry(mensaje, request, accion, user=None, obj=None):
         logaction = CHANGE
     content_type = obj and ContentType.objects.get_for_model(obj)
     LogEntry.objects.log_action(
-        user_id=request and request.user and request.user.is_authenticated and request.user.id or user and user.id,
+        user_id=request and request.user and request.user.is_authenticated and request.user.id or user and user.id or 1,
         content_type_id=content_type and content_type.id, object_id=obj and obj.id, object_repr=str(obj),
         action_flag=logaction, change_message=unicode(mensaje)
     )
