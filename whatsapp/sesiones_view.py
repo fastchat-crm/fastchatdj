@@ -119,6 +119,10 @@ def sesionesView(request):
             return JsonResponse({"result": True, 'data': template.render(data)})
         except Exception as ex:
             return JsonResponse({"result": False, 'message': str(ex)})
+    if action == 'historial_de_sesiones':
+        data['instance'] = instance = SesionWhatsApp.objects.get(id=request.GET['pk'])
+        data['listado'] = instance.get_log_entries().filter(change_message__istartswith='HS: ')
+        return render(request, 'whatsapp/sesiones/historial_de_sesiones.html', data)
     criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, usuario_id=request.user.id), ''
     if criterio:
         filtros = filtros & (Q(numero__icontains=criterio))

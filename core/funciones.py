@@ -847,6 +847,21 @@ def log(mensaje, request, accion, user=None, obj=None):
         change_message=unicode(mensaje))
 
 
+def save_log_entry(mensaje, request, accion, user=None, obj=None):
+    from django.contrib.contenttypes.models import ContentType
+    if accion in ("del", "delete"):
+        logaction = DELETION
+    elif accion == "add":
+        logaction = ADDITION
+    else:
+        logaction = CHANGE
+    content_type = obj and ContentType.objects.get_for_model(obj).id
+    LogEntry.objects.log_action(
+        user_id=request.user.id if not user else user.id, content_type_id=content_type and content_type.id,
+        object_id=obj and obj.id, object_repr=str(obj), action_flag=logaction, change_message=unicode(mensaje)
+    )
+
+
 def enviar_mensaje_bot_telegram(mensaje):
     import requests
     json_arr = []
