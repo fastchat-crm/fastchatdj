@@ -7,7 +7,7 @@ import os
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
-from whatsapp.transcribe_whatsapp_audio import convert_audio, transcribe_audio
+from whatsapp.transcribe_whatsapp_audio import convert_audio, transcribe_audio, extract_voiced_audio
 from django.conf import settings
 
 from core.decoradores import sync_to_async_function
@@ -145,16 +145,19 @@ class WhatsAppService:
         from django.db import connection
         text = ''
         wav_file = ''
+        voiced_wav = ''
         try:
             if not message.tipo == 'audio':
                 return
             wav_file = convert_audio(message.get_archivo_path, f'{message.get_archivo_path}.wav')
-            text = transcribe_audio(wav_file, model_size, lang)
+            voiced_wav = extract_voiced_audio(wav_file, f"{wav_file}_voiced.wav")
+            text = transcribe_audio(voiced_wav, model_size, lang)
             message.mensaje = text
             message.save()
         except Exception as ex:
             print(ex)
         finally:
+            voiced_wav and os.path.exists(voiced_wav) and os.remove(voiced_wav)
             wav_file and os.path.exists(wav_file) and os.remove(wav_file)
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(

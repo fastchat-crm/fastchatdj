@@ -2,6 +2,8 @@ import os
 import sys
 import subprocess
 import whisper
+import webrtcvad
+from pydub import AudioSegment
 
 def convert_audio(input_file, output_file="converted.wav"):
     """Convierte archivo .ogg/.opus a .wav mono 16000Hz"""
@@ -15,6 +17,28 @@ def convert_audio(input_file, output_file="converted.wav"):
     except subprocess.CalledProcessError:
         print("Error al convertir el audio.")
         sys.exit(1)
+
+def extract_voiced_audio(input_wav, output_wav="voiced.wav", aggressiveness=1):
+    """Usa WebRTC VAD para conservar solo voz"""
+    audio = AudioSegment.from_wav(input_wav)
+    audio = audio.set_channels(1).set_frame_rate(16000)
+    vad = webrtcvad.Vad(aggressiveness)  # 0 = conservador, 3 = agresivo
+
+    frame_duration_ms = 30
+    frame_size = int(audio.frame_rate * frame_duration_ms / 1000) * 2
+    raw = audio.raw_data
+    frames = [raw[i:i + frame_size] for i in range(0, len(raw), frame_size)]
+
+    voiced_audio = b"".join(f for f in frames if len(f) == frame_size and vad.is_speech(f, 16000))
+
+    clean = AudioSegment(
+        voiced_audio,
+        frame_rate=16000,
+        sample_width=2,
+        channels=1
+    )
+    clean.export(output_wav, format="wav")
+    return output_wav
 
 def transcribe_audio(wav_file, model_size="base", lang='es'):
     """Transcribe el audio WAV a texto usando Whisper"""
