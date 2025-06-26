@@ -343,7 +343,7 @@ def process_incoming_message(session, event_data, channel_layer):
                     filename = media_msg.get(filename_key, f"{type_name}_{message_id}")
 
                     # Guardar el archivo
-                    file_url = save_media_file(media_data, filename, session.id, contacto.id)
+                    file_url = save_media_file(media_data, filename)
 
         # Actualizar la conversación con el último mensaje
         contacto.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
@@ -359,7 +359,7 @@ def process_incoming_message(session, event_data, channel_layer):
             remitente=from_number,
             mensaje=message_text,
             tipo=message_type,
-            archivo_url=file_url,
+            archivo=file_url,
             fecha=message_date,
             mensaje_id_externo=message_id
         )
@@ -583,7 +583,7 @@ def process_sent_message(session, event_data, channel_layer):
                         filename = f'{filename}.png'
 
                     # Guardar el archivo
-                    file_url = save_media_file(media_data, filename, session.id, contacto.id)
+                    file_url = save_media_file(media_data, filename)
 
         # Actualizar la conversación
         contacto.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
@@ -599,7 +599,7 @@ def process_sent_message(session, event_data, channel_layer):
             remitente=session.numero,  # El remitente es el número de la sesión
             mensaje=message_text,
             tipo=message_type,
-            archivo_url=file_url,  # No tenemos la URL del archivo en este punto
+            archivo=file_url,  # No tenemos la URL del archivo en este punto
             fecha=timezone.now(),
             mensaje_id_externo=message_id,
             leido=True,  # Marcamos como leído ya que lo enviamos nosotros
@@ -815,34 +815,13 @@ def process_profile_update(session, event_data, channel_layer):
     except Exception as e:
         logger.exception(f"Error procesando actualización de perfil: {str(e)}")
 
-def save_media_file(media_base64, filename, session_id, conversation_id):
-    """
-    Guarda un archivo multimedia recibido en base64
-
-    Args:
-        media_base64: Datos del archivo en base64
-        filename: Nombre del archivo
-        session_id: ID de la sesión
-        conversation_id: ID de la conversación
-
-    Returns:
-        str: URL del archivo guardado
-    """
+def save_media_file(media_base64, filename):
     try:
-        # Decodificar el base64
         file_data = base64.b64decode(media_base64)
-
-        # Crear la ruta para guardar el archivo
-        file_path = f"whatsapp_media/{session_id}/{conversation_id}/{filename}"
-
-        # Guardar el archivo
-        path = default_storage.save(file_path, ContentFile(file_data))
-
-        # Devolver la URL
-        return default_storage.url(path)
+        return ContentFile(file_data, filename)
     except Exception as e:
         logger.exception(f"Error guardando archivo multimedia: {str(e)}")
-        return ''
+        return None
 
 def update_conversation_stats(conversation):
     """

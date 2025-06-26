@@ -3,13 +3,16 @@ import requests
 import json
 import base64
 import os
-from django.utils import timezone
-from django.urls import reverse
+
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+
+from whatsapp.transcribe_whatsapp_audio import convert_audio, transcribe_audio
 from django.conf import settings
 
 from core.decoradores import sync_to_async_function
 from core.funciones_adicionales import get_image_as_base64
-from .models import SesionWhatsApp, WhatsAppWebhook, Contacto
+from .models import SesionWhatsApp, WhatsAppWebhook, Contacto, MensajeWhatsApp
 
 
 class WhatsAppService:
@@ -135,6 +138,36 @@ class WhatsAppService:
         except Exception as ex:
             print(ex)
         finally:
+            connection.close()
+
+    @sync_to_async_function
+    def transcribe_audio(self, message: MensajeWhatsApp, model_size="base" , lang='es'):
+        from django.db import connection
+        text = ''
+        wav_file = ''
+        try:
+            if not message.tipo == 'audio':
+                return
+            wav_file = convert_audio(message.get_archivo_path, f'{message.get_archivo_path}.wav')
+            text = transcribe_audio(wav_file, model_size, lang)
+            message.mensaje = text
+            message.save()
+        except Exception as ex:
+            print(ex)
+        finally:
+            wav_file and os.path.exists(wav_file) and os.remove(wav_file)
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"chat_{message.conversacion.id}",
+                {
+                    'type': 'whatsapp_message',
+                    'event': 'message_edited',
+                    'conversation_id': message.conversacion.id,
+                    'message_id': message.id,
+                    'new_text': text,
+                    'original_text': message.mensaje_original
+                }
+            )
             connection.close()
 
     def send_text_message(self, session_id, to, text, simularEscritura=False):

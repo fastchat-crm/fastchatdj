@@ -1,3 +1,4 @@
+import os
 from email.policy import default
 from functools import cached_property
 
@@ -11,6 +12,7 @@ from core.custom_models import ModeloBase
 from autenticacion.models import Usuario
 from core.funciones import default_expira_10_min, get_encrypt
 from core.funciones_adicionales import remover_espacios_de_mas
+from fastchatdj.settings import MEDIA_ROOT
 from whatsapp.models_querysetmanagers import ContactoManager, ConversacionWhatsAppManager
 
 ESTADOS_SESION = (
@@ -339,6 +341,7 @@ class MensajeWhatsApp(ModeloBase):
     mensaje_original = models.TextField(blank=True, null=True)  # Para guardar el mensaje original en caso de edición
     tipo = models.CharField(max_length=20, choices=TIPO_MENSAJE_CHOICES, default='texto')
     archivo_url = models.URLField(blank=True, null=True)
+    archivo = models.FileField('Archivo', upload_to='whatsapp_media/', blank=True, null=True, max_length=10000)
     fecha = models.DateTimeField()
     leido = models.BooleanField(default=False)
     fecha_leido = models.DateTimeField(blank=True, null=True)
@@ -359,6 +362,14 @@ class MensajeWhatsApp(ModeloBase):
     mensaje_id_externo = models.CharField(max_length=100, blank=True, null=True)
     #IDIOMA
     language = models.CharField('Language', max_length=255, default='')
+
+    @cached_property
+    def get_archivo_url(self):
+        return self.archivo and self.archivo.url or self.archivo_url or ''
+
+    @cached_property
+    def get_archivo_path(self):
+        return self.archivo and self.archivo.path or os.path.join(MEDIA_ROOT, self.archivo_url) or ''
 
     class Meta:
         verbose_name = "Mensaje WhatsApp"

@@ -230,6 +230,11 @@ def conversacionesView(request):
                     filtro.save(request)
                     log(f"Conversación marcada como resuelta {filtro.id}", request, "change", obj=filtro.id)
                     return JsonResponse(res_json, safe=False)
+                elif action == 'transcribe_audio':
+                    service = WhatsAppService()
+                    msg = MensajeWhatsApp.objects.select_related('conversacion__contacto__sesion').get(id=request.POST['id'])
+                    service.transcribe_audio(msg, 'medium', msg.conversacion.contacto.sesion.language.split('-')[0])
+                    return JsonResponse({})
 
 
         except Exception as ex:

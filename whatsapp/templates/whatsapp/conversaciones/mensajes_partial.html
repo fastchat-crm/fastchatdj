@@ -17,30 +17,35 @@
                         {% endif %}
                     {% endif %}
 
-                    {% if mensaje.archivo_url and not mensaje.eliminado %}
+                    {% if mensaje.get_archivo_url and not mensaje.eliminado %}
                         {% if mensaje.tipo == 'imagen' %}
-                            <a href="{{ mensaje.archivo_url }}"
+                            <a href="{{ mensaje.get_archivo_url }}"
                                data-fancybox="image"
                                data-width="2048"
                                data-height="1365">
-                                <img src="{{ mensaje.archivo_url }}" alt="imagen" class="img-fluid rounded"
+                                <img src="{{ mensaje.get_archivo_url }}" alt="imagen" class="img-fluid rounded"
                                  style="max-width: 200px;">
                             </a>
                         {% elif mensaje.tipo == 'sticker' %}
-                            <img src="{{ mensaje.archivo_url }}" alt="imagen" class="img-fluid rounded"
+                            <img src="{{ mensaje.get_archivo_url }}" alt="imagen" class="img-fluid rounded"
                                  style="max-width: 200px;">
                         {% elif mensaje.tipo == 'audio' %}
                             <audio controls>
-                                <source src="{{ mensaje.archivo_url }}" type="audio/mpeg">
+                                <source src="{{ mensaje.get_archivo_url }}" type="audio/mpeg">
                                 Tu navegador no soporta el elemento de audio.
                             </audio>
+                            <div>
+                                <a data-id="{{ mensaje.id }}" href="javascript:;" onclick="transcribirAudio(this)">
+                                    <i class="fa-solid fa-marker"></i> <span>Transcribir audio</span> <i class="fa-solid fa-ellipsis fa-shake d-none"></i>
+                                </a>
+                            </div>
                         {% elif mensaje.tipo == 'video' %}
                             <video controls class="img-fluid rounded" style="max-width: 200px;">
-                                <source src="{{ mensaje.archivo_url }}" type="video/mp4">
+                                <source src="{{ mensaje.get_archivo_url }}" type="video/mp4">
                                 Tu navegador no soporta el elemento de video.
                             </video>
                         {% else %}
-                            <a href="{{ mensaje.archivo_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                            <a href="{{ mensaje.get_archivo_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
                                 <i class="fa fa-download"></i> Descargar {{ mensaje.tipo }}
                             </a>
                         {% endif %}
@@ -67,30 +72,35 @@
                         {% endif %}
                     {% endif %}
 
-                    {% if mensaje.archivo_url and not mensaje.eliminado %}
+                    {% if mensaje.get_archivo_url and not mensaje.eliminado %}
                         {% if mensaje.tipo == 'imagen' %}
-                            <a href="{{ mensaje.archivo_url }}"
+                            <a href="{{ mensaje.get_archivo_url }}"
                                data-fancybox="image"
                                data-width="2048"
                                data-height="1365">
-                                <img src="{{ mensaje.archivo_url }}" alt="imagen" class="img-fluid rounded"
+                                <img src="{{ mensaje.get_archivo_url }}" alt="imagen" class="img-fluid rounded"
                                  style="max-width: 200px;">
                             </a>
                         {% elif mensaje.tipo == 'sticker' %}
-                            <img src="{{ mensaje.archivo_url }}" alt="imagen" class="img-fluid rounded"
+                            <img src="{{ mensaje.get_archivo_url }}" alt="imagen" class="img-fluid rounded"
                                  style="max-width: 200px;">
                         {% elif mensaje.tipo == 'audio' %}
                             <audio controls>
-                                <source src="{{ mensaje.archivo_url }}" type="audio/mpeg">
+                                <source src="{{ mensaje.get_archivo_url }}" type="audio/mpeg">
                                 Tu navegador no soporta el elemento de audio.
                             </audio>
+                            <div>
+                                <a data-id="{{ mensaje.id }}" href="javascript:;" onclick="transcribirAudio(this)">
+                                    <i class="fa-solid fa-marker"></i> <span>Transcribir audio</span> <i class="fa-solid fa-ellipsis fa-shake d-none"></i>
+                                </a>
+                            </div>
                         {% elif mensaje.tipo == 'video' %}
                             <video controls class="img-fluid rounded" style="max-width: 200px;">
-                                <source src="{{ mensaje.archivo_url }}" type="video/mp4">
+                                <source src="{{ mensaje.get_archivo_url }}" type="video/mp4">
                                 Tu navegador no soporta el elemento de video.
                             </video>
                         {% else %}
-                            <a href="{{ mensaje.archivo_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                            <a href="{{ mensaje.get_archivo_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
                                 <i class="fa fa-download"></i> Descargar {{ mensaje.tipo }}
                             </a>
                         {% endif %}

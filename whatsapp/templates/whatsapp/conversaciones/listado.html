@@ -640,5 +640,11 @@
         }
         });
     });
+    async function transcribirAudio(ctr) {
+        $(ctr).find('span').html('Transcribiendo');
+        $(ctr).find('i.fa-ellipsis').removeClass('d-none');
+        $(ctr).prop('disabled', true);
+        $.post("{{ request.path }}", { action: 'transcribe_audio' , id: ctr.dataset.id,});
+    }
 </script>
 {% endblock %}
