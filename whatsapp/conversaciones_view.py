@@ -233,7 +233,7 @@ def conversacionesView(request):
                 elif action == 'transcribe_audio':
                     service = WhatsAppService()
                     msg = MensajeWhatsApp.objects.select_related('conversacion__contacto__sesion').get(id=request.POST['id'])
-                    service.transcribe_audio(msg, 'medium', msg.conversacion.contacto.sesion.language.split('-')[0])
+                    service.transcribe_audio(msg, 'small', msg.conversacion.contacto.sesion.language.split('-')[0])
                     return JsonResponse({})
 
 
