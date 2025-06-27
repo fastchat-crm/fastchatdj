@@ -137,16 +137,19 @@ class AddPerfilDepartamentoChatBotForm(FormModeloBase):
 class AgentesIAForm(ModelFormBase):
     class Meta:
         model = AgentesIA
-        fields = ('nombre', 'descripcion',)
+        fields = ('nombre', 'descripcion','apikey',)
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
         super().__init__(*args, **kwargs)
+        self.fields['apikey'].queryset = ApiKeyIA.objects.filter(status=True)
         for k, v in self.fields.items():
             self.fields[k].widget.attrs['class'] = 'form-control'
             self.fields[k].widget.attrs['col'] = '12'
             if k in ('descripcion',):
                 self.fields[k].widget.attrs['col'] = '12'
+            if k in ('apikey',):
+                self.fields[k].widget.attrs['class'] = 'select2'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 

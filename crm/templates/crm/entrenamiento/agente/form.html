@@ -77,72 +77,84 @@
     };
 
     function agregarDetalle(detalleExistente = null) {
-        window.contadorDetalles++;
-        const tipo = detalleExistente ? detalleExistente.tipo : 1;
-        const enlace = detalleExistente ? detalleExistente.enlace : '';
-        const tipoDatoEnlace = detalleExistente ? detalleExistente.tipo_dato_enlace : 1;
-        const archivoUrl = detalleExistente ? detalleExistente.archivo_url : '';
-        const idReal = detalleExistente ? detalleExistente.id : null;
+    window.contadorDetalles++;
+    const tipo = detalleExistente ? detalleExistente.tipo : 1;
+    const enlace = detalleExistente ? detalleExistente.enlace : '';
+    const tipoDatoEnlace = detalleExistente ? detalleExistente.tipo_dato_enlace : 1;
+    const archivoUrl = detalleExistente ? detalleExistente.archivo_url : '';
+    const descripcion = detalleExistente ? detalleExistente.descripcion || '' : '';
+    const idReal = detalleExistente ? detalleExistente.id : null;
 
-        // Generar opciones para tipo_dato_enlace
-        let tipoDatoEnlaceOptions = '';
-        window.TIPO_DATO_ENLACE_OPTIONS.forEach(option => {
-            const selected = option.value == tipoDatoEnlace ? 'selected' : '';
-            tipoDatoEnlaceOptions += `<option value="${option.value}" ${selected}>${option.text}</option>`;
-        });
+    // Generar opciones para tipo_dato_enlace
+    let tipoDatoEnlaceOptions = '';
+    window.TIPO_DATO_ENLACE_OPTIONS.forEach(option => {
+        const selected = option.value == tipoDatoEnlace ? 'selected' : '';
+        tipoDatoEnlaceOptions += `<option value="${option.value}" ${selected}>${option.text}</option>`;
+    });
 
-        const detalleHtml = `
-            <div class="card mb-2" id="detalle${window.contadorDetalles}">
-                <div class="card-body p-3">
-                    <div class="row g-2">
-                        <div class="col-md-3">
-                            <label class="form-label small mb-1">Tipo</label>
-                            <select class="form-select detalle-tipo" data-detalle="${window.contadorDetalles}" onchange="cambiarTipoDetalle(${window.contadorDetalles})">
-                                <option value="1" ${tipo == 1 ? 'selected' : ''}>Enlace</option>
-                                <option value="2" ${tipo == 2 ? 'selected' : ''}>Archivo</option>
-                            </select>
-                        </div>
-                        <div class="col-md-8" id="campoDetalle${window.contadorDetalles}">
-                            ${generarCampoDetalle(window.contadorDetalles, tipo, enlace, tipoDatoEnlace, archivoUrl, tipoDatoEnlaceOptions)}
-                        </div>
-                        <div class="col-md-1">
-                            <label class="form-label small mb-1">&nbsp;</label>
-                            <button type="button" class="btn btn-danger btn-sm w-100" onclick="eliminarDetalle(${window.contadorDetalles})">
-                                <i class="fa fa-trash"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <input type="hidden" class="detalle-id-real" value="${idReal || ''}">
+    const detalleHtml = `
+        <div class="card mb-2" id="detalle${window.contadorDetalles}">
+            <div class="card-body p-3">
+                ${generarCampoDetalle(window.contadorDetalles, tipo, enlace, tipoDatoEnlace, archivoUrl, tipoDatoEnlaceOptions, descripcion)}
             </div>
-        `;
+            <input type="hidden" class="detalle-id-real" value="${idReal || ''}">
+        </div>
+    `;
 
-        $('#contenedorDetalles').append(detalleHtml);
-        actualizarDetallesJSON();
-    }
+    $('#contenedorDetalles').append(detalleHtml);
+    actualizarDetallesJSON();
+}
 
-    function generarCampoDetalle(id, tipo, enlace, tipoDatoEnlace, archivoUrl, tipoDatoEnlaceOptions) {
-        if (tipo == 1) {
-            return `
-                <div class="mb-2">
-                    <label class="form-label small mb-1">Enlace</label>
-                    <input type="url" class="form-control detalle-enlace" data-detalle="${id}" value="${enlace}" placeholder="https://ejemplo.com" onchange="actualizarDetallesJSON()">
+    function generarCampoDetalle(id, tipo, enlace, tipoDatoEnlace, archivoUrl, tipoDatoEnlaceOptions, descripcion = '') {
+    if (tipo == 1) {
+        return `
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Tipo</label>
+                    <select class="form-select detalle-tipo" data-detalle="${id}" onchange="cambiarTipoDetalle(${id})">
+                        <option value="1" selected>Enlace</option>
+                        <option value="2">Archivo</option>
+                    </select>
                 </div>
-                <div>
+                <div class="col-md-3">
                     <label class="form-label small mb-1">Tipo de dato retorna</label>
                     <select class="form-select detalle-tipo-dato-enlace" data-detalle="${id}" onchange="actualizarDetallesJSON()">
                         ${tipoDatoEnlaceOptions}
                     </select>
                 </div>
-            `;
-        } else {
-            return `
-                <label class="form-label small mb-1">Archivo</label>
-                <input type="file" class="form-control detalle-archivo" data-detalle="${id}" name="detalle_archivo_${id}" onchange="actualizarDetallesJSON()">
-                ${archivoUrl ? `<small class="text-muted">Archivo actual: <a href="${archivoUrl}" target="_blank">Ver archivo</a></small>` : ''}
-            `;
-        }
+                <div class="col-md-6">
+                    <label class="form-label small mb-1">Enlace</label>
+                    <input type="url" class="form-control detalle-enlace" data-detalle="${id}" value="${enlace}" placeholder="https://ejemplo.com" onchange="actualizarDetallesJSON()">
+                </div>
+                <div class="col-12">
+                    <label class="form-label small mb-1">Descripción</label>
+                    <textarea class="form-control detalle-descripcion" data-detalle="${id}" rows="2" onchange="actualizarDetallesJSON()">${descripcion || ''}</textarea>
+                </div>
+            </div>
+        `;
+    } else {
+        return `
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Tipo</label>
+                    <select class="form-select detalle-tipo" data-detalle="${id}" onchange="cambiarTipoDetalle(${id})">
+                        <option value="1">Enlace</option>
+                        <option value="2" selected>Archivo</option>
+                    </select>
+                </div>
+                <div class="col-md-9">
+                    <label class="form-label small mb-1">Archivo</label>
+                    <input type="file" class="form-control detalle-archivo" data-detalle="${id}" name="detalle_archivo_${id}" onchange="actualizarDetallesJSON()">
+                    ${archivoUrl ? `<small class="text-muted">Archivo actual: <a href="${archivoUrl}" target="_blank">Ver archivo</a></small>` : ''}
+                </div>
+                <div class="col-12">
+                    <label class="form-label small mb-1">Descripción</label>
+                    <textarea class="form-control detalle-descripcion" data-detalle="${id}" rows="2" onchange="actualizarDetallesJSON()">${descripcion || ''}</textarea>
+                </div>
+            </div>
+        `;
     }
+}
 
     function eliminarDetalle(id) {
         $(`#detalle${id}`).remove();
@@ -184,46 +196,47 @@
     }
 
     function actualizarDetallesJSON() {
-        window.lista_items1 = [];
+    window.lista_items1 = [];
 
-        $('#contenedorDetalles .card').each(function(index) {
-            const $card = $(this);
-            const detalleId = $card.attr('id').replace('detalle', '');
-            const idReal = $card.find('.detalle-id-real').val();
-            const $tipoSelect = $card.find('.detalle-tipo');
-            const tipo = parseInt($tipoSelect.val());
+    $('#contenedorDetalles .card').each(function(index) {
+        const $card = $(this);
+        const detalleId = $card.attr('id').replace('detalle', '');
+        const idReal = $card.find('.detalle-id-real').val();
+        const $tipoSelect = $card.find('.detalle-tipo');
+        const $descripcionTextarea = $card.find('.detalle-descripcion');
+        const tipo = parseInt($tipoSelect.val());
 
-            let detalleData = {
-                id: idReal || null,
-                id_frontend: detalleId,
-                tipo: tipo,
-                enlace: '',
-                tipo_dato_enlace: 1,
-                archivo_nombre: '',
-                archivo_index: index
-            };
+        let detalleData = {
+            id: idReal || null,
+            id_frontend: detalleId,
+            tipo: tipo,
+            enlace: '',
+            tipo_dato_enlace: 1,
+            archivo_nombre: '',
+            archivo_index: index,
+            descripcion: $descripcionTextarea.val() || ''
+        };
 
-            if (tipo === 1) {
-                const $enlaceInput = $card.find('.detalle-enlace');
-                const $tipoDatoEnlaceSelect = $card.find('.detalle-tipo-dato-enlace');
+        if (tipo === 1) {
+            const $enlaceInput = $card.find('.detalle-enlace');
+            const $tipoDatoEnlaceSelect = $card.find('.detalle-tipo-dato-enlace');
 
-                detalleData.enlace = $enlaceInput.val() || '';
-                detalleData.tipo_dato_enlace = parseInt($tipoDatoEnlaceSelect.val()) || 1;
-            } else {
-                const $archivoInput = $card.find('.detalle-archivo');
-                if ($archivoInput.length > 0 && $archivoInput[0].files.length > 0) {
-                    detalleData.archivo_nombre = $archivoInput[0].files[0].name;
-                }
-                // Para archivos, no necesitamos tipo_dato_enlace
-                delete detalleData.tipo_dato_enlace;
+            detalleData.enlace = $enlaceInput.val() || '';
+            detalleData.tipo_dato_enlace = parseInt($tipoDatoEnlaceSelect.val()) || 1;
+        } else {
+            const $archivoInput = $card.find('.detalle-archivo');
+            if ($archivoInput.length > 0 && $archivoInput[0].files.length > 0) {
+                detalleData.archivo_nombre = $archivoInput[0].files[0].name;
             }
+            delete detalleData.tipo_dato_enlace;
+        }
 
-            window.lista_items1.push(detalleData);
-        });
+        window.lista_items1.push(detalleData);
+    });
 
-        const jsonString = JSON.stringify(window.lista_items1);
-        $('#detalles_json').val(jsonString);
-    }
+    const jsonString = JSON.stringify(window.lista_items1);
+    $('#detalles_json').val(jsonString);
+}
 
     function funcionAntesDeGuardar() {
         actualizarDetallesJSON();

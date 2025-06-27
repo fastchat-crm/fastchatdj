@@ -30,6 +30,7 @@ def guardar_detalles_agente(agente, detalles_data, archivos):
 
         detalle.agente = agente
         detalle.tipo = detalle_data.get('tipo', 1)
+        detalle.descripcion = detalle_data.get('descripcion', '').strip()
 
         if detalle.tipo == 1:  # ENLACE
             enlace = detalle_data.get('enlace', '').strip()
@@ -39,18 +40,21 @@ def guardar_detalles_agente(agente, detalles_data, archivos):
                 detalle.archivo = None  # Limpiar archivo si cambia a ENLACE
                 detalle.save()
                 ids_a_mantener.append(detalle.id)
+
         elif detalle.tipo == 2:  # ARCHIVO
             archivo_key = f'detalle_archivo_{detalle_data.get("id_frontend")}'
 
             if archivo_key in archivos:
                 detalle.archivo = archivos[archivo_key]
+                detalle.enlace = None  # Limpiar enlace si cambia a ARCHIVO
+                detalle.tipo_dato_enlace = 1  # Reset a valor por defecto si existía
                 detalle.save()
                 ids_a_mantener.append(detalle.id)
             elif detalle.pk:  # Mantener archivo existente
                 detalle.save()
                 ids_a_mantener.append(detalle.id)
 
-    # Eliminar solo los detalles que no están en la lista de IDs a mantener
+    # Eliminar detalles no incluidos
     DetalleAgentesAI.objects.filter(agente=agente).exclude(id__in=ids_a_mantener).delete()
 
 @login_required

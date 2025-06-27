@@ -103,7 +103,7 @@ class PerfilNegocioIA(ModeloBase):
         return self.respuestas_ia.filter(status=True)
 
     def get_agentes(self):
-        return self.agentesia_set.filter(status=True)
+        return self.agentesia_set.filter(status=True).order_by('nombre')
 
     def get_apis(self):
         return self.apikeyia_set.filter(status=True)
@@ -162,6 +162,7 @@ class RespuestaEntrenadaIA(ModeloBase):
 
 class AgentesIA(ModeloBase):
     perfil = models.ForeignKey(PerfilNegocioIA, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Perfil Negocio IA')
+    apikey = models.ForeignKey('ApiKeyIA', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Api Key IA')
     nombre = models.CharField(max_length=255, verbose_name="Nombre de agente")
     descripcion = models.TextField(verbose_name="Descripcion del agente")
 
@@ -182,7 +183,8 @@ class AgentesIA(ModeloBase):
                 'tipo': detalle.tipo,
                 'enlace': detalle.enlace or '',
                 'tipo_dato_enlace': detalle.tipo_dato_enlace,
-                'archivo_url': detalle.archivo.url if detalle.archivo else ''
+                'archivo_url': detalle.archivo.url if detalle.archivo else '',
+                'descripcion': detalle.descripcion if detalle.descripcion else ''
             }
             detalles_json.append(detalle_data)
 
@@ -211,13 +213,13 @@ class DetalleAgentesAI(ModeloBase):
     enlace = models.URLField(blank=True, null=True, verbose_name='Enlace')
     tipo_dato_enlace = models.PositiveSmallIntegerField(choices=TIPO_DATO_ENLACE, default=1, verbose_name='Tipo de dato retorna')
     archivo = models.FileField(upload_to='detalles_agentes/', blank=True, null=True, verbose_name='Archivo adjunto')
+    descripcion = models.TextField(blank=True, null=True, verbose_name='Descripción del detalle')
 
     class Meta:
         verbose_name = 'Respuesta Entrenada IA'
         verbose_name_plural = 'Respuestas Entrenadas IA'
 
 PROVEEDOR_CHOICES = (
-    (1, 'IA'),
     (2, 'GEMINI'),
     (3, 'OPEN IA'),
 )
