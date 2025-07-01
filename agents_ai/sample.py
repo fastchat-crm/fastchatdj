@@ -14,7 +14,7 @@ from PyPDF2 import PdfReader
 
 # === Setea API Keys ===
 os.environ["OPENAI_API_KEY"] = "sk-..."
-os.environ["GOOGLE_API_KEY"] = "AIzaSyBXa3ys3DHgDrbymnOuJ5pFP8KgwIwp6QM"
+os.environ["GOOGLE_API_KEY"] = "A..."
 
 # === Callback para streaming ===
 class StreamingCallbackHandler(BaseCallbackHandler):
