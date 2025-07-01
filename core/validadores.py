@@ -1,7 +1,43 @@
 from django.core.files.images import get_image_dimensions
 from django.core.exceptions import ValidationError
+from django.utils.deconstruct import deconstructible
+
 
 #para el modelo financiero.models.Constante
+
+
+@deconstructible
+class FileMaxSizeInMbValidator:
+    message = "El tamaño máximo del archivo es %(maxSize)sMB."
+    code = "invalid_file_size"
+
+    def __init__(self, fileSize: int | float = None, message=None, code=None):
+        self.fileSize = fileSize
+        if message is not None:
+            self.message = message
+        if code is not None:
+            self.code = code
+
+    def __call__(self, file):
+        file_size = file.file.size
+        limit_kb = self.fileSize * 1000
+        if file_size > limit_kb * 1024:
+            raise ValidationError(
+                self.message,
+                code=self.code,
+                params={
+                    "maxSize": self.fileSize,
+                    "value": file,
+                }
+            )
+
+    def __eq__(self, other):
+        return (
+                isinstance(other, self.__class__)
+                and self.fileSize == other.fileSize
+                and self.message == other.message
+                and self.code == other.code
+        )
 
 def validate_file_size_2mb(file):
     __general_validate_file_size(file, 2000)

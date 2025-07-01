@@ -1,9 +1,14 @@
 import json
+import os
 
+from django.core.validators import FileExtensionValidator
 from django.db import models
 from core.custom_models import ModeloBase
 from autenticacion.models import Usuario
+from core.validadores import FileMaxSizeInMbValidator
 from whatsapp.models import ConversacionWhatsApp
+from fastchatdj import settings
+from agents_ai.vectorstore_manager import VectorStoreManager
 
 # Representa las industrias generales a las que puede pertenecer un negocio
 class Industria(ModeloBase):
@@ -165,6 +170,9 @@ class AgentesIA(ModeloBase):
     apikey = models.ForeignKey('ApiKeyIA', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Api Key IA')
     nombre = models.CharField(max_length=255, verbose_name="Nombre de agente")
     descripcion = models.TextField(verbose_name="Descripcion del agente")
+    vectorstore_path = models.CharField(
+        max_length=1000, blank=True, null=True, verbose_name="Ruta del vector store generado"
+    )
 
     class Meta:
         verbose_name = 'Respuesta Entrenada IA'
@@ -212,12 +220,36 @@ class DetalleAgentesAI(ModeloBase):
     tipo = models.PositiveSmallIntegerField(choices=TIPO_DETALLE_AGENTE_AI, default=1, verbose_name='Tipo de detalle')
     enlace = models.URLField(blank=True, null=True, verbose_name='Enlace')
     tipo_dato_enlace = models.PositiveSmallIntegerField(choices=TIPO_DATO_ENLACE, default=1, verbose_name='Tipo de dato retorna')
-    archivo = models.FileField(upload_to='detalles_agentes/', blank=True, null=True, verbose_name='Archivo adjunto')
+    archivo = models.FileField(
+        upload_to='detalles_agentes/', blank=True, null=True, verbose_name='Archivo adjunto',
+        validators=[FileExtensionValidator(["pdf", 'csv', 'json', 'xlsx']), FileMaxSizeInMbValidator(10)]
+    )
     descripcion = models.TextField(blank=True, null=True, verbose_name='Descripción del detalle')
 
     class Meta:
         verbose_name = 'Respuesta Entrenada IA'
         verbose_name_plural = 'Respuestas Entrenadas IA'
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        base_dir = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
+        nombre_vs = f"agente_{self.agente.id}"
+        vs_manager = VectorStoreManager(storage_dir=base_dir)
+        agente = self.agente
+        detalles = agente.detalleagentesai_set.filter(status=True, tipo=2, archivo__isnull=False)
+        documentos = []
+        for detalle in detalles:
+            docs = vs_manager.load_and_split(
+                detalle.archivo.path,
+                metadata={"detalle_id": detalle.id}
+            )
+            documentos.extend(docs)
+
+        if documentos:
+            vs_path = vs_manager.build_and_save(documentos, nombre_vs)
+            agente.vectorstore_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
+            agente.save()
+
 
 PROVEEDOR_CHOICES = (
     (2, 'GEMINI'),
