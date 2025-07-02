@@ -16,17 +16,11 @@ from core.funciones import addData, secure_module, log
 
 
 def guardar_detalles_agente(agente, detalles_data, archivos):
-    # Lista para guardar los IDs de detalles que deben conservarse
     ids_a_mantener = []
 
     for detalle_data in detalles_data:
         detalle_id = detalle_data.get('id')
-
-        # Obtener o crear el detalle
-        if detalle_id:
-            detalle = DetalleAgentesAI.objects.filter(pk=detalle_id, agente=agente).first() or DetalleAgentesAI()
-        else:
-            detalle = DetalleAgentesAI()
+        detalle = DetalleAgentesAI.objects.filter(pk=detalle_id, agente=agente).first() if detalle_id else DetalleAgentesAI()
 
         detalle.agente = agente
         detalle.tipo = detalle_data.get('tipo', 1)
@@ -37,24 +31,31 @@ def guardar_detalles_agente(agente, detalles_data, archivos):
             if enlace:
                 detalle.enlace = enlace
                 detalle.tipo_dato_enlace = detalle_data.get('tipo_dato_enlace', 1)
-                detalle.archivo = None  # Limpiar archivo si cambia a ENLACE
+                detalle.archivo = None  # limpiar archivo si antes era tipo 2
                 detalle.save()
                 ids_a_mantener.append(detalle.id)
 
         elif detalle.tipo == 2:  # ARCHIVO
             archivo_key = f'detalle_archivo_{detalle_data.get("id_frontend")}'
-
             if archivo_key in archivos:
                 detalle.archivo = archivos[archivo_key]
-                detalle.enlace = None  # Limpiar enlace si cambia a ARCHIVO
-                detalle.tipo_dato_enlace = 1  # Reset a valor por defecto si existía
+                detalle.enlace = None  # limpiar enlace si antes era tipo 1
+                detalle.tipo_dato_enlace = 1  # resetear a valor por defecto
                 detalle.save()
                 ids_a_mantener.append(detalle.id)
-            elif detalle.pk:  # Mantener archivo existente
+            elif detalle.pk:  # mantener archivo ya guardado
                 detalle.save()
                 ids_a_mantener.append(detalle.id)
 
-    # Eliminar detalles no incluidos
+        elif detalle.tipo == 3:  # TEXTO
+            # Solo se requiere guardar descripción y tipo
+            detalle.enlace = None
+            detalle.archivo = None
+            detalle.tipo_dato_enlace = 1
+            detalle.save()
+            ids_a_mantener.append(detalle.id)
+
+    # Eliminar detalles que ya no existen en el formulario
     DetalleAgentesAI.objects.filter(agente=agente).exclude(id__in=ids_a_mantener).delete()
 
 @login_required

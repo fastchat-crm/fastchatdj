@@ -114,6 +114,7 @@
                     <select class="form-select detalle-tipo" data-detalle="${id}" onchange="cambiarTipoDetalle(${id})">
                         <option value="1" selected>Enlace</option>
                         <option value="2">Archivo</option>
+                        <option value="3">Texto</option>
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -132,7 +133,7 @@
                 </div>
             </div>
         `;
-    } else {
+    } else if (tipo == 2) {
         return `
             <div class="row g-2">
                 <div class="col-md-3">
@@ -153,6 +154,23 @@
                 </div>
             </div>
         `;
+    } else {
+        return `
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Tipo</label>
+                <select class="form-select detalle-tipo" data-detalle="${id}" onchange="cambiarTipoDetalle(${id})">
+                    <option value="1">Enlace</option>
+                    <option value="2">Archivo</option>
+                    <option value="3" selected>Texto</option>
+                </select>
+            </div>
+            <div class="col-lg-9">
+                <label class="form-label small mb-1">Descripción</label>
+                <textarea class="form-control detalle-descripcion" data-detalle="${id}" rows="2" onchange="actualizarDetallesJSON()">${descripcion || ''}</textarea>
+            </div>
+        </div>
+    `;
     }
 }
 
@@ -181,38 +199,46 @@
                 <input type="url" class="form-control detalle-enlace" data-detalle="${id}" placeholder="https://ejemplo.com" onchange="actualizarDetallesJSON()">
             </div>
         `;
-    } else {
+    } else if (tipo === '2') {
         // ARCHIVO con mismo ancho
         inputContenido = `
-            <div class="col-md-6">
+            <div class="col-md-9">
                 <label class="form-label small mb-1">Archivo</label>
                 <input type="file" class="form-control detalle-archivo" data-detalle="${id}" name="detalle_archivo_${id}" onchange="actualizarDetallesJSON()">
             </div>
         `;
+    } else {
+        // TEXTO
+        inputContenido = '';
     }
 
     const nuevoContenido = `
-        <div class="row g-2">
-            <div class="col-md-3">
-                <label class="form-label small mb-1">Tipo</label>
-                <select class="form-select detalle-tipo" data-detalle="${id}" onchange="cambiarTipoDetalle(${id})">
-                    <option value="1" ${tipo === '1' ? 'selected' : ''}>Enlace</option>
-                    <option value="2" ${tipo === '2' ? 'selected' : ''}>Archivo</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small mb-1">Tipo de dato retorna</label>
-                <select class="form-select detalle-tipo-dato-enlace" data-detalle="${id}" onchange="actualizarDetallesJSON()">
-                    ${tipoDatoEnlaceOptions}
-                </select>
-            </div>
-            ${inputContenido}
-            <div class="col-12">
-                <label class="form-label small mb-1">Descripción</label>
-                <textarea class="form-control detalle-descripcion" data-detalle="${id}" rows="2" onchange="actualizarDetallesJSON()"></textarea>
-            </div>
+    <div class="row g-2">
+        <div class="col-md-3">
+            <label class="form-label small mb-1">Tipo</label>
+            <select class="form-select detalle-tipo" data-detalle="${id}" onchange="cambiarTipoDetalle(${id})">
+                <option value="1" ${tipo === '1' ? 'selected' : ''}>Enlace</option>
+                <option value="2" ${tipo === '2' ? 'selected' : ''}>Archivo</option>
+                <option value="3" ${tipo === '3' ? 'selected' : ''}>Texto</option>
+            </select>
         </div>
-    `;
+
+        ${tipo === '1' ? `
+        <div class="col-md-3">
+            <label class="form-label small mb-1">Tipo de dato retorna</label>
+            <select class="form-select detalle-tipo-dato-enlace" data-detalle="${id}" onchange="actualizarDetallesJSON()">
+                ${tipoDatoEnlaceOptions}
+            </select>
+        </div>` : ''}
+
+        ${inputContenido}
+
+        <div class="${tipo === '3' ? 'col-lg-9' : 'col-12'}">
+            <label class="form-label small mb-1">Descripción</label>
+            <textarea class="form-control detalle-descripcion" data-detalle="${id}" rows="2" onchange="actualizarDetallesJSON()"></textarea>
+        </div>
+    </div>
+`;
 
     $card.find('.card-body').html(nuevoContenido);
     actualizarDetallesJSON();
@@ -247,11 +273,16 @@
 
             detalleData.enlace = $enlaceInput.val() || '';
             detalleData.tipo_dato_enlace = parseInt($tipoDatoEnlaceSelect.val()) || 1;
-        } else {
+        } else if (tipo === 2) {
             const $archivoInput = $card.find('.detalle-archivo');
             if ($archivoInput.length > 0 && $archivoInput[0].files.length > 0) {
                 detalleData.archivo_nombre = $archivoInput[0].files[0].name;
             }
+            delete detalleData.tipo_dato_enlace;
+        } else {
+            delete detalleData.enlace;
+            delete detalleData.archivo_nombre;
+            delete detalleData.archivo_index;
             delete detalleData.tipo_dato_enlace;
         }
 
