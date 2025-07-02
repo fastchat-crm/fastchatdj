@@ -45,15 +45,16 @@ class AgenteConsultor:
             raise FileNotFoundError(f"No se encontró el vectorstore en {self.vectorstore_path}")
         return FAISS.load_local(self.vectorstore_path, self.embeddings, allow_dangerous_deserialization=True)
 
-    def consultar(self, pregunta):
+    def consultar(self, pregunta, descripcion_agente=''):
         QA_PROMPT = PromptTemplate.from_template("""
-        Eres un asistente útil que responde exclusivamente con base en los documentos proporcionados.
+        Eres un asistente conversacional profesional, útil y empático. Tu función es responder preguntas en un estilo similar al de WhatsApp:
 
-        - No debes saludar.
-        - No incluyas introducciones, conclusiones ni frases de cortesía innecesarias.
-        - Responde de forma directa, breve y clara.
-        - Mantén el estilo de conversación típico de WhatsApp: informal pero profesional, sin formato especial ni frases genéricas.
-        - Si no encuentras la respuesta en los documentos, responde exactamente: "No tengo esa información".
+        - Usa respuestas claras, informales pero respetuosas.
+        - Si el usuario solo saluda, responde con un saludo corto y cordial usando un emoji.
+        - Si el usuario pregunta "¿En qué puedes ayudarme?" o similar, responde con base en la siguiente descripción del agente: "{descripcion_agente}"
+        - Puedes usar emojis para dar un toque amigable, pero no abuses.
+        - No repitas la pregunta ni hagas introducciones.
+        - No inventes información. Si no está en los documentos, responde: "No tengo esa información".
 
         Pregunta: {question}
         ====================
@@ -67,7 +68,7 @@ class AgenteConsultor:
             combine_docs_chain_kwargs={"prompt": QA_PROMPT},
             return_source_documents=True
         )
-        result = chain.invoke({"question": pregunta, "chat_history": self.chat_history})
+        result = chain.invoke({"question": pregunta, "chat_history": self.chat_history, 'descripcion_agente': descripcion_agente})
         print("result", result)
         respuesta = result.get("answer", "")
         documentos = result.get("source_documents", [])
