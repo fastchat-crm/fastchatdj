@@ -94,7 +94,7 @@ def crear_agente_qa(vectorstore, usar_openai=True, streaming=False, callback_han
         )
     else:
         llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-pro",
+            model="gemini-2.5-pro",
             streaming=streaming,
             callbacks=[callback_handler] if callback_handler else None,
         )

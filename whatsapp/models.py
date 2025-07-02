@@ -45,6 +45,7 @@ class SesionWhatsApp(ModeloBase):
     departamentos = models.ManyToManyField('crm.DepartamentoChatBot', verbose_name='Departamentos', blank=True)
     #IDIOMA
     language = models.CharField('Idioma', max_length=50, choices=LANGUAGES, default='es')
+    agente_ia = models.ForeignKey('crm.AgentesIA', on_delete=models.PROTECT, null=True, blank=True)
 
     def is_connected(self):
         return self.estado == 'conectado'

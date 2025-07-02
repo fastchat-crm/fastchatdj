@@ -1,16 +1,29 @@
 import os
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.document_loaders import (
     PyPDFLoader, CSVLoader, JSONLoader, UnstructuredExcelLoader
 )
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 
 class VectorStoreManager:
-    def __init__(self, storage_dir, embeddings=None):
+    def __init__(self, storage_dir, provider: str, apikey: str):
         self.storage_dir = storage_dir
-        self.embeddings = embeddings or OpenAIEmbeddings()
+        self.provider = provider.lower()
+        self.apikey = apikey
+
+        if self.provider == "openai":
+            self.embeddings = OpenAIEmbeddings(openai_api_key=self.apikey)
+        elif self.provider == "gemini":
+            self.embeddings = GoogleGenerativeAIEmbeddings(
+                model="models/embedding-001",
+                google_api_key=self.apikey
+            )
+        else:
+            raise ValueError("Proveedor de embedding no soportado: use 'openai' o 'gemini'")
+
         os.makedirs(self.storage_dir, exist_ok=True)
 
     def get_loader(self, file_path):

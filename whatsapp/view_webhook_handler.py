@@ -14,7 +14,7 @@ import os
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.conf import settings
-
+from agents_ai.agente_consultor import AgenteConsultor
 from core.funciones import save_log_entry
 from core.funciones_adicionales import get_image_as_base64, get_numero_emoji_ws
 from .models import (
@@ -383,7 +383,33 @@ def process_incoming_message(session, event_data, channel_layer):
             )
         )
         departamentos_msg = 'Escribe el número del departamento para continuar:\n'
-        if departamentos and conversation.estado_mensaje == 'MENU_DEPARTAMENTOS':
+        if session.agente_ia and session.agente_ia.apikey and session.agente_ia.descripcion:
+            agente = session.agente_ia
+            whatsapp_service.send_presence_update(
+                conversation.sesion.session_id, contacto.from_number
+            )
+            try:
+                print(message_text)
+                vs_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path)
+                consultor = AgenteConsultor(
+                    vectorstore_path=vs_path,
+                    provider=agente.apikey.proveedor,
+                    apikey=agente.apikey.descripcion
+                )
+                respuesta, detalles = consultor.consultar(message_text)
+                print("respuesta", respuesta)
+                whatsapp_service.send_text_message(
+                    conversation.sesion.session_id, contacto.from_number, respuesta
+                )
+            except Exception as ex:
+                whatsapp_service.send_text_message(
+                    conversation.sesion.session_id, contacto.from_number, str(ex)
+                )
+            finally:
+                whatsapp_service.quit_presence_update(
+                    conversation.sesion.session_id, contacto.from_number
+                )
+        elif departamentos and conversation.estado_mensaje == 'MENU_DEPARTAMENTOS':
             departamentos_msg += '\n'.join([f'{get_numero_emoji_ws(x.numero_opcion)}. {x.nombre}' for x in departamentos])
             departamento = departamentos.filter(numero_opcion=numero_opcion_respondido).first()
             if primer_mensaje:

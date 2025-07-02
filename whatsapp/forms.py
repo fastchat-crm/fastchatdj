@@ -7,7 +7,7 @@ from .models import SesionWhatsApp, Contacto, ConversacionWhatsApp
 class SesionWhatsAppForm(ModelFormBase):
     class Meta:
         model = SesionWhatsApp
-        fields = ('nombre', 'min_sesion', 'language', 'departamentos', 'mensaje_bienvenida', 'mensaje_despedida',)
+        fields = ('nombre', 'min_sesion', 'language', 'agente_ia', 'departamentos', 'mensaje_bienvenida', 'mensaje_despedida',)
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
@@ -19,7 +19,7 @@ class SesionWhatsAppForm(ModelFormBase):
                 self.fields[k].widget.attrs['class'] = "summernote"
             if k in ('min_sesion',):
                 self.fields[k].widget.attrs['col'] = '3'
-            if k in ('departamentos','language',):
+            if k in ('departamentos','language', 'agente_ia'):
                 self.fields[k].widget.attrs['col'] = '12'
                 self.fields[k].widget.attrs['class'] = "jselect2"
                 self.fields[k].required = False

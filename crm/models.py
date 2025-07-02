@@ -234,21 +234,26 @@ class DetalleAgentesAI(ModeloBase):
         super().save(*args, **kwargs)
         base_dir = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
         nombre_vs = f"agente_{self.agente.id}"
-        vs_manager = VectorStoreManager(storage_dir=base_dir)
-        agente = self.agente
-        detalles = agente.detalleagentesai_set.filter(status=True, tipo=2, archivo__isnull=False)
-        documentos = []
-        for detalle in detalles:
-            docs = vs_manager.load_and_split(
-                detalle.archivo.path,
-                metadata={"detalle_id": detalle.id}
+        apikeyobj = self.agente.apikey
+        if apikeyobj:
+            vs_manager = VectorStoreManager(
+                storage_dir=base_dir, provider=apikeyobj.proveedor == 2 and 'gemini' or apikeyobj.proveedor == 3 and 'openai',
+                apikey=apikeyobj.descripcion
             )
-            documentos.extend(docs)
+            agente = self.agente
+            detalles = agente.detalleagentesai_set.filter(status=True, tipo=2, archivo__isnull=False)
+            documentos = []
+            for detalle in detalles:
+                docs = vs_manager.load_and_split(
+                    detalle.archivo.path,
+                    metadata={"detalle_id": detalle.id}
+                )
+                documentos.extend(docs)
 
-        if documentos:
-            vs_path = vs_manager.build_and_save(documentos, nombre_vs)
-            agente.vectorstore_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
-            agente.save()
+            if documentos:
+                vs_path = vs_manager.build_and_save(documentos, nombre_vs)
+                agente.vectorstore_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
+                agente.save()
 
 
 PROVEEDOR_CHOICES = (
