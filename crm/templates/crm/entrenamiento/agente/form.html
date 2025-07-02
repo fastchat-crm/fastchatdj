@@ -162,38 +162,62 @@
     }
 
     function cambiarTipoDetalle(id) {
-        const tipo = $(`select[data-detalle="${id}"]`).val();
-        const $campoDetalle = $(`#campoDetalle${id}`);
+    const tipo = $(`select[data-detalle="${id}"].detalle-tipo`).val();
+    const $card = $(`#detalle${id}`);
 
-        // Generar opciones para tipo_dato_enlace
-        let tipoDatoEnlaceOptions = '';
-        window.TIPO_DATO_ENLACE_OPTIONS.forEach(option => {
-            const selected = option.value == 1 ? 'selected' : ''; // Default al primer valor
-            tipoDatoEnlaceOptions += `<option value="${option.value}" ${selected}>${option.text}</option>`;
-        });
+    // Generar opciones para tipo_dato_enlace
+    let tipoDatoEnlaceOptions = '';
+    window.TIPO_DATO_ENLACE_OPTIONS.forEach(option => {
+        const selected = option.value == 1 ? 'selected' : '';
+        tipoDatoEnlaceOptions += `<option value="${option.value}" ${selected}>${option.text}</option>`;
+    });
 
-        if (tipo === '1') {
-            $campoDetalle.html(`
-                <div class="mb-2">
-                    <label class="form-label small mb-1">Enlace</label>
-                    <input type="url" class="form-control detalle-enlace" data-detalle="${id}" placeholder="https://ejemplo.com" onchange="actualizarDetallesJSON()">
-                </div>
-                <div>
-                    <label class="form-label small mb-1">Tipo de dato retorna</label>
-                    <select class="form-select detalle-tipo-dato-enlace" data-detalle="${id}" onchange="actualizarDetallesJSON()">
-                        ${tipoDatoEnlaceOptions}
-                    </select>
-                </div>
-            `);
-        } else {
-            $campoDetalle.html(`
+    let inputContenido = '';
+    if (tipo === '1') {
+        // ENLACE
+        inputContenido = `
+            <div class="col-md-6">
+                <label class="form-label small mb-1">Enlace</label>
+                <input type="url" class="form-control detalle-enlace" data-detalle="${id}" placeholder="https://ejemplo.com" onchange="actualizarDetallesJSON()">
+            </div>
+        `;
+    } else {
+        // ARCHIVO con mismo ancho
+        inputContenido = `
+            <div class="col-md-6">
                 <label class="form-label small mb-1">Archivo</label>
                 <input type="file" class="form-control detalle-archivo" data-detalle="${id}" name="detalle_archivo_${id}" onchange="actualizarDetallesJSON()">
-            `);
-        }
-
-        actualizarDetallesJSON();
+            </div>
+        `;
     }
+
+    const nuevoContenido = `
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Tipo</label>
+                <select class="form-select detalle-tipo" data-detalle="${id}" onchange="cambiarTipoDetalle(${id})">
+                    <option value="1" ${tipo === '1' ? 'selected' : ''}>Enlace</option>
+                    <option value="2" ${tipo === '2' ? 'selected' : ''}>Archivo</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Tipo de dato retorna</label>
+                <select class="form-select detalle-tipo-dato-enlace" data-detalle="${id}" onchange="actualizarDetallesJSON()">
+                    ${tipoDatoEnlaceOptions}
+                </select>
+            </div>
+            ${inputContenido}
+            <div class="col-12">
+                <label class="form-label small mb-1">Descripción</label>
+                <textarea class="form-control detalle-descripcion" data-detalle="${id}" rows="2" onchange="actualizarDetallesJSON()"></textarea>
+            </div>
+        </div>
+    `;
+
+    $card.find('.card-body').html(nuevoContenido);
+    actualizarDetallesJSON();
+}
+
 
     function actualizarDetallesJSON() {
     window.lista_items1 = [];
