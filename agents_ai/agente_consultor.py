@@ -9,7 +9,7 @@ import os
 
 
 class AgenteConsultor:
-    def __init__(self, vectorstore_path, provider, apikey, model_name=None):
+    def __init__(self, vectorstore_path, provider, apikey, model_name=None, chat_history=[]):
         self.provider = provider == 2 and 'gemini' or provider == 3 and 'openai'
         self.apikey = apikey
         self.model_name = model_name or self.default_model()
@@ -17,6 +17,7 @@ class AgenteConsultor:
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
         self.retriever = self._load_vectorstore().as_retriever()
+        self.chat_history = chat_history
 
     def default_model(self):
         return self.provider == "openai" and "gpt-4"or "gemini-2.5-pro"
@@ -47,10 +48,11 @@ class AgenteConsultor:
     def consultar(self, pregunta):
         QA_PROMPT = PromptTemplate.from_template("""
         Eres un asistente útil que responde exclusivamente con base en los documentos proporcionados.
-        Debes responder como mensaje de whatsapp.
 
         Si no encuentras la respuesta en los documentos, responde únicamente:
         "No tengo esa información".
+        Si sólo está saludando, responde el saludo de forma cordial y profesional.
+        Formato: Estructura de mensaje de whatsapp
 
         Pregunta: {question}
         ====================
@@ -64,7 +66,7 @@ class AgenteConsultor:
             combine_docs_chain_kwargs={"prompt": QA_PROMPT},
             return_source_documents=True
         )
-        result = chain.invoke({"question": pregunta, "chat_history": []})
+        result = chain.invoke({"question": pregunta, "chat_history": self.chat_history})
         print("result", result)
         respuesta = result.get("answer", "")
         documentos = result.get("source_documents", [])

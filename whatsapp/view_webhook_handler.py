@@ -255,6 +255,33 @@ def webhook_handler(request):
         logger.exception(f"Error procesando webhook: {str(e)}")
         return JsonResponse({'message': f'Error: {str(e)}'}, status=500)
 
+def construir_chat_history(conversacion, from_number, numero_agente, max_pares=5, max_chars=1000):
+    chat_history = []
+    pregunta_actual, respuesta_actual = "", ""
+
+    mensajes = MensajeWhatsApp.objects.filter(conversacion=conversacion).order_by("id")
+
+    for m in mensajes:
+        if m.remitente == from_number:
+            if respuesta_actual:
+                chat_history.append((pregunta_actual.strip(), respuesta_actual.strip()))
+                pregunta_actual, respuesta_actual = "", ""
+            pregunta_actual += f"\n{m.mensaje}"
+        elif m.remitente == numero_agente:
+            respuesta_actual += f"\n{m.mensaje}"
+
+    if pregunta_actual and respuesta_actual:
+        chat_history.append((pregunta_actual.strip(), respuesta_actual.strip()))
+
+    # Filtra pares vacíos y limita longitud por seguridad
+    chat_history = [
+        (q[:max_chars], a[:max_chars])
+        for q, a in chat_history if q.strip() and a.strip()
+    ]
+
+    # Limita al máximo de pares permitidos
+    return chat_history[-max_pares:]
+
 def process_incoming_message(session, event_data, channel_layer):
     """
     Procesa un mensaje entrante de WhatsApp
