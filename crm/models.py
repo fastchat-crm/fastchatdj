@@ -205,6 +205,7 @@ class AgentesIA(ModeloBase):
 TIPO_DETALLE_AGENTE_AI = (
     (1, 'ENLACE'),
     (2, 'ARCHIVO'),
+    (3, 'TEXTO'),
 )
 
 TIPO_DATO_ENLACE = (
