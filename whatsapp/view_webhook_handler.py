@@ -423,7 +423,7 @@ def process_incoming_message(session, event_data, channel_layer):
                     provider=agente.apikey.proveedor,
                     apikey=agente.apikey.descripcion
                 )
-                respuesta, detalles = consultor.consultar(message_text, agente.descripcion)
+                respuesta = consultor.consultar(message_text, agente.descripcion)
                 print("respuesta", respuesta)
                 whatsapp_service.send_text_message(
                     conversation.sesion.session_id, contacto.from_number, respuesta
