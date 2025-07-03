@@ -6,6 +6,7 @@ from langchain_community.document_loaders import (
 )
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain.docstore.document import Document
 
 
 class VectorStoreManager:
@@ -37,6 +38,13 @@ class VectorStoreManager:
             return UnstructuredExcelLoader(file_path)
         else:
             raise ValueError("Formato de archivo no soportado")
+
+    def build_from_string(self, text: str, metadata: dict = None):
+        metadata = metadata or {}
+        doc = Document(page_content=text, metadata=metadata)
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        docs = splitter.split_documents([doc])
+        return docs
 
     def load_and_split(self, file_path, metadata=None):
         loader = self.get_loader(file_path)

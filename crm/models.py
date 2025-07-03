@@ -236,19 +236,23 @@ class DetalleAgentesAI(ModeloBase):
         base_dir = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
         nombre_vs = f"agente_{self.agente.id}"
         apikeyobj = self.agente.apikey
-        if apikeyobj:
+        if apikeyobj and apikeyobj.descripcion and self.tipo in (2, 3):
             vs_manager = VectorStoreManager(
                 storage_dir=base_dir, provider=apikeyobj.proveedor == 2 and 'gemini' or apikeyobj.proveedor == 3 and 'openai',
                 apikey=apikeyobj.descripcion
             )
             agente = self.agente
-            detalles = agente.detalleagentesai_set.filter(status=True, tipo=2, archivo__isnull=False)
+            detalles = agente.detalleagentesai_set.filter(status=True, tipo__in=(2, 3), archivo__isnull=False)
             documentos = []
             for detalle in detalles:
-                docs = vs_manager.load_and_split(
-                    detalle.archivo.path,
-                    metadata={"detalle_id": detalle.id}
-                )
+                docs = []
+                if detalle.tipo == 2:
+                    docs = vs_manager.load_and_split(
+                        detalle.archivo.path,
+                        metadata={"detalle_id": detalle.id}
+                    )
+                elif detalle.tipo == 3:
+                    docs = vs_manager.build_from_string(self.descripcion, metadata={"detalle_id": detalle.id})
                 documentos.extend(docs)
 
             if documentos:
