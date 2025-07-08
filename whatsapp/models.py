@@ -204,6 +204,7 @@ class ConversacionWhatsApp(ModeloBase):
         'Estado actual del Mensaje', max_length=100, choices=ESTADO_MENSAJE_CHOICES, default="MENU_DEPARTAMENTOS"
     )
     memoria_archivo = models.FileField(upload_to='memorias/', blank=True, null=True)
+    resumen_conversacion = models.TextField('Resumen de la conversación', blank=True, default='')
     # GenericForeignKey
     content_type = models.ForeignKey("contenttypes.ContentType", on_delete=models.SET_NULL, null=True, blank=True)
     object_id = models.PositiveIntegerField(null=True, blank=True)
