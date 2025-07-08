@@ -503,7 +503,7 @@
                             setTimeout($.unblockUI, 1);
                             if (data.result === true) {
                                 $('#modalNombre').html('Resumen de Conversación');
-                                $('.detalleProd').html(data.data);
+                                $('.detalleProdModal').html(data.data);
 
                                 // Usar Bootstrap 5 modal
                                 const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
