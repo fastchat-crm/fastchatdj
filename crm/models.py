@@ -270,6 +270,8 @@ class ApiKeyIA(ModeloBase):
     perfil = models.ForeignKey(PerfilNegocioIA, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Perfil Negocio IA')
     descripcion = models.CharField(max_length=255, verbose_name="Api Key")
     proveedor = models.IntegerField(choices=PROVEEDOR_CHOICES, default=1, verbose_name='Proveedor')
+    usuario = models.CharField(max_length=100, blank=True, null=True, verbose_name='Usuario')
+    contrasena = models.CharField(max_length=100, blank=True, null=True, verbose_name='Contraseña')
 
     class Meta:
         verbose_name = 'Api Keys IA'
