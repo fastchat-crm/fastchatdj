@@ -74,6 +74,7 @@ def conversacionesFinalizadasView(request):
             try:
                 pk = int(request.GET['pk'])
                 conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+                data['conversacion'] = conversacion
                 data['resumen_conversacion'] = conversacion.resumen_conversacion if conversacion.resumen_conversacion else 'Sin resumen disponible'
                 template = get_template("whatsapp/conversaciones/modal_resumen_conversacion.html")
                 return JsonResponse({"result": True, 'data': template.render(data)})
