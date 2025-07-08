@@ -497,7 +497,7 @@
                         url: `{{ request.path }}`,
                         data: {
                             'action': 'ver_resumen_conversacion',
-                            'id': id,
+                            'pk': id,
                         },
                         success: function (data) {
                             setTimeout($.unblockUI, 1);
