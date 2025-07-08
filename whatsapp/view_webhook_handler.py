@@ -421,7 +421,7 @@ def process_incoming_message(session, event_data, channel_layer):
                 consultor = AgenteConsultor(
                     vectorstore_path=vs_path,
                     provider=agente.apikey.proveedor,
-                    apikey=agente.apikey.descripcion
+                    apikey=agente.apikey.descripcion, conversacion=conversation
                 )
                 respuesta = consultor.consultar(message_text, agente.descripcion)
                 print("respuesta", respuesta)

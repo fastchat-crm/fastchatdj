@@ -1,3 +1,4 @@
+import json
 import os
 from email.policy import default
 from functools import cached_property
@@ -5,8 +6,10 @@ from functools import cached_property
 from dateutil.relativedelta import relativedelta
 from django.conf.global_settings import LANGUAGES
 from django.contrib.contenttypes.fields import GenericForeignKey
+from django.core.files.base import ContentFile
 from django.db import models
 from django.utils import timezone
+from langchain.memory import ConversationBufferMemory
 
 from core.custom_models import ModeloBase
 from autenticacion.models import Usuario
@@ -200,6 +203,7 @@ class ConversacionWhatsApp(ModeloBase):
     estado_mensaje = models.CharField(
         'Estado actual del Mensaje', max_length=100, choices=ESTADO_MENSAJE_CHOICES, default="MENU_DEPARTAMENTOS"
     )
+    memoria_archivo = models.FileField(upload_to='memorias/', blank=True, null=True)
     # GenericForeignKey
     content_type = models.ForeignKey("contenttypes.ContentType", on_delete=models.SET_NULL, null=True, blank=True)
     object_id = models.PositiveIntegerField(null=True, blank=True)
@@ -311,6 +315,28 @@ class ConversacionWhatsApp(ModeloBase):
 
     def __str__(self):
         return f"Conversación con {self.contacto}"
+
+    def cargar_memoria(self):
+        if not self.memoria_archivo:
+            return []
+
+        try:
+            with open(self.memoria_archivo.path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return []
+
+    def guardar_memoria(self, memoria):
+        nombre_archivo = f"memoria_conversacion_{self.id}.json"
+        ruta = os.path.join(MEDIA_ROOT, "memorias")
+        not os.path.exists(ruta) and os.makedirs(ruta)
+        ruta = os.path.join(ruta, nombre_archivo)
+
+        with open(ruta, 'w+', encoding='utf-8') as f:
+            json.dump(memoria, f, ensure_ascii=False, indent=2)
+
+        self.memoria_archivo.name = f"memorias/{nombre_archivo}"
+        self.save()
 
     def save(self, *args, **kwargs):
         if self.contacto.fecha_ultimo_mensaje:
