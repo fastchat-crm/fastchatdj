@@ -65,21 +65,6 @@ class AgenteConsultor:
         )
 
     def consultar(self, pregunta, descripcion_agente=''):
-        prompt_template = PromptTemplate.from_template("""
-        Eres un asistente conversacional amable y profesional que responde como si estuviera en un chat de WhatsApp.
-
-        Reglas:
-        - Usa un tono natural, directo y claro. Agrega emojis solo si ayudan a dar calidez o comprensión (sin exagerar).
-        - Si el usuario pregunta qué haces o saluda y es el primer mensaje, responde cordialmente. En el resto, no saludes de nuevo.
-        - Mantén el contexto de lo que el usuario ya dijo. No repitas la pregunta ni reinicies el flujo de conversación.
-        - Si el usuario pidió algo antes, continúa recordando.
-        - Si no encuentras la información, di: "No tengo esa información".
-
-        Pregunta: {question}
-        Contexto:
-        {context}
-        Respuesta:
-        """)
         pregunta_normalizada = normalizar_texto(pregunta)
         reformulada = self.llm.invoke(
             f"Reescribe formalmente y corrige errores de la siguiente pregunta: {pregunta_normalizada}"
@@ -93,11 +78,43 @@ class AgenteConsultor:
         mensajes_previos = self.memory.chat_memory.messages if self.memory else []
         es_primera_interaccion = len(mensajes_previos) < 2
 
-        prompt_final = prompt_template.format(
+        ultimo_turno_usuario = None
+        for m in reversed(mensajes_previos):
+            if isinstance(m, HumanMessage):
+                ultimo_turno_usuario = m.content
+                break
+
+        prompt_template = PromptTemplate.from_template("""
+    Eres un asistente conversacional amable y profesional que responde como si estuviera en WhatsApp.
+
+    Reglas:
+    - Usa un tono natural, directo y claro. Agrega emojis solo si ayudan a dar calidez o comprensión (sin exagerar).
+    - Si el usuario pregunta qué haces o saluda y es el primer mensaje, responde cordialmente. En el resto, no saludes de nuevo.
+    - Mantén el contexto de lo que el usuario ya dijo. No repitas la pregunta ni reinicies el flujo de conversación.
+    - Si el usuario pidió algo antes, continúa como si lo recordaras.
+    - Si no encuentras la información, di: "No tengo esa información".
+    - Ejemplo:
+      Usuario: También quiero una pizza  
+      Respuesta: Perfecto, agrego una pizza a tu orden.
+
+    Pregunta: {question}
+    Contexto:
+    {context}
+    Respuesta:
+    """)
+
+        prompt_base = prompt_template.format(
             question=reformulada,
             context=contexto,
             descripcion_agente=descripcion_agente
         )
+
+        if ultimo_turno_usuario:
+            contexto_extra = f"(Antes, el usuario dijo: \"{ultimo_turno_usuario}\")\n\n"
+        else:
+            contexto_extra = ""
+
+        prompt_final = contexto_extra + prompt_base
 
         if not es_primera_interaccion:
             prompt_final = prompt_final.replace("Hola", "").replace("👋", "").strip()
