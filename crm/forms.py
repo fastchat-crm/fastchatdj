@@ -157,14 +157,14 @@ class AgentesIAForm(ModelFormBase):
 class ApiKeyIAForm(ModelFormBase):
     class Meta:
         model = ApiKeyIA
-        fields = ('descripcion', 'proveedor', 'usuario', 'contrasena', 'msgerror', 'estado')
+        fields = ('alias', 'proveedor', 'descripcion', 'usuario', 'contrasena', 'msgerror', 'estado')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
         super().__init__(*args, **kwargs)
         for k, v in self.fields.items():
             self.fields[k].widget.attrs['class'] = 'form-control'
-            self.fields[k].widget.attrs['col'] = '12'
+            self.fields[k].widget.attrs['col'] = '6'
             if k in ('descripcion',):
                 self.fields[k].widget.attrs['col'] = '12'
             if k in ('proveedor',):

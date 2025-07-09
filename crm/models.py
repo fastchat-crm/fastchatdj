@@ -279,13 +279,14 @@ class ApiKeyIA(ModeloBase):
     contrasena = models.CharField(max_length=100, blank=True, null=True, verbose_name='Contraseña')
     msgerror = models.CharField(max_length=100, blank=True, null=True, verbose_name='Mensaje de error')
     estado = models.CharField(max_length=100, blank=True, null=True, verbose_name='Status')
+    alias = models.CharField(max_length=100, blank=True, null=True, verbose_name='Alias')
 
     class Meta:
         verbose_name = 'Api Keys IA'
         verbose_name_plural = 'Apis Keys IA'
 
     def __str__(self):
-        return f"{self.descripcion}"
+        return f"{self.alias}"
 
 
 class DepartamentoChatBot(ModeloBase):
