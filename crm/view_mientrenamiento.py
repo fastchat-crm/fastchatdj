@@ -16,47 +16,52 @@ from core.funciones import addData, secure_module, log
 
 
 def guardar_detalles_agente(agente, detalles_data, archivos):
-    ids_a_mantener = []
+    try:
+        ids_a_mantener = []
 
-    for detalle_data in detalles_data:
-        detalle_id = detalle_data.get('id')
-        detalle = DetalleAgentesAI.objects.filter(pk=detalle_id, agente=agente).first() if detalle_id else DetalleAgentesAI()
+        for detalle_data in detalles_data:
+            detalle_id = detalle_data.get('id')
+            detalle = DetalleAgentesAI.objects.filter(pk=detalle_id,
+                                                      agente=agente).first() if detalle_id else DetalleAgentesAI()
 
-        detalle.agente = agente
-        detalle.tipo = detalle_data.get('tipo', 1)
-        detalle.descripcion = detalle_data.get('descripcion', '').strip()
+            detalle.agente = agente
+            detalle.tipo = detalle_data.get('tipo', 1)
+            detalle.descripcion = detalle_data.get('descripcion', '').strip()
 
-        if detalle.tipo == 1:  # ENLACE
-            enlace = detalle_data.get('enlace', '').strip()
-            if enlace:
-                detalle.enlace = enlace
-                detalle.tipo_dato_enlace = detalle_data.get('tipo_dato_enlace', 1)
-                detalle.archivo = None  # limpiar archivo si antes era tipo 2
+            if detalle.tipo == 1:  # ENLACE
+                enlace = detalle_data.get('enlace', '').strip()
+                if enlace:
+                    detalle.enlace = enlace
+                    detalle.tipo_dato_enlace = detalle_data.get('tipo_dato_enlace', 1)
+                    detalle.archivo = None  # limpiar archivo si antes era tipo 2
+                    detalle.save()
+                    ids_a_mantener.append(detalle.id)
+
+            elif detalle.tipo == 2:  # ARCHIVO
+                archivo_key = f'detalle_archivo_{detalle_data.get("id_frontend")}'
+                if archivo_key in archivos:
+                    detalle.archivo = archivos[archivo_key]
+                    detalle.enlace = None  # limpiar enlace si antes era tipo 1
+                    detalle.tipo_dato_enlace = 1  # resetear a valor por defecto
+                    detalle.save()
+                    ids_a_mantener.append(detalle.id)
+                elif detalle.pk:  # mantener archivo ya guardado
+                    detalle.save()
+                    ids_a_mantener.append(detalle.id)
+
+            elif detalle.tipo == 3:  # TEXTO
+                # Solo se requiere guardar descripción y tipo
+                detalle.enlace = None
+                detalle.archivo = None
+                detalle.tipo_dato_enlace = 1
                 detalle.save()
                 ids_a_mantener.append(detalle.id)
 
-        elif detalle.tipo == 2:  # ARCHIVO
-            archivo_key = f'detalle_archivo_{detalle_data.get("id_frontend")}'
-            if archivo_key in archivos:
-                detalle.archivo = archivos[archivo_key]
-                detalle.enlace = None  # limpiar enlace si antes era tipo 1
-                detalle.tipo_dato_enlace = 1  # resetear a valor por defecto
-                detalle.save()
-                ids_a_mantener.append(detalle.id)
-            elif detalle.pk:  # mantener archivo ya guardado
-                detalle.save()
-                ids_a_mantener.append(detalle.id)
-
-        elif detalle.tipo == 3:  # TEXTO
-            # Solo se requiere guardar descripción y tipo
-            detalle.enlace = None
-            detalle.archivo = None
-            detalle.tipo_dato_enlace = 1
-            detalle.save()
-            ids_a_mantener.append(detalle.id)
-
-    # Eliminar detalles que ya no existen en el formulario
-    DetalleAgentesAI.objects.filter(agente=agente).exclude(id__in=ids_a_mantener).delete()
+        # Eliminar detalles que ya no existen en el formulario
+        DetalleAgentesAI.objects.filter(agente=agente).exclude(id__in=ids_a_mantener).delete()
+    except Exception as ex:
+        line = sys.exc_info()[-1].tb_lineno
+        pass
 
 @login_required
 @secure_module
@@ -269,6 +274,7 @@ def entrenamiento_ia_view(request):
             except FormError as ex:
                 res_json.append(ex.dict_error)
             except Exception as ex:
+                line = sys.exc_info()[-1].tb_lineno
                 res_json.append({'error': True, "message": f"Intente Nuevamente: {ex}"})
             return JsonResponse(res_json, safe=False)
 

@@ -137,7 +137,7 @@ class AddPerfilDepartamentoChatBotForm(FormModeloBase):
 class AgentesIAForm(ModelFormBase):
     class Meta:
         model = AgentesIA
-        fields = ('nombre', 'descripcion','apikey',)
+        fields = ('nombre', 'descripcion','apikey', 'prompt_template',)
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
@@ -157,7 +157,7 @@ class AgentesIAForm(ModelFormBase):
 class ApiKeyIAForm(ModelFormBase):
     class Meta:
         model = ApiKeyIA
-        fields = ('descripcion', 'proveedor', 'usuario', 'contrasena')
+        fields = ('descripcion', 'proveedor', 'usuario', 'contrasena', 'msgerror', 'estado')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False

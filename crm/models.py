@@ -167,12 +167,13 @@ class RespuestaEntrenadaIA(ModeloBase):
 
 class AgentesIA(ModeloBase):
     perfil = models.ForeignKey(PerfilNegocioIA, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Perfil Negocio IA')
-    apikey = models.ForeignKey('ApiKeyIA', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Api Key IA')
+    apikey = models.ManyToManyField('ApiKeyIA', blank=True, verbose_name='Api Keys IA')
     nombre = models.CharField(max_length=255, verbose_name="Nombre de agente")
     descripcion = models.TextField(verbose_name="Descripcion del agente")
     vectorstore_path = models.CharField(
         max_length=1000, blank=True, null=True, verbose_name="Ruta del vector store generado"
     )
+    prompt_template = models.TextField(blank=True, null=True, verbose_name="Promp Template")
 
     class Meta:
         verbose_name = 'Respuesta Entrenada IA'
@@ -235,30 +236,34 @@ class DetalleAgentesAI(ModeloBase):
         super().save(*args, **kwargs)
         base_dir = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
         nombre_vs = f"agente_{self.agente.id}"
-        apikeyobj = self.agente.apikey
-        if apikeyobj and apikeyobj.descripcion and self.tipo in (2, 3):
-            vs_manager = VectorStoreManager(
-                storage_dir=base_dir, provider=apikeyobj.proveedor == 2 and 'gemini' or apikeyobj.proveedor == 3 and 'openai',
-                apikey=apikeyobj.descripcion
-            )
-            agente = self.agente
-            detalles = agente.detalleagentesai_set.filter(status=True, tipo__in=(2, 3), archivo__isnull=False)
-            documentos = []
-            for detalle in detalles:
-                docs = []
-                if detalle.tipo == 2:
-                    docs = vs_manager.load_and_split(
-                        detalle.archivo.path,
-                        metadata={"detalle_id": detalle.id}
-                    )
-                elif detalle.tipo == 3:
-                    docs = vs_manager.build_from_string(self.descripcion, metadata={"detalle_id": detalle.id})
-                documentos.extend(docs)
 
-            if documentos:
-                vs_path = vs_manager.build_and_save(documentos, nombre_vs)
-                agente.vectorstore_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
-                agente.save()
+        apikeys = self.agente.apikey.all()
+        if apikeys.exists() and self.tipo in (2, 3):
+            for apikeyobj in apikeys:
+                if apikeyobj.descripcion:
+                    vs_manager = VectorStoreManager(
+                        storage_dir=base_dir,
+                        provider='gemini' if apikeyobj.proveedor == 2 else 'openai',
+                        apikey=apikeyobj.descripcion
+                    )
+                    agente = self.agente
+                    detalles = agente.detalleagentesai_set.filter(status=True, tipo__in=(2, 3), archivo__isnull=False)
+                    documentos = []
+                    for detalle in detalles:
+                        docs = []
+                        if detalle.tipo == 2:
+                            docs = vs_manager.load_and_split(
+                                detalle.archivo.path,
+                                metadata={"detalle_id": detalle.id}
+                            )
+                        elif detalle.tipo == 3:
+                            docs = vs_manager.build_from_string(self.descripcion, metadata={"detalle_id": detalle.id})
+                        documentos.extend(docs)
+
+                    if documentos:
+                        vs_path = vs_manager.build_and_save(documentos, nombre_vs)
+                        agente.vectorstore_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
+                        agente.save()
 
 
 PROVEEDOR_CHOICES = (
@@ -272,6 +277,8 @@ class ApiKeyIA(ModeloBase):
     proveedor = models.IntegerField(choices=PROVEEDOR_CHOICES, default=1, verbose_name='Proveedor')
     usuario = models.CharField(max_length=100, blank=True, null=True, verbose_name='Usuario')
     contrasena = models.CharField(max_length=100, blank=True, null=True, verbose_name='Contraseña')
+    msgerror = models.CharField(max_length=100, blank=True, null=True, verbose_name='Mensaje de error')
+    estado = models.CharField(max_length=100, blank=True, null=True, verbose_name='Status')
 
     class Meta:
         verbose_name = 'Api Keys IA'
