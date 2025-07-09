@@ -121,6 +121,14 @@
                                 <i class="fa fa-check-circle"></i> Reactivar
                             </a>
                         </div>
+                        <div class="btn-group d-none" id="ver-resumen-btn">
+                            <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" id="ver-resumen"
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="top" data-bs-title="Ver resumen de conversación"
+                               data-bs-custom-class="tooltip-primary">
+                                <i class="fa fa-message"></i> Ver Resumen
+                            </a>
+                        </div>
                         <div class="dropdown d-inline d-none">
                             <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" data-bs-toggle="dropdown">
                                 <i class="fa fa-ellipsis-v"></i>
@@ -162,6 +170,23 @@
             </div><!--end chat-box-right -->
         </div> <!-- end col -->
     </div><!-- end row -->
+
+    <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalNombre"></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body detalleProdModal">
+                        <!-- Contenido dinámico cargado por AJAX -->
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block jscript %}
@@ -368,7 +393,7 @@
             });
         }
 
-        const $btnsAction = ['#marcar-reactivar', ]
+        const $btnsAction = ['#marcar-reactivar','#ver-resumen-btn' ]
         // Función para cargar mensajes
         function cargarMensajes(conversacionId) {
             conversacionActiva = conversacionId;
@@ -398,7 +423,7 @@
                     $btnsAction.forEach(btn => $(`${btn}`).attr('data-id', conversacionId));
 
                     response.estado_active ? $('#reactivar-btn').addClass('d-none') : $('#reactivar-btn').removeClass('d-none')
-
+                    $('#ver-resumen-btn').removeClass('d-none');
                     if (response.show_date){
                         $('#fecha_container').removeClass('d-none');
                         $('#fecha-inicio').text(response.fecha_inicio);
@@ -460,6 +485,43 @@
             })
         }
         });
+
+
+        $('#ver-resumen-btn').on('click', function(e) {
+              e.preventDefault();
+                const id = $(this).data('id');
+                if (id) {
+                    pantallaespera();
+                    $.ajax({
+                        type: "GET",
+                        url: `{{ request.path }}`,
+                        data: {
+                            'action': 'ver_resumen_conversacion',
+                            'pk': id,
+                        },
+                        success: function (data) {
+                            setTimeout($.unblockUI, 1);
+                            if (data.result === true) {
+                                $('#modalNombre').html('Resumen de Conversación');
+                                $('.detalleProdModal').html(data.data);
+
+                                // Usar Bootstrap 5 modal
+                                const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+                                modal.show();
+                            } else {
+                                console.log('asdasd');
+                                console.log(data.message);
+                                mensajeWarning(data.message);
+                            }
+                        },
+                        error: function () {
+                            setTimeout($.unblockUI, 1);
+                            mensajeWarning("Error de conexión.");
+                        },
+                        dataType: "json"
+                    });
+                }
+        })
 
     });
 </script>

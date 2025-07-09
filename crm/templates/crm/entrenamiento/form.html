@@ -380,7 +380,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
                     <div>
-                        <h5 class="mb-0 text-primary"><i class="fas fa-comments me-2"></i>Agentes AI</h5>
+                        <h5 class="mb-0 text-primary"><i class="fas fa-comments me-2"></i>Apis Keys AI</h5>
                         <small class="text-muted">Define cómo responde la IA ante agentes comunes.</small>
                     </div>
                     <div>
@@ -398,6 +398,8 @@
                                 <tr>
                                     <th class="column-title" style="text-align: center">Api Key</th>
                                     <th class="column-title" style="text-align: center">Proveedor</th>
+                                    <th class="column-title" style="text-align: center">Usuario</th>
+                                    <th class="column-title" style="text-align: center">Contraseña</th>
                                     <th class="column-title" style="text-align: center">Acción</th>
                                 </tr>
                                 </thead>
@@ -406,6 +408,8 @@
                                     <tr>
                                         <td style="text-align: center">{{ l.descripcion|default:'' }}</td>
                                         <td style="text-align: center">{{ l.get_proveedor_display|default:'' }}</td>
+                                        <td style="text-align: center">{{ l.usuario|default:'SIN REGISTRAR' }}</td>
+                                        <td style="text-align: center">{{ l.contrasena|default:'SIN REGISTRAR' }}</td>
                                         <td class="text-center">
                                             <div class="dropdown">
                                                 <button class="btn btn-icon" type="button"

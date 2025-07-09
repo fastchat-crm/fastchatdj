@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q
 from django.contrib import messages
-from django.template.loader import render_to_string
+from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 from django.http import JsonResponse
 
@@ -70,6 +70,16 @@ def conversacionesFinalizadasView(request):
                 })
             except Exception as ex:
                 pass
+        elif action == 'ver_resumen_conversacion':
+            try:
+                pk = int(request.GET['pk'])
+                conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+                data['conversacion'] = conversacion
+                template = get_template("whatsapp/conversaciones/modal_resumen_conversacion.html")
+                return JsonResponse({"result": True, 'data': template.render(data)})
+            except Exception as ex:
+                return JsonResponse({"result": False, 'message': str(ex)})
+
 
     # ====================== ENVIAR MENSAJE =========================
     if request.method == 'POST':

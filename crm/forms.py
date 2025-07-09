@@ -157,7 +157,7 @@ class AgentesIAForm(ModelFormBase):
 class ApiKeyIAForm(ModelFormBase):
     class Meta:
         model = ApiKeyIA
-        fields = ('descripcion', 'proveedor',)
+        fields = ('descripcion', 'proveedor', 'usuario', 'contrasena')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
