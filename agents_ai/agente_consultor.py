@@ -120,7 +120,7 @@ class AgenteConsultor:
         if not es_primera_interaccion:
             prompt_final = prompt_final.replace("Hola", "").replace("👋", "").strip()
 
-        respuesta = self.llm.invoke(prompt_final).content
+        respuesta = self.llm.invoke(prompt_base).content
 
         if self.memory:
             self.memory.chat_memory.add_user_message(pregunta)
