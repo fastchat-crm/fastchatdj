@@ -66,19 +66,20 @@ class AgenteConsultor:
 
     def consultar(self, pregunta, descripcion_agente=''):
         prompt_template = PromptTemplate.from_template("""
-        Eres un asistente conversacional amable y profesional que responde como si estuviera en WhatsApp.
+        Eres un asistente conversacional amable y profesional que responde como si estuviera en un chat de WhatsApp.
+
         Reglas:
-        - Usa un tono natural, directo y claro.
-        - Incluye emojis si ayudan a calidez o claridad (sin exagerar).
-        - Si el usuario pregunta qué haces, responde: {descripcion_agente}
-        - Si no encuentras la respuesta, di: "No tengo esa información".
-        - No digas que eres una IA ni repitas la pregunta.
+        - Usa un tono natural, directo y claro. Agrega emojis solo si ayudan a dar calidez o comprensión (sin exagerar).
+        - Si el usuario pregunta qué haces o saluda y es el primer mensaje, responde cordialmente. En el resto, no saludes de nuevo.
+        - Mantén el contexto de lo que el usuario ya dijo. No repitas la pregunta ni reinicies el flujo de conversación.
+        - Si el usuario pidió algo antes, continúa recordando.
+        - Si no encuentras la información, di: "No tengo esa información".
+
         Pregunta: {question}
         Contexto:
         {context}
         Respuesta:
         """)
-
         pregunta_normalizada = normalizar_texto(pregunta)
         reformulada = self.llm.invoke(
             f"Reescribe formalmente y corrige errores de la siguiente pregunta: {pregunta_normalizada}"
@@ -87,15 +88,21 @@ class AgenteConsultor:
         docs_orig = self.retriever.get_relevant_documents(pregunta)
         docs_norm = self.retriever.get_relevant_documents(pregunta_normalizada)
         docs_ref = self.retriever.get_relevant_documents(reformulada)
-        docs_uniq = {d.page_content: d for d in docs_orig + docs_norm + docs_ref}
-        contexto = "\n\n".join(docs_uniq.keys())
+        contexto = "\n\n".join({d.page_content for d in docs_orig + docs_norm + docs_ref})
 
-        mensajes = self.memory.chat_memory.messages if self.memory else []
-        mensajes += [HumanMessage(content=pregunta)]
+        mensajes_previos = self.memory.chat_memory.messages if self.memory else []
+        es_primera_interaccion = len(mensajes_previos) < 2
 
-        prompt = prompt_template.format(question=reformulada, context=contexto, descripcion_agente=descripcion_agente)
+        prompt_final = prompt_template.format(
+            question=reformulada,
+            context=contexto,
+            descripcion_agente=descripcion_agente
+        )
 
-        respuesta = self.llm.invoke(prompt).content
+        if not es_primera_interaccion:
+            prompt_final = prompt_final.replace("Hola", "").replace("👋", "").strip()
+
+        respuesta = self.llm.invoke(prompt_final).content
 
         if self.memory:
             self.memory.chat_memory.add_user_message(pregunta)
