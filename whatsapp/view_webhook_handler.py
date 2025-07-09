@@ -416,6 +416,17 @@ def process_incoming_message(session, event_data, channel_layer):
                 conversation.sesion.session_id, contacto.from_number
             )
             try:
+                if message_type == 'audio':
+                    whatsapp_service.send_text_message(
+                        conversation.sesion.session_id, contacto.from_number, 'Procesando...', True
+                    )
+                    message_text = whatsapp_service.sync_transcribe_audio(message)
+                    whatsapp_service.send_text_message(
+                        conversation.sesion.session_id, contacto.from_number, f'Audio recibido: {message_text}', True
+                    )
+                    whatsapp_service.send_presence_update(
+                        conversation.sesion.session_id, contacto.from_number
+                    )
                 print(message_text)
                 vs_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path)
                 consultor = AgenteConsultor(
