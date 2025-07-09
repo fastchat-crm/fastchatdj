@@ -79,30 +79,24 @@ class AgenteConsultor:
         Respuesta:
         """)
 
-        # Paso 1: reformular pregunta
         pregunta_normalizada = normalizar_texto(pregunta)
         reformulada = self.llm.invoke(
             f"Reescribe formalmente y corrige errores de la siguiente pregunta: {pregunta_normalizada}"
         ).content
 
-        # Paso 2: buscar documentos combinados
         docs_orig = self.retriever.get_relevant_documents(pregunta)
         docs_norm = self.retriever.get_relevant_documents(pregunta_normalizada)
         docs_ref = self.retriever.get_relevant_documents(reformulada)
         docs_uniq = {d.page_content: d for d in docs_orig + docs_norm + docs_ref}
         contexto = "\n\n".join(docs_uniq.keys())
 
-        # Paso 3: construir el mensaje con historial + pregunta actual
         mensajes = self.memory.chat_memory.messages if self.memory else []
         mensajes += [HumanMessage(content=pregunta)]
 
-        # Paso 4: construir prompt final
         prompt = prompt_template.format(question=reformulada, context=contexto, descripcion_agente=descripcion_agente)
 
-        # Paso 5: invocar LLM
         respuesta = self.llm.invoke(prompt).content
 
-        # Paso 6: guardar en memoria si aplica
         if self.memory:
             self.memory.chat_memory.add_user_message(pregunta)
             self.memory.chat_memory.add_ai_message(respuesta)
