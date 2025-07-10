@@ -378,7 +378,9 @@ def entrenamiento_ia_view(request):
 
                 if action == 'addagente':
                     try:
-                        data["form"] = AgentesIAForm()
+                        form = AgentesIAForm()
+                        form.fields['apikey'].queryset = ApiKeyIA.objects.filter(perfil=perfil, status=True)
+                        data["form"] = form
                         template = get_template("crm/entrenamiento/agente/form.html")
                         return JsonResponse({"result": True, 'data': template.render(data)})
                     except Exception as ex:
