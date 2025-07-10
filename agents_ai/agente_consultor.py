@@ -91,15 +91,15 @@ class AgenteConsultor:
         tema_anterior = self._extraer_tema_previos_turnos()
 
         reformulada = self.llm.invoke(
-            f"Reescribe formalmente y corrige errores de la siguiente pregunta (SI NO ES pregunta, no reformules, solo responde FALSE,ES_SALUDO o responde FALSE,NO_ES_SALUDO): {pregunta_normalizada}"
+            f"Reescribe formalmente y corrige errores de la siguiente pregunta (SI ES SÓLO UN SALUDO, solo responde ES_SALUDO): {pregunta_normalizada}"
         ).content
 
         docs_orig = self.retriever.get_relevant_documents(pregunta)
         docs_norm = self.retriever.get_relevant_documents(pregunta_normalizada)
         docs_ref = self.retriever.get_relevant_documents(reformulada)
-        contexto = not 'FALSE' in reformulada and "\n\n".join({d.page_content for d in docs_orig + docs_norm + docs_ref}) or ''
+        contexto = not 'ES_SALUDO' in reformulada and "\n\n".join({d.page_content for d in docs_orig + docs_norm + docs_ref}) or ''
 
-        if ',ES_SALUDO' in reformulada:
+        if 'ES_SALUDO' in reformulada:
             return "Hola 👋, ¿en qué puedo ayudarte?"
 
         if not contexto.strip():
