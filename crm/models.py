@@ -3,6 +3,8 @@ import os
 
 from django.core.validators import FileExtensionValidator
 from django.db import models
+
+from core.constantes import PROMPT_TEMPLATES
 from core.custom_models import ModeloBase
 from autenticacion.models import Usuario
 from core.validadores import FileMaxSizeInMbValidator
@@ -173,7 +175,7 @@ class AgentesIA(ModeloBase):
     vectorstore_path = models.CharField(
         max_length=1000, blank=True, null=True, verbose_name="Ruta del vector store generado"
     )
-    prompt_template = models.TextField(blank=True, null=True, verbose_name="Promp Template")
+    prompt_template = models.TextField(verbose_name="Promp Template", default=PROMPT_TEMPLATES.get('es') or '')
 
     class Meta:
         verbose_name = 'Respuesta Entrenada IA'

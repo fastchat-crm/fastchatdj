@@ -11,6 +11,7 @@ from django.db import models
 from django.utils import timezone
 from langchain.memory import ConversationBufferMemory
 
+from agents_ai.agente_resumidor import AgenteResumidor
 from core.custom_models import ModeloBase
 from autenticacion.models import Usuario
 from core.funciones import default_expira_10_min, get_encrypt
@@ -246,6 +247,21 @@ class ConversacionWhatsApp(ModeloBase):
 
     def traer_ultimo_mensaje(self):
         return self.mensajes.last()
+
+    def resumir_conversacion(self):
+        session = self.contacto.sesion
+        if not self.resumen_conversacion and session.agente_ia and session.agente_ia.apikey.exists():
+            agente = session.agente_ia
+            for apikey in agente.apikey.all():
+                try:
+                    consultor = AgenteResumidor(
+                        provider=apikey.proveedor, apikey=apikey.descripcion, conversacion=self
+                    )
+                    self.resumen_conversacion = consultor.resumir()
+                except Exception as ex:
+                    continue
+                break
+            self.save()
 
     def get_foto_gris(self):
         try:

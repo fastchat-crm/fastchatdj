@@ -10,15 +10,13 @@ import os
 import unicodedata
 import re
 
-
 def normalizar_texto(texto):
     texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('utf-8')
     texto = re.sub(r'[^a-zA-Z0-9\s]', '', texto)
     return texto.lower()
 
-
 class AgenteConsultor:
-    def __init__(self, vectorstore_path, provider, apikey, model_name=None, conversacion=None):
+    def __init__(self, vectorstore_path, provider, apikey, model_name=None, conversacion=None, prompt_template_text=''):
         self.provider = provider == 2 and 'gemini' or provider == 3 and 'openai'
         self.apikey = apikey
         self.model_name = model_name or self.default_model()
@@ -26,9 +24,10 @@ class AgenteConsultor:
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
         self.vectorstore = self._load_vectorstore()
-        self.retriever = self.vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 15, "lambda_mult": 0.7})
+        self.retriever = self.vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 30, "lambda_mult": 0.7})
         self.conversacion = conversacion
         self.memory = self._get_memory()
+        self.prompt_template_text = prompt_template_text
 
     def default_model(self):
         return "gemini-1.5-pro" if self.provider == "gemini" else "gpt-4"
@@ -64,19 +63,49 @@ class AgenteConsultor:
             chat_memory=DjangoChatMessageHistory(session_id=str(self.conversacion.id))
         )
 
+    def _extraer_tema_previos_turnos(self):
+        if not self.memory:
+            return ""
+
+        mensajes = self.memory.chat_memory.messages
+        if len(mensajes) < 2:
+            return ""
+
+        ultimo_usuario = None
+        ultima_respuesta = None
+        for m in reversed(mensajes):
+            if not ultimo_usuario and isinstance(m, HumanMessage):
+                ultimo_usuario = m.content
+            elif not ultima_respuesta and isinstance(m, AIMessage):
+                ultima_respuesta = m.content
+            if ultimo_usuario and ultima_respuesta:
+                break
+
+        if ultimo_usuario and ultima_respuesta:
+            return f"(Anteriormente se habló sobre: \"{ultimo_usuario}\" y se respondió: \"{ultima_respuesta}\")\n\n"
+        return ""
+
     def consultar(self, pregunta, descripcion_agente=''):
         pregunta_normalizada = normalizar_texto(pregunta)
+
+        tema_anterior = self._extraer_tema_previos_turnos()
+
         reformulada = self.llm.invoke(
-            f"Reescribe formalmente y corrige errores de la siguiente pregunta: {pregunta_normalizada}"
+            f"Reescribe formalmente y corrige errores de la siguiente pregunta (SI NO ES pregunta, no reformules, solo responde FALSE,ES_SALUDO o responde FALSE,NO_ES_SALUDO): {pregunta_normalizada}"
         ).content
 
         docs_orig = self.retriever.get_relevant_documents(pregunta)
         docs_norm = self.retriever.get_relevant_documents(pregunta_normalizada)
         docs_ref = self.retriever.get_relevant_documents(reformulada)
-        contexto = "\n\n".join({d.page_content for d in docs_orig + docs_norm + docs_ref})
+        contexto = not 'FALSE' in reformulada and "\n\n".join({d.page_content for d in docs_orig + docs_norm + docs_ref}) or ''
+
+        if ',ES_SALUDO' in reformulada:
+            return "Hola 👋, ¿en qué puedo ayudarte?"
+
+        if not contexto.strip():
+            return "No tengo esa información."
 
         mensajes_previos = self.memory.chat_memory.messages if self.memory else []
-        es_primera_interaccion = len(mensajes_previos) < 2
 
         ultimo_turno_usuario = None
         for m in reversed(mensajes_previos):
@@ -84,46 +113,21 @@ class AgenteConsultor:
                 ultimo_turno_usuario = m.content
                 break
 
-        prompt_template = PromptTemplate.from_template("""
-        Eres un asistente conversacional amable y profesional que responde como si estuviera en un chat de WhatsApp. Responde con claridad y naturalidad, usando un estilo conversacional breve y cercano.
+        contexto_extra = tema_anterior + (f"(Antes, el usuario dijo: \"{ultimo_turno_usuario}\")\n\n" if ultimo_turno_usuario else "")
 
-        Reglas:
-        - Usa un tono amistoso, natural, directo. Agrega emojis de forma moderada si ayudan a entender o dar calidez.
-        - Si el usuario saluda, responde con un saludo corto y cordial (incluye un emoji si aplica).
-        - Si pregunta "¿En qué puedes ayudarme?", "¿Qué haces?" o algo similar, responde usando esta descripción: "{descripcion_agente}".
-        - Nunca inventes respuestas. Si no encuentras la información en los documentos, responde: "No tengo esa información".
-        - No digas que eres una IA ni des explicaciones técnicas.
-        - No repitas la pregunta del usuario. No uses frases como "Claro que sí" o "Por supuesto".
-        - La respuesta debe basarse en la mejora de la pregunta que hiciste
-        - Si el usuario pidió algo antes, responde como si recordaras esa información.
+        prompt_template = PromptTemplate.from_template(f'{self.prompt_template_text}\n')
 
-        Pregunta: {question}
-        ====================
-        {context}
-        ====================
-        Respuesta:
-        """)
-
-        prompt_base = prompt_template.format(
+        prompt_final = prompt_template.format(
             question=reformulada,
             context=contexto,
-            descripcion_agente=descripcion_agente
+            descripcion_agente=descripcion_agente,
+            contexto_extra=contexto_extra
         )
 
-        if ultimo_turno_usuario:
-            contexto_extra = f"(Antes, el usuario dijo: \"{ultimo_turno_usuario}\")\n\n"
-        else:
-            contexto_extra = ""
-
-        prompt_final = contexto_extra + prompt_base
-
-        if not es_primera_interaccion:
-            prompt_final = prompt_final.replace("Hola", "").replace("👋", "").strip()
-
-        respuesta = self.llm.invoke(prompt_base).content
+        respuesta = self.llm.invoke(prompt_final).content
 
         if self.memory:
-            self.memory.chat_memory.add_user_message(pregunta)
+            self.memory.chat_memory.add_user_message(reformulada)
             self.memory.chat_memory.add_ai_message(respuesta)
 
         return respuesta

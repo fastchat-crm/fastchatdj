@@ -410,7 +410,7 @@ def process_incoming_message(session, event_data, channel_layer):
             )
         )
         departamentos_msg = 'Escribe el número del departamento para continuar:\n'
-        if session.agente_ia and session.agente_ia.apikey and session.agente_ia.descripcion:
+        if session.agente_ia and session.agente_ia.apikey.exists():
             agente = session.agente_ia
             whatsapp_service.send_presence_update(
                 conversation.sesion.session_id, contacto.from_number
@@ -429,16 +429,20 @@ def process_incoming_message(session, event_data, channel_layer):
                     )
                 print(message_text)
                 vs_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path)
-                consultor = AgenteConsultor(
-                    vectorstore_path=vs_path,
-                    provider=agente.apikey.proveedor,
-                    apikey=agente.apikey.descripcion, conversacion=conversation
-                )
-                respuesta = consultor.consultar(message_text, agente.descripcion)
-                print("respuesta", respuesta)
-                whatsapp_service.send_text_message(
-                    conversation.sesion.session_id, contacto.from_number, respuesta
-                )
+                for apikey in agente.apikey.all():
+                    try:
+                        consultor = AgenteConsultor(
+                            vectorstore_path=vs_path, provider=apikey.proveedor, apikey=apikey.descripcion,
+                            conversacion=conversation, prompt_template_text= agente.prompt_template,
+                        )
+                        respuesta = consultor.consultar(message_text, agente.descripcion)
+                        print("respuesta", respuesta)
+                        whatsapp_service.send_text_message(
+                            conversation.sesion.session_id, contacto.from_number, respuesta
+                        )
+                        break
+                    except Exception as ex:
+                        continue
             except Exception as ex:
                 whatsapp_service.send_text_message(
                     conversation.sesion.session_id, contacto.from_number, str(ex)
