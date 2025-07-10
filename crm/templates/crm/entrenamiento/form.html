@@ -403,6 +403,7 @@
                                 <thead>
                                 <tr>
                                     <th class="column-title" style="text-align: center">Api Key</th>
+                                    <th class="column-title" style="text-align: center">Alias</th>
                                     <th class="column-title" style="text-align: center">Proveedor</th>
                                     <th class="column-title" style="text-align: center">Usuario</th>
                                     <th class="column-title" style="text-align: center">Contraseña</th>
@@ -413,6 +414,7 @@
                                 {% for l in apis %}
                                     <tr>
                                         <td style="text-align: center">{{ l.descripcion|default:'' }}</td>
+                                        <td style="text-align: center">{{ l.alias|default:'' }}</td>
                                         <td style="text-align: center">{{ l.get_proveedor_display|default:'' }}</td>
                                         <td style="text-align: center">{{ l.usuario|default:'SIN REGISTRAR' }}</td>
                                         <td style="text-align: center">{{ l.contrasena|default:'SIN REGISTRAR' }}</td>
