@@ -288,7 +288,7 @@ class ApiKeyIA(ModeloBase):
         verbose_name_plural = 'Apis Keys IA'
 
     def __str__(self):
-        return f"{self.alias}"
+        return f"[{self.get_proveedor_display()}]: {self.alias}"
 
 
 class DepartamentoChatBot(ModeloBase):
