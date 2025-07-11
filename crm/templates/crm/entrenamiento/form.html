@@ -337,7 +337,7 @@
                                         <td style="text-align: center">{{ l.descripcion|default:'' }}</td>
                                         <td style="text-align: center">
                                             {% for api in l.apikey.all %}
-                                                {{ api.descripcion }}{% if not forloop.last %}, {% endif %}
+                                                {{ api }}{% if not forloop.last %}, {% endif %}
                                             {% empty %}
                                                 -
                                             {% endfor %}
