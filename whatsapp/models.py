@@ -333,28 +333,6 @@ class ConversacionWhatsApp(ModeloBase):
     def __str__(self):
         return f"Conversación con {self.contacto}"
 
-    def cargar_memoria(self):
-        if not self.memoria_archivo:
-            return []
-
-        try:
-            with open(self.memoria_archivo.path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            return []
-
-    def guardar_memoria(self, memoria):
-        nombre_archivo = f"memoria_conversacion_{self.id}.json"
-        ruta = os.path.join(MEDIA_ROOT, "memorias")
-        not os.path.exists(ruta) and os.makedirs(ruta)
-        ruta = os.path.join(ruta, nombre_archivo)
-
-        with open(ruta, 'w+', encoding='utf-8') as f:
-            json.dump(memoria, f, ensure_ascii=False, indent=2)
-
-        self.memoria_archivo.name = f"memorias/{nombre_archivo}"
-        super().save()
-
     def save(self, *args, **kwargs):
         if self.contacto.fecha_ultimo_mensaje:
             self.order = int(round(self.contacto.fecha_ultimo_mensaje.timestamp(), 0))
