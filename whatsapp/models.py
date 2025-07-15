@@ -261,7 +261,7 @@ class ConversacionWhatsApp(ModeloBase):
                 except Exception as ex:
                     continue
                 break
-            self.save()
+            super().save()
 
     def get_foto_gris(self):
         try:
@@ -353,7 +353,7 @@ class ConversacionWhatsApp(ModeloBase):
             json.dump(memoria, f, ensure_ascii=False, indent=2)
 
         self.memoria_archivo.name = f"memorias/{nombre_archivo}"
-        self.save()
+        super().save()
 
     def save(self, *args, **kwargs):
         if self.contacto.fecha_ultimo_mensaje:
