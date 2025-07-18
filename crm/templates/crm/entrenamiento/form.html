@@ -2,6 +2,148 @@
 
 {% block head %}
     <style>
+        .agent-card {
+            transition: all 0.3s ease;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            overflow: hidden;
+            height: 100%;
+        }
+
+        .agent-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            border-color: #007bff;
+        }
+
+        .agent-status {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .agent-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            margin-bottom: 15px;
+        }
+
+        .agent-icon.icon-2 {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .agent-icon.icon-3 {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .agent-icon.icon-4 {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+
+        .agent-icon.icon-5 {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        }
+
+        .agent-icon.icon-6 {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+        }
+
+        .api-key-badge {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 0.75rem;
+            color: #6c757d;
+            display: inline-block;
+            margin: 2px;
+        }
+
+        .api-key-badge.no-keys {
+            background: #fff3cd;
+            color: #856404;
+            border-color: #ffeaa7;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .btn-action {
+            flex: 1;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+
+        .btn-edit {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .btn-edit:hover {
+            background: #bbdefb;
+            color: #0d47a1;
+        }
+
+        .btn-delete {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .btn-delete:hover {
+            background: #ffcdd2;
+            color: #b71c1c;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+    </style>
+    <style>
         .row [class*='col-'] {
             background-clip: content-box;
         }
@@ -10,7 +152,8 @@
 
 {% block content %}
     <div class="alert alert-info" role="alert">
-        <i class="fa fa-comment"></i> Aquí puedes configurar la inteligencia artificial de tu empresa: personaliza el perfil del negocio, agrega
+        <i class="fa fa-comment"></i> Aquí puedes configurar la inteligencia artificial de tu empresa: personaliza el
+        perfil del negocio, agrega
         productos y servicios, y define respuestas a preguntas frecuentes para entrenar la IA según tus criterios.
     </div>
 
@@ -41,63 +184,74 @@
                 </div>
                 <div class="card-body" id="bloque_agentes_ia">
                     <div class="card-body pt-0">
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                <tr>
-                                    <th class="column-title" style="text-align: center">Nombre</th>
-                                    <th class="column-title" style="text-align: center">Descripcion</th>
-                                    <th class="column-title" style="text-align: center">Api Key</th>
-                                    <th class="column-title" style="text-align: center">Acción</th>
-                                </tr>
-                                </thead>
-                                <tbody>
+                        {% if agentes %}
+                            <div class="row">
                                 {% for l in agentes %}
-                                    <tr>
-                                        <td style="text-align: center">{{ l.nombre|default:'' }}</td>
-                                        <td style="text-align: center">{{ l.descripcion|default:'' }}</td>
-                                        <td style="text-align: center">
-                                            {% for api in l.apikey.all %}
-                                                {{ api }}{% if not forloop.last %}, {% endif %}
-                                            {% empty %}
-                                                -
-                                            {% endfor %}
-                                        </td>
-                                        <td class="text-center">
-                                            <div class="dropdown">
-                                                <button class="btn btn-icon" type="button"
-                                                        id="dropdownMenuButton-{{ l.pk }}"
-                                                        data-bs-toggle="dropdown" aria-expanded="false"
-                                                        style="background: none; border: none;">
-                                                    <i class="fas fa-ellipsis-v"></i>
-                                                </button>
-                                                <ul class="dropdown-menu dropdown-menu-end"
-                                                    aria-labelledby="dropdownMenuButton-{{ l.pk }}">
-                                                    <li>
-                                                        <a class="dropdown-item"
-                                                           onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeagente')"
-                                                           href="javascript:void(0);">
-                                                            <i class="fas fa-edit me-2 text-primary"></i>Editar
-                                                        </a>
-                                                    </li>
-                                                    <li>
-                                                        <a class="dropdown-item" href="javascript:void(0);"
-                                                           onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteagente')">
-                                                            <i class="fas fa-trash me-2 text-danger"></i>Eliminar
-                                                        </a>
-                                                    </li>
-                                                </ul>
+                                    <div class="col-lg-4 col-md-6 mb-4">
+                                        <div class="card agent-card">
+                                            <div class="card-body position-relative">
+                                                <div class="agent-status" title="Agente activo"></div>
+
+                                                <div class="agent-icon {% cycle 'icon-1' 'icon-2' 'icon-3' 'icon-4' 'icon-5' 'icon-6' %}">
+                                                    <i class="fas fa-{% cycle 'robot' 'comments' 'chart-line' 'pen-fancy' 'language' 'cogs' %}"></i>
+                                                </div>
+
+                                                <h5 class="card-title mb-2">
+                                                    {{ l.nombre|default:'Agente Sin Nombre' }}
+                                                </h5>
+
+                                                <p class="card-text text-muted small mb-3">
+                                                    {% if l.descripcion %}
+                                                        {{ l.descripcion|truncatechars:100 }}
+                                                    {% else %}
+                                                        Sin descripción disponible para este agente.
+                                                    {% endif %}
+                                                </p>
+
+                                                <div class="mb-3">
+                                                    <div class="small text-muted mb-1">API Keys:</div>
+                                                    <div>
+                                                        {% for api in l.apikey.all %}
+                                                            <span class="api-key-badge">{{ api }}</span>
+                                                        {% empty %}
+                                                            <span class="api-key-badge no-keys">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                                Sin configurar
+                                            </span>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+
+                                                <div class="action-buttons">
+                                                    <a href="javascript:void(0)" class="btn-action btn-edit"
+                                                       onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeagente')">
+                                                        <i class="fas fa-edit"></i>
+                                                        Editar
+                                                    </a>
+                                                    <a href="javascript:void(0)" class="btn-action btn-delete"
+                                                       onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteagente')">
+                                                        <i class="fas fa-trash"></i>
+                                                        Eliminar
+                                                    </a>
+                                                </div>
                                             </div>
-                                        </td>
-                                    </tr>
-                                {% empty %}
-                                    <tr>
-                                        <td colspan="10">Sin registros</td>
-                                    </tr>
+                                        </div>
+                                    </div>
                                 {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-robot"></i>
+                                <h4>No hay agentes configurados</h4>
+                                <p class="mb-3">Comienza creando tu primer agente AI para automatizar tareas en tu
+                                    sistema.</p>
+                                <button class="btn btn-primary"
+                                        onclick="formModal('', 'Agregar Agente Entrenado', 'addagente')">
+                                    <i class="fas fa-plus me-2"></i>
+                                    Crear Primer Agente
+                                </button>
+                            </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
