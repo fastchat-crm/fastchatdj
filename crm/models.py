@@ -76,7 +76,7 @@ class PerfilNegocioIA(ModeloBase):
     # MÉTODOS ÚTILES
 
     def tiene_datos_basicos(self):
-        if perfil.get_agentes():
+        if self.get_agentes():
             return True
         else:
             return False
