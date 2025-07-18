@@ -76,7 +76,11 @@ class PerfilNegocioIA(ModeloBase):
     # MÉTODOS ÚTILES
 
     def tiene_datos_basicos(self):
-        return all([self.nombre_empresa, self.descripcion_empresa, self.industria, self.actividad])
+        if perfil.get_agentes():
+            return True
+        else:
+            return False
+        # return all([self.nombre_empresa, self.descripcion_empresa, self.industria, self.actividad])
 
     def resumen_contexto_ia(self):
         productos = self.productos.all()
@@ -101,19 +105,19 @@ class PerfilNegocioIA(ModeloBase):
         return self.servicios.count()
 
     def get_productos(self):
-        return self.productos.filter(status=True)
+        return self.productos.filter(status=True).order_by('-id')
 
     def get_servicios(self):
-        return self.servicios.filter(status=True)
+        return self.servicios.filter(status=True).order_by('-id')
 
     def get_respuestas(self):
-        return self.respuestas_ia.filter(status=True)
+        return self.respuestas_ia.filter(status=True).order_by('-id')
 
     def get_agentes(self):
         return self.agentesia_set.filter(status=True).order_by('nombre')
 
     def get_apis(self):
-        return self.apikeyia_set.filter(status=True)
+        return self.apikeyia_set.filter(status=True).order_by('-id')
 
 # Productos personalizados del perfil IA
 class ProductoIA(ModeloBase):
