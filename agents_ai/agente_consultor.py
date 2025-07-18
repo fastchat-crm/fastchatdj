@@ -4,6 +4,8 @@ from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain.memory import ConversationBufferMemory
+
+from whatsapp.models import ConversacionWhatsApp
 from .memoria_django import DjangoChatMessageHistory
 
 import os
@@ -25,7 +27,7 @@ class AgenteConsultor:
         self.llm = self._get_llm()
         self.vectorstore = self._load_vectorstore()
         self.retriever = self.vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 30, "lambda_mult": 0.7})
-        self.conversacion = conversacion
+        self.conversacion: ConversacionWhatsApp = conversacion
         self.memory = self._get_memory()
         self.prompt_template_text = prompt_template_text
 
@@ -90,13 +92,36 @@ class AgenteConsultor:
 
     def consultar(self, pregunta, descripcion_agente=''):
         pregunta_normalizada = normalizar_texto(pregunta)
+        
+        contexto_previo = self._extraer_tema_previos_turnos()
+        
+        # Solo verificar si es saludo cuando realmente es el primer mensaje de la conversación completa
+        if self.memory and len(self.memory.chat_memory.messages) == 0:
+            prompt_saludo = f"""Analiza si el siguiente texto es ÚNICAMENTE un saludo sin ninguna pregunta específica.
+            
+Texto: "{pregunta}"
 
+Responde EXACTAMENTE "ES_SALUDO" si es solo un saludo básico (como "hola", "buenos días", "hi", etc.).
+Responde "NO_ES_SALUDO" si contiene alguna pregunta o solicitud específica, aunque incluya un saludo."""
+
+            respuesta_saludo = self.llm.invoke(prompt_saludo).content.strip()
+            
+            if respuesta_saludo == "ES_SALUDO":
+                mensaje_bienvenida = "Hola 👋, ¿en qué puedo ayudarte?"
+                if self.conversacion and hasattr(self.conversacion, 'contacto') and hasattr(self.conversacion.contacto, 'sesion'):
+                    mensaje_bienvenida = self.conversacion.contacto.sesion.mensaje_bienvenida or mensaje_bienvenida
+                
+                # Guardar el saludo en memoria para mantener el historial
+                if self.memory:
+                    self.memory.chat_memory.add_user_message(pregunta)
+                    self.memory.chat_memory.add_ai_message(mensaje_bienvenida)
+                
+                return mensaje_bienvenida
+
+        # Reformular la pregunta para mejorar la búsqueda
         reformulada = self.llm.invoke(
-            f"Reescribe formalmente y corrige errores de la siguiente pregunta (SI ES SÓLO UN SALUDO, solo responde ES_SALUDO): {pregunta_normalizada}"
+            f"Reescribe y mejora la siguiente pregunta para una búsqueda más efectiva, mantén el contexto y significado original: {pregunta}"
         ).content
-
-        if 'ES_SALUDO' in reformulada:
-            return "Hola 👋, ¿en qué puedo ayudarte?"
 
         docs_orig = self.retriever.get_relevant_documents(pregunta)
         docs_norm = self.retriever.get_relevant_documents(pregunta_normalizada)
@@ -106,13 +131,12 @@ class AgenteConsultor:
         if not contexto.strip():
             return "No tengo esa información."
 
-        # Obtener contexto de la conversación anterior
-        contexto_extra = self._extraer_tema_previos_turnos()
+        contexto_extra = contexto_previo
 
         prompt_template = PromptTemplate.from_template(f'{self.prompt_template_text}\n')
 
         prompt_final = prompt_template.format(
-            question=f'{pregunta} OR {reformulada}',  # Usar pregunta original, no reformulada
+            question=f'{pregunta} or {reformulada}',
             context=contexto,
             descripcion_agente=descripcion_agente,
             contexto_extra=contexto_extra
@@ -120,9 +144,8 @@ class AgenteConsultor:
 
         respuesta = self.llm.invoke(prompt_final).content
 
-        # Guardar en memoria la pregunta ORIGINAL y la respuesta
         if self.memory:
-            self.memory.chat_memory.add_user_message(f'{pregunta} OR {reformulada}')
+            self.memory.chat_memory.add_user_message(f'{pregunta} or {reformulada}')
             self.memory.chat_memory.add_ai_message(respuesta)
 
         return respuesta
