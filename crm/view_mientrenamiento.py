@@ -174,7 +174,8 @@ def entrenamiento_ia_view(request):
                         pk = int(request.GET['id'])
                         filtro = AgentesIA.objects.get(pk=pk)
                         data["filtro"] = filtro
-                        data["form"] = AgentesIAForm(instance=filtro)
+                        data["form"] = form = AgentesIAForm(instance=filtro)
+                        form.fields['apikey'].queryset = ApiKeyIA.objects.filter(perfil=perfil, status=True)
                         data['detalles_existentes'] = filtro.obtener_detalles_agente()
                         template = get_template("crm/entrenamiento/agente/form.html")
                         return JsonResponse({"result": True, 'data': template.render(data)})

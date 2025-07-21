@@ -10,6 +10,7 @@ from django.urls import reverse
 
 from core.custom_forms import FormError
 from core.funciones import addData, paginador, secure_module, log, redirectAfterPostGet
+from crm.models import AgentesIA, PerfilNegocioIA
 from .forms import SesionWhatsAppForm
 from .models import SesionWhatsApp
 from .services import WhatsAppService
@@ -26,7 +27,7 @@ def sesionesView(request):
     }
     addData(request, data)
     model = SesionWhatsApp
-
+    perfil, creado = PerfilNegocioIA.objects.get_or_create(usuario=request.user)
     if request.method == 'POST':
         res_json = []
         action = request.POST['action']
@@ -110,11 +111,13 @@ def sesionesView(request):
     if action == 'change':
         data['instance'] = instance = SesionWhatsApp.objects.get(id=request.GET['pk'])
         data['form'] = SesionWhatsAppForm(instance=instance)
+        form.fields['agente_ia'].queryset = AgentesIA.objects.filter(perfil=perfil, status=True)
         return render(request, 'whatsapp/sesiones/form.html', data)
     if action == 'change_modal':
         try:
             data['instance'] = instance = SesionWhatsApp.objects.get(id=request.GET['pk'])
-            data['form'] = SesionWhatsAppForm(instance=instance)
+            data['form'] = form = SesionWhatsAppForm(instance=instance)
+            form.fields['agente_ia'].queryset = AgentesIA.objects.filter(perfil=perfil, status=True)
             template = get_template("whatsapp/sesiones/form_modal.html")
             return JsonResponse({"result": True, 'data': template.render(data)})
         except Exception as ex:
