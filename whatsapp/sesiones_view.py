@@ -110,7 +110,7 @@ def sesionesView(request):
     data['action'] = action = request.GET.get('action')
     if action == 'change':
         data['instance'] = instance = SesionWhatsApp.objects.get(id=request.GET['pk'])
-        data['form'] = SesionWhatsAppForm(instance=instance)
+        data['form'] = form = SesionWhatsAppForm(instance=instance)
         form.fields['agente_ia'].queryset = AgentesIA.objects.filter(perfil=perfil, status=True)
         return render(request, 'whatsapp/sesiones/form.html', data)
     if action == 'change_modal':
