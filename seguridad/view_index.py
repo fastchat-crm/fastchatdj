@@ -13,6 +13,7 @@ from core.funciones import addData, secure_module
 from public.models import VisitaEntorno
 from seguridad.models import *
 from seguridad.templatetags.templatefunctions import encrypt
+from whatsapp.models import SesionWhatsApp
 
 
 @login_required
@@ -42,4 +43,5 @@ def index(request):
             data['mostrar_modal_ia'] = mostrar_modal_ia
         else:
             data['PERFIL_EXISTE'] = False
+        data['sesiones_desconectados'] = SesionWhatsApp.objects.filter(status=True,estado='desconectado')
         return render(request, 'seguridad/index.html', data)

@@ -4,89 +4,102 @@
 {% endblock %}
 {% block content %}
     {% if PERFIL_EXISTE %}
+        {% if sesiones_desconectados %}
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="alert alert-danger">
+                        <i class="fa fa-info-circle"></i>
+                        <strong>Atención:</strong> Hay {{ sesiones_desconectados|length }} sesiones de WhatsApp
+                        desconectadas.
+                        <a href="/whatsapp/sesiones/?estado=desconectado" class="btn-link" target="_blank">Ver
+                            detalles</a>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
         <div class="row justify-content-center">
-        <div class="col-md-6 col-lg-4">
-            <div class="card">
-                <div class="card-body">
-                    <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
-                        <div class="col-9">
-                            <p class="text-dark mb-0 fw-semibold fs-14">Conversaciones</p>
-                            <h3 class="mt-2 mb-0 fw-bold">{{ total_conversaciones|default:"154" }}</h3>
-                        </div>
-                        <!--end col-->
-                        <div class="col-3 align-self-center">
-                            <div
-                                    class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                                <i
-                                        class="iconoir-chat-bubble h1 align-self-center mb-0 text-secondary"></i>
+            <div class="col-md-6 col-lg-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
+                            <div class="col-9">
+                                <p class="text-dark mb-0 fw-semibold fs-14">Conversaciones</p>
+                                <h3 class="mt-2 mb-0 fw-bold">{{ total_conversaciones|default:"154" }}</h3>
                             </div>
-                        </div>
-                        <!--end col-->
-                    </div>
-                    <!--end row-->
-                    <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">12.3%</span>
-                        Nuevas conversaciones hoy</p>
-                </div>
-                <!--end card-body-->
-            </div>
-            <!--end card-->
-        </div>
-        <!--end col-->
-        <div class="col-md-6 col-lg-4">
-            <div class="card">
-                <div class="card-body">
-                    <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
-                        <div class="col-9">
-                            <p class="text-dark mb-0 fw-semibold fs-14">Tiempo respuesta</p>
-                            <h3 class="mt-2 mb-0 fw-bold">00:45</h3>
-                        </div>
-                        <!--end col-->
-                        <div class="col-3 align-self-center">
-                            <div
-                                    class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                                <i class="iconoir-clock h1 align-self-center mb-0 text-secondary"></i>
+                            <!--end col-->
+                            <div class="col-3 align-self-center">
+                                <div
+                                        class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
+                                    <i
+                                            class="iconoir-chat-bubble h1 align-self-center mb-0 text-secondary"></i>
+                                </div>
                             </div>
+                            <!--end col-->
                         </div>
-                        <!--end col-->
+                        <!--end row-->
+                        <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">12.3%</span>
+                            Nuevas conversaciones hoy</p>
                     </div>
-                    <!--end row-->
-                    <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">2.4%</span>
-                        Mejora respecto a la semana pasada</p>
+                    <!--end card-body-->
                 </div>
-                <!--end card-body-->
+                <!--end card-->
             </div>
-            <!--end card-->
-        </div>
-        <!--end col-->
-        <div class="col-md-6 col-lg-4">
-            <div class="card">
-                <div class="card-body">
-                    <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
-                        <div class="col-9">
-                            <p class="text-dark mb-0 fw-semibold fs-14">Tasa de
-                                Conversión</p>
-                            <h3 class="mt-2 mb-0 fw-bold">28.65%</h3>
-                        </div>
-                        <!--end col-->
-                        <div class="col-3 align-self-center">
-                            <div
-                                    class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                                <i
-                                        class="iconoir-percentage-circle h1 align-self-center mb-0 text-secondary"></i>
+            <!--end col-->
+            <div class="col-md-6 col-lg-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
+                            <div class="col-9">
+                                <p class="text-dark mb-0 fw-semibold fs-14">Tiempo respuesta</p>
+                                <h3 class="mt-2 mb-0 fw-bold">00:45</h3>
                             </div>
+                            <!--end col-->
+                            <div class="col-3 align-self-center">
+                                <div
+                                        class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
+                                    <i class="iconoir-clock h1 align-self-center mb-0 text-secondary"></i>
+                                </div>
+                            </div>
+                            <!--end col-->
                         </div>
-                        <!--end col-->
+                        <!--end row-->
+                        <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">2.4%</span>
+                            Mejora respecto a la semana pasada</p>
                     </div>
-                    <!--end row-->
-                    <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">5.2%</span>
-                        Incremento en conversiones semanales</p>
+                    <!--end card-body-->
                 </div>
-                <!--end card-body-->
+                <!--end card-->
             </div>
-            <!--end card-->
+            <!--end col-->
+            <div class="col-md-6 col-lg-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
+                            <div class="col-9">
+                                <p class="text-dark mb-0 fw-semibold fs-14">Tasa de
+                                    Conversión</p>
+                                <h3 class="mt-2 mb-0 fw-bold">28.65%</h3>
+                            </div>
+                            <!--end col-->
+                            <div class="col-3 align-self-center">
+                                <div
+                                        class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
+                                    <i
+                                            class="iconoir-percentage-circle h1 align-self-center mb-0 text-secondary"></i>
+                                </div>
+                            </div>
+                            <!--end col-->
+                        </div>
+                        <!--end row-->
+                        <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">5.2%</span>
+                            Incremento en conversiones semanales</p>
+                    </div>
+                    <!--end card-body-->
+                </div>
+                <!--end card-->
+            </div>
+            <!--end col-->
         </div>
-        <!--end col-->
-    </div>
         <div class="row justify-content-center">
             <div class="col-md-6 col-lg-8">
                 <div class="card">
@@ -443,7 +456,8 @@
                         </div>
                         <div class="text-center">
                             <h4>Análisis de Sentimiento</h4>
-                            <p class="text-muted mt-2">El 68% de las conversaciones tienen un sentimiento positivo, lo que
+                            <p class="text-muted mt-2">El 68% de las conversaciones tienen un sentimiento positivo, lo
+                                que
                                 indica una buena percepción del servicio</p>
                             <button type="button" class="btn btn-outline-primary px-3 mt-2">Ver detalles
                             </button>
@@ -729,7 +743,8 @@
                                 <h4 class="card-title">Gestión de Agenda</h4>
                             </div>
                             <div class="col-auto">
-                                <button class="btn btn-sm btn-primary"><i class="fas fa-plus me-1"></i> Nueva cita</button>
+                                <button class="btn btn-sm btn-primary"><i class="fas fa-plus me-1"></i> Nueva cita
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -762,7 +777,8 @@
                                         </button>
                                         <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></button>
+                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i>
+                                        </button>
                                     </td>
                                 </tr>
                                 <tr>
@@ -781,7 +797,8 @@
                                         </button>
                                         <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></button>
+                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i>
+                                        </button>
                                     </td>
                                 </tr>
                                 <tr>
@@ -800,7 +817,8 @@
                                         </button>
                                         <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></button>
+                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i>
+                                        </button>
                                     </td>
                                 </tr>
                                 <tr>
@@ -819,7 +837,8 @@
                                         </button>
                                         <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></button>
+                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i>
+                                        </button>
                                     </td>
                                 </tr>
                                 </tbody>
@@ -848,7 +867,8 @@
                            onclick="contactWS('{{ confi.telefono_empresa }}', '{{ nombreempresa }}')"
                            class="btn btn-success"><i class="fab fa-whatsapp"></i> Contactar un asesor</a>
                         <br><br>
-                            <span class="text-muted"><i class="fa fa-info-circle"></i> No cuenta con perfil administrativo</span>
+                        <span class="text-muted"><i
+                                class="fa fa-info-circle"></i> No cuenta con perfil administrativo</span>
                     </div>
                 </div>
             </div>

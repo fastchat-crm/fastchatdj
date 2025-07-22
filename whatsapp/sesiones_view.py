@@ -124,10 +124,15 @@ def sesionesView(request):
         data['listado'] = instance.get_log_entries().filter(change_message__istartswith='HS: ')
         return render(request, 'whatsapp/sesiones/historial_de_sesiones.html', data)
     criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, usuario_id=request.user.id), ''
+    estado = request.GET.get('estado', '')
     if criterio:
         filtros = filtros & (Q(numero__icontains=criterio))
         data["criterio"] = criterio
         url_vars += '&criterio=' + criterio
+    if estado:
+        filtros &= Q(estado=estado)
+        data["estado"] = estado
+        url_vars += '&estado=' + estado
 
     listado = model.objects.filter(filtros)
     data["list_count"] = listado.count()
