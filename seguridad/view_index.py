@@ -43,5 +43,5 @@ def index(request):
             data['mostrar_modal_ia'] = mostrar_modal_ia
         else:
             data['PERFIL_EXISTE'] = False
-        data['sesiones_desconectados'] = SesionWhatsApp.objects.filter(status=True,estado='desconectado')
+        data['sesiones_desconectados'] = SesionWhatsApp.objects.filter(status=True, usuario=persona,estado='desconectado')
         return render(request, 'seguridad/index.html', data)
