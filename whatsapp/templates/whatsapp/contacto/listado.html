@@ -1,12 +1,13 @@
 {% extends 'base.html' %}
 {% block head %}
     <style>
-    .select2-container {
-        width: 87% !important;
-    }
-    .input-group-text {
-        width: 45px;
-    }
+        .select2-container {
+            width: 87% !important;
+        }
+
+        .input-group-text {
+            width: 45px;
+        }
     </style>
 {% endblock %}
 {% block content %}
@@ -48,6 +49,9 @@
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-search me-1"></i>
                             </button>
+                            <a href="?export_to_excel=1{{ url_vars }}" class="btn btn-success" target="_blank">
+                                <i class="fa fa-file-excel"></i>
+                            </a>
                             {% if url_vars %}
                                 <a href="{{ ruta }}?{{ dict_url_vars }}" class="btn btn-default">
                                     <i class="fas fa-sync-alt"></i>
@@ -60,13 +64,13 @@
         </div>
     </div>
 
-{#    <div class="row align-items-center mb-3">#}
-{#        <div class="col-md-12 mb-2 mb-md-0">#}
-{#            <a href="javascript:void(0);" class="btn btn-success btn-sm" onclick="formModal(0, 'Agregar {{ titulo }}', 'add')">#}
-{#                <i class="fas fa-plus-circle me-2"></i> Nuevo {{ titulo }}#}
-{#            </a>#}
-{#        </div>#}
-{#    </div>#}
+    {#    <div class="row align-items-center mb-3">#}
+    {#        <div class="col-md-12 mb-2 mb-md-0">#}
+    {#            <a href="javascript:void(0);" class="btn btn-success btn-sm" onclick="formModal(0, 'Agregar {{ titulo }}', 'add')">#}
+    {#                <i class="fas fa-plus-circle me-2"></i> Nuevo {{ titulo }}#}
+    {#            </a>#}
+    {#        </div>#}
+    {#    </div>#}
 
     <div class="card">
         <div class="card-body">
@@ -86,27 +90,27 @@
                         <tr>
                             <td class="text-left">
                                 <div class="d-flex justify-content-between align-items-center">
-                                        <div class="d-flex align-items-center">
-                                            <a href="{{ l.get_foto_gris }}"
-                                               data-fancybox="image"
-                                               data-width="2048"
-                                               data-height="1365"
-                                               title="{{ l.contacto_nombre }}">
-                                                <img id="presentaimg2" class="img-circle"
-                                                     src="{{ l.get_foto_gris }}"
-                                                     style="border-radius: 2.375rem;" width="55px"
-                                                     height="55px">
-                                            </a>
-                                            <div class="info-top ml-4">
+                                    <div class="d-flex align-items-center">
+                                        <a href="{{ l.get_foto_gris }}"
+                                           data-fancybox="image"
+                                           data-width="2048"
+                                           data-height="1365"
+                                           title="{{ l.contacto_nombre }}">
+                                            <img id="presentaimg2" class="img-circle"
+                                                 src="{{ l.get_foto_gris }}"
+                                                 style="border-radius: 2.375rem;" width="55px"
+                                                 height="55px">
+                                        </a>
+                                        <div class="info-top ml-4">
                                                 <span>
                                                     {{ l.contacto_nombre }}
                                                 </span><br>
-                                                <span>
+                                            <span>
                                                     {{ l.contacto_numero }}
                                                 </span>
-                                                <br>
-                                            </div>
+                                            <br>
                                         </div>
+                                    </div>
                                 </div>
                             </td>
                             <td class="text-center">{{ l.from_number|default:'' }}</td>
@@ -123,10 +127,12 @@
                                             style="background: none; border: none;">
                                         <i class="fas fa-ellipsis-v"></i>
                                     </button>
-                                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                                    <ul class="dropdown-menu dropdown-menu-end"
+                                        aria-labelledby="dropdownMenuButton-{{ l.pk }}">
                                         <li>
                                             <a class="dropdown-item"
-                                            href="javascript:void(0);" onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'change')">
+                                               href="javascript:void(0);"
+                                               onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'change')">
                                                 <i class="fas fa-edit me-2 text-primary"></i>Editar
                                             </a>
                                         </li>
@@ -168,36 +174,36 @@
 {% block jscript %}
     <script src="/js/forms.js?version=1"></script>
     <script>
-    function formModal(id, text, action) {
-        pantallaespera();
-        $.ajax({
-            type: "GET",
-            url: `{{ request.path }}`,
-            data: {
-                'action': action,
-                'id': id,
-            },
-            success: function (data) {
-                setTimeout($.unblockUI, 1);
-                if (data.result === true) {
-                    $('#modalNombre').html(text);
-                    $('.detalleProd').html(data.data);
+        function formModal(id, text, action) {
+            pantallaespera();
+            $.ajax({
+                type: "GET",
+                url: `{{ request.path }}`,
+                data: {
+                    'action': action,
+                    'id': id,
+                },
+                success: function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.result === true) {
+                        $('#modalNombre').html(text);
+                        $('.detalleProd').html(data.data);
 
-                    // Usar Bootstrap 5 modal
-                    const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
-                    modal.show();
-                } else {
-                    console.log('asdasd');
-                    console.log(data.message);
-                    mensajeWarning(data.message);
-                }
-            },
-            error: function () {
-                setTimeout($.unblockUI, 1);
-                mensajeWarning("Error de conexión.");
-            },
-            dataType: "json"
-        });
-    }
+                        // Usar Bootstrap 5 modal
+                        const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+                        modal.show();
+                    } else {
+                        console.log('asdasd');
+                        console.log(data.message);
+                        mensajeWarning(data.message);
+                    }
+                },
+                error: function () {
+                    setTimeout($.unblockUI, 1);
+                    mensajeWarning("Error de conexión.");
+                },
+                dataType: "json"
+            });
+        }
     </script>
 {% endblock %}

@@ -1,6 +1,6 @@
 import json
 import sys
-from datetime import date
+from datetime import date, datetime
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q
@@ -11,6 +11,7 @@ from django.template.loader import get_template
 from core.custom_models import FormError
 from core.funciones import addData, paginador, secure_module, log, remover_caracteres_especiales_unicode, generar_nombre
 from core.funciones_adicionales import convertir_archivo_a_base64
+from core.funciones_excel_panda import export_query_to_excel
 from seguridad.templatetags.templatefunctions import encrypt
 from .forms import ContactoForm
 from .models import Contacto, SesionWhatsApp
@@ -129,4 +130,14 @@ def contactoView(request):
         data["list_count"] = listado.count()
         data["url_vars"] = url_vars
         paginador(request, listado.order_by('contacto_nombre'), 20, data, url_vars)
+        if 'export_to_excel' in request.GET:
+            query = listado.values(
+                'contacto_nombre',
+                'contacto_numero',
+                'from_number',
+                'fecha_ultimo_mensaje',
+                'estado',
+            ).query
+            response = export_query_to_excel(str(query), [], f'reporte_contactos{str(datetime.now().date())}')
+            return response
         return render(request, 'whatsapp/contacto/listado.html', data)
