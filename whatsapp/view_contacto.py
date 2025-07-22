@@ -108,11 +108,9 @@ def contactoView(request):
                 return render(request, 'whatsapp/contacto/form.html', data)
 
 
-        criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, sesion__status=True), ''
+        criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, sesion__usuario=request.user), ''
         id = request.GET.get('id', '')
         sesion_id = request.GET.get('sesion_id', '')
-        if not request.user.is_superuser:
-            filtros = filtros & (Q(sesion__usuario=request.user))
         if criterio:
             filtros = filtros & (Q(contacto_nombre__icontains=criterio) | Q(contacto_numero__icontains=criterio))
             data["criterio"] = criterio
