@@ -410,24 +410,39 @@ def process_incoming_message(session, event_data, channel_layer):
             )
         )
         departamentos_msg = 'Escribe el número del departamento para continuar:\n'
-        if session.agente_ia and session.agente_ia.apikey and session.agente_ia.descripcion:
+        if session.agente_ia and session.agente_ia.apikey.exists():
             agente = session.agente_ia
             whatsapp_service.send_presence_update(
                 conversation.sesion.session_id, contacto.from_number
             )
             try:
+                if message_type == 'audio':
+                    whatsapp_service.send_text_message(
+                        conversation.sesion.session_id, contacto.from_number, 'Procesando...', True
+                    )
+                    message_text = whatsapp_service.sync_transcribe_audio(message)
+                    whatsapp_service.send_text_message(
+                        conversation.sesion.session_id, contacto.from_number, f'Audio recibido: {message_text}', True
+                    )
+                    whatsapp_service.send_presence_update(
+                        conversation.sesion.session_id, contacto.from_number
+                    )
                 print(message_text)
                 vs_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path)
-                consultor = AgenteConsultor(
-                    vectorstore_path=vs_path,
-                    provider=agente.apikey.proveedor,
-                    apikey=agente.apikey.descripcion, conversacion=conversation
-                )
-                respuesta = consultor.consultar(message_text, agente.descripcion)
-                print("respuesta", respuesta)
-                whatsapp_service.send_text_message(
-                    conversation.sesion.session_id, contacto.from_number, respuesta
-                )
+                for apikey in agente.apikey.all():
+                    try:
+                        consultor = AgenteConsultor(
+                            vectorstore_path=vs_path, provider=apikey.proveedor, apikey=apikey.descripcion,
+                            conversacion=conversation, prompt_template_text= agente.prompt_template,
+                        )
+                        respuesta = consultor.consultar(message_text, agente.descripcion)
+                        print("respuesta", respuesta)
+                        whatsapp_service.send_text_message(
+                            conversation.sesion.session_id, contacto.from_number, respuesta
+                        )
+                        break
+                    except Exception as ex:
+                        continue
             except Exception as ex:
                 whatsapp_service.send_text_message(
                     conversation.sesion.session_id, contacto.from_number, str(ex)
@@ -643,7 +658,7 @@ def process_sent_message(session, event_data, channel_layer):
         contacto.fecha_ultimo_mensaje = timezone.now()
         contacto.save()
 
-        conversation = ConversacionWhatsApp.objects.filter(contacto=contacto).order_by('-id').first() or \
+        conversation = ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).order_by('-id').first() or \
                        ConversacionWhatsApp.objects.create(contacto=contacto, fromMe=True)
 
         # Crear el mensaje

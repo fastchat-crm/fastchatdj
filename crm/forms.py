@@ -137,7 +137,7 @@ class AddPerfilDepartamentoChatBotForm(FormModeloBase):
 class AgentesIAForm(ModelFormBase):
     class Meta:
         model = AgentesIA
-        fields = ('nombre', 'descripcion','apikey',)
+        fields = ('nombre', 'descripcion','apikey', 'prompt_template',)
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
@@ -157,14 +157,19 @@ class AgentesIAForm(ModelFormBase):
 class ApiKeyIAForm(ModelFormBase):
     class Meta:
         model = ApiKeyIA
-        fields = ('descripcion', 'proveedor', 'usuario', 'contrasena')
+        fields = ('alias', 'proveedor', 'descripcion', 'usuario', 'contrasena', 'estado')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
         super().__init__(*args, **kwargs)
         for k, v in self.fields.items():
             self.fields[k].widget.attrs['class'] = 'form-control'
-            self.fields[k].widget.attrs['col'] = '12'
+            self.fields[k].widget.attrs['col'] = '6'
+            if k in ('estado'):
+                self.fields[k].widget.attrs['class'] = "js-switch"
+                self.fields[k].widget.attrs['data-render'] = "switchery"
+                self.fields[k].widget.attrs['data-theme'] = "default"
+                self.fields[k].widget.attrs['col'] = '3'
             if k in ('descripcion',):
                 self.fields[k].widget.attrs['col'] = '12'
             if k in ('proveedor',):

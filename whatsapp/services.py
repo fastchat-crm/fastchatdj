@@ -173,6 +173,37 @@ class WhatsAppService:
             )
             connection.close()
 
+    def sync_transcribe_audio(self, message: MensajeWhatsApp, model_size="base", lang='es'):
+        text = ''
+        wav_file = ''
+        voiced_wav = ''
+        try:
+            if not message.tipo == 'audio':
+                return
+            wav_file = convert_audio(message.get_archivo_path, f'{message.get_archivo_path}.wav')
+            voiced_wav = extract_voiced_audio(wav_file, f"{wav_file}_voiced.wav")
+            text = transcribe_audio(voiced_wav, model_size, lang)
+            message.mensaje = text
+            message.save()
+        except Exception as ex:
+            print(ex)
+        finally:
+            voiced_wav and os.path.exists(voiced_wav) and os.remove(voiced_wav)
+            wav_file and os.path.exists(wav_file) and os.remove(wav_file)
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"chat_{message.conversacion.id}",
+                {
+                    'type': 'whatsapp_message',
+                    'event': 'message_edited',
+                    'conversation_id': message.conversacion.id,
+                    'message_id': message.id,
+                    'new_text': text,
+                    'original_text': message.mensaje_original
+                }
+            )
+        return text
+
     def send_text_message(self, session_id, to, text, simularEscritura=False):
         """
         Envía un mensaje de texto a través de WhatsApp

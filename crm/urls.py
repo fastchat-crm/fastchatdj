@@ -4,12 +4,18 @@ from .view_actividad_economica import actividadEconomicaView
 from .view_industria import industriaView
 from .view_mientrenamiento import entrenamiento_ia_view
 from .view_departamento_chatbot import departamentoChatbotsView
+from .view_perfilempresa import perfil_empresa
 
 crm_urls = (
     {
         "nombre": "Entrenamiento IA",
         "url": 'entrenamiento/',
         "vista": entrenamiento_ia_view,
+    },
+    {
+        "nombre": "Perfil Empresa",
+        "url": 'perfil_empresa/',
+        "vista": perfil_empresa,
     },
     {
         "nombre": "Industria",
