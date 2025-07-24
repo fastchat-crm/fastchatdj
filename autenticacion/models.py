@@ -143,6 +143,24 @@ class Usuario(AbstractUser, ModeloBase):
             self.groups.remove(group)
         return cliente
 
+    def register_staff_user(self):
+        from django.contrib.auth.models import Group
+        try:
+            perfil_admin = self.get_admin()
+            perfil_admin.status = True
+            try:
+                group = Group.objects.get(name='Staff')
+            except Group.DoesNotExist:
+                group = Group.objects.create(name='Staff')
+            if not group.user_set.filter(id=self.id).exists():
+                group.user_set.add(self)
+                group.save()
+            self.is_staff = True
+            self.save()
+            return True, 'Creado con exito'
+        except Exception as ex:
+            return False, str(ex)
+
     def __str__(self):
         return "{} {} {}".format(self.documento, self.last_name, self.first_name).title()
 

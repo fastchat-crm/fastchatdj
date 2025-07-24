@@ -1,0 +1,76 @@
+<input type="hidden" name="id" value="{{ id|default:0 }}"/>
+<input type="hidden" name="action" value="{{ action }}"/>
+
+<div class="row g-2">
+    <div class="col-lg-12">
+        <div class="alert alert-warning fade show">
+            <i class="fa fa-info-circle"></i> La carga masiva de <b>usuarios administrativos</b> debe seguir el
+            siguiente formato establecido. <a href="/static/files/formato_usuarios.xlsx" target="_blank"><i
+                class="fa fa-download"></i> Descargar Formato</a>
+            <br>
+             El usuario y contraseña seran el número de identificacion ingresado en el
+            archivo.
+        </div>
+    </div>
+    <input type="hidden" value="{{ id }}" name="pk">
+    <input type="hidden" name="action" value="{{ action }}"/>
+    {% for field in form %}
+        {% if field.is_hidden %}
+            {{ field }}
+        {% else %}
+            <div class="col-lg-{{ field.field.widget.attrs.col }}">
+                <div class="mb-2">
+                    <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label>
+                    {{ field }}
+                    <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                </div>
+            </div>
+        {% endif %}
+    {% endfor %}
+</div>
+
+
+<div class="border-top my-3"></div>
+
+<div class="d-flex justify-content-end">
+    <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
+        <i class="fa fa-window-close me-1"></i>Cancelar
+    </button>
+    <button type="submit" class="btn btn-success btn-sm">
+        <i class="fa fa-save me-1"></i>Guardar
+    </button>
+</div>
+{% block js %}
+    <script>
+        $(document).ready(function () {
+            var archivo = $('#id_archivo').dropify({
+                messages: {
+                    default: 'Arrastre y suelte un archivo o haga clic aquí.',
+                    replace: 'Arrastre y suelte un archivo o haga clic aquí.',
+                    remove: 'Eliminar',
+                },
+            });
+            archivo.on('dropify.beforeClear', function (event, element) {
+                id = event.target.id;
+                Swal.fire({
+                    title: "¿Eliminar Archivo?",
+                    text: "¡No podrá deshacer esta operación!",
+                    type: "warning",
+                    showCancelButton: true,
+                    confirmButtonColor: "#DD6B55",
+                    confirmButtonText: "Sí, eliminar",
+                    cancelButtonText: "No, cancelar",
+                }).then(function (result) {
+                    if (result.value === true) {
+                        var drEvent = imagen.data('dropify');
+                        drEvent.resetPreview();
+                        drEvent.clearElement();
+                        $('#id_archivo').val(null);
+                        alertaSuccess('Imágen eliminada');
+                    }
+                });
+                return false;
+            });
+        });
+    </script>
+{% endblock %}

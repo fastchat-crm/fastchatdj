@@ -7,12 +7,13 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.template.loader import get_template
+from openpyxl.reader.excel import load_workbook
 
 from area_geografica.models import Ciudad, Provincia
 from core.custom_models import FormError
 from core.funciones import addData, paginador, salva_auditoria, secure_module, redirectAfterPostGet, codnombre, log
 from core.funciones_adicionales import salva_logs
-from .forms import UserForm, GrupoUserForm, ManageProfileForm, ChangeUsernameForm
+from .forms import UserForm, GrupoUserForm, ManageProfileForm, ChangeUsernameForm, CargarUsuariosForm
 
 from django.contrib import messages
 
@@ -189,6 +190,62 @@ def usuarioView(request):
                     res_json.append({'error': False,
                                      "reload": True
                                      })
+                elif action == 'uploadUsers':
+                    form = CargarUsuariosForm(request.POST, request.FILES)
+                    if form.is_valid():
+                        archivo = request.FILES['archivo']
+                        workbook = load_workbook(archivo)
+                        sheet = workbook[workbook.sheetnames[0]]
+                        linea_lectura = 1
+                        creados = 0
+                        editado = 0
+                        for rowx in sheet.iter_rows(min_row=2):
+                            cols = [cell.value for cell in rowx]
+
+                            if len(cols) < 3:
+                                continue
+
+                            apellidos = (cols[0] or '').strip().upper()
+                            nombres = (cols[1] or '').strip().upper()
+                            cedula = str(cols[2] or '').strip()
+
+                            if not (nombres and apellidos and cedula):
+                                continue
+
+                            telefono = str(cols[3] or '').strip()
+                            email = (cols[4] or '').strip()
+
+                            if not Usuario.objects.filter(username=cedula).exists():
+                                user = Usuario.objects.create_user(
+                                    username=cedula,
+                                    email=email,
+                                    password=cedula,
+                                    first_name=nombres,
+                                    last_name=apellidos,
+                                    telefono=telefono,
+                                    documento=cedula
+                                )
+                                creados += 1
+                            else:
+                                user = Usuario.objects.get(username=cedula)
+                                user.documento = cedula
+                                user.first_name = nombres
+                                user.last_name = apellidos
+                                user.telefono = telefono
+                                user.email = email
+                                editado += 1
+                                user.status = True
+                                user.is_active = True
+                                user.save(request)
+                            _success, resp = user.register_staff_user()
+                            if not _success:
+                                raise NameError(f"Error al registrar usuario {nombres} {apellidos}: {resp}")
+                        log(f"Subió archivo de usuarios con {creados} creados y {editado} editados", request, "add")
+                        messages.success(request, f"Creados: {creados}, Editados: {editado}")
+                        res_json.append({'error': False, "reload": True})
+                    else:
+                        raise FormError(form)
+
         except ValueError as ex:
             res_json.append({'error': True,
                              "message": str(ex)
@@ -263,6 +320,14 @@ def usuarioView(request):
                     data['form'] = form
                     template = get_template("autenticacion/usuario/form_change_username.html")
                     return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
+                except Exception as ex:
+                    return JsonResponse({"result": False, "message": f"Error: {ex}."})
+            elif action == 'uploadUsers':
+                try:
+                    form = CargarUsuariosForm()
+                    data['form'] = form
+                    template = get_template("autenticacion/usuario/cargausuarios.html")
+                    return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:
                     return JsonResponse({"result": False, "message": f"Error: {ex}."})
 

@@ -6,6 +6,7 @@ from django.utils.safestring import mark_safe
 
 from area_geografica.models import Pais, Ciudad, Provincia
 from autenticacion.models import Usuario, PerfilPersona
+from core.custom_forms import ExtFileField
 from core.custom_models import ModelFormBase, FormBase
 from core.validadores import es_cedula, es_ruc, es_pasaporte
 
@@ -239,4 +240,9 @@ class ManageProfileForm(FormBase):
 
 class ChangeUsernameForm(FormBase):
     username = forms.CharField(label="Nuevo nombre de usuario", max_length=150, required=True)
+
+class CargarUsuariosForm(FormBase):
+    archivo = ExtFileField(label=u'Archivo', required=False, ext_whitelist=(".xlsx",), max_upload_size=4194304, widget=forms.FileInput(attrs={'col': '12', 'data-allowed-file-extensions': 'xlsx'}))
+
+
 

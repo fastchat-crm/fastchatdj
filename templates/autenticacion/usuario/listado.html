@@ -32,8 +32,10 @@
                         <div class="input-group">
                             <select class="form-control select2" name="orderby" id="orderby">
                                 <option value="">TODOS</option>
-                                <option value="1" {% if orderby == '1' %} selected {% endif %}>APELLIDO ASCENDENTE</option>
-                                <option value="2" {% if orderby == '2' %} selected {% endif %}>APELLIDO DESCENDENTE</option>
+                                <option value="1" {% if orderby == '1' %} selected {% endif %}>APELLIDO ASCENDENTE
+                                </option>
+                                <option value="2" {% if orderby == '2' %} selected {% endif %}>APELLIDO DESCENDENTE
+                                </option>
                                 <option value="3" {% if orderby == '3' %} selected {% endif %}>F.CREACIÓN ASCENDENTE
                                 </option>
                                 <option value="4" {% if orderby == '4' %} selected {% endif %}>F.CREACIÓN DESCENDENTE
@@ -47,7 +49,8 @@
                             <option value="">Todos los estados</option>
                             <option value="1" {% if status_perfil == '1' %}selected{% endif %}>Activo</option>
                             <option value="0" {% if status_perfil == '0' %}selected{% endif %}>Inactivo</option>
-                            <option value="2" {% if status_perfil == '2' %}selected{% endif %}>Super Usuario Activo</option>
+                            <option value="2" {% if status_perfil == '2' %}selected{% endif %}>Super Usuario Activo
+                            </option>
                             <option value="3" {% if status_perfil == '3' %}selected{% endif %}>Staff Activo</option>
                         </select>
                     </div>
@@ -84,6 +87,9 @@
             <a href="?action=add&pk=0&{{ dict_url_vars }}" class="btn btn-success">
                 <i class="fas fa-plus-circle me-2"></i> Nuevo Registro
             </a>
+            <a href="javascript:void(0)"
+               onclick="formModal('', 'Cargar Usuarios Administrativos mediante plantilla excel', 'uploadUsers')"
+               class="btn btn-primary me-2"><i class="fa fa-upload"></i> Cargar Usuarios</a>
         </div>
     </div>
 
@@ -245,7 +251,8 @@
                                             <li>
                                                 <a class="dropdown-item" href="javascript:void(0);"
                                                    onclick="crearperfilpersona({{ l.pk }}, '{{ l }}', 'crearperfilpersona', '{{ dict_url_vars }}')">
-                                                    <i class="fas fa-user-plus me-2 text-success"></i> Crear Perfil Cliente
+                                                    <i class="fas fa-user-plus me-2 text-success"></i> Crear Perfil
+                                                    Cliente
                                                 </a>
                                             </li>
                                         {% endif %}
@@ -270,7 +277,7 @@
                                         <li>
                                             <a class="dropdown-item" href="javascript:void(0);"
                                                onclick="verModalPostAjax('change_username','{{ l.pk }}', 'fa-user-tag')">
-                                               <i class="fa-solid fa-user-tag me-2 text-primary"></i> Cambiar Username
+                                                <i class="fa-solid fa-user-tag me-2 text-primary"></i> Cambiar Username
                                             </a>
                                         </li>
                                         <li>
@@ -415,10 +422,59 @@
         </div>
     </div>
 
+    <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalNombre"></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body detalleProd">
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
 {% endblock %}
 
 {% block jscript %}
     <script src="/static/js/forms.js?version=1"></script>
+    <script>
+        function formModal(id, text, action) {
+            pantallaespera();
+            $.ajax({
+                type: "GET",
+                url: `{{ request.path }}`,
+                data: {
+                    'action': action,
+                    'id': id,
+                },
+                success: function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.result === true) {
+                        $('#modalNombre').html(text);
+                        $('.detalleProd').html(data.data);
+
+                        // Usar Bootstrap 5 modal
+                        const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+                        modal.show();
+                    } else {
+                        console.log('asdasd');
+                        console.log(data.message);
+                        mensajeWarning(data.message);
+                    }
+                },
+                error: function () {
+                    setTimeout($.unblockUI, 1);
+                    mensajeWarning("Error de conexión.");
+                },
+                dataType: "json"
+            });
+        }
+    </script>
     <script>
         // Inicializando Fancybox para las fotos de usuario
         Fancybox.bind('[data-fancybox="user-photos"]', {
