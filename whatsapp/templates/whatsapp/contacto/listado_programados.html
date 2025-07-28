@@ -60,10 +60,10 @@
                             </td>
                             <td class="text-center">
                                 <i class="{{ l.get_enviado }}"></i>
-                                {% if l.enviado %}
+                                {% if l.enviado %}<br>
                                     <i class="fa fa-calendar me-2"></i>{{ l.fecha_envio|date:'d/m/Y' }} -
                                     {{ l.fecha_envio|date:'H:i' }}
-                                    {% if l.enviado_por %}
+                                    {% if l.enviado_por %}<br>
                                         <i class="fa fa-user me-2"></i>{{ l.enviado_por.full_name }}
                                     {% endif %}
                                 {% endif %}
