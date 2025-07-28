@@ -18,6 +18,8 @@ from .forms import ContactoForm, MensajeWhatsAppProgramadoForm, AddContactoForm
 from .models import Contacto, SesionWhatsApp, MensajeWhatsAppProgramado
 from django.contrib import messages
 
+from .services import WhatsAppService
+
 
 @login_required
 @secure_module
@@ -29,6 +31,7 @@ def contactoView(request):
             }
     model = Contacto
     Formulario = ContactoForm
+    whatsapp_service = WhatsAppService()
 
     if request.method == 'POST':
         res_json = []
@@ -107,7 +110,67 @@ def contactoView(request):
                     log(f"Agrego un mensaje programado para el contacto {filtro.__str__()}", request, "add", obj=form.instance.id)
                     res_json.append({'error': False, "reload": True})
                     messages.success(request, f"Mensaje agregado correctamente")
+                elif action == 'changeMensajeProgramado':
+                    filtro = MensajeWhatsAppProgramado.objects.get(pk=int(encrypt(request.POST['pk'])))
+                    form = MensajeWhatsAppProgramadoForm(request.POST, request.FILES, request=request, instance=filtro)
+                    if not form.is_valid():
+                        raise FormError(form)
 
+                    fecha, hora = form.cleaned_data['fecha'], form.cleaned_data['hora']
+                    ahora = datetime.now()
+                    hora_minima = (ahora + timedelta(minutes=10)).time()
+                    if fecha != filtro.fecha or hora != filtro.hora:
+                        if fecha < ahora.date():
+                            raise ValueError("La fecha seleccionada no puede ser anterior al día de hoy.")
+
+                        if fecha == ahora.date() and hora < hora_minima:
+                            raise ValueError( f"⏰ La hora programada debe ser al menos 10 minutos después de la hora actual ({hora_minima.strftime('%H:%M')}).")
+
+                    if 'archivo' in request.FILES:
+                        file = request.FILES['archivo']
+                        nombredocumento, _ = os.path.splitext(remover_caracteres_especiales_unicode(file.name))
+                        file.name = generar_nombre(nombredocumento, file.name)
+                        form.instance.archivo = file
+                    form.save()
+                    log(f"Edito un mensaje programado para el contacto {filtro.__str__()}", request, "change", obj=form.instance.id)
+                    res_json.append({'error': False, "reload": True})
+                    messages.success(request, f"Mensaje editado correctamente")
+                elif action  == 'sendMensajeProgramado':
+                    mensaje = MensajeWhatsAppProgramado.objects.get(pk=int(request.POST['id']))
+                    if not mensaje:
+                        raise ValueError("Mensaje programado no encontrado.")
+                    if not mensaje.enviado:
+                        sesion_id = mensaje.sesion.session_id
+                        from_number = mensaje.from_number
+                        archivo = mensaje.archivo
+                        texto = mensaje.mensaje
+                        response = whatsapp_service.send_text_message(sesion_id, from_number, texto,simularEscritura=True)
+                        if not response.get('success', False):
+                            raise ValueError(f"Error al enviar mensaje programado: {mensaje.__str__()}")
+                        if archivo:
+                            filename = archivo.name.split('/')[1] if '/' in archivo.name else archivo.name
+                            response_archivo = whatsapp_service.send_media_message(sesion_id, from_number,
+                                                                                   caption=texto,
+                                                                                   file_content=archivo.read(),
+                                                                                   filename=filename)
+                            if not response_archivo.get('success', False):
+                                raise ValueError(f"Error al enviar archivo del mensaje programado: {mensaje.__str__()}")
+                        mensaje.enviado = True
+                        mensaje.fecha_envio = datetime.now()
+                        mensaje.enviado_por = request.user
+                        mensaje.save(request)
+                        log(f"Mensaje programado enviado: {mensaje.__str__()}", request, "sendMensajeProgramado", obj=mensaje.id)
+                        messages.success(request, f"Mensaje enviado correctamente")
+                    res_json.append({'error': False, "reload": True})
+                elif action == 'deleteMensajeProgramado':
+                    mensaje = MensajeWhatsAppProgramado.objects.get(pk=int(request.POST['id']))
+                    if not mensaje:
+                        raise ValueError("Mensaje programado no encontrado.")
+                    mensaje.status = False
+                    mensaje.save(request)
+                    log(f"Elimino un mensaje programado {mensaje.__str__()}", request, "deleteMensajeProgramado", obj=mensaje.id)
+                    messages.success(request, f"Mensaje programado eliminado correctamente")
+                    res_json = {"error": False}
 
 
         except ValueError as ex:
@@ -174,7 +237,20 @@ def contactoView(request):
                     filtro = model.objects.get(pk=pk)
                     data["filtro"] = filtro
                     data["pk"] = pk
-                    data["form"] = MensajeWhatsAppProgramadoForm()
+                    data["form"] = form = MensajeWhatsAppProgramadoForm()
+                    form.fields['fecha'].initial = datetime.now().date()
+                    form.fields['hora'].initial  = (datetime.now() + timedelta(minutes=11)).replace(second=0, microsecond=0).time()
+                    template = get_template("whatsapp/contacto/form_mensaje_programado.html")
+                    return JsonResponse({"result": True, 'data': template.render(data)})
+                except Exception as ex:
+                    return JsonResponse({"result": False, 'message': str(ex)})
+            elif action == 'changeMensajeProgramado':
+                try:
+                    pk = int(request.GET['id'])
+                    filtro = MensajeWhatsAppProgramado.objects.get(pk=pk)
+                    data["filtro"] = filtro
+                    data["pk"] = pk
+                    data["form"] = form = MensajeWhatsAppProgramadoForm(instance=filtro)
                     template = get_template("whatsapp/contacto/form_mensaje_programado.html")
                     return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:

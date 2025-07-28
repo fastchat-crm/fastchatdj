@@ -428,6 +428,10 @@ class MensajeWhatsAppProgramado(ModeloBase):
     mensaje = models.TextField(verbose_name='Mensaje a enviar', default='')
     archivo = models.FileField(upload_to='whatsapp_programados/', blank=True, null=True, verbose_name='Archivo adjunto')
     enviado = models.BooleanField(default=False, verbose_name='¿Enviado?')
+    fecha_envio = models.DateTimeField(blank=True, null=True, verbose_name='Fecha y hora de envío')
+    enviado_por = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Enviado por'
+    )
 
     @cached_property
     def sesion(self):

@@ -44,6 +44,7 @@ try:
                     logCron(f"Mensajes Programados", f"Error al enviar archivo del mensaje programado: {mensaje.__str__()}", False)
                     continue
             mensaje.enviado = True
+            mensaje.fecha_envio = ahora
             mensaje.save()
             logCron(f"Mensajes Programados", f"Mensaje programado enviado: {mensaje.__str__()}", True)
 except Exception as e:
