@@ -82,6 +82,7 @@
                         <th class="text-center">Sesión</th>
                         <th class="text-center">Whatsapp</th>
                         <th class="text-center">Último mensaje</th>
+                        <th class="text-center">Mensajes Programados</th>
                         <th class="text-center">Estado</th>
                         <th class="text-center">Acción</th>
                     </tr>
@@ -141,6 +142,8 @@
                             <td class="text-center">{{ l.from_number|default:'' }}</td>
                             <td class="text-center">{{ l.fecha_ultimo_mensaje|date:'d/m/Y H:i' }}</td>
                             <td class="text-center">
+                                {{ l.get_mensajes_programados.count }}
+                            </td><td class="text-center">
                                 <span class="badge bg-{{ l.get_estado_color }} fs-6">
                                     {{ l.get_estado_display }}
                                 </span>

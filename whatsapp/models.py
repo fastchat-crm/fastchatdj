@@ -147,6 +147,9 @@ class Contacto(ModeloBase):
     def __str__(self):
         return f"{self.contacto_numero} ({self.sesion.numero})"
 
+    def get_mensajes_programados(self):
+        return self.mensajes_programados.filter(status=True, enviado=False)
+
     class Meta:
         verbose_name = 'Contacto WhatsApp'
         verbose_name_plural = 'Contactos WhatsApp'
@@ -185,6 +188,7 @@ ESTADO_MENSAJE_CHOICES = (
     ("DEPARTAMENTO_ESCOGIDO", "Departamento Escogido"),
     ("OPCION_ESCOGIDA", "Opción Escogida"),
 )
+
 
 class ConversacionWhatsApp(ModeloBase):
     objects = ConversacionWhatsAppManager()
