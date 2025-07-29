@@ -435,7 +435,10 @@ def process_incoming_message(session, event_data, channel_layer):
                             vectorstore_path=vs_path, provider=apikey.proveedor, apikey=apikey.descripcion,
                             conversacion=conversation, prompt_template_text= agente.prompt_template,
                         )
-                        respuesta = consultor.consultar(message_text, agente.descripcion)
+                        if agente.anotar_listas:
+                            respuesta = consultor.consultar_con_listas(message_text, agente.descripcion)
+                        else:
+                            respuesta = consultor.consultar(message_text, agente.descripcion)
                         print("respuesta", respuesta)
                         whatsapp_service.send_text_message(
                             conversation.sesion.session_id, contacto.from_number, respuesta
