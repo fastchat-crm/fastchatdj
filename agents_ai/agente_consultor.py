@@ -89,26 +89,73 @@ class AgenteConsultor:
         self.memory.chat_memory.add_ai_message(f"LISTA_GUARDADA:{data_json}")
 
     def _procesar_comando_lista_ia(self, texto):
-        prompt_lista = f"""
-        Analiza el siguiente texto y determina si el usuario quiere agregar algo a una lista.
+        prompt_lista = f"""Tu tarea es analizar si el siguiente texto del usuario implica una acción sobre una lista de productos para un pedido.
 
-        Texto: "{texto}"
+Texto del usuario:
+"{texto}"
 
-        Si detectas que quiere agregar un ítem, responde en formato JSON:
-        {{
-            "accion": "agregar_item",
-            "nombre_lista": "pedido",
-            "item": "texto del producto a agregar"
-        }}
+---
 
-        Si quiere mostrar la lista:
-        {{
-            "accion": "mostrar_lista",
-            "nombre_lista": "pedido"
-        }}
+🎯 REGLAS:
+1. Si el usuario quiere **agregar un producto o servicio** al pedido, responde SOLO con un JSON de este tipo:
+{{
+  "accion": "agregar_item",
+  "nombre_lista": "pedido",
+  "item": "Texto exacto del producto o servicio que quiere"
+}}
 
-        Si no es un comando de lista, responde: "NO_ES_COMANDO_LISTA"
-        """
+2. Si el usuario quiere **ver su pedido**, responde SOLO con este JSON:
+{{
+  "accion": "mostrar_lista",
+  "nombre_lista": "pedido"
+}}
+
+3. Si el texto NO tiene relación con listas ni pedidos, responde EXACTAMENTE con:
+"NO_ES_COMANDO_LISTA"
+
+---
+
+Ejemplos válidos:
+
+Entrada: "quiero una pizza margarita"
+Respuesta:
+{{
+  "accion": "agregar_item",
+  "nombre_lista": "pedido",
+  "item": "Pizza Margarita"
+}}
+
+Entrada: "pon una coca cola"
+Respuesta:
+{{
+  "accion": "agregar_item",
+  "nombre_lista": "pedido",
+  "item": "Coca Cola"
+}}
+
+Entrada: "anota una margarita mediana"
+Respuesta:
+{{
+  "accion": "agregar_item",
+  "nombre_lista": "pedido",
+  "item": "Pizza Margarita Mediana"
+}}
+
+Entrada: "dime mi pedido"
+Respuesta:
+{{
+  "accion": "mostrar_lista",
+  "nombre_lista": "pedido"
+}}
+
+Entrada: "cuál es la diferencia entre mediana y jumbo?"
+Respuesta:
+"NO_ES_COMANDO_LISTA"
+
+---
+
+⚠️ IMPORTANTE: responde **solo con JSON válido o con la frase exacta "NO_ES_COMANDO_LISTA"**.
+No agregues explicaciones."""
 
         try:
             respuesta = self.llm.invoke(prompt_lista).content.strip()
