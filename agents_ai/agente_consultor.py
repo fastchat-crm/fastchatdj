@@ -88,74 +88,49 @@ class AgenteConsultor:
         data_json = json.dumps(self.listas_memoria, ensure_ascii=False)
         self.memory.chat_memory.add_ai_message(f"LISTA_GUARDADA:{data_json}")
 
-    def _procesar_comando_lista_ia(self, texto):
-        prompt_lista = f"""Tu tarea es analizar si el siguiente texto del usuario implica una acción sobre una lista de productos para un pedido.
+    def _extraer_contexto_reciente(self, cantidad_turnos=3):
+        if not self.memory:
+            return ""
 
-Texto del usuario:
+        mensajes = self.memory.chat_memory.messages[-(cantidad_turnos * 2):]  # turnos = user+ai
+        historial = []
+        for msg in mensajes:
+            if isinstance(msg, HumanMessage):
+                historial.append(f"Usuario: {msg.content}")
+            elif isinstance(msg, AIMessage):
+                historial.append(f"Asistente: {msg.content}")
+        return "\n".join(historial)
+
+    def _procesar_comando_lista_ia(self, texto):
+        contexto_prev = self._extraer_contexto_reciente()
+        prompt_lista = f"""Tu tarea es analizar si el siguiente mensaje del usuario implica una acción sobre una lista de productos or servicios para su pedido.
+
+Historial reciente de conversación (últimos turnos):
+{contexto_prev}
+
+Nuevo mensaje del usuario:
 "{texto}"
 
 ---
 
 🎯 REGLAS:
-1. Si el usuario quiere **agregar un producto o servicio** al pedido, responde SOLO con un JSON de este tipo:
+1. Si el usuario quiere agregar un producto al pedido, responde SOLO con un JSON como:
 {{
   "accion": "agregar_item",
   "nombre_lista": "pedido",
-  "item": "Texto exacto del producto o servicio que quiere"
+  "item": "Texto exacto del producto que quiere"
 }}
 
-2. Si el usuario quiere **ver su pedido**, responde SOLO con este JSON:
+2. Si quiere ver el pedido, responde SOLO:
 {{
   "accion": "mostrar_lista",
   "nombre_lista": "pedido"
 }}
 
-3. Si el texto NO tiene relación con listas ni pedidos, responde EXACTAMENTE con:
+3. Si el mensaje no tiene que ver con listas, responde:
 "NO_ES_COMANDO_LISTA"
 
----
-
-Ejemplos válidos:
-
-Entrada: "quiero una pizza margarita"
-Respuesta:
-{{
-  "accion": "agregar_item",
-  "nombre_lista": "pedido",
-  "item": "Pizza Margarita"
-}}
-
-Entrada: "pon una coca cola"
-Respuesta:
-{{
-  "accion": "agregar_item",
-  "nombre_lista": "pedido",
-  "item": "Coca Cola"
-}}
-
-Entrada: "anota una margarita mediana"
-Respuesta:
-{{
-  "accion": "agregar_item",
-  "nombre_lista": "pedido",
-  "item": "Pizza Margarita Mediana"
-}}
-
-Entrada: "dime mi pedido"
-Respuesta:
-{{
-  "accion": "mostrar_lista",
-  "nombre_lista": "pedido"
-}}
-
-Entrada: "cuál es la diferencia entre mediana y jumbo?"
-Respuesta:
-"NO_ES_COMANDO_LISTA"
-
----
-
-⚠️ IMPORTANTE: responde **solo con JSON válido o con la frase exacta "NO_ES_COMANDO_LISTA"**.
-No agregues explicaciones."""
+NO EXPLIQUES NADA. SOLO EL JSON o "NO_ES_COMANDO_LISTA"."""
 
         try:
             respuesta = self.llm.invoke(prompt_lista).content.strip()
