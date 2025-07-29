@@ -101,43 +101,11 @@ class AgenteConsultor:
                 historial.append(f"Asistente: {msg.content}")
         return "\n".join(historial)
 
-    def _procesar_comando_lista_ia(self, texto):
-        contexto_prev = self._extraer_contexto_reciente()
-        prompt_lista = f"""Tu tarea es analizar si el siguiente mensaje del usuario implica una acción sobre una lista de productos or servicios para su pedido.
-
-Historial reciente de conversación (últimos turnos):
-{contexto_prev}
-
-Nuevo mensaje del usuario:
-"{texto}"
-
----
-
-🎯 REGLAS:
-1. Si el usuario quiere agregar un producto al pedido, responde SOLO con un JSON como:
-{{
-  "accion": "agregar_item",
-  "nombre_lista": "pedido",
-  "item": "Texto exacto del producto que quiere"
-}}
-
-2. Si quiere ver el pedido, responde SOLO:
-{{
-  "accion": "mostrar_lista",
-  "nombre_lista": "pedido"
-}}
-
-3. Si el mensaje no tiene que ver con listas, responde:
-"NO_ES_COMANDO_LISTA"
-
-NO EXPLIQUES NADA. SOLO EL JSON o "NO_ES_COMANDO_LISTA"."""
-
+    def consultar_con_listas(self, pregunta, descripcion_agente=''):
+        consulta = self.consultar(pregunta, descripcion_agente)
+        resultado_lista = ''
         try:
-            respuesta = self.llm.invoke(prompt_lista).content.strip()
-            if respuesta == "NO_ES_COMANDO_LISTA":
-                return None
-
-            comando_data = json.loads(respuesta)
+            comando_data = json.loads(consulta)
             accion = comando_data.get("accion")
             lista = comando_data.get("nombre_lista", "pedido")
             item = comando_data.get("item", "")
@@ -148,28 +116,24 @@ NO EXPLIQUES NADA. SOLO EL JSON o "NO_ES_COMANDO_LISTA"."""
                 if item not in self.listas_memoria[lista]["items"]:
                     self.listas_memoria[lista]["items"].append(item)
                     self._guardar_listas_en_memoria()
-                    return f"📝 Agregado a tu pedido: {item}"
+                    resultado_lista = f"📝 Agregado a tu pedido: {item}"
                 else:
-                    return f"ℹ️ Ya está en tu pedido: {item}"
+                    resultado_lista = f"ℹ️ Ya está en tu pedido: {item}"
 
             if accion == "mostrar_lista":
                 if lista not in self.listas_memoria or not self.listas_memoria[lista]["items"]:
-                    return "📝 Tu pedido está vacío."
+                    resultado_lista = "📝 Tu pedido está vacío."
                 items = self.listas_memoria[lista]["items"]
                 listado = "\n".join([f"{i+1}. {x}" for i, x in enumerate(items)])
-                return f"📋 Tu pedido:\n{listado}\n\nTotal: {len(items)} ítems"
+                resultado_lista = f"📋 Tu pedido:\n{listado}\n\nTotal: {len(items)} ítems"
 
-        except Exception as e:
-            return None
-
-    def consultar_con_listas(self, pregunta, descripcion_agente=''):
-        resultado_lista = self._procesar_comando_lista_ia(pregunta)
+        except Exception as ex:
+            print(ex)
         if resultado_lista:
             if self.memory:
                 self.memory.chat_memory.add_user_message(pregunta)
                 self.memory.chat_memory.add_ai_message(resultado_lista)
-            return resultado_lista
-        return self.consultar(pregunta, descripcion_agente)
+        return resultado_lista or consulta
 
     def consultar(self, pregunta, descripcion_agente=''):
         pregunta_normalizada = normalizar_texto(pregunta)
