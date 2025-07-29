@@ -401,7 +401,7 @@ def process_incoming_message(session, event_data, channel_layer):
         if not conversation.bienvenida_enviado:
             conversation.bienvenida_enviado = True
             conversation.save()
-            if conversation.sesion.mensaje_bienvenida:
+            if conversation.sesion.mensaje_bienvenida and not (session.agente_ia and session.agente_ia.apikey.exists()):
                 whatsapp_service.send_text_message(conversation.sesion.session_id, contacto.from_number, conversation.sesion.mensaje_bienvenida, simularEscritura=True)
         departamentos = conversation.sesion.departamentos.all().annotate(
             numero_opcion=Window(
