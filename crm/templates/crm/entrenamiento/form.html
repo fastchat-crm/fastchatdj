@@ -282,6 +282,7 @@
                                     <th class="column-title" style="text-align: center">Usuario</th>
                                     <th class="column-title" style="text-align: center">Contraseña</th>
                                     <th class="column-title" style="text-align: center">Errores</th>
+                                    <th class="column-title" style="text-align: center">Estado</th>
                                     <th class="column-title" style="text-align: center">Acción</th>
                                 </tr>
                                 </thead>
@@ -294,6 +295,7 @@
                                         <td style="text-align: center">{{ l.usuario|default:'SIN REGISTRAR' }}</td>
                                         <td style="text-align: center">{{ l.contrasena|default:'SIN REGISTRAR' }}</td>
                                         <td style="text-align: center">{{ l.msgerror|default:'' }}</td>
+                                        <td style="text-align: center"><span class="badge {{ l.estado|yesno:'bg-success,bg-danger' }}">{{ l.estado|yesno:'Activo,Inactivo' }}</span></td>
                                         <td class="text-center">
                                             <div class="dropdown">
                                                 <button class="btn btn-icon" type="button"
