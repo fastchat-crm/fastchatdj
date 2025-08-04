@@ -123,9 +123,15 @@
                         ${tipoDatoEnlaceOptions}
                     </select>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-5">
                     <label class="form-label small mb-1">Enlace</label>
                     <input type="url" class="form-control detalle-enlace" data-detalle="${id}" value="${enlace}" placeholder="https://ejemplo.com" onchange="actualizarDetallesJSON()">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small mb-1 text-white">asdasd</label>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="eliminarDetalle(${id})">
+                        <i class="fas fa-trash"></i>
+                    </button>
                 </div>
                 <div class="col-12">
                     <label class="form-label small mb-1">Descripción</label>
@@ -141,12 +147,19 @@
                     <select class="form-select detalle-tipo" data-detalle="${id}" onchange="cambiarTipoDetalle(${id})">
                         <option value="1">Enlace</option>
                         <option value="2" selected>Archivo</option>
+                        <option value="3">Texto</option>
                     </select>
                 </div>
-                <div class="col-md-9">
+                <div class="col-md-8">
                     <label class="form-label small mb-1">Archivo</label>
                     <input type="file" class="form-control detalle-archivo" data-detalle="${id}" name="detalle_archivo_${id}" onchange="actualizarDetallesJSON()">
                     ${archivoUrl ? `<small class="text-muted">Archivo actual: <a href="${archivoUrl}" target="_blank">Ver archivo</a></small>` : ''}
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small mb-1 text-white">asdasdsa</label>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="eliminarDetalle(${id})">
+                        <i class="fas fa-trash"></i>
+                    </button>
                 </div>
                 <div class="col-12">
                     <label class="form-label small mb-1">Descripción</label>
@@ -156,21 +169,27 @@
         `;
     } else {
         return `
-        <div class="row g-2">
-            <div class="col-md-3">
-                <label class="form-label small mb-1">Tipo</label>
-                <select class="form-select detalle-tipo" data-detalle="${id}" onchange="cambiarTipoDetalle(${id})">
-                    <option value="1">Enlace</option>
-                    <option value="2">Archivo</option>
-                    <option value="3" selected>Texto</option>
-                </select>
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Tipo</label>
+                    <select class="form-select detalle-tipo" data-detalle="${id}" onchange="cambiarTipoDetalle(${id})">
+                        <option value="1">Enlace</option>
+                        <option value="2">Archivo</option>
+                        <option value="3" selected>Texto</option>
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label small mb-1">Descripción</label>
+                    <textarea class="form-control detalle-descripcion" data-detalle="${id}" rows="2" onchange="actualizarDetallesJSON()">${descripcion || ''}</textarea>
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small mb-1 text-white">asdasda</label>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="eliminarDetalle(${id})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
             </div>
-            <div class="col-lg-9">
-                <label class="form-label small mb-1">Descripción</label>
-                <textarea class="form-control detalle-descripcion" data-detalle="${id}" rows="2" onchange="actualizarDetallesJSON()">${descripcion || ''}</textarea>
-            </div>
-        </div>
-    `;
+        `;
     }
 }
 

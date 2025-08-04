@@ -17,51 +17,53 @@ from core.funciones import addData, secure_module, log
 
 def guardar_detalles_agente(agente, detalles_data, archivos):
     try:
-        ids_a_mantener = []
+        # Lista para guardar los IDs de los detalles que deben mantenerse activos
+        ids_activos = []
 
         for detalle_data in detalles_data:
             detalle_id = detalle_data.get('id')
+            # Buscar el detalle existente o crear uno nuevo
             detalle = DetalleAgentesAI.objects.filter(pk=detalle_id,
                                                       agente=agente).first() if detalle_id else DetalleAgentesAI()
 
             detalle.agente = agente
             detalle.tipo = detalle_data.get('tipo', 1)
             detalle.descripcion = detalle_data.get('descripcion', '').strip()
+            detalle.status = True  # Siempre True para los que estamos procesando
 
             if detalle.tipo == 1:  # ENLACE
                 enlace = detalle_data.get('enlace', '').strip()
                 if enlace:
                     detalle.enlace = enlace
                     detalle.tipo_dato_enlace = detalle_data.get('tipo_dato_enlace', 1)
-                    detalle.archivo = None  # limpiar archivo si antes era tipo 2
-                    detalle.save()
-                    ids_a_mantener.append(detalle.id)
+                    detalle.archivo = None  # Limpiar archivo si existía
+                detalle.save()
+                ids_activos.append(detalle.id)
 
             elif detalle.tipo == 2:  # ARCHIVO
                 archivo_key = f'detalle_archivo_{detalle_data.get("id_frontend")}'
                 if archivo_key in archivos:
                     detalle.archivo = archivos[archivo_key]
-                    detalle.enlace = None  # limpiar enlace si antes era tipo 1
-                    detalle.tipo_dato_enlace = 1  # resetear a valor por defecto
-                    detalle.save()
-                    ids_a_mantener.append(detalle.id)
-                elif detalle.pk:  # mantener archivo ya guardado
-                    detalle.save()
-                    ids_a_mantener.append(detalle.id)
+                    detalle.enlace = None  # Limpiar enlace si existía
+                    detalle.tipo_dato_enlace = 1  # Valor por defecto
+                detalle.save()
+                ids_activos.append(detalle.id)
 
             elif detalle.tipo == 3:  # TEXTO
-                # Solo se requiere guardar descripción y tipo
                 detalle.enlace = None
                 detalle.archivo = None
                 detalle.tipo_dato_enlace = 1
                 detalle.save()
-                ids_a_mantener.append(detalle.id)
+                ids_activos.append(detalle.id)
 
-        # Eliminar detalles que ya no existen en el formulario
-        DetalleAgentesAI.objects.filter(agente=agente).exclude(id__in=ids_a_mantener).delete()
+        # Actualizar a status=False los detalles que no están en ids_activos
+        DetalleAgentesAI.objects.filter(agente=agente).exclude(id__in=ids_activos).update(status=False)
+
+        return True
     except Exception as ex:
         line = sys.exc_info()[-1].tb_lineno
-        pass
+        print(f"Error en línea {line}: {str(ex)}")
+        return False
 
 @login_required
 @secure_module
