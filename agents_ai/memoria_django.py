@@ -1,4 +1,4 @@
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain_core.chat_history import BaseChatMessageHistory
 from .models import MessageStore
 
@@ -16,7 +16,23 @@ class DjangoChatMessageHistory(BaseChatMessageHistory):
                 messages.append(HumanMessage(content=entry.content))
             elif entry.role == "ai":
                 messages.append(AIMessage(content=entry.content))
+            elif entry.role == "system":
+                messages.append(SystemMessage(content=entry.content))
         return messages
+
+    def add_user_message(self, content: str) -> None:
+        MessageStore.objects.create(
+            session_id=self.session_id,
+            role="human",
+            content=content
+        )
+
+    def add_ai_message(self, content: str) -> None:
+        MessageStore.objects.create(
+            session_id=self.session_id,
+            role="ai",
+            content=content
+        )
 
     def add_message(self, message: BaseMessage) -> None:
         role = "human" if isinstance(message, HumanMessage) else "ai"

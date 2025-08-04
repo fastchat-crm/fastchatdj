@@ -180,6 +180,10 @@ class AgentesIA(ModeloBase):
         max_length=1000, blank=True, null=True, verbose_name="Ruta del vector store generado"
     )
     prompt_template = models.TextField(verbose_name="Promp Template", default=PROMPT_TEMPLATES.get('es') or '')
+    anotar_listas = models.BooleanField(
+        default=False, verbose_name="Anotar listas de productos/servicios en memoria",
+        help_text="Si se activa, el agente guardará las listas de productos/servicios en la memoria"
+    )
 
     class Meta:
         verbose_name = 'Respuesta Entrenada IA'

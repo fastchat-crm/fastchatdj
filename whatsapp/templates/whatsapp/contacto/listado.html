@@ -64,13 +64,13 @@
         </div>
     </div>
 
-    {#    <div class="row align-items-center mb-3">#}
-    {#        <div class="col-md-12 mb-2 mb-md-0">#}
-    {#            <a href="javascript:void(0);" class="btn btn-success btn-sm" onclick="formModal(0, 'Agregar {{ titulo }}', 'add')">#}
-    {#                <i class="fas fa-plus-circle me-2"></i> Nuevo {{ titulo }}#}
-    {#            </a>#}
-    {#        </div>#}
-    {#    </div>#}
+        <div class="row align-items-center mb-3">
+            <div class="col-md-12 mb-2 mb-md-0">
+                <a href="javascript:void(0);" class="btn btn-success btn-sm" onclick="formModal(0, 'Agregar {{ titulo }}', 'add')">
+                    <i class="fas fa-plus-circle me-2"></i> Nuevo {{ titulo }}
+                </a>
+            </div>
+        </div>
 
     <div class="card">
         <div class="card-body">
@@ -82,6 +82,7 @@
                         <th class="text-center">Sesión</th>
                         <th class="text-center">Whatsapp</th>
                         <th class="text-center">Último mensaje</th>
+                        <th class="text-center">Mensajes Programados</th>
                         <th class="text-center">Estado</th>
                         <th class="text-center">Acción</th>
                     </tr>
@@ -102,11 +103,8 @@
                                                  style="border-radius: 2.375rem;" width="55px"
                                                  height="55px">
                                         </a>
-                                        <div class="info-top ml-4">
-                                                <span>
-                                                    <i class="fa fa-tag"></i> {{ l.pk }}
-                                                </span><br><span>
-                                                    {{ l.contacto_nombre }}
+                                        <div class="info-top ml-4"><span>
+                                                    {{ l.contacto_nombre }} <small class="text-muted">Cod. {{ l.pk }}</small>
                                                 </span><br>
                                             <span>
                                                     {{ l.contacto_numero }}
@@ -130,9 +128,7 @@
                                                  height="55px">
                                         </a>
                                         <div class="info-top ml-4">
-                                                <span>
-                                                    <i class="fa fa-tag"></i> {{ l.sesion.pk }}
-                                                </span><br><span>
+                                               <span>
                                                     {{ l.sesion.nombre }}
                                                 </span><br>
                                             <span>
@@ -146,6 +142,8 @@
                             <td class="text-center">{{ l.from_number|default:'' }}</td>
                             <td class="text-center">{{ l.fecha_ultimo_mensaje|date:'d/m/Y H:i' }}</td>
                             <td class="text-center">
+                                {{ l.get_mensajes_programados.count }}
+                            </td><td class="text-center">
                                 <span class="badge bg-{{ l.get_estado_color }} fs-6">
                                     {{ l.get_estado_display }}
                                 </span>
@@ -159,6 +157,12 @@
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end"
                                         aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                                        <li>
+                                            <a class="dropdown-item"
+                                               href="?action=mensajes_programados&id={{ l.pk }}">
+                                                <i class="fas fa-clock me-2 text-default"></i>Mensajes Programados
+                                            </a>
+                                        </li>
                                         <li>
                                             <a class="dropdown-item"
                                                href="javascript:void(0);"

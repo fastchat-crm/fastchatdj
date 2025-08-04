@@ -1,0 +1,24 @@
+{% extends 'ajaxformmodal.html' %}
+{% block header_info %}
+    <div class="alert alert-warning d-flex align-items-center" role="alert">
+        <i class="fa fa-clock me-2"></i>
+        <div>
+            <strong>Ten en cuenta lo siguiente al registrar un mensaje programado:</strong><br>
+            La <strong>fecha</strong> no puede ser anterior al día de hoy y la <strong>hora</strong> debe estar
+            programada al menos <strong>10 minutos después del momento actual</strong>.
+        </div>
+    </div>
+
+{% endblock %}
+{% block extra_js %}
+    <script src="/static/editor_emoji_picker/editor-emoji-picker.js"></script>
+    <link rel="stylesheet" href="/static/editor_emoji_picker/editor-emoji.picker.css">
+    <script>
+        ['id_mensaje',].forEach(editorEmojiPicker);
+        $(function () {
+        })
+
+        function funcionAntesDeGuardar() {
+        }
+    </script>
+{% endblock %}

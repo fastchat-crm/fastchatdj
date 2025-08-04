@@ -52,7 +52,7 @@
                         <select id="sesion-selector" class="form-select">
                                 {% for sesion in sesiones %}
                                     <option value="{{ sesion.id }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
-                                        {{ sesion.numero }} ({{ sesion.get_estado_display }})
+                                        {{ sesion.numero }} | {{ sesion.nombre }} ({{ sesion.get_estado_display }})
                                     </option>
                                 {% endfor %}
                             </select>

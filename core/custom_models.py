@@ -330,11 +330,11 @@ class FormParent:
                 if hasattr(field, 'choices'):
                     self.fields[k].widget.attrs['class'] = "select2"
                     # self.fields[k].widget = Select2MultipleWidget(choices=field.choices, attrs={'data-width': '100%', 'data-language': 'es', 'data-minimum-input-length': 1})
-            elif isinstance(field, forms.BooleanField) and not(k in no_switchery):
+            elif (isinstance(field.widget, forms.CheckboxInput) or isinstance(field.widget, forms.CheckboxSelectMultiple)) and not(k in no_switchery):
                 self.fields[k].widget.attrs['class'] = "js-switch"
                 self.fields[k].widget.attrs['data-render'] = "switchery"
                 self.fields[k].widget.attrs['data-theme'] = "default"
-            elif not isinstance(field, forms.FileField):
+            else:
                 self.fields[k].widget.attrs['class'] = "form-control"
             if isinstance(field.widget, forms.Textarea):
                 if not 'rows' in self.fields[k].widget.attrs:
@@ -460,7 +460,7 @@ class FormCustom:
                 if hasattr(field, 'choices'):
                     self.fields[k].widget.attrs['class'] = "select2"
                     # self.fields[k].widget = Select2MultipleWidget(choices=field.choices, attrs={'data-width': '100%', 'data-language': 'es', 'data-minimum-input-length': 1})
-            elif isinstance(field, forms.BooleanField) and not(k in no_switchery):
+            elif (isinstance(field.widget, forms.CheckboxInput) or isinstance(field.widget, forms.CheckboxSelectMultiple)) and not (k in no_switchery):
                 self.fields[k].widget.attrs['class'] = "js-switch"
                 self.fields[k].widget.attrs['data-render'] = "switchery"
                 self.fields[k].widget.attrs['data-theme'] = "default"

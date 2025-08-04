@@ -401,7 +401,7 @@ def process_incoming_message(session, event_data, channel_layer):
         if not conversation.bienvenida_enviado:
             conversation.bienvenida_enviado = True
             conversation.save()
-            if conversation.sesion.mensaje_bienvenida:
+            if conversation.sesion.mensaje_bienvenida and not (session.agente_ia and session.agente_ia.apikey.exists()):
                 whatsapp_service.send_text_message(conversation.sesion.session_id, contacto.from_number, conversation.sesion.mensaje_bienvenida, simularEscritura=True)
         departamentos = conversation.sesion.departamentos.all().annotate(
             numero_opcion=Window(
@@ -435,7 +435,10 @@ def process_incoming_message(session, event_data, channel_layer):
                             vectorstore_path=vs_path, provider=apikey.proveedor, apikey=apikey.descripcion,
                             conversacion=conversation, prompt_template_text= agente.prompt_template,
                         )
-                        respuesta = consultor.consultar(message_text, agente.descripcion)
+                        if agente.anotar_listas:
+                            respuesta = consultor.consultar_con_listas(message_text, agente.descripcion)
+                        else:
+                            respuesta = consultor.consultar(message_text, agente.descripcion)
                         print("respuesta", respuesta)
                         whatsapp_service.send_text_message(
                             conversation.sesion.session_id, contacto.from_number, respuesta

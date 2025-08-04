@@ -59,7 +59,7 @@ class SesionWhatsApp(ModeloBase):
         verbose_name_plural = 'Sesiones WhatsApp'
 
     def __str__(self):
-        return f"{self.numero} - {self.estado}"
+        return f"{self.numero} - {self.nombre} | {self.estado}"
 
     def is_empty_session(self):
         from django.utils import timezone
@@ -147,6 +147,9 @@ class Contacto(ModeloBase):
     def __str__(self):
         return f"{self.contacto_numero} ({self.sesion.numero})"
 
+    def get_mensajes_programados(self):
+        return self.mensajes_programados.filter(status=True, enviado=False)
+
     class Meta:
         verbose_name = 'Contacto WhatsApp'
         verbose_name_plural = 'Contactos WhatsApp'
@@ -185,6 +188,7 @@ ESTADO_MENSAJE_CHOICES = (
     ("DEPARTAMENTO_ESCOGIDO", "Departamento Escogido"),
     ("OPCION_ESCOGIDA", "Opción Escogida"),
 )
+
 
 class ConversacionWhatsApp(ModeloBase):
     objects = ConversacionWhatsAppManager()
@@ -419,3 +423,35 @@ class EstadisticasConversacion(ModeloBase):
 
     def __str__(self):
         return f"Estadísticas: {self.conversacion}"
+
+
+class MensajeWhatsAppProgramado(ModeloBase):
+    contacto = models.ForeignKey(Contacto, on_delete=models.CASCADE, related_name='mensajes_programados')
+    fecha = models.DateField(verbose_name='Fecha de envío programado', blank=True, null=True)
+    hora = models.TimeField(verbose_name='Hora de envío programado', blank=True, null=True)
+    mensaje = models.TextField(verbose_name='Mensaje a enviar', default='')
+    archivo = models.FileField(upload_to='whatsapp_programados/', blank=True, null=True, verbose_name='Archivo adjunto')
+    enviado = models.BooleanField(default=False, verbose_name='¿Enviado?')
+    fecha_envio = models.DateTimeField(blank=True, null=True, verbose_name='Fecha y hora de envío')
+    enviado_por = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Enviado por'
+    )
+
+    @cached_property
+    def sesion(self):
+        return self.contacto.sesion
+
+    @cached_property
+    def from_number(self):
+        return self.contacto.from_number
+
+    def get_enviado(self):
+        return 'text-success fa fa-circle-check' if self.enviado else 'text-danger fa fa-times-circle'
+
+    def __str__(self):
+        return f"Mensaje programado para {self.contacto.contacto_nombre} el {self.fecha} a las {self.hora}"
+
+    class Meta:
+        verbose_name = 'Mensaje WhatsApp Programado'
+        verbose_name_plural = 'Mensajes WhatsApp Programados'
+        ordering = ['fecha', 'hora']

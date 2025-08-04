@@ -1,9 +1,31 @@
 {% extends 'ajaxformmodal.html' %}
+{% block header_info %}
+    {% if action == 'add' %}
+        <div class="alert alert-info d-flex align-items-start" role="alert">
+            <i class="fa-solid fa-circle-info me-2 mt-1"></i>
+            <div>
+                <strong>Antes de registrar un contacto, ten en cuenta lo siguiente:</strong>
+                <ul class="mb-0">
+                    <li>Primero selecciona la <strong>sesión</strong> a la que deseas agregar el contacto.</li>
+                    <li>Verifica que el número aún <strong>no esté registrado</strong> en esa sesión.</li>
+                    <li>En el campo <strong>número de teléfono</strong>, ingresa primero el <em>código del país</em>
+                        seguido del número celular.
+                    </li>
+                    <li>Para Ecuador, el código es <code>+593</code>. Ejemplo: <code>593999999999</code> (sin ceros,
+                        espacios ni guiones).
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+    {% endif %}
+{% endblock %}
 {% block extra_js %}
     <script>
-        $(function(){
+        $(function () {
         })
-        function funcionAntesDeGuardar(){
+
+        function funcionAntesDeGuardar() {
         }
     </script>
 {% endblock %}

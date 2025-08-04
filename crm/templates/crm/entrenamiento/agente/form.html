@@ -13,6 +13,9 @@
                     <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label>
                     {{ field }}
                     <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                    {% if field.help_text %}
+                        <div class="text-primary">{{ field.help_text }}</div>
+                    {% endif %}
                 </div>
             </div>
         {% endif %}
