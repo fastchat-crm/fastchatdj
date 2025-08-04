@@ -17,7 +17,7 @@ class AgenteResumidor:
         self.memory = self._get_memory()
 
     def default_model(self):
-        return "gpt-4" if self.provider == "openai" else "gemini-2.5-pro"
+        return "gpt-4" if self.provider == "openai" else "gemini-2.0-flash"
 
     def _get_embeddings(self):
         if self.provider == "openai":
