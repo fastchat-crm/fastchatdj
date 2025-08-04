@@ -60,6 +60,9 @@ def sesionesView(request):
                 elif action == 'delete':
                     filtro = model.objects.get(pk=int(request.POST['id']))
                     result = whatsapp_service.close_session(filtro.session_id)
+                    if 'success' in result:
+                        if not result['success']:
+                            raise NameError(result['error'])
                     log(f"Sesión de WhatsApp {filtro.numero} desconectada", request, "del", obj=filtro.id)
                     messages.success(request, "Sesión desconectada correctamente.")
                     return JsonResponse({"error": False})
@@ -104,7 +107,7 @@ def sesionesView(request):
         except FormError as ex:
             res_json.append(ex.dict_error)
         except Exception as ex:
-            res_json.append({'error': True, 'message': "Error, intente nuevamente."})
+            res_json.append({'error': True, 'message': f"Error, intente nuevamente. {str(ex)}"})
             return JsonResponse(res_json, safe=False)
     # ====================== LISTADO SESIONES =========================
     data['action'] = action = request.GET.get('action')
