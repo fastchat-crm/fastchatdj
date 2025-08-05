@@ -287,7 +287,7 @@ class ApiKeyIA(ModeloBase):
     proveedor = models.IntegerField(choices=PROVEEDOR_CHOICES, default=1, verbose_name='Proveedor')
     usuario = models.CharField(max_length=100, blank=True, null=True, verbose_name='Usuario')
     contrasena = models.CharField(max_length=100, blank=True, null=True, verbose_name='Contraseña')
-    msgerror = models.CharField(max_length=100, blank=True, null=True, verbose_name='Mensaje de error', editable=False)
+    msgerror = models.TextField(blank=True, null=True, verbose_name='Mensaje de error', editable=False)
     estado = models.BooleanField(default=True, verbose_name='Estado')
     alias = models.CharField(max_length=100, blank=True, null=True, verbose_name='Alias')
 

@@ -429,8 +429,11 @@ def process_incoming_message(session, event_data, channel_layer):
                     )
                 print(message_text)
                 vs_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path)
-                for apikey in agente.apikey.all():
+                sin_error = True
+                errores_msg = ''
+                for apikey in agente.apikey.filter(estado=True):
                     try:
+                        sin_error = True
                         consultor = AgenteConsultor(
                             vectorstore_path=vs_path, provider=apikey.proveedor, apikey=apikey.descripcion,
                             conversacion=conversation, prompt_template_text= agente.prompt_template,
@@ -445,7 +448,16 @@ def process_incoming_message(session, event_data, channel_layer):
                         )
                         break
                     except Exception as ex:
+                        apikey.estado = False
+                        apikey.msgerror = str(ex)
+                        apikey.save()
+                        sin_error = False
+                        errores_msg += f'\nAPIKEY ID {apikey.id}: {ex}'
                         continue
+                if not sin_error:
+                    whatsapp_service.send_text_message(
+                        conversation.sesion.session_id, contacto.from_number, errores_msg
+                    )
             except Exception as ex:
                 whatsapp_service.send_text_message(
                     conversation.sesion.session_id, contacto.from_number, str(ex)
