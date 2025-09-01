@@ -217,6 +217,9 @@ def webhook_handler(request):
             logger.info(f"Sesión {session_id} desconectada")
 
         elif event_type == 'message':
+            if session.estado != 'conectado':
+                session.estado = 'pendiente'
+                session.save()
             # Procesar mensaje entrante
             if event_data.get('message') and event_data['message'].get('protocolMessage') and event_data['message']['protocolMessage'].get('type') == 'MESSAGE_EDIT':
                 process_edited_message(session, event_data['message']['protocolMessage'], event_data['from'], channel_layer)
@@ -230,10 +233,16 @@ def webhook_handler(request):
                 process_incoming_message(session, event_data, channel_layer)
 
         elif event_type == 'message_sent':
+            if session.estado != 'conectado':
+                session.estado = 'pendiente'
+                session.save()
             # Procesar mensaje enviado
             process_sent_message(session, event_data, channel_layer)
 
         elif event_type == 'message_deleted':
+            if session.estado != 'conectado':
+                session.estado = 'pendiente'
+                session.save()
             # Procesar mensaje eliminado
             process_deleted_message(session, event_data, channel_layer)
 
