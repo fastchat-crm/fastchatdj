@@ -42,6 +42,7 @@ def webhook_handler(request):
         event_type = data.get('type')
         event_data = data.get('data', {})
         session_id = event_data.get('sessionId')
+        conversacion_id = event_data.get('conversacion_id')
         msgerror = ''
 
         # Obtener la sesión
@@ -612,6 +613,7 @@ def process_sent_message(session, event_data, channel_layer):
         to_number = from_number.split('@')[0]
         message_data = event_data.get('message', {})
         message_content = event_data.get('message', {})
+        conversacion_id = event_data.get('conversacion_id') or 0
 
         if session.numero == to_number:
             return
@@ -682,7 +684,8 @@ def process_sent_message(session, event_data, channel_layer):
         contacto.fecha_ultimo_mensaje = timezone.now()
         contacto.save()
 
-        conversation = ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).order_by('-id').first() or \
+        conversation = ConversacionWhatsApp.objects.filter(id=conversacion_id).first() or\
+                       ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).order_by('-id').first() or \
                        ConversacionWhatsApp.objects.create(contacto=contacto, fromMe=True)
 
         # Crear el mensaje

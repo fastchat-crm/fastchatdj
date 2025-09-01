@@ -204,7 +204,7 @@ class WhatsAppService:
             )
         return text
 
-    def send_text_message(self, session_id, to, text, simularEscritura=False):
+    def send_text_message(self, session_id, to, text, conversacion_id=None, simularEscritura=False):
         """
         Envía un mensaje de texto a través de WhatsApp
 
@@ -217,7 +217,7 @@ class WhatsAppService:
             dict: Respuesta del servidor
         """
         data = {
-            'sessionId': session_id,
+            'sessionId': session_id, "conversacion_id": conversacion_id,
             'to': to,
             'text': text, 'simularEscritura': simularEscritura
         }
@@ -324,7 +324,7 @@ class WhatsAppService:
             }
 
     def send_media_message(self, session_id, to, file_path=None, file_content=None, caption=None, filename=None,
-                           media_type=None):
+                           media_type=None, conversacion_id=None):
         """
         Envía un mensaje con archivo multimedia a través de WhatsApp, detectando automáticamente el tipo de medio
 
@@ -494,7 +494,7 @@ class WhatsAppService:
             'media': media_base64,
             'type': media_type,
             'filename': filename,
-            'mimetype': mimetype
+            'mimetype': mimetype, "conversacion_id": conversacion_id
         }
 
         try:
