@@ -215,6 +215,7 @@ def conversacionesView(request):
                     filtro.fecha_fin_conversacion = timezone.now()
                     res_json.append({ 'error':False, 'url': f'/whatsapp/conversaciones-finalizadas/' })
                     request.session['contactoId'] = encrypt(filtro.id)
+                    filtro.resumir_conversacion()
                     filtro.save(request)
                     log(f"Conversación marcada como resuelta {filtro.id}", request, "change", obj=filtro.id)
                     return JsonResponse(res_json, safe=False)

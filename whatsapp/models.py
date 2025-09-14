@@ -265,6 +265,8 @@ class ConversacionWhatsApp(ModeloBase):
                 except Exception as ex:
                     continue
                 break
+            if not self.resumen_conversacion:
+                self.resumen_conversacion = 'SIN RESUMEN'
             super().save()
 
     def get_foto_gris(self):
