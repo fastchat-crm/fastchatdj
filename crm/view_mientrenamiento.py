@@ -37,6 +37,12 @@ def guardar_detalles_agente(agente, detalles_data, archivos):
                     detalle.enlace = enlace
                     detalle.tipo_dato_enlace = detalle_data.get('tipo_dato_enlace', 1)
                     detalle.archivo = None  # Limpiar archivo si existía
+
+                    # Campos específicos para enlaces
+                    detalle.requiere_token = detalle_data.get('requiere_token', False)
+                    detalle.token_autorizacion = detalle_data.get('token_autorizacion', '').strip() if detalle_data.get('requiere_token') else None
+                    detalle.usar_cache = detalle_data.get('usar_cache', False)
+                    detalle.tiempo_cache_horas = detalle_data.get('tiempo_cache_horas', 1)
                 detalle.save()
                 ids_activos.append(detalle.id)
 
@@ -46,6 +52,12 @@ def guardar_detalles_agente(agente, detalles_data, archivos):
                     detalle.archivo = archivos[archivo_key]
                     detalle.enlace = None  # Limpiar enlace si existía
                     detalle.tipo_dato_enlace = 1  # Valor por defecto
+
+                    # Limpiar campos específicos de enlaces
+                    detalle.requiere_token = False
+                    detalle.token_autorizacion = None
+                    detalle.usar_cache = False
+                    detalle.tiempo_cache_horas = 1
                 detalle.save()
                 ids_activos.append(detalle.id)
 
@@ -53,6 +65,12 @@ def guardar_detalles_agente(agente, detalles_data, archivos):
                 detalle.enlace = None
                 detalle.archivo = None
                 detalle.tipo_dato_enlace = 1
+
+                # Limpiar campos específicos de enlaces
+                detalle.requiere_token = False
+                detalle.token_autorizacion = None
+                detalle.usar_cache = False
+                detalle.tiempo_cache_horas = 1
                 detalle.save()
                 ids_activos.append(detalle.id)
 

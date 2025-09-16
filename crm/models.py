@@ -193,8 +193,11 @@ class AgentesIA(ModeloBase):
         """
         Función para obtener los detalles existentes de un agente
         """
-        detalles = self.detalleagentesai_set.filter(status=True)
+        detalles = self.detalleagentesai_set.filter(status=True).order_by('id')
         detalles_json = []
+
+        # Debug: imprimir cuántos detalles se encontraron
+        print(f"DEBUG: Agente {self.id} tiene {detalles.count()} detalles activos")
 
         for detalle in detalles:
             detalle_data = {
@@ -203,10 +206,15 @@ class AgentesIA(ModeloBase):
                 'enlace': detalle.enlace or '',
                 'tipo_dato_enlace': detalle.tipo_dato_enlace,
                 'archivo_url': detalle.archivo.url if detalle.archivo else '',
-                'descripcion': detalle.descripcion if detalle.descripcion else ''
+                'descripcion': detalle.descripcion if detalle.descripcion else '',
+                'requiere_token': detalle.requiere_token,
+                'token_autorizacion': detalle.token_autorizacion or '',
+                'usar_cache': detalle.usar_cache,
+                'tiempo_cache_horas': detalle.tiempo_cache_horas
             }
             detalles_json.append(detalle_data)
 
+        print(f"DEBUG: JSON generado con {len(detalles_json)} detalles")
         return json.dumps(detalles_json)
 
     def __str__(self):
@@ -237,6 +245,12 @@ class DetalleAgentesAI(ModeloBase):
         validators=[FileExtensionValidator(["pdf", 'csv', 'json', 'xlsx']), FileMaxSizeInMbValidator(10)]
     )
     descripcion = models.TextField(blank=True, null=True, verbose_name='Descripción del detalle')
+
+    # Campos específicos para tipo ENLACE
+    requiere_token = models.BooleanField(default=False, verbose_name='Requiere token de autorización')
+    token_autorizacion = models.CharField(max_length=500, blank=True, null=True, verbose_name='Token de autorización')
+    usar_cache = models.BooleanField(default=False, verbose_name='Usar caché para consultas')
+    tiempo_cache_horas = models.PositiveIntegerField(default=1, verbose_name='Tiempo de caché en horas')
 
     class Meta:
         verbose_name = 'Respuesta Entrenada IA'
@@ -271,9 +285,12 @@ class DetalleAgentesAI(ModeloBase):
                         documentos.extend(docs)
 
                     if documentos:
-                        vs_path = vs_manager.build_and_save(documentos, nombre_vs)
-                        agente.vectorstore_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
-                        agente.save()
+                        try:
+                            vs_path = vs_manager.build_and_save(documentos, nombre_vs)
+                            agente.vectorstore_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
+                            agente.save()
+                        except Exception as e:
+                            print(e)
 
 
 PROVEEDOR_CHOICES = (
