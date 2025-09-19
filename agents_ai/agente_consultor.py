@@ -72,7 +72,7 @@ class AgenteConsultor:
         if not self.vectorstore_enlaces_path:
             return None
 
-        full_path = os.path.join(settings.MEDIA_ROOT, self.vectorstore_enlaces_path)
+        full_path = self.vectorstore_enlaces_path
         if not os.path.exists(full_path):
             raise FileNotFoundError(f"No se encontró el vectorstore en {full_path}")
 

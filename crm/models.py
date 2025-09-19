@@ -240,6 +240,16 @@ class AgentesIA(ModeloBase):
 
         agente = self
         agente.vectorstore_enlaces_path = None
+
+        def _money_map_to_str(m: dict | None) -> str:
+            if not m:
+                return ""
+            # Ordena por clave numérica si es posible (1,2,3,4,5…)
+            try:
+                items = sorted(m.items(), key=lambda kv: int(kv[0]))
+            except Exception:
+                items = list(m.items())
+            return ", ".join(f"{k}: {v}" for k, v in items if v is not None and str(v).strip() != "")
         for apikeyobj in apikeys:
             if not apikeyobj.descripcion:
                 continue
@@ -254,8 +264,74 @@ class AgentesIA(ModeloBase):
                     r = requests.get(detalle.enlace, timeout=30)
                     if r.status_code != 200:
                         continue
-                    docs = vs_manager.build_from_string(r.text, metadata={"detalle_id": detalle.id})
-                    documentos.extend(docs)
+                    data = r.json()
+                    if data.get("listCatalogo"):
+                        for c in data.get("listCatalogo"):
+                            page_content = f"""Curso: {c.get('nombre') or ''}
+                            Categoría: {c.get('categoria', {}).get('descripcion') or ''}
+                            Nombre: {c.get('nombre') or ''}
+                            Unidad de negocio: {c.get('unidad_negocio') or ''}
+                            Descripción: {c.get('descripcion') or ''}
+                            Precio total (USD): {c.get('precio', {}).get('real')}
+                            Fechas: {c.get('fechainicio', '')} a {c.get('fechafin')}
+                            Horas que dura el curso: {c.get('horas', {}).get('total')}
+                            Activo: {c.get('activo')}
+                            Brochure: {c.get('brochure_url') or ''}
+                            Portada: {c.get('portada_url') or ''}
+                            """
+                            metadata = {
+                                "tipo": "listCatalogo",
+                                "detalle_id": detalle.id,
+                                "id": c.get("id"),
+                                "slug": c.get("slug"),
+                                "categoria": c.get("categoria"),
+                                "unidad_negocio": c.get("unidad_negocio"),
+                                "precio_total": c.get("precio", {}).get("total"),
+                                "fechainicio": c.get("fechas", {}).get("inicio"),
+                                "fechafin": c.get("fechas", {}).get("fin"),
+                                "portada_url": c.get("portada_url"),
+                                "brochure_url": c.get("brochure_url"),
+                            }
+                            docs = vs_manager.build_from_string(page_content, metadata=metadata)
+                            documentos.extend(docs)
+                    if data.get("data"):
+                        for r in data["data"]:
+                            costos = r.get("costos", {}) or {}
+                            insc_str = _money_map_to_str(costos.get("inscripcion"))
+                            matr_str = _money_map_to_str(costos.get("matricula"))
+
+                            page_content = f"""Curso: {r.get('nombre') or ''}
+                    Periodo: {r.get('periodo') or ''}
+                    Centro de costo: {r.get('centro_costo') or ''}
+                    Fechas: {r.get('fechainicio') or ''} a {r.get('fechafin') or ''}
+                    Número de cuotas: {r.get('numero_cuotas') or ''}
+                    Cupos disponibles: {r.get('tiene_cupo')}
+                    Requisitos: {(r.get('requisitos') or '').strip()}
+                    Descripción: {(r.get('descripcion') or '').strip()}
+                    Costos:
+                      - Inscripción: {insc_str or 'N/D'}
+                      - Matrícula: {matr_str or 'N/D'}
+
+                    Contexto: {(r.get('contexto') or '').strip()}
+                    """
+
+                            metadata = {
+                                "tipo": "oferta_periodo",  # para distinguir de 'catalogo'
+                                "detalle_id": detalle.id,
+                                "id": r.get("id"),
+                                "nombre": r.get("nombre"),
+                                "periodo": r.get("periodo"),
+                                "centro_costo": r.get("centro_costo"),
+                                "fechainicio": r.get("fechainicio"),
+                                "fechafin": r.get("fechafin"),
+                                "numero_cuotas": r.get("numero_cuotas"),
+                                "tiene_cupo": r.get("tiene_cupo"),
+                                "costos_inscripcion": costos.get("inscripcion"),
+                                "costos_matricula": costos.get("matricula"),
+                            }
+
+                            docs = vs_manager.build_from_string(page_content, metadata=metadata)
+                            documentos.extend(docs)
                 except Exception as e:
                     print(f"Error procesando enlace {detalle.enlace}: {e}")
                     continue
