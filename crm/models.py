@@ -1,8 +1,11 @@
 import json
 import os
+from datetime import timedelta
 
+import requests
 from django.core.validators import FileExtensionValidator
 from django.db import models
+from django.utils import timezone
 
 from core.constantes import PROMPT_TEMPLATES
 from core.custom_models import ModeloBase
@@ -184,6 +187,10 @@ class AgentesIA(ModeloBase):
         default=False, verbose_name="Anotar listas de productos/servicios en memoria",
         help_text="Si se activa, el agente guardará las listas de productos/servicios en la memoria"
     )
+    vectorstore_enlaces_path = models.CharField(
+        max_length=1000, blank=True, null=True, verbose_name="Ruta del vector store de Apis y Enlaces"
+    )
+    vectorstore_enlaces_expira = models.DateTimeField(blank=True, null=True, verbose_name="Fecha de expiración del vector store")
 
     class Meta:
         verbose_name = 'Respuesta Entrenada IA'
@@ -216,6 +223,51 @@ class AgentesIA(ModeloBase):
 
         print(f"DEBUG: JSON generado con {len(detalles_json)} detalles")
         return json.dumps(detalles_json)
+
+    def build_enlaces_vectorstore(self):
+        detalles = self.detalleagentesai_set.filter(status=True, tipo=1, archivo__isnull=False)
+        if not detalles.exists():
+            return
+        tiempo_cache_horas = detalles.filter(usar_cache=True).order_by('-tiempo_cache_horas').first()
+        tiempo_cache_horas = tiempo_cache_horas and tiempo_cache_horas.tiempo_cache_horas or 0
+        base_dir = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
+        nombre_vs = f"agente_api_{self.id}"
+        apikeys = self.apikey.all()
+        if not apikeys.exists():
+            return
+        if self.vectorstore_enlaces_expira and self.vectorstore_enlaces_expira > timezone.now():
+            return
+
+        agente = self
+        agente.vectorstore_enlaces_path = None
+        for apikeyobj in apikeys:
+            if not apikeyobj.descripcion:
+                continue
+            vs_manager = VectorStoreManager(
+                storage_dir=base_dir,
+                provider='gemini' if apikeyobj.proveedor == 2 else 'openai',
+                apikey=apikeyobj.descripcion
+            )
+            documentos = []
+            for detalle in detalles:
+                try:
+                    r = requests.get(detalle.enlace, timeout=30)
+                    if r.status_code != 200:
+                        continue
+                    docs = vs_manager.build_from_string(r.text, metadata={"detalle_id": detalle.id})
+                    documentos.extend(docs)
+                except Exception as e:
+                    print(f"Error procesando enlace {detalle.enlace}: {e}")
+                    continue
+            if documentos:
+                vs_path = vs_manager.build_and_save(documentos, nombre_vs)
+                agente.vectorstore_enlaces_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
+                agente.vectorstore_enlaces_expira = None
+                if tiempo_cache_horas:
+                    agente.vectorstore_enlaces_expira = timezone.now() + timedelta(hours=tiempo_cache_horas)
+                agente.save()
+                AgentesIA.objects.bulk_update([agente], ['vectorstore_enlaces_path', 'vectorstore_enlaces_expira'])
+            break
 
     def __str__(self):
         return f"{self.nombre}"
@@ -291,6 +343,7 @@ class DetalleAgentesAI(ModeloBase):
                             agente.save()
                         except Exception as e:
                             print(e)
+                    break
 
 
 PROVEEDOR_CHOICES = (

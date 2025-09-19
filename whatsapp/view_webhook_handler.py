@@ -438,14 +438,18 @@ def process_incoming_message(session, event_data, channel_layer):
                         conversation.sesion.session_id, contacto.from_number
                     )
                 print(message_text)
-                vs_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path)
+                vs_path = agente.vectorstore_path and os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path) or ''
+                vectorstore_enlaces_path = ''
+                agente.build_enlaces_vectorstore()
+                if agente.vectorstore_enlaces_path:
+                    vectorstore_enlaces_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_enlaces_path)
                 sin_error = True
                 errores_msg = ''
                 for apikey in agente.apikey.filter(estado=True):
                     try:
                         sin_error = True
                         consultor = AgenteConsultor(
-                            vectorstore_path=vs_path, provider=apikey.proveedor, apikey=apikey.descripcion,
+                            vectorstore_path=vs_path, vectorstore_enlaces_path=vectorstore_enlaces_path, provider=apikey.proveedor, apikey=apikey.descripcion,
                             conversacion=conversation, prompt_template_text= agente.prompt_template,
                         )
                         if agente.anotar_listas:
