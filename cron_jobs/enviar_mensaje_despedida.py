@@ -21,7 +21,7 @@ try:
         from_number = conversacion.contacto.from_number
         session_id = conversacion.contacto.sesion.session_id
         if mensaje_despedida:
-            whatsapp_service.send_text_message(session_id, from_number, mensaje_despedida, simularEscritura=True)
+            whatsapp_service.send_text_message(session_id, from_number, mensaje_despedida, conversacion_id=conversacion.id, simularEscritura=True)
         conversacion.resumir_conversacion()
         conversacion.despedida_enviado = True
         conversacion.conversacion_finalizada = True

@@ -207,7 +207,7 @@ def conversacionesView(request):
                         session_id = contacto.sesion.session_id
                         # Crear instancia del servicio
                         service = WhatsAppService()
-                        result = service.send_text_message(session_id, from_number, contacto.sesion.mensaje_despedida, simularEscritura=True)
+                        result = service.send_text_message(session_id, from_number, contacto.sesion.mensaje_despedida, conversacion_id=filtro.id, simularEscritura=True)
                         if not result.get('success'):
                             raise NameError(f'{result.get("error", "Error desconocido")}')
                         filtro.despedida_enviado = True
