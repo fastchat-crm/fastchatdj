@@ -42,7 +42,7 @@ class AgenteConsultor:
         self._cargar_listas_desde_memoria()
 
     def default_model(self):
-        return "gemini-1.5-flash" if self.provider == "gemini" else "gpt-4"
+        return "gemini-2.5-flash" if self.provider == "gemini" else "gpt-4"
 
     def _get_embeddings(self):
         if self.provider == "gemini":
