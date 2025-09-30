@@ -19,8 +19,7 @@ class VectorStoreManager:
             self.embeddings = OpenAIEmbeddings(openai_api_key=self.apikey)
         elif self.provider == "gemini":
             self.embeddings = GoogleGenerativeAIEmbeddings(
-                model="models/embedding-001",
-                google_api_key=self.apikey
+                model="models/embedding-001", google_api_key=self.apikey
             )
         else:
             raise ValueError("Proveedor de embedding no soportado: use 'openai' o 'gemini'")
