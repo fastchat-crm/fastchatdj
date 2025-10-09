@@ -1568,6 +1568,27 @@ $(function() {
     });
 </script>
 
+<style>
+    .tableRowFocus {
+        border: 2px solid !important;
+            border-color: rgb(147 196 249 / 57%) !important;
+    }
+</style>
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        document.querySelector('html').addEventListener('click', function (e) {
+            const tableHovered = e.target.closest('table.table');
+            if (!tableHovered) return;
+            const tablaTr = Array.prototype.slice.call(tableHovered.querySelectorAll('tr'));
+            tablaTr.forEach((tr, index, value) => {
+                tr.classList.remove("tableRowFocus");
+            });
+            if (tablaTr.indexOf(e.target.closest('tr')) >= 0) {
+                e.target.closest('tr').classList.add("tableRowFocus");
+            }
+        });
+    });
+</script>
 {% block jscript %}
 {% endblock %}
 
