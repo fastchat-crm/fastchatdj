@@ -205,7 +205,7 @@ body
 
 .table th,
 .table td {
-    background-color: var(--bs-table-bg);
+    /*background-color: var(--bs-table-bg);*/
     color: var(--bs-table-color);
     border-color: var(--bs-table-border-color);
 }
