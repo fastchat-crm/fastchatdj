@@ -14,6 +14,7 @@ from datetime import date
 from django.db import transaction
 from .constantes import NOMBRE_MONEDA, SIMBOLO_MONEDA
 from .funciones_adicionales import round_num_dec
+from django.core.cache import cache
 
 import unicodedata
 
@@ -923,3 +924,18 @@ def notificacion(titulo, cuerpo, destinatario, url, prioridad, tipo=1, request=N
         notificacion.save(request)
     else:
         notificacion.save()
+
+def rate_limit(limit=10, seconds=60):
+    def _apply(view_func):
+        def _wrapped(request, *args, **kwargs):
+            ip = request.META.get("REMOTE_ADDR")
+            key = f"rate:{ip}"
+            requests = cache.get(key, 0)
+
+            if requests >= limit:
+                return JsonResponse({"error": "Demasiadas solicitudes"}, status=429)
+
+            cache.set(key, requests + 1, timeout=seconds)
+            return view_func(request, *args, **kwargs)
+        return _wrapped
+    return _apply

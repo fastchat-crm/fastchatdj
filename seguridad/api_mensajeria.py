@@ -6,10 +6,12 @@ from django.utils import timezone
 from django.core.exceptions import ObjectDoesNotExist
 from django.views.decorators.csrf import csrf_exempt
 
+from core.funciones import rate_limit
 from whatsapp.models import SesionWhatsApp, Contacto, ConversacionWhatsApp, MensajeWhatsApp
 from whatsapp.services import WhatsAppService
 
 @csrf_exempt
+@rate_limit(limit=30, seconds=60)
 def enviar_mensaje_view(request):
     """
     Endpoint POST para enviar un mensaje de texto por WhatsApp.
