@@ -25,7 +25,7 @@
     <!-- Adicionales -->
     <link href="/static/base_adicional.css?1.5" rel="stylesheet" type="text/css"/>
     <link href="/static/base_tablas.css?1.5" rel="stylesheet" type="text/css"/>
-    <link href="/static/assets/css/dark/custom-dark.css" rel="stylesheet" type="text/css"/>
+    <link href="/static/assets/css/dark/custom-dark.css?1.1" rel="stylesheet" type="text/css"/>
     <meta name="vapid-key" content="{{ vapid_key }}">
     <meta name="islogged" content="{{ request.user.is_authenticated }}">
     {% block head %}{% endblock %}
@@ -321,7 +321,7 @@
         <div class="modal-content">
             <div class="modal-body">
                 <div class="text-center">
-                    <img width="300" class="img-fluid" src="/static/loadmail.gif"/>
+                    <img width="300" loading="lazy" class="img-fluid" src="/static/loadmail.gif"/>
                     <strong>
                         <h2 id="codigo" style="color: #2C3E50;"></h2>
                     </strong>
@@ -407,6 +407,7 @@
 <script src="/static/assets_riz/libs/jsvectormap/js/jsvectormap.min.js"></script>
 <script src="/static/assets_riz/libs/jsvectormap/maps/world.js"></script>
 <script src="/static/assets_riz/js/app.js"></script>
+<script src="/static/assets_riz/js/sidebar-storage.js"></script>
 <script src="/static/jquery-3.7.1.min.js"></script>
 
 {% include 'datatable.html' %}
@@ -1567,6 +1568,27 @@ $(function() {
     });
 </script>
 
+<style>
+    .tableRowFocus {
+        border: 2px solid !important;
+            border-color: rgb(147 196 249 / 57%) !important;
+    }
+</style>
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        document.querySelector('html').addEventListener('click', function (e) {
+            const tableHovered = e.target.closest('table.table');
+            if (!tableHovered) return;
+            const tablaTr = Array.prototype.slice.call(tableHovered.querySelectorAll('tr'));
+            tablaTr.forEach((tr, index, value) => {
+                tr.classList.remove("tableRowFocus");
+            });
+            if (tablaTr.indexOf(e.target.closest('tr')) >= 0) {
+                e.target.closest('tr').classList.add("tableRowFocus");
+            }
+        });
+    });
+</script>
 {% block jscript %}
 {% endblock %}
 

@@ -42,6 +42,7 @@ def webhook_handler(request):
         event_type = data.get('type')
         event_data = data.get('data', {})
         session_id = event_data.get('sessionId')
+        conversacion_id = event_data.get('conversacion_id')
         msgerror = ''
 
         # Obtener la sesión
@@ -217,6 +218,9 @@ def webhook_handler(request):
             logger.info(f"Sesión {session_id} desconectada")
 
         elif event_type == 'message':
+            if session.estado != 'conectado':
+                session.estado = 'pendiente'
+                session.save()
             # Procesar mensaje entrante
             if event_data.get('message') and event_data['message'].get('protocolMessage') and event_data['message']['protocolMessage'].get('type') == 'MESSAGE_EDIT':
                 process_edited_message(session, event_data['message']['protocolMessage'], event_data['from'], channel_layer)
@@ -230,10 +234,16 @@ def webhook_handler(request):
                 process_incoming_message(session, event_data, channel_layer)
 
         elif event_type == 'message_sent':
+            if session.estado != 'conectado':
+                session.estado = 'pendiente'
+                session.save()
             # Procesar mensaje enviado
             process_sent_message(session, event_data, channel_layer)
 
         elif event_type == 'message_deleted':
+            if session.estado != 'conectado':
+                session.estado = 'pendiente'
+                session.save()
             # Procesar mensaje eliminado
             process_deleted_message(session, event_data, channel_layer)
 
@@ -428,14 +438,18 @@ def process_incoming_message(session, event_data, channel_layer):
                         conversation.sesion.session_id, contacto.from_number
                     )
                 print(message_text)
-                vs_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path)
+                vs_path = agente.vectorstore_path and os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path) or ''
+                vectorstore_enlaces_path = ''
+                agente.build_enlaces_vectorstore()
+                if agente.vectorstore_enlaces_path:
+                    vectorstore_enlaces_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_enlaces_path)
                 sin_error = True
                 errores_msg = ''
                 for apikey in agente.apikey.filter(estado=True):
                     try:
                         sin_error = True
                         consultor = AgenteConsultor(
-                            vectorstore_path=vs_path, provider=apikey.proveedor, apikey=apikey.descripcion,
+                            vectorstore_path=vs_path, vectorstore_enlaces_path=vectorstore_enlaces_path, provider=apikey.proveedor, apikey=apikey.descripcion,
                             conversacion=conversation, prompt_template_text= agente.prompt_template,
                         )
                         if agente.anotar_listas:
@@ -603,6 +617,7 @@ def process_sent_message(session, event_data, channel_layer):
         to_number = from_number.split('@')[0]
         message_data = event_data.get('message', {})
         message_content = event_data.get('message', {})
+        conversacion_id = event_data.get('conversacion_id') or 0
 
         if session.numero == to_number:
             return
@@ -673,7 +688,8 @@ def process_sent_message(session, event_data, channel_layer):
         contacto.fecha_ultimo_mensaje = timezone.now()
         contacto.save()
 
-        conversation = ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).order_by('-id').first() or \
+        conversation = ConversacionWhatsApp.objects.filter(id=conversacion_id).first() or\
+                       ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).order_by('-id').first() or \
                        ConversacionWhatsApp.objects.create(contacto=contacto, fromMe=True)
 
         # Crear el mensaje

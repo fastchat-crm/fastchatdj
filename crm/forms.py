@@ -150,6 +150,11 @@ class AgentesIAForm(ModelFormBase):
                 self.fields[k].widget.attrs['col'] = '12'
             if k in ('apikey',):
                 self.fields[k].widget.attrs['class'] = 'select2'
+            if k in ('anotar_listas'):
+                self.fields[k].widget.attrs['class'] = "js-switch"
+                self.fields[k].widget.attrs['data-render'] = "switchery"
+                self.fields[k].widget.attrs['data-theme'] = "default"
+                self.fields[k].widget.attrs['col'] = '12'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 

@@ -13,6 +13,7 @@ import unicodedata
 import re
 import json
 from datetime import datetime
+from django.conf import settings
 
 
 def normalizar_texto(texto):
@@ -22,15 +23,18 @@ def normalizar_texto(texto):
 
 
 class AgenteConsultor:
-    def __init__(self, vectorstore_path, provider, apikey, model_name=None, conversacion=None, prompt_template_text=''):
+    def __init__(self, vectorstore_path, vectorstore_enlaces_path, provider, apikey, model_name=None, conversacion=None, prompt_template_text=''):
         self.provider = provider == 2 and 'gemini' or provider == 3 and 'openai'
         self.apikey = apikey
         self.model_name = model_name or self.default_model()
         self.vectorstore_path = vectorstore_path
+        self.vectorstore_enlaces_path = vectorstore_enlaces_path
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
         self.vectorstore = self._load_vectorstore()
-        self.retriever = self.vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 30, "lambda_mult": 0.7})
+        self.vectorstore_enlaces = self._load_vectorstore_enlaces()
+        self.retriever = self.vectorstore and self.vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 30, "lambda_mult": 0.7})
+        self.retriever_enlaces = self.vectorstore_enlaces and self.vectorstore_enlaces.as_retriever(search_type="mmr", search_kwargs={"k": 30, "lambda_mult": 0.7})
         self.conversacion: ConversacionWhatsApp = conversacion
         self.memory = self._get_memory()
         self.prompt_template_text = prompt_template_text
@@ -38,7 +42,7 @@ class AgenteConsultor:
         self._cargar_listas_desde_memoria()
 
     def default_model(self):
-        return "gemini-1.5-pro" if self.provider == "gemini" else "gpt-4"
+        return "gemini-2.5-flash" if self.provider == "gemini" else "gpt-4"
 
     def _get_embeddings(self):
         if self.provider == "gemini":
@@ -58,9 +62,21 @@ class AgenteConsultor:
         raise ValueError("Proveedor de LLM no soportado")
 
     def _load_vectorstore(self):
-        if not os.path.exists(self.vectorstore_path):
+        if self.vectorstore_path and not os.path.exists(self.vectorstore_path):
             raise FileNotFoundError(f"No se encontró el vectorstore en {self.vectorstore_path}")
+        if not self.vectorstore_path:
+            return None
         return FAISS.load_local(self.vectorstore_path, self.embeddings, allow_dangerous_deserialization=True)
+
+    def _load_vectorstore_enlaces(self):
+        if not self.vectorstore_enlaces_path:
+            return None
+
+        full_path = self.vectorstore_enlaces_path
+        if not os.path.exists(full_path):
+            raise FileNotFoundError(f"No se encontró el vectorstore en {full_path}")
+
+        return FAISS.load_local(full_path, self.embeddings, allow_dangerous_deserialization=True)
 
     def _get_memory(self):
         if not self.conversacion:
@@ -143,18 +159,23 @@ class AgenteConsultor:
             saludo = self.llm.invoke(f"""¿El siguiente texto es solo un saludo?: "{pregunta}" 
 Responde exactamente "ES_SALUDO" o "NO_ES_SALUDO".""").content.strip()
             if saludo == "ES_SALUDO":
-                bienvenida = "Hola 👋, ¿en qué puedo ayudarte?"
+                bienvenida = self.conversacion  and self.conversacion.contacto and self.conversacion.contacto.sesion.mensaje_bienvenida or "Hola 👋, ¿en qué puedo ayudarte?"
                 if self.memory:
                     self.memory.chat_memory.add_user_message(pregunta)
                     self.memory.chat_memory.add_ai_message(bienvenida)
                 return bienvenida
 
         reformulada = self.llm.invoke(
-            f"Reescribe esta pregunta para hacerla más efectiva para búsqueda en una base de conocimiento: {pregunta}"
+            f"Reescribe la pregunta *{pregunta}* para hacerla más efectiva para búsqueda en una base de conocimiento, no respondas nada más porque no es un chat, sólo quiero que reescribas "
         ).content.strip()
 
-        docs = self.retriever.get_relevant_documents(reformulada)
+        docs = self.retriever and self.retriever.get_relevant_documents(reformulada) or []
         contexto = "\n\n".join({d.page_content for d in docs})
+
+        docs_enlaces = self.retriever_enlaces and self.retriever_enlaces.get_relevant_documents(reformulada) or []
+        if docs_enlaces:
+            contexto_enlaces = "\n\n".join({d.page_content for d in docs_enlaces})
+            contexto = contexto + "\n\n" + contexto_enlaces if contexto else contexto_enlaces
 
         if not contexto.strip():
             return "No tengo esa información."

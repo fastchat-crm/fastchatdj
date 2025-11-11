@@ -17,22 +17,23 @@ class AgenteResumidor:
         self.memory = self._get_memory()
 
     def default_model(self):
-        return "gpt-4" if self.provider == "openai" else "gemini-2.5-pro"
+        return "gpt-4" if self.provider == "openai" else "gemini-2.5-flash"
 
     def _get_embeddings(self):
-        if self.provider == "openai":
-            return OpenAIEmbeddings(openai_api_key=self.apikey)
-        elif self.provider == "gemini":
+        if self.provider == "gemini":
             return GoogleGenerativeAIEmbeddings(
                 model="models/embedding-001", google_api_key=self.apikey
             )
+        elif self.provider == "openai":
+            return OpenAIEmbeddings(openai_api_key=self.apikey)
         raise ValueError("Proveedor de embedding no soportado")
 
     def _get_llm(self):
-        if self.provider == "openai":
-            return ChatOpenAI(model_name=self.model_name, openai_api_key=self.apikey)
-        elif self.provider == "gemini":
+        if self.provider == "gemini":
             return ChatGoogleGenerativeAI(model=self.model_name, google_api_key=self.apikey)
+        elif self.provider == "openai":
+            from langchain_community.chat_models import ChatOpenAI
+            return ChatOpenAI(model_name=self.model_name, openai_api_key=self.apikey)
         raise ValueError("Proveedor de LLM no soportado")
 
     def _get_memory(self):

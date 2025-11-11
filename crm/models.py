@@ -1,8 +1,11 @@
 import json
 import os
+from datetime import timedelta
 
+import requests
 from django.core.validators import FileExtensionValidator
 from django.db import models
+from django.utils import timezone
 
 from core.constantes import PROMPT_TEMPLATES
 from core.custom_models import ModeloBase
@@ -184,6 +187,10 @@ class AgentesIA(ModeloBase):
         default=False, verbose_name="Anotar listas de productos/servicios en memoria",
         help_text="Si se activa, el agente guardará las listas de productos/servicios en la memoria"
     )
+    vectorstore_enlaces_path = models.CharField(
+        max_length=1000, blank=True, null=True, verbose_name="Ruta del vector store de Apis y Enlaces"
+    )
+    vectorstore_enlaces_expira = models.DateTimeField(blank=True, null=True, verbose_name="Fecha de expiración del vector store")
 
     class Meta:
         verbose_name = 'Respuesta Entrenada IA'
@@ -193,8 +200,11 @@ class AgentesIA(ModeloBase):
         """
         Función para obtener los detalles existentes de un agente
         """
-        detalles = self.detalleagentesai_set.filter(status=True)
+        detalles = self.detalleagentesai_set.filter(status=True).order_by('id')
         detalles_json = []
+
+        # Debug: imprimir cuántos detalles se encontraron
+        print(f"DEBUG: Agente {self.id} tiene {detalles.count()} detalles activos")
 
         for detalle in detalles:
             detalle_data = {
@@ -203,11 +213,137 @@ class AgentesIA(ModeloBase):
                 'enlace': detalle.enlace or '',
                 'tipo_dato_enlace': detalle.tipo_dato_enlace,
                 'archivo_url': detalle.archivo.url if detalle.archivo else '',
-                'descripcion': detalle.descripcion if detalle.descripcion else ''
+                'descripcion': detalle.descripcion if detalle.descripcion else '',
+                'requiere_token': detalle.requiere_token,
+                'token_autorizacion': detalle.token_autorizacion or '',
+                'usar_cache': detalle.usar_cache,
+                'tiempo_cache_horas': detalle.tiempo_cache_horas
             }
             detalles_json.append(detalle_data)
 
+        print(f"DEBUG: JSON generado con {len(detalles_json)} detalles")
         return json.dumps(detalles_json)
+
+    def build_enlaces_vectorstore(self):
+        detalles = self.detalleagentesai_set.filter(status=True, tipo=1, archivo__isnull=False)
+        if not detalles.exists():
+            return
+        tiempo_cache_horas = detalles.filter(usar_cache=True).order_by('-tiempo_cache_horas').first()
+        tiempo_cache_horas = tiempo_cache_horas and tiempo_cache_horas.tiempo_cache_horas or 0
+        base_dir = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
+        nombre_vs = f"agente_api_{self.id}"
+        apikeys = self.apikey.all()
+        if not apikeys.exists():
+            return
+        if self.vectorstore_enlaces_expira and self.vectorstore_enlaces_expira > timezone.now():
+            return
+
+        agente = self
+        agente.vectorstore_enlaces_path = None
+
+        def _money_map_to_str(m: dict | None) -> str:
+            if not m:
+                return ""
+            # Ordena por clave numérica si es posible (1,2,3,4,5…)
+            try:
+                items = sorted(m.items(), key=lambda kv: int(kv[0]))
+            except Exception:
+                items = list(m.items())
+            return ", ".join(f"{k}: {v}" for k, v in items if v is not None and str(v).strip() != "")
+        for apikeyobj in apikeys:
+            if not apikeyobj.descripcion:
+                continue
+            vs_manager = VectorStoreManager(
+                storage_dir=base_dir,
+                provider='gemini' if apikeyobj.proveedor == 2 else 'openai',
+                apikey=apikeyobj.descripcion
+            )
+            documentos = []
+            for detalle in detalles:
+                try:
+                    r = requests.get(detalle.enlace, timeout=30)
+                    if r.status_code != 200:
+                        continue
+                    data = r.json()
+                    if data.get("listCatalogo"):
+                        for c in data.get("listCatalogo"):
+                            page_content = f"""Curso: {c.get('nombre') or ''}
+                            Categoría: {c.get('categoria', {}).get('descripcion') or ''}
+                            Nombre: {c.get('nombre') or ''}
+                            Unidad de negocio: {c.get('unidad_negocio') or ''}
+                            Descripción: {c.get('descripcion') or ''}
+                            Precio total (USD): {c.get('precio', {}).get('real')}
+                            Fechas: {c.get('fechainicio', '')} a {c.get('fechafin')}
+                            Horas que dura el curso: {c.get('horas', {}).get('total')}
+                            Activo: {c.get('activo')}
+                            Brochure: {c.get('brochure_url') or ''}
+                            Portada: {c.get('portada_url') or ''}
+                            """
+                            metadata = {
+                                "tipo": "listCatalogo",
+                                "detalle_id": detalle.id,
+                                "id": c.get("id"),
+                                "slug": c.get("slug"),
+                                "categoria": c.get("categoria"),
+                                "unidad_negocio": c.get("unidad_negocio"),
+                                "precio_total": c.get("precio", {}).get("total"),
+                                "fechainicio": c.get("fechas", {}).get("inicio"),
+                                "fechafin": c.get("fechas", {}).get("fin"),
+                                "portada_url": c.get("portada_url"),
+                                "brochure_url": c.get("brochure_url"),
+                            }
+                            docs = vs_manager.build_from_string(page_content, metadata=metadata)
+                            documentos.extend(docs)
+                    if data.get("data"):
+                        for r in data["data"]:
+                            costos = r.get("costos", {}) or {}
+                            insc_str = _money_map_to_str(costos.get("inscripcion"))
+                            matr_str = _money_map_to_str(costos.get("matricula"))
+
+                            page_content = f"""Curso: {r.get('nombre') or ''}
+                    Periodo: {r.get('periodo') or ''}
+                    Centro de costo: {r.get('centro_costo') or ''}
+                    Fechas: {r.get('fechainicio') or ''} a {r.get('fechafin') or ''}
+                    Número de cuotas: {r.get('numero_cuotas') or ''}
+                    Cupos disponibles: {r.get('tiene_cupo')}
+                    Requisitos: {(r.get('requisitos') or '').strip()}
+                    Descripción: {(r.get('descripcion') or '').strip()}
+                    Costos:
+                      - Inscripción: {insc_str or 'N/D'}
+                      - Matrícula: {matr_str or 'N/D'}
+
+                    Contexto: {(r.get('contexto') or '').strip()}
+                    """
+
+                            metadata = {
+                                "tipo": "oferta_periodo",  # para distinguir de 'catalogo'
+                                "detalle_id": detalle.id,
+                                "id": r.get("id"),
+                                "nombre": r.get("nombre"),
+                                "periodo": r.get("periodo"),
+                                "centro_costo": r.get("centro_costo"),
+                                "fechainicio": r.get("fechainicio"),
+                                "fechafin": r.get("fechafin"),
+                                "numero_cuotas": r.get("numero_cuotas"),
+                                "tiene_cupo": r.get("tiene_cupo"),
+                                "costos_inscripcion": costos.get("inscripcion"),
+                                "costos_matricula": costos.get("matricula"),
+                            }
+
+                            docs = vs_manager.build_from_string(page_content, metadata=metadata)
+                            documentos.extend(docs)
+                except Exception as e:
+                    print(f"Error procesando enlace {detalle.enlace}: {e}")
+                    continue
+            if documentos:
+                vs_path = vs_manager.build_and_save(documentos, nombre_vs)
+                agente.vectorstore_enlaces_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
+                agente.vectorstore_enlaces_expira = None
+                if tiempo_cache_horas:
+                    agente.vectorstore_enlaces_expira = timezone.now() + timedelta(hours=tiempo_cache_horas)
+                agente.save()
+                AgentesIA.objects.bulk_update([agente], ['vectorstore_enlaces_path', 'vectorstore_enlaces_expira'])
+            break
 
     def __str__(self):
         return f"{self.nombre}"
@@ -237,6 +373,12 @@ class DetalleAgentesAI(ModeloBase):
         validators=[FileExtensionValidator(["pdf", 'csv', 'json', 'xlsx']), FileMaxSizeInMbValidator(10)]
     )
     descripcion = models.TextField(blank=True, null=True, verbose_name='Descripción del detalle')
+
+    # Campos específicos para tipo ENLACE
+    requiere_token = models.BooleanField(default=False, verbose_name='Requiere token de autorización')
+    token_autorizacion = models.CharField(max_length=500, blank=True, null=True, verbose_name='Token de autorización')
+    usar_cache = models.BooleanField(default=False, verbose_name='Usar caché para consultas')
+    tiempo_cache_horas = models.PositiveIntegerField(default=1, verbose_name='Tiempo de caché en horas')
 
     class Meta:
         verbose_name = 'Respuesta Entrenada IA'
@@ -271,9 +413,13 @@ class DetalleAgentesAI(ModeloBase):
                         documentos.extend(docs)
 
                     if documentos:
-                        vs_path = vs_manager.build_and_save(documentos, nombre_vs)
-                        agente.vectorstore_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
-                        agente.save()
+                        try:
+                            vs_path = vs_manager.build_and_save(documentos, nombre_vs)
+                            agente.vectorstore_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
+                            agente.save()
+                        except Exception as e:
+                            print(e)
+                    break
 
 
 PROVEEDOR_CHOICES = (
