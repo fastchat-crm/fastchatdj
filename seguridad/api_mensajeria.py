@@ -1,3 +1,5 @@
+import json
+
 from django.http import JsonResponse
 from django.db import transaction
 from django.utils import timezone
@@ -9,14 +11,32 @@ from whatsapp.services import WhatsAppService
 
 def enviar_mensaje_view(request):
     """
-    Endpoint GET para enviar un mensaje de texto por WhatsApp.
+    Endpoint POST para enviar un mensaje de texto por WhatsApp.
     Ejemplo:
-        /api/enviar-mensaje/?idSesion=1&numero=593987654321&mensaje=Hola
+        POST /api/enviar-mensaje/
+        Body (JSON o form-data):
+        {
+            "idSesion": 1,
+            "numero": "593987654321",
+            "mensaje": "Hola"
+        }
     """
+    if request.method != 'POST':
+        return JsonResponse(
+            {"status": "error", "message": "Método no permitido, use POST."},
+            status=405
+        )
+
     try:
-        idSesion = request.GET.get("idSesion")
-        numero = request.GET.get("numero")
-        mensaje = request.GET.get("mensaje")
+        # --- Intentar leer datos como JSON ---
+        try:
+            data = json.loads(request.body.decode('utf-8'))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            data = request.POST
+
+        idSesion = data.get("idSesion")
+        numero = data.get("numero")
+        mensaje = data.get("mensaje")
 
         # --- Validaciones iniciales ---
         if not all([idSesion, numero, mensaje]):
