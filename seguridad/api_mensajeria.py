@@ -1,6 +1,4 @@
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
+from django.http import JsonResponse
 from django.db import transaction
 from django.utils import timezone
 from django.core.exceptions import ObjectDoesNotExist
@@ -9,23 +7,22 @@ from whatsapp.models import SesionWhatsApp, Contacto, ConversacionWhatsApp, Mens
 from whatsapp.services import WhatsAppService
 
 
-@api_view(['GET'])
-def enviar_mensaje_api(request):
+def enviar_mensaje_view(request):
     """
-    Endpoint REST (GET) para enviar un mensaje de texto por WhatsApp.
+    Endpoint GET para enviar un mensaje de texto por WhatsApp.
     Ejemplo:
-        /api/enviar-mensaje/?idSesion=1&numero=+593987654321&mensaje=Hola
+        /api/enviar-mensaje/?idSesion=1&numero=593987654321&mensaje=Hola
     """
-    idSesion = request.GET.get('idSesion')
-    numero = request.GET.get('numero')
-    mensaje = request.GET.get('mensaje')
-
     try:
+        idSesion = request.GET.get("idSesion")
+        numero = request.GET.get("numero")
+        mensaje = request.GET.get("mensaje")
+
         # --- Validaciones iniciales ---
         if not all([idSesion, numero, mensaje]):
-            return Response(
+            return JsonResponse(
                 {"status": "error", "message": "Debe proporcionar idSesion, numero y mensaje."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=400
             )
 
         with transaction.atomic():
@@ -33,24 +30,23 @@ def enviar_mensaje_api(request):
             try:
                 sesion = SesionWhatsApp.objects.get(pk=idSesion, status=True)
             except ObjectDoesNotExist:
-                return Response(
+                return JsonResponse(
                     {"status": "error", "message": "Sesión no encontrada o inactiva."},
-                    status=status.HTTP_404_NOT_FOUND
+                    status=404
                 )
 
             # --- Validación de contacto existente ---
             contacto = Contacto.objects.filter(
                 status=True, sesion=sesion, contacto_numero=numero
             ).first()
-
             if not contacto:
-                return Response(
+                return JsonResponse(
                     {
                         "status": "error",
                         "message": f"No existe un contacto activo con {numero}. "
-                                   "Debe iniciar primero una conversación antes de enviar mensajes."
+                                   f"Inicie primero una conversación antes de enviar mensajes."
                     },
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=400
                 )
 
             # --- Obtiene o crea la conversación ---
@@ -67,9 +63,9 @@ def enviar_mensaje_api(request):
             )
 
             if not response.get("success"):
-                return Response(
+                return JsonResponse(
                     {"status": "error", "message": f"Error al enviar mensaje: {response.get('error', 'Desconocido')}"},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=400
                 )
 
             # --- Registro del mensaje enviado ---
@@ -85,17 +81,14 @@ def enviar_mensaje_api(request):
                 fecha_leido=timezone.now(),
             )
 
-            return Response(
+            return JsonResponse(
                 {
                     "status": "success",
                     "message": f"Mensaje enviado correctamente a {numero}",
                     "data": response
                 },
-                status=status.HTTP_200_OK
+                status=200
             )
 
     except Exception as e:
-        return Response(
-            {"status": "error", "message": str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
