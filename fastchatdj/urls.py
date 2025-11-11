@@ -18,6 +18,7 @@ from crm.urls import crm_urls
 from fastchatdj.view_clearsitedata import clearSiteDataView
 from fastchatdj import settings
 from fastchatdj.view_redirect import redirectView, redirectToUrlView
+from seguridad.api_mensajeria import enviar_mensaje_api
 from seguridad.models import Configuracion, Modulo
 from seguridad.urls import seguridad_urls
 from seguridad.view_index import index
@@ -93,6 +94,7 @@ urlpatterns = [
     path('webpush/', include('webpush.urls')),
     # pwa
     path('', include('for_django_projects.pwa.urls')),
+    path('api/enviar-mensaje/', enviar_mensaje_api, name='api_enviar_mensaje'),
 ]
 
 if settings.DEBUG:
