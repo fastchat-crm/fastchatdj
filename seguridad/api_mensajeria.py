@@ -4,11 +4,12 @@ from django.http import JsonResponse
 from django.db import transaction
 from django.utils import timezone
 from django.core.exceptions import ObjectDoesNotExist
+from django.views.decorators.csrf import csrf_exempt
 
 from whatsapp.models import SesionWhatsApp, Contacto, ConversacionWhatsApp, MensajeWhatsApp
 from whatsapp.services import WhatsAppService
 
-
+@csrf_exempt
 def enviar_mensaje_view(request):
     """
     Endpoint POST para enviar un mensaje de texto por WhatsApp.
