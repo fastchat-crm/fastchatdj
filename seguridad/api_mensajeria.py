@@ -73,11 +73,11 @@ def enviar_mensaje_view(request):
                 )
 
             # --- Obtiene o crea la conversación ---
-            conversacion, _ = ConversacionWhatsApp.objects.get_or_create(
-                status=True,
-                contacto=contacto,
-                defaults={"status": True}
-            )
+            conversacion = ConversacionWhatsApp.objects.filter(contacto=contacto, status=True).first()
+            if not conversacion:
+                conversacion = ConversacionWhatsApp.objects.create(
+                    contacto=contacto
+                )
 
             # --- Envío del mensaje ---
             service = WhatsAppService()
