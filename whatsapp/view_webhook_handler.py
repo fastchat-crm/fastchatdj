@@ -201,6 +201,7 @@ def webhook_handler(request):
         elif event_type == 'disconnected':
             # Actualizar el estado de la sesión
             session.estado = 'desconectado'
+            session.desconectado_manualmente = False  # desconexión inesperada → reconectable
             session.save()
 
             save_log_entry(f'HS: SESION {session_id} disconnected'.upper(), request, event_type, obj=session)

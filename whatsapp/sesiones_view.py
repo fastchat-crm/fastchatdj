@@ -65,6 +65,7 @@ def sesionesView(request):
                             raise NameError(result['error'])
                     filtro.estado = 'desconectado'
                     filtro.error_mensaje = None
+                    filtro.desconectado_manualmente = True  # el cron no intentará reconectar
                     filtro.save()
                     log(f"Sesión de WhatsApp {filtro.numero} desconectada", request, "del", obj=filtro.id)
                     messages.success(request, "Sesión desconectada correctamente.")

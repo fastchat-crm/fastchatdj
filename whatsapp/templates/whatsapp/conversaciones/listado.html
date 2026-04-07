@@ -311,6 +311,11 @@
                                    onclick="toggleControlRespuestas()">
                                     <i class="fa fa-chart-bar me-2 text-info"></i> Control de Respuestas
                                 </a>
+                                <a class="dropdown-item" href="javascript:void(0)" id="btn-bloquear-cierre"
+                                   onclick="toggleBloquearCierre()">
+                                    <i class="fa fa-lock me-2 text-warning" id="icon-bloquear-cierre"></i>
+                                    <span id="label-bloquear-cierre">Bloquear cierre automático</span>
+                                </a>
                                 <div class="dropdown-divider"></div>
                                 <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida" title="Terminar sin despedida">
                                     <i class="fa fa-times me-2 text-danger"></i> Terminar sin despedida
@@ -537,6 +542,28 @@
 
         function toggleControlRespuestas() {
             $('#control-respuestas-panel').toggleClass('d-none');
+        }
+
+        let _bloquearCierreActual = false;
+        function toggleBloquearCierre() {
+            const id = $('#conversacion-id').val();
+            if (!id) return;
+            $.post('', { action: 'toggle-bloquear-cierre', id: id, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
+                .done(function(r) {
+                    if (r.error) return;
+                    _bloquearCierreActual = r.bloquear_cierre;
+                    _actualizarBloquearCierreUI(_bloquearCierreActual);
+                });
+        }
+
+        function _actualizarBloquearCierreUI(bloqueado) {
+            if (bloqueado) {
+                $('#icon-bloquear-cierre').removeClass('fa-lock').addClass('fa-lock-open').removeClass('text-warning').addClass('text-danger');
+                $('#label-bloquear-cierre').text('Desbloquear cierre automático');
+            } else {
+                $('#icon-bloquear-cierre').removeClass('fa-lock-open').addClass('fa-lock').removeClass('text-danger').addClass('text-warning');
+                $('#label-bloquear-cierre').text('Bloquear cierre automático');
+            }
         }
 
         // Variables globales
@@ -841,6 +868,10 @@
                     _convAiActivo = response.ai_activo;
                     $('#bot-toggle-container').removeClass('d-none').show();
                     actualizarBotUI(response.ai_activo);
+
+                    // Bloquear cierre
+                    _bloquearCierreActual = response.bloquear_cierre || false;
+                    _actualizarBloquearCierreUI(_bloquearCierreActual);
 
                     // Asignado a
                     if (response.asignado_a) {

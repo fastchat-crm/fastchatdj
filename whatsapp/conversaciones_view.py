@@ -109,6 +109,7 @@ def conversacionesView(request):
                 'nota_interna': conversacion.nota_interna or '',
                 'fecha_asignacion': conversacion.fecha_asignacion.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_asignacion else '',
                 'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_registro else '',
+                'bloquear_cierre': conversacion.bloquear_cierre,
                 **_tokens_conversacion(conversacion),
                 **_control_respuestas(conversacion),
             })
@@ -263,6 +264,17 @@ def conversacionesView(request):
                         filtro = form.save()
                         asignado = filtro.asignado_a
                         log(f"Conversación {filtro.id} asignada a {asignado}", request, "change", obj=filtro.id)
+                        # Registrar en historial de asignaciones
+                        try:
+                            from .models import HistorialAsignacion
+                            HistorialAsignacion.objects.create(
+                                conversacion=filtro,
+                                asignado_a=asignado,
+                                asignado_por=request.user,
+                                nota=filtro.nota_interna or '',
+                            )
+                        except Exception:
+                            pass
                         # Notificar al agente asignado vía Notificacion
                         if asignado:
                             try:
@@ -327,6 +339,13 @@ def conversacionesView(request):
                     estado = 'activado' if filtro.ai_activo else 'pausado'
                     log(f"Bot {estado} para conversación {filtro.id}", request, "change", obj=filtro.id)
                     return JsonResponse({'error': False, 'ai_activo': filtro.ai_activo})
+                elif action == 'toggle-bloquear-cierre':
+                    filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))
+                    filtro.bloquear_cierre = not filtro.bloquear_cierre
+                    filtro.save(update_fields=['bloquear_cierre'])
+                    estado = 'bloqueado' if filtro.bloquear_cierre else 'desbloqueado'
+                    log(f"Cierre automático {estado} para conversación {filtro.id}", request, "change", obj=filtro.id)
+                    return JsonResponse({'error': False, 'bloquear_cierre': filtro.bloquear_cierre})
                 elif action == 'marcar-resuelto':
                     try:
                         filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))

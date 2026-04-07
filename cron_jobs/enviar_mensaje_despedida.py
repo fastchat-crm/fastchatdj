@@ -137,6 +137,15 @@ else:
     logCron(PROCESO, f'Procesando {total} conversación(es) expirada(s)', exito=True)
     for conversacion in conversaciones:
         try:
+            # Respetar bloqueo de cierre SÓLO si el bot está inactivo (agente humano al cargo)
+            # Si el bot IA está activo y la conversación expiró → cerrar igualmente
+            if conversacion.bloquear_cierre and not conversacion.ai_activo:
+                logCron(
+                    PROCESO,
+                    f'Conversación #{conversacion.id} — cierre bloqueado por asesor humano, omitiendo',
+                    exito=True,
+                )
+                continue
             _cerrar_conversacion(conversacion, whatsapp_service)
         except Exception as e:
             logCron(

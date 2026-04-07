@@ -10,15 +10,15 @@ from .models import SesionWhatsApp, Contacto, ConversacionWhatsApp, MensajeWhats
 class SesionWhatsAppForm(ModelFormBase):
     class Meta:
         model = SesionWhatsApp
-        fields = ('nombre', 'min_sesion', 'language', 'agente_ia', 'departamentos', 'mensaje_bienvenida', 'mensaje_despedida',)
+        fields = ('nombre', 'min_sesion', 'language', 'agente_ia', 'departamentos', 'mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff',)
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
         super(SesionWhatsAppForm, self).__init__(*args, **kwargs)
         self.fields['departamentos'].queryset = DepartamentoChatBot.objects.filter(status=True).order_by('nombre')
         for k, v in self.fields.items():
-            if k in ('mensaje_bienvenida', 'mensaje_despedida',):
-                self.fields[k].widget.attrs['rows'] = '10'
+            if k in ('mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff',):
+                self.fields[k].widget.attrs['rows'] = '5'
                 self.fields[k].widget.attrs['class'] = "summernote"
             if k in ('min_sesion',):
                 self.fields[k].widget.attrs['col'] = '3'

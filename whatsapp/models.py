@@ -45,11 +45,17 @@ class SesionWhatsApp(ModeloBase):
     # Campos para la gestión de mensajes
     mensaje_bienvenida = models.TextField(blank=True, null=True, verbose_name='Mensaje de bienvenida')
     mensaje_despedida = models.TextField(blank=True, null=True, verbose_name='Mensaje de despedida')
+    mensaje_handoff = models.TextField(blank=True, null=True, verbose_name='Mensaje de transferencia a agente',
+                                       help_text='Se envía al cliente cuando la IA transfiere a un agente humano')
     min_sesion = models.IntegerField(default=0, verbose_name='Minutos de sesión')
     departamentos = models.ManyToManyField('crm.DepartamentoChatBot', verbose_name='Departamentos', blank=True)
     #IDIOMA
     language = models.CharField('Idioma', max_length=50, choices=LANGUAGES, default='es')
     agente_ia = models.ForeignKey('crm.AgentesIA', on_delete=models.PROTECT, null=True, blank=True)
+    desconectado_manualmente = models.BooleanField(
+        default=False, verbose_name='Desconectado manualmente',
+        help_text='True cuando el usuario desconectó la sesión a propósito. El cron no intentará reconectarla.'
+    )
 
     def is_connected(self):
         return self.estado == 'conectado'
@@ -86,6 +92,7 @@ class SesionWhatsApp(ModeloBase):
         # Limpiar espacios en blanco de los mensajes
         self.mensaje_bienvenida = remover_espacios_de_mas(self.mensaje_bienvenida)
         self.mensaje_despedida = remover_espacios_de_mas(self.mensaje_despedida)
+        self.mensaje_handoff = remover_espacios_de_mas(self.mensaje_handoff)
         super().save(*args, **kwargs)
 
 
@@ -244,6 +251,11 @@ class ConversacionWhatsApp(ModeloBase):
     )
     fecha_asignacion = models.DateTimeField('Fecha de asignación', null=True, blank=True)
     nota_interna = models.TextField('Nota interna', blank=True, default='')
+    bloquear_cierre = models.BooleanField(
+        'Bloquear cierre automático', default=False,
+        help_text='Si está activo, el cron no cerrará esta conversación aunque expire. '
+                  'Se ignora cuando el bot IA está activo y la sesión supera su tiempo configurado.'
+    )
     # Análisis de sentimiento (calculado al cerrar)
     sentimiento = models.CharField('Sentimiento', max_length=20, choices=SENTIMIENTO_CHOICES, blank=True, default='')
     puntuacion_sentimiento = models.IntegerField('Puntuación (1-10)', null=True, blank=True)
@@ -482,6 +494,31 @@ class EstadisticasConversacion(ModeloBase):
 
     def __str__(self):
         return f"Estadísticas: {self.conversacion}"
+
+
+class HistorialAsignacion(models.Model):
+    """Registro de cada vez que una conversación fue asignada a un agente."""
+    conversacion = models.ForeignKey(
+        ConversacionWhatsApp, on_delete=models.CASCADE, related_name='historial_asignaciones'
+    )
+    asignado_a = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='asignaciones_recibidas', verbose_name='Asignado a'
+    )
+    asignado_por = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='asignaciones_realizadas', verbose_name='Asignado por'
+    )
+    fecha = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de asignación')
+    nota = models.TextField(blank=True, default='', verbose_name='Nota')
+
+    class Meta:
+        verbose_name = 'Historial de asignación'
+        verbose_name_plural = 'Historial de asignaciones'
+        ordering = ['-fecha']
+
+    def __str__(self):
+        return f"{self.conversacion_id} → {self.asignado_a} ({self.fecha:%d/%m/%Y %H:%M})"
 
 
 class MensajeWhatsAppProgramado(ModeloBase):
