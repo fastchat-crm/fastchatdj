@@ -14,6 +14,28 @@ from .forms import CambiarClasificacionForm, CambiarNombreContactoForm, AsignarA
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp, SENTIMIENTO_CHOICES
 from .services import WhatsAppService
 
+def _control_respuestas(conversacion):
+    """Devuelve estadísticas de participación por tipo de remitente en una conversación."""
+    try:
+        from django.db.models import Count
+        qs = conversacion.mensajes.filter(remitente=conversacion.sesion.numero)
+        ia_count = qs.filter(ia_generado=True).count()
+        agent_qs = qs.filter(ia_generado=False, agente__isnull=False)
+        agent_count = agent_qs.count()
+        agentes = list(
+            agent_qs.values(
+                'agente__id', 'agente__first_name', 'agente__last_name', 'agente__foto'
+            ).annotate(total=Count('id')).order_by('-total')
+        )
+        return {
+            'cr_ia': ia_count,
+            'cr_agent': agent_count,
+            'cr_agentes': agentes,
+        }
+    except Exception:
+        return {'cr_ia': 0, 'cr_agent': 0, 'cr_agentes': []}
+
+
 def _tokens_conversacion(conversacion):
     """Agrega tokens IA consumidos en una conversación."""
     try:
@@ -88,6 +110,7 @@ def conversacionesView(request):
                 'fecha_asignacion': conversacion.fecha_asignacion.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_asignacion else '',
                 'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_registro else '',
                 **_tokens_conversacion(conversacion),
+                **_control_respuestas(conversacion),
             })
         elif action == 'cambiar-clasificacion':
             try:
@@ -178,7 +201,9 @@ def conversacionesView(request):
                         archivo_url=response.get('media_url'),
                         fecha=timezone.now(),
                         leido=True,
-                        fecha_leido=timezone.now()
+                        fecha_leido=timezone.now(),
+                        agente=request.user,
+                        ia_generado=False,
                     )
                     # Guardar archivo localmente para tener URL definitiva
                     if archivo:

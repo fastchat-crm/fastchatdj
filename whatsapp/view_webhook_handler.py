@@ -399,6 +399,14 @@ def process_incoming_message(session, event_data, channel_layer):
         conversation = ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).first() or \
                        ConversacionWhatsApp.objects.create(contacto=contacto)
 
+        # Renovar ventana de expiración con cada mensaje entrante del cliente
+        if from_number != session.numero:  # sólo mensajes del cliente
+            min_sesion = getattr(session, 'min_sesion', None)
+            if min_sesion:
+                from datetime import timedelta
+                conversation.fecha_hora_expira = timezone.now() + timedelta(minutes=int(min_sesion))
+                conversation.save(update_fields=['fecha_hora_expira'])
+
         # Crear el mensaje
         message = MensajeWhatsApp.objects.create(
             conversacion=conversation,
@@ -499,10 +507,26 @@ def process_incoming_message(session, event_data, channel_layer):
                             resultado = consultor.consultar_con_listas(message_text, agente.descripcion)
                         else:
                             resultado = consultor.consultar(message_text, agente.descripcion)
-                        whatsapp_service.send_text_message(
+                        send_result = whatsapp_service.send_text_message(
                             conversation.sesion.session_id, contacto.from_number, resultado.respuesta
                         )
                         respuesta_enviada = True
+                        # Crear mensaje IA inmediatamente para que el webhook no lo duplique sin el flag
+                        try:
+                            MensajeWhatsApp.objects.create(
+                                conversacion=conversation,
+                                remitente=session.numero,
+                                mensaje=resultado.respuesta,
+                                tipo='texto',
+                                fecha=timezone.now(),
+                                mensaje_id_externo=send_result.get('message_id') if isinstance(send_result, dict) else None,
+                                leido=True,
+                                fecha_leido=timezone.now(),
+                                ia_generado=True,
+                                es_automatico=True,
+                            )
+                        except Exception:
+                            pass
                         # ── Registrar consumo de tokens ──────────────────────
                         if resultado.tokens_total > 0:
                             try:

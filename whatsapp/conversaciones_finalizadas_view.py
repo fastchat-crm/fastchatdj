@@ -10,8 +10,8 @@ from django.http import JsonResponse
 from core.funciones import addData, paginador, secure_module, log
 from seguridad.templatetags.templatefunctions import encrypt
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp
-# Importar el servicio en lugar de redis_publish
 from .services import WhatsAppService
+from .conversaciones_view import _control_respuestas, _tokens_conversacion
 
 @login_required
 @secure_module
@@ -67,6 +67,8 @@ def conversacionesFinalizadasView(request):
                     'show_date': True,
                     'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y') if conversacion.fecha_registro else '',
                     'fecha_fin': conversacion.fecha_fin_conversacion.strftime('%d/%m/%Y') if conversacion.fecha_fin_conversacion else '',
+                    **_tokens_conversacion(conversacion),
+                    **_control_respuestas(conversacion),
                 })
             except Exception as ex:
                 pass
@@ -134,7 +136,9 @@ def conversacionesFinalizadasView(request):
                         archivo_url=response.get('media_url'),
                         fecha=timezone.now(),
                         leido=True,
-                        fecha_leido=timezone.now()
+                        fecha_leido=timezone.now(),
+                        agente=request.user,
+                        ia_generado=False,
                     )
                     if archivo:
                         from django.core.files.base import ContentFile

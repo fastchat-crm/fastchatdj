@@ -13,7 +13,7 @@
     /* Anula position:absolute del tema para que el footer entre en el flujo */
     .chat-box-right .chat-body {
         flex: 1 1 auto !important;
-        height: auto !important;
+        height: 105% !important;
         min-height: 0;
         overflow-y: auto;
         padding-bottom: 0 !important;
@@ -307,6 +307,11 @@
                                     <i class="fa fa-user-plus me-2"></i> Asignar a agente
                                 </a>
                                 <div class="dropdown-divider"></div>
+                                <a class="dropdown-item" href="javascript:void(0)" id="btn-control-respuestas"
+                                   onclick="toggleControlRespuestas()">
+                                    <i class="fa fa-chart-bar me-2 text-info"></i> Control de Respuestas
+                                </a>
+                                <div class="dropdown-divider"></div>
                                 <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida" title="Terminar sin despedida">
                                     <i class="fa fa-times me-2 text-danger"></i> Terminar sin despedida
                                 </a>
@@ -314,6 +319,21 @@
                         </div>
                     </div>
                 </div><!-- end chat-header -->
+
+                <!-- Panel Control de Respuestas -->
+                <div id="control-respuestas-panel" class="d-none px-3 py-2 border-bottom"
+                     style="background:#f8f9fa;font-size:.82rem;">
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <strong><i class="fa fa-chart-bar me-1 text-info"></i>Control de Respuestas</strong>
+                        <span class="badge bg-indigo text-white" id="cr-ia-badge" style="background:#5c6bc0;">
+                            <i class="fa fa-robot me-1"></i><span id="cr-ia-count">0</span> IA
+                        </span>
+                        <span class="badge bg-success" id="cr-agent-badge">
+                            <i class="fa fa-headset me-1"></i><span id="cr-agent-count">0</span> Agente
+                        </span>
+                        <div id="cr-agentes-list" class="d-flex flex-wrap gap-2"></div>
+                    </div>
+                </div>
 
                 <div class="chat-body" data-simplebar id="chat-messages">
                     <div class="chat-detail" id="mensajes-container">
@@ -513,6 +533,10 @@
         function scrollToBottom(smooth = false) {
             const cw = document.getElementById('chat-messages')?.querySelector('.simplebar-content-wrapper');
             if (cw) cw.scrollTop = cw.scrollHeight;
+        }
+
+        function toggleControlRespuestas() {
+            $('#control-respuestas-panel').toggleClass('d-none');
         }
 
         // Variables globales
@@ -841,6 +865,18 @@
                     } else {
                         $('#tokens-container').addClass('d-none').hide();
                     }
+
+                    // Control de Respuestas
+                    $('#cr-ia-count').text(response.cr_ia || 0);
+                    $('#cr-agent-count').text(response.cr_agent || 0);
+                    var agentesHtml = '';
+                    (response.cr_agentes || []).forEach(function(a) {
+                        var nombre = ((a.agente__first_name || '') + ' ' + (a.agente__last_name || '')).trim() || 'Agente';
+                        agentesHtml += '<span class="badge bg-light text-dark border"><i class="fa fa-user me-1"></i>' + nombre + ' <small class="text-muted">(' + a.total + ')</small></span>';
+                    });
+                    $('#cr-agentes-list').html(agentesHtml);
+                    // Reset: hide panel until user clicks
+                    $('#control-respuestas-panel').addClass('d-none');
 
                     // Mostrar footer para enviar mensajes
                     $('#chat-footer').removeClass('d-none').show();

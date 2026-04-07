@@ -376,11 +376,7 @@ class AgenteConsultor:
         _sin_datos = False
         _es_ack = _es_ack_simple(pregunta) and not self._es_primer_mensaje()
 
-        if self.contexto_estatico:
-            contexto = self.contexto_estatico
-            logger.debug("Contexto estático (%d chars)", len(contexto))
-
-        elif _es_ack:
+        if _es_ack:
             # Confirmación breve — no necesita FAISS. El historial es suficiente.
             contexto = ""
             logger.debug("ACK simple — omitiendo FAISS")
@@ -398,13 +394,19 @@ class AgenteConsultor:
             todos_docs = _dedup_preservando_orden(docs + docs_enlaces)
             contexto = _trim_contexto(todos_docs, _MAX_CONTEXT_CHARS)
 
-            if not contexto:
+            if not contexto and not self.contexto_estatico:
                 _sin_datos = True
                 contexto = (
                     "SIN_DATOS: No hay documentos de entrenamiento cargados. "
                     "Responde ÚNICAMENTE: \"No tengo esa información.\" "
                     "Prohibido usar conocimiento externo o inventar datos."
                 )
+
+        # Contexto estático siempre se añade (prepuesto al RAG si existe)
+        if self.contexto_estatico:
+            faiss_part = ("\n\n---\n" + contexto) if contexto else ""
+            contexto = self.contexto_estatico + faiss_part
+            logger.debug("Contexto estático (%d chars) + FAISS (%d chars)", len(self.contexto_estatico), len(faiss_part))
 
         # ------------------------------------------------------------------
         # Construir prompt y llamar al LLM

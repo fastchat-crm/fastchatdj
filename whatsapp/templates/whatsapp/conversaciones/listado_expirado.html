@@ -171,12 +171,31 @@
                                 <i class="fa fa-file-alt me-1"></i>Resumen
                             </a>
                         </div>
+                        <button class="btn btn-sm btn-light border d-none" id="btn-control-respuestas"
+                                onclick="$('#control-respuestas-panel').toggleClass('d-none')" title="Control de Respuestas">
+                            <i class="fa fa-chart-bar text-info"></i>
+                        </button>
                         <div class="btn-group d-none" id="reactivar-btn">
                             <a href="javascript:void(0)" class="btn btn-sm btn-success" id="marcar-reactivar"
                                title="Reactivar conversación">
                                 <i class="fa fa-redo me-1"></i>Reactivar
                             </a>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Panel Control de Respuestas -->
+                <div id="control-respuestas-panel" class="d-none px-3 py-2 border-bottom"
+                     style="background:#f8f9fa;font-size:.82rem;">
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <strong><i class="fa fa-chart-bar me-1 text-info"></i>Control de Respuestas</strong>
+                        <span class="badge" style="background:#5c6bc0;color:#fff;">
+                            <i class="fa fa-robot me-1"></i><span id="cr-ia-count">0</span> IA
+                        </span>
+                        <span class="badge bg-success">
+                            <i class="fa fa-headset me-1"></i><span id="cr-agent-count">0</span> Agente
+                        </span>
+                        <div id="cr-agentes-list" class="d-flex flex-wrap gap-2"></div>
                     </div>
                 </div>
 
@@ -328,7 +347,8 @@ $(document).ready(function() {
         pantallaespera();
 
         if (chatSocket) { chatSocket.close(); chatSocket = null; }
-        $('#reactivar-btn, #ver-resumen-btn').addClass('d-none').hide();
+        $('#reactivar-btn, #ver-resumen-btn, #btn-control-respuestas').addClass('d-none').hide();
+        $('#control-respuestas-panel').addClass('d-none');
         $('#mensajes-container').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 small text-muted">Cargando mensajes...</p></div>');
 
         $.ajax({
@@ -357,6 +377,18 @@ $(document).ready(function() {
                 r.estado_active ? $('#reactivar-btn').addClass('d-none').hide()
                                 : $('#reactivar-btn').removeClass('d-none').show();
                 $('#ver-resumen-btn').removeClass('d-none').show();
+
+                // Control de Respuestas
+                $('#cr-ia-count').text(r.cr_ia || 0);
+                $('#cr-agent-count').text(r.cr_agent || 0);
+                var agentesHtml = '';
+                (r.cr_agentes || []).forEach(function(a) {
+                    var nombre = ((a.agente__first_name || '') + ' ' + (a.agente__last_name || '')).trim() || 'Agente';
+                    agentesHtml += '<span class="badge bg-light text-dark border"><i class="fa fa-user me-1"></i>' + nombre + ' <small class="text-muted">(' + a.total + ')</small></span>';
+                });
+                $('#cr-agentes-list').html(agentesHtml);
+                $('#control-respuestas-panel').addClass('d-none');
+                $('#btn-control-respuestas').removeClass('d-none').show();
 
                 setTimeout(scrollToBottom, 800);
                 conectarWebSocket(r.conversacion_id);

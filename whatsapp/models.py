@@ -438,6 +438,10 @@ class MensajeWhatsApp(ModeloBase):
     # Para mensajes enviados por el sistema
     es_automatico = models.BooleanField(default=False, verbose_name='¿Enviado automáticamente?')
     ia_generado = models.BooleanField(default=False, verbose_name='¿Generado por IA?')
+    agente = models.ForeignKey(
+        'autenticacion.Usuario', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='mensajes_enviados', verbose_name='Agente que respondió'
+    )
 
     # ID externo del mensaje (para poder identificarlo cuando se elimina o edita)
     mensaje_id_externo = models.CharField(max_length=100, blank=True, null=True)
