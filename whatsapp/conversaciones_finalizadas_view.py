@@ -96,10 +96,23 @@ def conversacionesFinalizadasView(request):
                     # Crear instancia del servicio
                     service = WhatsAppService()
 
+                    tipo_mensaje = 'texto'
                     if archivo:
+                        ct = archivo.content_type or ''
+                        if 'image' in ct:
+                            tipo_mensaje = 'imagen'
+                        elif 'audio' in ct:
+                            tipo_mensaje = 'audio'
+                        elif 'video' in ct:
+                            tipo_mensaje = 'video'
+                        else:
+                            tipo_mensaje = 'documento'
+
+                    if archivo:
+                        file_bytes = archivo.read()
                         response = service.send_media_message(
                             conversacion.sesion.session_id, conversacion.from_number, caption=texto,
-                            file_content=archivo.read(), filename=archivo.name
+                            file_content=file_bytes, filename=archivo.name
                         )
                     else:
                         response = service.send_text_message(
@@ -112,42 +125,21 @@ def conversacionesFinalizadasView(request):
                             'message': f"Error al enviar mensaje: {response.get('message', 'Error desconocido')}"
                         })
 
-                    # Determinar tipo de mensaje
-                    tipo_mensaje = 'texto'
-                    archivo_url = None
-
-                    if archivo:
-                        # Determinar tipo basado en el content_type
-                        content_type = archivo.content_type
-                        if 'image' in content_type:
-                            tipo_mensaje = 'imagen'
-                        elif 'audio' in content_type:
-                            tipo_mensaje = 'audio'
-                        elif 'video' in content_type:
-                            tipo_mensaje = 'video'
-                        else:
-                            tipo_mensaje = 'documento'
-
-                        # Si la respuesta incluye una URL del archivo, guardarla
-                        archivo_url = response.get('media_url')
-
-                    # Guardamos en BD
                     mensaje = MensajeWhatsApp(
                         mensaje_id_externo=response.get('message_id'),
                         conversacion=conversacion,
                         remitente=conversacion.sesion.numero,
                         mensaje=texto,
                         tipo=tipo_mensaje,
-                        archivo_url=archivo_url,
+                        archivo_url=response.get('media_url'),
                         fecha=timezone.now(),
                         leido=True,
                         fecha_leido=timezone.now()
                     )
-                    #
-                    # # Actualizar último mensaje de la conversación
-                    # conversacion.ultimo_mensaje = texto
-                    # conversacion.fecha_ultimo_mensaje = timezone.now()
-                    # conversacion.save()
+                    if archivo:
+                        from django.core.files.base import ContentFile
+                        mensaje.archivo.save(archivo.name, ContentFile(file_bytes), save=False)
+                    mensaje.save()
 
                     log(f"Mensaje enviado a {conversacion.contacto_numero}", request, "add", obj=conversacion.id)
 
@@ -179,30 +171,52 @@ def conversacionesFinalizadasView(request):
             return JsonResponse({'error': True, 'message': str(ex)})
 
     # ====================== LISTADO CONVERSACIONES =========================
-    criterio = request.GET.get('criterio', '').strip()
-    filtros = Q(contacto__status=True, status=True, contacto__sesion__usuario__id=request.user.id, contacto__sesion__status=True)
+    criterio    = request.GET.get('criterio', '').strip()
+    fecha_desde = request.GET.get('fecha_desde', '').strip()
+    fecha_hasta = request.GET.get('fecha_hasta', '').strip()
+    filtro_sentimiento = request.GET.get('sentimiento', '').strip()
+
+    filtros = Q(contacto__status=True, status=True,
+                contacto__sesion__usuario__id=request.user.id,
+                contacto__sesion__status=True)
     url_vars = ''
 
     if sesion_seleccionada:
-        filtros = filtros & Q(contacto__sesion=sesion_seleccionada)
+        filtros &= Q(contacto__sesion=sesion_seleccionada)
         url_vars += f'&sesion_id={sesion_seleccionada.id}'
 
     if criterio:
-        filtros = filtros & (Q(contacto__contacto_numero__icontains=criterio) | Q(contacto__contacto_nombre__icontains=criterio))
-        data["criterio"] = criterio
+        filtros &= Q(contacto__contacto_numero__icontains=criterio) | Q(contacto__contacto_nombre__icontains=criterio)
         url_vars += '&criterio=' + criterio
 
+    if fecha_desde:
+        filtros &= Q(fecha_fin_conversacion__date__gte=fecha_desde)
+        url_vars += '&fecha_desde=' + fecha_desde
+
+    if fecha_hasta:
+        filtros &= Q(fecha_fin_conversacion__date__lte=fecha_hasta)
+        url_vars += '&fecha_hasta=' + fecha_hasta
+
+    if filtro_sentimiento:
+        filtros &= Q(sentimiento=filtro_sentimiento)
+        url_vars += '&sentimiento=' + filtro_sentimiento
+
     data['conversacion_selected'] = conversacion_selected
-    data["url_vars"] = url_vars
-    data["today"] = timezone.now().date()  # Para comparar fechas en la plantilla
+    data['url_vars'] = url_vars
+    data['today'] = timezone.now().date()
+    data['criterio'] = criterio
+    data['fecha_desde'] = fecha_desde
+    data['fecha_hasta'] = fecha_hasta
+    data['filtro_sentimiento'] = filtro_sentimiento
 
     # Si es una solicitud AJAX para cargar conversaciones
     if request.GET.get('load_conversations'):
-        conversaciones = ConversacionWhatsApp.objects.expirado.filter(filtros)
-        data["conversaciones"] = conversaciones
-        data["list_count"] = conversaciones.count()
+        conversaciones = ConversacionWhatsApp.objects.expirado.filter(filtros).order_by('-fecha_fin_conversacion')
         return JsonResponse({
-            'html': render_to_string('whatsapp/conversaciones/conversaciones_partial.html', {'conversaciones': conversaciones, 'today': timezone.now().date(), 'show_date':True},
-                                     request=request)
+            'html': render_to_string(
+                'whatsapp/conversaciones/conversaciones_partial.html',
+                {'conversaciones': conversaciones, 'today': timezone.now().date(), 'show_date': True},
+                request=request
+            )
         })
     return render(request, 'whatsapp/conversaciones/listado_expirado.html', data)

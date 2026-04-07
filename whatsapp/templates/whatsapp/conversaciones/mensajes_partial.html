@@ -3,7 +3,7 @@
 .msg-row { padding: 0 12px; }
 
 .msg-bubble {
-    max-width: 68%;
+    max-width: 78%;
     padding: 8px 12px 4px;
     border-radius: 16px;
     font-size: .9rem;
@@ -71,9 +71,9 @@
 .btn-xs-sm { font-size:.75rem; padding:.2rem .55rem; border-radius:4px; }
 
 /* Media */
-.msg-bubble img.msg-img { max-width:220px; max-height:220px; object-fit:cover; border-radius:10px; display:block; margin-top:4px; }
-.msg-bubble video { max-width:220px; border-radius:10px; display:block; margin-top:4px; }
-.msg-bubble audio { max-width:220px; display:block; margin-top:4px; }
+.msg-bubble img.msg-img { max-width:300px; max-height:300px; object-fit:cover; border-radius:10px; display:block; margin-top:4px; cursor:zoom-in; }
+.msg-bubble video { max-width:300px; border-radius:10px; display:block; margin-top:4px; }
+.msg-bubble audio { max-width:300px; display:block; margin-top:4px; }
 </style>
 
 <script>
@@ -142,7 +142,7 @@ function _sendFeedback(msgId, esOk, correccion, pregunta, btn) {
              alt="" class="msg-avatar rounded-circle">
     {% endif %}
 
-    <div class="d-flex flex-column align-items-end" style="max-width:70%;">
+    <div class="d-flex flex-column align-items-end" style="max-width:82%;">
         <span class="msg-sender msg-sender-{% if mensaje.ia_generado %}ia{% else %}agent{% endif %}">
             {% if mensaje.ia_generado %}<i class="fa fa-robot me-1"></i>IA{% else %}<i class="fa fa-headset me-1"></i>Agente{% endif %}
         </span>
@@ -231,7 +231,7 @@ function _sendFeedback(msgId, esOk, correccion, pregunta, btn) {
         <img src="/static/assets/img/avatar.png" alt="" class="msg-avatar rounded-circle">
     {% endif %}
 
-    <div class="d-flex flex-column" style="max-width:70%;">
+    <div class="d-flex flex-column" style="max-width:82%;">
         <span class="msg-sender msg-sender-client">
             <i class="fa fa-user me-1"></i>{{ conversacion.contacto_nombre|default:conversacion.contacto_numero }}
         </span>

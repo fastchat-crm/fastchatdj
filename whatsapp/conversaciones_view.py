@@ -138,10 +138,24 @@ def conversacionesView(request):
                     # Crear instancia del servicio
                     service = WhatsAppService()
 
+                    # Determinar tipo antes de leer el archivo
+                    tipo_mensaje = 'texto'
                     if archivo:
+                        ct = archivo.content_type or ''
+                        if 'image' in ct:
+                            tipo_mensaje = 'imagen'
+                        elif 'audio' in ct:
+                            tipo_mensaje = 'audio'
+                        elif 'video' in ct:
+                            tipo_mensaje = 'video'
+                        else:
+                            tipo_mensaje = 'documento'
+
+                    if archivo:
+                        file_bytes = archivo.read()
                         response = service.send_media_message(
                             conversacion.sesion.session_id, conversacion.from_number, caption=texto,
-                            file_content=archivo.read(), filename=archivo.name
+                            file_content=file_bytes, filename=archivo.name
                         )
                     else:
                         response = service.send_text_message(
@@ -154,25 +168,6 @@ def conversacionesView(request):
                             'message': f"Error al enviar mensaje: {response.get('message', 'Error desconocido')}"
                         })
 
-                    # Determinar tipo de mensaje
-                    tipo_mensaje = 'texto'
-                    archivo_url = None
-
-                    if archivo:
-                        # Determinar tipo basado en el content_type
-                        content_type = archivo.content_type
-                        if 'image' in content_type:
-                            tipo_mensaje = 'imagen'
-                        elif 'audio' in content_type:
-                            tipo_mensaje = 'audio'
-                        elif 'video' in content_type:
-                            tipo_mensaje = 'video'
-                        else:
-                            tipo_mensaje = 'documento'
-
-                        # Si la respuesta incluye una URL del archivo, guardarla
-                        archivo_url = response.get('media_url')
-
                     # Guardamos en BD
                     mensaje = MensajeWhatsApp(
                         mensaje_id_externo=response.get('message_id'),
@@ -180,11 +175,15 @@ def conversacionesView(request):
                         remitente=conversacion.sesion.numero,
                         mensaje=texto,
                         tipo=tipo_mensaje,
-                        archivo_url=archivo_url,
+                        archivo_url=response.get('media_url'),
                         fecha=timezone.now(),
                         leido=True,
                         fecha_leido=timezone.now()
                     )
+                    # Guardar archivo localmente para tener URL definitiva
+                    if archivo:
+                        from django.core.files.base import ContentFile
+                        mensaje.archivo.save(archivo.name, ContentFile(file_bytes), save=False)
                     mensaje.save()
 
                     log(f"Mensaje enviado a {conversacion.contacto_numero}", request, "add", obj=conversacion.id)
