@@ -521,6 +521,10 @@ class ConsumoTokenIA(models.Model):
         'AgentesIA', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='consumos', verbose_name='Agente',
     )
+    conversacion = models.ForeignKey(
+        'whatsapp.ConversacionWhatsApp', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='consumos_token', verbose_name='Conversación',
+    )
     fecha = models.DateTimeField(auto_now_add=True, db_index=True)
     tokens_entrada = models.IntegerField(default=0, verbose_name='Tokens entrada (prompt)')
     tokens_salida = models.IntegerField(default=0, verbose_name='Tokens salida (respuesta)')

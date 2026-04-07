@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.db import models, transaction
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.contrib import messages
 from django.template.loader import render_to_string, get_template
 from django.utils import timezone
@@ -13,6 +13,23 @@ from seguridad.templatetags.templatefunctions import encrypt
 from .forms import CambiarClasificacionForm, CambiarNombreContactoForm, AsignarAgenteForm
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp, SENTIMIENTO_CHOICES
 from .services import WhatsAppService
+
+def _tokens_conversacion(conversacion):
+    """Agrega tokens IA consumidos en una conversación."""
+    try:
+        agg = conversacion.consumos_token.aggregate(
+            t_in=Sum('tokens_entrada'),
+            t_out=Sum('tokens_salida'),
+            t_total=Sum('tokens_total'),
+        )
+        return {
+            'tokens_entrada': agg['t_in'] or 0,
+            'tokens_salida': agg['t_out'] or 0,
+            'tokens_total': agg['t_total'] or 0,
+        }
+    except Exception:
+        return {'tokens_entrada': 0, 'tokens_salida': 0, 'tokens_total': 0}
+
 
 @login_required
 @secure_module
@@ -70,6 +87,7 @@ def conversacionesView(request):
                 'nota_interna': conversacion.nota_interna or '',
                 'fecha_asignacion': conversacion.fecha_asignacion.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_asignacion else '',
                 'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_registro else '',
+                **_tokens_conversacion(conversacion),
             })
         elif action == 'cambiar-clasificacion':
             try:
@@ -167,11 +185,7 @@ def conversacionesView(request):
                         leido=True,
                         fecha_leido=timezone.now()
                     )
-                    #
-                    # # Actualizar último mensaje de la conversación
-                    # conversacion.ultimo_mensaje = texto
-                    # conversacion.fecha_ultimo_mensaje = timezone.now()
-                    # conversacion.save()
+                    mensaje.save()
 
                     log(f"Mensaje enviado a {conversacion.contacto_numero}", request, "add", obj=conversacion.id)
 

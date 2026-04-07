@@ -509,6 +509,7 @@ def process_incoming_message(session, event_data, channel_layer):
                                 from crm.alertas_consumo import verificar_alerta_consumo
                                 ConsumoTokenIA.objects.create(
                                     apikey=apikey, agente=agente,
+                                    conversacion=conversation,
                                     tokens_entrada=resultado.tokens_entrada,
                                     tokens_salida=resultado.tokens_salida,
                                     tokens_total=resultado.tokens_total,

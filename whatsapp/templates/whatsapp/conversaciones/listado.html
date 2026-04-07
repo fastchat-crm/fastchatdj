@@ -43,21 +43,12 @@
     #btn-toggle-bot.bot-on  { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
     #btn-toggle-bot.bot-off { background: #fce4ec; color: #c62828; border: 1px solid #ef9a9a; }
 
-    /* Añadir estos estilos en tu CSS */
-    .deleted-message {
-        opacity: 0.7;
-        font-style: italic;
+    /* Chat background texture */
+    #chat-messages {
+        background-color: #e5ddd5;
+        background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8b8a2' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
     }
-
-    .edited-message p {
-        position: relative;
-    }
-
-    .edited-message small {
-        font-size: 0.7em;
-        margin-top: -5px;
-        display: block;
-    }
+    #chat-messages .simplebar-content { padding: 16px 0 !important; }
 </style>
 {% endblock %}
 
@@ -187,6 +178,17 @@
                         </div><!-- end media-body -->
                     </a><!--end media-->
                     <div class="d-sm-inline-block align-self-center d-flex align-items-center gap-2">
+                        <!-- Tokens IA -->
+                        <div class="d-none" id="tokens-container">
+                            <span class="badge border d-flex align-items-center gap-1"
+                                  id="tokens-badge"
+                                  title="Tokens IA consumidos en esta conversación"
+                                  style="background:#f3f0ff;color:#5c35d4;border-color:#c4b5fd!important;font-size:.72rem;font-weight:500;cursor:default;">
+                                <i class="fa fa-microchip" style="font-size:.7rem;"></i>
+                                <span id="tokens-valor">0</span>
+                                <span class="text-muted" style="font-size:.65rem;" id="tokens-detalle"></span>
+                            </span>
+                        </div>
                         <!-- Asignado a -->
                         <div class="d-none" id="asignado-container">
                             <span class="badge bg-light text-dark border" id="asignado-badge" title="Asignado a">
@@ -450,7 +452,7 @@
             sessionWebSocket(sesionId, filtroActivo);
             $('#mensajes-container').html('<div class="text-center p-5"><i class="fa fa-comments fa-4x text-muted mb-3"></i><p>Selecciona una conversación para ver los mensajes</p></div>');
             $('#chat-footer').hide();
-            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container').addClass('d-none');
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container').addClass('d-none');
             $('#contacto-nombre').text('Selecciona una conversación');
             $('#contacto-numero').text('');
             $('#contacto-hashedId').text('');
@@ -652,7 +654,7 @@
             if (chatSocket) { chatSocket.close(); chatSocket = null; }
 
             // Ocultar controles mientras carga
-            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #chat-footer').addClass('d-none').hide();
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #chat-footer').addClass('d-none').hide();
             $('#mensajes-container').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted small">Cargando mensajes...</p></div>');
 
             $.ajax({
@@ -703,6 +705,15 @@
                         $('#conv-fecha-inicio').text('Inicio: ' + response.fecha_inicio).show();
                     } else {
                         $('#conv-fecha-inicio').hide();
+                    }
+
+                    // Tokens IA
+                    if (response.tokens_total > 0) {
+                        $('#tokens-valor').text(response.tokens_total.toLocaleString());
+                        $('#tokens-detalle').text('↑' + response.tokens_entrada.toLocaleString() + ' ↓' + response.tokens_salida.toLocaleString());
+                        $('#tokens-container').removeClass('d-none').show();
+                    } else {
+                        $('#tokens-container').addClass('d-none').hide();
                     }
 
                     // Mostrar footer para enviar mensajes
