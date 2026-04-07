@@ -50,7 +50,7 @@ _MAX_STATIC_CHARS  = 1_200  # máx chars del contexto estático (el resto va a F
 _HISTORY_TURNS     = 4      # turnos de historial (4 turnos = 8 mensajes)
 _USER_SNIPPET      = 160    # chars por mensaje de usuario en historial
 _AI_SNIPPET        = 240    # chars por respuesta IA en historial
-_MAX_OUTPUT_TOKENS = 380    # límite duro de tokens de salida (evita respuestas novela)
+_MAX_OUTPUT_TOKENS = 650    # límite duro de tokens de salida — suficiente para listas de hasta ~20 ítems
 _TOPIC_ANCHOR_CHARS = 180   # chars del primer mensaje sustantivo como ancla de tema
 
 # Palabras que NO se añaden como ancla semántica al query FAISS
