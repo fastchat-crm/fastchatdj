@@ -1,9 +1,19 @@
 {% extends 'base.html' %}
 {% block head %}
 <style>
-    .chat-body {
-        height: calc(100vh - 250px);
-        overflow-y: auto;
+    /* ── Layout flexbox para que el footer no tape los mensajes ── */
+    .chat-box-right {
+        display: flex !important;
+        flex-direction: column;
+        height: calc(100vh - 120px) !important;
+    }
+    #chat-header  { flex-shrink: 0; }
+    .chat-body    { flex: 1 1 auto; height: auto !important; overflow-y: auto; min-height: 0; }
+    #chat-footer  {
+        flex-shrink: 0;
+        background: #f0f2f5 !important;
+        border-top: 1px solid #dde1e7;
+        box-shadow: 0 -2px 6px rgba(0,0,0,.06);
     }
 
     .chat-body-left {
@@ -242,7 +252,7 @@
                 </div><!-- end chat-body -->
 
                 <!-- Formulario para enviar mensajes -->
-                <div class="chat-footer p-3 bg-light" id="chat-footer" style="display: none;">
+                <div class="chat-footer p-3" id="chat-footer" style="display: none;">
                     <form id="form-enviar-mensaje" enctype="multipart/form-data">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="send">
@@ -257,16 +267,20 @@
                         </div>
                         <div class="d-flex align-items-center gap-2">
                             <!-- Adjuntar archivo -->
-                            <label for="archivo" class="btn btn-light border mb-0" title="Adjuntar imagen / video / audio / doc">
+                            <label for="archivo" class="mb-0 d-flex align-items-center justify-content-center"
+                                   title="Adjuntar imagen / video / audio / doc"
+                                   style="width:38px;height:38px;border-radius:50%;background:#fff;border:1px solid #dde1e7;cursor:pointer;color:#6c757d;flex-shrink:0;">
                                 <i class="fa fa-paperclip"></i>
                             </label>
                             <input type="file" id="archivo" name="archivo" style="display:none;"
                                    accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar">
                             <!-- Campo de texto -->
-                            <input type="text" class="form-control" name="mensaje" id="footer-mensaje-input"
-                                   placeholder="Escribe un mensaje...">
+                            <input type="text" class="form-control rounded-pill border-0" name="mensaje" id="footer-mensaje-input"
+                                   placeholder="Escribe un mensaje..."
+                                   style="background:#fff;box-shadow:none;">
                             <!-- Enviar -->
-                            <button type="submit" class="btn btn-primary" id="footer-send-btn">
+                            <button type="submit" class="mb-0 d-flex align-items-center justify-content-center border-0" id="footer-send-btn"
+                                    style="width:40px;height:40px;border-radius:50%;background:#25d366;color:#fff;flex-shrink:0;cursor:pointer;">
                                 <i class="fa fa-paper-plane"></i>
                             </button>
                         </div>

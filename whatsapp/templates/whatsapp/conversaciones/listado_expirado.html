@@ -1,10 +1,21 @@
 {% extends 'base.html' %}
 {% block head %}
 <style>
-    .chat-body {
-        height: calc(100vh - 250px);
-        overflow-y: auto;
+    /* ── Layout flexbox ── */
+    .chat-box-right {
+        display: flex !important;
+        flex-direction: column;
+        height: calc(100vh - 120px) !important;
     }
+    #chat-header { flex-shrink: 0; }
+    .chat-body   { flex: 1 1 auto; height: auto !important; overflow-y: auto; min-height: 0; }
+    #chat-footer {
+        flex-shrink: 0;
+        background: #f0f2f5 !important;
+        border-top: 1px solid #dde1e7;
+        box-shadow: 0 -2px 6px rgba(0,0,0,.06);
+    }
+
     .chat-body-left {
         height: calc(100vh - 520px) !important;
         overflow-y: auto;
