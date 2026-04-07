@@ -251,6 +251,14 @@ class ConversacionWhatsApp(ModeloBase):
     )
     fecha_asignacion = models.DateTimeField('Fecha de asignación', null=True, blank=True)
     nota_interna = models.TextField('Nota interna', blank=True, default='')
+    primer_agente = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='conversaciones_iniciadas', verbose_name='Primer agente en responder',
+    )
+    aprendizaje_procesado = models.BooleanField(
+        default=False, verbose_name='Aprendizaje procesado',
+        help_text='True cuando el cron ya extrajo pares Q&A de esta conversación para el vectorstore.'
+    )
     bloquear_cierre = models.BooleanField(
         'Bloquear cierre automático', default=False,
         help_text='Si está activo, el cron no cerrará esta conversación aunque expire. '

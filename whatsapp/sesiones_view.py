@@ -57,6 +57,21 @@ def sesionesView(request):
                     log(f"Crear sesión WhatsApp pendiente (ID: {session.id})", request, "create_session", obj=session.id)
                     res_json = {'error': False, 'qr': session.qr_code, 'session_id': session.id}
                     return JsonResponse(res_json, safe=False)
+                elif action == 'reconectar':
+                    filtro = model.objects.get(pk=int(request.POST['id']))
+                    webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
+                    result = whatsapp_service.create_session(filtro, webhook_url)
+                    if result.get('success'):
+                        filtro.estado = 'pendiente'
+                        filtro.error_mensaje = None
+                        filtro.desconectado_manualmente = False
+                        if result.get('qr_code'):
+                            filtro.qr_code = result['qr_code']
+                        filtro.save(update_fields=['estado', 'error_mensaje', 'desconectado_manualmente', 'qr_code'])
+                        log(f"Sesión {filtro.id} reconectada manualmente", request, "change", obj=filtro.id)
+                        return JsonResponse({'error': False, 'qr': filtro.qr_code or '', 'message': 'Reconexión iniciada. Escanea el QR si es necesario.'})
+                    else:
+                        return JsonResponse({'error': True, 'message': result.get('error') or 'No se pudo reconectar'})
                 elif action == 'delete':
                     filtro = model.objects.get(pk=int(request.POST['id']))
                     result = whatsapp_service.close_session(filtro.session_id)

@@ -250,9 +250,15 @@
                         </div>
                         <div class="card-footer">
                             <div class="d-flex justify-content-between align-items-center">
-                                <!-- Botón QR si está pendiente o desconectado -->
+                                <!-- Botones de sesión desconectada / pendiente -->
+                                {% if s.estado == 'desconectado' and not s.desconectado_manualmente %}
+                                    <button class="btn btn-warning btn-sm me-1" title="Intentar reconectar automáticamente"
+                                            onclick="reconectarSesion({{ s.id }}, this)">
+                                        <i class="fas fa-plug me-1"></i> Reconectar
+                                    </button>
+                                {% endif %}
                                 {% if s.estado == 'pendiente' or s.estado == 'desconectado' %}
-                                    <button class="btn btn-success btn-sm" data-bs-toggle="modal" style="width: 100%;"
+                                    <button class="btn btn-success btn-sm" data-bs-toggle="modal"
                                             data-bs-target="#modalAgregarSesion"
                                             data-qr="{{ s.qr_code }}" data-session-id="{{ s.id }}">
                                         <i class="fas fa-qrcode me-1"></i> Ver QR
@@ -579,6 +585,26 @@
         });
     </script>
     <script>
+        function reconectarSesion(id, btn) {
+            if (!confirm('¿Intentar reconectar esta sesión ahora?')) return;
+            const $btn = $(btn);
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Reconectando...');
+            $.post('', { action: 'reconectar', id: id, csrfmiddlewaretoken: '{{ csrf_token }}' })
+                .done(function(r) {
+                    if (r.error) {
+                        alertaDanger(r.message || 'No se pudo reconectar');
+                        $btn.prop('disabled', false).html('<i class="fas fa-plug me-1"></i> Reconectar');
+                    } else {
+                        alertaSuccess(r.message || 'Reconexión iniciada');
+                        setTimeout(() => location.reload(), 2000);
+                    }
+                })
+                .fail(function() {
+                    alertaDanger('Error de comunicación');
+                    $btn.prop('disabled', false).html('<i class="fas fa-plug me-1"></i> Reconectar');
+                });
+        }
+
         function sincronizarContactos(sesionId) {
             if (!sesionId) {
                 alertaWarning('Selecciona una sesión primero');

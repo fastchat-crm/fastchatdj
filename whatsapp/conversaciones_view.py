@@ -212,6 +212,11 @@ def conversacionesView(request):
                         mensaje.archivo.save(archivo.name, ContentFile(file_bytes), save=False)
                     mensaje.save()
 
+                    # Registrar primer agente humano en responder
+                    if not conversacion.primer_agente:
+                        conversacion.primer_agente = request.user
+                        conversacion.save(update_fields=['primer_agente'])
+
                     log(f"Mensaje enviado a {conversacion.contacto_numero}", request, "add", obj=conversacion.id)
 
                     # Devolver el HTML del mensaje para añadirlo al chat

@@ -42,14 +42,16 @@ class ConsultaResultado:
 
 # ---------------------------------------------------------------------------
 # Parámetros de control de tokens
-# Reducidos respecto a valores anteriores para ~35% menos de consumo promedio.
 # ---------------------------------------------------------------------------
-_FAISS_K          = 5      # chunks a recuperar (era 8) — suficiente para el 95% de preguntas
-_FAISS_FETCH_K    = 20     # candidatos pre-MMR (era 40)
-_MAX_CONTEXT_CHARS = 2_500  # techo del contexto enviado al LLM (era 4 000)
-_HISTORY_TURNS    = 3      # turnos de historial (era 4)
-_USER_SNIPPET     = 180    # chars por mensaje de usuario en historial (era 200)
-_AI_SNIPPET       = 300    # chars por respuesta IA en historial (era 600)
+_FAISS_K           = 4      # chunks a recuperar — suficiente para el 95% de preguntas
+_FAISS_FETCH_K     = 15     # candidatos pre-MMR
+_MAX_CONTEXT_CHARS = 2_200  # techo del contexto total enviado al LLM
+_MAX_STATIC_CHARS  = 1_200  # máx chars del contexto estático (el resto va a FAISS)
+_HISTORY_TURNS     = 4      # turnos de historial (4 turnos = 8 mensajes)
+_USER_SNIPPET      = 160    # chars por mensaje de usuario en historial
+_AI_SNIPPET        = 240    # chars por respuesta IA en historial
+_MAX_OUTPUT_TOKENS = 380    # límite duro de tokens de salida (evita respuestas novela)
+_TOPIC_ANCHOR_CHARS = 180   # chars del primer mensaje sustantivo como ancla de tema
 
 # Palabras que NO se añaden como ancla semántica al query FAISS
 _GREETING_WORDS = frozenset({
@@ -233,10 +235,16 @@ class AgenteConsultor:
 
     def _get_llm(self):
         if self.provider == "gemini":
-            return ChatGoogleGenerativeAI(model=self.model_name, google_api_key=self.apikey)
+            return ChatGoogleGenerativeAI(
+                model=self.model_name, google_api_key=self.apikey,
+                max_output_tokens=_MAX_OUTPUT_TOKENS,
+            )
         elif self.provider == "openai":
             from langchain_community.chat_models import ChatOpenAI
-            return ChatOpenAI(model_name=self.model_name, openai_api_key=self.apikey)
+            return ChatOpenAI(
+                model_name=self.model_name, openai_api_key=self.apikey,
+                max_tokens=_MAX_OUTPUT_TOKENS,
+            )
         raise ValueError("Proveedor de LLM no soportado")
 
     def _load_vectorstore(self):
@@ -290,38 +298,65 @@ class AgenteConsultor:
 
         return "Historial reciente:\n" + "\n".join(partes) + "\n\n"
 
+    def _tema_inicial(self) -> str:
+        """Primer mensaje sustantivo del usuario en esta conversación.
+
+        Se usa como ancla de tema en FAISS cuando el historial reciente
+        ya no incluye el contexto original (por rotación de turnos).
+        """
+        h = self._historia
+        if not h:
+            return ""
+        try:
+            from .models import MessageStore
+            first = (
+                MessageStore.objects
+                .filter(session_id=h.session_id, role="human")
+                .order_by("created_at")
+                .values_list("content", flat=True)
+                .first()
+            )
+            if first and len(first) >= 15 and not _es_ack_simple(first) and not _es_saludo(first):
+                return first[:_TOPIC_ANCHOR_CHARS]
+        except Exception:
+            pass
+        return ""
+
     def _query_retrieval(self, pregunta: str, contexto_previo: str) -> str:
         """
         Enriquece el query FAISS para preguntas de seguimiento.
 
-        Añade el último mensaje del usuario Y los primeros 120 chars de la
-        última respuesta del agente — esto mejora el recall cuando el usuario
-        hace referencias implícitas ("¿y el precio?" después de hablar de un curso).
+        Estrategia en capas:
+        1. Pregunta actual
+        2. Último mensaje del usuario (si aporta contexto semántico nuevo)
+        3. Extracto de la última respuesta IA (para seguimientos implícitos cortos)
+        4. Ancla de tema inicial (cuando el historial ya rotó y la pregunta es huérfana)
         """
-        if not contexto_previo:
-            return pregunta
-
-        lineas = contexto_previo.splitlines()
-
-        # Última línea del usuario
+        lineas = contexto_previo.splitlines() if contexto_previo else []
         user_lines = [l for l in lineas if l.startswith("U:")]
+        ai_lines   = [l for l in lineas if l.startswith("A:")]
         ultimo_user = user_lines[-1].replace("U:", "").strip() if user_lines else ""
-
-        # Última línea del agente (primeros 120 chars — solo para orientar FAISS)
-        ai_lines = [l for l in lineas if l.startswith("A:")]
-        ultimo_ai = ai_lines[-1].replace("A:", "").strip()[:120] if ai_lines else ""
+        ultimo_ai   = ai_lines[-1].replace("A:", "").strip()[:120] if ai_lines else ""
 
         ancla_parts = []
+        pregunta_lower = pregunta.lower()
 
-        # Añadir último mensaje usuario solo si aporta contexto semántico
+        # Capa 2: último mensaje del usuario con contenido semántico
         if ultimo_user and len(ultimo_user) >= 15:
             if ultimo_user.lower().strip('.,!?') not in _GREETING_WORDS:
-                if ultimo_user.lower() not in pregunta.lower():
-                    ancla_parts.append(ultimo_user)
+                if ultimo_user.lower() not in pregunta_lower:
+                    ancla_parts.append(ultimo_user[:120])
 
-        # Añadir extracto IA solo si la pregunta actual es muy corta (seguimiento implícito)
-        if ultimo_ai and len(pregunta.strip()) < 40 and ultimo_ai.lower() not in pregunta.lower():
+        # Capa 3: extracto IA para seguimientos cortos ("¿y el precio?")
+        if ultimo_ai and len(pregunta.strip()) < 40 and ultimo_ai.lower() not in pregunta_lower:
             ancla_parts.append(ultimo_ai)
+
+        # Capa 4: tema inicial como ancla de último recurso
+        # Se activa cuando la pregunta es corta Y no hay ancla de capa 2/3
+        if not ancla_parts and len(pregunta.strip()) < 50:
+            tema = self._tema_inicial()
+            if tema and tema.lower() not in pregunta_lower:
+                ancla_parts.append(tema[:100])
 
         if not ancla_parts:
             return pregunta
@@ -403,10 +438,18 @@ class AgenteConsultor:
                 )
 
         # Contexto estático siempre se añade (prepuesto al RAG si existe)
+        # Cap proporcional: el estático no consume más de _MAX_STATIC_CHARS,
+        # dejando el resto del presupuesto para los chunks FAISS.
         if self.contexto_estatico:
-            faiss_part = ("\n\n---\n" + contexto) if contexto else ""
-            contexto = self.contexto_estatico + faiss_part
-            logger.debug("Contexto estático (%d chars) + FAISS (%d chars)", len(self.contexto_estatico), len(faiss_part))
+            estatico_trim = self.contexto_estatico[:_MAX_STATIC_CHARS]
+            faiss_budget  = _MAX_CONTEXT_CHARS - len(estatico_trim)
+            faiss_trim    = contexto[:max(faiss_budget, 0)] if contexto else ""
+            faiss_part    = ("\n\n---\n" + faiss_trim) if faiss_trim else ""
+            contexto      = estatico_trim + faiss_part
+            logger.debug(
+                "Contexto estático (%d chars) + FAISS (%d chars) = %d total",
+                len(estatico_trim), len(faiss_trim), len(contexto),
+            )
 
         # ------------------------------------------------------------------
         # Construir prompt y llamar al LLM
