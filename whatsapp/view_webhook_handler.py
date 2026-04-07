@@ -1,5 +1,5 @@
 # whatsapp/views.py (webhook_handler)
-from django.db.models import Q, Window
+from django.db.models import Count, Q, Window
 from django.db.models.functions import RowNumber
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -15,7 +15,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.conf import settings
 from agents_ai.agente_consultor import AgenteConsultor
-from core.funciones import save_log_entry
+from core.funciones import save_log_entry, notificacion
 from core.funciones_adicionales import get_image_as_base64, get_numero_emoji_ws
 from .models import (
     SesionWhatsApp,
@@ -322,7 +322,7 @@ def process_incoming_message(session, event_data, channel_layer):
             return
 
         # Buscar o crear la conversación
-        contacto = Contacto.objects.filter(sesion=session, from_number=from_number).first() or Contacto(
+        contacto, _ = Contacto.objects.get_or_create(
             sesion=session, from_number=from_number
         )
         contacto.estado = 'activo'
@@ -387,6 +387,13 @@ def process_incoming_message(session, event_data, channel_layer):
         contacto.fecha_ultimo_mensaje = message_date
         contacto.save()
 
+        # Guard de idempotencia: si ya procesamos este mensaje_id, no duplicar
+        if message_id and MensajeWhatsApp.objects.filter(
+            mensaje_id_externo=message_id, conversacion__contacto__sesion=session
+        ).exists():
+            logger.warning(f"Mensaje duplicado ignorado: {message_id}")
+            return
+
         conversation = ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).first() or \
                        ConversacionWhatsApp.objects.create(contacto=contacto)
 
@@ -422,11 +429,33 @@ def process_incoming_message(session, event_data, channel_layer):
         departamentos_msg = 'Escribe el número del departamento para continuar:\n'
         if session.agente_ia and session.agente_ia.apikey.exists():
             agente = session.agente_ia
+
+            # ── Detección de reintento ────────────────────────────────────
+            texto_normalizado = (message_text or '').strip().lower()
+            es_reintento = texto_normalizado in ('reintentar', 'reintento', 'retry', 'intentar de nuevo', 'volver a intentar')
+            if es_reintento:
+                # Buscar el último mensaje del contacto que NO sea una palabra de reintento
+                ultimo = (
+                    MensajeWhatsApp.objects
+                    .filter(conversacion=conversation, remitente=from_number)
+                    .exclude(pk=message.pk)
+                    .order_by('-fecha')
+                    .first()
+                )
+                if ultimo and ultimo.mensaje:
+                    message_text = ultimo.mensaje
+                else:
+                    whatsapp_service.send_text_message(
+                        conversation.sesion.session_id, contacto.from_number,
+                        'No encontré un mensaje anterior para reintentar. Por favor escribe tu consulta nuevamente.'
+                    )
+                    return JsonResponse({'status': 'ok'})
+
             whatsapp_service.send_presence_update(
                 conversation.sesion.session_id, contacto.from_number
             )
             try:
-                if message_type == 'audio':
+                if message_type == 'audio' and not es_reintento:
                     whatsapp_service.send_text_message(
                         conversation.sesion.session_id, contacto.from_number, 'Procesando...', True
                     )
@@ -437,44 +466,60 @@ def process_incoming_message(session, event_data, channel_layer):
                     whatsapp_service.send_presence_update(
                         conversation.sesion.session_id, contacto.from_number
                     )
-                print(message_text)
                 vs_path = agente.vectorstore_path and os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path) or ''
                 vectorstore_enlaces_path = ''
                 agente.build_enlaces_vectorstore()
                 if agente.vectorstore_enlaces_path:
                     vectorstore_enlaces_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_enlaces_path)
-                sin_error = True
-                errores_msg = ''
+                respuesta_enviada = False
                 for apikey in agente.apikey.filter(estado=True):
                     try:
-                        sin_error = True
                         consultor = AgenteConsultor(
-                            vectorstore_path=vs_path, vectorstore_enlaces_path=vectorstore_enlaces_path, provider=apikey.proveedor, apikey=apikey.descripcion,
-                            conversacion=conversation, prompt_template_text= agente.prompt_template,
+                            vectorstore_path=vs_path, vectorstore_enlaces_path=vectorstore_enlaces_path,
+                            provider=apikey.proveedor, apikey=apikey.descripcion,
+                            conversacion=conversation, prompt_template_text=agente.prompt_template,
+                            contexto_estatico=agente.contexto_estatico or None,
                         )
                         if agente.anotar_listas:
                             respuesta = consultor.consultar_con_listas(message_text, agente.descripcion)
                         else:
                             respuesta = consultor.consultar(message_text, agente.descripcion)
-                        print("respuesta", respuesta)
                         whatsapp_service.send_text_message(
                             conversation.sesion.session_id, contacto.from_number, respuesta
                         )
+                        respuesta_enviada = True
                         break
                     except Exception as ex:
+                        logger.error("API Key %s falló para agente %s: %s", apikey.id, agente.nombre, ex)
                         apikey.estado = False
-                        apikey.msgerror = str(ex)
+                        apikey.msgerror = str(ex)[:500]
                         apikey.save()
-                        sin_error = False
-                        errores_msg += f'\nAPIKEY ID {apikey.id}: {ex}'
+                        try:
+                            notificacion(
+                                titulo=f'Error en API Key — Agente "{agente.nombre}"',
+                                cuerpo=(
+                                    f'La API Key <strong>{apikey.alias or apikey.get_proveedor_display()}</strong> '
+                                    f'(ID {apikey.id}) falló y fue desactivada automáticamente.<br>'
+                                    f'<small>{str(ex)[:300]}</small>'
+                                ),
+                                destinatario=session.usuario,
+                                url='/crm/entrenamiento/',
+                                prioridad=1,
+                                tipo=4,
+                            )
+                        except Exception:
+                            pass
                         continue
-                if not sin_error:
+                if not respuesta_enviada:
                     whatsapp_service.send_text_message(
-                        conversation.sesion.session_id, contacto.from_number, errores_msg
+                        conversation.sesion.session_id, contacto.from_number,
+                        'Lo siento, en este momento no puedo procesar tu consulta. Por favor escribe *reintentar* en unos momentos o contacta a un asesor.'
                     )
             except Exception as ex:
+                logger.error("Error inesperado en agente IA para sesión %s: %s", session.session_id, ex)
                 whatsapp_service.send_text_message(
-                    conversation.sesion.session_id, contacto.from_number, str(ex)
+                    conversation.sesion.session_id, contacto.from_number,
+                    'Lo siento, ocurrió un error inesperado. Escribe *reintentar* para volver a intentarlo.'
                 )
             finally:
                 whatsapp_service.quit_presence_update(
@@ -688,6 +733,13 @@ def process_sent_message(session, event_data, channel_layer):
         contacto.fecha_ultimo_mensaje = timezone.now()
         contacto.save()
 
+        # Guard de idempotencia: si ya procesamos este mensaje_id, no duplicar
+        if message_id and MensajeWhatsApp.objects.filter(
+            mensaje_id_externo=message_id, conversacion__contacto__sesion=session
+        ).exists():
+            logger.warning(f"Mensaje enviado duplicado ignorado: {message_id}")
+            return
+
         conversation = ConversacionWhatsApp.objects.filter(id=conversacion_id).first() or\
                        ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).order_by('-id').first() or \
                        ConversacionWhatsApp.objects.create(contacto=contacto, fromMe=True)
@@ -850,7 +902,7 @@ def process_edited_message(session, event_data, fromchat, channel_layer):
                 {
                     'type': 'whatsapp_event',
                     'event': 'new_message',
-                    'conversation_id': message.conversation.id
+                    'conversation_id': message.conversacion.id
                 }
             )
 
@@ -924,63 +976,49 @@ def save_media_file(media_base64, filename):
 
 def update_conversation_stats(conversation):
     """
-    Actualiza las estadísticas de una conversación
-
-    Args:
-        conversation: Objeto ConversacionWhatsApp
+    Actualiza las estadísticas de una conversación en una sola query aggregate.
     """
     try:
-        # Obtener o crear las estadísticas
-        stats, created = EstadisticasConversacion.objects.get_or_create(
-            conversacion=conversation
+        stats, _ = EstadisticasConversacion.objects.get_or_create(conversacion=conversation)
+
+        contacto_numero = conversation.contacto_numero
+
+        agg = MensajeWhatsApp.objects.filter(conversacion=conversation).aggregate(
+            total=Count('id'),
+            cliente=Count('id', filter=Q(remitente=contacto_numero)),
+            automaticos=Count('id', filter=Q(es_automatico=True)),
+            ia=Count('id', filter=Q(ia_generado=True)),
         )
 
-        # Contar mensajes
-        total_messages = MensajeWhatsApp.objects.filter(conversacion=conversation).count()
-        client_messages = MensajeWhatsApp.objects.filter(
-            conversacion=conversation,
-            remitente=conversation.contacto_numero
-        ).count()
-        advisor_messages = MensajeWhatsApp.objects.filter(
-            conversacion=conversation
-        ).exclude(
-            remitente=conversation.contacto_numero
-        ).exclude(
-            es_automatico=True
-        ).count()
-        auto_messages = MensajeWhatsApp.objects.filter(
-            conversacion=conversation,
-            es_automatico=True
-        ).count()
-        ai_messages = MensajeWhatsApp.objects.filter(
-            conversacion=conversation,
-            ia_generado=True
-        ).count()
+        stats.total_mensajes = agg['total']
+        stats.mensajes_cliente = agg['cliente']
+        stats.mensajes_automaticos = agg['automaticos']
+        stats.mensajes_ia = agg['ia']
+        # Asesor = no-cliente y no-automático
+        stats.mensajes_asesor = agg['total'] - agg['cliente'] - agg['automaticos']
 
-        # Actualizar estadísticas
-        stats.total_mensajes = total_messages
-        stats.mensajes_cliente = client_messages
-        stats.mensajes_asesor = advisor_messages
-        stats.mensajes_automaticos = auto_messages
-        stats.mensajes_ia = ai_messages
-
-        # Calcular tiempo de primera respuesta
-        if client_messages > 0 and advisor_messages > 0:
-            first_client_msg = MensajeWhatsApp.objects.filter(
-                conversacion=conversation,
-                remitente=conversation.contacto_numero
-            ).order_by('fecha').first()
-
-            if first_client_msg:
-                first_response = MensajeWhatsApp.objects.filter(
-                    conversacion=conversation,
-                    fecha__gt=first_client_msg.fecha
-                ).exclude(
-                    remitente=conversation.contacto_numero
-                ).order_by('fecha').first()
-
+        # Tiempo de primera respuesta (solo si hay mensajes de ambos lados)
+        if agg['cliente'] > 0 and stats.mensajes_asesor > 0:
+            first_client = (
+                MensajeWhatsApp.objects
+                .filter(conversacion=conversation, remitente=contacto_numero)
+                .order_by('fecha')
+                .values('fecha')
+                .first()
+            )
+            if first_client:
+                first_response = (
+                    MensajeWhatsApp.objects
+                    .filter(conversacion=conversation, fecha__gt=first_client['fecha'])
+                    .exclude(remitente=contacto_numero)
+                    .order_by('fecha')
+                    .values('fecha')
+                    .first()
+                )
                 if first_response:
-                    stats.tiempo_primera_respuesta = first_response.fecha - first_client_msg.fecha
+                    stats.tiempo_primera_respuesta = (
+                        first_response['fecha'] - first_client['fecha']
+                    )
 
         stats.save()
 

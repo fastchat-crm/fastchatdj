@@ -1,6 +1,7 @@
 from django.urls import path, re_path
 
 from .view_actividad_economica import actividadEconomicaView
+from .view_chat_agente import chat_agente_view
 from .view_industria import industriaView
 from .view_mientrenamiento import entrenamiento_ia_view
 from .view_departamento_chatbot import departamentoChatbotsView
@@ -34,9 +35,12 @@ crm_urls = (
     },
 )
 
-urlpatterns = [
-]
-
+urlpatterns = []
 
 for u in crm_urls:
     urlpatterns.append(re_path(r'^{}$'.format(u["url"]), u["vista"]))
+
+# Chat de prueba para un agente IA (ID encriptado en la URL)
+urlpatterns.append(
+    path('entrenamiento/chat/<str:agente_enc_id>/', chat_agente_view, name='chat_agente')
+)

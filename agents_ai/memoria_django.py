@@ -6,41 +6,84 @@ from .models import MessageStore
 class DjangoChatMessageHistory(BaseChatMessageHistory):
     def __init__(self, session_id: str):
         self.session_id = session_id
+        self._cache: list[BaseMessage] | None = None  # invalidado al escribir
+
+    # ------------------------------------------------------------------
+    # LangChain interface
+    # ------------------------------------------------------------------
 
     @property
     def messages(self) -> list[BaseMessage]:
-        qs = MessageStore.objects.filter(session_id=self.session_id).order_by("created_at")
-        messages = []
-        for entry in qs:
-            if entry.role == "human":
-                messages.append(HumanMessage(content=entry.content))
-            elif entry.role == "ai":
-                messages.append(AIMessage(content=entry.content))
-            elif entry.role == "system":
-                messages.append(SystemMessage(content=entry.content))
-        return messages
+        """Carga todos los mensajes (resultado cacheado en el ciclo de vida del objeto)."""
+        if self._cache is None:
+            self._cache = self._load_all()
+        return self._cache
 
     def add_user_message(self, content: str) -> None:
-        MessageStore.objects.create(
-            session_id=self.session_id,
-            role="human",
-            content=content
-        )
+        MessageStore.objects.create(session_id=self.session_id, role="human", content=content)
+        self._cache = None  # invalidar cache
 
     def add_ai_message(self, content: str) -> None:
-        MessageStore.objects.create(
-            session_id=self.session_id,
-            role="ai",
-            content=content
-        )
+        MessageStore.objects.create(session_id=self.session_id, role="ai", content=content)
+        self._cache = None
 
     def add_message(self, message: BaseMessage) -> None:
         role = "human" if isinstance(message, HumanMessage) else "ai"
-        MessageStore.objects.create(
-            session_id=self.session_id,
-            role=role,
-            content=message.content
-        )
+        MessageStore.objects.create(session_id=self.session_id, role=role, content=message.content)
+        self._cache = None
 
     def clear(self) -> None:
         MessageStore.objects.filter(session_id=self.session_id).delete()
+        self._cache = None
+
+    # ------------------------------------------------------------------
+    # Helpers eficientes
+    # ------------------------------------------------------------------
+
+    def count(self) -> int:
+        """Cuenta mensajes con COUNT(*) — sin cargar registros."""
+        return MessageStore.objects.filter(session_id=self.session_id).count()
+
+    def get_recent(self, n: int) -> list[BaseMessage]:
+        """Devuelve los últimos n mensajes en orden cronológico.
+
+        Usa LIMIT en la query en vez de cargar todo el historial.
+        Filtra automáticamente los mensajes internos LISTA_GUARDADA.
+        """
+        qs = (
+            MessageStore.objects
+            .filter(session_id=self.session_id)
+            .exclude(content__startswith="LISTA_GUARDADA:")
+            .order_by('-created_at')[:n]
+        )
+        result = []
+        for entry in reversed(list(qs)):
+            if entry.role == "human":
+                result.append(HumanMessage(content=entry.content))
+            elif entry.role == "ai":
+                result.append(AIMessage(content=entry.content))
+        return result
+
+    def get_recent_lista_guardada(self, n: int = 20) -> list[BaseMessage]:
+        """Devuelve los últimos n mensajes AI que sean LISTA_GUARDADA."""
+        qs = (
+            MessageStore.objects
+            .filter(session_id=self.session_id, role="ai", content__startswith="LISTA_GUARDADA:")
+            .order_by('-created_at')[:n]
+        )
+        return [AIMessage(content=e.content) for e in qs]
+
+    # ------------------------------------------------------------------
+    # Interno
+    # ------------------------------------------------------------------
+
+    def _load_all(self) -> list[BaseMessage]:
+        result = []
+        for entry in MessageStore.objects.filter(session_id=self.session_id).order_by("created_at"):
+            if entry.role == "human":
+                result.append(HumanMessage(content=entry.content))
+            elif entry.role == "ai":
+                result.append(AIMessage(content=entry.content))
+            elif entry.role == "system":
+                result.append(SystemMessage(content=entry.content))
+        return result

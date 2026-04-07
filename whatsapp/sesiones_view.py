@@ -63,6 +63,9 @@ def sesionesView(request):
                     if 'success' in result:
                         if not result['success']:
                             raise NameError(result['error'])
+                    filtro.estado = 'desconectado'
+                    filtro.error_mensaje = None
+                    filtro.save()
                     log(f"Sesión de WhatsApp {filtro.numero} desconectada", request, "del", obj=filtro.id)
                     messages.success(request, "Sesión desconectada correctamente.")
                     return JsonResponse({"error": False})

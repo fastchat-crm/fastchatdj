@@ -38,6 +38,30 @@ class VectorStoreManager:
         else:
             raise ValueError("Formato de archivo no soportado")
 
+    @staticmethod
+    def _extract_raw_text(file_path: str) -> str:
+        """Extrae el texto completo de un archivo sin fragmentarlo ni embedear."""
+        ext = os.path.splitext(file_path)[1].lower()
+        try:
+            if ext == '.pdf':
+                from langchain_community.document_loaders import PyPDFLoader
+                docs = PyPDFLoader(file_path).load()
+            elif ext == '.csv':
+                from langchain_community.document_loaders import CSVLoader
+                docs = CSVLoader(file_path).load()
+            elif ext == '.xlsx':
+                from langchain_community.document_loaders import UnstructuredExcelLoader
+                docs = UnstructuredExcelLoader(file_path).load()
+            elif ext == '.json':
+                from langchain_community.document_loaders import JSONLoader
+                docs = JSONLoader(file_path).load()
+            else:
+                return ''
+            return "\n".join(d.page_content for d in docs if d.page_content.strip())
+        except Exception as e:
+            print(f"_extract_raw_text error ({file_path}): {e}")
+            return ''
+
     def build_from_string(self, text: str, metadata: dict = None):
         metadata = metadata or {}
         doc = Document(page_content=text, metadata=metadata)

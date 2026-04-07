@@ -2,159 +2,154 @@
 
 {% block head %}
     <style>
+        /* ── Agent cards ─────────────────────────────────────────────── */
         .agent-card {
-            transition: all 0.3s ease;
-            border: 1px solid #e9ecef;
-            border-radius: 12px;
+            transition: box-shadow .25s ease, transform .25s ease;
+            border: 1px solid #e3e8f0;
+            border-radius: 14px;
             overflow: hidden;
-            height: 100%;
+            background: #fff;
         }
-
         .agent-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-            border-color: #007bff;
+            transform: translateY(-3px);
+            box-shadow: 0 10px 28px rgba(0,0,0,.10);
+            border-color: #4f7ef8;
         }
-
-        .agent-status {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #28a745;
-            animation: pulse 2s infinite;
+        .agent-card-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 16px 16px 10px;
         }
-
-        @keyframes pulse {
-            0% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.5;
-            }
-            100% {
-                opacity: 1;
-            }
-        }
-
         .agent-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 20px;
-            margin-bottom: 15px;
+            width: 44px; height: 44px;
+            flex-shrink: 0;
+            border-radius: 10px;
+            background: linear-gradient(135deg,#667eea,#764ba2);
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-size: 18px;
+        }
+        .agent-icon.icon-2 { background: linear-gradient(135deg,#f093fb,#f5576c); }
+        .agent-icon.icon-3 { background: linear-gradient(135deg,#4facfe,#00f2fe); }
+        .agent-icon.icon-4 { background: linear-gradient(135deg,#fa709a,#fee140); }
+        .agent-icon.icon-5 { background: linear-gradient(135deg,#43e97b,#38f9d7); }
+        .agent-icon.icon-6 { background: linear-gradient(135deg,#f7971e,#ffd200); }
+
+        .agent-title-group { flex: 1; min-width: 0; }
+        .agent-title-group h5 {
+            margin: 0 0 2px;
+            font-size: .93rem; font-weight: 700;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .agent-desc {
+            font-size: .80rem; color: #6b7280; line-height: 1.45;
+        }
+        .agent-status-dot {
+            width: 11px; height: 11px;
+            border-radius: 50%; flex-shrink: 0; margin-top: 4px;
+        }
+        .agent-status-dot.ok   { background:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.2); animation: pulseok 2s infinite; }
+        .agent-status-dot.warn { background:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.2); }
+        .agent-status-dot.err  { background:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.2); }
+        @keyframes pulseok {
+            0%,100% { box-shadow:0 0 0 3px rgba(34,197,94,.2); }
+            50%      { box-shadow:0 0 0 6px rgba(34,197,94,.05); }
         }
 
-        .agent-icon.icon-2 {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        }
+        .agent-card-body { padding: 0 16px 14px; }
 
-        .agent-icon.icon-3 {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        /* Stats chips */
+        .agent-stats { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+        .stat-chip {
+            display:inline-flex; align-items:center; gap:4px;
+            font-size:.70rem; font-weight:600;
+            padding:3px 8px; border-radius:20px; border:1px solid transparent;
         }
+        .stat-chip.ok    { background:#dcfce7; color:#15803d; border-color:#bbf7d0; }
+        .stat-chip.err   { background:#fee2e2; color:#b91c1c; border-color:#fecaca; }
+        .stat-chip.warn  { background:#fef3c7; color:#92400e; border-color:#fde68a; }
+        .stat-chip.info  { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+        .stat-chip.ctx   { background:#f0fdf4; color:#166534; border-color:#bbf7d0; }
+        .stat-chip.noctx { background:#fefce8; color:#854d0e; border-color:#fef08a; }
 
-        .agent-icon.icon-4 {
-            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-        }
-
-        .agent-icon.icon-5 {
-            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-        }
-
-        .agent-icon.icon-6 {
-            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
-        }
-
+        /* API key badges */
         .api-key-badge {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 20px;
-            padding: 4px 12px;
-            font-size: 0.75rem;
-            color: #6c757d;
-            display: inline-block;
-            margin: 2px;
+            font-size:.70rem; font-weight:600;
+            padding:2px 8px; border-radius:20px; border:1px solid transparent;
+            display:inline-flex; align-items:center; gap:4px; margin:2px;
         }
+        .api-key-badge.ok    { background:#dcfce7; color:#15803d; border-color:#bbf7d0; }
+        .api-key-badge.err   { background:#fee2e2; color:#b91c1c; border-color:#fecaca; }
+        .api-key-badge.no-keys { background:#fef3c7; color:#92400e; border-color:#fde68a; }
 
-        .api-key-badge.no-keys {
-            background: #fff3cd;
-            color: #856404;
-            border-color: #ffeaa7;
+        /* Action buttons */
+        .agent-actions {
+            display:flex; gap:5px; flex-wrap:wrap;
+            padding-top:10px; border-top:1px solid #f1f5f9;
         }
+        .btn-ag {
+            display:inline-flex; align-items:center; gap:5px;
+            font-size:.76rem; font-weight:500;
+            padding:5px 10px; border-radius:7px; border:none;
+            cursor:pointer; text-decoration:none;
+            transition:background .15s, color .15s; white-space:nowrap;
+        }
+        .btn-ag.edit  { background:#eff6ff; color:#2563eb; }
+        .btn-ag.edit:hover  { background:#dbeafe; }
+        .btn-ag.del   { background:#fff1f2; color:#be123c; padding:5px 9px; }
+        .btn-ag.del:hover   { background:#ffe4e6; }
+        .btn-ag.chat  { background:#f0fdf4; color:#15803d; }
+        .btn-ag.chat:hover  { background:#dcfce7; }
+        .btn-ag.proc  { background:#fefce8; color:#854d0e; }
+        .btn-ag.proc:hover  { background:#fef9c3; }
+        .btn-ag.view  { background:#f5f3ff; color:#6d28d9; }
+        .btn-ag.view:hover  { background:#ede9fe; }
 
-        .action-buttons {
-            display: flex;
-            gap: 8px;
-            margin-top: 15px;
-        }
+        /* Empty state */
+        .empty-state { text-align:center; padding:60px 20px; color:#6c757d; }
+        .empty-state i { font-size:4rem; margin-bottom:20px; opacity:.3; }
 
-        .btn-action {
-            flex: 1;
-            padding: 8px 16px;
-            border-radius: 8px;
-            border: none;
-            font-size: 0.875rem;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            cursor: pointer;
-        }
+        /* Table API keys */
+        .btn-test     { background:#fef3c7; color:#92400e; }
+        .btn-test:hover { background:#fde68a; }
 
-        .btn-edit {
-            background: #e3f2fd;
-            color: #1976d2;
+        /* ── Context modal ──────────────────────────────────────────── */
+        .ctx-pane {
+            font-family:'Courier New',monospace;
+            font-size:.76rem; white-space:pre-wrap; word-break:break-word;
+            max-height:55vh; overflow-y:auto;
+            background:#f8fafc; border:1px solid #e2e8f0;
+            border-radius:8px; padding:14px; color:#1e293b; line-height:1.65;
         }
+        .ctx-source-item {
+            display:flex; align-items:flex-start; gap:10px;
+            padding:10px 12px; border:1px solid #e2e8f0;
+            border-radius:8px; margin-bottom:8px; background:#fff;
+        }
+        .ctx-source-icon {
+            width:32px; height:32px; border-radius:8px;
+            display:flex; align-items:center; justify-content:center;
+            font-size:13px; flex-shrink:0;
+        }
+        .ctx-source-icon.tipo-1 { background:#eff6ff; color:#2563eb; }
+        .ctx-source-icon.tipo-2 { background:#fdf4ff; color:#7c3aed; }
+        .ctx-source-icon.tipo-3 { background:#f0fdf4; color:#15803d; }
+        .ctx-mode-badge {
+            font-size:.70rem; font-weight:700;
+            padding:3px 10px; border-radius:20px; border:1px solid transparent;
+        }
+        .ctx-mode-badge.estatico { background:#dcfce7; color:#15803d; border-color:#bbf7d0; }
+        .ctx-mode-badge.faiss    { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+        .ctx-mode-badge.sin_datos{ background:#fef3c7; color:#92400e; border-color:#fde68a; }
 
-        .btn-edit:hover {
-            background: #bbdefb;
-            color: #0d47a1;
-        }
-
-        .btn-delete {
-            background: #ffebee;
-            color: #d32f2f;
-        }
-
-        .btn-delete:hover {
-            background: #ffcdd2;
-            color: #b71c1c;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #6c757d;
-        }
-
-        .empty-state i {
-            font-size: 4rem;
-            margin-bottom: 20px;
-            opacity: 0.3;
-        }
-    </style>
-    <style>
-        .row [class*='col-'] {
-            background-clip: content-box;
-        }
+        .row [class*='col-'] { background-clip:content-box; }
     </style>
 {% endblock %}
 
 {% block content %}
     <div class="alert alert-info" role="alert">
         <i class="fa fa-comment"></i> Aquí puedes configurar la inteligencia artificial de tu empresa: personaliza el
-        perfil del negocio, agrega
-        productos y servicios, y define respuestas a preguntas frecuentes para entrenar la IA según tus criterios.
+        perfil del negocio, agrega productos y servicios, y define respuestas a preguntas frecuentes para entrenar la IA según tus criterios.
     </div>
 
     <ul class="nav nav-tabs mb-3" role="tablist">
@@ -168,70 +163,109 @@
         </li>
     </ul>
     <div class="tab-content">
+        {# ── Tab Agentes ──────────────────────────────────────────────── #}
         <div class="tab-pane active" id="agentes" role="tabpanel">
             <div class="card bg-transparent shadow-sm mb-4">
                 <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
                     <div>
-                        <h5 class="mb-0 text-primary"><i class="fas fa-comments me-2"></i>Agentes AI</h5>
-                        <small class="text-muted">Define cómo responde la IA ante agentes comunes.</small>
+                        <h5 class="mb-0 text-primary"><i class="fas fa-robot me-2"></i>Agentes AI</h5>
+                        <small class="text-muted">Configura cómo responde la IA en cada conversación.</small>
                     </div>
-                    <div>
-                        <a href="javascript:void(0)" class="btn btn-sm btn-dark"
-                           onclick="formModal('', 'Agregar Agente Entrenado', 'addagente')">
-                            <i class="fa fa-plus"></i> Agente
-                        </a>
-                    </div>
+                    <a href="javascript:void(0)" class="btn btn-sm btn-dark"
+                       onclick="formModal('', 'Agregar Agente Entrenado', 'addagente')">
+                        <i class="fa fa-plus"></i> Agente
+                    </a>
                 </div>
                 <div class="card-body" id="bloque_agentes_ia">
                     <div class="card-body pt-0">
                         {% if agentes %}
-                            <div class="row">
+                            <div class="row g-3">
                                 {% for l in agentes %}
-                                    <div class="col-lg-4 col-md-6 mb-4">
-                                        <div class="card agent-card">
-                                            <div class="card-body position-relative">
-                                                <div class="agent-status" title="Agente activo"></div>
-
+                                    <div class="col-xl-4 col-lg-6 col-md-6">
+                                        <div class="card agent-card h-100">
+                                            {# Header: icon + title + status dot #}
+                                            <div class="agent-card-header">
                                                 <div class="agent-icon {% cycle 'icon-1' 'icon-2' 'icon-3' 'icon-4' 'icon-5' 'icon-6' %}">
                                                     <i class="fas fa-{% cycle 'robot' 'comments' 'chart-line' 'pen-fancy' 'language' 'cogs' %}"></i>
                                                 </div>
+                                                <div class="agent-title-group">
+                                                    <h5 title="{{ l.nombre }}">{{ l.nombre|default:'Sin nombre' }}</h5>
+                                                    <div class="agent-desc">{{ l.descripcion|default:'Sin descripción.'|truncatechars:80 }}</div>
+                                                </div>
+                                                <div class="agent-status-dot {{ l.estado_agente }}"
+                                                     title="{% if l.estado_agente == 'ok' %}{{ l.keys_activas }} key(s) activa(s){% elif l.estado_agente == 'err' %}Sin API Keys funcionales{% else %}Sin API Keys configuradas{% endif %}">
+                                                </div>
+                                            </div>
 
-                                                <h5 class="card-title mb-2">
-                                                    {{ l.nombre|default:'Agente Sin Nombre' }}
-                                                </h5>
-
-                                                <p class="card-text text-muted small mb-3">
-                                                    {% if l.descripcion %}
-                                                        {{ l.descripcion|truncatechars:100 }}
+                                            <div class="agent-card-body">
+                                                {# Stats chips #}
+                                                <div class="agent-stats">
+                                                    {% if l.keys_total == 0 %}
+                                                        <span class="stat-chip warn"><i class="fas fa-key"></i> Sin keys</span>
+                                                    {% elif l.keys_activas == 0 %}
+                                                        <span class="stat-chip err"><i class="fas fa-key"></i> {{ l.keys_total }} key{{ l.keys_total|pluralize }} — inactiva{{ l.keys_total|pluralize }}</span>
                                                     {% else %}
-                                                        Sin descripción disponible para este agente.
+                                                        <span class="stat-chip ok"><i class="fas fa-key"></i> {{ l.keys_activas }}/{{ l.keys_total }} activa{{ l.keys_activas|pluralize }}</span>
                                                     {% endif %}
-                                                </p>
 
-                                                <div class="mb-3">
-                                                    <div class="small text-muted mb-1">API Keys:</div>
-                                                    <div>
-                                                        {% for api in l.apikey.all %}
-                                                            <span class="api-key-badge">{{ api }}</span>
-                                                        {% empty %}
-                                                            <span class="api-key-badge no-keys">
-                                                <i class="fas fa-exclamation-triangle me-1"></i>
-                                                Sin configurar
-                                            </span>
-                                                        {% endfor %}
-                                                    </div>
+                                                    {% if l.contexto_estatico %}
+                                                        <span class="stat-chip ctx" title="{{ l.contexto_estatico|length }} chars extraídos">
+                                                            <i class="fas fa-database"></i> {{ l.contexto_estatico|length|filesizeformat }}
+                                                        </span>
+                                                    {% else %}
+                                                        <span class="stat-chip noctx" title="Usa el botón Procesar para extraer el contexto">
+                                                            <i class="fas fa-exclamation-triangle"></i> Sin procesar
+                                                        </span>
+                                                    {% endif %}
+
+                                                    {% if l.vectorstore_path %}
+                                                        <span class="stat-chip info" title="Índice FAISS activo">
+                                                            <i class="fas fa-layer-group"></i> FAISS
+                                                        </span>
+                                                    {% endif %}
                                                 </div>
 
-                                                <div class="action-buttons">
-                                                    <a href="javascript:void(0)" class="btn-action btn-edit"
-                                                       onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeagente')">
-                                                        <i class="fas fa-edit"></i>
-                                                        Editar
+                                                {# API Key badges #}
+                                                <div class="mb-2">
+                                                    {% for api in l.apikey.all %}
+                                                        <span class="api-key-badge {% if api.estado %}ok{% else %}err{% endif %}"
+                                                              title="{% if api.estado %}Activa{% else %}{{ api.msgerror|default:'Inactiva' }}{% endif %}">
+                                                            <i class="fas fa-circle" style="font-size:.45rem;"></i>
+                                                            {{ api.alias|default:api.get_proveedor_display }}
+                                                        </span>
+                                                    {% empty %}
+                                                        <span class="api-key-badge no-keys">
+                                                            <i class="fas fa-exclamation-triangle"></i> Sin API Key
+                                                        </span>
+                                                    {% endfor %}
+                                                </div>
+
+                                                {# Action buttons #}
+                                                <div class="agent-actions">
+                                                    <a href="javascript:void(0)" class="btn-ag proc"
+                                                       onclick="procesarAgente({{ l.pk }}, '{{ l.nombre|escapejs }}', this)"
+                                                       title="Extraer texto de archivos y preparar contexto estático">
+                                                        <i class="fas fa-cogs"></i> Procesar
                                                     </a>
-                                                    <a href="javascript:void(0)" class="btn-action btn-delete"
-                                                       onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteagente')">
+                                                    <a href="javascript:void(0)" class="btn-ag view"
+                                                       onclick="verContexto({{ l.pk }}, '{{ l.nombre|escapejs }}')"
+                                                       title="Ver contexto, prompt completo y fuentes">
+                                                        <i class="fas fa-eye"></i> Ver contexto
+                                                    </a>
+                                                    {% if l.chat_url %}
+                                                    <a href="{{ l.chat_url }}" class="btn-ag chat" target="_blank"
+                                                       title="Probar el agente en chat">
+                                                        <i class="fas fa-comments"></i> Probar
+                                                    </a>
+                                                    {% endif %}
+                                                    <a href="javascript:void(0)" class="btn-ag edit"
+                                                       onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeagente')">
+                                                        <i class="fas fa-edit"></i> Editar
+                                                    </a>
+                                                    <a href="javascript:void(0)" class="btn-ag del"
+                                                       onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteagente')"
+                                                       title="Eliminar agente">
                                                         <i class="fas fa-trash"></i>
-                                                        Eliminar
                                                     </a>
                                                 </div>
                                             </div>
@@ -243,12 +277,10 @@
                             <div class="empty-state">
                                 <i class="fas fa-robot"></i>
                                 <h4>No hay agentes configurados</h4>
-                                <p class="mb-3">Comienza creando tu primer agente AI para automatizar tareas en tu
-                                    sistema.</p>
+                                <p class="mb-3">Comienza creando tu primer agente AI para automatizar respuestas.</p>
                                 <button class="btn btn-primary"
                                         onclick="formModal('', 'Agregar Agente Entrenado', 'addagente')">
-                                    <i class="fas fa-plus me-2"></i>
-                                    Crear Primer Agente
+                                    <i class="fas fa-plus me-2"></i>Crear Primer Agente
                                 </button>
                             </div>
                         {% endif %}
@@ -256,20 +288,24 @@
                 </div>
             </div>
         </div>
+
+        {# ── Tab API Keys ─────────────────────────────────────────────── #}
         <div class="tab-pane" id="apikeys" role="tabpanel">
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
                     <div>
-                        <h5 class="mb-0 text-primary"><i class="fas fa-comments me-2"></i>Apis Keys AI</h5>
-                        <small class="text-muted">Define cómo responde la IA ante agentes comunes.</small>
-                        <p>https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com?hl=es-419</p>
+                        <h5 class="mb-0 text-primary"><i class="fas fa-key me-2"></i>APIs Keys AI</h5>
+                        <small class="text-muted">Credenciales para conectar con los proveedores de IA.</small>
+                        <p class="mb-0 mt-1">
+                            <small><a href="https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com?hl=es-419" target="_blank" class="text-muted">
+                                <i class="fas fa-external-link-alt me-1"></i>Obtener API Key de Google Gemini
+                            </a></small>
+                        </p>
                     </div>
-                    <div>
-                        <a href="javascript:void(0)" class="btn btn-sm btn-dark"
-                           onclick="formModal('', 'Agregar Api Key', 'addapikey')">
-                            <i class="fa fa-plus"></i> Api
-                        </a>
-                    </div>
+                    <a href="javascript:void(0)" class="btn btn-sm btn-dark"
+                       onclick="formModal('', 'Agregar Api Key', 'addapikey')">
+                        <i class="fa fa-plus"></i> Api Key
+                    </a>
                 </div>
                 <div class="card-body" id="bloque_apis_ia">
                     <div class="card-body pt-0">
@@ -277,32 +313,53 @@
                             <table class="table table-striped">
                                 <thead>
                                 <tr>
-                                    <th class="column-title" style="text-align: center">Api Key</th>
-                                    <th class="column-title" style="text-align: center">Alias</th>
-                                    <th class="column-title" style="text-align: center">Proveedor</th>
-                                    <th class="column-title" style="text-align: center">Usuario</th>
-                                    <th class="column-title" style="text-align: center">Contraseña</th>
-                                    <th class="column-title" style="text-align: center">Errores</th>
-                                    <th class="column-title" style="text-align: center">Estado</th>
-                                    <th class="column-title" style="text-align: center">Acción</th>
+                                    <th>Alias / Proveedor</th>
+                                    <th>Api Key</th>
+                                    <th>Último error</th>
+                                    <th class="text-center">Estado</th>
+                                    <th class="text-center">Probar</th>
+                                    <th class="text-center">Acción</th>
                                 </tr>
                                 </thead>
                                 <tbody>
                                 {% for l in apis %}
-                                    <tr>
-                                        <td style="text-align: center">{{ l.descripcion|default:'' }}</td>
-                                        <td style="text-align: center">{{ l.alias|default:'' }}</td>
-                                        <td style="text-align: center">{{ l.get_proveedor_display|default:'' }}</td>
-                                        <td style="text-align: center">{{ l.usuario|default:'SIN REGISTRAR' }}</td>
-                                        <td style="text-align: center">{{ l.contrasena|default:'SIN REGISTRAR' }}</td>
-                                        <td style="text-align: center">{{ l.msgerror|default:'' }}</td>
-                                        <td style="text-align: center"><span class="badge {{ l.estado|yesno:'bg-success,bg-danger' }}">{{ l.estado|yesno:'Activo,Inactivo' }}</span></td>
+                                    <tr id="apikey-row-{{ l.pk }}">
+                                        <td>
+                                            <strong>{{ l.alias|default:l.get_proveedor_display }}</strong>
+                                            <br><small class="text-muted">{{ l.get_proveedor_display }}</small>
+                                        </td>
+                                        <td>
+                                            <code class="small text-muted" title="{{ l.descripcion }}">
+                                                {{ l.descripcion|slice:":12" }}…
+                                            </code>
+                                        </td>
+                                        <td>
+                                            {% if l.msgerror %}
+                                                <span class="text-danger small" title="{{ l.msgerror }}">
+                                                    <i class="fas fa-exclamation-circle me-1"></i>{{ l.msgerror|truncatechars:60 }}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted small">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge {{ l.estado|yesno:'bg-success,bg-danger' }}" id="badge-estado-{{ l.pk }}">
+                                                {{ l.estado|yesno:'Activa,Inactiva' }}
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-warning"
+                                                    onclick="testApiKey({{ l.pk }}, this)"
+                                                    title="Probar conectividad con el proveedor">
+                                                <i class="fas fa-vial me-1"></i>Probar
+                                            </button>
+                                        </td>
                                         <td class="text-center">
                                             <div class="dropdown">
                                                 <button class="btn btn-icon" type="button"
                                                         id="dropdownMenuButton-{{ l.pk }}"
                                                         data-bs-toggle="dropdown" aria-expanded="false"
-                                                        style="background: none; border: none;">
+                                                        style="background:none;border:none;">
                                                     <i class="fas fa-ellipsis-v"></i>
                                                 </button>
                                                 <ul class="dropdown-menu dropdown-menu-end"
@@ -314,9 +371,17 @@
                                                             <i class="fas fa-edit me-2 text-primary"></i>Editar
                                                         </a>
                                                     </li>
+                                                    {% if not l.estado %}
                                                     <li>
                                                         <a class="dropdown-item" href="javascript:void(0);"
-                                                           onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteapikey')">
+                                                           onclick="reactivarApiKey({{ l.pk }})">
+                                                            <i class="fas fa-redo me-2 text-success"></i>Reactivar
+                                                        </a>
+                                                    </li>
+                                                    {% endif %}
+                                                    <li>
+                                                        <a class="dropdown-item" href="javascript:void(0);"
+                                                           onclick="eliminarajax({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display }}', 'deleteapikey')">
                                                             <i class="fas fa-trash me-2 text-danger"></i>Eliminar
                                                         </a>
                                                     </li>
@@ -326,7 +391,7 @@
                                     </tr>
                                 {% empty %}
                                     <tr>
-                                        <td colspan="10">Sin registros</td>
+                                        <td colspan="6" class="text-center text-muted py-3">Sin API Keys registradas</td>
                                     </tr>
                                 {% endfor %}
                                 </tbody>
@@ -338,6 +403,79 @@
         </div>
     </div>
 
+    {# ── Modal contexto — 3 pestañas ─────────────────────────────────── #}
+    <div class="modal fade" id="modalContexto" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header border-bottom-0 pb-0">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <h5 class="modal-title mb-0" id="ctxTitulo">Contexto del agente</h5>
+                            <span class="ctx-mode-badge" id="ctxModeBadge"></span>
+                        </div>
+                        <small class="text-muted" id="ctxMeta"></small>
+                    </div>
+                    <button type="button" class="btn-close ms-3" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body pt-2">
+                    <ul class="nav nav-tabs mb-3" id="ctxTabs" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ctxTabContexto" type="button">
+                                <i class="fas fa-database me-1"></i>Contexto extraído
+                                <span class="badge bg-secondary ms-1" id="ctxBadgeChars" style="font-size:.65rem;"></span>
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#ctxTabPrompt" type="button">
+                                <i class="fas fa-terminal me-1"></i>Prompt completo
+                                <span class="badge bg-secondary ms-1" id="ctxBadgePrompt" style="font-size:.65rem;"></span>
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#ctxTabFuentes" type="button">
+                                <i class="fas fa-folder-open me-1"></i>Fuentes
+                                <span class="badge bg-secondary ms-1" id="ctxBadgeFuentes" style="font-size:.65rem;"></span>
+                            </button>
+                        </li>
+                    </ul>
+                    <div class="tab-content" id="ctxTabsContent">
+                        {# Tab 1: contexto #}
+                        <div class="tab-pane fade show active" id="ctxTabContexto">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <small class="text-muted">Texto exacto que se inyecta como <code>{context}</code> en el prompt.</small>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="copiarTab('ctxContenidoContexto')">
+                                    <i class="fas fa-copy me-1"></i>Copiar
+                                </button>
+                            </div>
+                            <div class="ctx-pane" id="ctxContenidoContexto">Cargando…</div>
+                        </div>
+                        {# Tab 2: prompt preview #}
+                        <div class="tab-pane fade" id="ctxTabPrompt">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <small class="text-muted">Prompt completo tal como lo recibe el modelo LLM (con contexto y marcadores de ejemplo).</small>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="copiarTab('ctxContenidoPrompt')">
+                                    <i class="fas fa-copy me-1"></i>Copiar
+                                </button>
+                            </div>
+                            <div class="ctx-pane" id="ctxContenidoPrompt">Cargando…</div>
+                        </div>
+                        {# Tab 3: fuentes #}
+                        <div class="tab-pane fade" id="ctxTabFuentes">
+                            <div class="mb-2">
+                                <small class="text-muted">Archivos y textos de entrenamiento que alimentan este agente.</small>
+                            </div>
+                            <div id="ctxContenidoFuentes">Cargando…</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0 pt-0">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Modal formulario (editar/agregar) ──────────────────────────── #}
     <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
@@ -347,8 +485,7 @@
                         <h5 class="modal-title" id="modalNombre"></h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="modal-body detalleProd">
-                    </div>
+                    <div class="modal-body detalleProd"></div>
                 </form>
             </div>
         </div>
@@ -360,27 +497,208 @@
     {% include 'base_formulario_modal.html' %}
     <script src="/static/js/forms.js?version=1"></script>
     <script>
+    /* ── Helpers ── */
+    function copiarTab(elId) {
+        const el = document.getElementById(elId);
+        navigator.clipboard.writeText(el.innerText || el.textContent).then(function() {
+            const btn = el.closest('.tab-pane').querySelector('button.btn-outline-secondary');
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check me-1"></i>Copiado';
+            setTimeout(function() { btn.innerHTML = orig; }, 2000);
+        });
+    }
+
+    /* ── Ver contexto — 3 tabs ── */
+    function verContexto(id, nombre) {
+        // Reset
+        document.getElementById('ctxTitulo').textContent = nombre;
+        document.getElementById('ctxModeBadge').textContent = '';
+        document.getElementById('ctxModeBadge').className = 'ctx-mode-badge';
+        document.getElementById('ctxMeta').textContent = '';
+        document.getElementById('ctxContenidoContexto').textContent = 'Cargando…';
+        document.getElementById('ctxContenidoPrompt').textContent = 'Cargando…';
+        document.getElementById('ctxContenidoFuentes').innerHTML = '<div class="text-muted small p-2">Cargando…</div>';
+        document.getElementById('ctxBadgeChars').textContent = '';
+        document.getElementById('ctxBadgePrompt').textContent = '';
+        document.getElementById('ctxBadgeFuentes').textContent = '';
+
+        // Activate first tab
+        const firstTabBtn = document.querySelector('#ctxTabs button[data-bs-target="#ctxTabContexto"]');
+        if (firstTabBtn) new bootstrap.Tab(firstTabBtn).show();
+
+        new bootstrap.Modal(document.getElementById('modalContexto')).show();
+
+        $.ajax({
+            type: 'GET',
+            url: '{{ request.path }}',
+            data: { action: 'vercontexto', id: id },
+            dataType: 'json',
+            success: function(res) {
+                if (!res.result) {
+                    document.getElementById('ctxContenidoContexto').textContent = 'Error: ' + (res.message || 'desconocido');
+                    return;
+                }
+
+                /* Mode badge */
+                const modeBadge = document.getElementById('ctxModeBadge');
+                const modeLabels = { estatico: 'Estático', faiss: 'FAISS + Estático', sin_datos: 'Sin datos' };
+                modeBadge.textContent = modeLabels[res.modo] || res.modo;
+                modeBadge.className = 'ctx-mode-badge ' + (res.modo || 'sin_datos');
+
+                /* Meta */
+                const kb = (res.chars_contexto / 1024).toFixed(1);
+                document.getElementById('ctxMeta').textContent =
+                    res.chars_contexto.toLocaleString() + ' chars (' + kb + ' KB) · Prompt: ' +
+                    res.chars_prompt.toLocaleString() + ' chars';
+
+                /* Tab 1: contexto */
+                const ctxEl = document.getElementById('ctxContenidoContexto');
+                ctxEl.textContent = res.contexto || '(vacío — usa el botón Procesar para extraer el texto)';
+                document.getElementById('ctxBadgeChars').textContent = kb + ' KB';
+
+                /* Tab 2: prompt preview */
+                const promptEl = document.getElementById('ctxContenidoPrompt');
+                promptEl.textContent = res.prompt_preview || '(sin template de prompt configurado)';
+                const pkb = (res.chars_prompt / 1024).toFixed(1);
+                document.getElementById('ctxBadgePrompt').textContent = pkb + ' KB';
+
+                /* Tab 3: fuentes */
+                const fuentesEl = document.getElementById('ctxContenidoFuentes');
+                const tipoLabel = { 1: 'Enlace API', 2: 'Archivo', 3: 'Texto' };
+                const tipoIcon  = { 1: 'fa-link', 2: 'fa-file-alt', 3: 'fa-align-left' };
+                document.getElementById('ctxBadgeFuentes').textContent = res.detalles_count;
+                if (!res.detalles || res.detalles.length === 0) {
+                    fuentesEl.innerHTML = '<div class="text-muted small p-2">Sin fuentes de entrenamiento configuradas.</div>';
+                } else {
+                    const items = res.detalles.map(function(d) {
+                        const label = tipoLabel[d.tipo] || ('Tipo ' + d.tipo);
+                        const icon  = tipoIcon[d.tipo] || 'fa-question';
+                        let detail = '';
+                        if (d.tipo === 1) detail = d.enlace || '';
+                        else if (d.tipo === 2) detail = d.archivo ? d.archivo.split('/').pop() : '(archivo)';
+                        else if (d.tipo === 3) detail = d.descripcion ? d.descripcion.substring(0, 120) + (d.descripcion.length > 120 ? '…' : '') : '';
+                        return '<div class="ctx-source-item">' +
+                            '<div class="ctx-source-icon tipo-' + d.tipo + '"><i class="fas ' + icon + '"></i></div>' +
+                            '<div style="min-width:0;flex:1;">' +
+                            '<div style="font-size:.78rem;font-weight:700;color:#374151;">' + label + '</div>' +
+                            '<div style="font-size:.74rem;color:#6b7280;word-break:break-all;">' + (detail || '—') + '</div>' +
+                            '</div></div>';
+                    });
+                    fuentesEl.innerHTML = items.join('');
+                }
+            },
+            error: function() {
+                document.getElementById('ctxContenidoContexto').textContent = 'Error de conexión al cargar el contexto.';
+            }
+        });
+    }
+
+    /* ── Procesar agente ── */
+    function procesarAgente(id, nombre, btn) {
+        Swal.fire({
+            title: 'Procesar "' + nombre + '"',
+            text: 'Se extraerá el texto de todos los archivos y se preparará el contexto del agente.',
+            type: 'warning',
+            showCancelButton: true,
+            allowOutsideClick: false,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Sí, procesar',
+            cancelButtonText: 'Cancelar'
+        }).then(function(result) {
+            if (!result.value) return;
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Procesando…';
+            btn.style.pointerEvents = 'none';
+            $.ajax({
+                type: 'POST',
+                url: '{{ request.path }}',
+                data: { csrfmiddlewaretoken: '{{ csrf_token }}', action: 'procesaragente', id: id },
+                dataType: 'json',
+                success: function(res) {
+                    const data = Array.isArray(res) ? res[0] : res;
+                    if (data.error) {
+                        Swal.fire({ type: 'error', title: 'Error', text: data.message });
+                    } else {
+                        Swal.fire({ type: 'success', title: 'Listo', text: data.message, timer: 3000, showConfirmButton: false })
+                            .then(function() { if (data.reload) location.reload(); });
+                    }
+                },
+                error: function() {
+                    Swal.fire({ type: 'error', title: 'Error', text: 'No se pudo procesar el agente.' });
+                },
+                complete: function() {
+                    btn.innerHTML = orig;
+                    btn.style.pointerEvents = '';
+                }
+            });
+        });
+    }
+
+    /* ── Test API Key ── */
+    function testApiKey(id, btn) {
+        const original = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Probando…';
+        $.ajax({
+            type: 'POST',
+            url: '{{ request.path }}',
+            data: { csrfmiddlewaretoken: '{{ csrf_token }}', action: 'testapikey', id: id },
+            dataType: 'json',
+            success: function(res) {
+                const activo = res.activo !== false;
+                const badge = document.getElementById('badge-estado-' + id);
+                if (badge) {
+                    badge.className = 'badge ' + (activo ? 'bg-success' : 'bg-danger');
+                    badge.textContent = activo ? 'Activa' : 'Inactiva';
+                }
+                if (activo) {
+                    Swal.fire({ type: 'success', title: 'Conexión exitosa', text: res.message || 'API Key válida.', timer: 3000, showConfirmButton: false });
+                } else {
+                    Swal.fire({ type: 'error', title: 'API Key inválida', text: res.message || 'Error de conexión.' });
+                }
+            },
+            error: function() {
+                Swal.fire({ type: 'error', title: 'Error', text: 'No se pudo probar la API Key.' });
+            },
+            complete: function() {
+                btn.disabled = false;
+                btn.innerHTML = original;
+            }
+        });
+    }
+
+    /* ── Reactivar API Key ── */
+    function reactivarApiKey(id) {
+        $.ajax({
+            type: 'POST',
+            url: '{{ request.path }}',
+            data: { csrfmiddlewaretoken: '{{ csrf_token }}', action: 'reactivarapikey', id: id },
+            dataType: 'json',
+            success: function(res) {
+                if (!res.error) {
+                    const badge = document.getElementById('badge-estado-' + id);
+                    if (badge) { badge.className = 'badge bg-success'; badge.textContent = 'Activa'; }
+                    Swal.fire({ type: 'success', title: 'Reactivada', text: 'La API Key fue reactivada.', timer: 2000, showConfirmButton: false });
+                }
+            }
+        });
+    }
+    </script>
+    <script>
         function formModal(id, text, action) {
             pantallaespera();
             $.ajax({
                 type: "GET",
                 url: `{{ request.path }}`,
-                data: {
-                    'action': action,
-                    'id': id,
-                },
+                data: { 'action': action, 'id': id },
                 success: function (data) {
                     setTimeout($.unblockUI, 1);
                     if (data.result === true) {
                         $('#modalNombre').html(text);
                         $('.detalleProd').html(data.data);
-
-                        // Usar Bootstrap 5 modal
-                        const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
-                        modal.show();
+                        new bootstrap.Modal(document.getElementById('modalDetalle')).show();
                     } else {
-                        console.log('asdasd');
-                        console.log(data.message);
                         mensajeWarning(data.message);
                     }
                 },
@@ -394,34 +712,28 @@
     </script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            // Restaurar pestañas al cargar la página
             const mainTab = localStorage.getItem('mainTab');
-            const subTab = localStorage.getItem('subTab');
-
+            const subTab  = localStorage.getItem('subTab');
             if (mainTab) {
-                const mainTabElement = document.querySelector(`a[href="${mainTab}"]`);
-                if (mainTabElement) new bootstrap.Tab(mainTabElement).show();
+                const el = document.querySelector(`a[href="${mainTab}"]`);
+                if (el) new bootstrap.Tab(el).show();
             }
-
             if (subTab) {
-                const subTabElement = document.querySelector(`a[href="${subTab}"]`);
-                if (subTabElement) new bootstrap.Tab(subTabElement).show();
+                const el = document.querySelector(`a[href="${subTab}"]`);
+                if (el) new bootstrap.Tab(el).show();
             }
-
-            // Guardar selección de pestaña principal
             document.querySelectorAll('.nav-tabs > .nav-item > .nav-link').forEach(tab => {
                 tab.addEventListener('shown.bs.tab', function (e) {
                     const href = e.target.getAttribute('href');
-                    if (['#perfil', '#mantenimientos', '#preguntas', '#agentes', '#apikeys'].includes(href)) {
+                    if (['#perfil','#mantenimientos','#preguntas','#agentes','#apikeys'].includes(href)) {
                         localStorage.setItem('mainTab', href);
-                    } else if (['#productos', '#servicios',].includes(href)) {
+                    } else if (['#productos','#servicios'].includes(href)) {
                         localStorage.setItem('subTab', href);
                     }
                 });
             });
         });
     </script>
-    {#  ABRIR EN POPUP EL MANTENIMIENTO  #}
     <script>
     $(document).ready(function () {
         $('.add-with-popup').click(function (e) {
@@ -437,17 +749,12 @@
         name = id_to_windowname(name);
         var href = $(`#${idSelect}`).attr('data-urladd');
 
-        if (href.indexOf('?') === -1) {
-            href += '?popup=1';
-        } else {
-            href += '&popup=1';
-        }
+        if (href.indexOf('?') === -1) { href += '?popup=1'; } else { href += '&popup=1'; }
         href += '&winName=' + name;
 
         var win = window.open(href, name, 'height=500,width=900,resizable=yes,scrollbars=yes');
         win.focus();
 
-        // Verificar periódicamente si el popup debe cerrarse
         var checkPopup = setInterval(function() {
             try {
                 if (win.closed) {
@@ -455,20 +762,16 @@
                     checkForNewOptions(idSelect, action, href);
                     return;
                 }
-
-                // Si el popup ha marcado que se completó el guardado
                 if (win.formSubmitted) {
                     clearInterval(checkPopup);
                     win.close();
                     checkForNewOptions(idSelect, action, href);
                 }
             } catch(e) {
-                // Si no se puede acceder al popup (posiblemente cerrado)
                 clearInterval(checkPopup);
                 checkForNewOptions(idSelect, action, href);
             }
         }, 500);
-
         return false;
     }
 
@@ -477,41 +780,28 @@
         var listadoOptions = $(`#${selectId}`).children('option').toArray();
         for (var i = 0; i < listadoOptions.length; i++) {
             var value = $(listadoOptions[i]).val();
-            if (value) {
-                ids.push(parseInt(value));
-            }
+            if (value) { ids.push(parseInt(value)); }
         }
-
         $.ajax({
             type: "GET",
             url: baseUrl.split('?')[0],
-            data: {'action': action, 'ids': JSON.stringify(ids)},
+            data: { 'action': action, 'ids': JSON.stringify(ids) },
             success: function (data) {
                 if (data.result === true) {
                     if (data.nuevo_registro) {
                         if (data.usaa_jax) {
-                            Swal.fire({
-                                toast: true,
-                                position: 'top-end',
-                                icon: 'success',
-                                title: 'Registro Guardado',
-                                showConfirmButton: false,
-                                timer: 4000
-                            });
+                            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Registro Guardado', showConfirmButton: false, timer: 4000 });
                         } else {
                             $(`#${selectId}`).children('option').remove();
                             $(`#${selectId}`).append(data.data);
                             $(`#${selectId}`).select2();
-
                         }
                     }
                 } else {
                     mensajeDanger(data.mensaje);
                 }
             },
-            error: function () {
-                mensajeDanger("Error de conexión.");
-            },
+            error: function () { mensajeDanger("Error de conexión."); },
             dataType: "json"
         });
     }
@@ -523,5 +813,5 @@
         text = text.replace(/\]/g, '__braceright__');
         return text;
     }
-</script>
+    </script>
 {% endblock %}

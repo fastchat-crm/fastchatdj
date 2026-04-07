@@ -29,7 +29,8 @@ class ConversacionWhatsAppManager(Manager):
     def sin_expirar(self):
         return self.get_queryset().filter(
             expirado=False,
-            conversacion_finalizada=False
+            conversacion_finalizada=False,
+            estado_conversacion=0,
         )
 
     @property

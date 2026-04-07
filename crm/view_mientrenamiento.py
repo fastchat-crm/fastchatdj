@@ -1,5 +1,7 @@
 import json
+import os
 import sys
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import JsonResponse
@@ -12,7 +14,7 @@ from crm.forms import PerfilNegocioIAForm, ProductoIAForm, ServicioIAForm, Respu
     ActividadEconomicaForm, AgentesIAForm, ApiKeyIAForm
 from crm.models import PerfilNegocioIA, ProductoIA, ServicioIA, RespuestaEntrenadaIA, Industria, ActividadEconomica, \
     AgentesIA, DetalleAgentesAI, ApiKeyIA
-from core.funciones import addData, secure_module, log
+from core.funciones import addData, secure_module, log, get_encrypt
 
 
 def guardar_detalles_agente(agente, detalles_data, archivos):
@@ -169,6 +171,87 @@ def entrenamiento_ia_view(request):
                         log(f"Elimino un api key IA {filtro.__str__()}", request, "del", obj=filtro.id)
                         messages.success(request, f"Registro Eliminado")
                         res_json = {"error": False}
+                    elif action == 'procesaragente':
+                        filtro = AgentesIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
+                        # Disparar el mismo proceso que DetalleAgentesAI.save()
+                        # pero desde el agente directamente
+                        from agents_ai.vectorstore_manager import VectorStoreManager
+                        base_dir = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
+                        nombre_vs = f"agente_{filtro.id}"
+                        textos_raw = []
+                        detalles_archivo = filtro.detalleagentesai_set.filter(status=True, tipo=2, archivo__isnull=False)
+                        detalles_texto = filtro.detalleagentesai_set.filter(status=True, tipo=3).exclude(descripcion__isnull=True).exclude(descripcion='')
+                        for det in detalles_archivo:
+                            try:
+                                raw = VectorStoreManager._extract_raw_text(det.archivo.path)
+                                if raw:
+                                    textos_raw.append(raw)
+                            except Exception:
+                                pass
+                        for det in detalles_texto:
+                            if det.descripcion:
+                                textos_raw.append(det.descripcion.strip())
+                        if not textos_raw:
+                            res_json = {"error": True, "message": "No hay archivos ni textos cargados en este agente."}
+                        else:
+                            texto_completo = "\n\n".join(textos_raw)
+                            _UMBRAL = 40_000
+                            filtro.contexto_estatico = texto_completo[:_UMBRAL]
+                            if len(texto_completo) > _UMBRAL:
+                                # Construir FAISS para la parte que no cabe
+                                apikey_obj = filtro.apikey.filter(estado=True).first()
+                                if apikey_obj:
+                                    try:
+                                        vs_manager = VectorStoreManager(
+                                            storage_dir=base_dir,
+                                            provider='gemini' if apikey_obj.proveedor == 2 else 'openai',
+                                            apikey=apikey_obj.descripcion
+                                        )
+                                        documentos = []
+                                        for det in detalles_archivo:
+                                            documentos.extend(vs_manager.load_and_split(det.archivo.path, metadata={"detalle_id": det.id}))
+                                        for det in detalles_texto:
+                                            if det.descripcion:
+                                                documentos.extend(vs_manager.build_from_string(det.descripcion, metadata={"detalle_id": det.id}))
+                                        if documentos:
+                                            vs_path = vs_manager.build_and_save(documentos, nombre_vs)
+                                            filtro.vectorstore_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
+                                    except Exception as ex:
+                                        pass
+                                filtro.save()
+                                res_json = {"error": False, "message": f"✅ Procesado: {len(texto_completo):,} chars. Documento grande → FAISS + contexto estático.", "reload": True}
+                            else:
+                                filtro.vectorstore_path = None
+                                filtro.save()
+                                res_json = {"error": False, "message": f"✅ Procesado: {len(texto_completo):,} chars. Contexto estático listo (sin FAISS).", "reload": True}
+                    elif action == 'reactivarapikey':
+                        filtro = ApiKeyIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
+                        filtro.estado = True
+                        filtro.msgerror = None
+                        filtro.save()
+                        log(f"API Key reactivada {filtro}", request, "change", obj=filtro.id)
+                        res_json = {"error": False, "reload": True}
+                    elif action == 'testapikey':
+                        filtro = ApiKeyIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
+                        try:
+                            if filtro.proveedor == 2:  # Gemini
+                                from langchain_google_genai import ChatGoogleGenerativeAI
+                                llm = ChatGoogleGenerativeAI(model='gemini-2.5-flash', google_api_key=filtro.descripcion)
+                            else:  # OpenAI
+                                from langchain_community.chat_models import ChatOpenAI
+                                llm = ChatOpenAI(model_name='gpt-4o-mini', openai_api_key=filtro.descripcion)
+                            llm.invoke('responde solo: ok')
+                            # Éxito — reactivar si estaba desactivada
+                            if not filtro.estado:
+                                filtro.estado = True
+                                filtro.msgerror = None
+                                filtro.save()
+                            res_json = {"error": False, "message": "✅ API Key válida y funcional.", "activo": True}
+                        except Exception as ex:
+                            filtro.estado = False
+                            filtro.msgerror = str(ex)[:500]
+                            filtro.save()
+                            res_json = {"error": False, "message": f"❌ Error: {str(ex)[:300]}", "activo": False}
             except ValueError as ex:
                 res_json.append({'error': True, "message": str(ex)})
             except FormError as ex:
@@ -201,6 +284,44 @@ def entrenamiento_ia_view(request):
                         return JsonResponse({"result": True, 'data': template.render(data)})
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})
+                elif action == 'vercontexto':
+                    try:
+                        pk = int(request.GET['id'])
+                        filtro = AgentesIA.objects.get(pk=pk, perfil=perfil)
+                        contexto = filtro.contexto_estatico or ''
+                        prompt_tpl = filtro.prompt_template or ''
+                        # Armar preview del prompt completo con valores de ejemplo
+                        prompt_preview = ''
+                        try:
+                            prompt_preview = prompt_tpl.replace(
+                                '{context}', contexto[:3000] + ('…' if len(contexto) > 3000 else '')
+                            ).replace(
+                                '{descripcion_agente}', filtro.descripcion or ''
+                            ).replace(
+                                '{contexto_extra}', '[Historial de la conversación irá aquí]'
+                            ).replace(
+                                '{question}', '[Pregunta del usuario irá aquí]'
+                            )
+                        except Exception:
+                            prompt_preview = prompt_tpl
+                        detalles = list(filtro.detalleagentesai_set.filter(status=True).values(
+                            'tipo', 'archivo', 'enlace', 'descripcion'
+                        ))
+                        return JsonResponse({
+                            "result": True,
+                            "nombre": filtro.nombre,
+                            "descripcion": filtro.descripcion or '',
+                            "chars_contexto": len(contexto),
+                            "chars_prompt": len(prompt_tpl),
+                            "contexto": contexto,
+                            "prompt_preview": prompt_preview,
+                            "tiene_faiss": bool(filtro.vectorstore_path),
+                            "modo": "estatico" if contexto and not filtro.vectorstore_path else ("faiss" if filtro.vectorstore_path else "sin_datos"),
+                            "detalles_count": len(detalles),
+                            "detalles": detalles,
+                        })
+                    except Exception as ex:
+                        return JsonResponse({"result": False, 'message': str(ex)})
                 if action == 'addapikey':
                     try:
                         data["form"] = ApiKeyIAForm()
@@ -218,7 +339,21 @@ def entrenamiento_ia_view(request):
                         return JsonResponse({"result": True, 'data': template.render(data)})
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})
-            data['agentes'] = perfil.get_agentes()
+            agentes = list(perfil.get_agentes())
+            for a in agentes:
+                ok, enc = get_encrypt(a.id)
+                a.chat_url = f'/crm/entrenamiento/chat/{enc}/' if ok else ''
+                keys = list(a.apikey.all())
+                a.keys_total = len(keys)
+                a.keys_activas = sum(1 for k in keys if k.estado)
+                # estado: 'ok' → al menos una activa, 'err' → todas inactivas, 'warn' → sin keys
+                if not keys:
+                    a.estado_agente = 'warn'
+                elif a.keys_activas > 0:
+                    a.estado_agente = 'ok'
+                else:
+                    a.estado_agente = 'err'
+            data['agentes'] = agentes
             data['apis'] = perfil.get_apis()
     except Exception as ex:
         error_line = sys.exc_info()[-1].tb_lineno

@@ -191,6 +191,12 @@ class AgentesIA(ModeloBase):
         max_length=1000, blank=True, null=True, verbose_name="Ruta del vector store de Apis y Enlaces"
     )
     vectorstore_enlaces_expira = models.DateTimeField(blank=True, null=True, verbose_name="Fecha de expiración del vector store")
+    # Texto completo extraído de archivos/textos — se inyecta directamente en el prompt
+    # sin llamadas de embedding. Ideal para documentos pequeños (menús, FAQ, etc.)
+    contexto_estatico = models.TextField(
+        blank=True, null=True,
+        verbose_name="Contexto estático (texto completo para inyección directa en prompt)"
+    )
 
     class Meta:
         verbose_name = 'Respuesta Entrenada IA'
@@ -225,7 +231,7 @@ class AgentesIA(ModeloBase):
         return json.dumps(detalles_json)
 
     def build_enlaces_vectorstore(self):
-        detalles = self.detalleagentesai_set.filter(status=True, tipo=1, archivo__isnull=False)
+        detalles = self.detalleagentesai_set.filter(status=True, tipo=1, enlace__isnull=False)
         if not detalles.exists():
             return
         tiempo_cache_horas = detalles.filter(usar_cache=True).order_by('-tiempo_cache_horas').first()
@@ -338,9 +344,12 @@ class AgentesIA(ModeloBase):
             if documentos:
                 vs_path = vs_manager.build_and_save(documentos, nombre_vs)
                 agente.vectorstore_enlaces_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
-                agente.vectorstore_enlaces_expira = None
-                if tiempo_cache_horas:
-                    agente.vectorstore_enlaces_expira = timezone.now() + timedelta(hours=tiempo_cache_horas)
+                # Siempre fijar una expiración mínima de 10 min para que el check
+                # de caché no vuelva a entrar en la próxima petición.
+                agente.vectorstore_enlaces_expira = timezone.now() + timedelta(
+                    hours=tiempo_cache_horas if tiempo_cache_horas else 0,
+                    minutes=0 if tiempo_cache_horas else 10,
+                )
                 agente.save()
                 AgentesIA.objects.bulk_update([agente], ['vectorstore_enlaces_path', 'vectorstore_enlaces_expira'])
             break
@@ -386,40 +395,97 @@ class DetalleAgentesAI(ModeloBase):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        base_dir = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
-        nombre_vs = f"agente_{self.agente.id}"
+        if self.tipo not in (2, 3):
+            return  # ENLACE → no afecta vectorstore de archivos
 
-        apikeys = self.agente.apikey.all()
-        if apikeys.exists() and self.tipo in (2, 3):
-            for apikeyobj in apikeys:
-                if apikeyobj.descripcion:
-                    vs_manager = VectorStoreManager(
-                        storage_dir=base_dir,
-                        provider='gemini' if apikeyobj.proveedor == 2 else 'openai',
-                        apikey=apikeyobj.descripcion
+        agente = self.agente
+        if not agente:
+            return
+
+        # ── Recopilar todo el texto de los detalles activos ──────────────
+        base_dir = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
+        nombre_vs = f"agente_{agente.id}"
+
+        # Extraer texto raw de archivos (tipo 2) y textos directos (tipo 3)
+        textos_raw = []
+        detalles_archivo = agente.detalleagentesai_set.filter(
+            status=True, tipo=2, archivo__isnull=False
+        )
+        detalles_texto = agente.detalleagentesai_set.filter(
+            status=True, tipo=3
+        ).exclude(descripcion__isnull=True).exclude(descripcion='')
+
+        for detalle in detalles_archivo:
+            try:
+                from agents_ai.vectorstore_manager import VectorStoreManager as _VM
+                raw_docs = _VM._extract_raw_text(detalle.archivo.path)
+                if raw_docs:
+                    textos_raw.append(raw_docs)
+            except Exception as e:
+                print(f"Error extrayendo texto de {detalle.archivo}: {e}")
+
+        for detalle in detalles_texto:
+            if detalle.descripcion:
+                textos_raw.append(detalle.descripcion.strip())
+
+        if not textos_raw:
+            return
+
+        texto_completo = "\n\n".join(textos_raw)
+
+        # ── Decisión: contexto estático vs FAISS ─────────────────────────
+        # Si el texto cabe en un prompt (≤ 40 000 chars), lo inyectamos
+        # directamente → cero llamadas de embedding por mensaje.
+        # Para documentos grandes usamos FAISS como antes.
+        _UMBRAL_ESTATICO = 40_000
+
+        agente.contexto_estatico = texto_completo[:_UMBRAL_ESTATICO]
+
+        if len(texto_completo) <= _UMBRAL_ESTATICO:
+            # Documento pequeño → solo contexto estático, limpiar FAISS
+            agente.vectorstore_path = None
+            agente.save()
+            return
+
+        # Documento grande → construir FAISS (y también guardar contexto estático
+        # con los primeros 40k chars como respaldo)
+        apikeys = agente.apikey.all()
+        if not apikeys.exists():
+            agente.save()
+            return
+
+        for apikeyobj in apikeys:
+            if not apikeyobj.descripcion:
+                continue
+            try:
+                vs_manager = VectorStoreManager(
+                    storage_dir=base_dir,
+                    provider='gemini' if apikeyobj.proveedor == 2 else 'openai',
+                    apikey=apikeyobj.descripcion
+                )
+                documentos = []
+                for detalle in detalles_archivo:
+                    docs = vs_manager.load_and_split(
+                        detalle.archivo.path,
+                        metadata={"detalle_id": detalle.id}
                     )
-                    agente = self.agente
-                    detalles = agente.detalleagentesai_set.filter(status=True, tipo__in=(2, 3), archivo__isnull=False)
-                    documentos = []
-                    for detalle in detalles:
-                        docs = []
-                        if detalle.tipo == 2:
-                            docs = vs_manager.load_and_split(
-                                detalle.archivo.path,
-                                metadata={"detalle_id": detalle.id}
-                            )
-                        elif detalle.tipo == 3:
-                            docs = vs_manager.build_from_string(self.descripcion, metadata={"detalle_id": detalle.id})
+                    documentos.extend(docs)
+                for detalle in detalles_texto:
+                    if detalle.descripcion:
+                        docs = vs_manager.build_from_string(
+                            detalle.descripcion,
+                            metadata={"detalle_id": detalle.id}
+                        )
                         documentos.extend(docs)
 
-                    if documentos:
-                        try:
-                            vs_path = vs_manager.build_and_save(documentos, nombre_vs)
-                            agente.vectorstore_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
-                            agente.save()
-                        except Exception as e:
-                            print(e)
-                    break
+                if documentos:
+                    vs_path = vs_manager.build_and_save(documentos, nombre_vs)
+                    agente.vectorstore_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
+            except Exception as e:
+                print(f"Error construyendo FAISS: {e}")
+            break
+
+        agente.save()
 
 
 PROVEEDOR_CHOICES = (
