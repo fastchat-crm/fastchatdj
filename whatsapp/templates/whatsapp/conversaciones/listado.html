@@ -66,12 +66,73 @@
     #btn-toggle-bot.bot-on  { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
     #btn-toggle-bot.bot-off { background: #fce4ec; color: #c62828; border: 1px solid #ef9a9a; }
 
-    /* Chat background texture */
+    /* Chat background */
     #chat-messages {
         background-color: #e5ddd5;
         background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8b8a2' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
     }
-    #chat-messages .simplebar-content { padding: 16px 0 !important; }
+    /* Anclar mensajes al fondo como WhatsApp Web */
+    #chat-messages .simplebar-content-wrapper { display: flex; flex-direction: column; }
+    #chat-messages .simplebar-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 8px 0 4px !important;
+        min-height: 100%;
+    }
+
+    /* ── Emoji picker ── */
+    #emoji-picker-popup {
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 0;
+        width: 320px;
+        max-height: 260px;
+        background: #fff;
+        border: 1px solid #dde1e7;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,.18);
+        overflow-y: auto;
+        z-index: 999;
+        padding: 8px;
+        display: none;
+    }
+    #emoji-picker-popup .emoji-cat-title {
+        font-size: .68rem;
+        font-weight: 600;
+        color: #888;
+        padding: 4px 2px 2px;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+    #emoji-picker-popup .emoji-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px;
+        margin-bottom: 4px;
+    }
+    #emoji-picker-popup .e {
+        font-size: 1.35rem;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        border-radius: 6px;
+        transition: background .12s;
+        user-select: none;
+    }
+    #emoji-picker-popup .e:hover { background: #f0f0f0; }
+    #emoji-btn {
+        width: 38px; height: 38px; border-radius: 50%;
+        background: none; border: none; font-size: 1.25rem;
+        cursor: pointer; color: #6c757d; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        transition: background .15s;
+    }
+    #emoji-btn:hover { background: rgba(0,0,0,.07); }
 </style>
 {% endblock %}
 
@@ -265,35 +326,46 @@
                 </div><!-- end chat-body -->
 
                 <!-- Formulario para enviar mensajes -->
-                <div class="chat-footer p-3" id="chat-footer" style="display: none;">
+                <div class="chat-footer" id="chat-footer" style="display:none;">
                     <form id="form-enviar-mensaje" enctype="multipart/form-data">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="send">
                         <input type="hidden" name="pk" id="conversacion-id" value="">
-                        <!-- Preview del archivo seleccionado -->
-                        <div id="footer-file-preview" class="d-none mb-2 px-1 d-flex align-items-center gap-2"
-                             style="font-size:.83rem;background:#f0f4ff;border-radius:6px;padding:6px 10px;">
+
+                        <!-- Preview archivo -->
+                        <div id="footer-file-preview" class="d-none mb-2 d-flex align-items-center gap-2"
+                             style="font-size:.82rem;background:#e9f5ff;border-radius:8px;padding:6px 10px;">
                             <i class="fa fa-file-alt text-primary" id="footer-file-icon"></i>
-                            <span id="footer-file-name" class="text-truncate flex-grow-1" style="max-width:260px;"></span>
-                            <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1" id="footer-file-remove"
-                                    title="Quitar archivo"><i class="fa fa-times"></i></button>
+                            <span id="footer-file-name" class="text-truncate flex-grow-1"></span>
+                            <button type="button" class="btn btn-sm btn-link text-danger p-0" id="footer-file-remove">
+                                <i class="fa fa-times"></i>
+                            </button>
                         </div>
-                        <div class="d-flex align-items-center gap-2">
-                            <!-- Adjuntar archivo -->
+
+                        <div class="d-flex align-items-center gap-2" style="position:relative;">
+                            <!-- Emoji -->
+                            <div style="position:relative;flex-shrink:0;">
+                                <button type="button" id="emoji-btn" title="Emojis">😊</button>
+                                <div id="emoji-picker-popup"></div>
+                            </div>
+
+                            <!-- Adjuntar -->
                             <label for="archivo" class="mb-0 d-flex align-items-center justify-content-center"
-                                   title="Adjuntar imagen / video / audio / doc"
-                                   style="width:38px;height:38px;border-radius:50%;background:#fff;border:1px solid #dde1e7;cursor:pointer;color:#6c757d;flex-shrink:0;">
+                                   title="Adjuntar archivo"
+                                   style="width:38px;height:38px;border-radius:50%;background:#f0f2f5;cursor:pointer;color:#6c757d;flex-shrink:0;border:none;">
                                 <i class="fa fa-paperclip"></i>
                             </label>
                             <input type="file" id="archivo" name="archivo" style="display:none;"
                                    accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar">
-                            <!-- Campo de texto -->
-                            <input type="text" class="form-control rounded-pill border-0" name="mensaje" id="footer-mensaje-input"
+
+                            <!-- Texto -->
+                            <input type="text" class="form-control border-0 rounded-pill" name="mensaje" id="footer-mensaje-input"
                                    placeholder="Escribe un mensaje..."
-                                   style="background:#fff;box-shadow:none;">
+                                   style="background:#fff;box-shadow:none;min-height:40px;">
+
                             <!-- Enviar -->
-                            <button type="submit" class="mb-0 d-flex align-items-center justify-content-center border-0" id="footer-send-btn"
-                                    style="width:40px;height:40px;border-radius:50%;background:#25d366;color:#fff;flex-shrink:0;cursor:pointer;">
+                            <button type="submit" id="footer-send-btn"
+                                    style="width:42px;height:42px;border-radius:50%;background:#25d366;color:#fff;border:none;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem;transition:background .15s;">
                                 <i class="fa fa-paper-plane"></i>
                             </button>
                         </div>
@@ -438,28 +510,9 @@
 
         sessionWebSocket($('#sesion-selector').val(), filtroActivo);
 
-        function scrollToBottom(smooth = true) {
-            const chatContainer = document.getElementById('chat-messages').querySelector('.simplebar-content-wrapper');
-            if (chatContainer) {
-                // Calcular la altura total del contenido
-                const scrollHeight = chatContainer.scrollHeight;
-
-                // Hacer scroll
-                if (smooth) {
-                    // En algunos dispositivos móviles, scrollTo con behavior: 'smooth' puede no funcionar
-                    try {
-                        chatContainer.scrollTo({
-                            top: scrollHeight,
-                            behavior: 'smooth'
-                        });
-                    } catch (e) {
-                        // Fallback para navegadores que no soportan scrollTo con opciones
-                        chatContainer.scrollTop = scrollHeight;
-                    }
-                } else {
-                    chatContainer.scrollTop = scrollHeight;
-                }
-            }
+        function scrollToBottom(smooth = false) {
+            const cw = document.getElementById('chat-messages')?.querySelector('.simplebar-content-wrapper');
+            if (cw) cw.scrollTop = cw.scrollHeight;
         }
 
         // Variables globales
@@ -579,8 +632,9 @@
                     alertaWarning('Error al enviar mensaje: ' + error);
                 },
                 complete: function() {
-                    // Restaurar el botón
-                    submitBtn.prop('disabled', false).html(originalBtnText);
+                    submitBtn.prop('disabled', false)
+                        .css('background', '#25d366')
+                        .html('<i class="fa fa-paper-plane"></i>');
                 }
             });
         });
@@ -624,6 +678,49 @@
             $('#footer-file-icon').attr('class', 'fa ' + icon);
             $('#footer-file-name').text(file.name);
             $('#footer-file-preview').removeClass('d-none');
+        });
+
+        // ── Emoji picker ────────────────────────────────────────────────
+        const _emojis = {
+            '😊 Caras': ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🥸','🤩','🥳','😏','😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤','😠','😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🫣','🤗','🫡','🤔','🫢','🤭','🤫','🤥','😶','😐','😑','😬','🙄','😯','😦','😧','😮','😲','🥱','😴','🤤','😪','😵','🤐','🥴','🤢','🤮','🤧','😷','🤒','🤕'],
+            '👋 Gestos': ['👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🫰','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','🫵','👍','👎','✊','👊','🤛','🤜','👏','🙌','🫶','👐','🤲','🤝','🙏','✍️','💅','🤳','💪','🦾','🦵','🦶','👂','🦻','👃','🫀','🫁','🧠','🦷','🦴','👀','👁️','👅','👄','🫦','💋'],
+            '❤️ Corazones': ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❤️‍🔥','❤️‍🩹','❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☪️','🕉️','✡️','🔯','🪯','☯️','☦️','🛐'],
+            '🎉 Celebración': ['🎉','🎊','🎈','🎁','🎀','🎗️','🎟️','🎫','🏆','🥇','🥈','🥉','🏅','🎖️','🌟','⭐','💫','✨','🌠','🎆','🎇','🧨','🪅','🎭','🎪','🎨','🎬','🎤','🎧','🎼','🎵','🎶','🎹','🥁','🪘','🎷','🎺','🪗','🎸','🪕'],
+            '🐱 Animales': ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🪱','🐛','🦋','🐌','🐞','🐜','🪲','🦟','🦗','🕷️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐟','🐠','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🦣','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐈‍⬛','🪶','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊️','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿️','🦔'],
+            '🍕 Comida': ['🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🫒','🫑','🥕','🥦','🧄','🧅','🌽','🌶️','🫚','🥑','🍆','🥔','🍠','🥐','🥯','🍞','🫓','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🌭','🍔','🍟','🍕','🫔','🌮','🌯','🥙','🧆','🥚','🥘','🍲','🫕','🥣','🥗','🍿','🧂','🥫','🍱','🍘','🍙','🍚','🍛','🍜','🍝','🍠','🍢','🍣','🍤','🍥','🥮','🍡','🥟','🥠','🥡','🍦','🍧','🍨','🍩','🍪','🎂','🍰','🧁','🥧','🍫','🍬','🍭','🍮','🍯','☕','🫖','🍵','🧃','🥤','🧋','🍶','🍺','🍻','🥂','🍷','🫗','🥃','🍸','🍹','🧉','🍾','🧊'],
+            '✈️ Viajes': ['🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🏍️','🛵','🛺','🚲','🛴','🛹','🛼','🚏','🛣️','🛤️','⛽','🚧','⚓','🛟','⛵','🚤','🛥️','🛳️','⛴️','🚢','✈️','🛩️','🛫','🛬','🪂','💺','🚁','🚟','🚠','🚡','🛰️','🚀','🛸','🏠','🏡','🏢','🏣','🏤','🏥','🏦','🏨','🏩','🏪','🏫','🏬','🏭','🏯','🏰','💒','🗼','🗽','⛪','🕌','🛕','🕍','⛩️','🕋','⛲','⛺','🌁','🌃','🏙️','🌄','🌅','🌆','🌇','🌉','♟️','🎠','🎡','🎢','💈','🎪'],
+        };
+
+        (function _buildEmojiPicker() {
+            const popup = document.getElementById('emoji-picker-popup');
+            let html = '';
+            for (const [cat, emojis] of Object.entries(_emojis)) {
+                html += `<div class="emoji-cat-title">${cat}</div><div class="emoji-grid">`;
+                html += emojis.map(e => `<span class="e" data-e="${e}">${e}</span>`).join('');
+                html += '</div>';
+            }
+            popup.innerHTML = html;
+        })();
+
+        document.getElementById('emoji-btn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            const p = document.getElementById('emoji-picker-popup');
+            p.style.display = p.style.display === 'none' || !p.style.display ? 'block' : 'none';
+        });
+
+        document.getElementById('emoji-picker-popup').addEventListener('click', function(e) {
+            const emoji = e.target.dataset.e;
+            if (!emoji) return;
+            const inp = document.getElementById('footer-mensaje-input');
+            const pos = inp.selectionStart;
+            const val = inp.value;
+            inp.value = val.slice(0, pos) + emoji + val.slice(pos);
+            inp.selectionStart = inp.selectionEnd = pos + emoji.length;
+            inp.focus();
+        });
+
+        document.addEventListener('click', function() {
+            document.getElementById('emoji-picker-popup').style.display = 'none';
         });
 
         $('#footer-file-remove').on('click', function() {
