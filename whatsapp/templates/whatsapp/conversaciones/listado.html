@@ -245,23 +245,28 @@
                         {% csrf_token %}
                         <input type="hidden" name="action" value="send">
                         <input type="hidden" name="pk" id="conversacion-id" value="">
-                        <div class="row">
-                            <div class="col-9">
-                                <div class="input-group">
-                                    <input type="text" class="form-control" name="mensaje" placeholder="Escribe un mensaje..." required>
-                                    <div class="input-group-append">
-                                        <label for="archivo" class="btn btn-light border">
-                                            <i class="fa fa-paperclip"></i>
-                                        </label>
-                                        <input type="file" id="archivo" name="archivo" style="display: none;">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-3">
-                                <button type="submit" class="btn btn-primary w-100">
-                                    <i class="fa fa-paper-plane"></i> Enviar
-                                </button>
-                            </div>
+                        <!-- Preview del archivo seleccionado -->
+                        <div id="footer-file-preview" class="d-none mb-2 px-1 d-flex align-items-center gap-2"
+                             style="font-size:.83rem;background:#f0f4ff;border-radius:6px;padding:6px 10px;">
+                            <i class="fa fa-file-alt text-primary" id="footer-file-icon"></i>
+                            <span id="footer-file-name" class="text-truncate flex-grow-1" style="max-width:260px;"></span>
+                            <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1" id="footer-file-remove"
+                                    title="Quitar archivo"><i class="fa fa-times"></i></button>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <!-- Adjuntar archivo -->
+                            <label for="archivo" class="btn btn-light border mb-0" title="Adjuntar imagen / video / audio / doc">
+                                <i class="fa fa-paperclip"></i>
+                            </label>
+                            <input type="file" id="archivo" name="archivo" style="display:none;"
+                                   accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar">
+                            <!-- Campo de texto -->
+                            <input type="text" class="form-control" name="mensaje" id="footer-mensaje-input"
+                                   placeholder="Escribe un mensaje...">
+                            <!-- Enviar -->
+                            <button type="submit" class="btn btn-primary" id="footer-send-btn">
+                                <i class="fa fa-paper-plane"></i>
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -501,6 +506,13 @@
             e.preventDefault();
 
             const form = $(this);
+            const texto = form.find('input[name="mensaje"]').val().trim();
+            const archivo = document.getElementById('archivo').files[0];
+            if (!texto && !archivo) {
+                alertaWarning('Escribe un mensaje o adjunta un archivo.');
+                return;
+            }
+
             const formData = new FormData(form[0]);
 
             // Deshabilitar el botón de envío
@@ -522,6 +534,7 @@
                         // Limpiar el formulario
                         form.find('input[name="mensaje"]').val('');
                         form.find('input[name="archivo"]').val('');
+                        $('#footer-file-preview').addClass('d-none');
 
                         // Scroll al final
                         setTimeout(() => {
@@ -559,16 +572,32 @@
             }
         }
 
-        // Mostrar nombre del archivo seleccionado
-        $('#archivo').change(function() {
-            const fileName = $(this).val().split('\\').pop();
-            if (fileName) {
-                // Mostrar el nombre del archivo junto al campo de mensaje
-                const messageInput = $('input[name="mensaje"]');
-                if (!messageInput.val()) {
-                    messageInput.val('Archivo adjunto: ' + fileName);
-                }
+        // Preview del archivo seleccionado en el footer
+        const _fileIconMap = {
+            'image': 'fa-file-image text-success',
+            'video': 'fa-file-video text-danger',
+            'audio': 'fa-file-audio text-warning',
+            'application/pdf': 'fa-file-pdf text-danger',
+        };
+        function _fileIcon(type) {
+            for (const k in _fileIconMap) {
+                if (type.startsWith(k)) return _fileIconMap[k];
             }
+            return 'fa-file-alt text-primary';
+        }
+
+        $('#archivo').on('change', function() {
+            const file = this.files[0];
+            if (!file) return;
+            const icon = _fileIcon(file.type);
+            $('#footer-file-icon').attr('class', 'fa ' + icon);
+            $('#footer-file-name').text(file.name);
+            $('#footer-file-preview').removeClass('d-none');
+        });
+
+        $('#footer-file-remove').on('click', function() {
+            $('#archivo').val('');
+            $('#footer-file-preview').addClass('d-none');
         });
 
         // Función para cargar conversaciones
