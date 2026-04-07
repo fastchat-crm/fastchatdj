@@ -677,7 +677,7 @@
                     }
 
                     // Mostrar footer para enviar mensajes
-                    $('#chat-footer').show();
+                    $('#chat-footer').removeClass('d-none').show();
                     $('#conversacion-id').val(response.conversacion_id);
 
                     setTimeout(() => { scrollToBottom(); }, 800);
