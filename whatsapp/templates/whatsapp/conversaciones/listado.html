@@ -435,6 +435,10 @@
         // Cambiar de sesión
         $('#sesion-selector').change(function() {
             const sesionId = $(this).val();
+            // Abortar cualquier carga en curso
+            _cargandoMensajes = false;
+            $.unblockUI();
+            if (chatSocket) { chatSocket.close(); chatSocket = null; }
             sessionWebSocket(sesionId, filtroActivo);
             $('#mensajes-container').html('<div class="text-center p-5"><i class="fa fa-comments fa-4x text-muted mb-3"></i><p>Selecciona una conversación para ver los mensajes</p></div>');
             $('#chat-footer').hide();
@@ -467,10 +471,12 @@
             buscarConversacion(e);
         });
 
-        // Cargar conversación al hacer clic
+        // Cargar conversación al hacer clic — con guard anti-doble-click
+        let _cargandoMensajes = false;
         $(document).on('click', '.cargar-conversacion', function(e) {
             e.preventDefault();
             const conversacionId = $(this).data('id');
+            if (_cargandoMensajes || conversacionId == conversacionActiva) return;
             cargarMensajes(conversacionId);
 
             // Marcar como activa
@@ -603,15 +609,26 @@
 
         // Función para cargar mensajes
         function cargarMensajes(conversacionId) {
+            if (_cargandoMensajes) return;
+            _cargandoMensajes = true;
             conversacionActiva = conversacionId;
 
-            // Mostrar indicador de carga
-            $('#mensajes-container').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2">Cargando mensajes...</p></div>');
+            pantallaespera();
+
+            // Limpiar WebSocket anterior
+            if (chatSocket) { chatSocket.close(); chatSocket = null; }
+
+            // Ocultar controles mientras carga
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #chat-footer').addClass('d-none').hide();
+            $('#mensajes-container').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted small">Cargando mensajes...</p></div>');
 
             $.ajax({
                 url: '/whatsapp/conversaciones/?action=ver_mensajes&pk=' + conversacionId,
                 type: 'GET',
                 success: function(response) {
+                    $.unblockUI();
+                    _cargandoMensajes = false;
+
                     // Actualizar mensajes
                     $('#mensajes-container').html(response.html);
 
@@ -620,7 +637,6 @@
                     $('#contacto-numero').text(response.contacto_numero);
                     $('#contacto-hashedId').text(response.hashed_id && `#${response.hashed_id}` || '');
 
-                    // Actualizar foto de contacto si está disponible
                     if (response.contacto_foto) {
                         $('#contacto-foto').attr('src', response.contacto_foto);
                     } else {
@@ -649,14 +665,13 @@
                     $('#chat-footer').show();
                     $('#conversacion-id').val(response.conversacion_id);
 
-                    // Scroll al final
-                    setTimeout(() => {
-                        scrollToBottom();
-                    }, 1500);
+                    setTimeout(() => { scrollToBottom(); }, 800);
                     conectarWebSocket(response.conversacion_id);
                 },
                 error: function(xhr, status, error) {
-                    $('#mensajes-container').html('<div class="p-3 text-center"><p class="text-danger">Error al cargar mensajes: ' + error + '</p></div>');
+                    $.unblockUI();
+                    _cargandoMensajes = false;
+                    $('#mensajes-container').html('<div class="p-3 text-center"><p class="text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error al cargar mensajes: ' + error + '</p></div>');
                 }
             });
         }

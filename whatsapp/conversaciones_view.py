@@ -212,11 +212,44 @@ def conversacionesView(request):
                     filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['pk']))
                     form = AsignarAgenteForm(request.POST, instance=filtro, request=request)
                     if form.is_valid():
-                        form.save()
+                        filtro = form.save()
                         asignado = filtro.asignado_a
                         log(f"Conversación {filtro.id} asignada a {asignado}", request, "change", obj=filtro.id)
-                        res_json.append({'error': False, 'reload': True})
-                        messages.success(request, f'Conversación asignada a {asignado.get_full_name() if asignado else "sin asignar"}.')
+                        # Notificar al agente asignado vía Notificacion
+                        if asignado:
+                            try:
+                                from seguridad.models import Notificacion
+                                contacto_nombre = filtro.contacto.contacto_nombre or filtro.contacto.from_number
+                                Notificacion.objects.create(
+                                    usuario=asignado,
+                                    titulo='Conversación asignada',
+                                    mensaje=f'Se te asignó la conversación con {contacto_nombre}.',
+                                    url='/whatsapp/conversaciones/',
+                                    prioridad=2,
+                                    tipo=1,
+                                )
+                            except Exception:
+                                pass
+                        nombre_asignado = asignado.get_full_name() if asignado else ''
+                        foto_asignado = asignado.get_foto_url() if asignado else ''
+                        if nombre_asignado:
+                            js = (
+                                f"$('#asignado-nombre').text({repr(nombre_asignado)});"
+                                f"$('#asignado-container').removeClass('d-none');"
+                                f"bootstrap.Modal.getInstance(document.getElementById('modalDetalle'))?.hide();"
+                                f"alertaSuccess('Conversación asignada a {nombre_asignado}.');"
+                            )
+                        else:
+                            js = (
+                                "$('#asignado-container').addClass('d-none');"
+                                "bootstrap.Modal.getInstance(document.getElementById('modalDetalle'))?.hide();"
+                                "alertaSuccess('Asignación eliminada.');"
+                            )
+                        res_json.append({
+                            'error': False,
+                            'reload': False,
+                            'function_js': js,
+                        })
                         return JsonResponse(res_json, safe=False)
                     else:
                         raise NameError(f'Error al asignar: {form.errors}')
