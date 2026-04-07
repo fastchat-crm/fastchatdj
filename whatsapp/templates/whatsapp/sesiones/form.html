@@ -1,45 +1,461 @@
 <style>
-    .select2-search__field {
-        width: 100% !important;
+    .select2-search__field { width: 100% !important; }
+    .select2-container--open { z-index: 9999 !important; }
+    .nav-tabs .nav-link { font-size: .82rem; padding: .45rem .9rem; }
+    .section-label {
+        font-size: .7rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .06em; color: #6c757d; margin-bottom: .5rem;
     }
-
-    .select2-container--open {
-        z-index: 9999 !important;
-    }
+    .accion-row { background: #f8f9fa; border-radius: 8px; padding: 8px 12px; margin-bottom: 6px; font-size: .82rem; }
+    .accion-row .accion-tipo { font-weight: 600; }
+    .tipo-card { cursor: pointer; transition: border-color .15s, background .15s; border-color: #dee2e6 !important; }
+    .tipo-card:hover { border-color: #adb5bd !important; background: #f8f9fa; }
+    .tipo-card.selected { border-color: #667eea !important; background: #f0f4ff; }
+    .tipo-card .tc-icon { font-size: 1.3rem; margin-bottom: 4px; }
+    .tipo-card .tc-name { font-size: .78rem; font-weight: 600; }
+    .tipo-card .tc-desc { font-size: .63rem; color: #868e96; margin-top: 2px; }
+    .var-pill { cursor: pointer; font-size: .67rem; padding: 2px 6px; }
+    .var-pill:hover { background: #e9ecef !important; }
 </style>
 
-<div class="row g-2">
-    <input type="hidden" name="pk" value="{{ instance.id }}">
-    <input type="hidden" name="action" value="{{ action }}">
-    {% for field in form %}
-        {% if field.is_hidden %}
-            {{ field }}
-        {% else %}
-            <div class="col-lg-{{ field.field.widget.attrs.col }}">
-                <div class="mb-2">
-                    <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label><br>
-                    {{ field }}
-                    <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+<input type="hidden" name="pk" value="{{ instance.id }}">
+<input type="hidden" name="action" value="{{ action }}">
+
+{# ── TABS ──────────────────────────────────────────────────────────── #}
+<ul class="nav nav-tabs mb-3" id="sesionTabs" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-basico" type="button">
+            <i class="fas fa-sliders-h me-1"></i> Básico
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-agente" type="button">
+            <i class="fas fa-robot me-1"></i> Agente IA
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-mensajes" type="button">
+            <i class="fas fa-comment-dots me-1"></i> Mensajes
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link {% if regla_fin %}text-danger fw-semibold{% endif %}"
+                data-bs-toggle="tab" data-bs-target="#tab-cierre" type="button">
+            <i class="fas fa-flag-checkered me-1"></i> Cierre
+            {% if regla_fin and regla_fin.activo %}<span class="badge bg-danger ms-1" style="font-size:.6rem">ON</span>{% endif %}
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+
+    {# ── TAB 1: BÁSICO ─────────────────────────────────────────────── #}
+    <div class="tab-pane fade show active" id="tab-basico">
+        <div class="row g-2">
+            <div class="col-9">
+                <label class="form-label small mb-1">{{ form.nombre.label }}</label>
+                {{ form.nombre }}
+                <div class="invalid-feedback" id="errorMessagenombre"></div>
+            </div>
+            <div class="col-3">
+                <label class="form-label small mb-1">{{ form.min_sesion.label }}</label>
+                {{ form.min_sesion }}
+                <div class="invalid-feedback" id="errorMessagemin_sesion"></div>
+            </div>
+            <div class="col-12">
+                <label class="form-label small mb-1">{{ form.language.label }}</label>
+                {{ form.language }}
+                <div class="invalid-feedback" id="errorMessagelanguage"></div>
+            </div>
+        </div>
+    </div>
+
+    {# ── TAB 2: AGENTE IA ──────────────────────────────────────────── #}
+    <div class="tab-pane fade" id="tab-agente">
+        <div class="row g-2">
+            <div class="col-12">
+                <p class="section-label">Agente de inteligencia artificial</p>
+                <label class="form-label small mb-1">{{ form.agente_ia.label }}</label>
+                {{ form.agente_ia }}
+                <div class="form-text">El agente responderá automáticamente a los mensajes entrantes.</div>
+                <div class="invalid-feedback" id="errorMessageagente_ia"></div>
+            </div>
+            <div class="col-12 mt-2">
+                <p class="section-label">Departamentos del chatbot</p>
+                <label class="form-label small mb-1">{{ form.departamentos.label }}</label>
+                {{ form.departamentos }}
+                <div class="form-text">Si configuras departamentos, el usuario podrá seleccionar uno antes de ser atendido.</div>
+                <div class="invalid-feedback" id="errorMessagedepartamentos"></div>
+            </div>
+        </div>
+    </div>
+
+    {# ── TAB 3: MENSAJES ───────────────────────────────────────────── #}
+    <div class="tab-pane fade" id="tab-mensajes">
+        <div class="row g-2">
+            <div class="col-12">
+                <p class="section-label">Mensaje de bienvenida</p>
+                <div class="form-text mb-2">Se envía la primera vez que un contacto inicia una conversación.</div>
+                {{ form.mensaje_bienvenida }}
+                <div class="invalid-feedback" id="errorMessagemensaje_bienvenida"></div>
+            </div>
+            <div class="col-12 mt-3">
+                <p class="section-label">Mensaje de despedida</p>
+                <div class="form-text mb-2">Se envía cuando la conversación llega a su tiempo límite.</div>
+                {{ form.mensaje_despedida }}
+                <div class="invalid-feedback" id="errorMessagemensaje_despedida"></div>
+            </div>
+        </div>
+    </div>
+
+    {# ── TAB 4: CIERRE ─────────────────────────────────────────────── #}
+    <div class="tab-pane fade" id="tab-cierre">
+        <p class="section-label">Detección automática de fin de conversación</p>
+        <p class="text-muted small mb-3">
+            Cuando el agente detecte que el usuario se despide, puede marcar la conversación como finalizada
+            y disparar acciones como enviar un email o notificar a un supervisor.
+        </p>
+
+        {% if tiene_plantilla_agente %}
+        <div class="alert alert-info py-2 d-flex align-items-center gap-2 mb-3" style="font-size:.82rem">
+            <i class="fas fa-info-circle"></i>
+            <span>El agente asignado tiene una plantilla de cierre configurada.</span>
+            <button type="button" class="btn btn-sm btn-outline-primary ms-auto" id="btn-cargar-plantilla">
+                <i class="fas fa-download me-1"></i> Cargar plantilla del agente
+            </button>
+        </div>
+        {% endif %}
+
+        {# ── Interruptor maestro ──────────────────────────────────── #}
+        <div class="card border-0 bg-light mb-3">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="rf-activo"
+                               {% if regla_fin and regla_fin.activo %}checked{% endif %}>
+                        <label class="form-check-label small fw-semibold" for="rf-activo">
+                            Detección de cierre activa
+                        </label>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-primary" id="btn-guardar-regla">
+                        <i class="fas fa-save me-1"></i> Guardar configuración
+                    </button>
+                </div>
+                <div class="form-text mt-1">
+                    Interruptor principal. Si está apagado, el sistema nunca detecta el fin de conversación
+                    sin importar lo demás.
                 </div>
             </div>
-        {% endif %}
-    {% endfor %}
-</div>
+        </div>
+
+        {# ── Dos métodos de detección ─────────────────────────────── #}
+        <div class="row g-3 mb-3">
+
+            {# Método 1: Frases #}
+            <div class="col-md-6">
+                <div class="card h-100 border border-primary border-opacity-25">
+                    <div class="card-header bg-primary bg-opacity-10 py-2 d-flex align-items-center gap-2">
+                        <i class="fas fa-font text-primary"></i>
+                        <span class="small fw-semibold">Método 1 — Palabras clave</span>
+                        <span class="badge bg-success ms-auto" style="font-size:.6rem">Siempre activo</span>
+                    </div>
+                    <div class="card-body py-2 px-3">
+                        <p class="small text-muted mb-2">
+                            El sistema revisa si el mensaje del usuario contiene alguna de estas frases
+                            <strong>antes de llamar a la IA</strong>. Es instantáneo y sin costo adicional.
+                            Útil para despedidas explícitas.
+                        </p>
+                        <label class="form-label small fw-semibold mb-1">Frases de cierre <span class="text-muted fw-normal">(una por línea)</span></label>
+                        <textarea id="rf-frases" class="form-control form-control-sm" rows="5"
+                                  placeholder="gracias hasta luego&#10;fue un placer&#10;eso era todo&#10;adiós&#10;bye">{% if regla_fin %}{{ regla_fin.frases_cierre|default:'' }}{% endif %}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            {# Método 2: IA #}
+            <div class="col-md-6">
+                <div class="card h-100 border border-warning border-opacity-25">
+                    <div class="card-header bg-warning bg-opacity-10 py-2 d-flex align-items-center gap-2">
+                        <i class="fas fa-robot text-warning"></i>
+                        <span class="small fw-semibold">Método 2 — Detección inteligente (IA)</span>
+                    </div>
+                    <div class="card-body py-2 px-3">
+                        <p class="small text-muted mb-2">
+                            Indica al agente que incluya una señal interna cuando detecte que la conversación
+                            concluyó de forma natural, aunque el usuario no haya usado una frase de la lista.
+                            Detecta cierres implícitos como <em>"ok perfecto, eso era todo lo que necesitaba"</em>.
+                        </p>
+                        <p class="small text-muted mb-3">
+                            <i class="fas fa-info-circle text-warning me-1"></i>
+                            Añade unos pocos tokens extra a cada respuesta del agente.
+                        </p>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="rf-senal-llm"
+                                   {% if not regla_fin or regla_fin.usar_senal_llm %}checked{% endif %}>
+                            <label class="form-check-label small fw-semibold" for="rf-senal-llm">
+                                Activar detección inteligente
+                            </label>
+                        </div>
+                        <div class="form-text mt-1">
+                            Recomendado tenerlo activo junto con las palabras clave para mayor cobertura.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        {# ── Acciones ─────────────────────────────────────────────── #}
+        <p class="section-label mt-3 mb-1">Acciones al detectar el cierre</p>
+        <p class="small text-muted mb-3">
+            Cuando el sistema detecte el fin de la conversación ejecutará las acciones que configures aquí.
+            Puedes agregar varias. Se ejecutan en orden.
+        </p>
+
+        {# Lista de acciones existentes #}
+        <div id="acciones-list" class="mb-3">
+            {% for accion in acciones_fin %}
+            <div class="accion-row d-flex align-items-start gap-2" data-accion-id="{{ accion.id }}">
+                <div class="mt-1 flex-shrink-0">
+                    <i class="fas fa-{% if accion.tipo == 'email' %}envelope text-primary{% elif accion.tipo == 'whatsapp' %}whatsapp text-success{% elif accion.tipo == 'webhook' %}link text-warning{% else %}flag-checkered text-secondary{% endif %}"></i>
+                </div>
+                <div class="flex-grow-1" style="min-width:0">
+                    <div class="accion-tipo">{{ accion.get_tipo_display }}</div>
+                    {% if accion.destino %}<div class="text-muted" style="font-size:.75rem">{{ accion.destino }}</div>{% endif %}
+                    {% if accion.plantilla_mensaje %}<div class="text-muted fst-italic" style="font-size:.72rem">{{ accion.plantilla_mensaje|truncatechars:90 }}</div>{% endif %}
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger btn-del-accion py-0 px-2 flex-shrink-0"
+                        data-id="{{ accion.id }}">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            {% empty %}
+            <div class="text-muted small text-center py-2" id="acciones-empty">
+                <i class="fas fa-info-circle me-1"></i> Sin acciones — la conversación solo se marcará como finalizada.
+            </div>
+            {% endfor %}
+        </div>
+
+        {# Formulario nueva acción #}
+        <div class="card border border-success border-opacity-25" id="form-nueva-accion">
+            <div class="card-header bg-success bg-opacity-10 py-2 d-flex align-items-center gap-2">
+                <i class="fas fa-plus-circle text-success"></i>
+                <span class="small fw-semibold">Nueva acción</span>
+            </div>
+            <div class="card-body py-3 px-3">
+
+                {# Selector de tipo #}
+                <p class="small text-muted mb-2">¿Qué debe ocurrir cuando se detecte el cierre?</p>
+                <div class="row g-2 mb-3">
+                    <div class="col-6 col-md-3">
+                        <div class="tipo-card card border-2 text-center py-2 px-1 selected" data-tipo="ninguna">
+                            <div class="tc-icon"><i class="fas fa-flag-checkered text-secondary"></i></div>
+                            <div class="tc-name">Solo registrar</div>
+                            <div class="tc-desc">Marca la conversación como finalizada</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="tipo-card card border-2 text-center py-2 px-1" data-tipo="email">
+                            <div class="tc-icon"><i class="fas fa-envelope text-primary"></i></div>
+                            <div class="tc-name">Correo</div>
+                            <div class="tc-desc">Envía email al destinatario</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="tipo-card card border-2 text-center py-2 px-1" data-tipo="whatsapp">
+                            <div class="tc-icon"><i class="fab fa-whatsapp text-success"></i></div>
+                            <div class="tc-name">WhatsApp</div>
+                            <div class="tc-desc">Avisa al supervisor por WhatsApp</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="tipo-card card border-2 text-center py-2 px-1" data-tipo="webhook">
+                            <div class="tc-icon"><i class="fas fa-link text-warning"></i></div>
+                            <div class="tc-name">Webhook</div>
+                            <div class="tc-desc">Llama a una URL con los datos</div>
+                        </div>
+                    </div>
+                </div>
+
+                {# Destino — se muestra solo cuando aplica #}
+                <div id="na-destino-wrap" style="display:none" class="mb-2">
+                    <label class="form-label small fw-semibold mb-1" id="na-destino-label">Destino</label>
+                    <input type="text" id="na-destino" class="form-control form-control-sm">
+                    <div class="form-text" id="na-destino-hint"></div>
+                </div>
+
+                {# Mensaje #}
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold mb-1">
+                        Mensaje <span class="fw-normal text-muted">(opcional)</span>
+                    </label>
+                    <div class="mb-1">
+                        <span class="text-muted" style="font-size:.67rem">Insertar variable:</span>
+                        <span class="var-pill badge bg-light text-dark border ms-1" data-var="{nombre_contacto}">{nombre_contacto}</span>
+                        <span class="var-pill badge bg-light text-dark border ms-1" data-var="{numero}">{numero}</span>
+                        <span class="var-pill badge bg-light text-dark border ms-1" data-var="{sesion}">{sesion}</span>
+                        <span class="var-pill badge bg-light text-dark border ms-1" data-var="{resumen}">{resumen}</span>
+                        <span class="var-pill badge bg-light text-dark border ms-1" data-var="{agente}">{agente}</span>
+                    </div>
+                    <textarea id="na-mensaje" class="form-control form-control-sm" rows="2"
+                              placeholder="La conversación con {nombre_contacto} ({numero}) ha finalizado."></textarea>
+                </div>
+
+                <div class="d-flex justify-content-end">
+                    <button type="button" class="btn btn-sm btn-success" id="btn-add-accion">
+                        <i class="fas fa-plus me-1"></i> Agregar acción
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>{# /tab-content #}
+
 {{ form.media }}
-
-
 <script src="/static/editor_emoji_picker/editor-emoji-picker.js"></script>
 <link rel="stylesheet" href="/static/editor_emoji_picker/editor-emoji.picker.css">
 <script>
+(function () {
+    const RUTA = '{{ ruta }}';
+    const PK   = '{{ instance.id }}';
+    const CSRF = '{{ csrf_token }}';
+
+    /* ── Select2 / Summernote ── */
     ['id_mensaje_bienvenida', 'id_mensaje_despedida'].forEach(editorEmojiPicker);
-
-
     $(function () {
-        $('.jselect2').select2({
-            width: '100%',
-            placeholder: 'Seleccione una o multiples opciones',
-            allowClear: true,
-        });
+        $('.jselect2').select2({ width: '100%', placeholder: 'Seleccione opciones', allowClear: true });
+    });
 
-    })
+    /* ── Helpers AJAX ── */
+    function post(data, ok, err) {
+        data.csrfmiddlewaretoken = CSRF;
+        $.post(RUTA, data, function (res) {
+            if (res.error) { alertaWarning(res.message || 'Error'); if (err) err(); }
+            else { if (ok) ok(res); }
+        }, 'json').fail(function () { alertaWarning('Error de conexión.'); if (err) err(); });
+    }
+
+    /* ── Configuración por tipo ── */
+    const TIPO_CONFIG = {
+        ninguna:  { label: null, placeholder: null, hint: null,
+                    iconCls: 'fa-flag-checkered text-secondary' },
+        email:    { label: 'Dirección de correo destino', placeholder: 'supervisor@empresa.com',
+                    hint: 'Se enviará un email con el mensaje al finalizar la conversación.',
+                    iconCls: 'fa-envelope text-primary' },
+        whatsapp: { label: 'Número de WhatsApp (con código de país)', placeholder: '593987654321',
+                    hint: 'El número debe estar registrado como contacto en una sesión activa de este sistema.',
+                    iconCls: 'fa-whatsapp text-success' },
+        webhook:  { label: 'URL del endpoint (POST)', placeholder: 'https://mi-sistema.com/api/fin-conversacion',
+                    hint: 'Se hará un POST con los datos de la conversación en formato JSON.',
+                    iconCls: 'fa-link text-warning' },
+    };
+    let tipoSeleccionado = 'ninguna';
+
+    /* ── Selector de tipo ── */
+    $('#form-nueva-accion').on('click', '.tipo-card', function () {
+        $('#form-nueva-accion .tipo-card').removeClass('selected');
+        $(this).addClass('selected');
+        tipoSeleccionado = $(this).data('tipo');
+        const cfg = TIPO_CONFIG[tipoSeleccionado];
+        if (cfg && cfg.label) {
+            $('#na-destino-label').text(cfg.label);
+            $('#na-destino').attr('placeholder', cfg.placeholder || '');
+            $('#na-destino-hint').text(cfg.hint || '');
+            $('#na-destino-wrap').show();
+        } else {
+            $('#na-destino-wrap').hide();
+            $('#na-destino').val('');
+        }
+    });
+
+    /* ── Pills de variables ── */
+    $('#form-nueva-accion').on('click', '.var-pill', function () {
+        const v = $(this).data('var');
+        const ta = document.getElementById('na-mensaje');
+        const s = ta.selectionStart, e = ta.selectionEnd;
+        ta.value = ta.value.slice(0, s) + v + ta.value.slice(e);
+        ta.selectionStart = ta.selectionEnd = s + v.length;
+        ta.focus();
+    });
+
+    function iconForTipo(tipo) {
+        return {email:'envelope', whatsapp:'whatsapp', webhook:'link', ninguna:'flag-checkered'}[tipo] || 'flag-checkered';
+    }
+    function colorForTipo(tipo) {
+        return {email:'text-primary', whatsapp:'text-success', webhook:'text-warning', ninguna:'text-secondary'}[tipo] || 'text-secondary';
+    }
+
+    /* ── Cargar plantilla del agente ── */
+    $('#btn-cargar-plantilla').on('click', function () {
+        if (!confirm('¿Cargar la configuración del agente? Reemplazará la configuración actual de esta sesión.')) return;
+        pantallaespera();
+        post({ action: 'regla_fin_cargar_plantilla', pk: PK }, function (res) {
+            setTimeout($.unblockUI, 1);
+            alertaSuccess('Plantilla cargada. Recargando…');
+            setTimeout(() => location.reload(), 1200);
+        }, () => setTimeout($.unblockUI, 1));
+    });
+
+    /* ── Guardar configuración de regla ── */
+    $('#btn-guardar-regla').on('click', function () {
+        post({
+            action: 'regla_fin_guardar',
+            pk: PK,
+            activo: $('#rf-activo').is(':checked') ? 'true' : 'false',
+            usar_senal_llm: $('#rf-senal-llm').is(':checked') ? 'true' : 'false',
+            frases_cierre: $('#rf-frases').val(),
+        }, function () { alertaSuccess('Configuración guardada.'); });
+    });
+
+    /* ── Agregar acción ── */
+    $('#btn-add-accion').on('click', function () {
+        const tipo    = tipoSeleccionado;
+        const destino = $('#na-destino').val().trim();
+        const mensaje = $('#na-mensaje').val().trim();
+        if (tipo !== 'ninguna' && !destino) {
+            alertaWarning('Debes completar el campo de destino para este tipo de acción.');
+            $('#na-destino').focus();
+            return;
+        }
+        post({
+            action: 'regla_fin_accion_add',
+            pk: PK, tipo: tipo, destino: destino, plantilla_mensaje: mensaje,
+        }, function (res) {
+            $('#acciones-empty').remove();
+            const row = `<div class="accion-row d-flex align-items-start gap-2" data-accion-id="${res.accion.id}">
+                <div class="mt-1 flex-shrink-0"><i class="fas fa-${iconForTipo(tipo)} ${colorForTipo(tipo)}"></i></div>
+                <div class="flex-grow-1" style="min-width:0">
+                    <div class="accion-tipo">${res.accion.tipo}</div>
+                    ${res.accion.destino ? `<div class="text-muted" style="font-size:.75rem">${res.accion.destino}</div>` : ''}
+                    ${mensaje ? `<div class="text-muted fst-italic" style="font-size:.72rem">${mensaje.slice(0, 90)}${mensaje.length > 90 ? '…' : ''}</div>` : ''}
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger btn-del-accion py-0 px-2 flex-shrink-0" data-id="${res.accion.id}">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>`;
+            $('#acciones-list').append(row);
+            // Reset form
+            $('#form-nueva-accion .tipo-card').removeClass('selected');
+            $('#form-nueva-accion .tipo-card[data-tipo="ninguna"]').addClass('selected');
+            tipoSeleccionado = 'ninguna';
+            $('#na-destino-wrap').hide();
+            $('#na-destino').val('');
+            $('#na-mensaje').val('');
+            alertaSuccess('Acción agregada.');
+        });
+    });
+
+    /* ── Eliminar acción ── */
+    $('#acciones-list').on('click', '.btn-del-accion', function () {
+        const id = $(this).data('id');
+        const row = $(this).closest('.accion-row');
+        post({ action: 'regla_fin_accion_delete', accion_id: id }, function () {
+            row.remove();
+            if ($('#acciones-list .accion-row').length === 0) {
+                $('#acciones-list').append('<div class="text-muted small text-center py-2" id="acciones-empty"><i class="fas fa-info-circle me-1"></i> Sin acciones configuradas.</div>');
+            }
+        });
+    });
+})();
 </script>

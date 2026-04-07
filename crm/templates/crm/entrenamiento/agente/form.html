@@ -1,47 +1,420 @@
-<div class="row g-2">
-    <input type="hidden" value="{{ filtro.pk }}" name="pk">
-    <input type="hidden" name="action" value="{{ action }}"/>
-    <!-- Campo hidden para los detalles JSON -->
-    <input type="hidden" name="detalles_json" id="detalles_json" value="">
+<style>
+    .guide-callout {
+        background: #f0f4ff;
+        border-left: 3px solid #667eea;
+        border-radius: 0 8px 8px 0;
+        padding: 10px 14px;
+        font-size: .8rem;
+        color: #495057;
+        margin-bottom: 1rem;
+    }
+    .guide-callout i { color: #667eea; }
+    .section-header {
+        font-size: .7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .07em;
+        color: #6c757d;
+        padding-bottom: 6px;
+        border-bottom: 1px solid #e9ecef;
+        margin-bottom: 12px;
+    }
+    .nav-tabs .nav-link { font-size: .82rem; padding: .4rem .85rem; }
+    .tipo-card { cursor: pointer; transition: border-color .15s, background .15s; border-color: #dee2e6 !important; }
+    .tipo-card:hover { border-color: #adb5bd !important; background: #f8f9fa; }
+    .tipo-card.selected { border-color: #667eea !important; background: #f0f4ff; }
+    .tipo-card .tc-icon { font-size: 1.3rem; margin-bottom: 4px; }
+    .tipo-card .tc-name { font-size: .78rem; font-weight: 600; }
+    .tipo-card .tc-desc { font-size: .63rem; color: #868e96; margin-top: 2px; }
+    .accion-row { background: #f8f9fa; border-radius: 8px; padding: 8px 12px; margin-bottom: 6px; font-size: .82rem; }
+    .accion-row .accion-tipo { font-weight: 600; }
+    .var-pill { cursor: pointer; font-size: .67rem; padding: 2px 6px; }
+    .var-pill:hover { background: #e9ecef !important; }
+</style>
 
-    {% for field in form %}
-        {% if field.is_hidden %}
-            {{ field }}
-        {% else %}
-            <div class="col-lg-{{ field.field.widget.attrs.col }}">
-                <div class="mb-2">
-                    <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label>
-                    {{ field }}
-                    <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
-                    {% if field.help_text %}
-                        <div class="text-primary">{{ field.help_text }}</div>
-                    {% endif %}
+<input type="hidden" value="{{ filtro.pk }}" name="pk">
+<input type="hidden" name="action" value="{{ action }}"/>
+<input type="hidden" name="detalles_json" id="detalles_json" value="">
+
+{# ── TABS ──────────────────────────────────────────────────────── #}
+<ul class="nav nav-tabs mb-3" id="agenteTabs" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#at-basico" type="button">
+            <i class="fas fa-id-card me-1"></i> Identidad
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-conocimiento" type="button">
+            <i class="fas fa-database me-1"></i> Conocimiento
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-prompt" type="button">
+            <i class="fas fa-terminal me-1"></i> Prompt
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link {% if regla_fin and regla_fin.activo %}text-danger fw-semibold{% endif %}"
+                data-bs-toggle="tab" data-bs-target="#at-cierre" type="button">
+            <i class="fas fa-flag-checkered me-1"></i> Cierre
+            {% if regla_fin and regla_fin.activo %}
+                <span class="badge bg-danger ms-1" style="font-size:.6rem">ON</span>
+            {% else %}
+                <span class="badge bg-secondary ms-1" style="font-size:.6rem">Plantilla</span>
+            {% endif %}
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+
+    {# ── TAB 1: IDENTIDAD ──────────────────────────────────────────── #}
+    <div class="tab-pane fade show active" id="at-basico">
+
+        <div class="guide-callout mb-3">
+            <i class="fas fa-lightbulb me-1"></i>
+            Define quién es este agente y qué hace. Estos datos se muestran al usuario y también
+            se usan en el prompt para que el agente sepa describirse a sí mismo cuando le pregunten.
+        </div>
+
+        <div class="row g-2">
+            <div class="col-12">
+                <p class="section-header">Información del agente</p>
+                <label class="form-label small fw-semibold mb-1">{{ form.nombre.label }}</label>
+                {{ form.nombre }}
+                <div class="form-text">Nombre visible en el chat y en el panel. Ej: <em>Asistente de Ventas</em>, <em>Soporte Técnico</em>.</div>
+                <div class="invalid-feedback" id="errorMessagenombre"></div>
+            </div>
+            <div class="col-12 mt-2">
+                <label class="form-label small fw-semibold mb-1">{{ form.descripcion.label }}</label>
+                {{ form.descripcion }}
+                <div class="form-text">
+                    Describe en 1-2 oraciones qué puede hacer este agente. El agente usará esta descripción
+                    cuando alguien le pregunte "¿en qué me puedes ayudar?".
+                    Ej: <em>Soy el asistente virtual de la empresa X. Puedo responder preguntas sobre nuestros productos, precios y horarios de atención.</em>
+                </div>
+                <div class="invalid-feedback" id="errorMessagedescripcion"></div>
+            </div>
+            <div class="col-12 mt-2">
+                <p class="section-header mt-2">API Key</p>
+                <div class="guide-callout">
+                    <i class="fas fa-key me-1"></i>
+                    Selecciona la API Key que el agente usará para generar respuestas (Gemini u OpenAI).
+                    Puedes agregar varias — si la primera falla, el sistema prueba automáticamente con la siguiente.
+                </div>
+                <label class="form-label small fw-semibold mb-1">{{ form.apikey.label }}</label>
+                {{ form.apikey }}
+                <div class="invalid-feedback" id="errorMessageapikey"></div>
+            </div>
+        </div>
+    </div>
+
+    {# ── TAB 2: CONOCIMIENTO ───────────────────────────────────────── #}
+    <div class="tab-pane fade" id="at-conocimiento">
+
+        <div class="guide-callout">
+            <i class="fas fa-lightbulb me-1"></i>
+            El agente solo responde con la información que le das aquí. Tiene <strong>tres formas</strong>
+            de recibir conocimiento — puedes combinarlas:
+        </div>
+
+        <div class="row g-2 mb-3">
+            <div class="col-md-4">
+                <div class="card border-0 bg-light h-100 text-center p-3">
+                    <i class="fas fa-file-alt fa-2x text-primary mb-2"></i>
+                    <div class="small fw-semibold">Documentos / Archivos</div>
+                    <div class="text-muted" style="font-size:.75rem">PDF, Excel, CSV — se suben en la sección de Entrenamiento y se convierten en un índice de búsqueda (FAISS).</div>
                 </div>
             </div>
+            <div class="col-md-4">
+                <div class="card border-0 bg-light h-100 text-center p-3">
+                    <i class="fas fa-link fa-2x text-success mb-2"></i>
+                    <div class="small fw-semibold">Enlace / API externa</div>
+                    <div class="text-muted" style="font-size:.75rem">El agente consulta una URL en tiempo real antes de responder. Ideal para catálogos o precios que cambian frecuentemente.</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 bg-light h-100 text-center p-3">
+                    <i class="fas fa-align-left fa-2x text-warning mb-2"></i>
+                    <div class="small fw-semibold">Texto libre</div>
+                    <div class="text-muted" style="font-size:.75rem">Escribe directamente el contenido (FAQ, menú, políticas). Se inyecta completo en cada respuesta — ideal para textos cortos.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <p class="section-header mb-0">Fuentes de conocimiento</p>
+            <button type="button" class="btn btn-primary btn-sm" id="btnAgregarDetalle">
+                <i class="fa fa-plus me-1"></i> Agregar fuente
+            </button>
+        </div>
+
+        <div class="guide-callout mb-2" style="font-size:.75rem">
+            <strong>Enlace:</strong> URL de una API o página que retorna texto/JSON/HTML.
+            <strong>Archivo:</strong> sube un PDF, CSV o Excel.
+            <strong>Texto:</strong> escribe el contenido directamente (menú, FAQ breve, políticas, etc.).
+        </div>
+
+        <div id="contenedorDetalles"></div>
+
+        <div class="mt-2">
+            <div class="d-flex align-items-center gap-2">
+                {{ form.anotar_listas }}
+                <label class="form-label small mb-0 fw-semibold" for="{{ form.anotar_listas.id_for_label }}">
+                    {{ form.anotar_listas.label }}
+                </label>
+            </div>
+            <div class="form-text">
+                Actívalo si el agente necesita gestionar pedidos o listas (agrega/muestra ítems en memoria
+                durante la conversación). Para agentes de consulta normal déjalo desactivado.
+            </div>
+        </div>
+    </div>
+
+    {# ── TAB 3: PROMPT ─────────────────────────────────────────────── #}
+    <div class="tab-pane fade" id="at-prompt">
+
+        <div class="guide-callout">
+            <i class="fas fa-lightbulb me-1"></i>
+            El prompt es el conjunto de instrucciones que recibe el agente antes de responder.
+            Define su <strong>tono</strong>, sus <strong>restricciones</strong> y cómo debe usar la información
+            que tiene disponible. Las variables entre llaves se reemplazan automáticamente.
+        </div>
+
+        <div class="row g-2 mb-3">
+            <div class="col-md-6">
+                <div class="card border-0 bg-light p-2 h-100">
+                    <p class="section-header mb-2">Variables disponibles</p>
+                    <table class="table table-sm table-borderless mb-0" style="font-size:.78rem">
+                        <tr><td class="text-primary fw-semibold">{question}</td><td>Mensaje del usuario</td></tr>
+                        <tr><td class="text-primary fw-semibold">{context}</td><td>Fragmentos relevantes de los documentos de entrenamiento</td></tr>
+                        <tr><td class="text-primary fw-semibold">{contexto_extra}</td><td>Historial reciente de la conversación (últimos 4 turnos)</td></tr>
+                        <tr><td class="text-primary fw-semibold">{descripcion_agente}</td><td>Descripción del agente (la que configuraste en Identidad)</td></tr>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card border-0 bg-light p-2 h-100">
+                    <p class="section-header mb-2">Consejos para el prompt</p>
+                    <ul class="small text-muted mb-0 ps-3">
+                        <li>Indica el tono: formal, amigable, conciso.</li>
+                        <li>Deja claro qué hacer si no tiene la información: <em>"responde exactamente: No tengo esa información."</em></li>
+                        <li>Especifica el formato: si quieres listas, párrafos cortos, emojis, etc.</li>
+                        <li>No borres <code>{question}</code> ni <code>{context}</code> — son obligatorios.</li>
+                        <li>Si activas detección de cierre en una sesión, el sistema añade la instrucción necesaria automáticamente.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <label class="form-label small fw-semibold mb-1">{{ form.prompt_template.label }}</label>
+        {{ form.prompt_template }}
+        <div class="invalid-feedback" id="errorMessageprompt_template"></div>
+    </div>
+
+    {# ── TAB 4: CIERRE (PLANTILLA) ─────────────────────────────────── #}
+    <div class="tab-pane fade" id="at-cierre">
+
+        {% if not filtro or not filtro.pk %}
+        <div class="guide-callout">
+            <i class="fas fa-info-circle me-1"></i>
+            Guarda el agente primero. Una vez creado podrás configurar la plantilla de cierre de conversación.
+        </div>
+        {% else %}
+
+        <div class="guide-callout mb-3">
+            <i class="fas fa-lightbulb me-1"></i>
+            Esta configuración es la <strong>plantilla de cierre del agente</strong>. Los números de WhatsApp
+            que usen este agente y no tengan su propio cierre configurado la heredarán automáticamente.
+            También puedes cargarla con un clic desde el formulario de edición de cada número.
+        </div>
+
+        <p class="section-header">Detección automática de fin de conversación</p>
+
+        {# ── Interruptor maestro ── #}
+        <div class="card border-0 bg-light mb-3">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="arf-activo"
+                               {% if regla_fin and regla_fin.activo %}checked{% endif %}>
+                        <label class="form-check-label small fw-semibold" for="arf-activo">
+                            Detección de cierre activa
+                        </label>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-primary" id="btn-guardar-regla-agente">
+                        <i class="fas fa-save me-1"></i> Guardar configuración
+                    </button>
+                </div>
+                <div class="form-text mt-1">
+                    Interruptor principal. Si está apagado, el sistema nunca detecta el fin de conversación
+                    para este agente ni sus números heredados.
+                </div>
+            </div>
+        </div>
+
+        {# ── Dos métodos ── #}
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <div class="card h-100 border border-primary border-opacity-25">
+                    <div class="card-header bg-primary bg-opacity-10 py-2 d-flex align-items-center gap-2">
+                        <i class="fas fa-font text-primary"></i>
+                        <span class="small fw-semibold">Método 1 — Palabras clave</span>
+                        <span class="badge bg-success ms-auto" style="font-size:.6rem">Siempre activo</span>
+                    </div>
+                    <div class="card-body py-2 px-3">
+                        <p class="small text-muted mb-2">
+                            El sistema revisa si el mensaje del usuario contiene alguna de estas frases
+                            <strong>antes de llamar a la IA</strong>. Instantáneo, sin costo adicional.
+                            Útil para despedidas explícitas.
+                        </p>
+                        <label class="form-label small fw-semibold mb-1">Frases de cierre <span class="text-muted fw-normal">(una por línea)</span></label>
+                        <textarea id="arf-frases" class="form-control form-control-sm" rows="5"
+                                  placeholder="gracias hasta luego&#10;fue un placer&#10;eso era todo&#10;adiós&#10;bye">{% if regla_fin %}{{ regla_fin.frases_cierre|default:'' }}{% endif %}</textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100 border border-warning border-opacity-25">
+                    <div class="card-header bg-warning bg-opacity-10 py-2 d-flex align-items-center gap-2">
+                        <i class="fas fa-robot text-warning"></i>
+                        <span class="small fw-semibold">Método 2 — Detección inteligente (IA)</span>
+                    </div>
+                    <div class="card-body py-2 px-3">
+                        <p class="small text-muted mb-2">
+                            Indica al agente que incluya una señal interna cuando detecte que la conversación
+                            concluyó de forma natural, aunque el usuario no haya usado una frase de la lista.
+                            Detecta cierres implícitos como <em>"ok perfecto, eso era todo lo que necesitaba"</em>.
+                        </p>
+                        <p class="small text-muted mb-3">
+                            <i class="fas fa-info-circle text-warning me-1"></i>
+                            Añade unos pocos tokens extra a cada respuesta del agente.
+                        </p>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="arf-senal-llm"
+                                   {% if not regla_fin or regla_fin.usar_senal_llm %}checked{% endif %}>
+                            <label class="form-check-label small fw-semibold" for="arf-senal-llm">
+                                Activar detección inteligente
+                            </label>
+                        </div>
+                        <div class="form-text mt-1">
+                            Recomendado tenerlo activo junto con las palabras clave para mayor cobertura.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ── Acciones ── #}
+        <p class="section-header mt-3 mb-1">Acciones al detectar el cierre</p>
+        <p class="small text-muted mb-3">
+            Cuando el sistema detecte el fin de la conversación ejecutará las acciones que configures aquí.
+            Puedes agregar varias. Se ejecutan en orden.
+        </p>
+
+        {# Lista de acciones existentes #}
+        <div id="acciones-agente-list" class="mb-3">
+            {% for accion in acciones_fin %}
+            <div class="accion-row d-flex align-items-start gap-2" data-accion-id="{{ accion.id }}">
+                <div class="mt-1 flex-shrink-0">
+                    <i class="fas fa-{% if accion.tipo == 'email' %}envelope text-primary{% elif accion.tipo == 'whatsapp' %}whatsapp text-success{% elif accion.tipo == 'webhook' %}link text-warning{% else %}flag-checkered text-secondary{% endif %}"></i>
+                </div>
+                <div class="flex-grow-1" style="min-width:0">
+                    <div class="accion-tipo">{{ accion.get_tipo_display }}</div>
+                    {% if accion.destino %}<div class="text-muted" style="font-size:.75rem">{{ accion.destino }}</div>{% endif %}
+                    {% if accion.plantilla_mensaje %}<div class="text-muted fst-italic" style="font-size:.72rem">{{ accion.plantilla_mensaje|truncatechars:90 }}</div>{% endif %}
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger btn-del-accion-agente py-0 px-2 flex-shrink-0"
+                        data-id="{{ accion.id }}">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            {% empty %}
+            <div class="text-muted small text-center py-2" id="acciones-agente-empty">
+                <i class="fas fa-info-circle me-1"></i> Sin acciones — la conversación solo se marcará como finalizada.
+            </div>
+            {% endfor %}
+        </div>
+
+        {# Formulario nueva acción #}
+        <div class="card border border-success border-opacity-25" id="form-nueva-accion-agente">
+            <div class="card-header bg-success bg-opacity-10 py-2 d-flex align-items-center gap-2">
+                <i class="fas fa-plus-circle text-success"></i>
+                <span class="small fw-semibold">Nueva acción</span>
+            </div>
+            <div class="card-body py-3 px-3">
+
+                <p class="small text-muted mb-2">¿Qué debe ocurrir cuando se detecte el cierre?</p>
+                <div class="row g-2 mb-3">
+                    <div class="col-6 col-md-3">
+                        <div class="tipo-card card border-2 text-center py-2 px-1 selected" data-tipo="ninguna">
+                            <div class="tc-icon"><i class="fas fa-flag-checkered text-secondary"></i></div>
+                            <div class="tc-name">Solo registrar</div>
+                            <div class="tc-desc">Marca la conversación como finalizada</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="tipo-card card border-2 text-center py-2 px-1" data-tipo="email">
+                            <div class="tc-icon"><i class="fas fa-envelope text-primary"></i></div>
+                            <div class="tc-name">Correo</div>
+                            <div class="tc-desc">Envía email al destinatario</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="tipo-card card border-2 text-center py-2 px-1" data-tipo="whatsapp">
+                            <div class="tc-icon"><i class="fab fa-whatsapp text-success"></i></div>
+                            <div class="tc-name">WhatsApp</div>
+                            <div class="tc-desc">Avisa al supervisor por WhatsApp</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="tipo-card card border-2 text-center py-2 px-1" data-tipo="webhook">
+                            <div class="tc-icon"><i class="fas fa-link text-warning"></i></div>
+                            <div class="tc-name">Webhook</div>
+                            <div class="tc-desc">Llama a una URL con los datos</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="ana-destino-wrap" style="display:none" class="mb-2">
+                    <label class="form-label small fw-semibold mb-1" id="ana-destino-label">Destino</label>
+                    <input type="text" id="ana-destino" class="form-control form-control-sm">
+                    <div class="form-text" id="ana-destino-hint"></div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold mb-1">
+                        Mensaje <span class="fw-normal text-muted">(opcional)</span>
+                    </label>
+                    <div class="mb-1">
+                        <span class="text-muted" style="font-size:.67rem">Insertar variable:</span>
+                        <span class="var-pill-a badge bg-light text-dark border ms-1" data-var="{nombre_contacto}">{nombre_contacto}</span>
+                        <span class="var-pill-a badge bg-light text-dark border ms-1" data-var="{numero}">{numero}</span>
+                        <span class="var-pill-a badge bg-light text-dark border ms-1" data-var="{sesion}">{sesion}</span>
+                        <span class="var-pill-a badge bg-light text-dark border ms-1" data-var="{resumen}">{resumen}</span>
+                        <span class="var-pill-a badge bg-light text-dark border ms-1" data-var="{agente}">{agente}</span>
+                    </div>
+                    <textarea id="ana-mensaje" class="form-control form-control-sm" rows="2"
+                              placeholder="La conversación con {nombre_contacto} ({numero}) ha finalizado."></textarea>
+                </div>
+
+                <div class="d-flex justify-content-end">
+                    <button type="button" class="btn btn-sm btn-success" id="btn-add-accion-agente">
+                        <i class="fas fa-plus me-1"></i> Agregar acción
+                    </button>
+                </div>
+            </div>
+        </div>
+
         {% endif %}
-    {% endfor %}
-</div>
+    </div>
+
+</div>{# /tab-content #}
 
 <div class="border-top my-3"></div>
 
-<!-- Sección de Detalles -->
-<div class="mb-3">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <h6 class="mb-0">Detalles del Agente</h6>
-        <button type="button" class="btn btn-primary btn-sm" id="btnAgregarDetalle">
-            <i class="fa fa-plus me-1"></i>Agregar Detalle
-        </button>
-    </div>
-
-    <div id="contenedorDetalles">
-        <!-- Los detalles se agregarán aquí dinámicamente -->
-    </div>
-</div>
-
-<div class="border-top my-3"></div>
-
-<div class="d-flex justify-content-end">
-    <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
+<div class="d-flex justify-content-end gap-1">
+    <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">
         <i class="fa fa-window-close me-1"></i>Cancelar
     </button>
     <button type="submit" class="btn btn-success btn-sm">
@@ -50,15 +423,12 @@
 </div>
 
 {{ form.media }}
-
 {% include 'base_formulario_modal.html' %}
 
 <script>
-    // Use window properties to avoid redeclaration errors in modals
     window.contadorDetalles = window.contadorDetalles || 0;
     window.lista_items1 = window.lista_items1 || [];
 
-    // Definir las opciones de tipo de dato de enlace
     window.TIPO_DATO_ENLACE_OPTIONS = [
         { value: 1, text: 'TEXT' },
         { value: 2, text: 'HTML' },
@@ -67,180 +437,146 @@
         { value: 5, text: 'CSV' }
     ];
 
-    // Reset variables when modal opens
     function resetearVariables() {
         window.contadorDetalles = 0;
         window.lista_items1 = [];
     }
 
-    // Datos existentes para edición (se mantienen constantes)
     window.DATOS_ORIGINALES = {
         detalles: {% if filtro and filtro.pk %}{{ detalles_existentes|safe }}{% else %}[]{% endif %},
         tieneFiltro: {% if filtro and filtro.pk %}true{% else %}false{% endif %}
     };
 
     function agregarDetalle(detalleExistente = null) {
-    window.contadorDetalles++;
-    const tipo = detalleExistente ? detalleExistente.tipo : 1;
-    const enlace = detalleExistente ? detalleExistente.enlace : '';
-    const tipoDatoEnlace = detalleExistente ? detalleExistente.tipo_dato_enlace : 1;
-    const archivoUrl = detalleExistente ? detalleExistente.archivo_url : '';
-    const descripcion = detalleExistente ? detalleExistente.descripcion || '' : '';
-    const idReal = detalleExistente ? detalleExistente.id : null;
-    const requiereToken = detalleExistente ? detalleExistente.requiere_token : false;
-    const tokenAutorizacion = detalleExistente ? detalleExistente.token_autorizacion : '';
-    const usarCache = detalleExistente ? detalleExistente.usar_cache : false;
-    const tiempoCacheHoras = detalleExistente ? detalleExistente.tiempo_cache_horas : 1;
+        window.contadorDetalles++;
+        const tipo = detalleExistente ? detalleExistente.tipo : 1;
+        const enlace = detalleExistente ? detalleExistente.enlace : '';
+        const tipoDatoEnlace = detalleExistente ? detalleExistente.tipo_dato_enlace : 1;
+        const archivoUrl = detalleExistente ? detalleExistente.archivo_url : '';
+        const descripcion = detalleExistente ? detalleExistente.descripcion || '' : '';
+        const idReal = detalleExistente ? detalleExistente.id : null;
+        const requiereToken = detalleExistente ? detalleExistente.requiere_token : false;
+        const tokenAutorizacion = detalleExistente ? detalleExistente.token_autorizacion : '';
+        const usarCache = detalleExistente ? detalleExistente.usar_cache : false;
+        const tiempoCacheHoras = detalleExistente ? detalleExistente.tiempo_cache_horas : 1;
 
-    // Generar opciones para tipo_dato_enlace
-    let tipoDatoEnlaceOptions = '';
-    window.TIPO_DATO_ENLACE_OPTIONS.forEach(option => {
-        const selected = option.value == tipoDatoEnlace ? 'selected' : '';
-        tipoDatoEnlaceOptions += `<option value="${option.value}" ${selected}>${option.text}</option>`;
-    });
+        let tipoDatoEnlaceOptions = '';
+        window.TIPO_DATO_ENLACE_OPTIONS.forEach(option => {
+            const selected = option.value == tipoDatoEnlace ? 'selected' : '';
+            tipoDatoEnlaceOptions += `<option value="${option.value}" ${selected}>${option.text}</option>`;
+        });
 
-    const detalleHtml = `
-        <div class="card mb-2" id="detalle${window.contadorDetalles}">
-            <div class="card-body p-3">
-                ${generarCampoDetalle(window.contadorDetalles, tipo, enlace, tipoDatoEnlace, archivoUrl, tipoDatoEnlaceOptions, descripcion, requiereToken, tokenAutorizacion, usarCache, tiempoCacheHoras)}
-            </div>
-            <input type="hidden" class="detalle-id-real" value="${idReal || ''}">
-        </div>
-    `;
+        const TIPO_LABELS = { 1: 'Enlace / API', 2: 'Archivo (PDF, CSV, Excel)', 3: 'Texto libre' };
+        const detalleHtml = `
+            <div class="card mb-2 border-start border-primary border-3" id="detalle${window.contadorDetalles}">
+                <div class="card-body p-3">
+                    ${generarCampoDetalle(window.contadorDetalles, tipo, enlace, tipoDatoEnlace, archivoUrl, tipoDatoEnlaceOptions, descripcion, requiereToken, tokenAutorizacion, usarCache, tiempoCacheHoras)}
+                </div>
+                <input type="hidden" class="detalle-id-real" value="${idReal || ''}">
+            </div>`;
 
-    $('#contenedorDetalles').append(detalleHtml);
+        $('#contenedorDetalles').append(detalleHtml);
+        const $newCard = $(`#detalle${window.contadorDetalles}`);
+        $newCard.show().css({'display': 'block', 'visibility': 'visible', 'height': 'auto'});
 
-    // SOLUCIÓN: Forzar visibilidad del elemento recién agregado
-    const $newCard = $(`#detalle${window.contadorDetalles}`);
-    $newCard.show().css({'display': 'block', 'visibility': 'visible', 'height': 'auto'});
-
-    // Inicializar campos específicos para tipo ENLACE
-    if (tipo == 1) {
-        $(`#detalle${window.contadorDetalles} .detalle-requiere-token`).val(requiereToken ? 'true' : 'false');
-        $(`#detalle${window.contadorDetalles} .detalle-token`).val(tokenAutorizacion);
-        $(`#detalle${window.contadorDetalles} .detalle-usar-cache`).val(usarCache ? 'true' : 'false');
-        $(`#detalle${window.contadorDetalles} .detalle-tiempo-cache`).val(tiempoCacheHoras);
-
-        // Mostrar u ocultar campos según la configuración
-        toggleTokenFields(window.contadorDetalles);
-        toggleCacheFields(window.contadorDetalles);
+        if (tipo == 1) {
+            $(`#detalle${window.contadorDetalles} .detalle-requiere-token`).val(requiereToken ? 'true' : 'false');
+            $(`#detalle${window.contadorDetalles} .detalle-token`).val(tokenAutorizacion);
+            $(`#detalle${window.contadorDetalles} .detalle-usar-cache`).val(usarCache ? 'true' : 'false');
+            $(`#detalle${window.contadorDetalles} .detalle-tiempo-cache`).val(tiempoCacheHoras);
+            toggleTokenFields(window.contadorDetalles);
+            toggleCacheFields(window.contadorDetalles);
+        }
+        actualizarDetallesJSON();
     }
 
-    actualizarDetallesJSON();
-}
-
     function generarCampoDetalle(id, tipo, enlace, tipoDatoEnlace, archivoUrl, tipoDatoEnlaceOptions, descripcion = '', requiereToken = false, tokenAutorizacion = '', usarCache = false, tiempoCacheHoras = 1) {
-    if (tipo == 1) {
-        const tokenDisplayStyle = requiereToken ? 'block' : 'none';
-        const cacheDisplayStyle = usarCache ? 'block' : 'none';
+        const tipoSelector = `
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Tipo de fuente</label>
+                <select class="form-select form-select-sm detalle-tipo" data-detalle="${id}" onchange="cambiarTipoDetalle(${id})">
+                    <option value="1" ${tipo==1?'selected':''}>Enlace / API</option>
+                    <option value="2" ${tipo==2?'selected':''}>Archivo (PDF, CSV, Excel)</option>
+                    <option value="3" ${tipo==3?'selected':''}>Texto libre</option>
+                </select>
+            </div>`;
+        const btnEliminar = `
+            <div class="col-auto d-flex align-items-end">
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarDetalle(${id})" title="Eliminar fuente">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>`;
 
-        return `
-            <div class="row g-2">
+        if (tipo == 1) {
+            const tokenDisplayStyle = requiereToken ? 'block' : 'none';
+            const cacheDisplayStyle = usarCache ? 'block' : 'none';
+            return `<div class="row g-2">
+                ${tipoSelector}
                 <div class="col-md-3">
-                    <label class="form-label small mb-1">Tipo</label>
-                    <select class="form-select detalle-tipo" data-detalle="${id}" onchange="cambiarTipoDetalle(${id})">
-                        <option value="1" selected>Enlace</option>
-                        <option value="2">Archivo</option>
-                        <option value="3">Texto</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label small mb-1">Tipo de dato retorna</label>
-                    <select class="form-select detalle-tipo-dato-enlace" data-detalle="${id}" onchange="actualizarDetallesJSON()">
+                    <label class="form-label small mb-1">Formato que retorna</label>
+                    <select class="form-select form-select-sm detalle-tipo-dato-enlace" data-detalle="${id}" onchange="actualizarDetallesJSON()">
                         ${tipoDatoEnlaceOptions}
                     </select>
                 </div>
                 <div class="col-md-5">
-                    <label class="form-label small mb-1">Enlace</label>
-                    <input type="url" class="form-control detalle-enlace" data-detalle="${id}" value="${enlace}" placeholder="https://ejemplo.com" onchange="actualizarDetallesJSON()">
+                    <label class="form-label small mb-1">URL</label>
+                    <input type="url" class="form-control form-control-sm detalle-enlace" data-detalle="${id}" value="${enlace}" placeholder="https://api.ejemplo.com/productos" onchange="actualizarDetallesJSON()">
                 </div>
-                <div class="col-md-1">
-                    <label class="form-label small mb-1 text-white">.</label>
-                    <button type="button" class="btn btn-danger btn-sm" onclick="eliminarDetalle(${id})">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
+                ${btnEliminar}
                 <div class="col-md-3">
-                    <label class="form-label small mb-1">¿Requiere token?</label>
-                    <select class="form-select detalle-requiere-token" data-detalle="${id}" onchange="toggleTokenFields(${id}); actualizarDetallesJSON()">
-                        <option value="false" ${!requiereToken ? 'selected' : ''}>No</option>
-                        <option value="true" ${requiereToken ? 'selected' : ''}>Sí</option>
+                    <label class="form-label small mb-1">¿Requiere token de autorización?</label>
+                    <select class="form-select form-select-sm detalle-requiere-token" data-detalle="${id}" onchange="toggleTokenFields(${id}); actualizarDetallesJSON()">
+                        <option value="false" ${!requiereToken?'selected':''}>No</option>
+                        <option value="true" ${requiereToken?'selected':''}>Sí</option>
                     </select>
                 </div>
-                <div class="col-md-9 detalle-token-container" id="tokenContainer${id}" style="display: ${tokenDisplayStyle};">
-                    <label class="form-label small mb-1">Token de autorización</label>
-                    <input type="text" class="form-control detalle-token" data-detalle="${id}" value="${tokenAutorizacion}" placeholder="Bearer eyJhbGci... o API key" onchange="actualizarDetallesJSON()">
+                <div class="col-md-9 detalle-token-container" id="tokenContainer${id}" style="display:${tokenDisplayStyle}">
+                    <label class="form-label small mb-1">Token / API Key</label>
+                    <input type="text" class="form-control form-control-sm detalle-token" data-detalle="${id}" value="${tokenAutorizacion}" placeholder="Bearer eyJhbGci... o sk-..." onchange="actualizarDetallesJSON()">
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label small mb-1">¿Usar caché?</label>
-                    <select class="form-select detalle-usar-cache" data-detalle="${id}" onchange="toggleCacheFields(${id}); actualizarDetallesJSON()">
-                        <option value="false" ${!usarCache ? 'selected' : ''}>No</option>
-                        <option value="true" ${usarCache ? 'selected' : ''}>Sí</option>
+                    <label class="form-label small mb-1">¿Guardar en caché?</label>
+                    <select class="form-select form-select-sm detalle-usar-cache" data-detalle="${id}" onchange="toggleCacheFields(${id}); actualizarDetallesJSON()">
+                        <option value="false" ${!usarCache?'selected':''}>No (siempre en tiempo real)</option>
+                        <option value="true" ${usarCache?'selected':''}>Sí (guardar resultado N horas)</option>
                     </select>
                 </div>
-                <div class="col-md-9 detalle-cache-container" id="cacheContainer${id}" style="display: ${cacheDisplayStyle};">
+                <div class="col-md-9 detalle-cache-container" id="cacheContainer${id}" style="display:${cacheDisplayStyle}">
                     <label class="form-label small mb-1">Tiempo de caché (horas)</label>
-                    <input type="number" class="form-control detalle-tiempo-cache" data-detalle="${id}" value="${tiempoCacheHoras}" min="1" max="168" onchange="actualizarDetallesJSON()">
+                    <input type="number" class="form-control form-control-sm detalle-tiempo-cache" data-detalle="${id}" value="${tiempoCacheHoras}" min="1" max="168" onchange="actualizarDetallesJSON()">
+                    <div class="form-text">El resultado se reutiliza por este tiempo sin llamar a la URL de nuevo.</div>
                 </div>
                 <div class="col-12">
-                    <label class="form-label small mb-1">Descripción</label>
-                    <textarea class="form-control detalle-descripcion" data-detalle="${id}" rows="2" onchange="actualizarDetallesJSON()">${descripcion || ''}</textarea>
+                    <label class="form-label small mb-1">Descripción interna <span class="text-muted fw-normal">(para identificar esta fuente)</span></label>
+                    <textarea class="form-control form-control-sm detalle-descripcion" data-detalle="${id}" rows="2" placeholder="Ej: Catálogo de productos actualizado desde ERP" onchange="actualizarDetallesJSON()">${descripcion}</textarea>
                 </div>
-            </div>
-        `;
-    } else if (tipo == 2) {
-        return `
-            <div class="row g-2">
-                <div class="col-md-3">
-                    <label class="form-label small mb-1">Tipo</label>
-                    <select class="form-select detalle-tipo" data-detalle="${id}" onchange="cambiarTipoDetalle(${id})">
-                        <option value="1">Enlace</option>
-                        <option value="2" selected>Archivo</option>
-                        <option value="3">Texto</option>
-                    </select>
-                </div>
+            </div>`;
+        } else if (tipo == 2) {
+            return `<div class="row g-2">
+                ${tipoSelector}
                 <div class="col-md-8">
-                    <label class="form-label small mb-1">Archivo</label>
-                    <input type="file" class="form-control detalle-archivo" data-detalle="${id}" name="detalle_archivo_${id}" onchange="actualizarDetallesJSON()">
-                    ${archivoUrl ? `<small class="text-muted">Archivo actual: <a href="${archivoUrl}" target="_blank">Ver archivo</a></small>` : ''}
+                    <label class="form-label small mb-1">Archivo <span class="text-muted fw-normal">(PDF, CSV, Excel)</span></label>
+                    <input type="file" class="form-control form-control-sm detalle-archivo" data-detalle="${id}" name="detalle_archivo_${id}" accept=".pdf,.csv,.xlsx,.xls" onchange="actualizarDetallesJSON()">
+                    ${archivoUrl ? `<div class="form-text">Archivo actual: <a href="${archivoUrl}" target="_blank"><i class="fas fa-external-link-alt me-1"></i>Ver archivo</a></div>` : ''}
                 </div>
-                <div class="col-md-1">
-                    <label class="form-label small mb-1 text-white">asdasdsa</label>
-                    <button type="button" class="btn btn-danger btn-sm" onclick="eliminarDetalle(${id})">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
+                ${btnEliminar}
                 <div class="col-12">
-                    <label class="form-label small mb-1">Descripción</label>
-                    <textarea class="form-control detalle-descripcion" data-detalle="${id}" rows="2" onchange="actualizarDetallesJSON()">${descripcion || ''}</textarea>
+                    <label class="form-label small mb-1">Descripción interna</label>
+                    <textarea class="form-control form-control-sm detalle-descripcion" data-detalle="${id}" rows="2" placeholder="Ej: Manual de productos versión 2024" onchange="actualizarDetallesJSON()">${descripcion}</textarea>
                 </div>
-            </div>
-        `;
-    } else {
-        return `
-            <div class="row g-2">
-                <div class="col-md-3">
-                    <label class="form-label small mb-1">Tipo</label>
-                    <select class="form-select detalle-tipo" data-detalle="${id}" onchange="cambiarTipoDetalle(${id})">
-                        <option value="1">Enlace</option>
-                        <option value="2">Archivo</option>
-                        <option value="3" selected>Texto</option>
-                    </select>
-                </div>
+            </div>`;
+        } else {
+            return `<div class="row g-2">
+                ${tipoSelector}
                 <div class="col-md-8">
-                    <label class="form-label small mb-1">Descripción</label>
-                    <textarea class="form-control detalle-descripcion" data-detalle="${id}" rows="2" onchange="actualizarDetallesJSON()">${descripcion || ''}</textarea>
+                    <label class="form-label small mb-1">Contenido <span class="text-muted fw-normal">(texto, FAQ, menú, políticas…)</span></label>
+                    <textarea class="form-control form-control-sm detalle-descripcion" data-detalle="${id}" rows="5" placeholder="Escribe aquí el contenido que el agente debe conocer..." onchange="actualizarDetallesJSON()">${descripcion}</textarea>
+                    <div class="form-text">Este texto se incluye completo en el prompt. Ideal para contenido breve (menos de 3 000 caracteres). Para documentos grandes usa Archivo.</div>
                 </div>
-                <div class="col-md-1">
-                    <label class="form-label small mb-1 text-white">asdasda</label>
-                    <button type="button" class="btn btn-danger btn-sm" onclick="eliminarDetalle(${id})">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-        `;
+                ${btnEliminar}
+            </div>`;
+        }
     }
-}
 
     function eliminarDetalle(id) {
         $(`#detalle${id}`).remove();
@@ -248,247 +584,211 @@
     }
 
     function cambiarTipoDetalle(id) {
-    const tipo = $(`select[data-detalle="${id}"].detalle-tipo`).val();
-    const $card = $(`#detalle${id}`);
-
-    // Generar opciones para tipo_dato_enlace
-    let tipoDatoEnlaceOptions = '';
-    window.TIPO_DATO_ENLACE_OPTIONS.forEach(option => {
-        const selected = option.value == 1 ? 'selected' : '';
-        tipoDatoEnlaceOptions += `<option value="${option.value}" ${selected}>${option.text}</option>`;
-    });
-
-    let inputContenido = '';
-    let camposAdicionales = '';
-
-    if (tipo === '1') {
-        // ENLACE
-        inputContenido = `
-            <div class="col-md-6">
-                <label class="form-label small mb-1">Enlace</label>
-                <input type="url" class="form-control detalle-enlace" data-detalle="${id}" placeholder="https://ejemplo.com" onchange="actualizarDetallesJSON()">
-            </div>
-        `;
-
-        camposAdicionales = `
-            <div class="col-md-3">
-                <label class="form-label small mb-1">¿Requiere token?</label>
-                <select class="form-select detalle-requiere-token" data-detalle="${id}" onchange="toggleTokenFields(${id}); actualizarDetallesJSON()">
-                    <option value="false" selected>No</option>
-                    <option value="true">Sí</option>
-                </select>
-            </div>
-            <div class="col-md-9 detalle-token-container" id="tokenContainer${id}" style="display: none;">
-                <label class="form-label small mb-1">Token de autorización</label>
-                <input type="text" class="form-control detalle-token" data-detalle="${id}" placeholder="Bearer eyJhbGci... o API key" onchange="actualizarDetallesJSON()">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small mb-1">¿Usar caché?</label>
-                <select class="form-select detalle-usar-cache" data-detalle="${id}" onchange="toggleCacheFields(${id}); actualizarDetallesJSON()">
-                    <option value="false" selected>No</option>
-                    <option value="true">Sí</option>
-                </select>
-            </div>
-            <div class="col-md-9 detalle-cache-container" id="cacheContainer${id}" style="display: none;">
-                <label class="form-label small mb-1">Tiempo de caché (horas)</label>
-                <input type="number" class="form-control detalle-tiempo-cache" data-detalle="${id}" value="1" min="1" max="168" onchange="actualizarDetallesJSON()">
-            </div>
-        `;
-    } else if (tipo === '2') {
-        // ARCHIVO con mismo ancho
-        inputContenido = `
-            <div class="col-md-9">
-                <label class="form-label small mb-1">Archivo</label>
-                <input type="file" class="form-control detalle-archivo" data-detalle="${id}" name="detalle_archivo_${id}" onchange="actualizarDetallesJSON()">
-            </div>
-        `;
-    } else {
-        // TEXTO
-        inputContenido = '';
+        const tipo = $(`select[data-detalle="${id}"].detalle-tipo`).val();
+        let tipoDatoEnlaceOptions = '';
+        window.TIPO_DATO_ENLACE_OPTIONS.forEach(option => {
+            const selected = option.value == 1 ? 'selected' : '';
+            tipoDatoEnlaceOptions += `<option value="${option.value}" ${selected}>${option.text}</option>`;
+        });
+        $(`#detalle${id}`).find('.card-body').html(
+            generarCampoDetalle(id, parseInt(tipo), '', 1, '', tipoDatoEnlaceOptions, '', false, '', false, 1)
+        );
+        actualizarDetallesJSON();
     }
 
-    const nuevoContenido = `
-    <div class="row g-2">
-        <div class="col-md-3">
-            <label class="form-label small mb-1">Tipo</label>
-            <select class="form-select detalle-tipo" data-detalle="${id}" onchange="cambiarTipoDetalle(${id})">
-                <option value="1" ${tipo === '1' ? 'selected' : ''}>Enlace</option>
-                <option value="2" ${tipo === '2' ? 'selected' : ''}>Archivo</option>
-                <option value="3" ${tipo === '3' ? 'selected' : ''}>Texto</option>
-            </select>
-        </div>
-
-        ${tipo === '1' ? `
-        <div class="col-md-3">
-            <label class="form-label small mb-1">Tipo de dato retorna</label>
-            <select class="form-select detalle-tipo-dato-enlace" data-detalle="${id}" onchange="actualizarDetallesJSON()">
-                ${tipoDatoEnlaceOptions}
-            </select>
-        </div>` : ''}
-
-        ${inputContenido}
-
-        ${camposAdicionales}
-
-        <div class="col-12">
-            <label class="form-label small mb-1">Descripción</label>
-            <textarea class="form-control detalle-descripcion" data-detalle="${id}" rows="2" onchange="actualizarDetallesJSON()"></textarea>
-        </div>
-    </div>
-`;
-
-    $card.find('.card-body').html(nuevoContenido);
-    actualizarDetallesJSON();
-}
-
-    // Función para mostrar/ocultar campos de token
     function toggleTokenFields(id) {
-        const requiereToken = $(`select[data-detalle="${id}"].detalle-requiere-token`).val() === 'true';
-        const $tokenContainer = $(`#tokenContainer${id}`);
-
-        if (requiereToken) {
-            $tokenContainer.show();
-        } else {
-            $tokenContainer.hide();
-            $tokenContainer.find('.detalle-token').val('');
-        }
+        const req = $(`select[data-detalle="${id}"].detalle-requiere-token`).val() === 'true';
+        if (req) { $(`#tokenContainer${id}`).show(); }
+        else { $(`#tokenContainer${id}`).hide().find('.detalle-token').val(''); }
     }
 
-    // Función para mostrar/ocultar campos de cache
     function toggleCacheFields(id) {
-        const usarCache = $(`select[data-detalle="${id}"].detalle-usar-cache`).val() === 'true';
-        const $cacheContainer = $(`#cacheContainer${id}`);
-
-        if (usarCache) {
-            $cacheContainer.show();
-        } else {
-            $cacheContainer.hide();
-            $cacheContainer.find('.detalle-tiempo-cache').val('1');
-        }
+        const use = $(`select[data-detalle="${id}"].detalle-usar-cache`).val() === 'true';
+        if (use) { $(`#cacheContainer${id}`).show(); }
+        else { $(`#cacheContainer${id}`).hide().find('.detalle-tiempo-cache').val('1'); }
     }
-
 
     function actualizarDetallesJSON() {
-    window.lista_items1 = [];
+        window.lista_items1 = [];
+        $('#contenedorDetalles .card').each(function(index) {
+            const $card = $(this);
+            const detalleId = $card.attr('id').replace('detalle', '');
+            const idReal = $card.find('.detalle-id-real').val();
+            const tipo = parseInt($card.find('.detalle-tipo').val());
+            const descripcion = $card.find('.detalle-descripcion').val() || '';
 
-    $('#contenedorDetalles .card').each(function(index) {
-        const $card = $(this);
-        const detalleId = $card.attr('id').replace('detalle', '');
-        const idReal = $card.find('.detalle-id-real').val();
-        const $tipoSelect = $card.find('.detalle-tipo');
-        const $descripcionTextarea = $card.find('.detalle-descripcion');
-        const tipo = parseInt($tipoSelect.val());
+            let detalleData = { id: idReal || null, id_frontend: detalleId, tipo, enlace: '', tipo_dato_enlace: 1, archivo_nombre: '', archivo_index: index, descripcion };
 
-        let detalleData = {
-            id: idReal || null,
-            id_frontend: detalleId,
-            tipo: tipo,
-            enlace: '',
-            tipo_dato_enlace: 1,
-            archivo_nombre: '',
-            archivo_index: index,
-            descripcion: $descripcionTextarea.val() || ''
-        };
-
-        if (tipo === 1) {
-            const $enlaceInput = $card.find('.detalle-enlace');
-            const $tipoDatoEnlaceSelect = $card.find('.detalle-tipo-dato-enlace');
-            const $requiereTokenSelect = $card.find('.detalle-requiere-token');
-            const $tokenInput = $card.find('.detalle-token');
-            const $usarCacheSelect = $card.find('.detalle-usar-cache');
-            const $tiempoCacheInput = $card.find('.detalle-tiempo-cache');
-
-            detalleData.enlace = $enlaceInput.val() || '';
-            detalleData.tipo_dato_enlace = parseInt($tipoDatoEnlaceSelect.val()) || 1;
-            detalleData.requiere_token = $requiereTokenSelect.val() === 'true';
-            detalleData.token_autorizacion = $tokenInput.val() || '';
-            detalleData.usar_cache = $usarCacheSelect.val() === 'true';
-            detalleData.tiempo_cache_horas = parseInt($tiempoCacheInput.val()) || 1;
-        } else if (tipo === 2) {
-            const $archivoInput = $card.find('.detalle-archivo');
-            if ($archivoInput.length > 0 && $archivoInput[0].files.length > 0) {
-                detalleData.archivo_nombre = $archivoInput[0].files[0].name;
+            if (tipo === 1) {
+                detalleData.enlace = $card.find('.detalle-enlace').val() || '';
+                detalleData.tipo_dato_enlace = parseInt($card.find('.detalle-tipo-dato-enlace').val()) || 1;
+                detalleData.requiere_token = $card.find('.detalle-requiere-token').val() === 'true';
+                detalleData.token_autorizacion = $card.find('.detalle-token').val() || '';
+                detalleData.usar_cache = $card.find('.detalle-usar-cache').val() === 'true';
+                detalleData.tiempo_cache_horas = parseInt($card.find('.detalle-tiempo-cache').val()) || 1;
+            } else if (tipo === 2) {
+                const $archivo = $card.find('.detalle-archivo');
+                if ($archivo.length && $archivo[0].files.length) detalleData.archivo_nombre = $archivo[0].files[0].name;
+                delete detalleData.tipo_dato_enlace;
+            } else {
+                delete detalleData.enlace; delete detalleData.archivo_nombre;
+                delete detalleData.archivo_index; delete detalleData.tipo_dato_enlace;
             }
-            delete detalleData.tipo_dato_enlace;
-        } else {
-            delete detalleData.enlace;
-            delete detalleData.archivo_nombre;
-            delete detalleData.archivo_index;
-            delete detalleData.tipo_dato_enlace;
-        }
-
-        window.lista_items1.push(detalleData);
-    });
-
-    const jsonString = JSON.stringify(window.lista_items1);
-    $('#detalles_json').val(jsonString);
-}
-
-    function funcionAntesDeGuardar() {
-        actualizarDetallesJSON();
-        return true;
+            window.lista_items1.push(detalleData);
+        });
+        $('#detalles_json').val(JSON.stringify(window.lista_items1));
     }
 
+    function funcionAntesDeGuardar() { actualizarDetallesJSON(); return true; }
+
     function inicializarEventos() {
-        // Limpiar event listeners previos
-        $('#btnAgregarDetalle').off('click');
-
-        $('#btnAgregarDetalle').on('click', function() {
-            agregarDetalle();
-        });
-
-        // Usar delegación de eventos para campos dinámicos
-        $(document).off('change', '.detalle-enlace, .detalle-archivo, .detalle-tipo-dato-enlace, .detalle-requiere-token, .detalle-token, .detalle-usar-cache, .detalle-tiempo-cache');
-        $(document).on('change', '.detalle-enlace, .detalle-archivo, .detalle-tipo-dato-enlace, .detalle-token, .detalle-tiempo-cache', function() {
-            actualizarDetallesJSON();
-        });
-
-        $(document).off('change', '.detalle-tipo');
-        $(document).on('change', '.detalle-tipo', function() {
-            const detalleId = $(this).data('detalle');
-            cambiarTipoDetalle(detalleId);
-        });
+        $('#btnAgregarDetalle').off('click').on('click', function() { agregarDetalle(); });
+        $(document).off('change', '.detalle-enlace,.detalle-archivo,.detalle-tipo-dato-enlace,.detalle-token,.detalle-tiempo-cache');
+        $(document).on('change', '.detalle-enlace,.detalle-archivo,.detalle-tipo-dato-enlace,.detalle-token,.detalle-tiempo-cache', actualizarDetallesJSON);
     }
 
     function inicializarDetalles() {
-        // Reset variables
         resetearVariables();
-
-        // Limpiar contenedor
         $('#contenedorDetalles').empty();
         $('#detalles_json').val('[]');
-
-        if (window.DATOS_ORIGINALES.tieneFiltro) {
-            // Si estamos editando, cargar los detalles existentes
-            if (window.DATOS_ORIGINALES.detalles && Array.isArray(window.DATOS_ORIGINALES.detalles) && window.DATOS_ORIGINALES.detalles.length > 0) {
-                $.each(window.DATOS_ORIGINALES.detalles, function(index, detalle) {
-                    agregarDetalle(detalle);
-                });
-            }
-            // Al editar, si no hay detalles, no agregar ninguno por defecto
+        if (window.DATOS_ORIGINALES.tieneFiltro && Array.isArray(window.DATOS_ORIGINALES.detalles)) {
+            $.each(window.DATOS_ORIGINALES.detalles, function(_, detalle) { agregarDetalle(detalle); });
         }
     }
 
-    // Inicialización con jQuery - usar $(document).ready() más robusto
-    $(document).ready(function() {
-        inicializarEventos();
-        inicializarDetalles();
-    });
-
-    // Limpiar cuando se cierre el modal
+    $(document).ready(function() { inicializarEventos(); inicializarDetalles(); });
     $(document).on('hidden.bs.modal', function(e) {
-        if ($(e.target).find('#contenedorDetalles').length > 0) {
-            resetearVariables();
-            $('#contenedorDetalles').empty();
-            $('#detalles_json').val('[]');
+        if ($(e.target).find('#contenedorDetalles').length) {
+            resetearVariables(); $('#contenedorDetalles').empty(); $('#detalles_json').val('[]');
         }
+    });
+    $(document).on('shown.bs.modal', function(e) {
+        if ($(e.target).find('#contenedorDetalles').length) { inicializarEventos(); inicializarDetalles(); }
     });
 
-    // Reinicializar cuando se abra el modal
-    $(document).on('shown.bs.modal', function(e) {
-        if ($(e.target).find('#contenedorDetalles').length > 0) {
-            inicializarEventos();
-            inicializarDetalles();
+    /* ── Cierre del agente (plantilla) ── */
+    (function () {
+        const RUTA = '{{ ruta }}';
+        const PK   = '{{ filtro.pk }}';
+        const CSRF = '{{ csrf_token }}';
+        if (!PK) return;
+
+        function post(data, ok, err) {
+            data.csrfmiddlewaretoken = CSRF;
+            $.post(RUTA, data, function (res) {
+                const r = Array.isArray(res) ? res[0] : res;
+                if (r && r.error) { alertaWarning(r.message || 'Error'); if (err) err(); }
+                else { if (ok) ok(r); }
+            }, 'json').fail(function () { alertaWarning('Error de conexión.'); if (err) err(); });
         }
-    });
+
+        const TIPO_CFG = {
+            ninguna:  { label: null, placeholder: null,
+                        hint: null, iconCls: 'fa-flag-checkered text-secondary' },
+            email:    { label: 'Dirección de correo destino', placeholder: 'supervisor@empresa.com',
+                        hint: 'Se enviará un email con el mensaje al finalizar la conversación.',
+                        iconCls: 'fa-envelope text-primary' },
+            whatsapp: { label: 'Número de WhatsApp (con código de país)', placeholder: '593987654321',
+                        hint: 'El número debe estar registrado como contacto en una sesión activa.',
+                        iconCls: 'fa-whatsapp text-success' },
+            webhook:  { label: 'URL del endpoint (POST)', placeholder: 'https://mi-sistema.com/api/fin-conversacion',
+                        hint: 'Se hará un POST con los datos de la conversación en formato JSON.',
+                        iconCls: 'fa-link text-warning' },
+        };
+        let tipoAgente = 'ninguna';
+
+        /* Selector de tipo */
+        $('#form-nueva-accion-agente').on('click', '.tipo-card', function () {
+            $('#form-nueva-accion-agente .tipo-card').removeClass('selected');
+            $(this).addClass('selected');
+            tipoAgente = $(this).data('tipo');
+            const cfg = TIPO_CFG[tipoAgente];
+            if (cfg && cfg.label) {
+                $('#ana-destino-label').text(cfg.label);
+                $('#ana-destino').attr('placeholder', cfg.placeholder || '');
+                $('#ana-destino-hint').text(cfg.hint || '');
+                $('#ana-destino-wrap').show();
+            } else {
+                $('#ana-destino-wrap').hide();
+                $('#ana-destino').val('');
+            }
+        });
+
+        /* Pills de variables */
+        $('#form-nueva-accion-agente').on('click', '.var-pill-a', function () {
+            const v = $(this).data('var');
+            const ta = document.getElementById('ana-mensaje');
+            const s = ta.selectionStart, e = ta.selectionEnd;
+            ta.value = ta.value.slice(0, s) + v + ta.value.slice(e);
+            ta.selectionStart = ta.selectionEnd = s + v.length;
+            ta.focus();
+        });
+
+        function iconForTipo(t) {
+            return {email:'envelope', whatsapp:'whatsapp', webhook:'link', ninguna:'flag-checkered'}[t] || 'flag-checkered';
+        }
+        function colorForTipo(t) {
+            return {email:'text-primary', whatsapp:'text-success', webhook:'text-warning', ninguna:'text-secondary'}[t] || 'text-secondary';
+        }
+
+        $('#btn-guardar-regla-agente').on('click', function () {
+            post({
+                action: 'agente_regla_fin_guardar',
+                pk: PK,
+                activo: $('#arf-activo').is(':checked') ? 'true' : 'false',
+                usar_senal_llm: $('#arf-senal-llm').is(':checked') ? 'true' : 'false',
+                frases_cierre: $('#arf-frases').val(),
+            }, function () { alertaSuccess('Configuración guardada.'); });
+        });
+
+        $('#btn-add-accion-agente').on('click', function () {
+            const tipo    = tipoAgente;
+            const destino = $('#ana-destino').val().trim();
+            const mensaje = $('#ana-mensaje').val().trim();
+            if (tipo !== 'ninguna' && !destino) {
+                alertaWarning('Debes completar el campo de destino para este tipo de acción.');
+                $('#ana-destino').focus();
+                return;
+            }
+            post({
+                action: 'agente_regla_fin_accion_add',
+                pk: PK, tipo: tipo, destino: destino, plantilla_mensaje: mensaje,
+            }, function (res) {
+                $('#acciones-agente-empty').remove();
+                const row = `<div class="accion-row d-flex align-items-start gap-2" data-accion-id="${res.accion.id}">
+                    <div class="mt-1 flex-shrink-0"><i class="fas fa-${iconForTipo(tipo)} ${colorForTipo(tipo)}"></i></div>
+                    <div class="flex-grow-1" style="min-width:0">
+                        <div class="accion-tipo">${res.accion.tipo}</div>
+                        ${res.accion.destino ? `<div class="text-muted" style="font-size:.75rem">${res.accion.destino}</div>` : ''}
+                        ${mensaje ? `<div class="text-muted fst-italic" style="font-size:.72rem">${mensaje.slice(0, 90)}${mensaje.length > 90 ? '…' : ''}</div>` : ''}
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-del-accion-agente py-0 px-2 flex-shrink-0" data-id="${res.accion.id}">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>`;
+                $('#acciones-agente-list').append(row);
+                $('#form-nueva-accion-agente .tipo-card').removeClass('selected');
+                $('#form-nueva-accion-agente .tipo-card[data-tipo="ninguna"]').addClass('selected');
+                tipoAgente = 'ninguna';
+                $('#ana-destino-wrap').hide();
+                $('#ana-destino').val('');
+                $('#ana-mensaje').val('');
+                alertaSuccess('Acción agregada.');
+            });
+        });
+
+        $('#acciones-agente-list').on('click', '.btn-del-accion-agente', function () {
+            const id  = $(this).data('id');
+            const row = $(this).closest('.accion-row');
+            post({ action: 'agente_regla_fin_accion_delete', accion_id: id }, function () {
+                row.remove();
+                if ($('#acciones-agente-list .accion-row').length === 0) {
+                    $('#acciones-agente-list').append(
+                        '<div class="text-muted small text-center py-2" id="acciones-agente-empty">' +
+                        '<i class="fas fa-info-circle me-1"></i> Sin acciones configuradas.</div>'
+                    );
+                }
+            });
+        });
+    })();
 </script>

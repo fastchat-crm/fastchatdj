@@ -87,27 +87,46 @@ Note: Test files exist but are mostly empty stubs.
 **Singleton Config:** `Configuracion.get_instancia()` returns the single site-wide config row (company name, logos, email templates, etc.). It is accessed at module load time in `urls.py`.
 
 **WebSockets:** Django Channels handles three WebSocket consumers in `whatsapp/`:
-- `ChatConsumer` — real-time chat per conversation
-- `SessionConsumer` / `SessionRoomConsumer` — WhatsApp session status
+- `ChatConsumer` — real-time chat per conversation, broadcasts rendered HTML partials on new messages
+- `SessionConsumer` / `SessionRoomConsumer` — WhatsApp session status (QR code, connect/disconnect)
 
-**AI Pipeline:** `agents_ai` uses LangChain with Google Generative AI embeddings stored in FAISS vector stores. `AgentesIA` records in `crm` configure which agent handles each WhatsApp session. Training documents uploaded via `EntrenamientosIA` are embedded and stored per agent.
+**AI Pipeline:** `agents_ai` uses LangChain with Google Generative AI embeddings stored in FAISS vector stores. `AgentesIA` records in `crm` configure which agent handles each WhatsApp session. Training documents uploaded via `EntrenamientosIA` are embedded and stored per agent. The FAISS index is cached in-memory keyed by `mtime` to avoid reloads between messages (`agente_consultor.py:_faiss_cache`). Each agent can also have a `contexto_estatico` field (plain text injected directly into the prompt without embedding, for small documents like FAQs).
 
-**Base Models:** `core.ModeloBase` and `core.NormalModel` are the base classes for most models (providing `created_at`, `updated_at`, soft delete, etc.).
+**Base Models:** `core.custom_models.ModeloBase` (abstract) and `NormalModel` are the base classes for most models. `ModeloBase` adds `usuario_creacion`, `fecha_registro`, `usuario_modificacion`, `fecha_modificacion`, `status` (soft-delete flag). It auto-populates audit fields from the current request via `core.custom_middleware.get_current_request()`. `NormalModel` adds convenience attributes like `<field>_boolhtml`, `<field>_yesorno`, `<field>_money` dynamically on `__init__`.
 
 ### WhatsApp Integration Flow
 
 ```
 External WhatsApp API (Node.js service)
-    ↓ webhook POST
-whatsapp/webhook_handler/
+    ↓ webhook POST to /whatsapp/webhook_handler/
+    ↓ NODE_SECRET_KEY verified
+webhook_handler creates/updates:
+    MensajeWhatsApp, ConversacionWhatsApp, Contacto, EstadisticasConversacion
     ↓
-MensajeWhatsApp created → ConversacionWhatsApp updated
+async_to_sync → channel_layer.group_send → ChatConsumer broadcasts rendered HTML to frontend
+    ↓ (if AI enabled: SesionWhatsApp.agente_ia is set)
+AgenteConsultor.responder() → FAISS similarity search → LangChain prompt → Google Generative AI
     ↓
-ChatConsumer broadcasts via WebSocket to frontend
-    ↓ (if AI enabled on session)
-agents_ai.AgenteConsultor → LangChain → Google Generative AI → reply sent via WHATSAPP_API_URL
+WhatsAppService.send_message() → WHATSAPP_API_URL (Node.js)
 ```
+
+**Webhook event types handled:** `qr_code`, `ready`, `authenticated`, `auth_failure`, `disconnected`, `message`, `message_sent`, `message_reaction`, `message_revoked`, `message_ack`, `contact_changed`, `group_join`, `group_leave`.
 
 ### REST API Endpoint
 
 `POST /api/enviar-mensaje/` — sends a WhatsApp message. Rate limited to 30 req/min. Requires active session and valid contact. Defined in `seguridad/api_mensajeria.py`.
+
+### AI Agent Configuration
+
+`AgentesIA` (in `crm/models.py`) is the central config for each chatbot:
+- `perfil` → links to `PerfilNegocioIA` (business context: products, services, company description)
+- `vectorstore_path` → FAISS index on disk built from uploaded training documents
+- `contexto_estatico` → raw text injected directly into the LLM prompt (no embedding needed)
+- `prompt_template` → Jinja-style template; default Spanish template is in `core/constantes.py:PROMPT_TEMPLATES`
+- `apikey` (M2M) → `ApiKeyIA` with `provider` field (`"gemini"` or `"openai"`) and API key
+
+`VectorStoreManager` (`agents_ai/vectorstore_manager.py`) handles building FAISS indexes from PDF, CSV, JSON, or XLSX files. Supported embedding providers: `"gemini"` (default) and `"openai"`.
+
+### Conversation Memory
+
+`agents_ai/memoria_django.py` implements `DjangoChatMessageHistory`, a LangChain-compatible message history backend that persists conversation turns in the database (keyed by `ConversacionWhatsApp` ID). Only the last `_HISTORY_TURNS` (default: 4) turns are passed to the LLM prompt to control token usage.

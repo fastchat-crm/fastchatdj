@@ -10,7 +10,8 @@ from django.conf import settings
 from agents_ai.agente_consultor import AgenteConsultor
 from agents_ai.memoria_django import DjangoChatMessageHistory
 from core.funciones import addData, get_encrypt, get_decrypt, log
-from crm.models import AgentesIA, PerfilNegocioIA
+from crm.acciones_fin import ejecutar_acciones_fin
+from crm.models import AgentesIA, PerfilNegocioIA, ConsumoTokenIA
 
 from langchain_core.messages import HumanMessage, AIMessage
 
@@ -70,6 +71,19 @@ def chat_agente_view(request, agente_enc_id):
             except Exception:
                 pass
 
+            # ── Configuración de fin de conversación ──────────────────────
+            regla_fin = getattr(agente, 'regla_fin', None)
+            fin_por_frase = (
+                regla_fin is not None
+                and regla_fin.activo
+                and regla_fin.detectar_por_frase(pregunta)
+            )
+            detectar_fin_llm = (
+                regla_fin is not None
+                and regla_fin.activo
+                and regla_fin.usar_senal_llm
+            )
+
             # SimpleNamespace provee el .id que AgenteConsultor usa para memoria
             fake_conv = SimpleNamespace(id=session_id, contacto=None)
 
@@ -82,11 +96,12 @@ def chat_agente_view(request, agente_enc_id):
                     conversacion=fake_conv,
                     prompt_template_text=agente.prompt_template,
                     contexto_estatico=agente.contexto_estatico or None,
+                    detectar_fin=detectar_fin_llm,
                 )
                 if agente.anotar_listas:
-                    respuesta = consultor.consultar_con_listas(pregunta, agente.descripcion)
+                    resultado = consultor.consultar_con_listas(pregunta, agente.descripcion)
                 else:
-                    respuesta = consultor.consultar(pregunta, agente.descripcion)
+                    resultado = consultor.consultar(pregunta, agente.descripcion)
             except Exception as ex:
                 line = sys.exc_info()[-1].tb_lineno
                 return JsonResponse({
@@ -94,7 +109,41 @@ def chat_agente_view(request, agente_enc_id):
                     'message': f'Error al consultar el agente (línea {line}): {ex}'
                 })
 
-            return JsonResponse({'error': False, 'respuesta': respuesta})
+            fin_detectado = fin_por_frase or resultado.fin_detectado
+
+            # ── Registrar consumo de tokens ───────────────────────────────────
+            if resultado.tokens_total > 0:
+                try:
+                    ConsumoTokenIA.objects.create(
+                        apikey=apikey_obj, agente=agente,
+                        tokens_entrada=resultado.tokens_entrada,
+                        tokens_salida=resultado.tokens_salida,
+                        tokens_total=resultado.tokens_total,
+                        modelo=consultor.model_name,
+                    )
+                except Exception:
+                    pass
+
+            # ── Ejecutar acciones de fin (sin sesión_id real = chat de prueba) ──
+            if fin_detectado and regla_fin:
+                try:
+                    contexto_fin = {
+                        'nombre_contacto': request.user.get_full_name() or request.user.username,
+                        'numero': '',
+                        'sesion': f'Chat de prueba — {agente.nombre}',
+                        'sesion_id': '',   # sin sesión WA real
+                        'resumen': '',
+                        'agente': agente.nombre,
+                    }
+                    ejecutar_acciones_fin(regla_fin, contexto_fin)
+                except Exception:
+                    pass
+
+            return JsonResponse({
+                'error': False,
+                'respuesta': resultado.respuesta,
+                'fin_detectado': fin_detectado,
+            })
 
         return JsonResponse({'error': True, 'message': 'Acción no reconocida.'})
 

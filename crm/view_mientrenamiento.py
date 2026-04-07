@@ -13,7 +13,7 @@ from core.custom_forms import FormError
 from crm.forms import PerfilNegocioIAForm, ProductoIAForm, ServicioIAForm, RespuestaEntrenadaIAForm, IndustriaForm, \
     ActividadEconomicaForm, AgentesIAForm, ApiKeyIAForm
 from crm.models import PerfilNegocioIA, ProductoIA, ServicioIA, RespuestaEntrenadaIA, Industria, ActividadEconomica, \
-    AgentesIA, DetalleAgentesAI, ApiKeyIA
+    AgentesIA, DetalleAgentesAI, ApiKeyIA, ReglaFinConversacion, AccionFinConversacion, ConsumoTokenIA
 from core.funciones import addData, secure_module, log, get_encrypt
 
 
@@ -224,6 +224,39 @@ def entrenamiento_ia_view(request):
                                 filtro.vectorstore_path = None
                                 filtro.save()
                                 res_json = {"error": False, "message": f"✅ Procesado: {len(texto_completo):,} chars. Contexto estático listo (sin FAISS).", "reload": True}
+                    elif action == 'agente_regla_fin_guardar':
+                        agente = AgentesIA.objects.get(id=request.POST['pk'], perfil=perfil)
+                        regla, _ = ReglaFinConversacion.objects.get_or_create(agente=agente)
+                        regla.activo = request.POST.get('activo') == 'true'
+                        regla.usar_senal_llm = request.POST.get('usar_senal_llm') == 'true'
+                        regla.frases_cierre = request.POST.get('frases_cierre', '').strip() or None
+                        regla.save()
+                        return JsonResponse({'error': False})
+
+                    elif action == 'agente_regla_fin_accion_add':
+                        agente = AgentesIA.objects.get(id=request.POST['pk'], perfil=perfil)
+                        regla, _ = ReglaFinConversacion.objects.get_or_create(agente=agente)
+                        tipo = request.POST.get('tipo', 'ninguna')
+                        destino = request.POST.get('destino', '').strip() or None
+                        plantilla_mensaje = request.POST.get('plantilla_mensaje', '').strip() or None
+                        accion = AccionFinConversacion.objects.create(
+                            regla=regla, tipo=tipo,
+                            destino=destino, plantilla_mensaje=plantilla_mensaje,
+                        )
+                        return JsonResponse({
+                            'error': False,
+                            'accion': {
+                                'id': accion.id,
+                                'tipo': accion.get_tipo_display(),
+                                'destino': accion.destino or '',
+                            }
+                        })
+
+                    elif action == 'agente_regla_fin_accion_delete':
+                        accion = AccionFinConversacion.objects.get(id=request.POST['accion_id'])
+                        accion.delete()
+                        return JsonResponse({'error': False})
+
                     elif action == 'reactivarapikey':
                         filtro = ApiKeyIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
                         filtro.estado = True
@@ -280,6 +313,8 @@ def entrenamiento_ia_view(request):
                         data["form"] = form = AgentesIAForm(instance=filtro)
                         form.fields['apikey'].queryset = ApiKeyIA.objects.filter(perfil=perfil, status=True)
                         data['detalles_existentes'] = filtro.obtener_detalles_agente()
+                        data['regla_fin'] = getattr(filtro, 'regla_fin', None)
+                        data['acciones_fin'] = data['regla_fin'].acciones.filter(status=True) if data['regla_fin'] else []
                         template = get_template("crm/entrenamiento/agente/form.html")
                         return JsonResponse({"result": True, 'data': template.render(data)})
                     except Exception as ex:
@@ -337,6 +372,77 @@ def entrenamiento_ia_view(request):
                         data["form"] = ApiKeyIAForm(instance=filtro)
                         template = get_template("crm/entrenamiento/apikey/form.html")
                         return JsonResponse({"result": True, 'data': template.render(data)})
+                    except Exception as ex:
+                        return JsonResponse({"result": False, 'message': str(ex)})
+                elif action == 'consumo_apikey':
+                    try:
+                        from django.db.models import Sum, Count
+                        from django.db.models.functions import TruncDate
+                        from django.utils.dateparse import parse_date
+                        from django.utils import timezone
+                        import datetime
+
+                        pk = int(request.GET['id'])
+                        apikey = ApiKeyIA.objects.get(pk=pk, perfil=perfil)
+
+                        # Rango de fechas — default últimos 30 días
+                        hoy = timezone.localdate()
+                        fecha_fin   = parse_date(request.GET.get('fecha_fin', ''))   or hoy
+                        fecha_inicio = parse_date(request.GET.get('fecha_inicio', '')) or (hoy - datetime.timedelta(days=29))
+
+                        qs = ConsumoTokenIA.objects.filter(
+                            apikey=apikey,
+                            fecha__date__gte=fecha_inicio,
+                            fecha__date__lte=fecha_fin,
+                        )
+                        totales = qs.aggregate(
+                            total_llamadas=Count('id'),
+                            total_entrada=Sum('tokens_entrada'),
+                            total_salida=Sum('tokens_salida'),
+                            total_tokens=Sum('tokens_total'),
+                        )
+                        por_dia = list(
+                            qs.annotate(dia=TruncDate('fecha'))
+                              .values('dia')
+                              .annotate(
+                                  llamadas=Count('id'),
+                                  entrada=Sum('tokens_entrada'),
+                                  salida=Sum('tokens_salida'),
+                                  total=Sum('tokens_total'),
+                              )
+                              .order_by('dia')
+                        )
+                        por_agente = list(
+                            qs.filter(agente__isnull=False)
+                              .values('agente__nombre')
+                              .annotate(
+                                  llamadas=Count('id'),
+                                  total=Sum('tokens_total'),
+                              )
+                              .order_by('-total')[:10]
+                        )
+                        return JsonResponse({
+                            'result': True,
+                            'apikey_alias': str(apikey),
+                            'fecha_inicio': str(fecha_inicio),
+                            'fecha_fin': str(fecha_fin),
+                            'totales': {
+                                'llamadas': totales['total_llamadas'] or 0,
+                                'entrada': totales['total_entrada'] or 0,
+                                'salida': totales['total_salida'] or 0,
+                                'total': totales['total_tokens'] or 0,
+                            },
+                            'por_dia': [
+                                {'dia': str(r['dia']), 'llamadas': r['llamadas'],
+                                 'entrada': r['entrada'] or 0, 'salida': r['salida'] or 0,
+                                 'total': r['total'] or 0}
+                                for r in por_dia
+                            ],
+                            'por_agente': [
+                                {'agente': r['agente__nombre'], 'llamadas': r['llamadas'], 'total': r['total'] or 0}
+                                for r in por_agente
+                            ],
+                        })
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})
             agentes = list(perfil.get_agentes())

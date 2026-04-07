@@ -511,6 +511,32 @@ class ApiKeyIA(ModeloBase):
         return f"[{self.get_proveedor_display()}]: {self.alias}"
 
 
+class ConsumoTokenIA(models.Model):
+    """Registro de consumo de tokens por llamada al LLM."""
+    apikey = models.ForeignKey(
+        'ApiKeyIA', on_delete=models.CASCADE,
+        related_name='consumos', verbose_name='API Key',
+    )
+    agente = models.ForeignKey(
+        'AgentesIA', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='consumos', verbose_name='Agente',
+    )
+    fecha = models.DateTimeField(auto_now_add=True, db_index=True)
+    tokens_entrada = models.IntegerField(default=0, verbose_name='Tokens entrada (prompt)')
+    tokens_salida = models.IntegerField(default=0, verbose_name='Tokens salida (respuesta)')
+    tokens_total = models.IntegerField(default=0, verbose_name='Tokens total')
+    modelo = models.CharField(max_length=100, blank=True, default='', verbose_name='Modelo')
+
+    class Meta:
+        verbose_name = 'Consumo de Tokens IA'
+        verbose_name_plural = 'Consumos de Tokens IA'
+        indexes = [models.Index(fields=['apikey', 'fecha'])]
+        ordering = ['-fecha']
+
+    def __str__(self):
+        return f"{self.apikey} — {self.tokens_total} tokens ({self.fecha:%Y-%m-%d})"
+
+
 class DepartamentoChatBot(ModeloBase):
     nombre = models.CharField(max_length=100, verbose_name="Nombre")
     color = models.CharField(max_length=100, verbose_name="Color", default='')
@@ -568,3 +594,120 @@ class PerfilDepartamentoChatBot(ModeloBase):
 
     def __str__(self):
         return f"{self.usuario.get_full_name()} - {self.departamento.nombre if self.departamento else 'Sin departamento'}"
+
+
+# ---------------------------------------------------------------------------
+# Detección de fin de conversación + acciones automáticas
+# ---------------------------------------------------------------------------
+
+class ReglaFinConversacion(ModeloBase):
+    """
+    Detecta el cierre de una conversación y dispara acciones.
+
+    Puede estar asociada a:
+      - una SesionWhatsApp (config específica por número) — campo `sesion`
+      - un AgentesIA (plantilla reutilizable)             — campo `agente`
+
+    El webhook primero busca la regla de la sesión; si no existe, cae en
+    la del agente como plantilla.
+    """
+    sesion = models.OneToOneField(
+        'whatsapp.SesionWhatsApp', on_delete=models.CASCADE,
+        related_name='regla_fin', verbose_name='Sesión WhatsApp',
+        blank=True, null=True,
+    )
+    agente = models.OneToOneField(
+        'AgentesIA', on_delete=models.CASCADE, related_name='regla_fin',
+        verbose_name='Agente IA (plantilla)',
+        blank=True, null=True,
+    )
+    activo = models.BooleanField(default=True, verbose_name='Activo')
+    usar_senal_llm = models.BooleanField(
+        default=True,
+        verbose_name='Detección por LLM',
+        help_text='El LLM emitirá [FIN_CONVERSACION] cuando detecte una despedida o cierre natural.'
+    )
+    frases_cierre = models.TextField(
+        blank=True, null=True,
+        verbose_name='Frases de cierre (una por línea)',
+        help_text='El sistema detectará el fin si el usuario envía alguna de estas frases. Ej: gracias hasta luego'
+    )
+
+    class Meta:
+        verbose_name = 'Regla de Fin de Conversación'
+        verbose_name_plural = 'Reglas de Fin de Conversación'
+
+    def __str__(self):
+        if self.sesion_id:
+            return f"ReglaFin → {self.sesion}"
+        if self.agente_id:
+            return f"ReglaFin (plantilla) → {self.agente.nombre}"
+        return f"ReglaFin #{self.pk}"
+
+    def get_frases(self) -> list:
+        if not self.frases_cierre:
+            return []
+        return [f.strip().lower() for f in self.frases_cierre.splitlines() if f.strip()]
+
+    def detectar_por_frase(self, texto: str) -> bool:
+        texto_norm = texto.strip().lower()
+        return any(frase in texto_norm for frase in self.get_frases())
+
+    @classmethod
+    def para_sesion(cls, session):
+        """
+        Retorna la ReglaFinConversacion efectiva para una sesión:
+        primero la de la sesión, luego la del agente como plantilla.
+        """
+        regla = getattr(session, 'regla_fin', None)
+        if regla and regla.activo:
+            return regla
+        agente = getattr(session, 'agente_ia', None)
+        if agente:
+            regla_agente = getattr(agente, 'regla_fin', None)
+            if regla_agente and regla_agente.activo:
+                return regla_agente
+        return None
+
+
+class AccionFinConversacion(ModeloBase):
+    """
+    Una acción a ejecutar cuando se detecta el fin de conversación.
+    Puede haber múltiples acciones por regla (email + webhook, etc.).
+    """
+    TIPOS = [
+        ('email',    'Enviar correo electrónico'),
+        ('whatsapp', 'Enviar mensaje WhatsApp al supervisor'),
+        ('webhook',  'Llamar URL externa (HTTP POST)'),
+        ('ninguna',  'Solo marcar conversación como finalizada'),
+    ]
+    regla = models.ForeignKey(
+        ReglaFinConversacion, on_delete=models.CASCADE,
+        related_name='acciones', verbose_name='Regla'
+    )
+    tipo = models.CharField(max_length=20, choices=TIPOS, verbose_name='Tipo de acción')
+    destino = models.CharField(
+        max_length=500, blank=True, null=True,
+        verbose_name='Destino',
+        help_text='Email, número WhatsApp con código de país (ej: 593912345678) o URL según el tipo.'
+    )
+    plantilla_mensaje = models.TextField(
+        blank=True, null=True,
+        verbose_name='Plantilla de mensaje',
+        help_text='Variables disponibles: {nombre_contacto}, {numero}, {sesion}, {resumen}, {agente}'
+    )
+
+    class Meta:
+        verbose_name = 'Acción de Fin de Conversación'
+        verbose_name_plural = 'Acciones de Fin de Conversación'
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} → {self.destino or '(sin destino)'}"
+
+    def render_mensaje(self, contexto: dict) -> str:
+        if not self.plantilla_mensaje:
+            return ''
+        try:
+            return self.plantilla_mensaje.format(**contexto)
+        except (KeyError, ValueError):
+            return self.plantilla_mensaje

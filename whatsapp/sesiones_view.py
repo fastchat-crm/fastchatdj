@@ -10,7 +10,7 @@ from django.urls import reverse
 
 from core.custom_forms import FormError
 from core.funciones import addData, paginador, secure_module, log, redirectAfterPostGet
-from crm.models import AgentesIA, PerfilNegocioIA
+from crm.models import AgentesIA, PerfilNegocioIA, ReglaFinConversacion, AccionFinConversacion
 from .forms import SesionWhatsAppForm
 from .models import SesionWhatsApp
 from .services import WhatsAppService
@@ -91,6 +91,64 @@ def sesionesView(request):
                     res_json.append({'error': False, 'reload': True})
                     return JsonResponse(res_json, safe=False)
 
+                # ── Regla de Fin de Conversación ─────────────────────────────
+                elif action == 'regla_fin_cargar_plantilla':
+                    # Carga la plantilla del agente asociado a la sesión
+                    session = SesionWhatsApp.objects.get(id=request.POST['pk'])
+                    agente = session.agente_ia
+                    if not agente:
+                        return JsonResponse({'error': True, 'message': 'Esta sesión no tiene un agente asignado.'})
+                    plantilla = getattr(agente, 'regla_fin', None)
+                    if not plantilla:
+                        return JsonResponse({'error': True, 'message': 'El agente no tiene una plantilla de cierre configurada.'})
+                    regla, _ = ReglaFinConversacion.objects.get_or_create(sesion=session)
+                    regla.activo = plantilla.activo
+                    regla.usar_senal_llm = plantilla.usar_senal_llm
+                    regla.frases_cierre = plantilla.frases_cierre
+                    regla.save()
+                    # Copiar acciones
+                    regla.acciones.all().delete()
+                    for accion in plantilla.acciones.filter(status=True):
+                        AccionFinConversacion.objects.create(
+                            regla=regla, tipo=accion.tipo,
+                            destino=accion.destino,
+                            plantilla_mensaje=accion.plantilla_mensaje,
+                        )
+                    return JsonResponse({'error': False, 'message': 'Plantilla cargada correctamente.'})
+
+                elif action == 'regla_fin_guardar':
+                    session = SesionWhatsApp.objects.get(id=request.POST['pk'])
+                    regla, _ = ReglaFinConversacion.objects.get_or_create(sesion=session)
+                    regla.activo = request.POST.get('activo') == 'true'
+                    regla.usar_senal_llm = request.POST.get('usar_senal_llm') == 'true'
+                    regla.frases_cierre = request.POST.get('frases_cierre', '').strip() or None
+                    regla.save()
+                    return JsonResponse({'error': False})
+
+                elif action == 'regla_fin_accion_add':
+                    session = SesionWhatsApp.objects.get(id=request.POST['pk'])
+                    regla, _ = ReglaFinConversacion.objects.get_or_create(sesion=session)
+                    tipo = request.POST.get('tipo', 'ninguna')
+                    destino = request.POST.get('destino', '').strip() or None
+                    plantilla_mensaje = request.POST.get('plantilla_mensaje', '').strip() or None
+                    accion = AccionFinConversacion.objects.create(
+                        regla=regla, tipo=tipo,
+                        destino=destino, plantilla_mensaje=plantilla_mensaje,
+                    )
+                    return JsonResponse({
+                        'error': False,
+                        'accion': {
+                            'id': accion.id,
+                            'tipo': accion.get_tipo_display(),
+                            'destino': accion.destino or '',
+                        }
+                    })
+
+                elif action == 'regla_fin_accion_delete':
+                    accion = AccionFinConversacion.objects.get(id=request.POST['accion_id'])
+                    accion.delete()
+                    return JsonResponse({'error': False})
+
                 elif action == 'delete_force':
                     session_id = request.POST.get('id')
                     session = SesionWhatsApp.objects.filter(id=session_id).first()
@@ -118,12 +176,18 @@ def sesionesView(request):
         data['instance'] = instance = SesionWhatsApp.objects.get(id=request.GET['pk'])
         data['form'] = form = SesionWhatsAppForm(instance=instance)
         form.fields['agente_ia'].queryset = AgentesIA.objects.filter(perfil=perfil, status=True)
+        data['regla_fin'] = getattr(instance, 'regla_fin', None)
+        data['acciones_fin'] = data['regla_fin'].acciones.filter(status=True) if data['regla_fin'] else []
+        data['tiene_plantilla_agente'] = bool(instance.agente_ia and getattr(instance.agente_ia, 'regla_fin', None))
         return render(request, 'whatsapp/sesiones/form.html', data)
     if action == 'change_modal':
         try:
             data['instance'] = instance = SesionWhatsApp.objects.get(id=request.GET['pk'])
             data['form'] = form = SesionWhatsAppForm(instance=instance)
             form.fields['agente_ia'].queryset = AgentesIA.objects.filter(perfil=perfil, status=True)
+            data['regla_fin'] = getattr(instance, 'regla_fin', None)
+            data['acciones_fin'] = data['regla_fin'].acciones.filter(status=True) if data['regla_fin'] else []
+            data['tiene_plantilla_agente'] = bool(instance.agente_ia and getattr(instance.agente_ia, 'regla_fin', None))
             template = get_template("whatsapp/sesiones/form_modal.html")
             return JsonResponse({"result": True, 'data': template.render(data)})
         except Exception as ex:

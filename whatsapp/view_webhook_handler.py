@@ -15,6 +15,8 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.conf import settings
 from agents_ai.agente_consultor import AgenteConsultor
+from crm.acciones_fin import ejecutar_acciones_fin
+from crm.models import ReglaFinConversacion, ConsumoTokenIA
 from core.funciones import save_log_entry, notificacion
 from core.funciones_adicionales import get_image_as_base64, get_numero_emoji_ws
 from .models import (
@@ -451,6 +453,17 @@ def process_incoming_message(session, event_data, channel_layer):
                     )
                     return JsonResponse({'status': 'ok'})
 
+            # ── Detección de fin: sesión propia → plantilla del agente ───
+            regla_fin = ReglaFinConversacion.para_sesion(session)
+            fin_por_frase = (
+                regla_fin is not None
+                and regla_fin.detectar_por_frase(message_text or '')
+            )
+            detectar_fin_llm = (
+                regla_fin is not None
+                and regla_fin.usar_senal_llm
+            )
+
             whatsapp_service.send_presence_update(
                 conversation.sesion.session_id, contacto.from_number
             )
@@ -472,6 +485,7 @@ def process_incoming_message(session, event_data, channel_layer):
                 if agente.vectorstore_enlaces_path:
                     vectorstore_enlaces_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_enlaces_path)
                 respuesta_enviada = False
+                resultado = None
                 for apikey in agente.apikey.filter(estado=True):
                     try:
                         consultor = AgenteConsultor(
@@ -479,15 +493,28 @@ def process_incoming_message(session, event_data, channel_layer):
                             provider=apikey.proveedor, apikey=apikey.descripcion,
                             conversacion=conversation, prompt_template_text=agente.prompt_template,
                             contexto_estatico=agente.contexto_estatico or None,
+                            detectar_fin=detectar_fin_llm,
                         )
                         if agente.anotar_listas:
-                            respuesta = consultor.consultar_con_listas(message_text, agente.descripcion)
+                            resultado = consultor.consultar_con_listas(message_text, agente.descripcion)
                         else:
-                            respuesta = consultor.consultar(message_text, agente.descripcion)
+                            resultado = consultor.consultar(message_text, agente.descripcion)
                         whatsapp_service.send_text_message(
-                            conversation.sesion.session_id, contacto.from_number, respuesta
+                            conversation.sesion.session_id, contacto.from_number, resultado.respuesta
                         )
                         respuesta_enviada = True
+                        # ── Registrar consumo de tokens ──────────────────────
+                        if resultado.tokens_total > 0:
+                            try:
+                                ConsumoTokenIA.objects.create(
+                                    apikey=apikey, agente=agente,
+                                    tokens_entrada=resultado.tokens_entrada,
+                                    tokens_salida=resultado.tokens_salida,
+                                    tokens_total=resultado.tokens_total,
+                                    modelo=consultor.model_name,
+                                )
+                            except Exception:
+                                pass
                         break
                     except Exception as ex:
                         logger.error("API Key %s falló para agente %s: %s", apikey.id, agente.nombre, ex)
@@ -515,6 +542,25 @@ def process_incoming_message(session, event_data, channel_layer):
                         conversation.sesion.session_id, contacto.from_number,
                         'Lo siento, en este momento no puedo procesar tu consulta. Por favor escribe *reintentar* en unos momentos o contacta a un asesor.'
                     )
+
+                # ── Fin de conversación detectado ─────────────────────────
+                fin_detectado = fin_por_frase or (resultado is not None and resultado.fin_detectado)
+                if fin_detectado and regla_fin and respuesta_enviada:
+                    try:
+                        conversation.conversacion_finalizada = True
+                        conversation.save(update_fields=['conversacion_finalizada'])
+                        contexto_fin = {
+                            'nombre_contacto': contacto.contacto_nombre or '',
+                            'numero': contacto.contacto_numero or '',
+                            'sesion': session.nombre or session.session_id,
+                            'sesion_id': session.session_id,
+                            'resumen': conversation.resumen_conversacion or '',
+                            'agente': agente.nombre,
+                        }
+                        ejecutar_acciones_fin(regla_fin, contexto_fin)
+                    except Exception:
+                        logger.exception("Error procesando fin de conversación conv_id=%s", conversation.id)
+
             except Exception as ex:
                 logger.error("Error inesperado en agente IA para sesión %s: %s", session.session_id, ex)
                 whatsapp_service.send_text_message(

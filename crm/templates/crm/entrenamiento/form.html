@@ -318,6 +318,7 @@
                                     <th>Último error</th>
                                     <th class="text-center">Estado</th>
                                     <th class="text-center">Probar</th>
+                                    <th class="text-center">Consumo</th>
                                     <th class="text-center">Acción</th>
                                 </tr>
                                 </thead>
@@ -352,6 +353,13 @@
                                                     onclick="testApiKey({{ l.pk }}, this)"
                                                     title="Probar conectividad con el proveedor">
                                                 <i class="fas fa-vial me-1"></i>Probar
+                                            </button>
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-outline-info"
+                                                    onclick="verConsumo({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')"
+                                                    title="Ver consumo de tokens">
+                                                <i class="fas fa-chart-bar me-1"></i>Consumo
                                             </button>
                                         </td>
                                         <td class="text-center">
@@ -391,13 +399,103 @@
                                     </tr>
                                 {% empty %}
                                     <tr>
-                                        <td colspan="6" class="text-center text-muted py-3">Sin API Keys registradas</td>
+                                        <td colspan="7" class="text-center text-muted py-3">Sin API Keys registradas</td>
                                     </tr>
                                 {% endfor %}
                                 </tbody>
                             </table>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Modal consumo de tokens ──────────────────────────────────────── #}
+    <div class="modal fade" id="modalConsumo" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-chart-bar me-2 text-info"></i><span id="consumo-titulo">Consumo de tokens</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+
+                    {# Filtro de fechas #}
+                    <div class="row g-2 align-items-end mb-4">
+                        <div class="col-sm-4">
+                            <label class="form-label small fw-semibold mb-1">Desde</label>
+                            <input type="date" id="consumo-desde" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small fw-semibold mb-1">Hasta</label>
+                            <input type="date" id="consumo-hasta" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-sm-4">
+                            <button type="button" class="btn btn-sm btn-primary w-100" id="btn-consumo-filtrar">
+                                <i class="fas fa-search me-1"></i> Consultar
+                            </button>
+                        </div>
+                    </div>
+
+                    {# Tarjetas resumen #}
+                    <div class="row g-3 mb-4" id="consumo-cards">
+                        <div class="col-6 col-md-3">
+                            <div class="card border-0 bg-light text-center py-3">
+                                <div class="h4 mb-0 text-primary fw-bold" id="c-llamadas">—</div>
+                                <div class="small text-muted mt-1">Llamadas al LLM</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card border-0 bg-light text-center py-3">
+                                <div class="h4 mb-0 text-success fw-bold" id="c-total">—</div>
+                                <div class="small text-muted mt-1">Tokens totales</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card border-0 bg-light text-center py-3">
+                                <div class="h4 mb-0 text-info fw-bold" id="c-entrada">—</div>
+                                <div class="small text-muted mt-1">Tokens prompt</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card border-0 bg-light text-center py-3">
+                                <div class="h4 mb-0 text-warning fw-bold" id="c-salida">—</div>
+                                <div class="small text-muted mt-1">Tokens respuesta</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        {# Tabla por día #}
+                        <div class="col-md-8">
+                            <p class="small fw-semibold text-muted text-uppercase mb-2" style="letter-spacing:.05em">Detalle por día</p>
+                            <div class="table-responsive" style="max-height:340px;overflow-y:auto">
+                                <table class="table table-sm table-hover" id="consumo-tabla-dias">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th class="text-end">Llamadas</th>
+                                            <th class="text-end">Prompt</th>
+                                            <th class="text-end">Respuesta</th>
+                                            <th class="text-end">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="consumo-tbody-dias">
+                                        <tr><td colspan="5" class="text-center text-muted py-3">Selecciona un rango y pulsa Consultar</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        {# Top agentes #}
+                        <div class="col-md-4">
+                            <p class="small fw-semibold text-muted text-uppercase mb-2" style="letter-spacing:.05em">Por agente</p>
+                            <div id="consumo-agentes">
+                                <p class="text-muted small">—</p>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -667,6 +765,87 @@
             }
         });
     }
+
+    /* ── Consumo de tokens ── */
+    let _consumoApikeyId = null;
+    const _RUTA = '{{ request.path }}';
+
+    function fmtN(n) { return Number(n || 0).toLocaleString('es-EC'); }
+
+    function cargarConsumo() {
+        const desde = document.getElementById('consumo-desde').value;
+        const hasta = document.getElementById('consumo-hasta').value;
+        pantallaespera();
+        $.get(_RUTA, {
+            action: 'consumo_apikey', id: _consumoApikeyId,
+            fecha_inicio: desde, fecha_fin: hasta,
+        }, function (res) {
+            setTimeout($.unblockUI, 1);
+            if (!res.result) { alertaWarning(res.message || 'Error'); return; }
+
+            // Tarjetas
+            document.getElementById('c-llamadas').textContent = fmtN(res.totales.llamadas);
+            document.getElementById('c-total').textContent    = fmtN(res.totales.total);
+            document.getElementById('c-entrada').textContent  = fmtN(res.totales.entrada);
+            document.getElementById('c-salida').textContent   = fmtN(res.totales.salida);
+
+            // Tabla por día
+            const tbody = document.getElementById('consumo-tbody-dias');
+            if (!res.por_dia.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Sin datos para el período seleccionado</td></tr>';
+            } else {
+                tbody.innerHTML = res.por_dia.map(r =>
+                    `<tr>
+                        <td>${r.dia}</td>
+                        <td class="text-end">${fmtN(r.llamadas)}</td>
+                        <td class="text-end text-info">${fmtN(r.entrada)}</td>
+                        <td class="text-end text-warning">${fmtN(r.salida)}</td>
+                        <td class="text-end fw-semibold">${fmtN(r.total)}</td>
+                    </tr>`
+                ).join('');
+            }
+
+            // Por agente
+            const div = document.getElementById('consumo-agentes');
+            if (!res.por_agente.length) {
+                div.innerHTML = '<p class="text-muted small">Sin datos</p>';
+            } else {
+                const maxT = Math.max(...res.por_agente.map(a => a.total));
+                div.innerHTML = res.por_agente.map(a => {
+                    const pct = maxT ? Math.round((a.total / maxT) * 100) : 0;
+                    return `<div class="mb-2">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span class="text-truncate me-2" style="max-width:160px" title="${a.agente}">${a.agente}</span>
+                            <span class="fw-semibold">${fmtN(a.total)}</span>
+                        </div>
+                        <div class="progress" style="height:5px">
+                            <div class="progress-bar bg-info" style="width:${pct}%"></div>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+        }, 'json').fail(function () {
+            setTimeout($.unblockUI, 1);
+            alertaWarning('Error de conexión.');
+        });
+    }
+
+    function verConsumo(id, alias) {
+        _consumoApikeyId = id;
+        document.getElementById('consumo-titulo').textContent = alias;
+
+        // Defaults: últimos 30 días
+        const hoy = new Date();
+        const hace30 = new Date(); hace30.setDate(hoy.getDate() - 29);
+        const fmt = d => d.toISOString().slice(0, 10);
+        document.getElementById('consumo-desde').value = fmt(hace30);
+        document.getElementById('consumo-hasta').value = fmt(hoy);
+
+        new bootstrap.Modal(document.getElementById('modalConsumo')).show();
+        cargarConsumo();
+    }
+
+    document.getElementById('btn-consumo-filtrar').addEventListener('click', cargarConsumo);
 
     /* ── Reactivar API Key ── */
     function reactivarApiKey(id) {

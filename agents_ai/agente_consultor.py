@@ -4,6 +4,7 @@ import re
 import threading
 import unicodedata
 import json
+from dataclasses import dataclass
 
 from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
@@ -16,6 +17,28 @@ from whatsapp.models import ConversacionWhatsApp
 from .memoria_django import DjangoChatMessageHistory
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Resultado de consulta — incluye la respuesta y si se detectó fin de conv.
+# ---------------------------------------------------------------------------
+
+FIN_SIGNAL = "[FIN_CONVERSACION]"
+
+_FIN_INSTRUCCION = (
+    "\n\nIMPORTANTE: Si detectas que el usuario se está despidiendo o que la conversación "
+    "ha llegado a su conclusión natural, añade exactamente [FIN_CONVERSACION] al final "
+    "de tu respuesta, después del punto final. No lo incluyas en ningún otro caso."
+)
+
+
+@dataclass
+class ConsultaResultado:
+    respuesta: str
+    fin_detectado: bool = False
+    tokens_entrada: int = 0
+    tokens_salida: int = 0
+    tokens_total: int = 0
+
 
 # ---------------------------------------------------------------------------
 # Parámetros de control de tokens
@@ -139,6 +162,7 @@ class AgenteConsultor:
         conversacion=None,
         prompt_template_text='',
         contexto_estatico=None,
+        detectar_fin: bool = False,
     ):
         self.provider = 'gemini' if provider == 2 else 'openai'
         self.apikey = apikey
@@ -147,6 +171,7 @@ class AgenteConsultor:
         self.vectorstore_enlaces_path = vectorstore_enlaces_path
         # Texto completo precargado — si está presente, se usa en lugar de FAISS
         self.contexto_estatico: str | None = contexto_estatico or None
+        self.detectar_fin = detectar_fin
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
         self.vectorstore = self._load_vectorstore()
@@ -322,7 +347,7 @@ class AgenteConsultor:
     # Consulta principal — 1 llamada LLM
     # ------------------------------------------------------------------
 
-    def consultar(self, pregunta: str, descripcion_agente: str = '') -> str:
+    def consultar(self, pregunta: str, descripcion_agente: str = '') -> ConsultaResultado:
         # Historial compacto (solo N turnos, LIMIT en DB)
         contexto_previo = self._contexto_previo()
 
@@ -337,7 +362,7 @@ class AgenteConsultor:
             if h:
                 h.add_user_message(pregunta)
                 h.add_ai_message(bienvenida)
-            return bienvenida
+            return ConsultaResultado(respuesta=bienvenida, fin_detectado=False)
 
         # ------------------------------------------------------------------
         # Contexto: estático (inyección directa) o RAG (FAISS)
@@ -369,7 +394,11 @@ class AgenteConsultor:
         # ------------------------------------------------------------------
         # Construir y enviar prompt
         # ------------------------------------------------------------------
-        prompt_template = PromptTemplate.from_template(f'{self.prompt_template_text}\n')
+        prompt_text = self.prompt_template_text
+        if self.detectar_fin:
+            prompt_text += _FIN_INSTRUCCION
+
+        prompt_template = PromptTemplate.from_template(f'{prompt_text}\n')
         prompt_final = prompt_template.format(
             question=pregunta,
             context=contexto,
@@ -378,11 +407,29 @@ class AgenteConsultor:
         )
 
         try:
-            respuesta = self.llm.invoke(prompt_final).content
+            ai_message = self.llm.invoke(prompt_final)
+            respuesta = ai_message.content
         except Exception as exc:
             logger.error("Error invocando LLM: %s", exc)
             # Re-raise para que el webhook pueda desactivar la API key y probar la siguiente
             raise
+
+        # Extraer conteo de tokens del metadata del proveedor
+        meta = getattr(ai_message, 'response_metadata', {}) or {}
+        if self.provider == 'gemini':
+            usage = meta.get('usage_metadata', {})
+            t_in  = usage.get('prompt_token_count', 0) or 0
+            t_out = usage.get('candidates_token_count', 0) or 0
+        else:  # openai
+            usage = meta.get('token_usage', {})
+            t_in  = usage.get('prompt_tokens', 0) or 0
+            t_out = usage.get('completion_tokens', 0) or 0
+        t_total = t_in + t_out
+
+        # Detectar y limpiar señal de fin — nunca llega al usuario
+        fin_detectado = FIN_SIGNAL in respuesta
+        if fin_detectado:
+            respuesta = respuesta.replace(FIN_SIGNAL, "").strip()
 
         # Guardar en historial
         h = self._chat_history()
@@ -390,14 +437,18 @@ class AgenteConsultor:
             h.add_user_message(pregunta)
             h.add_ai_message(respuesta)
 
-        return respuesta
+        return ConsultaResultado(
+            respuesta=respuesta, fin_detectado=fin_detectado,
+            tokens_entrada=t_in, tokens_salida=t_out, tokens_total=t_total,
+        )
 
     # ------------------------------------------------------------------
     # Consulta con listas (modo pedido)
     # ------------------------------------------------------------------
 
-    def consultar_con_listas(self, pregunta: str, descripcion_agente: str = '') -> str:
-        consulta = self.consultar(pregunta, descripcion_agente)
+    def consultar_con_listas(self, pregunta: str, descripcion_agente: str = '') -> ConsultaResultado:
+        resultado = self.consultar(pregunta, descripcion_agente)
+        consulta = resultado.respuesta
         resultado_lista = ''
         try:
             comando_data = json.loads(consulta)
@@ -432,4 +483,5 @@ class AgenteConsultor:
                 h.add_user_message(pregunta)
                 h.add_ai_message(resultado_lista)
 
-        return resultado_lista or consulta
+        respuesta_final = resultado_lista or consulta
+        return ConsultaResultado(respuesta=respuesta_final, fin_detectado=resultado.fin_detectado)

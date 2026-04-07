@@ -515,6 +515,25 @@ ge{% extends 'base.html' %}
             word-break: break-all;
         }
 
+        /* ── Banner fin de conversación ─────────────────────────────────── */
+        .fin-banner {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 10px 16px;
+            background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+            border-top: 1px solid #f1aeb5;
+            color: #842029;
+            font-size: .82rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .fin-banner.visible {
+            display: flex;
+        }
+
         /* ── Contador de chars ───────────────────────────────────────────── */
         .char-count {
             font-size: .67rem;
@@ -635,6 +654,16 @@ ge{% extends 'base.html' %}
             </div>
             <div class="char-count" id="char-count" style="display:none">0 / 2000</div>
 
+            {# Banner de fin de conversación #}
+            <div class="fin-banner" id="fin-banner">
+                <i class="fas fa-flag-checkered"></i>
+                Conversación finalizada — el agente detectó el cierre
+                <button type="button" class="btn btn-sm btn-outline-danger ms-2" id="btn-reopen-chat"
+                        style="font-size:.72rem;padding:2px 10px">
+                    Continuar igualmente
+                </button>
+            </div>
+
         </div>
         {# /chat-card #}
 
@@ -677,6 +706,10 @@ ge{% extends 'base.html' %}
             const btnClear = document.getElementById('btn-clear');
             const typingRow = document.getElementById('typing-row');
             const charCount = document.getElementById('char-count');
+            const finBanner = document.getElementById('fin-banner');
+            const btnReopenChat = document.getElementById('btn-reopen-chat');
+
+            let conversacionFinalizada = false;
             const debugPanel = document.getElementById('debug-panel');
             const debugLog = document.getElementById('debug-log');
             const debugBar = document.getElementById('debug-bar');
@@ -789,7 +822,33 @@ ge{% extends 'base.html' %}
             log.info('Chat inicializado', {agente: AGENT, mensajes: document.querySelectorAll('.msg-row').length});
 
             /* ── Input ──────────────────────────────────────────────────── */
+            /* ── Fin de conversación ────────────────────────────────────── */
+            function marcarFinConversacion() {
+                conversacionFinalizada = true;
+                finBanner.classList.add('visible');
+                input.disabled = true;
+                btnSend.disabled = true;
+                input.placeholder = 'Conversación finalizada';
+                log.warn('Fin de conversación detectado por el agente');
+                // Burbuja informativa en el chat
+                const sep = document.createElement('div');
+                sep.style.cssText = 'text-align:center;font-size:.72rem;color:#999;margin:6px 0';
+                sep.textContent = '— Conversación finalizada —';
+                chatBody.insertBefore(sep, typingRow);
+                scrollBottom(true);
+            }
+
+            btnReopenChat && btnReopenChat.addEventListener('click', function () {
+                conversacionFinalizada = false;
+                finBanner.classList.remove('visible');
+                input.disabled = false;
+                input.placeholder = 'Escribe un mensaje… (Enter para enviar)';
+                input.focus();
+                log.info('Conversación reabierta manualmente');
+            });
+
             input.addEventListener('input', function () {
+                if (conversacionFinalizada) return;
                 const len = this.value.length;
                 btnSend.disabled = !this.value.trim();
                 this.style.height = 'auto';
@@ -875,6 +934,9 @@ ge{% extends 'base.html' %}
                             log.ok('Respuesta recibida', {chars: (res.respuesta || '').length});
                             log.timing('Tiempo de respuesta', elapsed + ' ms');
                             appendBubble('ia', res.respuesta);
+                            if (res.fin_detectado) {
+                                marcarFinConversacion();
+                            }
                         }
                     },
                     error: function (xhr, status, err) {
