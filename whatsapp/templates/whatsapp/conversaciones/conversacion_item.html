@@ -108,9 +108,21 @@
                 <!-- Primera línea: badge y nombre -->
                 <div class="d-flex align-items-start conversacion-header">
                     <div class="d-flex flex-column min-w-0 flex-grow-1">
-                        <small class="badge badge-{{ conversacion.get_estado_color_clasificacion }} mb-1 align-self-start">
-                            {{ conversacion.get_clasificacion_display }}
-                        </small>
+                        <div class="d-flex gap-1 flex-wrap mb-1">
+                            <small class="badge badge-{{ conversacion.get_estado_color_clasificacion }}">
+                                {{ conversacion.get_clasificacion_display }}
+                            </small>
+                            {% if not conversacion.ai_activo %}
+                                <small class="badge bg-warning text-dark" title="Bot pausado">
+                                    <i class="fa fa-robot"></i> OFF
+                                </small>
+                            {% endif %}
+                            {% if conversacion.asignado_a %}
+                                <small class="badge bg-light text-dark border" title="Asignado a {{ conversacion.asignado_a.get_full_name }}">
+                                    <i class="fa fa-user"></i> {{ conversacion.asignado_a.first_name }}
+                                </small>
+                            {% endif %}
+                        </div>
                         <h6 class="my-0 fw-medium fs-14 text-truncate">
                             {% if conversacion.contacto_nombre %}
                                 {{ conversacion.contacto_nombre }}
@@ -130,6 +142,16 @@
                 {{ conversacion.fecha_ultimo_mensaje|naturaltime }}
             {% endif %}
         </small>
+
+        <!-- Sentimiento (solo visible si está calculado, típicamente en finalizadas) -->
+        {% if conversacion.sentimiento %}
+        <div class="mt-1 px-1">
+            <small class="badge bg-{{ conversacion.get_sentimiento_color }}">
+                {{ conversacion.get_sentimiento_emoji }} {{ conversacion.get_sentimiento_display }}
+                {% if conversacion.puntuacion_sentimiento %}({{ conversacion.puntuacion_sentimiento }}/10){% endif %}
+            </small>
+        </div>
+        {% endif %}
 
         <!-- Mensaje y fecha DEBAJO DE LA IMAGEN -->
         <div class="mensaje-abajo">

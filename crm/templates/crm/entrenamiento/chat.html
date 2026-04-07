@@ -515,6 +515,22 @@ ge{% extends 'base.html' %}
             word-break: break-all;
         }
 
+        /* ── Banner sin datos ───────────────────────────────────────────── */
+        .no-data-banner {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #fff3cd, #ffeeba);
+            border-top: 1px solid #ffc107;
+            color: #856404;
+            font-size: .78rem;
+            font-weight: 500;
+            flex-shrink: 0;
+        }
+        .no-data-banner.visible { display: flex; }
+        .no-data-banner a { color: #664d03; font-weight: 700; }
+
         /* ── Banner fin de conversación ─────────────────────────────────── */
         .fin-banner {
             display: none;
@@ -544,6 +560,89 @@ ge{% extends 'base.html' %}
 
         .char-count.warn {
             color: #e67e22;
+        }
+
+        /* ── Attachment button ───────────────────────────────────────────── */
+        .btn-attach {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: #f0f2f5;
+            color: #667eea;
+            border: 1.5px solid #e0e0e0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: background .15s;
+            font-size: .95rem;
+        }
+
+        .btn-attach:hover {
+            background: #e8eaf6;
+        }
+
+        /* ── Media preview area ──────────────────────────────────────────── */
+        .media-preview {
+            display: none;
+            padding: 8px 14px 0;
+            align-items: center;
+            gap: 10px;
+            background: #fff;
+            border-top: 1px dashed #e0e0e0;
+        }
+
+        .media-preview.visible {
+            display: flex;
+        }
+
+        .media-preview img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .media-preview .media-name {
+            font-size: .8rem;
+            color: #555;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .media-preview .media-type-badge {
+            font-size: .7rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        /* ── Media bubble ────────────────────────────────────────────────── */
+        .msg-bubble img.media-thumb {
+            max-width: 200px;
+            border-radius: 10px;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .msg-bubble audio {
+            max-width: 240px;
+            height: 36px;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .transcripcion-label {
+            font-size: .7rem;
+            opacity: .75;
+            font-style: italic;
+            margin-top: 4px;
+            display: block;
         }
     </style>
 {% endblock %}
@@ -643,8 +742,24 @@ ge{% extends 'base.html' %}
 
             </div>
 
+            {# Media preview #}
+            <div class="media-preview" id="media-preview">
+                <img id="media-img-preview" src="" alt="preview" style="display:none">
+                <i class="fas fa-music text-success" id="media-audio-icon" style="font-size:1.5rem;display:none"></i>
+                <span class="media-name" id="media-file-name"></span>
+                <span class="badge media-type-badge bg-secondary" id="media-type-badge"></span>
+                <button type="button" class="btn btn-sm btn-outline-danger ms-auto" id="btn-remove-media"
+                        style="font-size:.7rem;padding:2px 8px">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
             {# Footer #}
             <div class="chat-foot">
+                <label class="btn-attach" title="Adjuntar imagen o audio" id="btn-attach-label">
+                    <i class="fas fa-paperclip"></i>
+                    <input type="file" id="media-file-input" accept="image/*,audio/*" style="display:none">
+                </label>
         <textarea id="chat-input" rows="1"
                   placeholder="Escribe un mensaje… (Enter para enviar)"
                   maxlength="2000"></textarea>
@@ -653,6 +768,19 @@ ge{% extends 'base.html' %}
                 </button>
             </div>
             <div class="char-count" id="char-count" style="display:none">0 / 2000</div>
+
+            {# Banner sin datos de entrenamiento #}
+            <div class="no-data-banner" id="no-data-banner">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>
+                    Este agente <strong>no tiene documentos cargados</strong>. Sus respuestas son inventadas.
+                    Ve a <a href="/crm/entrenamiento/">Entrenamiento → Conocimiento</a>, carga el catálogo y presiona <strong>Procesar agente</strong>.
+                </span>
+                <button type="button" class="btn btn-sm btn-warning ms-auto" style="font-size:.7rem;padding:2px 10px"
+                        onclick="document.getElementById('no-data-banner').classList.remove('visible')">
+                    Entendido
+                </button>
+            </div>
 
             {# Banner de fin de conversación #}
             <div class="fin-banner" id="fin-banner">
@@ -708,6 +836,12 @@ ge{% extends 'base.html' %}
             const charCount = document.getElementById('char-count');
             const finBanner = document.getElementById('fin-banner');
             const btnReopenChat = document.getElementById('btn-reopen-chat');
+            const noDataBanner = document.getElementById('no-data-banner');
+            const mediaPreview = document.getElementById('media-preview');
+            const mediaFileInput = document.getElementById('media-file-input');
+
+            let _mediaFile = null;   // File object seleccionado
+            let _mediaTipo = null;   // 'imagen' | 'audio'
 
             let conversacionFinalizada = false;
             const debugPanel = document.getElementById('debug-panel');
@@ -850,7 +984,7 @@ ge{% extends 'base.html' %}
             input.addEventListener('input', function () {
                 if (conversacionFinalizada) return;
                 const len = this.value.length;
-                btnSend.disabled = !this.value.trim();
+                btnSend.disabled = !this.value.trim() && !_mediaFile;
                 this.style.height = 'auto';
                 this.style.height = Math.min(this.scrollHeight, 120) + 'px';
 
@@ -902,8 +1036,166 @@ ge{% extends 'base.html' %}
                     .replace(/\n/g, '<br>');
             }
 
+            /* ── Selección de archivo ───────────────────────────────────── */
+            mediaFileInput.addEventListener('change', function () { _onMediaSelected(this); });
+            document.getElementById('btn-remove-media').addEventListener('click', removeMedia);
+
+            function _onMediaSelected(inp) {
+                const file = inp.files[0];
+                if (!file) return;
+
+                const isImg = file.type.startsWith('image/');
+                const isAud = file.type.startsWith('audio/');
+                if (!isImg && !isAud) {
+                    alert('Solo se admiten imágenes y audios.');
+                    inp.value = '';
+                    return;
+                }
+
+                _mediaFile = file;
+                _mediaTipo = isImg ? 'imagen' : 'audio';
+
+                document.getElementById('media-file-name').textContent = file.name;
+                document.getElementById('media-type-badge').textContent = isImg ? 'Imagen' : 'Audio';
+                document.getElementById('media-type-badge').className =
+                    'badge media-type-badge ' + (isImg ? 'bg-primary' : 'bg-success');
+
+                const imgEl = document.getElementById('media-img-preview');
+                const audIco = document.getElementById('media-audio-icon');
+                if (isImg) {
+                    const reader = new FileReader();
+                    reader.onload = e => {
+                        imgEl.src = e.target.result;
+                        imgEl.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                    audIco.style.display = 'none';
+                } else {
+                    imgEl.style.display = 'none';
+                    audIco.style.display = 'block';
+                }
+
+                mediaPreview.classList.add('visible');
+                btnSend.disabled = false;
+                input.placeholder = 'Añade un texto opcional…';
+                log.info('Archivo seleccionado', {nombre: file.name, tipo: _mediaTipo, size: file.size});
+            }
+
+            function removeMedia() {
+                _mediaFile = null;
+                _mediaTipo = null;
+                mediaFileInput.value = '';
+                mediaPreview.classList.remove('visible');
+                document.getElementById('media-img-preview').style.display = 'none';
+                document.getElementById('media-audio-icon').style.display = 'none';
+                btnSend.disabled = !input.value.trim();
+                input.placeholder = 'Escribe un mensaje… (Enter para enviar)';
+            }
+
+            /* ── Burbuja multimedia ─────────────────────────────────────── */
+            function appendMediaBubble(tipo, file, texto, transcripcion) {
+                const empty = document.getElementById('empty-state');
+                if (empty) empty.remove();
+
+                const now = new Date().toLocaleTimeString('es-EC', {hour: '2-digit', minute: '2-digit'});
+                const row = document.createElement('div');
+                row.className = 'msg-row from-human';
+
+                let mediaHtml = '';
+                if (tipo === 'imagen') {
+                    const url = URL.createObjectURL(file);
+                    mediaHtml = `<img src="${url}" class="media-thumb" alt="imagen">`;
+                } else {
+                    const url = URL.createObjectURL(file);
+                    mediaHtml = `<audio controls src="${url}"></audio>`;
+                    if (transcripcion) {
+                        mediaHtml += `<span class="transcripcion-label">🎤 ${escHtml(transcripcion)}</span>`;
+                    }
+                }
+
+                const noteHtml = texto ? `<div style="margin-top:4px">${escHtml(texto)}</div>` : '';
+                row.innerHTML =
+                    '<div class="msg-avatar ha"><i class="fas fa-user"></i></div>' +
+                    '<div class="msg-content">' +
+                    '<div class="msg-bubble human">' + mediaHtml + noteHtml + '</div>' +
+                    '<span class="msg-time">Tú · ' + now + '</span>' +
+                    '</div>';
+
+                chatBody.insertBefore(row, typingRow);
+                scrollBottom(true);
+            }
+
+            /* ── Enviar media ───────────────────────────────────────────── */
+            function sendMedia() {
+                const texto = input.value.trim();
+                log.info('Enviando archivo', {tipo: _mediaTipo, nombre: _mediaFile.name});
+
+                appendMediaBubble(_mediaTipo, _mediaFile, texto, null);
+
+                input.value = '';
+                input.style.height = 'auto';
+                charCount.style.display = 'none';
+                btnSend.disabled = true;
+                typingRow.classList.add('visible');
+                scrollBottom(true);
+
+                const fd = new FormData();
+                fd.append('csrfmiddlewaretoken', CSRF);
+                fd.append('action', 'send_media');
+                fd.append('tipo', _mediaTipo);
+                fd.append('archivo', _mediaFile);
+                fd.append('texto', texto);
+
+                const fileRef = _mediaFile;
+                removeMedia();
+
+                _sendStart = performance.now();
+
+                fetch(CHAT_URL, {method: 'POST', body: fd})
+                    .then(r => r.json())
+                    .then(function (res) {
+                        const elapsed = (performance.now() - _sendStart).toFixed(0);
+                        typingRow.classList.remove('visible');
+                        if (res.error) {
+                            log.error('Error en media', {message: res.message});
+                            appendBubble('error', '⚠️ ' + res.message);
+                        } else {
+                            log.ok('Respuesta recibida', {tipo: res.tipo, chars: (res.respuesta || '').length});
+                            log.timing('Tiempo de respuesta', elapsed + ' ms');
+                            if (res.transcripcion) {
+                                log.info('Transcripción', res.transcripcion);
+                                // Actualizar la burbuja del usuario con la transcripción
+                                const rows = chatBody.querySelectorAll('.msg-row.from-human');
+                                const lastRow = rows[rows.length - 1];
+                                if (lastRow) {
+                                    const label = lastRow.querySelector('.transcripcion-label');
+                                    if (!label) {
+                                        const bubble = lastRow.querySelector('.msg-bubble');
+                                        if (bubble) {
+                                            const sp = document.createElement('span');
+                                            sp.className = 'transcripcion-label';
+                                            sp.textContent = '🎤 ' + res.transcripcion;
+                                            bubble.appendChild(sp);
+                                        }
+                                    }
+                                }
+                            }
+                            if (res.sin_datos) {
+                                noDataBanner.classList.add('visible');
+                            }
+                            appendBubble('ia', res.respuesta);
+                        }
+                    })
+                    .catch(function (err) {
+                        typingRow.classList.remove('visible');
+                        log.error('Error HTTP al enviar media', String(err));
+                        appendBubble('error', '⚠️ Error de conexión al enviar el archivo.');
+                    });
+            }
+
             /* ── Enviar ─────────────────────────────────────────────────── */
             function send() {
+                if (_mediaFile) { sendMedia(); return; }
                 const texto = input.value.trim();
                 if (!texto) return;
 
@@ -933,6 +1225,10 @@ ge{% extends 'base.html' %}
                         } else {
                             log.ok('Respuesta recibida', {chars: (res.respuesta || '').length});
                             log.timing('Tiempo de respuesta', elapsed + ' ms');
+                            if (res.sin_datos) {
+                                log.warn('Agente sin datos de entrenamiento — respuesta no confiable');
+                                noDataBanner.classList.add('visible');
+                            }
                             appendBubble('ia', res.respuesta);
                             if (res.fin_detectado) {
                                 marcarFinConversacion();

@@ -256,10 +256,33 @@ def contactoView(request):
                 except Exception as ex:
                     return JsonResponse({"result": False, 'message': str(ex)})
 
+        from django.db.models import Count as DbCount
         criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, sesion__usuario=request.user), ''
         id = request.GET.get('id', '')
+        solo_duplicados = request.GET.get('solo_duplicados', '')
         mis_sesiones = SesionWhatsApp.objects.filter(status=True, usuario=request.user).distinct()
         sesion_id = request.GET.get('sesion_id', str(mis_sesiones.first().id) if mis_sesiones.exists() else '')
+
+        # Números que aparecen en más de una sesión del usuario
+        numeros_duplicados = set(
+            model.objects.filter(status=True, sesion__usuario=request.user)
+            .values('contacto_numero')
+            .annotate(_n=DbCount('sesion', distinct=True))
+            .filter(_n__gt=1)
+            .values_list('contacto_numero', flat=True)
+        )
+        # Dict {numero: [nombre_sesion, ...]} para mostrar en qué sesiones duplica
+        dup_sesiones = {}
+        if numeros_duplicados:
+            for row in (
+                model.objects.filter(status=True, sesion__usuario=request.user, contacto_numero__in=numeros_duplicados)
+                .values('contacto_numero', 'sesion__nombre', 'sesion__numero')
+                .order_by('contacto_numero', 'sesion__nombre')
+            ):
+                num = row['contacto_numero']
+                label = row['sesion__nombre'] or row['sesion__numero'] or num
+                dup_sesiones.setdefault(num, []).append(label)
+
         if criterio:
             filtros = filtros & (Q(contacto_nombre__icontains=criterio) | Q(contacto_numero__icontains=criterio))
             data["criterio"] = criterio
@@ -272,8 +295,16 @@ def contactoView(request):
             filtros = filtros & (Q(sesion_id=sesion_id))
             data["sesion_id"] = int(sesion_id)
             url_vars += '&sesion_id=' + sesion_id
+        if solo_duplicados:
+            filtros = filtros & Q(contacto_numero__in=numeros_duplicados)
+            url_vars += '&solo_duplicados=1'
+            data["solo_duplicados"] = True
+
         listado = model.objects.filter(filtros)
         data["mis_sesiones"] = mis_sesiones
+        data["numeros_duplicados"] = numeros_duplicados
+        data["total_duplicados"] = len(numeros_duplicados)
+        data["dup_sesiones_json"] = json.dumps(dup_sesiones, ensure_ascii=False)
         data["list_count"] = listado.count()
         data["url_vars"] = url_vars
         paginador(request, listado.order_by('contacto_nombre'), 20, data, url_vars)

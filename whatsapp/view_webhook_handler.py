@@ -429,7 +429,7 @@ def process_incoming_message(session, event_data, channel_layer):
             )
         )
         departamentos_msg = 'Escribe el número del departamento para continuar:\n'
-        if session.agente_ia and session.agente_ia.apikey.exists():
+        if session.agente_ia and session.agente_ia.apikey.exists() and conversation.ai_activo:
             agente = session.agente_ia
 
             # ── Detección de reintento ────────────────────────────────────
@@ -506,6 +506,7 @@ def process_incoming_message(session, event_data, channel_layer):
                         # ── Registrar consumo de tokens ──────────────────────
                         if resultado.tokens_total > 0:
                             try:
+                                from crm.alertas_consumo import verificar_alerta_consumo
                                 ConsumoTokenIA.objects.create(
                                     apikey=apikey, agente=agente,
                                     tokens_entrada=resultado.tokens_entrada,
@@ -513,6 +514,7 @@ def process_incoming_message(session, event_data, channel_layer):
                                     tokens_total=resultado.tokens_total,
                                     modelo=consultor.model_name,
                                 )
+                                verificar_alerta_consumo(apikey, resultado.tokens_total)
                             except Exception:
                                 pass
                         break

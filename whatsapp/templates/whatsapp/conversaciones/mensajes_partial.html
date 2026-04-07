@@ -1,5 +1,78 @@
+<style>
+.btn-fb { background:none; border:none; padding:0 4px; font-size:.78rem; cursor:pointer; color:#aaa; transition:color .15s; }
+.btn-fb-ok:hover { color:#28a745; }
+.btn-fb-ko:hover { color:#dc3545; }
+.btn-fb.selected-ok { color:#28a745; }
+.btn-fb.selected-ko { color:#dc3545; }
+.btn-xs-sm { font-size:.75rem; padding:.2rem .55rem; border-radius:4px; }
+</style>
+<script>
+const _fbCsrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+const _fbUrl  = '/whatsapp/conversaciones/';
+
+function feedbackOk(msgId, btn) {
+    _sendFeedback(msgId, true, '', '', btn);
+}
+
+function feedbackKo(msgId, btn) {
+    // Buscar el mensaje previo del cliente (en el DOM, antes de este bloque)
+    const msgBlock = btn.closest('[class*="d-flex flex-row-reverse"]') || btn.closest('.d-flex');
+    // Intentar extraer la pregunta del mensaje anterior del cliente en el DOM
+    const allBlocks = document.querySelectorAll('#mensajes-container .d-flex');
+    let pregunta = '';
+    let found = false;
+    for (let i = allBlocks.length - 1; i >= 0; i--) {
+        if (found && !allBlocks[i].querySelector('.flex-row-reverse, [class*="flex-row-reverse"]')) {
+            const p = allBlocks[i].querySelector('.user-chat p');
+            if (p) pregunta = p.innerText.trim();
+            break;
+        }
+        if (allBlocks[i].contains(btn)) found = true;
+    }
+    document.getElementById('cf-pregunta-' + msgId).value = pregunta;
+    document.getElementById('cf-' + msgId).classList.remove('d-none');
+}
+
+function enviarCorreccion(msgId) {
+    const correccion = document.getElementById('cf-texto-' + msgId).value.trim();
+    const pregunta   = document.getElementById('cf-pregunta-' + msgId).value.trim();
+    if (!correccion) { alert('Escribe la respuesta correcta antes de guardar.'); return; }
+    _sendFeedback(msgId, false, correccion, pregunta, null);
+}
+
+function _sendFeedback(msgId, esOk, correccion, pregunta, btn) {
+    fetch(_fbUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': _fbCsrf },
+        body: new URLSearchParams({
+            action: 'feedback-mensaje',
+            mensaje_id: msgId,
+            es_correcto: esOk ? '1' : '0',
+            correccion: correccion,
+            pregunta: pregunta,
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) return;
+        const bar = document.querySelector(`.feedback-bar[data-id="${msgId}"]`);
+        if (bar) {
+            if (esOk) {
+                bar.innerHTML = '<span class="text-success" style="font-size:.75rem;"><i class="fa fa-thumbs-up"></i> Correcto</span>';
+            } else {
+                const vs = data.procesado_vectorstore ? ' <i class="fa fa-brain" title="Aprendido en vectorstore"></i>' : '';
+                bar.innerHTML = `<span class="text-danger" style="font-size:.75rem;"><i class="fa fa-thumbs-down"></i> Corregido${vs}</span>`;
+                const cf = document.getElementById('cf-' + msgId);
+                if (cf) cf.classList.add('d-none');
+            }
+        }
+    })
+    .catch(() => {});
+}
+</script>
 {% for mensaje in mensajes %}
     {% if mensaje.remitente == conversacion.sesion.numero %}
+    {# ── Mensaje del BOT / asesor ── #}
         <div class="d-flex flex-row-reverse">
             {% if conversacion.sesion.foto %}
                 <img src="{{ conversacion.sesion.foto }}" alt="user" class="rounded-circle thumb-md">
@@ -51,7 +124,46 @@
                         {% endif %}
                     {% endif %}
                 </div>
-                <div class="chat-time">{{ mensaje.fecha|date:"H:i" }}</div>
+                <div class="d-flex align-items-center gap-2 mt-1">
+                    <span class="chat-time">{{ mensaje.fecha|date:"H:i" }}</span>
+                    {# Feedback solo en mensajes IA generados #}
+                    {% if mensaje.ia_generado and not mensaje.eliminado %}
+                    <span class="feedback-bar" data-id="{{ mensaje.pk }}">
+                        {% if mensaje.feedback %}
+                            {% if mensaje.feedback.es_correcto %}
+                                <span class="text-success" style="font-size:.75rem;"><i class="fa fa-thumbs-up"></i> Correcto</span>
+                            {% else %}
+                                <span class="text-danger" style="font-size:.75rem;"><i class="fa fa-thumbs-down"></i> Corregido{% if mensaje.feedback.procesado_vectorstore %} <i class="fa fa-brain" title="Aprendido en vectorstore"></i>{% endif %}</span>
+                            {% endif %}
+                        {% else %}
+                            <button class="btn-fb btn-fb-ok" onclick="feedbackOk({{ mensaje.pk }}, this)" title="Respuesta correcta">
+                                <i class="fa fa-thumbs-up"></i>
+                            </button>
+                            <button class="btn-fb btn-fb-ko" onclick="feedbackKo({{ mensaje.pk }}, this)" title="Marcar como incorrecta">
+                                <i class="fa fa-thumbs-down"></i>
+                            </button>
+                        {% endif %}
+                    </span>
+                    {% endif %}
+                </div>
+                {# Formulario de corrección (oculto) #}
+                {% if mensaje.ia_generado and not mensaje.eliminado and not mensaje.feedback %}
+                <div class="correccion-form d-none mt-1 p-2 rounded" id="cf-{{ mensaje.pk }}"
+                     style="background:#fff8e1;border:1px solid #ffe082;max-width:350px;">
+                    <small class="d-block text-muted mb-1"><i class="fa fa-brain me-1"></i>¿Cuál sería la respuesta correcta?</small>
+                    <input type="hidden" id="cf-pregunta-{{ mensaje.pk }}" value="">
+                    <textarea class="form-control form-control-sm mb-1" id="cf-texto-{{ mensaje.pk }}"
+                              rows="3" placeholder="Escribe la respuesta correcta aquí..."></textarea>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-xs-sm btn-warning" onclick="enviarCorreccion({{ mensaje.pk }})">
+                            <i class="fa fa-save me-1"></i>Guardar corrección
+                        </button>
+                        <button class="btn btn-xs-sm btn-light" onclick="document.getElementById('cf-{{ mensaje.pk }}').classList.add('d-none')">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     {% else %}

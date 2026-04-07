@@ -319,6 +319,7 @@
                                     <th class="text-center">Estado</th>
                                     <th class="text-center">Probar</th>
                                     <th class="text-center">Consumo</th>
+                                    <th class="text-center">Alertas</th>
                                     <th class="text-center">Acción</th>
                                 </tr>
                                 </thead>
@@ -360,6 +361,17 @@
                                                     onclick="verConsumo({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')"
                                                     title="Ver consumo de tokens">
                                                 <i class="fas fa-chart-bar me-1"></i>Consumo
+                                            </button>
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button"
+                                                    class="btn btn-sm {% if l.alerta_consumo and l.alerta_consumo.umbral_diario or l.alerta_consumo and l.alerta_consumo.umbral_mensual %}btn-danger{% else %}btn-outline-secondary{% endif %}"
+                                                    onclick="verAlerta({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')"
+                                                    title="Configurar alertas de consumo">
+                                                <i class="fas fa-bell me-1"></i>Alertas
+                                                {% if l.alerta_consumo and l.alerta_consumo.umbral_diario or l.alerta_consumo and l.alerta_consumo.umbral_mensual %}
+                                                    <span class="badge bg-white text-danger ms-1">ON</span>
+                                                {% endif %}
                                             </button>
                                         </td>
                                         <td class="text-center">
@@ -585,6 +597,65 @@
                     </div>
                     <div class="modal-body detalleProd"></div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    {# ── Modal alertas de consumo ──────────────────────────────────────── #}
+    <div class="modal fade" id="modalAlerta" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="fas fa-bell me-2"></i>Alertas de consumo — <span id="alerta-titulo"></span></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="alerta-body">
+                    <div id="alerta-spinner" class="text-center py-4 d-none">
+                        <div class="spinner-border text-danger"></div>
+                        <p class="mt-2 text-muted">Cargando configuración...</p>
+                    </div>
+                    <div id="alerta-form-content">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold"><i class="fas fa-sun me-1 text-warning"></i>Umbral diario de tokens</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="alerta-diario" min="0" step="1000" placeholder="0 = sin límite">
+                                <span class="input-group-text">tokens</span>
+                            </div>
+                            <small class="text-muted">Notificar cuando el consumo diario acumulado supere este valor. 0 = desactivado.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold"><i class="fas fa-calendar me-1 text-danger"></i>Umbral mensual de tokens</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="alerta-mensual" min="0" step="10000" placeholder="0 = sin límite">
+                                <span class="input-group-text">tokens</span>
+                            </div>
+                            <small class="text-muted">Notificar cuando el consumo del mes en curso supere este valor. 0 = desactivado.</small>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold"><i class="fas fa-users me-1"></i>Notificar a</label>
+                        <div class="border rounded p-2" style="max-height:180px;overflow-y:auto;">
+                            {% for u in usuarios_sistema %}
+                            <div class="form-check">
+                                <input class="form-check-input alerta-user-cb" type="checkbox"
+                                       value="{{ u.pk }}" id="au-{{ u.pk }}">
+                                <label class="form-check-label" for="au-{{ u.pk }}">
+                                    {{ u.get_full_name|default:u.username }}
+                                    <small class="text-muted">{{ u.email }}</small>
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    </div>{# /alerta-form-content #}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" onclick="guardarAlerta()">
+                        <i class="fas fa-save me-1"></i>Guardar alertas
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -846,6 +917,48 @@
     }
 
     document.getElementById('btn-consumo-filtrar').addEventListener('click', cargarConsumo);
+
+    /* ── Alertas de consumo ── */
+    let _alertaApikeyId = null;
+
+    function verAlerta(id, alias) {
+        _alertaApikeyId = id;
+        document.getElementById('alerta-titulo').textContent = alias;
+        document.getElementById('alerta-spinner').classList.remove('d-none');
+        document.getElementById('alerta-form-content').classList.add('d-none');
+        new bootstrap.Modal(document.getElementById('modalAlerta')).show();
+        $.get(_RUTA, { action: 'alerta_consumo_get', id }, function(data) {
+            document.getElementById('alerta-diario').value  = data.umbral_diario  || 0;
+            document.getElementById('alerta-mensual').value = data.umbral_mensual || 0;
+            // Marcar usuarios
+            document.querySelectorAll('.alerta-user-cb').forEach(cb => {
+                cb.checked = (data.notificar_a || []).includes(parseInt(cb.value));
+            });
+            document.getElementById('alerta-spinner').classList.add('d-none');
+            document.getElementById('alerta-form-content').classList.remove('d-none');
+        });
+    }
+
+    function guardarAlerta() {
+        const umbralD = parseInt(document.getElementById('alerta-diario').value) || 0;
+        const umbralM = parseInt(document.getElementById('alerta-mensual').value) || 0;
+        const usuarios = [...document.querySelectorAll('.alerta-user-cb:checked')].map(cb => cb.value);
+        $.post(_RUTA, {
+            csrfmiddlewaretoken: '{{ csrf_token }}',
+            action: 'alerta_consumo_save',
+            id: _alertaApikeyId,
+            umbral_diario:  umbralD,
+            umbral_mensual: umbralM,
+            notificar_a: JSON.stringify(usuarios),
+        }, function(data) {
+            if (!data.error) {
+                bootstrap.Modal.getInstance(document.getElementById('modalAlerta')).hide();
+                alertaSuccess('Alertas de consumo guardadas correctamente.');
+            } else {
+                alertaWarning(data.message || 'Error al guardar.');
+            }
+        }, 'json');
+    }
 
     /* ── Reactivar API Key ── */
     function reactivarApiKey(id) {

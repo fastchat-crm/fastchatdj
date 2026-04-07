@@ -4,9 +4,36 @@
         .select2-container {
             width: 87% !important;
         }
-
         .input-group-text {
             width: 45px;
+        }
+        .badge-dup {
+            background: linear-gradient(135deg, #fd7e14, #dc3545);
+            color: #fff;
+            font-size: .7rem;
+            font-weight: 700;
+            padding: .25em .55em;
+            border-radius: 20px;
+            letter-spacing: .03em;
+            display: inline-flex;
+            align-items: center;
+            gap: .25em;
+        }
+        .sesion-chip {
+            display: inline-block;
+            background: #f0f4ff;
+            border: 1px solid #c5d0e8;
+            border-radius: 20px;
+            padding: .15em .55em;
+            font-size: .75rem;
+            color: #3a5a90;
+            margin: .1em;
+            white-space: nowrap;
+        }
+        .filter-dup-btn.active {
+            background-color: #dc3545 !important;
+            border-color: #dc3545 !important;
+            color: #fff !important;
         }
     </style>
 {% endblock %}
@@ -45,15 +72,24 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Acciones</label>
-                        <div class="d-flex gap-2">
+                        <div class="d-flex gap-2 flex-wrap">
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-search me-1"></i>
                             </button>
                             <a href="?export_to_excel=1{{ url_vars }}" class="btn btn-success" target="_blank">
                                 <i class="fa fa-file-excel"></i>
                             </a>
+                            <a href="?solo_duplicados=1{% if sesion_id %}&sesion_id={{ sesion_id }}{% endif %}{% if criterio %}&criterio={{ criterio }}{% endif %}"
+                               class="btn btn-outline-danger filter-dup-btn {% if solo_duplicados %}active{% endif %}"
+                               title="Mostrar solo contactos con el mismo número en varias sesiones">
+                                <i class="fas fa-copy me-1"></i>
+                                Duplicados
+                                {% if total_duplicados %}
+                                    <span class="badge bg-danger ms-1">{{ total_duplicados }}</span>
+                                {% endif %}
+                            </a>
                             {% if url_vars %}
-                                <a href="{{ ruta }}?{{ dict_url_vars }}" class="btn btn-default">
+                                <a href="{{ ruta }}" class="btn btn-default" title="Limpiar filtros">
                                     <i class="fas fa-sync-alt"></i>
                                 </a>
                             {% endif %}
@@ -82,8 +118,9 @@
                         <th class="text-center">Sesión</th>
                         <th class="text-center">Whatsapp</th>
                         <th class="text-center">Último mensaje</th>
-                        <th class="text-center">Mensajes Programados</th>
+                        <th class="text-center">Prog.</th>
                         <th class="text-center">Estado</th>
+                        <th class="text-center">Duplicado en</th>
                         <th class="text-center">Acción</th>
                     </tr>
                     </thead>
@@ -143,10 +180,23 @@
                             <td class="text-center">{{ l.fecha_ultimo_mensaje|date:'d/m/Y H:i' }}</td>
                             <td class="text-center">
                                 {{ l.get_mensajes_programados.count }}
-                            </td><td class="text-center">
+                            </td>
+                            <td class="text-center">
                                 <span class="badge bg-{{ l.get_estado_color }} fs-6">
                                     {{ l.get_estado_display }}
                                 </span>
+                            </td>
+                            <td class="text-center">
+                                {% if l.contacto_numero in numeros_duplicados %}
+                                    <div class="dup-cell" data-numero="{{ l.contacto_numero }}">
+                                        <span class="badge-dup">
+                                            <i class="fas fa-copy"></i> Duplicado
+                                        </span>
+                                        <div class="dup-chips mt-1"></div>
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted" style="font-size:.8rem;">—</span>
+                                {% endif %}
                             </td>
                             <td class="text-center">
                                 <div class="dropdown">
@@ -208,6 +258,20 @@
 {% block jscript %}
     <script src="/js/forms.js?version=1"></script>
     <script>
+        // Renderizar chips de sesiones duplicadas
+        const DUP_SESIONES = {{ dup_sesiones_json|safe }};
+        document.querySelectorAll('.dup-cell').forEach(cell => {
+            const num = cell.dataset.numero;
+            const sesiones = DUP_SESIONES[num] || [];
+            const container = cell.querySelector('.dup-chips');
+            sesiones.forEach(s => {
+                const chip = document.createElement('span');
+                chip.className = 'sesion-chip';
+                chip.textContent = s;
+                container.appendChild(chip);
+            });
+        });
+
         function formModal(id, text, action) {
             pantallaespera();
             $.ajax({

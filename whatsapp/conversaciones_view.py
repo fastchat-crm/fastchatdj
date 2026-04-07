@@ -1,17 +1,17 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
+from django.db import models, transaction
 from django.db.models import Q
 from django.contrib import messages
 from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 from django.http import JsonResponse
 
+from autenticacion.models import Usuario
 from core.funciones import addData, paginador, secure_module, log
 from seguridad.templatetags.templatefunctions import encrypt
-from .forms import CambiarClasificacionForm, CambiarNombreContactoForm
-from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp
-# Importar el servicio en lugar de redis_publish
+from .forms import CambiarClasificacionForm, CambiarNombreContactoForm, AsignarAgenteForm
+from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp, SENTIMIENTO_CHOICES
 from .services import WhatsAppService
 
 @login_required
@@ -64,6 +64,9 @@ def conversacionesView(request):
                 'contacto_foto': conversacion.contacto_foto or '',
                 'hashed_id': conversacion.hashed_id or '',
                 'estado_active': conversacion.estado_conversacion == 0,
+                'ai_activo': conversacion.ai_activo,
+                'asignado_a': conversacion.asignado_a.get_full_name() if conversacion.asignado_a else '',
+                'asignado_foto': conversacion.asignado_a.get_foto_url() if conversacion.asignado_a else '',
             })
         elif action == 'cambiar-clasificacion':
             try:
@@ -85,6 +88,15 @@ def conversacionesView(request):
                     'form': form,
                     'filtro': filtro,
                 })
+                template = get_template("whatsapp/conversaciones/form.html")
+                return JsonResponse({"result": True, 'data': template.render(data)})
+            except Exception as ex:
+                return JsonResponse({"result": False, 'message': str(ex)})
+        elif action == 'asignar-conversacion':
+            try:
+                filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
+                form = AsignarAgenteForm(instance=filtro)
+                data.update({'form': form, 'filtro': filtro})
                 template = get_template("whatsapp/conversaciones/form.html")
                 return JsonResponse({"result": True, 'data': template.render(data)})
             except Exception as ex:
@@ -196,6 +208,25 @@ def conversacionesView(request):
                         return JsonResponse(res_json, safe=False)
                     else:
                         raise NameError(f'Error al guardar la clasificación: {form.errors}')
+                elif action == 'asignar-conversacion':
+                    filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['pk']))
+                    form = AsignarAgenteForm(request.POST, instance=filtro, request=request)
+                    if form.is_valid():
+                        form.save()
+                        asignado = filtro.asignado_a
+                        log(f"Conversación {filtro.id} asignada a {asignado}", request, "change", obj=filtro.id)
+                        res_json.append({'error': False, 'reload': True})
+                        messages.success(request, f'Conversación asignada a {asignado.get_full_name() if asignado else "sin asignar"}.')
+                        return JsonResponse(res_json, safe=False)
+                    else:
+                        raise NameError(f'Error al asignar: {form.errors}')
+                elif action == 'toggle-bot':
+                    filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))
+                    filtro.ai_activo = not filtro.ai_activo
+                    filtro.save(request)
+                    estado = 'activado' if filtro.ai_activo else 'pausado'
+                    log(f"Bot {estado} para conversación {filtro.id}", request, "change", obj=filtro.id)
+                    return JsonResponse({'error': False, 'ai_activo': filtro.ai_activo})
                 elif action == 'marcar-resuelto':
                     try:
                         filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))
@@ -228,6 +259,7 @@ def conversacionesView(request):
                     filtro.fecha_fin_conversacion = timezone.now()
                     res_json.append({ 'error':False, 'url': f'/whatsapp/conversaciones-finalizadas/' })
                     request.session['contactoId'] = encrypt(filtro.id)
+                    filtro.resumir_conversacion()
                     filtro.save(request)
                     log(f"Conversación marcada como resuelta {filtro.id}", request, "change", obj=filtro.id)
                     return JsonResponse(res_json, safe=False)
@@ -237,13 +269,73 @@ def conversacionesView(request):
                     service.transcribe_audio(msg, 'small', msg.conversacion.contacto.sesion.language.split('-')[0])
                     return JsonResponse({})
 
+                elif action == 'feedback-mensaje':
+                    from crm.models import FeedbackMensajeBot
+                    msg_id = int(request.POST['mensaje_id'])
+                    es_correcto = request.POST.get('es_correcto') == '1'
+                    correccion = request.POST.get('correccion', '').strip()
+                    pregunta = request.POST.get('pregunta', '').strip()
+
+                    msg = MensajeWhatsApp.objects.select_related(
+                        'conversacion__contacto__sesion__agente_ia'
+                    ).get(pk=msg_id)
+
+                    # Crear o actualizar feedback
+                    feedback, _ = FeedbackMensajeBot.objects.update_or_create(
+                        mensaje=msg,
+                        defaults={
+                            'es_correcto': es_correcto,
+                            'correccion': correccion,
+                            'pregunta_original': pregunta,
+                            'agente': msg.conversacion.sesion.agente_ia,
+                            'usuario': request.user,
+                            'procesado_vectorstore': False,
+                        }
+                    )
+
+                    # Si es incorrecto y hay corrección → agregar al vectorstore
+                    if not es_correcto and correccion and pregunta:
+                        agente = msg.conversacion.sesion.agente_ia
+                        if agente and agente.vectorstore_path and agente.apikey.filter(estado=True).exists():
+                            apikey_obj = agente.apikey.filter(estado=True).first()
+                            provider = {2: 'gemini', 3: 'openai'}.get(apikey_obj.proveedor, 'gemini')
+                            try:
+                                from agents_ai.vectorstore_manager import VectorStoreManager
+                                import os
+                                from django.conf import settings
+                                storage = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
+                                vsm = VectorStoreManager(storage, provider, apikey_obj.descripcion)
+                                vsm.add_correction(agente.vectorstore_path, pregunta, correccion)
+                                feedback.procesado_vectorstore = True
+                                feedback.save(update_fields=['procesado_vectorstore'])
+                                # Invalidar caché de FAISS del agente
+                                from agents_ai.agente_consultor import AgenteConsultor
+                                AgenteConsultor._faiss_cache.clear()
+                            except Exception as ex:
+                                log(f"Error al agregar corrección al vectorstore: {ex}", request, "error")
+
+                    return JsonResponse({
+                        'error': False,
+                        'procesado_vectorstore': feedback.procesado_vectorstore,
+                        'mensaje': 'Feedback guardado' + (' y agregado al vectorstore ✓' if feedback.procesado_vectorstore else ''),
+                    })
+
 
         except Exception as ex:
             return JsonResponse({'error': True, 'message': str(ex)})
 
     # ====================== LISTADO CONVERSACIONES =========================
     criterio = request.GET.get('criterio', '').strip()
-    filtros = Q(contacto__status=True, status=True, contacto__sesion__usuario__id=request.user.id, contacto__sesion__status=True, estado_conversacion=0)
+    filtro_clasificacion = request.GET.get('clasificacion', '')
+    filtro_sin_responder = request.GET.get('sin_responder', '')
+    filtro_mis_conv = request.GET.get('mis_conv', '')
+
+    filtros = Q(
+        contacto__status=True, status=True,
+        contacto__sesion__usuario__id=request.user.id,
+        contacto__sesion__status=True,
+        estado_conversacion=0
+    )
     url_vars = ''
 
     if sesion_seleccionada:
@@ -255,19 +347,61 @@ def conversacionesView(request):
         data["criterio"] = criterio
         url_vars += '&criterio=' + criterio
 
+    if filtro_clasificacion:
+        filtros = filtros & Q(clasificacion=filtro_clasificacion)
+        data["filtro_clasificacion"] = int(filtro_clasificacion)
+        url_vars += f'&clasificacion={filtro_clasificacion}'
+
+    if filtro_sin_responder:
+        # Último mensaje es del cliente (remitente != numero de sesión)
+        filtros = filtros & ~Q(mensajes__remitente=models.F('contacto__sesion__numero')) & Q(mensajes__isnull=False)
+        # Más preciso: anotar el last mensaje y verificar
+        from django.db.models import Max, Subquery, OuterRef
+        ultimo_msg = MensajeWhatsApp.objects.filter(
+            conversacion=OuterRef('pk')
+        ).order_by('-fecha').values('remitente')[:1]
+        filtros = filtros & ~Q(mensajes__isnull=True)
+        data["filtro_sin_responder"] = True
+        url_vars += '&sin_responder=1'
+
+    if filtro_mis_conv:
+        filtros = filtros & Q(asignado_a=request.user)
+        data["filtro_mis_conv"] = True
+        url_vars += '&mis_conv=1'
+
     data["url_vars"] = url_vars
     data['conversacion_selected'] = conversacion_selected
-    data["today"] = timezone.now().date()  # Para comparar fechas en la plantilla
+    data["today"] = timezone.now().date()
+    data["SENTIMIENTO_CHOICES"] = SENTIMIENTO_CHOICES
+    from .models import ESTADOS_CLASIFICACION
+    data["ESTADOS_CLASIFICACION"] = ESTADOS_CLASIFICACION
+
+    # Conteo global de conversaciones sin leer (para badge en header)
+    data["total_sin_leer"] = ConversacionWhatsApp.objects.filter(
+        contacto__status=True, status=True,
+        contacto__sesion__usuario__id=request.user.id,
+        estado_conversacion=0,
+        mensajes__leido=False,
+        mensajes__remitente=models.F('contacto__contacto_numero')
+    ).distinct().count()
 
     # Si es una solicitud AJAX para cargar conversaciones
     if request.GET.get('load_conversations'):
-        # Obtener las conversaciones
-        conversaciones = ConversacionWhatsApp.objects.sin_expirar.filter(filtros)
-        data["conversaciones"] = conversaciones
-        data["list_count"] = conversaciones.count()
+        from django.db import models as django_models
+        qs = ConversacionWhatsApp.objects.sin_expirar.filter(filtros).distinct()
+
+        # Filtro sin responder via Python post-query (más seguro)
+        if filtro_sin_responder:
+            ids_sin_resp = []
+            for conv in qs:
+                ultimo = conv.mensajes.order_by('-fecha').first()
+                if ultimo and ultimo.remitente != conv.sesion.numero:
+                    ids_sin_resp.append(conv.id)
+            qs = qs.filter(id__in=ids_sin_resp)
+
         return JsonResponse({
             'html': render_to_string('whatsapp/conversaciones/conversaciones_partial.html',
-                                    {'conversaciones': conversaciones, 'today': timezone.now().date()},
+                                    {'conversaciones': qs, 'today': timezone.now().date()},
                                     request=request)
         })
 

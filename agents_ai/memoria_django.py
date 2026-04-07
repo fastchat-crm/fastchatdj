@@ -64,6 +64,22 @@ class DjangoChatMessageHistory(BaseChatMessageHistory):
                 result.append(AIMessage(content=entry.content))
         return result
 
+    def update_last_ai_message(self, new_content: str) -> None:
+        """Actualiza el contenido del último mensaje AI (para correcciones en consultar_con_listas)."""
+        last = (
+            MessageStore.objects
+            .filter(session_id=self.session_id, role="ai")
+            .exclude(content__startswith="LISTA_GUARDADA:")
+            .order_by('-created_at')
+            .first()
+        )
+        if last:
+            last.content = new_content
+            last.save(update_fields=['content'])
+        else:
+            self.add_ai_message(new_content)
+        self._cache = None
+
     def get_recent_lista_guardada(self, n: int = 20) -> list[BaseMessage]:
         """Devuelve los últimos n mensajes AI que sean LISTA_GUARDADA."""
         qs = (

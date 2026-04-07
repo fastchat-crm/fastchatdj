@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentación de la Plataforma{% if confi %} | {{ confi.nombre_empresa }}{% endif %}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root {
+            --primary: #25d366;
+            --primary-dark: #128c5e;
+            --accent: #075e54;
+            --bg-dark: #0f1923;
+            --bg-card: #1a2535;
+            --text-muted-custom: #8fa0b4;
+        }
+
+        body {
+            background: var(--bg-dark);
+            color: #e2eaf4;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        /* Sidebar */
+        .docs-sidebar {
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            background: var(--bg-card);
+            border-right: 1px solid #243040;
+            padding: 1.5rem 1rem;
+        }
+
+        .docs-sidebar .brand {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #243040;
+        }
+
+        .docs-sidebar .nav-link {
+            color: var(--text-muted-custom);
+            font-size: .85rem;
+            padding: .35rem .75rem;
+            border-radius: 6px;
+            transition: all .15s;
+        }
+
+        .docs-sidebar .nav-link:hover,
+        .docs-sidebar .nav-link.active {
+            color: var(--primary);
+            background: rgba(37, 211, 102, .1);
+        }
+
+        .docs-sidebar .section-label {
+            font-size: .7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: #4a6080;
+            padding: 1rem .75rem .25rem;
+        }
+
+        /* Content */
+        .docs-content {
+            max-width: 860px;
+            padding: 2rem 2.5rem 4rem;
+        }
+
+        h2.section-title {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #fff;
+            margin-top: 3rem;
+            margin-bottom: 1rem;
+            padding-bottom: .5rem;
+            border-bottom: 2px solid var(--primary-dark);
+            scroll-margin-top: 20px;
+        }
+
+        h3.sub-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--primary);
+            margin-top: 1.75rem;
+            margin-bottom: .75rem;
+        }
+
+        .doc-card {
+            background: var(--bg-card);
+            border: 1px solid #243040;
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .hero-section {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--bg-card) 100%);
+            border-radius: 16px;
+            padding: 2.5rem 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .hero-section h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #fff;
+        }
+
+        .hero-section p {
+            color: #b0d0c0;
+            font-size: 1.05rem;
+        }
+
+        .badge-tech {
+            background: rgba(37, 211, 102, .15);
+            color: var(--primary);
+            border: 1px solid rgba(37, 211, 102, .3);
+            font-size: .75rem;
+            font-weight: 600;
+            padding: .3em .7em;
+            border-radius: 6px;
+            display: inline-block;
+            margin: .2em;
+        }
+
+        /* Flow diagram */
+        .flow-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: .5rem;
+        }
+
+        .flow-icon {
+            width: 36px;
+            height: 36px;
+            min-width: 36px;
+            border-radius: 50%;
+            background: var(--primary-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            color: #fff;
+        }
+
+        .flow-arrow {
+            margin-left: 17px;
+            width: 2px;
+            height: 20px;
+            background: linear-gradient(to bottom, var(--primary-dark), transparent);
+        }
+
+        .flow-text strong {
+            color: #fff;
+        }
+
+        .flow-text small {
+            color: var(--text-muted-custom);
+            display: block;
+            font-size: .8rem;
+        }
+
+        /* Table */
+        .docs-table th {
+            background: rgba(37, 211, 102, .1);
+            color: var(--primary);
+            font-size: .8rem;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            border-color: #243040;
+        }
+
+        .docs-table td {
+            border-color: #243040;
+            color: #000000;
+            font-size: .9rem;
+            vertical-align: top;
+        }
+
+        .docs-table tr:hover td {
+            {#background: rgba(255, 255, 255, .03);#}
+        }
+
+        code {
+            background: #0d1520;
+            color: #7dd3a8;
+            border: 1px solid #1e3040;
+            border-radius: 4px;
+            padding: .15em .4em;
+            font-size: .85em;
+        }
+
+        pre {
+            background: #0d1520;
+            border: 1px solid #1e3040;
+            border-radius: 8px;
+            padding: 1.25rem;
+            color: #a0d8b0;
+            font-size: .85rem;
+            overflow-x: auto;
+        }
+
+        pre code {
+            background: none;
+            border: none;
+            padding: 0;
+            color: inherit;
+        }
+
+        .tip-box {
+            background: rgba(37, 211, 102, .08);
+            border-left: 3px solid var(--primary);
+            padding: .75rem 1rem;
+            border-radius: 0 8px 8px 0;
+            font-size: .9rem;
+            margin: 1rem 0;
+        }
+
+        .warn-box {
+            background: rgba(255, 193, 7, .08);
+            border-left: 3px solid #ffc107;
+            padding: .75rem 1rem;
+            border-radius: 0 8px 8px 0;
+            font-size: .9rem;
+            margin: 1rem 0;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid #243040;
+            border-radius: 10px;
+            padding: 1rem;
+            transition: border-color .2s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--primary-dark);
+        }
+
+        .feature-card .icon {
+            font-size: 1.5rem;
+            margin-bottom: .5rem;
+        }
+
+        .feature-card h5 {
+            font-size: .9rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: .25rem;
+        }
+
+        .feature-card p {
+            font-size: .8rem;
+            color: var(--text-muted-custom);
+            margin: 0;
+        }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .docs-sidebar {
+                display: none;
+            }
+
+            .docs-content {
+                padding: 1.5rem 1rem 3rem;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="d-flex">
+
+    <!-- Sidebar -->
+    <nav class="docs-sidebar d-none d-md-flex flex-column" style="width:240px; min-width:240px;">
+        <div class="brand">
+            <i class="bi bi-whatsapp"></i>
+            FastChat DJ
+        </div>
+        <div class="section-label">Inicio</div>
+        <a class="nav-link" href="#overview"><i class="bi bi-grid-1x2 me-2"></i>Plataforma</a>
+        <a class="nav-link" href="#features"><i class="bi bi-stars me-2"></i>Funcionalidades</a>
+
+        <div class="section-label">Módulos</div>
+        <a class="nav-link" href="#modulo-sesiones"><i class="bi bi-phone me-2"></i>Sesiones WhatsApp</a>
+        <a class="nav-link" href="#modulo-contactos"><i class="bi bi-person-lines-fill me-2"></i>Contactos y Convs.</a>
+        <a class="nav-link" href="#modulo-agentes"><i class="bi bi-robot me-2"></i>Agentes IA</a>
+        <a class="nav-link" href="#modulo-entrenamiento"><i class="bi bi-book me-2"></i>Entrenamiento</a>
+        <a class="nav-link" href="#modulo-cierre"><i class="bi bi-x-circle me-2"></i>Detección de Cierre</a>
+        <a class="nav-link" href="#modulo-tokens"><i class="bi bi-bar-chart me-2"></i>Consumo de Tokens</a>
+
+        <div class="section-label">Técnico</div>
+        <a class="nav-link" href="#flujo"><i class="bi bi-diagram-3 me-2"></i>Flujo de Mensajes</a>
+        <a class="nav-link" href="#tecnologias"><i class="bi bi-code-slash me-2"></i>Tecnologías</a>
+        <a class="nav-link" href="#api-rest"><i class="bi bi-plug me-2"></i>API REST</a>
+        <a class="nav-link" href="#websockets"><i class="bi bi-arrow-left-right me-2"></i>WebSockets</a>
+
+        <div class="section-label">Futuro</div>
+        <a class="nav-link" href="#recomendaciones"><i class="bi bi-lightbulb me-2"></i>Recomendaciones</a>
+    </nav>
+
+    <!-- Main content -->
+    <main class="docs-content flex-grow-1">
+
+        <!-- Hero -->
+        <div class="hero-section">
+            <h1><i class="bi bi-whatsapp text-success me-2"></i>FastChat DJ</h1>
+            <p class="mb-3">Plataforma CRM de WhatsApp con agentes de inteligencia artificial, gestión de conversaciones
+                en tiempo real y automatización de atención al cliente.</p>
+            <div>
+                <span class="badge-tech">Django 4.x</span>
+                <span class="badge-tech">LangChain</span>
+                <span class="badge-tech">FAISS</span>
+                <span class="badge-tech">Google Gemini</span>
+                <span class="badge-tech">OpenAI</span>
+                <span class="badge-tech">Django Channels</span>
+                <span class="badge-tech">Redis</span>
+                <span class="badge-tech">PostgreSQL</span>
+                <span class="badge-tech">Node.js</span>
+            </div>
+        </div>
+
+        <!-- Overview -->
+        <h2 class="section-title" id="overview"><i class="bi bi-grid-1x2 me-2 text-success"></i>¿Qué es esta plataforma?
+        </h2>
+        <p>FastChat DJ es un CRM web construido sobre Django que permite gestionar múltiples sesiones de WhatsApp,
+            centralizar conversaciones entrantes, y automatizar respuestas mediante agentes de IA entrenados con
+            documentos propios del negocio.</p>
+        <p>Está diseñado para empresas que atienden clientes por WhatsApp y desean escalar sin aumentar el equipo
+            humano, usando LLMs (Gemini o GPT) combinados con una base de conocimiento personalizada.</p>
+
+        <div class="feature-grid mt-3">
+            <div class="feature-card">
+                <div class="icon">📱</div>
+                <h5>Multi-sesión</h5>
+                <p>Varios números de WhatsApp en una sola plataforma</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🤖</div>
+                <h5>Agentes IA</h5>
+                <p>Respuestas automáticas contextualizadas con RAG</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">📚</div>
+                <h5>Entrenamiento</h5>
+                <p>Sube PDFs, Excel, CSV y la IA aprende tu negocio</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">⚡</div>
+                <h5>Tiempo real</h5>
+                <p>WebSockets para chat en vivo sin recargar la página</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🔚</div>
+                <h5>Cierre automático</h5>
+                <p>Detecta cuando el cliente termina la conversación</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">📊</div>
+                <h5>Control de consumo</h5>
+                <p>Monitorea tokens usados por API key y agente</p>
+            </div>
+        </div>
+
+        <!-- Features -->
+        <h2 class="section-title" id="features"><i class="bi bi-stars me-2 text-success"></i>Funcionalidades
+            implementadas</h2>
+        <div class="doc-card">
+            <table class="table docs-table mb-0">
+                <thead>
+                <tr>
+                    <th>Funcionalidad</th>
+                    <th>Descripción</th>
+                    <th>Estado</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><strong>Sesiones WhatsApp</strong></td>
+                    <td>Creación, conexión/desconexión, escáner QR en tiempo real</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Contactos</strong></td>
+                    <td>Sincronización automática de contactos desde WhatsApp, grupos, perfiles</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Conversaciones</strong></td>
+                    <td>Historial completo, búsqueda, vista de mensajes, asignación de agente</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Agentes IA</strong></td>
+                    <td>Configuración de LLM (Gemini/OpenAI), prompt personalizado, departamentos</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>RAG con FAISS</strong></td>
+                    <td>Búsqueda vectorial sobre documentos entrenados para contextualizar respuestas</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Contexto estático</strong></td>
+                    <td>Texto inyectado directamente al prompt (FAQs, instrucciones cortas)</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Cierre de conversación</strong></td>
+                    <td>Detección por palabras clave con acciones automáticas (cambiar estado, enviar mensaje, asignar
+                        usuario)
+                    </td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Plantilla de cierre en agente</strong></td>
+                    <td>Los agentes pueden tener su propia regla de cierre como plantilla base</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Consumo de tokens</strong></td>
+                    <td>Registro por API key + agente, con resumen por rango de fechas y gráfico diario</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Chat de prueba</strong></td>
+                    <td>Interfaz interna para probar el agente sin usar WhatsApp real</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>API REST</strong></td>
+                    <td><code>POST /api/enviar-mensaje/</code> con rate limiting para integraciones externas</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Notificaciones push</strong></td>
+                    <td>Web push (VAPID) para alertas de nuevos mensajes</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Cron Jobs</strong></td>
+                    <td>Mensajes programados y de despedida automática</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Control de acceso por roles</strong></td>
+                    <td>Grupos con acceso granular por módulos/URLs</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Multi-proveedor IA</strong></td>
+                    <td>Soporte para Google Gemini y OpenAI en el mismo sistema</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Bot on/off por conversación</strong></td>
+                    <td>Desactivar el bot IA en una conversación específica para tomar control manual sin afectar
+                        otras
+                    </td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Asignación de agente humano</strong></td>
+                    <td>Asignar conversaciones a operadores específicos con foto y nombre visible en el chat</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Análisis de sentimiento</strong></td>
+                    <td>Al cerrar la conversación, el LLM analiza el tono (positivo → agresivo) con puntuación 1-10 y
+                        resumen
+                    </td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Alertas de consumo de tokens</strong></td>
+                    <td>Umbrales diario/mensual por API key con notificaciones automáticas a usuarios configurados</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Aprendizaje continuo / Feedback</strong></td>
+                    <td>Agentes humanos marcan respuestas del bot como correctas/incorrectas; correcciones se inyectan
+                        al FAISS automáticamente
+                    </td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Detección de contactos duplicados</strong></td>
+                    <td>Identificación visual de números registrados en múltiples sesiones con chips por sesión</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Filtros avanzados de conversaciones</strong></td>
+                    <td>Filtrar por sin responder, mis conversaciones, etapa/clasificación con badge de no leídas</td>
+                    <td><span class="badge bg-success">Activo</span></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Sesiones -->
+        <h2 class="section-title" id="modulo-sesiones"><i class="bi bi-phone me-2 text-success"></i>Módulo: Sesiones
+            WhatsApp</h2>
+        <p>Cada <strong>SesionWhatsApp</strong> representa un número de teléfono conectado. La plataforma se comunica
+            con un servicio Node.js externo que maneja la conexión real con la API de WhatsApp.</p>
+
+        <h3 class="sub-title">Ciclo de vida de una sesión</h3>
+        <div class="doc-card">
+            <div class="flow-step">
+                <div class="flow-icon">1</div>
+                <div class="flow-text"><strong>Crear sesión en el panel</strong><small>Se registra en la BD con estado
+                    "desconectado"</small></div>
+            </div>
+            <div class="flow-arrow"></div>
+            <div class="flow-step">
+                <div class="flow-icon">2</div>
+                <div class="flow-text"><strong>Conectar → QR via WebSocket</strong><small>El Node.js genera el QR, lo
+                    envía al panel via <code>SessionConsumer</code></small></div>
+            </div>
+            <div class="flow-arrow"></div>
+            <div class="flow-step">
+                <div class="flow-icon">3</div>
+                <div class="flow-text"><strong>Escanear QR con el celular</strong><small>WhatsApp autentica → evento
+                    <code>ready</code> actualiza el estado a "conectado"</small></div>
+            </div>
+            <div class="flow-arrow"></div>
+            <div class="flow-step">
+                <div class="flow-icon">4</div>
+                <div class="flow-text"><strong>Mensajes entrantes via webhook</strong><small><code>POST
+                    /whatsapp/webhook_handler/</code> procesa todos los eventos</small></div>
+            </div>
+        </div>
+
+        <h3 class="sub-title">Configuración del agente IA en la sesión</h3>
+        <p>Cada sesión puede tener asignado un <code>AgentesIA</code>. Si está configurado, cada mensaje entrante
+            dispara automáticamente una consulta al agente y envía la respuesta al cliente.</p>
+        <div class="tip-box"><i class="bi bi-info-circle me-2"></i>Si la sesión no tiene agente asignado, los mensajes
+            solo se almacenan y muestran en el panel para respuesta manual.
+        </div>
+
+        <!-- Contactos -->
+        <h2 class="section-title" id="modulo-contactos"><i class="bi bi-person-lines-fill me-2 text-success"></i>Módulo:
+            Contactos y Conversaciones</h2>
+        <p>Los <strong>Contacto</strong> se crean automáticamente al recibir el primer mensaje de un número. El sistema
+            sincroniza el nombre de perfil de WhatsApp.</p>
+
+        <h3 class="sub-title">ConversacionWhatsApp</h3>
+        <p>Cada par (sesión, contacto) tiene una conversación única. Los <strong>MensajeWhatsApp</strong> se asocian a
+            la conversación. El <code>ChatConsumer</code> (WebSocket) envía actualizaciones en tiempo real al panel
+            cuando llega un nuevo mensaje.</p>
+
+        <table class="table docs-table">
+            <thead>
+            <tr>
+                <th>Campo clave</th>
+                <th>Descripción</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td><code>estado</code></td>
+                <td>abierta / en_proceso / cerrada — controlado por reglas de cierre</td>
+            </tr>
+            <tr>
+                <td><code>leido</code></td>
+                <td>Flag de lectura para el agente humano</td>
+            </tr>
+            <tr>
+                <td><code>ai_activo</code></td>
+                <td>Si el agente IA responde en esta conversación (puede desactivarse por turno)</td>
+            </tr>
+            <tr>
+                <td><code>EstadisticasConversacion</code></td>
+                <td>Tiempo de respuesta, total mensajes, primer contacto, etc.</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <!-- Agentes IA -->
+        <h2 class="section-title" id="modulo-agentes"><i class="bi bi-robot me-2 text-success"></i>Módulo: Agentes IA
+        </h2>
+        <p>Un <strong>AgentesIA</strong> es la configuración completa de un chatbot. Se puede reutilizar en varias
+            sesiones.</p>
+
+        <table class="table docs-table">
+            <thead>
+            <tr>
+                <th>Campo</th>
+                <th>Función</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td><code>nombre</code></td>
+                <td>Identificador del agente</td>
+            </tr>
+            <tr>
+                <td><code>perfil</code></td>
+                <td>Vincula a <code>PerfilNegocioIA</code>: descripción del negocio, productos, servicios</td>
+            </tr>
+            <tr>
+                <td><code>vectorstore_path</code></td>
+                <td>Ruta al índice FAISS en disco (construido desde documentos de entrenamiento)</td>
+            </tr>
+            <tr>
+                <td><code>contexto_estatico</code></td>
+                <td>Texto inyectado directamente al prompt sin pasar por FAISS (ideal para FAQs cortas)</td>
+            </tr>
+            <tr>
+                <td><code>prompt_template</code></td>
+                <td>Plantilla Jinja con variables <code>{context}</code>, <code>{question}</code>,
+                    <code>{historial}</code>, <code>{descripcion_agente}</code></td>
+            </tr>
+            <tr>
+                <td><code>apikey</code></td>
+                <td>Relación M2M a <code>ApiKeyIA</code> (Gemini o OpenAI)</td>
+            </tr>
+            <tr>
+                <td><code>departamento</code></td>
+                <td>Agrupación lógica para organizaciones con múltiples áreas</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <h3 class="sub-title">Lógica de respuesta del agente</h3>
+        <div class="doc-card">
+            <ol class="mb-0" style="font-size:.9rem; color:#c8d8e8; line-height:2;">
+                <li>El mensaje del usuario llega al webhook</li>
+                <li>Se carga <code>AgenteConsultor</code> con la config del agente</li>
+                <li>Si el mensaje es un <strong>ack corto</strong> ("ok", "gracias", "sí") se omite la búsqueda
+                    vectorial
+                </li>
+                <li>Se construye la <strong>query de búsqueda</strong> combinando el mensaje + las últimas 3 frases del
+                    historial + snippet de la última respuesta IA
+                </li>
+                <li>FAISS devuelve los <strong>5 chunks más relevantes</strong> (MMR, pool de 20) de máximo 2.500
+                    caracteres
+                </li>
+                <li>Se ensambla el prompt con contexto, historial y pregunta</li>
+                <li>El LLM genera la respuesta</li>
+                <li>Se registran los tokens en <code>ConsumoTokenIA</code></li>
+                <li>La respuesta se envía al cliente por WhatsApp</li>
+            </ol>
+        </div>
+
+        <div class="warn-box">
+            <i class="bi bi-exclamation-triangle me-2"></i><strong>Sin datos de entrenamiento:</strong> Si el agente no
+            tiene vectorstore ni contexto estático, responderá indicando que no tiene información. Es esencial cargar al
+            menos un documento o agregar contexto estático antes de activar el agente en producción.
+        </div>
+
+        <!-- Entrenamiento -->
+        <h2 class="section-title" id="modulo-entrenamiento"><i class="bi bi-book me-2 text-success"></i>Módulo:
+            Entrenamiento</h2>
+        <p>Los documentos de entrenamiento son archivos que se convierten en embeddings vectoriales y se almacenan en un
+            índice FAISS local.</p>
+
+        <h3 class="sub-title">Formatos soportados</h3>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <span class="badge-tech"><i class="bi bi-file-pdf me-1"></i>PDF</span>
+            <span class="badge-tech"><i class="bi bi-file-spreadsheet me-1"></i>Excel (.xlsx)</span>
+            <span class="badge-tech"><i class="bi bi-filetype-csv me-1"></i>CSV</span>
+            <span class="badge-tech"><i class="bi bi-filetype-json me-1"></i>JSON</span>
+        </div>
+
+        <h3 class="sub-title">Proceso de indexación</h3>
+        <pre><code>Archivo subido
+    ↓ VectorStoreManager.build_from_files()
+    ↓ Extracción de texto por tipo de archivo
+    ↓ Chunking (segmentación en fragmentos)
+    ↓ Embeddings (Google Gemini o OpenAI)
+    ↓ FAISS index guardado en vectorstore_path
+    ↓ Cache en memoria invalidado (mtime check)</code></pre>
+
+        <div class="tip-box"><i class="bi bi-lightning me-2"></i>El índice FAISS se cachea en memoria con verificación
+            de <code>mtime</code> para no reconstruirlo en cada mensaje. El cache se invalida automáticamente al
+            reentrenar.
+        </div>
+
+        <h3 class="sub-title">Contexto estático vs. FAISS</h3>
+        <table class="table docs-table">
+            <thead>
+            <tr>
+                <th>Tipo</th>
+                <th>Cuándo usarlo</th>
+                <th>Ventaja</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td><strong>Contexto estático</strong></td>
+                <td>FAQs, instrucciones cortas, información que siempre aplica</td>
+                <td>Cero latencia, siempre visible para el LLM</td>
+            </tr>
+            <tr>
+                <td><strong>FAISS vectorial</strong></td>
+                <td>Documentos extensos: catálogos, manuales, políticas</td>
+                <td>Escala a miles de páginas sin saturar el prompt</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <!-- Cierre -->
+        <h2 class="section-title" id="modulo-cierre"><i class="bi bi-x-circle me-2 text-success"></i>Módulo: Detección
+            de Cierre</h2>
+        <p>La <strong>detección de cierre</strong> permite identificar automáticamente cuando un cliente indica que
+            terminó la conversación ("gracias, hasta luego", "listo, eso era todo", etc.) y ejecutar acciones
+            automáticas.</p>
+
+        <h3 class="sub-title">Configuración por niveles</h3>
+        <div class="doc-card">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="p-3" style="background:#1e2d20;border-radius:8px;border:1px solid #2a4a2e;">
+                        <h6 class="text-success mb-2"><i class="bi bi-phone me-2"></i>Nivel sesión</h6>
+                        <p style="font-size:.85rem;color:#b0c8b8;margin:0">Configurado en la sesión específica de
+                            WhatsApp. Tiene prioridad absoluta sobre el agente.</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="p-3" style="background:#1e2020;border-radius:8px;border:1px solid #3a2a2a;">
+                        <h6 style="color:#e8a0a0;" class="mb-2"><i class="bi bi-robot me-2"></i>Nivel agente (plantilla)
+                        </h6>
+                        <p style="font-size:.85rem;color:#c8b0b0;margin:0">Si la sesión no tiene cierre configurado, se
+                            usa la plantilla del agente asignado.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h3 class="sub-title">Acciones disponibles al detectar cierre</h3>
+        <table class="table docs-table">
+            <thead>
+            <tr>
+                <th>Tipo de acción</th>
+                <th>Descripción</th>
+                <th>Variables de plantilla</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td><strong>Mensaje automático</strong></td>
+                <td>Envía un mensaje de despedida personalizado al cliente</td>
+                <td><code>{nombre}</code>, <code>{telefono}</code>, <code>{fecha}</code></td>
+            </tr>
+            <tr>
+                <td><strong>Cambiar estado</strong></td>
+                <td>Cambia el estado de la conversación (ej: cerrada, en espera)</td>
+                <td>—</td>
+            </tr>
+            <tr>
+                <td><strong>Asignar usuario</strong></td>
+                <td>Reasigna la conversación a un agente humano específico</td>
+                <td>—</td>
+            </tr>
+            <tr>
+                <td><strong>Webhook externo</strong></td>
+                <td>Llama a una URL externa con datos de la conversación (CRM, ERP)</td>
+                <td>—</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <!-- Tokens -->
+        <h2 class="section-title" id="modulo-tokens"><i class="bi bi-bar-chart me-2 text-success"></i>Módulo: Consumo de
+            Tokens</h2>
+        <p>El modelo <code>ConsumoTokenIA</code> registra cada llamada al LLM con los tokens utilizados, permitiendo
+            monitorear costos por API key y agente.</p>
+
+        <h3 class="sub-title">Datos registrados por llamada</h3>
+        <table class="table docs-table">
+            <thead>
+            <tr>
+                <th>Campo</th>
+                <th>Descripción</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td><code>apikey</code></td>
+                <td>API key usada (FK a ApiKeyIA)</td>
+            </tr>
+            <tr>
+                <td><code>agente</code></td>
+                <td>Agente que generó la respuesta</td>
+            </tr>
+            <tr>
+                <td><code>tokens_entrada</code></td>
+                <td>Tokens del prompt enviado al LLM</td>
+            </tr>
+            <tr>
+                <td><code>tokens_salida</code></td>
+                <td>Tokens de la respuesta generada</td>
+            </tr>
+            <tr>
+                <td><code>tokens_total</code></td>
+                <td>Suma entrada + salida</td>
+            </tr>
+            <tr>
+                <td><code>modelo</code></td>
+                <td>Nombre del modelo usado (ej: <code>gemini-1.5-flash</code>)</td>
+            </tr>
+            <tr>
+                <td><code>fecha</code></td>
+                <td>Timestamp automático de la llamada</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="tip-box"><i class="bi bi-graph-up me-2"></i>Desde la pantalla de API Keys del agente, el botón
+            <strong>"Consumo"</strong> abre un modal con resumen por rango de fechas, totales del período, promedio
+            diario y desglose por agente en barras.
+        </div>
+
+        <!-- Flujo -->
+        <h2 class="section-title" id="flujo"><i class="bi bi-diagram-3 me-2 text-success"></i>Flujo completo de mensajes
+        </h2>
+        <pre><code>Cliente envía WhatsApp
+    ↓
+Node.js (whatsapp-web.js)
+    ↓ POST /whatsapp/webhook_handler/ + NODE_SECRET_KEY
+webhook_handler.py
+    ↓ Verifica sesión activa
+    ↓ Crea/actualiza Contacto, ConversacionWhatsApp, MensajeWhatsApp
+    ↓ async_to_sync → channel_layer.group_send
+        ↓ ChatConsumer (WebSocket) → renderiza HTML → browser del agente humano
+
+    ↓ (si SesionWhatsApp.agente_ia está configurado)
+AgenteConsultor.responder(pregunta, session_id)
+    ↓ _es_ack_simple() → si es ack corto, respuesta directa
+    ↓ _query_retrieval() → búsqueda contextualizada
+    ↓ FAISS MMR (k=5, fetch_k=20)
+    ↓ PromptTemplate.format() → LLM.invoke()
+    ↓ Extraer tokens de response_metadata
+    ↓ ReglaFinConversacion → detectar cierre
+        ↓ Si cierre detectado → AccionFinConversacion → ejecutar acciones
+    ↓ ConsultaResultado (respuesta, tokens, fin_detectado, sin_datos)
+
+    ↓ WhatsAppService.send_message() → Node.js → cliente
+    ↓ ConsumoTokenIA.objects.create() → registro de consumo</code></pre>
+
+        <!-- Tecnologías -->
+        <h2 class="section-title" id="tecnologias"><i class="bi bi-code-slash me-2 text-success"></i>Stack tecnológico
+        </h2>
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="doc-card h-100">
+                    <h6 class="text-success mb-3"><i class="bi bi-server me-2"></i>Backend</h6>
+                    <table class="table docs-table mb-0" style="font-size:.82rem;">
+                        <tbody>
+                        <tr>
+                            <td><strong>Django 4.x</strong></td>
+                            <td>Framework principal, ORM, admin, autenticación</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Django Channels</strong></td>
+                            <td>WebSockets (ASGI) para chat en tiempo real</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Daphne</strong></td>
+                            <td>Servidor ASGI para WebSockets en producción</td>
+                        </tr>
+                        <tr>
+                            <td><strong>PostgreSQL</strong></td>
+                            <td>Base de datos principal</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Redis</strong></td>
+                            <td>Channel layer (WebSockets) + caché de sesiones</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Celery / Cron</strong></td>
+                            <td>Tareas programadas en background</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="doc-card h-100">
+                    <h6 class="text-success mb-3"><i class="bi bi-robot me-2"></i>IA / LangChain</h6>
+                    <table class="table docs-table mb-0" style="font-size:.82rem;">
+                        <tbody>
+                        <tr>
+                            <td><strong>LangChain</strong></td>
+                            <td>Orquestación de LLMs, prompts, historial</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Google Generative AI</strong></td>
+                            <td>Embeddings y LLM (Gemini Flash/Pro)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>OpenAI</strong></td>
+                            <td>Embeddings y LLM alternativo (GPT-4o, etc.)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>FAISS</strong></td>
+                            <td>Búsqueda vectorial local (sin servidor externo)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>DjangoChatMessageHistory</strong></td>
+                            <td>Historial persistente en BD compatible con LangChain</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="doc-card h-100">
+                    <h6 class="text-success mb-3"><i class="bi bi-phone me-2"></i>WhatsApp</h6>
+                    <table class="table docs-table mb-0" style="font-size:.82rem;">
+                        <tbody>
+                        <tr>
+                            <td><strong>Node.js + whatsapp-web.js</strong></td>
+                            <td>Conexión real a WhatsApp Web</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Webhook</strong></td>
+                            <td>Node → Django via POST autenticado con <code>NODE_SECRET_KEY</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>WhatsAppService</strong></td>
+                            <td>Cliente HTTP Django → Node para enviar mensajes</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="doc-card h-100">
+                    <h6 class="text-success mb-3"><i class="bi bi-globe me-2"></i>Frontend</h6>
+                    <table class="table docs-table mb-0" style="font-size:.82rem;">
+                        <tbody>
+                        <tr>
+                            <td><strong>Bootstrap 5</strong></td>
+                            <td>UI components, grid, modales</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Django Templates</strong></td>
+                            <td>Rendering server-side</td>
+                        </tr>
+                        <tr>
+                            <td><strong>WebSockets (JS)</strong></td>
+                            <td>Chat en tiempo real sin polling</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Web Push (VAPID)</strong></td>
+                            <td>Notificaciones push de nuevos mensajes</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Select2</strong></td>
+                            <td>Dropdowns con búsqueda</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- API REST -->
+        <h2 class="section-title" id="api-rest"><i class="bi bi-plug me-2 text-success"></i>API REST</h2>
+        <p>La plataforma expone un endpoint HTTP para integración con sistemas externos.</p>
+
+        <h3 class="sub-title">Enviar mensaje</h3>
+        <pre><code>POST /api/enviar-mensaje/
+Content-Type: application/json
+
+{
+    "session_id": "abc123",
+    "phone": "593991234567",
+    "message": "Hola, tu pedido está listo"
+}</code></pre>
+        <div class="doc-card">
+            <table class="table docs-table mb-0">
+                <thead>
+                <tr>
+                    <th>Detalle</th>
+                    <th>Valor</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>Autenticación</td>
+                    <td>Requiere sesión Django activa (autenticación de usuario)</td>
+                </tr>
+                <tr>
+                    <td>Rate limit</td>
+                    <td>30 solicitudes/minuto por IP</td>
+                </tr>
+                <tr>
+                    <td>Validaciones</td>
+                    <td>Sesión activa, contacto existente en el sistema</td>
+                </tr>
+                <tr>
+                    <td>Respuesta exitosa</td>
+                    <td><code>{"status": "ok", "message_id": "..."}</code></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- WebSockets -->
+        <h2 class="section-title" id="websockets"><i class="bi bi-arrow-left-right me-2 text-success"></i>WebSockets
+        </h2>
+        <p>Django Channels maneja tres consumers WebSocket que permiten actualizaciones en tiempo real sin recargar la
+            página.</p>
+
+        <table class="table docs-table">
+            <thead>
+            <tr>
+                <th>Consumer</th>
+                <th>URL</th>
+                <th>Función</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td><code>ChatConsumer</code></td>
+                <td><code>ws/chat/&lt;conv_id&gt;/</code></td>
+                <td>Transmite mensajes nuevos renderizados en HTML al panel del agente humano</td>
+            </tr>
+            <tr>
+                <td><code>SessionConsumer</code></td>
+                <td><code>ws/session/&lt;session_id&gt;/</code></td>
+                <td>Estado de la sesión WhatsApp: QR code en tiempo real, conectado/desconectado</td>
+            </tr>
+            <tr>
+                <td><code>SessionRoomConsumer</code></td>
+                <td><code>ws/session-room/</code></td>
+                <td>Dashboard global de estado de todas las sesiones</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="tip-box"><i class="bi bi-info-circle me-2"></i>Para WebSockets en producción se requiere <strong>Daphne</strong>
+            como servidor ASGI y <strong>Redis</strong> como channel layer. <code>python manage.py runserver</code> no
+            soporta WebSockets.
+        </div>
+
+        <!-- Recomendaciones -->
+        <h2 class="section-title" id="recomendaciones"><i class="bi bi-lightbulb me-2 text-success"></i>Recomendaciones
+            a futuro</h2>
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="doc-card h-100">
+                    <h5 style="color:#7dd3a8;"><i class="bi bi-mic me-2"></i>Procesamiento de audio y multimedia</h5>
+                    <p style="font-size:.88rem;color:#a0b8c8;">Integrar transcripción de notas de voz (Whisper de OpenAI
+                        o Google Speech-to-Text) para que el agente pueda procesar mensajes de audio. Para imágenes,
+                        usar modelos multimodales (Gemini Vision, GPT-4V) que describan el contenido antes de
+                        responder.</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="doc-card h-100">
+                    <h5 style="color:#7dd3a8;"><i class="bi bi-people me-2"></i>Handoff humano inteligente</h5>
+                    <p style="font-size:.88rem;color:#a0b8c8;">Cuando el agente detecta frustración, preguntas repetidas
+                        sin respuesta satisfactoria o solicitudes de hablar con un humano, transferir automáticamente a
+                        un agente disponible con resumen de la conversación.</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="doc-card h-100">
+                    <h5 style="color:#7dd3a8;"><i class="bi bi-graph-up-arrow me-2"></i>Dashboard de analítica</h5>
+                    <p style="font-size:.88rem;color:#a0b8c8;">Métricas de conversación: tasa de resolución del bot vs.
+                        humano, tiempo promedio de respuesta, preguntas frecuentes no resueltas, satisfacción del
+                        cliente (encuesta post-conversación).</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="doc-card h-100">
+                    <h5 style="color:#7dd3a8;"><i class="bi bi-layers me-2"></i>Agentes especializados por intención
+                    </h5>
+                    <p style="font-size:.88rem;color:#a0b8c8;">Implementar un router de intenciones que derive al agente
+                        correcto según el tema: soporte técnico, ventas, facturación. Cada agente con su propio
+                        vectorstore y prompt.</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="doc-card h-100">
+                    <h5 style="color:#7dd3a8;"><i class="bi bi-shield-check me-2"></i>Seguridad y cumplimiento</h5>
+                    <p style="font-size:.88rem;color:#a0b8c8;">Implementar cifrado end-to-end para mensajes almacenados
+                        en BD, política de retención de datos configurable, y exportación de datos personales bajo
+                        solicitud (GDPR / normativas locales).</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="doc-card h-100">
+                    <h5 style="color:#7dd3a8;"><i class="bi bi-cloud-upload me-2"></i>Vectorstore en la nube</h5>
+                    <p style="font-size:.88rem;color:#a0b8c8;">Migrar FAISS local a Pinecone, Weaviate o pgvector
+                        (PostgreSQL) para mayor escalabilidad y facilitar despliegues multi-instancia sin compartir
+                        sistema de archivos.</p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="doc-card h-100">
+                    <h5 style="color:#7dd3a8;"><i class="bi bi-whatsapp me-2"></i>Integración con Meta API oficial de
+                        WhatsApp</h5>
+                    <p style="font-size:.88rem;color:#a0b8c8;">Migrar del conector actual (Node.js + <code>whatsapp-web.js</code>,
+                        basado en reverse-engineering de WhatsApp Web) a la <strong>Meta Cloud API (WhatsApp Business
+                            API oficial)</strong>.</p>
+                    <ul style="font-size:.82rem;color:#8fa0b4;margin-top:.5rem;padding-left:1.2rem;">
+                        <li>Sin riesgo de ban por uso no oficial de la plataforma</li>
+                        <li>Soporte oficial de Meta con SLA y uptime garantizado</li>
+                        <li>Plantillas HSM (mensajes proactivos aprobados por Meta)</li>
+                        <li>Confirmaciones de lectura, estados de entrega nativos</li>
+                        <li>Botones interactivos, listas, respuestas rápidas</li>
+                        <li>Gestión de medios (imágenes, audio, documentos) con URLs permanentes de Meta</li>
+                    </ul>
+                    <p style="font-size:.82rem;color:#8fa0b4;margin-top:.25rem;">Requiere cuenta <strong>Meta
+                        Business</strong>, número verificado y webhook HTTPS público. El webhook de Django ya recibe
+                        eventos POST — solo cambia el proveedor externo.</p>
+                </div>
+            </div>
+        </div>
+
+        <hr style="border-color:#243040; margin: 3rem 0 1.5rem;">
+        <p style="font-size:.8rem; color:#4a6080; text-align:center;">
+            FastChat DJ &mdash; Documentación técnica generada automáticamente &mdash; {{ "2025"|default:"2025" }}
+        </p>
+
+    </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Highlight sidebar link on scroll
+    const sections = document.querySelectorAll('h2.section-title[id]');
+    const navLinks = document.querySelectorAll('.docs-sidebar .nav-link[href^="#"]');
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                navLinks.forEach(l => l.classList.remove('active'));
+                const link = document.querySelector(`.docs-sidebar .nav-link[href="#${entry.target.id}"]`);
+                if (link) link.classList.add('active');
+            }
+        });
+    }, {rootMargin: '-10% 0px -80% 0px'});
+    sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

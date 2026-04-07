@@ -189,6 +189,26 @@ ESTADO_MENSAJE_CHOICES = (
     ("OPCION_ESCOGIDA", "Opción Escogida"),
 )
 
+SENTIMIENTO_CHOICES = (
+    ('muy_positiva', 'Muy positiva'),
+    ('positiva', 'Positiva'),
+    ('neutral', 'Neutral'),
+    ('tibia', 'Tibia'),
+    ('pasiva', 'Pasiva'),
+    ('negativa', 'Negativa'),
+    ('agresiva', 'Agresiva'),
+)
+
+SENTIMIENTO_EMOJI = {
+    'muy_positiva': '😊', 'positiva': '🙂', 'neutral': '😐',
+    'tibia': '😑', 'pasiva': '😶', 'negativa': '😕', 'agresiva': '😠',
+}
+
+SENTIMIENTO_COLOR = {
+    'muy_positiva': 'success', 'positiva': 'success', 'neutral': 'secondary',
+    'tibia': 'warning', 'pasiva': 'warning', 'negativa': 'danger', 'agresiva': 'danger',
+}
+
 
 class ConversacionWhatsApp(ModeloBase):
     objects = ConversacionWhatsAppManager()
@@ -216,6 +236,15 @@ class ConversacionWhatsApp(ModeloBase):
     modelo = GenericForeignKey('content_type', 'object_id')
     # ----------------------------------------------------------------
     fromMe = models.BooleanField('¿From Me?', default=False)
+    # IA y asignación
+    ai_activo = models.BooleanField('Bot activo', default=True)
+    asignado_a = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='conversaciones_asignadas', verbose_name='Asignado a'
+    )
+    # Análisis de sentimiento (calculado al cerrar)
+    sentimiento = models.CharField('Sentimiento', max_length=20, choices=SENTIMIENTO_CHOICES, blank=True, default='')
+    puntuacion_sentimiento = models.IntegerField('Puntuación (1-10)', null=True, blank=True)
 
     class Meta:
         verbose_name = 'Conversación WhatsApp'
@@ -233,6 +262,18 @@ class ConversacionWhatsApp(ModeloBase):
         if self.conversacion_finalizada:
             return 'danger'
         return 'success'
+
+    def get_sentimiento_emoji(self):
+        return SENTIMIENTO_EMOJI.get(self.sentimiento, '')
+
+    def get_sentimiento_color(self):
+        return SENTIMIENTO_COLOR.get(self.sentimiento, 'secondary')
+
+    def get_sentimiento_display_full(self):
+        emoji = self.get_sentimiento_emoji()
+        label = dict(SENTIMIENTO_CHOICES).get(self.sentimiento, '')
+        score = f' ({self.puntuacion_sentimiento}/10)' if self.puntuacion_sentimiento else ''
+        return f'{emoji} {label}{score}' if label else '—'
 
     def get_estado_color_clasificacion(self):
         if self.clasificacion == 0:
@@ -261,8 +302,18 @@ class ConversacionWhatsApp(ModeloBase):
                     consultor = AgenteResumidor(
                         provider=apikey.proveedor, apikey=apikey.descripcion, conversacion=self
                     )
-                    self.resumen_conversacion = consultor.resumir()
-                except Exception as ex:
+                    analisis = consultor.analizar_sentimiento()
+                    # Guardar sentimiento
+                    if analisis.get('sentimiento'):
+                        self.sentimiento = analisis['sentimiento']
+                        self.puntuacion_sentimiento = analisis.get('puntuacion')
+                    # Usar el resumen extendido del análisis si lo tiene, o pedir uno aparte
+                    resumen_analisis = analisis.get('resumen', '')
+                    if resumen_analisis:
+                        self.resumen_conversacion = resumen_analisis
+                    else:
+                        self.resumen_conversacion = consultor.resumir()
+                except Exception:
                     continue
                 break
             if not self.resumen_conversacion:

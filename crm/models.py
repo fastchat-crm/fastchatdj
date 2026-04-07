@@ -537,6 +537,65 @@ class ConsumoTokenIA(models.Model):
         return f"{self.apikey} — {self.tokens_total} tokens ({self.fecha:%Y-%m-%d})"
 
 
+class AlertaConsumoIA(models.Model):
+    """Umbrales de alerta de consumo de tokens por API key."""
+    apikey = models.OneToOneField(
+        'ApiKeyIA', on_delete=models.CASCADE,
+        related_name='alerta_consumo', verbose_name='API Key'
+    )
+    umbral_diario = models.IntegerField(
+        'Umbral diario (tokens)', default=0,
+        help_text='Notificar cuando el consumo diario supere este valor. 0 = sin límite'
+    )
+    umbral_mensual = models.IntegerField(
+        'Umbral mensual (tokens)', default=0,
+        help_text='Notificar cuando el consumo mensual supere este valor. 0 = sin límite'
+    )
+    notificar_a = models.ManyToManyField(
+        'autenticacion.Usuario', blank=True,
+        related_name='alertas_consumo_ia', verbose_name='Notificar a'
+    )
+    ultimo_aviso_diario = models.DateField('Último aviso diario', null=True, blank=True)
+    ultimo_aviso_mensual = models.DateField('Último aviso mensual', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Alerta de consumo IA'
+        verbose_name_plural = 'Alertas de consumo IA'
+
+    def __str__(self):
+        return f"Alerta [{self.apikey}] — D:{self.umbral_diario} M:{self.umbral_mensual}"
+
+
+class FeedbackMensajeBot(models.Model):
+    """Feedback del agente humano sobre una respuesta generada por el bot."""
+    mensaje = models.OneToOneField(
+        'whatsapp.MensajeWhatsApp', on_delete=models.CASCADE,
+        related_name='feedback', verbose_name='Mensaje'
+    )
+    es_correcto = models.BooleanField('¿Es correcto?')
+    correccion = models.TextField('Respuesta correcta', blank=True, default='')
+    pregunta_original = models.TextField('Pregunta que originó la respuesta', blank=True, default='')
+    agente = models.ForeignKey(
+        'AgentesIA', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='feedbacks', verbose_name='Agente'
+    )
+    usuario = models.ForeignKey(
+        'autenticacion.Usuario', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='feedbacks_bot', verbose_name='Usuario que evaluó'
+    )
+    procesado_vectorstore = models.BooleanField('Agregado al vectorstore', default=False)
+    fecha = models.DateTimeField('Fecha', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Feedback mensaje bot'
+        verbose_name_plural = 'Feedback mensajes bot'
+        ordering = ['-fecha']
+
+    def __str__(self):
+        estado = '✓' if self.es_correcto else '✗'
+        return f"{estado} Feedback msg#{self.mensaje_id}"
+
+
 class DepartamentoChatBot(ModeloBase):
     nombre = models.CharField(max_length=100, verbose_name="Nombre")
     color = models.CharField(max_length=100, verbose_name="Color", default='')

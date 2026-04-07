@@ -16,6 +16,7 @@ from autenticacion.view_perfil import perfilView
 from core.ajax import ConsultasAjax
 from crm.urls import crm_urls
 from fastchatdj.view_clearsitedata import clearSiteDataView
+from fastchatdj.view_docs import docs_view
 from fastchatdj import settings
 from fastchatdj.view_redirect import redirectView, redirectToUrlView
 from seguridad.api_mensajeria import enviar_mensaje_view
@@ -95,6 +96,7 @@ urlpatterns = [
     # pwa
     path('', include('for_django_projects.pwa.urls')),
     path('api/enviar-mensaje/', enviar_mensaje_view, name='api_enviar_mensaje'),
+    path('docs/', docs_view, name='docs'),
 ]
 
 if settings.DEBUG:

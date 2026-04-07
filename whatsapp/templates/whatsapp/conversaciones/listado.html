@@ -22,6 +22,26 @@
         background-color: rgba(0,123,255,0.1);
         border-color: #007bff !important;
     }
+    /* Filtros rápidos */
+    .btn-xs {
+        font-size: .75rem;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+        border: 1px solid #dee2e6;
+        background: #fff;
+        color: #6c757d;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .btn-xs:hover, .btn-xs.active {
+        background: #0d6efd;
+        color: #fff;
+        border-color: #0d6efd;
+    }
+    .btn-xs.active.sin-responder { background: #dc3545; border-color: #dc3545; }
+    /* Bot toggle */
+    #btn-toggle-bot.bot-on  { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+    #btn-toggle-bot.bot-off { background: #fce4ec; color: #c62828; border: 1px solid #ef9a9a; }
 
     /* Añadir estos estilos en tu CSS */
     .deleted-message {
@@ -63,12 +83,44 @@
                 <ul class="nav nav-tabs nav-justified" id="myTab" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link py-2 active" id="open_chats_tab" data-bs-toggle="tab"
-                               data-bs-target="#open_chats_content" type="button" role="tab">Conversaciones Abiertas</button>
+                               data-bs-target="#open_chats_content" type="button" role="tab">
+                            Abiertas
+                            {% if total_sin_leer %}<span class="badge bg-danger ms-1">{{ total_sin_leer }}</span>{% endif %}
+                        </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <a href="/whatsapp/conversaciones-finalizadas/" class="nav-link py-2 bloqueo_pantalla" id="resolved_chats_tab">Conversaciones Finalizadas</a>
+                        <a href="/whatsapp/conversaciones-finalizadas/" class="nav-link py-2 bloqueo_pantalla" id="resolved_chats_tab">Finalizadas</a>
                     </li>
                 </ul>
+                <!-- Filtros rápidos -->
+                <div class="px-3 pt-2 pb-1 d-flex flex-wrap gap-1" id="filtros-rapidos">
+                    <button class="btn btn-xs filter-btn {% if not filtro_sin_responder and not filtro_mis_conv and not filtro_clasificacion %}active{% endif %}"
+                            data-filter="">
+                        <i class="fa fa-th-list me-1"></i>Todas
+                    </button>
+                    <button class="btn btn-xs filter-btn {% if filtro_sin_responder %}active{% endif %}"
+                            data-filter="sin_responder=1"
+                            title="Último mensaje es del cliente">
+                        <i class="fa fa-reply me-1"></i>Sin responder
+                    </button>
+                    <button class="btn btn-xs filter-btn {% if filtro_mis_conv %}active{% endif %}"
+                            data-filter="mis_conv=1">
+                        <i class="fa fa-user me-1"></i>Mis conv.
+                    </button>
+                    <div class="dropdown">
+                        <button class="btn btn-xs filter-btn dropdown-toggle {% if filtro_clasificacion %}active{% endif %}" data-bs-toggle="dropdown">
+                            <i class="fa fa-tag me-1"></i>Etapa
+                        </button>
+                        <ul class="dropdown-menu">
+                            {% for val, label in ESTADOS_CLASIFICACION %}
+                            <li>
+                                <a class="dropdown-item filter-link" href="#"
+                                   data-filter="clasificacion={{ val }}">{{ label }}</a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
 
 
                 <div class="chat-search p-3">
@@ -111,12 +163,23 @@
                             </div>
                         </div><!-- end media-body -->
                     </a><!--end media-->
-                    <div class="d-sm-inline-block align-self-center">
+                    <div class="d-sm-inline-block align-self-center d-flex align-items-center gap-2">
+                        <!-- Asignado a -->
+                        <div class="d-none" id="asignado-container">
+                            <span class="badge bg-light text-dark border" id="asignado-badge" title="Asignado a">
+                                <i class="fa fa-user-circle me-1"></i><span id="asignado-nombre">—</span>
+                            </span>
+                        </div>
+                        <!-- Toggle bot -->
+                        <div class="d-none" id="bot-toggle-container">
+                            <button class="btn btn-sm" id="btn-toggle-bot" title="Activar/pausar bot IA en esta conversación"
+                                    onclick="toggleBot()">
+                                <i class="fa fa-robot me-1"></i><span id="bot-estado-label">Bot</span>
+                            </button>
+                        </div>
                         <div class="btn-group d-none" id="resolver-btn">
                             <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" id="marcar-resuelto"
-                               data-bs-toggle="tooltip"
-                               data-bs-placement="top" data-bs-title="Marcar como resuelto"
-                               data-bs-custom-class="tooltip-primary">
+                               data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Marcar como resuelto">
                                 <i class="fa fa-check-circle"></i> Terminar
                             </a>
                         </div>
@@ -124,18 +187,19 @@
                             <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" data-bs-toggle="dropdown">
                                 <i class="fa fa-ellipsis-v"></i>
                             </a>
-                            <div class="dropdown-menu">
+                            <div class="dropdown-menu dropdown-menu-end">
                                 <a href="javascript:void(0)" class="dropdown-item form_modal" id="cambiar-nombre-contacto" title="Cambiar nombre de contacto">
-                                    <i class="fa fa-user-edit"></i> Cambiar nombre de contacto
+                                    <i class="fa fa-user-edit me-2"></i> Cambiar nombre de contacto
                                 </a>
                                 <a href="javascript:void(0)" class="dropdown-item form_modal" id="cambiar-clasificacion" title="Cambiar clasificacion">
-                                    <i class="fa fa-sync"></i> Cambiar clasificacion
+                                    <i class="fa fa-sync me-2"></i> Cambiar clasificación
                                 </a>
                                 <a class="dropdown-item form_modal" href="javascript:void(0)" id="asignar-conversacion" title="Asignar a otro usuario">
-                                    <i class="fa fa-user-plus"></i> Asignar a otro usuario
+                                    <i class="fa fa-user-plus me-2"></i> Asignar a agente
                                 </a>
+                                <div class="dropdown-divider"></div>
                                 <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida" title="Terminar sin despedida">
-                                    <i class="fa fa-times"></i> Terminar sin despedida
+                                    <i class="fa fa-times me-2 text-danger"></i> Terminar sin despedida
                                 </a>
                             </div>
                         </div>
@@ -273,7 +337,7 @@
             };
         }
 
-        function sessionWebSocket(sessionId) {
+        function sessionWebSocket(sessionId, filtro = '') {
             const wsUrl = `${wsProtocol}//${window.location.host}/ws/sessionroom/${sessionId}/`;
             if (sessionSocket){
                 sessionSocket.close();
@@ -305,10 +369,10 @@
                 console.error('Error en SessionWebSocket:', e);
             };
 
-            cargarConversaciones(sessionId);
+            cargarConversaciones(sessionId, '', filtro);
         }
 
-        sessionWebSocket($('#sesion-selector').val());
+        sessionWebSocket($('#sesion-selector').val(), filtroActivo);
 
         function scrollToBottom(smooth = true) {
             const chatContainer = document.getElementById('chat-messages').querySelector('.simplebar-content-wrapper');
@@ -344,11 +408,10 @@
         // Cambiar de sesión
         $('#sesion-selector').change(function() {
             const sesionId = $(this).val();
-            console.log("Cambiando a sesión:", sesionId);
-            sessionWebSocket(sesionId);
-            // Limpiar chat actual
+            sessionWebSocket(sesionId, filtroActivo);
             $('#mensajes-container').html('<div class="text-center p-5"><i class="fa fa-comments fa-4x text-muted mb-3"></i><p>Selecciona una conversación para ver los mensajes</p></div>');
             $('#chat-footer').hide();
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container').addClass('d-none');
             $('#contacto-nombre').text('Selecciona una conversación');
             $('#contacto-numero').text('');
             $('#contacto-hashedId').text('');
@@ -357,7 +420,7 @@
 
         const buscarConversacion = debounceFunction(function (e) {
             const criterio = $(e.target).val();
-            cargarConversaciones($('#sesion-selector').val(), criterio);
+            cargarConversaciones($('#sesion-selector').val(), criterio, filtroActivo);
         }, 500);
 
         const quitPresenceUpdate = debounceFunction(function (e) {
@@ -472,14 +535,13 @@
         });
 
         // Función para cargar conversaciones
-        function cargarConversaciones(sesionId = null, query = '') {
-            // Mostrar indicador de carga
+        function cargarConversaciones(sesionId = null, query = '', filtro = '') {
             $('#lista-conversaciones').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2">Cargando conversaciones...</p></div>');
 
-            const url = '/whatsapp/conversaciones/' +
-                        '?load_conversations=true' +
-                        (sesionId ? '&sesion_id=' + sesionId : '') +
-                        (query ? '&criterio=' + encodeURIComponent(query) : '');
+            let url = '/whatsapp/conversaciones/?load_conversations=true';
+            if (sesionId) url += '&sesion_id=' + sesionId;
+            if (query)    url += '&criterio=' + encodeURIComponent(query);
+            if (filtro)   url += '&' + filtro;
 
             $.ajax({
                 url: url,
@@ -541,8 +603,20 @@
                     $btnsAction.forEach(btn => $(`${btn}`).attr('data-id', conversacionId));
 
                     response.estado_active ? $('#resolver-btn').removeClass('d-none') : $('#resolver-btn').addClass('d-none');
+                    $('#dropdowns-btn').removeClass('d-none');
 
-                    $('#dropdowns-btn').removeClass('d-none')
+                    // Bot toggle
+                    _convAiActivo = response.ai_activo;
+                    $('#bot-toggle-container').removeClass('d-none');
+                    actualizarBotUI(response.ai_activo);
+
+                    // Asignado a
+                    if (response.asignado_a) {
+                        $('#asignado-nombre').text(response.asignado_a);
+                        $('#asignado-container').removeClass('d-none');
+                    } else {
+                        $('#asignado-container').addClass('d-none');
+                    }
 
                     // Mostrar footer para enviar mensajes
                     $('#chat-footer').show();
@@ -565,6 +639,55 @@
             cargarMensajes(conversacionId);
         }
 
+        // ====================== FILTROS RÁPIDOS =========================
+        let filtroActivo = '{{ url_vars }}'.replace('&sesion_id={{ sesion_seleccionada.id }}', '').replace(/^&/, '');
+
+        function aplicarFiltro(filtro) {
+            filtroActivo = filtro;
+            $('.filter-btn').removeClass('active');
+            $(`.filter-btn[data-filter="${filtro}"]`).addClass('active');
+            const sesionId = $('#sesion-selector').val();
+            cargarConversaciones(sesionId, $('#search-conversacion').val(), filtroActivo);
+        }
+
+        $('.filter-btn').on('click', function() {
+            aplicarFiltro($(this).data('filter'));
+        });
+
+        $(document).on('click', '.filter-link', function(e) {
+            e.preventDefault();
+            aplicarFiltro($(this).data('filter'));
+        });
+
+        // ====================== TOGGLE BOT =========================
+        let _convAiActivo = true;
+
+        window.toggleBot = function() {
+            if (!conversacionActiva) return;
+            $.post("{{ request.path }}", {
+                action: 'toggle-bot',
+                id: conversacionActiva,
+                csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()
+            }, function(data) {
+                if (!data.error) {
+                    _convAiActivo = data.ai_activo;
+                    actualizarBotUI(data.ai_activo);
+                }
+            }, 'json');
+        };
+
+        function actualizarBotUI(activo) {
+            const btn = $('#btn-toggle-bot');
+            const label = $('#bot-estado-label');
+            btn.removeClass('bot-on bot-off');
+            if (activo) {
+                btn.addClass('bot-on');
+                label.text('Bot ON');
+            } else {
+                btn.addClass('bot-off');
+                label.text('Bot PAUSADO');
+            }
+        }
 
         $('.form_modal').on('click', function(e) {
             e.preventDefault();

@@ -92,3 +92,35 @@ class VectorStoreManager:
     def cargar_vectorstore(self, nombre_directorio):
         path = os.path.join(self.storage_dir, nombre_directorio)
         return FAISS.load_local(path, self.embeddings)
+
+    def add_correction(self, vectorstore_path: str, pregunta: str, respuesta_correcta: str) -> bool:
+        """
+        Agrega un par pregunta→respuesta correcta al FAISS existente como nuevo documento.
+        Si el índice no existe aún, lo crea desde cero.
+
+        Returns True si se guardó correctamente.
+        """
+        text = (
+            f"Pregunta: {pregunta.strip()}\n"
+            f"Respuesta correcta: {respuesta_correcta.strip()}"
+        )
+        doc = Document(
+            page_content=text,
+            metadata={"source": "feedback_humano", "tipo": "correccion"}
+        )
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        docs = splitter.split_documents([doc])
+
+        index_file = os.path.join(vectorstore_path, "index.faiss")
+        if os.path.exists(index_file):
+            vs = FAISS.load_local(
+                vectorstore_path, self.embeddings,
+                allow_dangerous_deserialization=True
+            )
+            vs.add_documents(docs)
+        else:
+            os.makedirs(vectorstore_path, exist_ok=True)
+            vs = FAISS.from_documents(docs, self.embeddings)
+
+        vs.save_local(vectorstore_path)
+        return True

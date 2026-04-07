@@ -13,7 +13,8 @@ from core.custom_forms import FormError
 from crm.forms import PerfilNegocioIAForm, ProductoIAForm, ServicioIAForm, RespuestaEntrenadaIAForm, IndustriaForm, \
     ActividadEconomicaForm, AgentesIAForm, ApiKeyIAForm
 from crm.models import PerfilNegocioIA, ProductoIA, ServicioIA, RespuestaEntrenadaIA, Industria, ActividadEconomica, \
-    AgentesIA, DetalleAgentesAI, ApiKeyIA, ReglaFinConversacion, AccionFinConversacion, ConsumoTokenIA
+    AgentesIA, DetalleAgentesAI, ApiKeyIA, ReglaFinConversacion, AccionFinConversacion, ConsumoTokenIA, \
+    AlertaConsumoIA
 from core.funciones import addData, secure_module, log, get_encrypt
 
 
@@ -257,6 +258,19 @@ def entrenamiento_ia_view(request):
                         accion.delete()
                         return JsonResponse({'error': False})
 
+                    elif action == 'alerta_consumo_save':
+                        from autenticacion.models import Usuario as UsuarioModel
+                        pk = int(request.POST['id'])
+                        apikey = ApiKeyIA.objects.get(pk=pk, perfil=perfil)
+                        alerta, _ = AlertaConsumoIA.objects.get_or_create(apikey=apikey)
+                        alerta.umbral_diario  = int(request.POST.get('umbral_diario',  0) or 0)
+                        alerta.umbral_mensual = int(request.POST.get('umbral_mensual', 0) or 0)
+                        alerta.save()
+                        ids_usuarios = json.loads(request.POST.get('notificar_a', '[]'))
+                        alerta.notificar_a.set(UsuarioModel.objects.filter(pk__in=[int(i) for i in ids_usuarios if str(i).isdigit()]))
+                        log(f"Alertas de consumo configuradas para ApiKey {apikey}", request, "change", obj=apikey.id)
+                        return JsonResponse({'error': False})
+
                     elif action == 'reactivarapikey':
                         filtro = ApiKeyIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
                         filtro.estado = True
@@ -445,6 +459,24 @@ def entrenamiento_ia_view(request):
                         })
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})
+
+                elif action == 'alerta_consumo_get':
+                    try:
+                        pk = int(request.GET['id'])
+                        apikey = ApiKeyIA.objects.get(pk=pk, perfil=perfil)
+                        try:
+                            alerta = apikey.alerta_consumo
+                            data_alerta = {
+                                'umbral_diario': alerta.umbral_diario,
+                                'umbral_mensual': alerta.umbral_mensual,
+                                'notificar_a': list(alerta.notificar_a.values_list('id', flat=True)),
+                            }
+                        except AlertaConsumoIA.DoesNotExist:
+                            data_alerta = {'umbral_diario': 0, 'umbral_mensual': 0, 'notificar_a': []}
+                        return JsonResponse(data_alerta)
+                    except Exception as ex:
+                        return JsonResponse({'umbral_diario': 0, 'umbral_mensual': 0, 'notificar_a': [], 'error': str(ex)})
+
             agentes = list(perfil.get_agentes())
             for a in agentes:
                 ok, enc = get_encrypt(a.id)
@@ -461,6 +493,9 @@ def entrenamiento_ia_view(request):
                     a.estado_agente = 'err'
             data['agentes'] = agentes
             data['apis'] = perfil.get_apis()
+            # Usuarios para modal de alertas
+            from autenticacion.models import Usuario as UsuarioModel
+            data['usuarios_sistema'] = UsuarioModel.objects.filter(is_active=True).order_by('first_name', 'last_name')
     except Exception as ex:
         error_line = sys.exc_info()[-1].tb_lineno
         messages.error(request, f"Error inesperado: {ex} - Línea {error_line}")

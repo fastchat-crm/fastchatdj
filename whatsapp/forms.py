@@ -1,5 +1,6 @@
 from django.utils.safestring import mark_safe
 
+from autenticacion.models import Usuario
 from core.custom_models import ModelFormBase
 from crm.models import DepartamentoChatBot
 from .models import SesionWhatsApp, Contacto, ConversacionWhatsApp, MensajeWhatsAppProgramado
@@ -100,6 +101,20 @@ class CambiarNombreContactoForm(ModelFormBase):
             self.fields[k].widget.attrs['col'] = '12'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+
+class AsignarAgenteForm(ModelFormBase):
+    class Meta:
+        model = ConversacionWhatsApp
+        fields = ('asignado_a',)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['asignado_a'].queryset = Usuario.objects.filter(is_active=True).order_by('first_name')
+        self.fields['asignado_a'].widget.attrs['class'] = 'jselect2'
+        self.fields['asignado_a'].widget.attrs['col'] = '12'
+        self.fields['asignado_a'].label = 'Asignar a'
+        self.fields['asignado_a'].required = False
 
 
 class MensajeWhatsAppProgramadoForm(ModelFormBase):
