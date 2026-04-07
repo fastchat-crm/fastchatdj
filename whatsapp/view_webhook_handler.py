@@ -689,6 +689,7 @@ def process_incoming_message(session, event_data, channel_layer):
                 'type': 'whatsapp_event',
                 'event': 'new_message',
                 'conversation_id': conversation.id,
+                'from_me': False,
                 'timestamp': message_date.isoformat()
             }
         )
@@ -831,7 +832,8 @@ def process_sent_message(session, event_data, channel_layer):
             {
                 'type': 'whatsapp_event',
                 'event': 'new_message',
-                'conversation_id': conversation.id
+                'conversation_id': conversation.id,
+                'from_me': True,
             }
         )
 

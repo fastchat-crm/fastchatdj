@@ -62,6 +62,26 @@
 {% endblock %}
 
 {% block content %}
+
+{# ── Toast de nuevo mensaje ──────────────────────────────────────────────── #}
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:9999">
+    <div id="toast-nuevo-mensaje" class="toast align-items-center text-white border-0"
+         role="alert" aria-live="assertive" aria-atomic="true"
+         style="background:linear-gradient(135deg,#25d366,#128c5e);min-width:280px;">
+        <div class="d-flex">
+            <div class="toast-body d-flex align-items-center gap-2">
+                <i class="fab fa-whatsapp fs-5"></i>
+                <div>
+                    <div class="fw-semibold" id="toast-nombre" style="font-size:.88rem;">Nuevo mensaje</div>
+                    <div class="text-white-75" id="toast-sub" style="font-size:.78rem;opacity:.85;">WhatsApp</div>
+                </div>
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                    data-bs-dismiss="toast" aria-label="Cerrar"></button>
+        </div>
+    </div>
+</div>
+
     <div class="row">
         <div class="col-12">
             <div class="chat-box-left">
@@ -304,6 +324,9 @@
         let sessionSocket;
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 
+        // Declarar filtroActivo aquí para evitar ReferenceError antes de su uso
+        let filtroActivo = '{{ url_vars }}'.replace('&sesion_id={{ sesion_seleccionada.id }}', '').replace(/^&/, '');
+
         function conectarWebSocket(conversacionId) {
             const wsUrl = `${wsProtocol}//${window.location.host}/ws/chat/${conversacionId}/`;
             if (chatSocket){
@@ -357,6 +380,10 @@
                         conversacion.replaceWith(data.html);
                     } else {
                         $(`#lista-conversaciones`).append(data.html);
+                    }
+                    // Sonido + toast solo para mensajes entrantes del cliente
+                    if (!data.from_me) {
+                        notificarNuevoMensaje(data.contacto_nombre || 'Nuevo mensaje');
                     }
                 }
             };
@@ -640,7 +667,6 @@
         }
 
         // ====================== FILTROS RÁPIDOS =========================
-        let filtroActivo = '{{ url_vars }}'.replace('&sesion_id={{ sesion_seleccionada.id }}', '').replace(/^&/, '');
 
         function aplicarFiltro(filtro) {
             filtroActivo = filtro;
@@ -763,6 +789,60 @@
         }
         });
     });
+    /* ── Sonido + Toast de nuevo mensaje ─────────────────────────────── */
+    const _toastEl = document.getElementById('toast-nuevo-mensaje');
+    const _bsToast = _toastEl ? new bootstrap.Toast(_toastEl, {delay: 4000}) : null;
+
+    function _beep() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            // Primer tono
+            const o1 = ctx.createOscillator();
+            const g1 = ctx.createGain();
+            o1.connect(g1); g1.connect(ctx.destination);
+            o1.type = 'sine'; o1.frequency.value = 880;
+            g1.gain.setValueAtTime(0, ctx.currentTime);
+            g1.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+            g1.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.18);
+            o1.start(ctx.currentTime); o1.stop(ctx.currentTime + 0.18);
+            // Segundo tono (eco suave)
+            const o2 = ctx.createOscillator();
+            const g2 = ctx.createGain();
+            o2.connect(g2); g2.connect(ctx.destination);
+            o2.type = 'sine'; o2.frequency.value = 1100;
+            g2.gain.setValueAtTime(0, ctx.currentTime + 0.12);
+            g2.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.18);
+            g2.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.32);
+            o2.start(ctx.currentTime + 0.12); o2.stop(ctx.currentTime + 0.32);
+        } catch(e) { /* navegador sin AudioContext */ }
+    }
+
+    function _mostrarToast(nombre) {
+        if (!_bsToast) return;
+        document.getElementById('toast-nombre').textContent = nombre || 'Nuevo mensaje';
+        document.getElementById('toast-sub').textContent = 'Mensaje entrante de WhatsApp';
+        _bsToast.show();
+    }
+
+    function notificarNuevoMensaje(nombre) {
+        _beep();
+        _mostrarToast(nombre);
+        // Título de la pestaña parpadeante
+        if (document.hidden) {
+            let _orig = document.title;
+            let _blink = true;
+            let _iv = setInterval(function() {
+                document.title = _blink ? '💬 Nuevo mensaje' : _orig;
+                _blink = !_blink;
+            }, 800);
+            document.addEventListener('visibilitychange', function _stop() {
+                clearInterval(_iv);
+                document.title = _orig;
+                document.removeEventListener('visibilitychange', _stop);
+            });
+        }
+    }
+
     async function transcribirAudio(ctr) {
         $(ctr).find('span').html('Transcribiendo');
         $(ctr).find('i.fa-ellipsis').removeClass('d-none');
