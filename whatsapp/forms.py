@@ -1,3 +1,4 @@
+from django.db.models import Count, Q
 from django.utils.safestring import mark_safe
 
 from autenticacion.models import Usuario
@@ -106,15 +107,52 @@ class CambiarNombreContactoForm(ModelFormBase):
 class AsignarAgenteForm(ModelFormBase):
     class Meta:
         model = ConversacionWhatsApp
-        fields = ('asignado_a',)
+        fields = ('asignado_a', 'nota_interna')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['asignado_a'].queryset = Usuario.objects.filter(is_active=True).order_by('first_name')
+
+        # Queryset con carga de trabajo anotada
+        agentes = Usuario.objects.filter(is_active=True).annotate(
+            carga=Count(
+                'conversaciones_asignadas',
+                filter=Q(conversaciones_asignadas__conversacion_finalizada=False)
+            )
+        ).order_by('first_name')
+
+        # Etiquetas con carga: "Juan Pérez (3 activas)"
+        choices = [('', '---------')]
+        for u in agentes:
+            label = u.get_full_name() or u.username
+            if u.carga:
+                label += f'  ({u.carga} activa{"s" if u.carga != 1 else ""})'
+            choices.append((u.pk, label))
+
+        from django import forms as dj_forms
+        self.fields['asignado_a'] = dj_forms.ChoiceField(
+            choices=choices,
+            required=False,
+            label='Asignar a',
+        )
         self.fields['asignado_a'].widget.attrs['class'] = 'jselect2'
         self.fields['asignado_a'].widget.attrs['col'] = '12'
-        self.fields['asignado_a'].label = 'Asignar a'
-        self.fields['asignado_a'].required = False
+
+        self.fields['nota_interna'].widget.attrs['class'] = 'form-control'
+        self.fields['nota_interna'].widget.attrs['rows'] = '3'
+        self.fields['nota_interna'].widget.attrs['col'] = '12'
+        self.fields['nota_interna'].widget.attrs['placeholder'] = 'Nota interna para el agente (no se envía al cliente)…'
+        self.fields['nota_interna'].label = 'Nota interna'
+        self.fields['nota_interna'].required = False
+
+    def save(self, commit=True):
+        instance = super(ModelFormBase, self).save(commit=False)
+        pk = self.cleaned_data.get('asignado_a') or None
+        instance.asignado_a_id = int(pk) if pk else None
+        instance.nota_interna = self.cleaned_data.get('nota_interna', '')
+        if commit:
+            instance.save(update_fields=['asignado_a', 'nota_interna', 'fecha_asignacion',
+                                         'ai_activo'])
+        return instance
 
 
 class MensajeWhatsAppProgramadoForm(ModelFormBase):

@@ -67,6 +67,9 @@ def conversacionesView(request):
                 'ai_activo': conversacion.ai_activo,
                 'asignado_a': conversacion.asignado_a.get_full_name() if conversacion.asignado_a else '',
                 'asignado_foto': conversacion.asignado_a.get_foto_url() if conversacion.asignado_a else '',
+                'nota_interna': conversacion.nota_interna or '',
+                'fecha_asignacion': conversacion.fecha_asignacion.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_asignacion else '',
+                'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_registro else '',
             })
         elif action == 'cambiar-clasificacion':
             try:
@@ -210,6 +213,13 @@ def conversacionesView(request):
                         raise NameError(f'Error al guardar la clasificación: {form.errors}')
                 elif action == 'asignar-conversacion':
                     filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['pk']))
+                    # Marcar fecha_asignacion y pausar bot antes de pasar al form
+                    if request.POST.get('asignado_a'):
+                        filtro.fecha_asignacion = timezone.now()
+                        filtro.ai_activo = False   # auto-pausar bot al asignar humano
+                    else:
+                        filtro.fecha_asignacion = None
+                        filtro.ai_activo = True    # reactivar bot si se desasigna
                     form = AsignarAgenteForm(request.POST, instance=filtro, request=request)
                     if form.is_valid():
                         filtro = form.save()
@@ -231,19 +241,38 @@ def conversacionesView(request):
                             except Exception:
                                 pass
                         nombre_asignado = asignado.get_full_name() if asignado else ''
-                        foto_asignado = asignado.get_foto_url() if asignado else ''
+                        # Mensaje de handoff al cliente (si la sesión tiene mensaje configurado)
+                        if asignado:
+                            try:
+                                sesion = filtro.contacto.sesion
+                                handoff_msg = getattr(sesion, 'mensaje_handoff', None)
+                                if not handoff_msg:
+                                    handoff_msg = f'Hola, te atenderá {nombre_asignado}. En breve te contactamos.'
+                                service = WhatsAppService()
+                                service.send_text_message(
+                                    sesion.session_id,
+                                    filtro.contacto.from_number,
+                                    handoff_msg,
+                                    conversacion_id=filtro.id,
+                                    simularEscritura=True,
+                                )
+                            except Exception:
+                                pass
+                        # JS para actualizar header sin recargar
                         if nombre_asignado:
                             js = (
                                 f"$('#asignado-nombre').text({repr(nombre_asignado)});"
                                 f"$('#asignado-container').removeClass('d-none');"
+                                f"actualizarBotUI(false);"
                                 f"bootstrap.Modal.getInstance(document.getElementById('modalDetalle'))?.hide();"
-                                f"alertaSuccess('Conversación asignada a {nombre_asignado}.');"
+                                f"alertaSuccess('Conversación asignada a {nombre_asignado}. Bot pausado.');"
                             )
                         else:
                             js = (
                                 "$('#asignado-container').addClass('d-none');"
+                                "actualizarBotUI(true);"
                                 "bootstrap.Modal.getInstance(document.getElementById('modalDetalle'))?.hide();"
-                                "alertaSuccess('Asignación eliminada.');"
+                                "alertaSuccess('Asignación eliminada. Bot reactivado.');"
                             )
                         res_json.append({
                             'error': False,

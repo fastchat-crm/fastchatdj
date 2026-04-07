@@ -179,7 +179,10 @@
                             <div>
                                 <h6 class="my-0 fw-medium text-dark fs-14" id="contacto-nombre">Selecciona una conversación</h6>
                                 <p class="text-muted mb-0" id="contacto-numero"></p>
-                                <p class="text-muted mb-0 d-none d-sm-block"><span id="contacto-hashedId"></span></p>
+                                <p class="text-muted mb-0 d-none d-sm-block">
+                                    <span id="contacto-hashedId"></span>
+                                    <small id="conv-fecha-inicio" class="ms-2 text-muted" style="display:none;font-size:.75rem;"></small>
+                                </p>
                             </div>
                         </div><!-- end media-body -->
                     </a><!--end media-->
@@ -446,6 +449,7 @@
             $('#contacto-nombre').text('Selecciona una conversación');
             $('#contacto-numero').text('');
             $('#contacto-hashedId').text('');
+            $('#conv-fecha-inicio').hide();
             conversacionActiva = null;
         });
 
@@ -645,20 +649,31 @@
 
                     $btnsAction.forEach(btn => $(`${btn}`).attr('data-id', conversacionId));
 
-                    response.estado_active ? $('#resolver-btn').removeClass('d-none') : $('#resolver-btn').addClass('d-none');
-                    $('#dropdowns-btn').removeClass('d-none');
+                    if (response.estado_active) {
+                        $('#resolver-btn').removeClass('d-none').show();
+                    } else {
+                        $('#resolver-btn').addClass('d-none').hide();
+                    }
+                    $('#dropdowns-btn').removeClass('d-none').show();
 
                     // Bot toggle
                     _convAiActivo = response.ai_activo;
-                    $('#bot-toggle-container').removeClass('d-none');
+                    $('#bot-toggle-container').removeClass('d-none').show();
                     actualizarBotUI(response.ai_activo);
 
                     // Asignado a
                     if (response.asignado_a) {
                         $('#asignado-nombre').text(response.asignado_a);
-                        $('#asignado-container').removeClass('d-none');
+                        $('#asignado-container').removeClass('d-none').show();
                     } else {
-                        $('#asignado-container').addClass('d-none');
+                        $('#asignado-container').addClass('d-none').hide();
+                    }
+
+                    // Fecha inicio conversación
+                    if (response.fecha_inicio) {
+                        $('#conv-fecha-inicio').text('Inicio: ' + response.fecha_inicio).show();
+                    } else {
+                        $('#conv-fecha-inicio').hide();
                     }
 
                     // Mostrar footer para enviar mensajes
@@ -808,9 +823,27 @@
     const _toastEl = document.getElementById('toast-nuevo-mensaje');
     const _bsToast = _toastEl ? new bootstrap.Toast(_toastEl, {delay: 4000}) : null;
 
+    // AudioContext creado lazily tras primer gesto del usuario (política autoplay de Chrome)
+    let _audioCtx = null;
+    function _getAudioCtx() {
+        if (!_audioCtx) {
+            try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+        }
+        if (_audioCtx && _audioCtx.state === 'suspended') {
+            _audioCtx.resume();
+        }
+        return _audioCtx;
+    }
+    // Inicializar el contexto en el primer clic del usuario para que esté listo
+    document.addEventListener('click', function _initAudio() {
+        _getAudioCtx();
+        document.removeEventListener('click', _initAudio);
+    }, { once: true });
+
     function _beep() {
         try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const ctx = _getAudioCtx();
+            if (!ctx) return;
             // Primer tono
             const o1 = ctx.createOscillator();
             const g1 = ctx.createGain();

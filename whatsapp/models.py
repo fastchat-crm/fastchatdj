@@ -242,6 +242,8 @@ class ConversacionWhatsApp(ModeloBase):
         Usuario, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='conversaciones_asignadas', verbose_name='Asignado a'
     )
+    fecha_asignacion = models.DateTimeField('Fecha de asignación', null=True, blank=True)
+    nota_interna = models.TextField('Nota interna', blank=True, default='')
     # Análisis de sentimiento (calculado al cerrar)
     sentimiento = models.CharField('Sentimiento', max_length=20, choices=SENTIMIENTO_CHOICES, blank=True, default='')
     puntuacion_sentimiento = models.IntegerField('Puntuación (1-10)', null=True, blank=True)
