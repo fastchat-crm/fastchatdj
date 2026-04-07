@@ -1,23 +1,36 @@
 {% extends 'base.html' %}
 {% block head %}
 <style>
-    /* ── Layout flexbox para que el footer no tape los mensajes ── */
+    /* ── Layout flexbox: anula el position:absolute del tema ── */
     .chat-box-right {
         display: flex !important;
         flex-direction: column;
         height: calc(100vh - 120px) !important;
+        position: relative;
     }
-    #chat-header  { flex-shrink: 0; }
-    .chat-body    { flex: 1 1 auto; height: auto !important; overflow-y: auto; min-height: 0; }
-    #chat-footer  {
+    #chat-header { flex-shrink: 0; }
+
+    /* Anula position:absolute del tema para que el footer entre en el flujo */
+    .chat-box-right .chat-body {
+        flex: 1 1 auto !important;
+        height: auto !important;
+        min-height: 0;
+        overflow-y: auto;
+        padding-bottom: 0 !important;
+    }
+    .chat-box-right .chat-footer {
+        position: static !important;   /* cancela el absolute del tema */
         flex-shrink: 0;
+        width: 100% !important;
         background: #f0f2f5 !important;
         border-top: 1px solid #dde1e7;
-        box-shadow: 0 -2px 6px rgba(0,0,0,.06);
+        box-shadow: 0 -2px 8px rgba(0,0,0,.07);
+        border-radius: 0 0 8px 8px;
+        padding: 10px 14px !important;
     }
 
     .chat-body-left {
-        height: calc(100vh - 500px) !important;
+        {#height: calc(100vh - 500px) !important;#}
         overflow-y: auto;
     }
 
@@ -533,8 +546,10 @@
 
             // Deshabilitar el botón de envío
             const submitBtn = form.find('button[type="submit"]');
-            const originalBtnText = submitBtn.html();
-            submitBtn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Enviando...');
+            // Estado "enviando": spinner dentro del botón circular, sin texto
+            submitBtn.prop('disabled', true)
+                .css('background', '#1aab52')
+                .html('<span class="spinner-border spinner-border-sm" role="status" style="width:14px;height:14px;border-width:2px;"></span>');
 
             $.ajax({
                 url: '/whatsapp/conversaciones/',

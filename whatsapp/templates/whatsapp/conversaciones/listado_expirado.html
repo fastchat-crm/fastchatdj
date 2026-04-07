@@ -1,23 +1,33 @@
 {% extends 'base.html' %}
 {% block head %}
 <style>
-    /* ── Layout flexbox ── */
+    /* ── Layout flexbox: anula el position:absolute del tema ── */
     .chat-box-right {
         display: flex !important;
         flex-direction: column;
         height: calc(100vh - 120px) !important;
+        position: relative;
     }
     #chat-header { flex-shrink: 0; }
-    .chat-body   { flex: 1 1 auto; height: auto !important; overflow-y: auto; min-height: 0; }
-    #chat-footer {
+    .chat-box-right .chat-body {
+        flex: 1 1 auto !important;
+        height: auto !important;
+        min-height: 0;
+        overflow-y: auto;
+    }
+    .chat-box-right .chat-footer {
+        position: static !important;
         flex-shrink: 0;
+        width: 100% !important;
         background: #f0f2f5 !important;
         border-top: 1px solid #dde1e7;
-        box-shadow: 0 -2px 6px rgba(0,0,0,.06);
+        box-shadow: 0 -2px 8px rgba(0,0,0,.07);
+        border-radius: 0 0 8px 8px;
+        padding: 10px 14px !important;
     }
 
     .chat-body-left {
-        height: calc(100vh - 520px) !important;
+        {#height: calc(100vh - 520px) !important;#}
         overflow-y: auto;
     }
     .conversacion-item {
