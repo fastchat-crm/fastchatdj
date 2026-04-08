@@ -43,10 +43,10 @@ class ConsultaResultado:
 # ---------------------------------------------------------------------------
 # Parámetros de control de tokens
 # ---------------------------------------------------------------------------
-_FAISS_K           = 4      # chunks a recuperar — suficiente para el 95% de preguntas
-_FAISS_FETCH_K     = 15     # candidatos pre-MMR
-_MAX_CONTEXT_CHARS = 2_200  # techo del contexto total enviado al LLM
-_MAX_STATIC_CHARS  = 1_200  # máx chars del contexto estático (el resto va a FAISS)
+_FAISS_K           = 5      # chunks a recuperar
+_FAISS_FETCH_K     = 20     # candidatos pre-MMR
+_MAX_CONTEXT_CHARS = 4_000  # techo del contexto total — suficiente para menús completos
+_MAX_STATIC_CHARS  = 2_000  # máx chars del contexto estático
 _HISTORY_TURNS     = 4      # turnos de historial (4 turnos = 8 mensajes)
 _USER_SNIPPET      = 160    # chars por mensaje de usuario en historial
 _AI_SNIPPET        = 240    # chars por respuesta IA en historial
@@ -116,6 +116,20 @@ def _es_ack_simple(texto: str) -> bool:
     """True si el mensaje es una confirmación breve que no necesita buscar en FAISS."""
     t = texto.strip()
     return len(t) <= 30 and bool(_ACK_RE.match(t))
+
+
+_AMPLIA_RE = re.compile(
+    r'(men[uú]|carta|qu[eé]\s+tiene[sn]?|qu[eé]\s+ofrecen?|lista\s+de|cat[aá]logo'
+    r'|todas?\s+(las?|los?)\s+opciones?|todo\s+lo\s+que|todos?\s+(los?|las?)\s+platos?'
+    r'|qu[eé]\s+hay|productos?|servicios?|precios?\s+de\s+todo|todo\s+el\s+men[uú]'
+    r'|qu[eé]\s+venden?|qu[eé]\s+sirven?|qu[eé]\s+tienen\s+disponible)',
+    re.IGNORECASE | re.UNICODE,
+)
+
+
+def _es_consulta_amplia(texto: str) -> bool:
+    """True si el usuario pide información amplia (menú completo, catálogo, lista de productos)."""
+    return bool(_AMPLIA_RE.search(texto.strip()))
 
 
 # ---------------------------------------------------------------------------
@@ -420,14 +434,32 @@ class AgenteConsultor:
             query_faiss = self._query_retrieval(pregunta, contexto_previo)
             logger.debug("FAISS query: %r", query_faiss)
 
+            # Modo amplio para consultas de catálogo/menú completo
+            es_consulta_amplia = _es_consulta_amplia(pregunta)
+            k_actual     = _FAISS_K * 3 if es_consulta_amplia else _FAISS_K
+            fetch_actual = _FAISS_FETCH_K * 2 if es_consulta_amplia else _FAISS_FETCH_K
+
+            if self.retriever:
+                self.retriever.search_kwargs.update({"k": k_actual, "fetch_k": fetch_actual})
+            if self.retriever_enlaces:
+                self.retriever_enlaces.search_kwargs.update({"k": k_actual, "fetch_k": fetch_actual})
+
             docs = self.retriever.get_relevant_documents(query_faiss) if self.retriever else []
             docs_enlaces = (
                 self.retriever_enlaces.get_relevant_documents(query_faiss)
                 if self.retriever_enlaces else []
             )
-            logger.debug("FAISS: %d docs + %d enlaces", len(docs), len(docs_enlaces))
+            logger.debug("FAISS: %d docs + %d enlaces (amplia=%s)", len(docs), len(docs_enlaces), es_consulta_amplia)
             todos_docs = _dedup_preservando_orden(docs + docs_enlaces)
-            contexto = _trim_contexto(todos_docs, _MAX_CONTEXT_CHARS)
+            # Para consultas amplias usar hasta el doble del techo
+            max_chars_actual = min(_MAX_CONTEXT_CHARS * 2, 8_000) if es_consulta_amplia else _MAX_CONTEXT_CHARS
+            contexto = _trim_contexto(todos_docs, max_chars_actual)
+
+            # Restaurar k normal
+            if self.retriever:
+                self.retriever.search_kwargs.update({"k": _FAISS_K, "fetch_k": _FAISS_FETCH_K})
+            if self.retriever_enlaces:
+                self.retriever_enlaces.search_kwargs.update({"k": _FAISS_K, "fetch_k": _FAISS_FETCH_K})
 
             if not contexto and not self.contexto_estatico:
                 _sin_datos = True

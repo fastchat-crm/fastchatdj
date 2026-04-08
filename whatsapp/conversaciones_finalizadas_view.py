@@ -11,7 +11,7 @@ from core.funciones import addData, paginador, secure_module, log
 from seguridad.templatetags.templatefunctions import encrypt
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp
 from .services import WhatsAppService
-from .conversaciones_view import _control_respuestas, _tokens_conversacion
+from .conversaciones_view import _control_respuestas, _tokens_conversacion, _estadisticas_conversacion
 
 @login_required
 @secure_module
@@ -67,8 +67,7 @@ def conversacionesFinalizadasView(request):
                     'show_date': True,
                     'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y') if conversacion.fecha_registro else '',
                     'fecha_fin': conversacion.fecha_fin_conversacion.strftime('%d/%m/%Y') if conversacion.fecha_fin_conversacion else '',
-                    **_tokens_conversacion(conversacion),
-                    **_control_respuestas(conversacion),
+                    **_estadisticas_conversacion(conversacion),
                 })
             except Exception as ex:
                 pass

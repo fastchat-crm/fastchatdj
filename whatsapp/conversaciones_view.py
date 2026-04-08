@@ -14,6 +14,78 @@ from .forms import CambiarClasificacionForm, CambiarNombreContactoForm, AsignarA
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp, SENTIMIENTO_CHOICES
 from .services import WhatsAppService
 
+def _estadisticas_conversacion(conversacion):
+    """Devuelve dict completo de estadísticas para el panel de la conversación."""
+    from django.db.models import Count, Sum, Max
+    from django.utils import timezone
+
+    # Tokens
+    tok = conversacion.consumos_token.aggregate(
+        t_in=Sum('tokens_entrada'), t_out=Sum('tokens_salida'), t_total=Sum('tokens_total'),
+    )
+    tokens_in  = tok['t_in']  or 0
+    tokens_out = tok['t_out'] or 0
+    tokens_tot = tok['t_total'] or 0
+
+    # Modelo más usado
+    modelo_top = (
+        conversacion.consumos_token.values('modelo')
+        .annotate(n=Count('id')).order_by('-n')
+        .values_list('modelo', flat=True).first() or ''
+    )
+
+    # Mensajes
+    try:
+        stats = conversacion.estadisticas
+        total_msgs   = stats.total_mensajes
+        msgs_cliente = stats.mensajes_cliente
+        msgs_asesor  = stats.mensajes_asesor
+        msgs_ia      = stats.mensajes_ia
+    except Exception:
+        total_msgs = msgs_cliente = msgs_asesor = msgs_ia = 0
+
+    # Duración
+    inicio = conversacion.fecha_registro
+    fin    = conversacion.fecha_fin_conversacion or timezone.now()
+    if inicio:
+        delta   = fin - inicio
+        mins    = int(delta.total_seconds() // 60)
+        horas   = mins // 60
+        mins_r  = mins % 60
+        duracion = f'{horas}h {mins_r}m' if horas else f'{mins_r} min'
+    else:
+        duracion = '—'
+
+    # Estado badge
+    if conversacion.estado_conversacion == 0:
+        estado_badge = '<span class="badge bg-success">Activa</span>'
+    else:
+        estado_badge = '<span class="badge bg-secondary">Finalizada</span>'
+
+    # Primer agente
+    primer_agente = ''
+    if conversacion.primer_agente:
+        primer_agente = conversacion.primer_agente.get_full_name() or conversacion.primer_agente.username
+
+    # Control de respuestas
+    cr = _control_respuestas(conversacion)
+
+    return {
+        'tokens_entrada': tokens_in,
+        'tokens_salida': tokens_out,
+        'tokens_total': tokens_tot,
+        'modelo_ia': modelo_top,
+        'total_mensajes': total_msgs,
+        'mensajes_cliente': msgs_cliente,
+        'mensajes_asesor': msgs_asesor,
+        'mensajes_ia': msgs_ia,
+        'duracion': duracion,
+        'estado_badge': estado_badge,
+        'primer_agente': primer_agente,
+        **cr,
+    }
+
+
 def _control_respuestas(conversacion):
     """Devuelve estadísticas de participación por tipo de remitente en una conversación."""
     try:
@@ -110,9 +182,14 @@ def conversacionesView(request):
                 'fecha_asignacion': conversacion.fecha_asignacion.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_asignacion else '',
                 'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_registro else '',
                 'bloquear_cierre': conversacion.bloquear_cierre,
-                **_tokens_conversacion(conversacion),
-                **_control_respuestas(conversacion),
+                **_estadisticas_conversacion(conversacion),
             })
+        elif action == 'ver_estadisticas':
+            try:
+                conversacion = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['pk']))
+                return JsonResponse({'error': False, **_estadisticas_conversacion(conversacion)})
+            except Exception as ex:
+                return JsonResponse({'error': True, 'message': str(ex)})
         elif action == 'cambiar-clasificacion':
             try:
                 filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))

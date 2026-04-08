@@ -307,6 +307,10 @@
                                     <i class="fa fa-user-plus me-2"></i> Asignar a agente
                                 </a>
                                 <div class="dropdown-divider"></div>
+                                <a class="dropdown-item" href="javascript:void(0)"
+                                   onclick="toggleEstadisticasPanel()">
+                                    <i class="fa fa-chart-line me-2 text-primary"></i> Estadísticas
+                                </a>
                                 <a class="dropdown-item" href="javascript:void(0)" id="btn-control-respuestas"
                                    onclick="toggleControlRespuestas()">
                                     <i class="fa fa-chart-bar me-2 text-info"></i> Control de Respuestas
@@ -325,15 +329,71 @@
                     </div>
                 </div><!-- end chat-header -->
 
+                <!-- Panel Estadísticas -->
+                <div id="stats-panel" class="d-none border-bottom" style="background:#f0f4ff;font-size:.8rem;">
+                    <div class="px-3 py-2">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <strong class="text-primary"><i class="fa fa-chart-line me-1"></i>Estadísticas de conversación</strong>
+                            <span id="stat-estado"></span>
+                            <span class="ms-auto text-muted"><i class="fa fa-clock me-1"></i><span id="stat-duracion">—</span></span>
+                        </div>
+                        <div class="row g-1">
+                            <div class="col-auto">
+                                <div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;">
+                                    <div class="fw-bold text-dark" id="stat-msgs-total">0</div>
+                                    <div class="text-muted" style="font-size:.7rem;">Total msgs</div>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;">
+                                    <div class="fw-bold text-warning" id="stat-msgs-cliente">0</div>
+                                    <div class="text-muted" style="font-size:.7rem;">Cliente</div>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;">
+                                    <div class="fw-bold text-success" id="stat-msgs-agente">0</div>
+                                    <div class="text-muted" style="font-size:.7rem;">Agente</div>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;">
+                                    <div class="fw-bold" style="color:#5c6bc0" id="stat-msgs-ia">0</div>
+                                    <div class="text-muted" style="font-size:.7rem;">IA</div>
+                                </div>
+                            </div>
+                            <div class="col-auto ms-2">
+                                <div class="border rounded px-2 py-1 bg-white" style="min-width:140px;">
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <i class="fa fa-microchip" style="color:#5c35d4;font-size:.75rem;"></i>
+                                        <span class="fw-bold" id="stat-tokens-total">0</span>
+                                        <small class="text-muted">tokens</small>
+                                    </div>
+                                    <div class="text-muted" style="font-size:.7rem;">
+                                        ↑<span id="stat-tokens-entrada">0</span> prompt &nbsp;·&nbsp; ↓<span id="stat-tokens-salida">0</span> resp
+                                    </div>
+                                    <div class="text-muted mt-1" style="font-size:.7rem;"><i class="fa fa-robot me-1"></i><span id="stat-modelo">—</span></div>
+                                </div>
+                            </div>
+                            <div class="col-auto ms-1">
+                                <div class="border rounded px-2 py-1 bg-white" style="min-width:100px;">
+                                    <div class="text-muted" style="font-size:.7rem;">Primer agente</div>
+                                    <div class="fw-bold" id="stat-primer-agente" style="font-size:.78rem;">—</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Panel Control de Respuestas -->
                 <div id="control-respuestas-panel" class="d-none px-3 py-2 border-bottom"
                      style="background:#f8f9fa;font-size:.82rem;">
                     <div class="d-flex align-items-center gap-3 flex-wrap">
                         <strong><i class="fa fa-chart-bar me-1 text-info"></i>Control de Respuestas</strong>
-                        <span class="badge bg-indigo text-white" id="cr-ia-badge" style="background:#5c6bc0;">
+                        <span class="badge" style="background:#5c6bc0;color:#fff;">
                             <i class="fa fa-robot me-1"></i><span id="cr-ia-count">0</span> IA
                         </span>
-                        <span class="badge bg-success" id="cr-agent-badge">
+                        <span class="badge bg-success">
                             <i class="fa fa-headset me-1"></i><span id="cr-agent-count">0</span> Agente
                         </span>
                         <div id="cr-agentes-list" class="d-flex flex-wrap gap-2"></div>
@@ -451,6 +511,84 @@
     }
 </script>
 <script>
+    /* ── Funciones globales (deben estar fuera de document.ready para ser accesibles desde onclick) ── */
+    function toggleControlRespuestas() {
+        $('#control-respuestas-panel').toggleClass('d-none');
+        if (!$('#control-respuestas-panel').hasClass('d-none')) {
+            refrescarEstadisticas();
+        }
+    }
+
+    function toggleEstadisticasPanel() {
+        $('#stats-panel').toggleClass('d-none');
+        if (!$('#stats-panel').hasClass('d-none')) {
+            refrescarEstadisticas();
+        }
+    }
+
+    let _bloquearCierreActual = false;
+    function toggleBloquearCierre() {
+        const id = $('#conversacion-id').val();
+        if (!id) return;
+        $.post('', { action: 'toggle-bloquear-cierre', id: id, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
+            .done(function(r) {
+                if (r.error) return;
+                _bloquearCierreActual = r.bloquear_cierre;
+                _actualizarBloquearCierreUI(_bloquearCierreActual);
+            });
+    }
+
+    function _actualizarBloquearCierreUI(bloqueado) {
+        if (bloqueado) {
+            $('#icon-bloquear-cierre').removeClass('fa-lock').addClass('fa-lock-open').removeClass('text-warning').addClass('text-danger');
+            $('#label-bloquear-cierre').text('Desbloquear cierre automático');
+        } else {
+            $('#icon-bloquear-cierre').removeClass('fa-lock-open').addClass('fa-lock').removeClass('text-danger').addClass('text-warning');
+            $('#label-bloquear-cierre').text('Bloquear cierre automático');
+        }
+    }
+
+    function refrescarEstadisticas() {
+        const id = $('#conversacion-id').val();
+        if (!id) return;
+        $.get('', { action: 'ver_estadisticas', pk: id })
+            .done(function(r) {
+                if (r.error) return;
+                _renderEstadisticas(r);
+            });
+    }
+
+    function _renderEstadisticas(r) {
+        // Tokens badge header
+        if (r.tokens_total > 0) {
+            $('#tokens-valor').text(r.tokens_total.toLocaleString());
+            $('#tokens-detalle').text('↑' + r.tokens_entrada.toLocaleString() + ' ↓' + r.tokens_salida.toLocaleString());
+            $('#tokens-container').removeClass('d-none').show();
+        }
+        // Panel estadísticas
+        $('#stat-duracion').text(r.duracion || '—');
+        $('#stat-estado').html(r.estado_badge || '');
+        $('#stat-msgs-total').text(r.total_mensajes || 0);
+        $('#stat-msgs-cliente').text(r.mensajes_cliente || 0);
+        $('#stat-msgs-ia').text(r.mensajes_ia || 0);
+        $('#stat-msgs-agente').text(r.mensajes_asesor || 0);
+        $('#stat-tokens-entrada').text((r.tokens_entrada || 0).toLocaleString());
+        $('#stat-tokens-salida').text((r.tokens_salida || 0).toLocaleString());
+        $('#stat-tokens-total').text((r.tokens_total || 0).toLocaleString());
+        $('#stat-modelo').text(r.modelo_ia || '—');
+        $('#stat-primer-agente').text(r.primer_agente || '—');
+        // Control de respuestas
+        $('#cr-ia-count').text(r.cr_ia || 0);
+        $('#cr-agent-count').text(r.cr_agent || 0);
+        var agentesHtml = '';
+        (r.cr_agentes || []).forEach(function(a) {
+            var nombre = ((a.agente__first_name || '') + ' ' + (a.agente__last_name || '')).trim() || 'Agente';
+            agentesHtml += '<span class="badge bg-light text-dark border"><i class="fa fa-user me-1"></i>' + nombre + ' <small>(' + a.total + ')</small></span>';
+        });
+        $('#cr-agentes-list').html(agentesHtml);
+    }
+</script>
+<script>
     $(document).ready(function() {
         $('#btnBlock').hide();
         // Configurar WebSocket
@@ -478,10 +616,12 @@
                 if (data.type === 'new_message' || data.type === 'messages_update') {
                     // Actualizar los mensajes
                     $('#mensajes-container').html(data.html);
+                    setTimeout(() => { scrollToBottom(); }, 1500);
 
-                    setTimeout(() => {
-                        scrollToBottom();
-                    }, 1500);
+                    // Refrescar estadísticas cuando llega un mensaje IA (from_me=true, ia_generado)
+                    if (data.from_me) {
+                        setTimeout(refrescarEstadisticas, 1000);
+                    }
                 }
             };
 
@@ -540,32 +680,6 @@
             if (cw) cw.scrollTop = cw.scrollHeight;
         }
 
-        function toggleControlRespuestas() {
-            $('#control-respuestas-panel').toggleClass('d-none');
-        }
-
-        let _bloquearCierreActual = false;
-        function toggleBloquearCierre() {
-            const id = $('#conversacion-id').val();
-            if (!id) return;
-            $.post('', { action: 'toggle-bloquear-cierre', id: id, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
-                .done(function(r) {
-                    if (r.error) return;
-                    _bloquearCierreActual = r.bloquear_cierre;
-                    _actualizarBloquearCierreUI(_bloquearCierreActual);
-                });
-        }
-
-        function _actualizarBloquearCierreUI(bloqueado) {
-            if (bloqueado) {
-                $('#icon-bloquear-cierre').removeClass('fa-lock').addClass('fa-lock-open').removeClass('text-warning').addClass('text-danger');
-                $('#label-bloquear-cierre').text('Desbloquear cierre automático');
-            } else {
-                $('#icon-bloquear-cierre').removeClass('fa-lock-open').addClass('fa-lock').removeClass('text-danger').addClass('text-warning');
-                $('#label-bloquear-cierre').text('Bloquear cierre automático');
-            }
-        }
-
         // Variables globales
        // Variables globales
         let conversacionActiva = null;
@@ -584,6 +698,7 @@
             $('#mensajes-container').html('<div class="text-center p-5"><i class="fa fa-comments fa-4x text-muted mb-3"></i><p>Selecciona una conversación para ver los mensajes</p></div>');
             $('#chat-footer').hide();
             $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container').addClass('d-none');
+            $('#stats-panel, #control-respuestas-panel').addClass('d-none');
             $('#contacto-nombre').text('Selecciona una conversación');
             $('#contacto-numero').text('');
             $('#contacto-hashedId').text('');
@@ -832,6 +947,7 @@
 
             // Ocultar controles mientras carga
             $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #chat-footer').addClass('d-none').hide();
+            $('#stats-panel, #control-respuestas-panel').addClass('d-none');
             $('#mensajes-container').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted small">Cargando mensajes...</p></div>');
 
             $.ajax({
@@ -888,26 +1004,9 @@
                         $('#conv-fecha-inicio').hide();
                     }
 
-                    // Tokens IA
-                    if (response.tokens_total > 0) {
-                        $('#tokens-valor').text(response.tokens_total.toLocaleString());
-                        $('#tokens-detalle').text('↑' + response.tokens_entrada.toLocaleString() + ' ↓' + response.tokens_salida.toLocaleString());
-                        $('#tokens-container').removeClass('d-none').show();
-                    } else {
-                        $('#tokens-container').addClass('d-none').hide();
-                    }
-
-                    // Control de Respuestas
-                    $('#cr-ia-count').text(response.cr_ia || 0);
-                    $('#cr-agent-count').text(response.cr_agent || 0);
-                    var agentesHtml = '';
-                    (response.cr_agentes || []).forEach(function(a) {
-                        var nombre = ((a.agente__first_name || '') + ' ' + (a.agente__last_name || '')).trim() || 'Agente';
-                        agentesHtml += '<span class="badge bg-light text-dark border"><i class="fa fa-user me-1"></i>' + nombre + ' <small class="text-muted">(' + a.total + ')</small></span>';
-                    });
-                    $('#cr-agentes-list').html(agentesHtml);
-                    // Reset: hide panel until user clicks
-                    $('#control-respuestas-panel').addClass('d-none');
+                    // Render estadísticas completas (tokens, mensajes, CR, panel)
+                    _renderEstadisticas(response);
+                    $('#stats-panel, #control-respuestas-panel').addClass('d-none');
 
                     // Mostrar footer para enviar mensajes
                     $('#chat-footer').removeClass('d-none').show();

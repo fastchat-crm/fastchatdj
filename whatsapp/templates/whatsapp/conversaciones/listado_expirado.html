@@ -171,6 +171,10 @@
                                 <i class="fa fa-file-alt me-1"></i>Resumen
                             </a>
                         </div>
+                        <button class="btn btn-sm btn-light border d-none" id="btn-estadisticas"
+                                onclick="$('#stats-panel').toggleClass('d-none');if(!$('#stats-panel').hasClass('d-none'))_renderEstExpired();" title="Estadísticas">
+                            <i class="fa fa-chart-line text-primary"></i>
+                        </button>
                         <button class="btn btn-sm btn-light border d-none" id="btn-control-respuestas"
                                 onclick="$('#control-respuestas-panel').toggleClass('d-none')" title="Control de Respuestas">
                             <i class="fa fa-chart-bar text-info"></i>
@@ -180,6 +184,28 @@
                                title="Reactivar conversación">
                                 <i class="fa fa-redo me-1"></i>Reactivar
                             </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel Estadísticas -->
+                <div id="stats-panel" class="d-none border-bottom" style="background:#f0f4ff;font-size:.8rem;">
+                    <div class="px-3 py-2">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <strong class="text-primary"><i class="fa fa-chart-line me-1"></i>Estadísticas</strong>
+                            <span id="stat-estado"></span>
+                            <span class="ms-auto text-muted"><i class="fa fa-clock me-1"></i><span id="stat-duracion">—</span></span>
+                        </div>
+                        <div class="row g-1">
+                            <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold text-dark" id="stat-msgs-total">0</div><div class="text-muted" style="font-size:.7rem;">Total</div></div></div>
+                            <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold text-warning" id="stat-msgs-cliente">0</div><div class="text-muted" style="font-size:.7rem;">Cliente</div></div></div>
+                            <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold text-success" id="stat-msgs-agente">0</div><div class="text-muted" style="font-size:.7rem;">Agente</div></div></div>
+                            <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold" style="color:#5c6bc0" id="stat-msgs-ia">0</div><div class="text-muted" style="font-size:.7rem;">IA</div></div></div>
+                            <div class="col-auto ms-2"><div class="border rounded px-2 py-1 bg-white" style="min-width:160px;">
+                                <div class="d-flex gap-1 align-items-center"><i class="fa fa-microchip" style="color:#5c35d4;font-size:.75rem;"></i><span class="fw-bold" id="stat-tokens-total">0</span><small class="text-muted">tokens</small></div>
+                                <div class="text-muted" style="font-size:.7rem;">↑<span id="stat-tokens-entrada">0</span> &nbsp;·&nbsp; ↓<span id="stat-tokens-salida">0</span></div>
+                                <div class="text-muted mt-1" style="font-size:.7rem;"><i class="fa fa-robot me-1"></i><span id="stat-modelo">—</span></div>
+                            </div></div>
                         </div>
                     </div>
                 </div>
@@ -298,6 +324,33 @@ $(document).ready(function() {
         if (cw) cw.scrollTop = cw.scrollHeight;
     }
 
+    // ── Estadísticas ────────────────────────────────────────────────────
+    function _renderExpiredStats(r) {
+        $('#stat-duracion').text(r.duracion || '—');
+        $('#stat-estado').html(r.estado_badge || '');
+        $('#stat-msgs-total').text(r.total_mensajes || 0);
+        $('#stat-msgs-cliente').text(r.mensajes_cliente || 0);
+        $('#stat-msgs-ia').text(r.mensajes_ia || 0);
+        $('#stat-msgs-agente').text(r.mensajes_asesor || 0);
+        $('#stat-tokens-entrada').text((r.tokens_entrada || 0).toLocaleString());
+        $('#stat-tokens-salida').text((r.tokens_salida || 0).toLocaleString());
+        $('#stat-tokens-total').text((r.tokens_total || 0).toLocaleString());
+        $('#stat-modelo').text(r.modelo_ia || '—');
+        // Control de respuestas
+        $('#cr-ia-count').text(r.cr_ia || 0);
+        $('#cr-agent-count').text(r.cr_agent || 0);
+        var agentesHtml = '';
+        (r.cr_agentes || []).forEach(function(a) {
+            var nombre = ((a.agente__first_name || '') + ' ' + (a.agente__last_name || '')).trim() || 'Agente';
+            agentesHtml += '<span class="badge bg-light text-dark border"><i class="fa fa-user me-1"></i>' + nombre + ' <small>(' + a.total + ')</small></span>';
+        });
+        $('#cr-agentes-list').html(agentesHtml);
+    }
+
+    function _renderEstExpired() {
+        if (window._lastStatsData) _renderExpiredStats(window._lastStatsData);
+    }
+
     // ── Sesión ─────────────────────────────────────────────────────────
     $('#sesion-selector').on('change', function() {
         _filtros.sesion_id = $(this).val();
@@ -347,8 +400,8 @@ $(document).ready(function() {
         pantallaespera();
 
         if (chatSocket) { chatSocket.close(); chatSocket = null; }
-        $('#reactivar-btn, #ver-resumen-btn, #btn-control-respuestas').addClass('d-none').hide();
-        $('#control-respuestas-panel').addClass('d-none');
+        $('#reactivar-btn, #ver-resumen-btn, #btn-control-respuestas, #btn-estadisticas').addClass('d-none').hide();
+        $('#control-respuestas-panel, #stats-panel').addClass('d-none');
         $('#mensajes-container').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 small text-muted">Cargando mensajes...</p></div>');
 
         $.ajax({
@@ -378,17 +431,11 @@ $(document).ready(function() {
                                 : $('#reactivar-btn').removeClass('d-none').show();
                 $('#ver-resumen-btn').removeClass('d-none').show();
 
-                // Control de Respuestas
-                $('#cr-ia-count').text(r.cr_ia || 0);
-                $('#cr-agent-count').text(r.cr_agent || 0);
-                var agentesHtml = '';
-                (r.cr_agentes || []).forEach(function(a) {
-                    var nombre = ((a.agente__first_name || '') + ' ' + (a.agente__last_name || '')).trim() || 'Agente';
-                    agentesHtml += '<span class="badge bg-light text-dark border"><i class="fa fa-user me-1"></i>' + nombre + ' <small class="text-muted">(' + a.total + ')</small></span>';
-                });
-                $('#cr-agentes-list').html(agentesHtml);
-                $('#control-respuestas-panel').addClass('d-none');
-                $('#btn-control-respuestas').removeClass('d-none').show();
+                // Guardar datos para render lazy del panel estadísticas
+                window._lastStatsData = r;
+                _renderExpiredStats(r);
+                $('#control-respuestas-panel, #stats-panel').addClass('d-none');
+                $('#btn-control-respuestas, #btn-estadisticas').removeClass('d-none').show();
 
                 setTimeout(scrollToBottom, 800);
                 conectarWebSocket(r.conversacion_id);
