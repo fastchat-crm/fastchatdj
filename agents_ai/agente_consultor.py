@@ -206,6 +206,56 @@ def _extraer_seccion_relevante(texto: str, query: str, max_chars: int) -> str:
     return seccion
 
 
+def _build_bm25(vs):
+    """
+    Construye un índice BM25 desde los documentos almacenados en el docstore FAISS.
+    BM25 busca por keywords exactas; complementa la búsqueda semántica de FAISS.
+    Devuelve None si rank_bm25 no está instalado o el vectorstore está vacío.
+    """
+    if not vs:
+        return None
+    try:
+        from langchain_community.retrievers import BM25Retriever
+        docs = [d for d in vs.docstore._dict.values() if getattr(d, 'page_content', '').strip()]
+        if not docs:
+            return None
+        retriever = BM25Retriever.from_documents(docs)
+        retriever.k = _FAISS_K
+        return retriever
+    except Exception as e:
+        logger.debug("BM25 no disponible (rank_bm25 no instalado?): %s", e)
+        return None
+
+
+def _hybrid_search(vs, bm25, query: str, k: int, lambda_mult: float) -> list:
+    """
+    Búsqueda híbrida BM25 + FAISS MMR.
+    - BM25 : recupera por keywords exactas (nombres de productos, términos específicos)
+    - FAISS: recupera por similitud semántica
+    Los resultados BM25 van primero (mayor precisión exacta), luego FAISS.
+    Duplicados eliminados por contenido.
+    """
+    docs_kw  = []
+    docs_sem = []
+
+    if bm25:
+        try:
+            bm25.k = k
+            docs_kw = bm25.get_relevant_documents(query)
+        except Exception as e:
+            logger.debug("BM25 search error: %s", e)
+
+    if vs:
+        try:
+            docs_sem = vs.max_marginal_relevance_search(
+                query, k=k, fetch_k=k * 3, lambda_mult=lambda_mult
+            )
+        except Exception as e:
+            logger.debug("FAISS MMR search error: %s", e)
+
+    return _dedup_preservando_orden(docs_kw + docs_sem)
+
+
 def _trim_contexto(docs, max_chars: int = _MAX_CONTEXT_CHARS) -> str:
     """Une los chunks más relevantes hasta el techo de caracteres."""
     partes = []
@@ -252,20 +302,8 @@ class AgenteConsultor:
         self.llm = self._get_llm()
         self.vectorstore = self._load_vectorstore()
         self.vectorstore_enlaces = self._load_vectorstore_enlaces()
-        self.retriever = (
-            self.vectorstore
-            and self.vectorstore.as_retriever(
-                search_type="mmr",
-                search_kwargs={"k": _FAISS_K, "fetch_k": _FAISS_FETCH_K, "lambda_mult": 0.65},
-            )
-        )
-        self.retriever_enlaces = (
-            self.vectorstore_enlaces
-            and self.vectorstore_enlaces.as_retriever(
-                search_type="mmr",
-                search_kwargs={"k": _FAISS_K, "fetch_k": _FAISS_FETCH_K, "lambda_mult": 0.65},
-            )
-        )
+        self._bm25 = _build_bm25(self.vectorstore)
+        self._bm25_enlaces = _build_bm25(self.vectorstore_enlaces)
         self.conversacion: ConversacionWhatsApp = conversacion
 
         # Historial — acceso directo, sin ConversationBufferMemory (era dead code)
@@ -496,39 +534,27 @@ class AgenteConsultor:
             es_consulta_amplia = _es_consulta_amplia(pregunta)
             _es_amplia = es_consulta_amplia
 
+            # Parámetros según tipo de consulta
             if es_consulta_amplia:
-                # Para catálogo completo: más chunks, sin penalización de diversidad MMR
-                # (lambda_mult=0 → pura similitud, recupera secciones contiguas del menú)
-                if self.retriever:
-                    self.retriever.search_kwargs.update({
-                        "k": _FAISS_K * 4, "fetch_k": _FAISS_FETCH_K * 3, "lambda_mult": 0.0
-                    })
-                if self.retriever_enlaces:
-                    self.retriever_enlaces.search_kwargs.update({
-                        "k": _FAISS_K * 4, "fetch_k": _FAISS_FETCH_K * 3, "lambda_mult": 0.0
-                    })
+                _k = _FAISS_K * 4        # más chunks
+                _lambda = 0.0            # pura similitud, secciones contiguas
+                _presupuesto = min(_MAX_CONTEXT_CHARS * 2, 8_000)
             else:
-                if self.retriever:
-                    self.retriever.search_kwargs.update({"k": _FAISS_K, "fetch_k": _FAISS_FETCH_K})
-                if self.retriever_enlaces:
-                    self.retriever_enlaces.search_kwargs.update({"k": _FAISS_K, "fetch_k": _FAISS_FETCH_K})
+                _k = _FAISS_K
+                _lambda = 0.65           # diversidad MMR normal
+                _presupuesto = _MAX_CONTEXT_CHARS
 
-            docs = self.retriever.get_relevant_documents(query_faiss) if self.retriever else []
-            docs_enlaces = (
-                self.retriever_enlaces.get_relevant_documents(query_faiss)
-                if self.retriever_enlaces else []
+            # Búsqueda híbrida BM25 + FAISS (BM25 primero = keywords exactas)
+            docs = _hybrid_search(self.vectorstore, self._bm25, query_faiss, _k, _lambda)
+            docs_enlaces = _hybrid_search(
+                self.vectorstore_enlaces, self._bm25_enlaces, query_faiss, _k, _lambda
             )
-            logger.debug("FAISS: %d docs + %d enlaces (amplia=%s)", len(docs), len(docs_enlaces), es_consulta_amplia)
+            logger.debug(
+                "Hybrid: %d docs + %d enlaces (amplia=%s, bm25=%s)",
+                len(docs), len(docs_enlaces), es_consulta_amplia, self._bm25 is not None
+            )
             todos_docs = _dedup_preservando_orden(docs + docs_enlaces)
-            # Para consultas amplias usar hasta el doble del techo
-            _presupuesto = min(_MAX_CONTEXT_CHARS * 2, 8_000) if es_consulta_amplia else _MAX_CONTEXT_CHARS
             contexto = _trim_contexto(todos_docs, _presupuesto)
-
-            # Restaurar valores por defecto
-            if self.retriever:
-                self.retriever.search_kwargs.update({"k": _FAISS_K, "fetch_k": _FAISS_FETCH_K, "lambda_mult": 0.65})
-            if self.retriever_enlaces:
-                self.retriever_enlaces.search_kwargs.update({"k": _FAISS_K, "fetch_k": _FAISS_FETCH_K, "lambda_mult": 0.65})
 
             if not contexto and not self.contexto_estatico:
                 _sin_datos = True

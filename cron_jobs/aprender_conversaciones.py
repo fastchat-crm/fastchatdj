@@ -130,8 +130,14 @@ def run():
             continue
 
         provider = {2: 'gemini', 3: 'openai'}.get(apikey_obj.proveedor, 'gemini')
-        vs_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path)
         storage = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
+        nombre_vs = f"agente_{agente.id}"
+
+        # Si el agente no tiene FAISS todavía (Modo A), usar directorio propio
+        if agente.vectorstore_path:
+            vs_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path)
+        else:
+            vs_path = os.path.join(storage, nombre_vs)
 
         try:
             pares = _extraer_pares(conv)
@@ -141,6 +147,19 @@ def run():
                     vsm.add_correction(vs_path, pregunta, respuesta)
                     pares_total += 1
                 invalidate_vectorstore_cache(vs_path)
+
+                # Si el agente era Modo A y ahora tiene FAISS, registrar la ruta
+                if not agente.vectorstore_path:
+                    import os as _os
+                    ruta_relativa = _os.path.relpath(vs_path, settings.MEDIA_ROOT)
+                    agente.vectorstore_path = ruta_relativa
+                    agente.save(update_fields=['vectorstore_path'])
+                    logCron(
+                        PROCESO,
+                        f'Agente "{agente.nombre}": FAISS creado desde conversaciones → {ruta_relativa}',
+                        exito=True,
+                    )
+
                 logCron(
                     PROCESO,
                     f'Conv #{conv.id}: {len(pares)} par(es) agregado(s) al vectorstore "{agente.nombre}"',

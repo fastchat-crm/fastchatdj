@@ -13,7 +13,10 @@
       "Bash(ls venv* env* .venv*)",
       "Read(//c/Users/USEROPC/miniconda3/**)",
       "Bash(.venv/Scripts/python:*)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(pip list:*)",
+      "Bash(pip show:*)",
+      "Bash(pip3 show:*)"
     ]
   }
 }
