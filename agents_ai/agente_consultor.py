@@ -500,16 +500,23 @@ class AgenteConsultor:
             logger.error("Error invocando LLM: %s", exc)
             raise
 
-        # Extraer tokens
-        meta = getattr(ai_message, 'response_metadata', {}) or {}
-        if self.provider == 'gemini':
-            usage = meta.get('usage_metadata', {})
-            t_in  = usage.get('prompt_token_count', 0) or 0
-            t_out = usage.get('candidates_token_count', 0) or 0
-        else:
-            usage = meta.get('token_usage', {})
-            t_in  = usage.get('prompt_tokens', 0) or 0
-            t_out = usage.get('completion_tokens', 0) or 0
+        # Extraer tokens — usar campo estandarizado de LangChain v0.3+ primero
+        t_in = t_out = 0
+        usage_std = getattr(ai_message, 'usage_metadata', None) or {}
+        if usage_std:
+            t_in  = usage_std.get('input_tokens', 0) or 0
+            t_out = usage_std.get('output_tokens', 0) or 0
+        if not (t_in or t_out):
+            # Fallback a response_metadata específico del proveedor
+            meta = getattr(ai_message, 'response_metadata', {}) or {}
+            if self.provider == 'gemini':
+                usage = meta.get('usage_metadata', {}) or {}
+                t_in  = usage.get('prompt_token_count', 0) or 0
+                t_out = usage.get('candidates_token_count', 0) or 0
+            else:
+                usage = meta.get('token_usage', {}) or {}
+                t_in  = usage.get('prompt_tokens', 0) or 0
+                t_out = usage.get('completion_tokens', 0) or 0
         t_total = t_in + t_out
 
         # Detectar y limpiar señal de fin
