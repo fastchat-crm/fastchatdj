@@ -18,6 +18,7 @@ from django.conf import settings
 from agents_ai.agente_consultor import AgenteConsultor
 from crm.acciones_fin import ejecutar_acciones_fin
 from crm.models import ReglaFinConversacion, ConsumoTokenIA
+from core.constantes import PROMPT_TEMPLATES
 from core.funciones import save_log_entry, notificacion
 from core.funciones_adicionales import get_image_as_base64, get_numero_emoji_ws
 from .models import (
@@ -506,10 +507,13 @@ def process_incoming_message(session, event_data, channel_layer):
                 resultado = None
                 for apikey in agente.apikey.filter(estado=True):
                     try:
+                        _prompt_tpl = (agente.prompt_template or '').strip()
+                        if not _prompt_tpl:
+                            _prompt_tpl = PROMPT_TEMPLATES.get('es', '')
                         consultor = AgenteConsultor(
                             vectorstore_path=vs_path, vectorstore_enlaces_path=vectorstore_enlaces_path,
                             provider=apikey.proveedor, apikey=apikey.descripcion,
-                            conversacion=conversation, prompt_template_text=agente.prompt_template,
+                            conversacion=conversation, prompt_template_text=_prompt_tpl,
                             contexto_estatico=agente.contexto_estatico or None,
                             detectar_fin=detectar_fin_llm,
                         )

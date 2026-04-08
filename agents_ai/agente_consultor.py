@@ -45,13 +45,14 @@ class ConsultaResultado:
 # ---------------------------------------------------------------------------
 _FAISS_K           = 5      # chunks a recuperar
 _FAISS_FETCH_K     = 20     # candidatos pre-MMR
-_MAX_CONTEXT_CHARS = 4_000  # techo del contexto total — suficiente para menús completos
-_MAX_STATIC_CHARS  = 2_000  # máx chars del contexto estático
+_MAX_CONTEXT_CHARS = 4_000  # techo del contexto FAISS para consultas específicas
+_MAX_STATIC_CHARS  = 2_000  # máx chars del contexto estático en Modo B (suplemento)
 _HISTORY_TURNS     = 4      # turnos de historial (4 turnos = 8 mensajes)
 _USER_SNIPPET      = 160    # chars por mensaje de usuario en historial
 _AI_SNIPPET        = 240    # chars por respuesta IA en historial
-_MAX_OUTPUT_TOKENS = 1500   # límite duro de tokens de salida — suficiente para menús completos con precios
+_MAX_OUTPUT_TOKENS = 3000   # tokens de salida — suficiente para menús completos con pizzas/precios
 _TOPIC_ANCHOR_CHARS = 180   # chars del primer mensaje sustantivo como ancla de tema
+# Para consultas amplias en Modo A (sin FAISS) se envía el contexto_estatico completo sin cap
 
 # Palabras que NO se añaden como ancla semántica al query FAISS
 _GREETING_WORDS = frozenset({
@@ -303,12 +304,14 @@ class AgenteConsultor:
             return ChatGoogleGenerativeAI(
                 model=self.model_name, google_api_key=self.apikey,
                 max_output_tokens=_MAX_OUTPUT_TOKENS,
+                temperature=0.1,  # Baja temperatura → reproduce contexto fielmente, sin inventar
             )
         elif self.provider == "openai":
             from langchain_community.chat_models import ChatOpenAI
             return ChatOpenAI(
                 model_name=self.model_name, openai_api_key=self.apikey,
                 max_tokens=_MAX_OUTPUT_TOKENS,
+                temperature=0.1,
             )
         raise ValueError("Proveedor de LLM no soportado")
 
@@ -544,16 +547,17 @@ class AgenteConsultor:
             if sin_faiss:
                 # Modo A: el PDF completo está en contexto_estatico
                 if _es_amplia:
-                    # Catálogo completo → primeros N chars (orden natural del documento)
-                    contexto = self.contexto_estatico[:_presupuesto]
+                    # Catálogo completo → enviar el documento COMPLETO sin recortar
+                    # El modelo Gemini tiene ventana de 1M tokens — enviar el doc entero es seguro
+                    contexto = self.contexto_estatico
                 else:
                     # Consulta específica → buscar la sección relevante en el documento
                     contexto = _extraer_seccion_relevante(
                         self.contexto_estatico, _query_faiss, _presupuesto
                     )
                 logger.debug(
-                    "Contexto estático (Modo A): %d chars de %d disponibles (presupuesto=%d, amplia=%s)",
-                    len(contexto), len(self.contexto_estatico), _presupuesto, _es_amplia,
+                    "Contexto estático (Modo A): %d chars de %d disponibles (amplia=%s)",
+                    len(contexto), len(self.contexto_estatico), _es_amplia,
                 )
             else:
                 # Modo B: suplemento pequeño + chunks FAISS

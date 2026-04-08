@@ -12,6 +12,7 @@ from django.conf import settings
 
 from agents_ai.agente_consultor import AgenteConsultor
 from agents_ai.memoria_django import DjangoChatMessageHistory
+from core.constantes import PROMPT_TEMPLATES
 from core.funciones import addData, get_encrypt, get_decrypt, log
 from crm.acciones_fin import ejecutar_acciones_fin
 from crm.models import AgentesIA, PerfilNegocioIA, ConsumoTokenIA
@@ -97,7 +98,7 @@ def chat_agente_view(request, agente_enc_id):
                     provider=apikey_obj.proveedor,
                     apikey=apikey_obj.descripcion,
                     conversacion=fake_conv,
-                    prompt_template_text=agente.prompt_template,
+                    prompt_template_text=(agente.prompt_template or '').strip() or PROMPT_TEMPLATES.get('es', ''),
                     contexto_estatico=agente.contexto_estatico or None,
                     detectar_fin=detectar_fin_llm,
                 )
