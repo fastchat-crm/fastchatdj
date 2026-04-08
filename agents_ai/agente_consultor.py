@@ -50,7 +50,7 @@ _MAX_STATIC_CHARS  = 2_000  # máx chars del contexto estático
 _HISTORY_TURNS     = 4      # turnos de historial (4 turnos = 8 mensajes)
 _USER_SNIPPET      = 160    # chars por mensaje de usuario en historial
 _AI_SNIPPET        = 240    # chars por respuesta IA en historial
-_MAX_OUTPUT_TOKENS = 900    # límite duro de tokens de salida — suficiente para listas completas de menú
+_MAX_OUTPUT_TOKENS = 1500   # límite duro de tokens de salida — suficiente para menús completos con precios
 _TOPIC_ANCHOR_CHARS = 180   # chars del primer mensaje sustantivo como ancla de tema
 
 # Palabras que NO se añaden como ancla semántica al query FAISS
@@ -437,13 +437,23 @@ class AgenteConsultor:
 
             # Modo amplio para consultas de catálogo/menú completo
             es_consulta_amplia = _es_consulta_amplia(pregunta)
-            k_actual     = _FAISS_K * 3 if es_consulta_amplia else _FAISS_K
-            fetch_actual = _FAISS_FETCH_K * 2 if es_consulta_amplia else _FAISS_FETCH_K
 
-            if self.retriever:
-                self.retriever.search_kwargs.update({"k": k_actual, "fetch_k": fetch_actual})
-            if self.retriever_enlaces:
-                self.retriever_enlaces.search_kwargs.update({"k": k_actual, "fetch_k": fetch_actual})
+            if es_consulta_amplia:
+                # Para catálogo completo: más chunks, sin penalización de diversidad MMR
+                # (lambda_mult=0 → pura similitud, recupera secciones contiguas del menú)
+                if self.retriever:
+                    self.retriever.search_kwargs.update({
+                        "k": _FAISS_K * 4, "fetch_k": _FAISS_FETCH_K * 3, "lambda_mult": 0.0
+                    })
+                if self.retriever_enlaces:
+                    self.retriever_enlaces.search_kwargs.update({
+                        "k": _FAISS_K * 4, "fetch_k": _FAISS_FETCH_K * 3, "lambda_mult": 0.0
+                    })
+            else:
+                if self.retriever:
+                    self.retriever.search_kwargs.update({"k": _FAISS_K, "fetch_k": _FAISS_FETCH_K})
+                if self.retriever_enlaces:
+                    self.retriever_enlaces.search_kwargs.update({"k": _FAISS_K, "fetch_k": _FAISS_FETCH_K})
 
             docs = self.retriever.get_relevant_documents(query_faiss) if self.retriever else []
             docs_enlaces = (
@@ -456,11 +466,11 @@ class AgenteConsultor:
             _presupuesto = min(_MAX_CONTEXT_CHARS * 2, 8_000) if es_consulta_amplia else _MAX_CONTEXT_CHARS
             contexto = _trim_contexto(todos_docs, _presupuesto)
 
-            # Restaurar k normal
+            # Restaurar valores por defecto
             if self.retriever:
-                self.retriever.search_kwargs.update({"k": _FAISS_K, "fetch_k": _FAISS_FETCH_K})
+                self.retriever.search_kwargs.update({"k": _FAISS_K, "fetch_k": _FAISS_FETCH_K, "lambda_mult": 0.65})
             if self.retriever_enlaces:
-                self.retriever_enlaces.search_kwargs.update({"k": _FAISS_K, "fetch_k": _FAISS_FETCH_K})
+                self.retriever_enlaces.search_kwargs.update({"k": _FAISS_K, "fetch_k": _FAISS_FETCH_K, "lambda_mult": 0.65})
 
             if not contexto and not self.contexto_estatico:
                 _sin_datos = True
@@ -470,19 +480,30 @@ class AgenteConsultor:
                     "Prohibido usar conocimiento externo o inventar datos."
                 )
 
-        # Contexto estático siempre se añade (prepuesto al RAG si existe).
-        # El presupuesto FAISS usa el mismo techo calculado arriba (_presupuesto),
-        # no el techo por defecto — así las consultas amplias conservan el espacio extra.
+        # Combinar contexto estático con FAISS.
+        # Hay dos modos:
+        #   A) contexto_estatico ES el documento principal (sin FAISS) → usar presupuesto completo
+        #   B) contexto_estatico es suplemento pequeño al FAISS → cap a _MAX_STATIC_CHARS
         if self.contexto_estatico:
-            estatico_trim = self.contexto_estatico[:_MAX_STATIC_CHARS]
-            faiss_budget  = _presupuesto - len(estatico_trim)
-            faiss_trim    = contexto[:max(faiss_budget, 0)] if contexto else ""
-            faiss_part    = ("\n\n---\n" + faiss_trim) if faiss_trim else ""
-            contexto      = estatico_trim + faiss_part
-            logger.debug(
-                "Contexto estático (%d chars) + FAISS (%d chars) = %d total (presupuesto=%d)",
-                len(estatico_trim), len(faiss_trim), len(contexto), _presupuesto,
-            )
+            sin_faiss = not contexto  # FAISS no devolvió nada (vectorstore_path=None o vacío)
+            if sin_faiss:
+                # Modo A: el PDF completo está en contexto_estatico — usar hasta el presupuesto
+                contexto = self.contexto_estatico[:_presupuesto]
+                logger.debug(
+                    "Contexto estático como fuente principal: %d chars (presupuesto=%d)",
+                    len(contexto), _presupuesto,
+                )
+            else:
+                # Modo B: suplemento pequeño + chunks FAISS
+                estatico_trim = self.contexto_estatico[:_MAX_STATIC_CHARS]
+                faiss_budget  = _presupuesto - len(estatico_trim)
+                faiss_trim    = contexto[:max(faiss_budget, 0)]
+                faiss_part    = ("\n\n---\n" + faiss_trim) if faiss_trim else ""
+                contexto      = estatico_trim + faiss_part
+                logger.debug(
+                    "Contexto estático (%d chars) + FAISS (%d chars) = %d total (presupuesto=%d)",
+                    len(estatico_trim), len(faiss_trim), len(contexto), _presupuesto,
+                )
 
         # ------------------------------------------------------------------
         # Construir prompt y llamar al LLM

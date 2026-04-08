@@ -65,7 +65,7 @@ class VectorStoreManager:
     def build_from_string(self, text: str, metadata: dict = None):
         metadata = metadata or {}
         doc = Document(page_content=text, metadata=metadata)
-        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
         docs = splitter.split_documents([doc])
         return docs
 
@@ -76,7 +76,7 @@ class VectorStoreManager:
         for d in docs:
             d.metadata.update(metadata or {})
 
-        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
         return splitter.split_documents(docs)
 
     def build_and_save(self, docs, nombre_directorio):
@@ -108,7 +108,7 @@ class VectorStoreManager:
             page_content=text,
             metadata={"source": "feedback_humano", "tipo": "correccion"}
         )
-        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
         docs = splitter.split_documents([doc])
 
         index_file = os.path.join(vectorstore_path, "index.faiss")
