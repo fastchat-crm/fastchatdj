@@ -154,6 +154,57 @@ def _dedup_preservando_orden(docs) -> list:
     return result
 
 
+_STOP_WORDS_ES = frozenset({
+    'dame', 'quiero', 'tienes', 'tiene', 'puedo', 'como', 'para', 'cual',
+    'que', 'del', 'los', 'las', 'una', 'uno', 'con', 'sin', 'por', 'pero',
+    'hay', 'hay', 'este', 'esta', 'ese', 'esa', 'algo', 'todo',
+})
+
+
+def _extraer_seccion_relevante(texto: str, query: str, max_chars: int) -> str:
+    """
+    Mode A (sin FAISS): extrae la sección del documento más relevante al query.
+    Busca keywords del query en el texto, retrocede al encabezado de sección más
+    cercano (===, ---, ###) e incluye prefijo del documento + sección encontrada.
+    Si no hay match, devuelve los primeros max_chars.
+    """
+    palabras = [
+        w for w in re.findall(r'\w+', query.lower())
+        if len(w) > 3 and w not in _STOP_WORDS_ES
+    ]
+    if not palabras:
+        return texto[:max_chars]
+
+    # Posición del primer keyword encontrado en el documento
+    mejor_pos = len(texto)
+    for palabra in palabras:
+        pos = texto.lower().find(palabra)
+        if 0 <= pos < mejor_pos:
+            mejor_pos = pos
+
+    if mejor_pos == len(texto):
+        return texto[:max_chars]
+
+    # Retroceder al inicio de sección más cercano (=== o ---) antes del match
+    _SEPARADORES = re.compile(r'(?m)^(?:===|---|###|\*\*\*)')
+    seccion_inicio = 0
+    for m in _SEPARADORES.finditer(texto):
+        if m.start() <= mejor_pos:
+            seccion_inicio = m.start()
+        else:
+            break
+
+    # Prefijo del documento (primeras líneas con el nombre/encabezado)
+    prefijo_fin = min(300, seccion_inicio)
+    prefijo = texto[:prefijo_fin].strip()
+    presupuesto_seccion = max_chars - len(prefijo) - 10  # margen para "\n...\n"
+    seccion = texto[seccion_inicio: seccion_inicio + presupuesto_seccion]
+
+    if prefijo and not seccion.startswith(prefijo):
+        return f"{prefijo}\n...\n{seccion}"
+    return seccion
+
+
 def _trim_contexto(docs, max_chars: int = _MAX_CONTEXT_CHARS) -> str:
     """Une los chunks más relevantes hasta el techo de caracteres."""
     partes = []
@@ -425,6 +476,8 @@ class AgenteConsultor:
         _sin_datos = False
         _es_ack = _es_ack_simple(pregunta) and not self._es_primer_mensaje()
         _presupuesto = _MAX_CONTEXT_CHARS  # se ajusta abajo si es consulta amplia
+        _es_amplia = False   # accesible fuera del else
+        _query_faiss = pregunta  # fallback si es ACK
 
         if _es_ack:
             # Confirmación breve — no necesita FAISS. El historial es suficiente.
@@ -432,11 +485,13 @@ class AgenteConsultor:
             logger.debug("ACK simple — omitiendo FAISS")
 
         else:
-            query_faiss = self._query_retrieval(pregunta, contexto_previo)
+            _query_faiss = self._query_retrieval(pregunta, contexto_previo)
+            query_faiss = _query_faiss
             logger.debug("FAISS query: %r", query_faiss)
 
             # Modo amplio para consultas de catálogo/menú completo
             es_consulta_amplia = _es_consulta_amplia(pregunta)
+            _es_amplia = es_consulta_amplia
 
             if es_consulta_amplia:
                 # Para catálogo completo: más chunks, sin penalización de diversidad MMR
@@ -487,11 +542,18 @@ class AgenteConsultor:
         if self.contexto_estatico:
             sin_faiss = not contexto  # FAISS no devolvió nada (vectorstore_path=None o vacío)
             if sin_faiss:
-                # Modo A: el PDF completo está en contexto_estatico — usar hasta el presupuesto
-                contexto = self.contexto_estatico[:_presupuesto]
+                # Modo A: el PDF completo está en contexto_estatico
+                if _es_amplia:
+                    # Catálogo completo → primeros N chars (orden natural del documento)
+                    contexto = self.contexto_estatico[:_presupuesto]
+                else:
+                    # Consulta específica → buscar la sección relevante en el documento
+                    contexto = _extraer_seccion_relevante(
+                        self.contexto_estatico, _query_faiss, _presupuesto
+                    )
                 logger.debug(
-                    "Contexto estático como fuente principal: %d chars (presupuesto=%d)",
-                    len(contexto), _presupuesto,
+                    "Contexto estático (Modo A): %d chars de %d disponibles (presupuesto=%d, amplia=%s)",
+                    len(contexto), len(self.contexto_estatico), _presupuesto, _es_amplia,
                 )
             else:
                 # Modo B: suplemento pequeño + chunks FAISS
