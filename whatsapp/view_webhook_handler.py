@@ -542,9 +542,12 @@ def process_incoming_message(session, event_data, channel_layer):
                     )
                 vs_path = agente.vectorstore_path and os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path) or ''
                 vectorstore_enlaces_path = ''
-                agente.build_enlaces_vectorstore()
-                if agente.vectorstore_enlaces_path:
-                    vectorstore_enlaces_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_enlaces_path)
+                try:
+                    agente.build_enlaces_vectorstore()
+                    if agente.vectorstore_enlaces_path:
+                        vectorstore_enlaces_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_enlaces_path)
+                except Exception as _e:
+                    logger.warning("build_enlaces_vectorstore falló para agente %s: %s", agente.id, _e)
                 respuesta_enviada = False
                 resultado = None
                 for apikey in agente.apikey.filter(estado=True):
@@ -657,11 +660,10 @@ def process_incoming_message(session, event_data, channel_layer):
                         logger.exception("Error procesando fin de conversación conv_id=%s", conversation.id)
 
             except Exception as ex:
-                import traceback as _tb
-                logger.error("Error inesperado en agente IA para sesión %s:\n%s", session.session_id, _tb.format_exc())
+                logger.error("Error inesperado en agente IA para sesión %s: %s", session.session_id, ex, exc_info=True)
                 whatsapp_service.send_text_message(
                     conversation.sesion.session_id, contacto.from_number,
-                    f'⚠️ DEBUG: {type(ex).__name__}: {str(ex)[:400]}'
+                    'Lo siento, ocurrió un error inesperado. Escribe *reintentar* para volver a intentarlo.'
                 )
             finally:
                 whatsapp_service.quit_presence_update(

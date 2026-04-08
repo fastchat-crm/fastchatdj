@@ -370,7 +370,11 @@ class AgenteConsultor:
         if not os.path.exists(self.vectorstore_path):
             logger.warning("Vectorstore no encontrado en %s", self.vectorstore_path)
             return None
-        return _get_vectorstore_cached(self.vectorstore_path, self.embeddings)
+        try:
+            return _get_vectorstore_cached(self.vectorstore_path, self.embeddings)
+        except Exception as e:
+            logger.error("Error cargando vectorstore %s: %s", self.vectorstore_path, e)
+            return None
 
     def _load_vectorstore_enlaces(self):
         if not self.vectorstore_enlaces_path:
@@ -378,7 +382,11 @@ class AgenteConsultor:
         if not os.path.exists(self.vectorstore_enlaces_path):
             logger.warning("Vectorstore de enlaces no encontrado en %s", self.vectorstore_enlaces_path)
             return None
-        return _get_vectorstore_cached(self.vectorstore_enlaces_path, self.embeddings)
+        try:
+            return _get_vectorstore_cached(self.vectorstore_enlaces_path, self.embeddings)
+        except Exception as e:
+            logger.error("Error cargando vectorstore de enlaces %s: %s", self.vectorstore_enlaces_path, e)
+            return None
 
     # ------------------------------------------------------------------
     # Historial
