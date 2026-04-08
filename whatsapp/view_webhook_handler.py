@@ -403,17 +403,26 @@ def process_incoming_message(session, event_data, channel_layer):
         _min_sesion_val = getattr(session, 'min_sesion', None)
         _expira_nueva = timezone.now() + timedelta(minutes=int(_min_sesion_val) if _min_sesion_val else 10)
 
-        conversation = (
-            ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).first()
-            or ConversacionWhatsApp.objects.create(contacto=contacto, fecha_hora_expira=_expira_nueva)
-        )
+        conversation = ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).first()
+        if conversation is None:
+            try:
+                conversation = ConversacionWhatsApp.objects.create(
+                    contacto=contacto, fecha_hora_expira=_expira_nueva
+                )
+                logger.info("Nueva conversación creada #%s para contacto %s", conversation.id, contacto.id)
+            except Exception as create_err:
+                logger.error(
+                    "ERROR creando conversación para contacto %s (sesión %s): %s — "
+                    "¿Hay migraciones pendientes? Ejecuta: py manage.py migrate",
+                    contacto.id, session.session_id, create_err, exc_info=True
+                )
+                raise
 
         # Renovar ventana de expiración con cada mensaje entrante del cliente
         if from_number != session.numero:  # sólo mensajes del cliente
-            min_sesion = getattr(session, 'min_sesion', None)
-            if min_sesion:
-                conversation.fecha_hora_expira = timezone.now() + timedelta(minutes=int(min_sesion))
-                conversation.save(update_fields=['fecha_hora_expira'])
+            min_sesion = int(getattr(session, 'min_sesion', None) or 10)
+            conversation.fecha_hora_expira = timezone.now() + timedelta(minutes=min_sesion)
+            conversation.save(update_fields=['fecha_hora_expira'])
 
         # Crear el mensaje
         message = MensajeWhatsApp.objects.create(
