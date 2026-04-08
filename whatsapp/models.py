@@ -9,7 +9,6 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.core.files.base import ContentFile
 from django.db import models
 from django.utils import timezone
-from langchain.memory import ConversationBufferMemory
 
 from agents_ai.agente_resumidor import AgenteResumidor
 from core.custom_models import ModeloBase

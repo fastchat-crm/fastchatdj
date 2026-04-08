@@ -4,7 +4,6 @@ from langchain_community.chat_models import ChatOpenAI
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from langchain.memory import ConversationBufferMemory
 from .memoria_django import DjangoChatMessageHistory
 
 
@@ -16,7 +15,10 @@ class AgenteResumidor:
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
         self.conversacion = conversacion
-        self.memory = self._get_memory()
+        self._historia = (
+            DjangoChatMessageHistory(session_id=str(conversacion.id))
+            if conversacion else None
+        )
 
     def default_model(self):
         return "gpt-4" if self.provider == "openai" else "gemini-2.5-flash"
@@ -38,19 +40,10 @@ class AgenteResumidor:
             return ChatOpenAI(model_name=self.model_name, openai_api_key=self.apikey)
         raise ValueError("Proveedor de LLM no soportado")
 
-    def _get_memory(self):
-        if not self.conversacion:
-            return None
-        return ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True,
-            chat_memory=DjangoChatMessageHistory(session_id=str(self.conversacion.id))
-        )
-
     def _get_texto_chat(self) -> str:
-        if not self.memory:
+        if not self._historia:
             return ""
-        messages = self.memory.chat_memory.messages
+        messages = self._historia.messages
         lines = []
         for msg in messages:
             if isinstance(msg, HumanMessage):
