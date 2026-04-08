@@ -435,8 +435,11 @@ def process_incoming_message(session, event_data, channel_layer):
         if not conversation.bienvenida_enviado:
             conversation.bienvenida_enviado = True
             conversation.save()
-            if conversation.sesion.mensaje_bienvenida and not (session.agente_ia and session.agente_ia.apikey.exists()):
+            _ia_activa = bool(session.agente_ia and session.agente_ia.apikey.filter(estado=True).exists())
+            if conversation.sesion.mensaje_bienvenida and not _ia_activa:
                 whatsapp_service.send_text_message(conversation.sesion.session_id, contacto.from_number, conversation.sesion.mensaje_bienvenida, simularEscritura=True)
+        else:
+            _ia_activa = bool(session.agente_ia and session.agente_ia.apikey.filter(estado=True).exists())
         departamentos = conversation.sesion.departamentos.all().annotate(
             numero_opcion=Window(
                 expression=RowNumber(),
@@ -444,7 +447,7 @@ def process_incoming_message(session, event_data, channel_layer):
             )
         )
         departamentos_msg = 'Escribe el número del departamento para continuar:\n'
-        if session.agente_ia and session.agente_ia.apikey.exists() and conversation.ai_activo:
+        if _ia_activa and conversation.ai_activo:
             agente = session.agente_ia
 
             # ── Detección de reintento ────────────────────────────────────
@@ -552,24 +555,36 @@ def process_incoming_message(session, event_data, channel_layer):
                         break
                     except Exception as ex:
                         logger.error("API Key %s falló para agente %s: %s", apikey.id, agente.nombre, ex)
-                        apikey.estado = False
-                        apikey.msgerror = str(ex)[:500]
-                        apikey.save()
-                        try:
-                            notificacion(
-                                titulo=f'Error en API Key — Agente "{agente.nombre}"',
-                                cuerpo=(
-                                    f'La API Key <strong>{apikey.alias or apikey.get_proveedor_display()}</strong> '
-                                    f'(ID {apikey.id}) falló y fue desactivada automáticamente.<br>'
-                                    f'<small>{str(ex)[:300]}</small>'
-                                ),
-                                destinatario=session.usuario,
-                                url='/crm/entrenamiento/',
-                                prioridad=1,
-                                tipo=4,
-                            )
-                        except Exception:
-                            pass
+                        # Solo desactivar la key si el error es de autenticación/cuota de la API,
+                        # no por bugs propios del código (NameError, AttributeError, etc.)
+                        _es_error_api = any(
+                            kw in str(ex).lower()
+                            for kw in ('api key', 'invalid api', 'quota', 'unauthorized', '401', '403',
+                                       'permission denied', 'api_key', 'authentication')
+                        )
+                        if _es_error_api:
+                            apikey.estado = False
+                            apikey.msgerror = str(ex)[:500]
+                            apikey.save()
+                            try:
+                                notificacion(
+                                    titulo=f'Error en API Key — Agente "{agente.nombre}"',
+                                    cuerpo=(
+                                        f'La API Key <strong>{apikey.alias or apikey.get_proveedor_display()}</strong> '
+                                        f'(ID {apikey.id}) falló y fue desactivada automáticamente.<br>'
+                                        f'<small>{str(ex)[:300]}</small>'
+                                    ),
+                                    destinatario=session.usuario,
+                                    url='/crm/entrenamiento/',
+                                    prioridad=1,
+                                    tipo=4,
+                                )
+                            except Exception:
+                                pass
+                        else:
+                            # Error de código — solo loguear, no deshabilitar la key
+                            apikey.msgerror = str(ex)[:500]
+                            apikey.save(update_fields=['msgerror'])
                         continue
                 if not respuesta_enviada:
                     whatsapp_service.send_text_message(
