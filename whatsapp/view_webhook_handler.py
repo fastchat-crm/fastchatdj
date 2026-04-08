@@ -15,7 +15,6 @@ import os
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.conf import settings
-from agents_ai.agente_consultor import AgenteConsultor
 from crm.acciones_fin import ejecutar_acciones_fin
 from crm.models import ReglaFinConversacion, ConsumoTokenIA
 from core.constantes import PROMPT_TEMPLATES
@@ -552,6 +551,7 @@ def process_incoming_message(session, event_data, channel_layer):
                 resultado = None
                 for apikey in agente.apikey.filter(estado=True):
                     try:
+                        from agents_ai.agente_consultor import AgenteConsultor
                         _prompt_tpl = (agente.prompt_template or '').strip()
                         if not _prompt_tpl:
                             _prompt_tpl = PROMPT_TEMPLATES.get('es', '')
