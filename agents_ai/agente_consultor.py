@@ -313,7 +313,18 @@ class AgenteConsultor:
         )
 
         # Pre-compilar PromptTemplate una sola vez (no en cada llamada)
+        _VARS_REQUERIDAS = {'question', 'context', 'descripcion_agente', 'contexto_extra'}
         _tpl_text = prompt_template_text
+        if _tpl_text:
+            _tpl_candidato = PromptTemplate.from_template(f'{_tpl_text}\n')
+            _vars_extra = set(_tpl_candidato.input_variables) - _VARS_REQUERIDAS
+            if _vars_extra:
+                logger.warning(
+                    "Prompt del agente tiene variables desconocidas %s — usando template por defecto",
+                    _vars_extra,
+                )
+                from core.constantes import PROMPT_TEMPLATES
+                _tpl_text = PROMPT_TEMPLATES.get('es', '')
         if detectar_fin:
             _tpl_text += _FIN_INSTRUCCION
         self._prompt_tpl = PromptTemplate.from_template(f'{_tpl_text}\n')
@@ -600,12 +611,23 @@ class AgenteConsultor:
         # ------------------------------------------------------------------
         # Construir prompt y llamar al LLM
         # ------------------------------------------------------------------
-        prompt_final = self._prompt_tpl.format(
-            question=pregunta,
-            context=contexto,
-            descripcion_agente=descripcion_agente,
-            contexto_extra=contexto_previo,
-        )
+        try:
+            prompt_final = self._prompt_tpl.format(
+                question=pregunta,
+                context=contexto,
+                descripcion_agente=descripcion_agente,
+                contexto_extra=contexto_previo,
+            )
+        except KeyError as _ke:
+            logger.error("Variable faltante en prompt template: %s — usando template de emergencia", _ke)
+            from core.constantes import PROMPT_TEMPLATES
+            _tpl_fallback = PromptTemplate.from_template(PROMPT_TEMPLATES.get('es', '') + '\n')
+            prompt_final = _tpl_fallback.format(
+                question=pregunta,
+                context=contexto,
+                descripcion_agente=descripcion_agente,
+                contexto_extra=contexto_previo,
+            )
 
         try:
             ai_message = self.llm.invoke(prompt_final)
