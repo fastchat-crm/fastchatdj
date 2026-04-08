@@ -657,10 +657,11 @@ def process_incoming_message(session, event_data, channel_layer):
                         logger.exception("Error procesando fin de conversación conv_id=%s", conversation.id)
 
             except Exception as ex:
-                logger.error("Error inesperado en agente IA para sesión %s: %s", session.session_id, ex, exc_info=True)
+                import traceback as _tb
+                logger.error("Error inesperado en agente IA para sesión %s:\n%s", session.session_id, _tb.format_exc())
                 whatsapp_service.send_text_message(
                     conversation.sesion.session_id, contacto.from_number,
-                    'Lo siento, ocurrió un error inesperado. Escribe *reintentar* para volver a intentarlo.'
+                    f'⚠️ DEBUG: {type(ex).__name__}: {str(ex)[:400]}'
                 )
             finally:
                 whatsapp_service.quit_presence_update(
