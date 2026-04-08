@@ -138,7 +138,9 @@
 
         <!-- Fecha último mensaje posicionada arriba a la derecha -->
         <small class="text-muted fs-11 conversacion-fecha">
-            {% if conversacion.fecha_ultimo_mensaje %}
+            {% if show_date and conversacion.fecha_fin_conversacion %}
+                {{ conversacion.fecha_fin_conversacion|naturaltime }}
+            {% elif conversacion.fecha_ultimo_mensaje %}
                 {{ conversacion.fecha_ultimo_mensaje|naturaltime }}
             {% endif %}
         </small>

@@ -1,4 +1,5 @@
 # whatsapp/views.py (webhook_handler)
+from datetime import timedelta
 from django.db.models import Count, Q, Window
 from django.db.models.functions import RowNumber
 from django.http import JsonResponse
@@ -397,14 +398,19 @@ def process_incoming_message(session, event_data, channel_layer):
             logger.warning(f"Mensaje duplicado ignorado: {message_id}")
             return
 
-        conversation = ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).first() or \
-                       ConversacionWhatsApp.objects.create(contacto=contacto)
+        # Calcular fecha_hora_expira para conversación nueva
+        _min_sesion_val = getattr(session, 'min_sesion', None)
+        _expira_nueva = timezone.now() + timedelta(minutes=int(_min_sesion_val) if _min_sesion_val else 10)
+
+        conversation = (
+            ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).first()
+            or ConversacionWhatsApp.objects.create(contacto=contacto, fecha_hora_expira=_expira_nueva)
+        )
 
         # Renovar ventana de expiración con cada mensaje entrante del cliente
         if from_number != session.numero:  # sólo mensajes del cliente
             min_sesion = getattr(session, 'min_sesion', None)
             if min_sesion:
-                from datetime import timedelta
                 conversation.fecha_hora_expira = timezone.now() + timedelta(minutes=int(min_sesion))
                 conversation.save(update_fields=['fecha_hora_expira'])
 

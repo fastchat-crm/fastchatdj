@@ -653,7 +653,8 @@
                     if (conversacion.length) {
                         conversacion.replaceWith(data.html);
                     } else {
-                        $(`#lista-conversaciones`).append(data.html);
+                        // Nueva conversación: insertar al principio de la lista
+                        $(`#lista-conversaciones`).prepend(data.html);
                     }
                     // Sonido + toast solo para mensajes entrantes del cliente
                     if (!data.from_me) {
