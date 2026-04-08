@@ -393,14 +393,13 @@ def entrenamiento_ia_view(request):
                         from django.db.models import Sum, Count
                         from django.db.models.functions import TruncDate
                         from django.utils.dateparse import parse_date
-                        from django.utils import timezone
                         import datetime
 
                         pk = int(request.GET['id'])
                         apikey = ApiKeyIA.objects.get(pk=pk, perfil=perfil)
 
-                        # Rango de fechas — default últimos 30 días
-                        hoy = timezone.localdate()
+                        # Rango de fechas — default últimos 30 días (usar date.today() sin conversión timezone)
+                        hoy = datetime.date.today()
                         fecha_fin   = parse_date(request.GET.get('fecha_fin', ''))   or hoy
                         fecha_inicio = parse_date(request.GET.get('fecha_inicio', '')) or (hoy - datetime.timedelta(days=29))
 
@@ -415,17 +414,23 @@ def entrenamiento_ia_view(request):
                             total_salida=Sum('tokens_salida'),
                             total_tokens=Sum('tokens_total'),
                         )
-                        por_dia = list(
-                            qs.annotate(dia=TruncDate('fecha'))
-                              .values('dia')
+                        # Agrupar por fecha usando __date (sin conversión timezone)
+                        por_dia_qs = (
+                            qs.values('fecha__date')
                               .annotate(
                                   llamadas=Count('id'),
                                   entrada=Sum('tokens_entrada'),
                                   salida=Sum('tokens_salida'),
                                   total=Sum('tokens_total'),
                               )
-                              .order_by('dia')
+                              .order_by('fecha__date')
                         )
+                        por_dia = [
+                            {'dia': str(r['fecha__date']), 'llamadas': r['llamadas'],
+                             'entrada': r['entrada'] or 0, 'salida': r['salida'] or 0,
+                             'total': r['total'] or 0}
+                            for r in por_dia_qs
+                        ]
                         por_agente = list(
                             qs.filter(agente__isnull=False)
                               .values('agente__nombre')
@@ -446,12 +451,7 @@ def entrenamiento_ia_view(request):
                                 'salida': totales['total_salida'] or 0,
                                 'total': totales['total_tokens'] or 0,
                             },
-                            'por_dia': [
-                                {'dia': str(r['dia']), 'llamadas': r['llamadas'],
-                                 'entrada': r['entrada'] or 0, 'salida': r['salida'] or 0,
-                                 'total': r['total'] or 0}
-                                for r in por_dia
-                            ],
+                            'por_dia': por_dia,
                             'por_agente': [
                                 {'agente': r['agente__nombre'], 'llamadas': r['llamadas'], 'total': r['total'] or 0}
                                 for r in por_agente
@@ -471,7 +471,8 @@ def entrenamiento_ia_view(request):
                                 'umbral_mensual': alerta.umbral_mensual,
                                 'notificar_a': list(alerta.notificar_a.values_list('id', flat=True)),
                             }
-                        except AlertaConsumoIA.DoesNotExist:
+                        except Exception:
+                            # DoesNotExist o tabla aún no migrada → devolver defaults
                             data_alerta = {'umbral_diario': 0, 'umbral_mensual': 0, 'notificar_a': []}
                         return JsonResponse(data_alerta)
                     except Exception as ex:

@@ -20,19 +20,21 @@ def _estadisticas_conversacion(conversacion):
     from django.utils import timezone
 
     # Tokens
-    tok = conversacion.consumos_token.aggregate(
-        t_in=Sum('tokens_entrada'), t_out=Sum('tokens_salida'), t_total=Sum('tokens_total'),
-    )
-    tokens_in  = tok['t_in']  or 0
-    tokens_out = tok['t_out'] or 0
-    tokens_tot = tok['t_total'] or 0
-
-    # Modelo más usado
-    modelo_top = (
-        conversacion.consumos_token.values('modelo')
-        .annotate(n=Count('id')).order_by('-n')
-        .values_list('modelo', flat=True).first() or ''
-    )
+    try:
+        tok = conversacion.consumos_token.aggregate(
+            t_in=Sum('tokens_entrada'), t_out=Sum('tokens_salida'), t_total=Sum('tokens_total'),
+        )
+        tokens_in  = tok['t_in']  or 0
+        tokens_out = tok['t_out'] or 0
+        tokens_tot = tok['t_total'] or 0
+        modelo_top = (
+            conversacion.consumos_token.values('modelo')
+            .annotate(n=Count('id')).order_by('-n')
+            .values_list('modelo', flat=True).first() or ''
+        )
+    except Exception:
+        tokens_in = tokens_out = tokens_tot = 0
+        modelo_top = ''
 
     # Mensajes
     try:
@@ -45,15 +47,21 @@ def _estadisticas_conversacion(conversacion):
         total_msgs = msgs_cliente = msgs_asesor = msgs_ia = 0
 
     # Duración
-    inicio = conversacion.fecha_registro
-    fin    = conversacion.fecha_fin_conversacion or timezone.now()
-    if inicio:
-        delta   = fin - inicio
-        mins    = int(delta.total_seconds() // 60)
-        horas   = mins // 60
-        mins_r  = mins % 60
-        duracion = f'{horas}h {mins_r}m' if horas else f'{mins_r} min'
-    else:
+    try:
+        inicio = conversacion.fecha_registro
+        fin    = conversacion.fecha_fin_conversacion or timezone.now()
+        if inicio and fin:
+            # Asegurar que ambos son aware o ambos naive para la resta
+            if hasattr(fin, 'tzinfo') and fin.tzinfo and (not hasattr(inicio, 'tzinfo') or not inicio.tzinfo):
+                fin = fin.replace(tzinfo=None)
+            delta   = fin - inicio
+            mins    = int(delta.total_seconds() // 60)
+            horas   = mins // 60
+            mins_r  = mins % 60
+            duracion = f'{horas}h {mins_r}m' if horas else f'{mins_r} min'
+        else:
+            duracion = '—'
+    except Exception:
         duracion = '—'
 
     # Estado badge
@@ -64,8 +72,11 @@ def _estadisticas_conversacion(conversacion):
 
     # Primer agente
     primer_agente = ''
-    if conversacion.primer_agente:
-        primer_agente = conversacion.primer_agente.get_full_name() or conversacion.primer_agente.username
+    try:
+        if conversacion.primer_agente:
+            primer_agente = conversacion.primer_agente.get_full_name() or conversacion.primer_agente.username
+    except Exception:
+        pass
 
     # Control de respuestas
     cr = _control_respuestas(conversacion)
