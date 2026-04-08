@@ -450,6 +450,39 @@ def process_incoming_message(session, event_data, channel_layer):
                 whatsapp_service.send_text_message(conversation.sesion.session_id, contacto.from_number, conversation.sesion.mensaje_bienvenida, simularEscritura=True)
         else:
             _ia_activa = bool(session.agente_ia and session.agente_ia.apikey.filter(estado=True).exists())
+
+        # Log diagnóstico cuando la IA no está activa — ayuda a detectar cambios de agente sin keys
+        if not _ia_activa and session.agente_ia:
+            _keys_total = session.agente_ia.apikey.count()
+            _keys_activas = session.agente_ia.apikey.filter(estado=True).count()
+            logger.warning(
+                "Sesión %s: agente '%s' (id=%s) tiene %d/%d API Keys activas — IA desactivada",
+                session.session_id, session.agente_ia.nombre, session.agente_ia.id,
+                _keys_activas, _keys_total,
+            )
+            # Notificar al usuario del CRM si el agente no tiene keys activas (una vez cada 10 min)
+            if _keys_activas == 0:
+                try:
+                    from django.core.cache import cache
+                    _notif_key = f'notif_ia_sin_keys_{session.id}'
+                    if not cache.get(_notif_key):
+                        cache.set(_notif_key, True, 600)  # throttle 10 minutos
+                        notificacion(
+                            titulo=f'Agente IA sin API Keys activas — "{session.nombre or session.session_id}"',
+                            cuerpo=(
+                                f'El agente <strong>{session.agente_ia.nombre}</strong> no tiene API Keys activas '
+                                f'({_keys_total} key(s) registradas, todas desactivadas). '
+                                f'La IA no responderá hasta que reactives una key en '
+                                f'<a href="/crm/entrenamiento/">Entrenamiento IA</a>.'
+                            ),
+                            destinatario=session.usuario,
+                            url='/crm/entrenamiento/',
+                            prioridad=1,
+                            tipo=4,
+                        )
+                except Exception:
+                    pass
+
         departamentos = conversation.sesion.departamentos.all().annotate(
             numero_opcion=Window(
                 expression=RowNumber(),
