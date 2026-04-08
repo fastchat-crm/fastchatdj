@@ -36,6 +36,7 @@ def webhook_handler(request):
     """
     Manejador de webhooks para eventos de WhatsApp
     """
+    logger.info("WEBHOOK_RECV ip=%s len=%d", request.META.get('REMOTE_ADDR', '?'), len(request.body))
     # Verificar la clave API
     whatsapp_service = WhatsAppService()
     try:
@@ -45,6 +46,7 @@ def webhook_handler(request):
         event_type = data.get('type')
         event_data = data.get('data', {})
         session_id = event_data.get('sessionId')
+        logger.info("WEBHOOK_EVENT type=%s session=%s", event_type, session_id)
         conversacion_id = event_data.get('conversacion_id')
         msgerror = ''
 
