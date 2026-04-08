@@ -50,7 +50,7 @@ _MAX_STATIC_CHARS  = 2_000  # máx chars del contexto estático
 _HISTORY_TURNS     = 4      # turnos de historial (4 turnos = 8 mensajes)
 _USER_SNIPPET      = 160    # chars por mensaje de usuario en historial
 _AI_SNIPPET        = 240    # chars por respuesta IA en historial
-_MAX_OUTPUT_TOKENS = 650    # límite duro de tokens de salida — suficiente para listas de hasta ~20 ítems
+_MAX_OUTPUT_TOKENS = 900    # límite duro de tokens de salida — suficiente para listas completas de menú
 _TOPIC_ANCHOR_CHARS = 180   # chars del primer mensaje sustantivo como ancla de tema
 
 # Palabras que NO se añaden como ancla semántica al query FAISS
@@ -424,6 +424,7 @@ class AgenteConsultor:
         # ------------------------------------------------------------------
         _sin_datos = False
         _es_ack = _es_ack_simple(pregunta) and not self._es_primer_mensaje()
+        _presupuesto = _MAX_CONTEXT_CHARS  # se ajusta abajo si es consulta amplia
 
         if _es_ack:
             # Confirmación breve — no necesita FAISS. El historial es suficiente.
@@ -452,8 +453,8 @@ class AgenteConsultor:
             logger.debug("FAISS: %d docs + %d enlaces (amplia=%s)", len(docs), len(docs_enlaces), es_consulta_amplia)
             todos_docs = _dedup_preservando_orden(docs + docs_enlaces)
             # Para consultas amplias usar hasta el doble del techo
-            max_chars_actual = min(_MAX_CONTEXT_CHARS * 2, 8_000) if es_consulta_amplia else _MAX_CONTEXT_CHARS
-            contexto = _trim_contexto(todos_docs, max_chars_actual)
+            _presupuesto = min(_MAX_CONTEXT_CHARS * 2, 8_000) if es_consulta_amplia else _MAX_CONTEXT_CHARS
+            contexto = _trim_contexto(todos_docs, _presupuesto)
 
             # Restaurar k normal
             if self.retriever:
@@ -469,18 +470,18 @@ class AgenteConsultor:
                     "Prohibido usar conocimiento externo o inventar datos."
                 )
 
-        # Contexto estático siempre se añade (prepuesto al RAG si existe)
-        # Cap proporcional: el estático no consume más de _MAX_STATIC_CHARS,
-        # dejando el resto del presupuesto para los chunks FAISS.
+        # Contexto estático siempre se añade (prepuesto al RAG si existe).
+        # El presupuesto FAISS usa el mismo techo calculado arriba (_presupuesto),
+        # no el techo por defecto — así las consultas amplias conservan el espacio extra.
         if self.contexto_estatico:
             estatico_trim = self.contexto_estatico[:_MAX_STATIC_CHARS]
-            faiss_budget  = _MAX_CONTEXT_CHARS - len(estatico_trim)
+            faiss_budget  = _presupuesto - len(estatico_trim)
             faiss_trim    = contexto[:max(faiss_budget, 0)] if contexto else ""
             faiss_part    = ("\n\n---\n" + faiss_trim) if faiss_trim else ""
             contexto      = estatico_trim + faiss_part
             logger.debug(
-                "Contexto estático (%d chars) + FAISS (%d chars) = %d total",
-                len(estatico_trim), len(faiss_trim), len(contexto),
+                "Contexto estático (%d chars) + FAISS (%d chars) = %d total (presupuesto=%d)",
+                len(estatico_trim), len(faiss_trim), len(contexto), _presupuesto,
             )
 
         # ------------------------------------------------------------------
