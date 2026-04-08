@@ -24,7 +24,7 @@ class AgenteResumidor:
     def _get_embeddings(self):
         if self.provider == "gemini":
             return GoogleGenerativeAIEmbeddings(
-                model="models/embedding-001", google_api_key=self.apikey
+                model="models/text-embedding-004", google_api_key=self.apikey
             )
         elif self.provider == "openai":
             return OpenAIEmbeddings(openai_api_key=self.apikey)
