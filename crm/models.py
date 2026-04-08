@@ -247,15 +247,38 @@ class AgentesIA(ModeloBase):
         agente = self
         agente.vectorstore_enlaces_path = None
 
-        def _money_map_to_str(m: dict | None) -> str:
+        def _money_map_to_str(m):
             if not m:
                 return ""
-            # Ordena por clave numérica si es posible (1,2,3,4,5…)
             try:
                 items = sorted(m.items(), key=lambda kv: int(kv[0]))
             except Exception:
                 items = list(m.items())
             return ", ".join(f"{k}: {v}" for k, v in items if v is not None and str(v).strip() != "")
+
+        def _json_to_text(obj, nivel=0) -> str:
+            """Convierte recursivamente cualquier JSON en texto legible para FAISS."""
+            indent = "  " * nivel
+            if isinstance(obj, list):
+                partes = []
+                for i, item in enumerate(obj):
+                    partes.append(f"{indent}[{i + 1}]\n{_json_to_text(item, nivel + 1)}")
+                return "\n\n".join(partes)
+            elif isinstance(obj, dict):
+                lineas = []
+                for k, v in obj.items():
+                    if v is None or str(v).strip() == "":
+                        continue
+                    if isinstance(v, (dict, list)):
+                        sub = _json_to_text(v, nivel + 1)
+                        if sub.strip():
+                            lineas.append(f"{indent}{k}:\n{sub}")
+                    else:
+                        lineas.append(f"{indent}{k}: {v}")
+                return "\n".join(lineas)
+            else:
+                return f"{indent}{obj}"
+
         for apikeyobj in apikeys:
             if not apikeyobj.descripcion:
                 continue
@@ -267,85 +290,96 @@ class AgentesIA(ModeloBase):
             documentos = []
             for detalle in detalles:
                 try:
-                    r = requests.get(detalle.enlace, timeout=30)
-                    if r.status_code != 200:
+                    headers = {}
+                    if detalle.requiere_token and detalle.token_autorizacion:
+                        headers['Authorization'] = f'Bearer {detalle.token_autorizacion}'
+
+                    resp = requests.get(detalle.enlace, headers=headers, timeout=30)
+                    if resp.status_code != 200:
+                        print(f"[build_enlaces] {detalle.enlace} → HTTP {resp.status_code}: {resp.text[:200]}")
                         continue
-                    data = r.json()
-                    if data.get("listCatalogo"):
-                        for c in data.get("listCatalogo"):
-                            page_content = f"""Curso: {c.get('nombre') or ''}
-                            Categoría: {c.get('categoria', {}).get('descripcion') or ''}
-                            Nombre: {c.get('nombre') or ''}
-                            Unidad de negocio: {c.get('unidad_negocio') or ''}
-                            Descripción: {c.get('descripcion') or ''}
-                            Precio total (USD): {c.get('precio', {}).get('real')}
-                            Fechas: {c.get('fechainicio', '')} a {c.get('fechafin')}
-                            Horas que dura el curso: {c.get('horas', {}).get('total')}
-                            Activo: {c.get('activo')}
-                            Brochure: {c.get('brochure_url') or ''}
-                            Portada: {c.get('portada_url') or ''}
-                            """
+
+                    descripcion_detalle = (detalle.descripcion or '').strip()
+                    tipo_dato = detalle.tipo_dato_enlace  # 1=TEXT, 2=HTML, 3=JSON, 4=EXCEL, 5=CSV
+
+                    # ── TEXT o HTML ──────────────────────────────────────────
+                    if tipo_dato in (1, 2):
+                        texto = resp.text
+                        if tipo_dato == 2:
+                            try:
+                                from bs4 import BeautifulSoup
+                                soup = BeautifulSoup(texto, 'html.parser')
+                                texto = soup.get_text(separator='\n', strip=True)
+                            except Exception:
+                                pass
+                        if descripcion_detalle:
+                            texto = f"{descripcion_detalle}\n\n{texto}"
+                        docs = vs_manager.build_from_string(texto, metadata={"tipo": "texto", "detalle_id": detalle.id})
+                        documentos.extend(docs)
+                        continue
+
+                    # ── JSON ─────────────────────────────────────────────────
+                    data = resp.json()
+
+                    # Estructura conocida: listCatalogo
+                    if isinstance(data, dict) and data.get("listCatalogo"):
+                        for c in data["listCatalogo"]:
+                            page_content = (
+                                f"Curso: {c.get('nombre') or ''}\n"
+                                f"Categoría: {(c.get('categoria') or {}).get('descripcion') or ''}\n"
+                                f"Unidad de negocio: {c.get('unidad_negocio') or ''}\n"
+                                f"Descripción: {c.get('descripcion') or ''}\n"
+                                f"Precio total (USD): {(c.get('precio') or {}).get('real') or ''}\n"
+                                f"Fechas: {c.get('fechainicio') or ''} a {c.get('fechafin') or ''}\n"
+                                f"Horas: {(c.get('horas') or {}).get('total') or ''}\n"
+                                f"Activo: {c.get('activo')}\n"
+                            )
                             metadata = {
-                                "tipo": "listCatalogo",
-                                "detalle_id": detalle.id,
-                                "id": c.get("id"),
-                                "slug": c.get("slug"),
-                                "categoria": c.get("categoria"),
-                                "unidad_negocio": c.get("unidad_negocio"),
-                                "precio_total": c.get("precio", {}).get("total"),
-                                "fechainicio": c.get("fechas", {}).get("inicio"),
-                                "fechafin": c.get("fechas", {}).get("fin"),
-                                "portada_url": c.get("portada_url"),
-                                "brochure_url": c.get("brochure_url"),
+                                "tipo": "listCatalogo", "detalle_id": detalle.id,
+                                "id": c.get("id"), "slug": c.get("slug"),
                             }
                             docs = vs_manager.build_from_string(page_content, metadata=metadata)
                             documentos.extend(docs)
-                    if data.get("data"):
-                        for r in data["data"]:
-                            costos = r.get("costos", {}) or {}
-                            insc_str = _money_map_to_str(costos.get("inscripcion"))
-                            matr_str = _money_map_to_str(costos.get("matricula"))
 
-                            page_content = f"""Curso: {r.get('nombre') or ''}
-                    Periodo: {r.get('periodo') or ''}
-                    Centro de costo: {r.get('centro_costo') or ''}
-                    Fechas: {r.get('fechainicio') or ''} a {r.get('fechafin') or ''}
-                    Número de cuotas: {r.get('numero_cuotas') or ''}
-                    Cupos disponibles: {r.get('tiene_cupo')}
-                    Requisitos: {(r.get('requisitos') or '').strip()}
-                    Descripción: {(r.get('descripcion') or '').strip()}
-                    Costos:
-                      - Inscripción: {insc_str or 'N/D'}
-                      - Matrícula: {matr_str or 'N/D'}
-
-                    Contexto: {(r.get('contexto') or '').strip()}
-                    """
-
+                    # Estructura conocida: data (oferta por periodo)
+                    elif isinstance(data, dict) and data.get("data"):
+                        for item in data["data"]:
+                            costos = item.get("costos", {}) or {}
+                            page_content = (
+                                f"Curso: {item.get('nombre') or ''}\n"
+                                f"Periodo: {item.get('periodo') or ''}\n"
+                                f"Centro de costo: {item.get('centro_costo') or ''}\n"
+                                f"Fechas: {item.get('fechainicio') or ''} a {item.get('fechafin') or ''}\n"
+                                f"Cupos disponibles: {item.get('tiene_cupo')}\n"
+                                f"Requisitos: {(item.get('requisitos') or '').strip()}\n"
+                                f"Descripción: {(item.get('descripcion') or '').strip()}\n"
+                                f"Costos - Inscripción: {_money_map_to_str(costos.get('inscripcion')) or 'N/D'}\n"
+                                f"Costos - Matrícula: {_money_map_to_str(costos.get('matricula')) or 'N/D'}\n"
+                                f"Contexto: {(item.get('contexto') or '').strip()}\n"
+                            )
                             metadata = {
-                                "tipo": "oferta_periodo",  # para distinguir de 'catalogo'
-                                "detalle_id": detalle.id,
-                                "id": r.get("id"),
-                                "nombre": r.get("nombre"),
-                                "periodo": r.get("periodo"),
-                                "centro_costo": r.get("centro_costo"),
-                                "fechainicio": r.get("fechainicio"),
-                                "fechafin": r.get("fechafin"),
-                                "numero_cuotas": r.get("numero_cuotas"),
-                                "tiene_cupo": r.get("tiene_cupo"),
-                                "costos_inscripcion": costos.get("inscripcion"),
-                                "costos_matricula": costos.get("matricula"),
+                                "tipo": "oferta_periodo", "detalle_id": detalle.id,
+                                "id": item.get("id"), "nombre": item.get("nombre"),
                             }
-
                             docs = vs_manager.build_from_string(page_content, metadata=metadata)
                             documentos.extend(docs)
+
+                    # ── GENÉRICO: cualquier otra estructura JSON ──────────────
+                    else:
+                        texto = _json_to_text(data)
+                        if descripcion_detalle:
+                            texto = f"{descripcion_detalle}\n\n{texto}"
+                        docs = vs_manager.build_from_string(texto, metadata={"tipo": "json_generico", "detalle_id": detalle.id})
+                        documentos.extend(docs)
+
                 except Exception as e:
-                    print(f"Error procesando enlace {detalle.enlace}: {e}")
+                    import traceback
+                    print(f"[build_enlaces] Error procesando {detalle.enlace}: {e}\n{traceback.format_exc()}")
                     continue
+
             if documentos:
                 vs_path = vs_manager.build_and_save(documentos, nombre_vs)
                 agente.vectorstore_enlaces_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
-                # Siempre fijar una expiración mínima de 10 min para que el check
-                # de caché no vuelva a entrar en la próxima petición.
                 agente.vectorstore_enlaces_expira = timezone.now() + timedelta(
                     hours=tiempo_cache_horas if tiempo_cache_horas else 0,
                     minutes=0 if tiempo_cache_horas else 10,
