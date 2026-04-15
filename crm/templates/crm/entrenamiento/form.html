@@ -789,7 +789,7 @@
                     if (data.error) {
                         Swal.fire({ type: 'error', title: 'Error', text: data.message });
                     } else {
-                        Swal.fire({ type: 'success', title: 'Listo', text: data.message, timer: 3000, showConfirmButton: false })
+                        Swal.fire({ type: 'success', title: 'Listo', text: data.message, timer: 6000, showConfirmButton: false })
                             .then(function() { if (data.reload) location.reload(); });
                     }
                 },
@@ -822,7 +822,7 @@
                     badge.textContent = activo ? 'Activa' : 'Inactiva';
                 }
                 if (activo) {
-                    Swal.fire({ type: 'success', title: 'Conexión exitosa', text: res.message || 'API Key válida.', timer: 3000, showConfirmButton: false });
+                    Swal.fire({ type: 'success', title: 'Conexión exitosa', text: res.message || 'API Key válida.', timer: 6000, showConfirmButton: false });
                 } else {
                     Swal.fire({ type: 'error', title: 'API Key inválida', text: res.message || 'Error de conexión.' });
                 }
