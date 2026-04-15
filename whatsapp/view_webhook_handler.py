@@ -27,7 +27,7 @@ from .models import (
     EstadisticasConversacion
 )
 from .services import WhatsAppService
-from .trazas import registrar as _traza
+from .trazas import registrar as _traza, notificar_superusers_error, fallback_permitido
 
 logger = logging.getLogger(__name__)
 
@@ -607,7 +607,31 @@ def process_incoming_message(session, event_data, channel_layer):
                     logger.warning("build_enlaces_vectorstore falló para agente %s: %s", agente.id, _e)
                 respuesta_enviada = False
                 resultado = None
-                for apikey in agente.apikey.filter(estado=True):
+                _keys_activas_qs = agente.apikey.filter(estado=True)
+                if not _keys_activas_qs.exists():
+                    _traza(
+                        etapa='sin_respuesta', sesion=session, conversacion=conversation, mensaje=message,
+                        numero=from_number, nivel='error',
+                        detalle=f'Agente "{agente.nombre}" (id={agente.id}) no tiene API Keys activas.',
+                    )
+                    notificar_superusers_error(
+                        titulo=f'Agente IA sin API Keys activas — {agente.nombre}',
+                        cuerpo=(
+                            f'El agente <strong>{agente.nombre}</strong> (id {agente.id}) recibió un mensaje '
+                            f'de <strong>{from_number}</strong> pero no tiene ninguna API Key activa. '
+                            f'Revisa la configuración del agente o las keys desactivadas automáticamente.'
+                        ),
+                        url=f'/whatsapp/trazas/?numero={from_number}&solo_problemas=1',
+                        cache_key=f'ia_sin_keys_agente_{agente.id}',
+                        cooldown_segundos=1800,
+                    )
+                    if fallback_permitido(conversation.id):
+                        whatsapp_service.send_text_message(
+                            conversation.sesion.session_id, contacto.from_number,
+                            'Lo siento, en este momento no puedo procesar tu consulta. Por favor escribe *reintentar* en unos momentos o contacta a un asesor.'
+                        )
+                    _keys_activas_qs = []  # salta el loop siguiente
+                for apikey in _keys_activas_qs:
                     import time as _time
                     _t0 = _time.time()
                     try:
@@ -702,6 +726,20 @@ def process_incoming_message(session, event_data, channel_layer):
                             for kw in ('api key', 'invalid api', 'quota', 'unauthorized', '401', '403',
                                        'permission denied', 'api_key', 'authentication')
                         )
+                        if not _es_error_api:
+                            # Bug de código: avisar a superusers (la key NO se deshabilita y el admin necesita ver la traza)
+                            notificar_superusers_error(
+                                titulo=f'Bug en pipeline IA — Agente "{agente.nombre}"',
+                                cuerpo=(
+                                    f'El agente <strong>{agente.nombre}</strong> (id {agente.id}) '
+                                    f'falló al responder a <strong>{from_number}</strong>.<br>'
+                                    f'<small>Error: {str(ex)[:300]}</small><br>'
+                                    f'<small>API Key id {apikey.id} ({apikey.get_proveedor_display()})</small>'
+                                ),
+                                url=f'/whatsapp/trazas/?numero={from_number}&solo_problemas=1',
+                                cache_key=f'ia_bug_agente_{agente.id}_apikey_{apikey.id}',
+                                cooldown_segundos=1800,
+                            )
                         if _es_error_api:
                             apikey.estado = False
                             apikey.msgerror = str(ex)[:500]
@@ -726,16 +764,29 @@ def process_incoming_message(session, event_data, channel_layer):
                             apikey.msgerror = str(ex)[:500]
                             apikey.save(update_fields=['msgerror'])
                         continue
-                if not respuesta_enviada:
+                if not respuesta_enviada and _keys_activas_qs:
                     _traza(
                         etapa='sin_respuesta', sesion=session, conversacion=conversation, mensaje=message,
                         numero=from_number, nivel='error',
                         detalle='Ningun API Key del agente logro responder (ver trazas llm_error previas).',
                     )
-                    whatsapp_service.send_text_message(
-                        conversation.sesion.session_id, contacto.from_number,
-                        'Lo siento, en este momento no puedo procesar tu consulta. Por favor escribe *reintentar* en unos momentos o contacta a un asesor.'
+                    notificar_superusers_error(
+                        titulo=f'Ninguna API Key respondió — Agente "{agente.nombre}"',
+                        cuerpo=(
+                            f'Todas las API Keys activas del agente <strong>{agente.nombre}</strong> '
+                            f'(id {agente.id}) fallaron al responder a <strong>{from_number}</strong>. '
+                            f'Abre las trazas filtradas y revisa los errores <code>llm_error</code> previos '
+                            f'para diagnosticar el problema (cuota, bug, red).'
+                        ),
+                        url=f'/whatsapp/trazas/?numero={from_number}&solo_problemas=1',
+                        cache_key=f'ia_sin_respuesta_conv_{conversation.id}',
+                        cooldown_segundos=900,
                     )
+                    if fallback_permitido(conversation.id):
+                        whatsapp_service.send_text_message(
+                            conversation.sesion.session_id, contacto.from_number,
+                            'Lo siento, en este momento no puedo procesar tu consulta. Por favor escribe *reintentar* en unos momentos o contacta a un asesor.'
+                        )
 
                 # ── Fin de conversación detectado ─────────────────────────
                 fin_detectado = fin_por_frase or (resultado is not None and resultado.fin_detectado)

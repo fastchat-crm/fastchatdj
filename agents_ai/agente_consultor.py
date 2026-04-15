@@ -610,6 +610,26 @@ class AgenteConsultor:
                 descripcion_agente=descripcion_agente, contexto_extra=contexto_previo,
             )
 
+    @staticmethod
+    def _extraer_texto(ai_message) -> str:
+        # Gemini con tool-calling puede devolver content como list[dict|str]; .strip() sobre list explota.
+        content = getattr(ai_message, 'content', '') if ai_message else ''
+        if content is None:
+            return ''
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            partes = []
+            for parte in content:
+                if isinstance(parte, str):
+                    partes.append(parte)
+                elif isinstance(parte, dict):
+                    txt = parte.get('text') or parte.get('content') or ''
+                    if isinstance(txt, str):
+                        partes.append(txt)
+            return '\n'.join(p for p in partes if p).strip()
+        return str(content).strip()
+
     def _extraer_tokens(self, ai_message) -> tuple[int, int]:
         """(tokens_in, tokens_out) desde un AIMessage — compatible Gemini y OpenAI."""
         t_in = t_out = 0
@@ -659,7 +679,7 @@ class AgenteConsultor:
 
         try:
             ai_message = self.llm.invoke(prompt_final)
-            respuesta = ai_message.content
+            respuesta = self._extraer_texto(ai_message)
         except Exception as exc:
             logger.error("Error invocando LLM: %s", exc)
             raise
@@ -814,7 +834,7 @@ class AgenteConsultor:
         else:
             logger.warning("Loop tool-use alcanzó MAX_ITER=%d sin respuesta final", _MAX_ITER)
 
-        respuesta = (ai_message.content or "").strip() if ai_message else ""
+        respuesta = self._extraer_texto(ai_message)
 
         # Fallback backward-compat: si el modelo emitió JSON en vez de llamar tools
         # (p. ej. prompt antiguo con instrucción "emite {accion:...}"), aplicamos la
