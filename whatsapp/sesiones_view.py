@@ -1,7 +1,7 @@
 import uuid
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.contrib import messages
@@ -57,6 +57,79 @@ def sesionesView(request):
                     log(f"Crear sesión WhatsApp pendiente (ID: {session.id})", request, "create_session", obj=session.id)
                     res_json = {'error': False, 'qr': session.qr_code, 'session_id': session.id}
                     return JsonResponse(res_json, safe=False)
+                elif action == 'probar_envio_mensaje':
+                    from django.utils import timezone as _tz
+                    filtro = model.objects.get(pk=int(request.POST['id']))
+                    if filtro.estado != 'conectado':
+                        return JsonResponse({'error': True, 'message': 'La sesión no está conectada.'})
+                    numero_destino = (request.POST.get('numero_destino') or '').strip()
+                    if not numero_destino:
+                        numero_destino = filtro.numero
+                    if not numero_destino:
+                        return JsonResponse({'error': True, 'message': 'No se proporcionó un número de destino y la sesión no tiene número.'})
+                    texto = (request.POST.get('texto') or '').strip() or (
+                        f"🔧 Mensaje de prueba desde FastChat\n"
+                        f"Sesión: {filtro.numero or filtro.session_id}\n"
+                        f"Fecha: {_tz.now().strftime('%d/%m/%Y %H:%M:%S')}"
+                    )
+                    destino_fmt = whatsapp_service.format_phone_number(numero_destino)
+                    resultado = whatsapp_service.send_text_message(
+                        filtro.session_id, destino_fmt, texto,
+                    )
+                    if resultado.get('success'):
+                        log(f"Prueba de envío enviada desde sesión {filtro.id} a {destino_fmt}", request, "change", obj=filtro.id)
+                        return JsonResponse({
+                            'error': False,
+                            'message': 'Mensaje de prueba enviado correctamente.',
+                            'message_id': resultado.get('message_id'),
+                            'destino': destino_fmt,
+                            'texto': texto,
+                        })
+                    return JsonResponse({
+                        'error': True,
+                        'message': resultado.get('error') or 'No se pudo enviar el mensaje de prueba.',
+                        'destino': destino_fmt,
+                    })
+                elif action == 'verificar_conexion':
+                    filtro = model.objects.get(pk=int(request.POST['id']))
+                    if not filtro.session_id:
+                        return JsonResponse({'error': True, 'message': 'La sesión no tiene session_id asignado.'})
+                    result = whatsapp_service.check_session_status(filtro.session_id)
+                    if not result.get('success'):
+                        if result.get('not_found') and filtro.estado == 'conectado':
+                            filtro.estado = 'desconectado'
+                            filtro.error_mensaje = 'Sesión no existe en el servidor de WhatsApp'
+                            filtro.save()
+                            log(f"Verificación: sesión {filtro.id} no existe en Node — marcada como desconectada", request, "change", obj=filtro.id)
+                        return JsonResponse({
+                            'error': True,
+                            'connected': False,
+                            'message': result.get('error') or 'No se pudo verificar la sesión',
+                        })
+                    connected = result.get('connected')
+                    estado_previo = filtro.estado
+                    if connected and filtro.estado != 'conectado':
+                        filtro.estado = 'conectado'
+                        filtro.error_mensaje = None
+                        filtro.save()
+                        log(f"Verificación: sesión {filtro.id} está realmente conectada — estado actualizado", request, "change", obj=filtro.id)
+                    elif not connected and filtro.estado == 'conectado':
+                        filtro.estado = 'desconectado'
+                        filtro.error_mensaje = 'Conexión con WhatsApp perdida (detectado por verificación manual)'
+                        filtro.save()
+                        log(f"Verificación: sesión {filtro.id} reportaba conectada pero el socket está caído — marcada como desconectada", request, "change", obj=filtro.id)
+                    return JsonResponse({
+                        'error': False,
+                        'connected': connected,
+                        'is_active': result.get('is_active'),
+                        'estado': filtro.estado,
+                        'estado_previo': estado_previo,
+                        'last_activity': result.get('last_activity'),
+                        'message': (
+                            'Conexión activa con WhatsApp.' if connected
+                            else 'La sesión no tiene conexión real con WhatsApp.'
+                        ),
+                    })
                 elif action == 'reconectar':
                     filtro = model.objects.get(pk=int(request.POST['id']))
                     webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
@@ -226,5 +299,16 @@ def sesionesView(request):
     listado = model.objects.filter(filtros)
     data["list_count"] = listado.count()
     data["url_vars"] = url_vars
-    paginador(request, listado.order_by('numero'), 10, data, url_vars)
+
+    base_qs = model.objects.filter(status=True, usuario_id=request.user.id)
+    stats_raw = {row['estado']: row['total'] for row in base_qs.values('estado').annotate(total=Count('id'))}
+    data['stats'] = {
+        'total': sum(stats_raw.values()),
+        'conectado': stats_raw.get('conectado', 0),
+        'pendiente': stats_raw.get('pendiente', 0),
+        'desconectado': stats_raw.get('desconectado', 0),
+        'error': stats_raw.get('error', 0),
+    }
+
+    paginador(request, listado.order_by('numero'), 12, data, url_vars)
     return render(request, 'whatsapp/sesiones/listado.html', data)

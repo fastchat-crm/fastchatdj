@@ -1,344 +1,334 @@
 {% extends 'base.html' %}
-{% load templatefunctions %}
+{% load static templatefunctions %}
 {% block head %}
-    <style>
-        ._akau ._akaz {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            z-index: 2;
-            width: 64px;
-            height: 64px;
-            margin-top: -32px;
-            margin-left: -32px;
-            -webkit-user-select: none
-        }
-
-        .qr-container img {
-            border-radius: 8px;
-            margin-left: -21px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        /* Animación de escaneo */
-        .qr-scanning:before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(to right, transparent, #28a745, transparent);
-            animation: qr-scan 2s infinite;
-            z-index: 1;
-        }
-
-        @keyframes qr-scan {
-            0% {
-                top: 0;
-            }
-            100% {
-                top: 100%;
-            }
-        }
-    </style>
-    <style>
-        .session-card {
-            transition: transform 0.2s;
-        }
-
-        .session-card:hover {
-            transform: translateY(-5px);
-        }
-
-        .card {
-            border-radius: 12px;
-            overflow: hidden;
-        }
-
-        .card-header {
-            border-bottom: none;
-            font-weight: 500;
-        }
-
-        .dropdown-toggle::after {
-            display: none;
-        }
-
-        .badge {
-            font-weight: 500;
-            padding: 0.35em 0.65em;
-        }
-
-        /* Animación para el estado */
-        @keyframes pulse {
-            0% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.5;
-            }
-            100% {
-                opacity: 1;
-            }
-        }
-
-        .bg-success i.fa-check-circle {
-            animation: pulse 2s infinite;
-        }
-
-        .bg-warning i.fa-clock {
-            animation: pulse 1.5s infinite;
-        }
-    </style>
+    <link rel="stylesheet" href="{% static 'stylenew/sesionws.css' %}">
 {% endblock %}
 
 {% block content %}
-    <div class="card mb-3">
-        <div class="card-body">
-            <form method="GET" class="mb-0">
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label">Búsqueda general</label>
-                        <div class="input-group">
-                            <span class="input-group-text border-end-0">
-                                <i class="fa fa-search text-muted"></i>
-                            </span>
-                            <input type="text" class="form-control border-start-0"
-                                   placeholder="Buscar por número o asesor..." name="criterio" value="{{ criterio }}">
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Estado</label>
-                        <select class="form-select" name="estado">
-                            <option value="">Todos</option>
-                            <option value="conectado" {% if estado == 'conectado' %}selected{% endif %}>Conectado
-                            </option>
-                            <option value="pendiente" {% if estado == 'pendiente' %}selected{% endif %}>Pendiente
-                            </option>
-                            <option value="desconectado" {% if estado == 'desconectado' %}selected{% endif %}>
-                                Desconectado
-                            </option>
-                            <option value="error" {% if estado == 'error' %}selected{% endif %}>Error</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Acciones</label>
-                        <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-search me-1"></i>
-                            </button>
-                            {% if url_vars %}
-                                <a href="{{ request.path }}" class="btn btn-warning">
-                                    <i class="fas fa-refresh"></i>
-                                </a>
-                            {% endif %}
-                        </div>
+    {# ===== STATS ROW ===== #}
+    <div class="row g-3 stats-row">
+        <div class="col-6 col-md-3">
+            <a href="?{% if criterio %}criterio={{ criterio }}{% endif %}"
+               class="stat-tile {% if not estado %}active{% endif %} text-decoration-none">
+                <div class="stat-icon icon-total"><i class="fab fa-whatsapp"></i></div>
+                <div>
+                    <div class="stat-value">{{ stats.total }}</div>
+                    <div class="stat-label">Total</div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="?estado=conectado{% if criterio %}&criterio={{ criterio }}{% endif %}"
+               class="stat-tile {% if estado == 'conectado' %}active{% endif %} text-decoration-none">
+                <div class="stat-icon icon-conn"><i class="fas fa-check-circle"></i></div>
+                <div>
+                    <div class="stat-value">{{ stats.conectado }}</div>
+                    <div class="stat-label">Conectadas</div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="?estado=pendiente{% if criterio %}&criterio={{ criterio }}{% endif %}"
+               class="stat-tile {% if estado == 'pendiente' %}active{% endif %} text-decoration-none">
+                <div class="stat-icon icon-pend"><i class="fas fa-clock"></i></div>
+                <div>
+                    <div class="stat-value">{{ stats.pendiente }}</div>
+                    <div class="stat-label">Pendientes</div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="?estado=desconectado{% if criterio %}&criterio={{ criterio }}{% endif %}"
+               class="stat-tile {% if estado == 'desconectado' or estado == 'error' %}active{% endif %} text-decoration-none">
+                <div class="stat-icon icon-off"><i class="fas fa-plug-circle-xmark"></i></div>
+                <div>
+                    <div class="stat-value">{{ stats.desconectado|add:stats.error }}</div>
+                    <div class="stat-label">Sin conexión</div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    {# ===== FILTER BAR ===== #}
+    <div class="filter-card">
+        <form method="GET">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label small text-muted mb-1">Búsqueda</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0">
+                            <i class="fa fa-search text-muted"></i>
+                        </span>
+                        <input type="text" class="form-control border-start-0"
+                               placeholder="Buscar por número..." name="criterio" value="{{ criterio }}">
                     </div>
                 </div>
-            </form>
-        </div>
+                <div class="col-md-6">
+                    <label class="form-label small text-muted mb-1 d-block">Estado</label>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="?{% if criterio %}criterio={{ criterio }}{% endif %}"
+                           class="estado-chip {% if not estado %}active{% endif %}">
+                            Todos
+                        </a>
+                        <a href="?estado=conectado{% if criterio %}&criterio={{ criterio }}{% endif %}"
+                           class="estado-chip {% if estado == 'conectado' %}active{% endif %}">
+                            <span class="dot dot-conectado"></span> Conectado
+                        </a>
+                        <a href="?estado=pendiente{% if criterio %}&criterio={{ criterio }}{% endif %}"
+                           class="estado-chip {% if estado == 'pendiente' %}active{% endif %}">
+                            <span class="dot dot-pendiente"></span> Pendiente
+                        </a>
+                        <a href="?estado=desconectado{% if criterio %}&criterio={{ criterio }}{% endif %}"
+                           class="estado-chip {% if estado == 'desconectado' %}active{% endif %}">
+                            <span class="dot dot-desconectado"></span> Desconectado
+                        </a>
+                        <a href="?estado=error{% if criterio %}&criterio={{ criterio }}{% endif %}"
+                           class="estado-chip {% if estado == 'error' %}active{% endif %}">
+                            <span class="dot dot-error"></span> Error
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </form>
     </div>
 
-
-    <div class="row align-items-center mb-3">
-        <div class="col-md-12 mb-2 mb-md-0">
-            <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalAgregarSesion">
-                <i class="fas fa-plus-circle me-2"></i> Nueva Sesión de WhatsApp
-            </button>
+    {# ===== HEADER / ACTIONS ===== #}
+    <div class="page-header">
+        <div>
+            <h4>Sesiones de WhatsApp</h4>
+            <span class="result-count">{{ list_count }} resultado{{ list_count|pluralize }}</span>
         </div>
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalAgregarSesion">
+            <i class="fas fa-plus-circle me-2"></i>Nueva sesión
+        </button>
     </div>
-    <div class="container-fluid">
-        <div class="row g-4" id="tablaSesiones">
+
+    {# ===== SESSION GRID ===== #}
+    <div class="container-fluid p-0">
+        <div class="row g-3" id="tablaSesiones">
             {% for s in listado %}
-                <div class="col-12 col-md-6 col-lg-4 col-xl-3 session-card" data-session-id="{{ s.id }}">
-                    <div class="card h-100 shadow-sm border-0">
-                        <!-- Estado de la sesión en header -->
-                        <div class="card-header text-white {% if s.estado == 'conectado' %}bg-success{% elif s.estado == 'pendiente' %}bg-warning text-dark{% elif s.estado == 'desconectado' %}bg-secondary{% elif s.estado == 'error' %}bg-danger{% endif %}">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span class="fw-bold">
-                                    {% if s.estado == 'conectado' %}
-                                        <i class="fas fa-check-circle me-1"></i>
-                                    {% elif s.estado == 'pendiente' %}
-                                        <i class="fas fa-clock me-1"></i>
-                                    {% elif s.estado == 'desconectado' %}
-                                        <i class="fas fa-times-circle me-1"></i>
-                                    {% elif s.estado == 'error' %}
-                                        <i class="fas fa-exclamation-triangle me-1"></i>
-                                    {% endif %}
-                                    {{ s.get_estado_display }}
-                                </span>
-                                <b class="small">#{{ s.id }}</b>
-                            </div>
+                <div class="col-12 col-md-6 col-lg-4 col-xl-3" data-session-id="{{ s.id }}">
+                    <div class="session-card stripe-{{ s.estado }}">
+
+                        <div class="card-top">
+                            <span class="status-pill pill-{{ s.estado }}">
+                                {% if s.estado == 'conectado' %}
+                                    <span class="dot-live"></span>
+                                {% elif s.estado == 'pendiente' %}
+                                    <i class="fas fa-clock"></i>
+                                {% elif s.estado == 'desconectado' %}
+                                    <i class="fas fa-times-circle"></i>
+                                {% elif s.estado == 'error' %}
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                {% endif %}
+                                {{ s.get_estado_display }}
+                            </span>
+                            <span class="session-id">#{{ s.id }}</span>
                         </div>
-                        <div class="card-body">
-                            <!-- Foto y número -->
-                            <div class="d-flex align-items-center mb-3">
+
+                        <div class="card-body-sess">
+                            <div class="d-flex align-items-center gap-3">
                                 {% if s.foto %}
-                                    <a href="{{ s.foto }}"
-                                       data-fancybox="image"
-                                       data-width="2048"
-                                       data-height="1365"
-                                       title="{{ s.numero }}">
-                                        <img class="rounded-circle me-3"
-                                             src="{{ s.foto }}"
-                                             width="60"
-                                             height="60"
-                                             alt="{{ s.numero }}">
+                                    <a href="{{ s.foto }}" data-fancybox="image" title="{{ s.numero }}">
+                                        <img class="sess-avatar" src="{{ s.foto }}" alt="{{ s.numero }}">
                                     </a>
                                 {% else %}
-                                    <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
-                                         style="width: 60px; height: 60px;">
-                                        <i class="fas fa-user fa-2x text-secondary"></i>
+                                    <div class="sess-avatar-placeholder">
+                                        <i class="fas fa-user fa-lg"></i>
                                     </div>
                                 {% endif %}
-                                <div>
-                                    <h5 class="card-title mb-0">{{ s.nombre|default:'SIN NOMBRE' }}</h5>
-                                    <h5 class="card-title mb-0">{{ s.numero|default:'' }}</h5>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <p class="sess-name" title="{{ s.nombre|default:'Sin nombre' }}">
+                                        {{ s.nombre|default:'SIN NOMBRE' }}
+                                    </p>
+                                    <div class="sess-number">
+                                        <i class="fab fa-whatsapp text-success me-1"></i>{{ s.numero|default:'—' }}
+                                    </div>
                                     {% if s.observacion %}
-                                        <small class="text-muted">
-                                            <i class="fas fa-info-circle me-1"></i>{{ s.observacion }}
+                                        <small class="sess-observacion" title="{{ s.observacion }}">
+                                            <i class="fas fa-info-circle me-1"></i>{{ s.observacion|truncatechars:40 }}
                                         </small>
                                     {% endif %}
                                 </div>
                             </div>
-                            <!-- Información adicional -->
-                            <div class="small text-muted">
-                                <div class="mb-2">
-                                    <i class="fas fa-calendar-alt me-1"></i>
-                                    Registrado: {{ s.fecha_registro|date:"d/m/Y H:i" }}
-                                </div>
-                                {% if s.ultima_conexion %}
-                                    <div class="mb-2">
-                                        <i class="fas fa-clock me-1"></i>
-                                        Última conexión: {{ s.ultima_conexion|date:"d/m/Y H:i" }}
-                                    </div>
-                                {% endif %}
-                                <div class="mb-2">
-                                    <i class="fas fa-user-tie me-1"></i>
-                                    Asesor:
+
+                            <div class="sess-meta">
+                                <div class="meta-item">
+                                    <i class="fas fa-user-tie"></i>
                                     {% if s.usuario %}
-                                        <span class="text-info">{{ s.usuario }}</span>
+                                        <span>{{ s.usuario }}</span>
                                     {% else %}
-                                        <span class="text-warning">Sin asignar</span>
+                                        <span class="text-warning">Sin asesor</span>
                                     {% endif %}
                                 </div>
+                                {% if s.ultima_conexion %}
+                                    <div class="meta-item">
+                                        <i class="fas fa-clock"></i>
+                                        <span>Últ. conexión: {{ s.ultima_conexion|timesince }} atrás</span>
+                                    </div>
+                                {% else %}
+                                    <div class="meta-item">
+                                        <i class="fas fa-calendar-alt"></i>
+                                        <span>Registrada: {{ s.fecha_registro|date:"d/m/Y H:i" }}</span>
+                                    </div>
+                                {% endif %}
                                 {% if s.contacts_length %}
-                                    <div>
-                                        <i class="fas fa-address-book me-1"></i>
-                                        Contactos: {{ s.contacts_length }}
+                                    <div class="meta-item">
+                                        <i class="fas fa-address-book"></i>
+                                        <span>{{ s.contacts_length }} contacto{{ s.contacts_length|pluralize }}</span>
                                     </div>
                                 {% endif %}
                             </div>
-                            <!-- Error mensaje si existe -->
-                            {% if s.error_mensaje and s.estado == 'error' %}
-                                <div class="alert alert-danger small mt-3 mb-0 py-2">
-                                    <i class="fas fa-exclamation-circle me-1"></i>
-                                    {{ s.error_mensaje }}
+
+                            {% if s.departamentos.all %}
+                                <div class="sess-dept-chips">
+                                    {% for l in s.departamentos.all %}
+                                        <span class="chip"><i class="fas fa-tag me-1"></i>{{ l.nombre }}</span>
+                                    {% endfor %}
                                 </div>
                             {% endif %}
 
-                            {% if s.departamentos.all %}
-                                <br>
-                                {% for l in s.departamentos.all %}
-                                    <span class="badge bg-light text-dark me-1">
-                                    <i class="fas fa-tag me-1"></i>
-                                    {{ l.nombre }}
-                                </span>
-                                {% endfor %}
+                            {% if s.error_mensaje and s.estado == 'error' %}
+                                <div class="sess-error">
+                                    <i class="fas fa-exclamation-circle me-1"></i>{{ s.error_mensaje }}
+                                </div>
                             {% endif %}
                         </div>
-                        <div class="card-footer">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <!-- Botones de sesión desconectada / pendiente -->
-                                {% if s.estado == 'desconectado' and not s.desconectado_manualmente %}
-                                    <button class="btn btn-warning btn-sm me-1" title="Intentar reconectar automáticamente"
-                                            onclick="reconectarSesion({{ s.id }}, this)">
-                                        <i class="fas fa-plug me-1"></i> Reconectar
-                                    </button>
-                                {% endif %}
-                                {% if s.estado == 'pendiente' or s.estado == 'desconectado' %}
-                                    <button class="btn btn-success btn-sm" data-bs-toggle="modal"
-                                            data-bs-target="#modalAgregarSesion"
-                                            data-qr="{{ s.qr_code }}" data-session-id="{{ s.id }}">
-                                        <i class="fas fa-qrcode me-1"></i> Ver QR
-                                    </button>
-                                {% else %}
-                                    <div></div>
-                                {% endif %}
-                                <!-- Menú de acciones -->
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-light" type="button" data-bs-toggle="dropdown"
-                                            aria-expanded="false">
-                                        <i class="fas fa-ellipsis-v"></i>
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end">
+
+                        <div class="card-footer-sess">
+                            {% if s.estado == 'conectado' %}
+                                <button class="btn btn-outline-success btn-sm"
+                                        onclick="abrirModalPruebaEnvio({{ s.id }}, '{{ s.numero|default:'' }}')">
+                                    <i class="fas fa-paper-plane me-1"></i> Probar envío
+                                </button>
+                            {% elif s.estado == 'desconectado' and not s.desconectado_manualmente %}
+                                <button class="btn btn-warning btn-sm"
+                                        onclick="reconectarSesion({{ s.id }}, this)">
+                                    <i class="fas fa-plug me-1"></i> Reconectar
+                                </button>
+                            {% elif s.estado == 'pendiente' or s.estado == 'desconectado' %}
+                                <button class="btn btn-success btn-sm" data-bs-toggle="modal"
+                                        data-bs-target="#modalAgregarSesion"
+                                        data-qr="{{ s.qr_code }}" data-session-id="{{ s.id }}">
+                                    <i class="fas fa-qrcode me-1"></i> Ver QR
+                                </button>
+                            {% else %}
+                                <span></span>
+                            {% endif %}
+
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown"
+                                        aria-expanded="false">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                    <li>
+                                        <a href="?action=change&pk={{ s.id }}" class="dropdown-item formmodal">
+                                            <i class="fa-solid fa-pen-to-square me-2 text-success"></i>
+                                            Modificar
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="javascript:void(0);"
+                                           onclick="verificarConexion({{ s.id }})">
+                                            <i class="fa-solid fa-satellite-dish me-2 text-primary"></i>
+                                            Verificar conexión
+                                        </a>
+                                    </li>
+                                    {% if s.departamentos.all %}
                                         <li>
-                                            <a href="?action=change&pk={{ s.id }}"
-                                               class="dropdown-item formmodal">
-                                                <i class="fa-solid fa-pen-to-square me-2 text-success"></i>
-                                                Modificar
+                                            <a class="dropdown-item"
+                                               href="/crm/departamentos_chatbots/prueba/{{ s.id|get_encrypt }}/"
+                                               target="_blank" rel="noopener">
+                                                <i class="fa-solid fa-diagram-project me-2 text-success"></i>
+                                                Probar flujo del chatbot
                                             </a>
                                         </li>
-                                        {% if s.estado == 'conectado' %}
-                                            <li>
-                                                <a class="dropdown-item" href="javascript:void(0);"
-                                                   onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete', '¿Desconectar esta sesión?')">
-                                                    <i class="fa-solid fa-plug-circle-minus me-2 text-danger"></i>
-                                                    Desconectar sesión
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <a class="dropdown-item" href="javascript:void(0);"
-                                                   onclick="sincronizarContactos({{ s.id }})">
-                                                    <i class="fa fa-sync me-2 text-success"></i>
-                                                    Sincronizar contactos
-                                                </a>
-                                            </li>
-                                        {% endif %}
-                                        {% if s.is_empty_session %}
-                                            <li>
-                                                <a class="dropdown-item" href="javascript:void(0);"
-                                                   onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete_force', '¿Deseas eliminar esta sesión?')">
-                                                    <i class="fa-solid fa-plug-circle-minus me-2 text-danger"></i>
-                                                    Eliminar sesión
-                                                </a>
-                                            </li>
-                                        {% endif %}
+                                    {% endif %}
+                                    {% if s.estado == 'conectado' %}
                                         <li>
-                                            <a href="?action=historial_de_sesiones&pk={{ s.id }}" class="dropdown-item detailviewmodal">
-                                                <i class="fa-solid fa-clock-rotate-left me-2"></i>
-                                                Historial de conexiones
+                                            <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="abrirModalPruebaEnvio({{ s.id }}, '{{ s.numero|default:'' }}')">
+                                                <i class="fa-solid fa-paper-plane me-2 text-info"></i>
+                                                Probar envío de mensaje
                                             </a>
                                         </li>
-                                    </ul>
-                                </div>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="sincronizarContactos({{ s.id }})">
+                                                <i class="fa fa-sync me-2 text-success"></i>
+                                                Sincronizar contactos
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete', '¿Desconectar esta sesión?')">
+                                                <i class="fa-solid fa-plug-circle-minus me-2 text-danger"></i>
+                                                Desconectar sesión
+                                            </a>
+                                        </li>
+                                    {% endif %}
+                                    {% if s.is_empty_session %}
+                                        <li>
+                                            <a class="dropdown-item text-danger" href="javascript:void(0);"
+                                               onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete_force', '¿Eliminar esta sesión?')">
+                                                <i class="fa-solid fa-trash me-2"></i>
+                                                Eliminar sesión
+                                            </a>
+                                        </li>
+                                    {% endif %}
+                                    <li>
+                                        <a href="?action=historial_de_sesiones&pk={{ s.id }}" class="dropdown-item detailviewmodal">
+                                            <i class="fa-solid fa-clock-rotate-left me-2"></i>
+                                            Historial de conexiones
+                                        </a>
+                                    </li>
+                                </ul>
                             </div>
                         </div>
                     </div>
                 </div>
             {% empty %}
                 <div class="col-12">
-                    <div class="text-center py-5">
-                        <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">No hay sesiones disponibles</p>
+                    <div class="empty-state">
+                        <div class="empty-icon">
+                            <i class="fab fa-whatsapp"></i>
+                        </div>
+                        <h4>No hay sesiones</h4>
+                        <p>
+                            {% if criterio or estado %}
+                                No se encontraron sesiones con los filtros aplicados.
+                            {% else %}
+                                Crea tu primera sesión de WhatsApp para comenzar a chatear con tus clientes.
+                            {% endif %}
+                        </p>
+                        {% if criterio or estado %}
+                            <a href="{{ request.path }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-1"></i>Limpiar filtros
+                            </a>
+                        {% else %}
+                            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalAgregarSesion">
+                                <i class="fas fa-plus-circle me-2"></i>Crear primera sesión
+                            </button>
+                        {% endif %}
                     </div>
                 </div>
             {% endfor %}
         </div>
 
-        <!-- Paginación -->
-        <div class="row mt-4">
-            <div class="col-12">
-                {% include 'paginacion.html' %}
+        {% if listado %}
+            <div class="row mt-4">
+                <div class="col-12">
+                    {% include 'paginacion.html' %}
+                </div>
             </div>
-        </div>
+        {% endif %}
     </div>
 
-    <!-- Modal para Agregar Sesión / Mostrar QR -->
+    {# ===== MODAL AGREGAR SESIÓN / QR ===== #}
     <div class="modal fade" data-bs-backdrop="static" id="modalAgregarSesion" tabindex="-1"
-         aria-labelledby="modalAgregarSesionLabel"
-         aria-hidden="true">
+         aria-labelledby="modalAgregarSesionLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header bg-success text-white border-0">
@@ -391,56 +381,48 @@
         </div>
     </div>
 
-    <!-- Modal para ver QR de una sesión existente -->
-    <div class="modal fade" data-bs-backdrop="static" id="modalVerQR" tabindex="-1" aria-hidden="true">
+    {# ===== MODAL: PRUEBA DE ENVÍO DE MENSAJE ===== #}
+    <div class="modal fade" id="modalPruebaEnvio" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header bg-info text-white border-0">
                     <h5 class="modal-title">
-                        <i class="fas fa-qrcode me-2"></i>Reconectar WhatsApp
+                        <i class="fas fa-paper-plane me-2"></i>Probar envío de mensaje
                     </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
-                            aria-label="Close"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body p-0">
-                    <div class="text-center p-4 border-bottom">
-                        <h6 class="mb-3 fw-normal text-muted">Escanea el código QR para reconectar esta sesión</h6>
-                        <div id="verQrContent" class="qr-container bg-light p-4 rounded mx-auto"
-                             style="max-width: 280px;">
-                            <!-- QR se cargará aquí -->
-                        </div>
-                        <div class="qr-status mt-3">
-                            <div class="d-inline-flex align-items-center badge bg-light text-dark px-3 py-2 mt-2">
-                                <i class="fas fa-clock me-2 text-warning"></i>
-                                <span>Esperando que escanees el código...</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="p-4 bg-light">
-                        <div class="d-flex">
-                            <div class="me-3 text-info">
-                                <i class="fas fa-info-circle fa-lg"></i>
-                            </div>
-                            <div class="small text-muted">
-                                Si tienes problemas para escanear, cierra la sesión en tu teléfono e intenta nuevamente.
-                                El código QR se actualiza automáticamente cada 30 segundos.
-                            </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-3">
+                        Envía un mensaje de prueba para verificar que la sesión puede emitir mensajes
+                        correctamente. La respuesta del servidor confirmará el estado real del envío.
+                    </p>
+                    <input type="hidden" id="pruebaEnvioSessionId">
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Número de destino</label>
+                        <input type="text" id="pruebaEnvioDestino" class="form-control"
+                               placeholder="593987654321 (sin + ni @)">
+                        <div class="form-text">
+                            Si dejas vacío, se enviará al número de la propia sesión.
                         </div>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Mensaje</label>
+                        <textarea id="pruebaEnvioTexto" class="form-control" rows="3"
+                                  placeholder="Dejar vacío para usar el mensaje de prueba por defecto"></textarea>
+                    </div>
+                    <div id="pruebaEnvioResultado" class="d-none"></div>
                 </div>
                 <div class="modal-footer border-0">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
-                        <i class="fas fa-times me-1"></i> Cancelar
-                    </button>
-                    <button type="button" class="btn btn-info text-white refresh-modal-qr-btn">
-                        <i class="fas fa-sync-alt me-1"></i> Actualizar QR
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-info text-white" id="btnEnviarPrueba">
+                        <i class="fas fa-paper-plane me-1"></i>Enviar mensaje
                     </button>
                 </div>
             </div>
         </div>
     </div>
 
-
+    {# ===== MODAL GENÉRICO (detalle formulario) ===== #}
     <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
@@ -467,16 +449,12 @@
             $.ajax({
                 type: "GET",
                 url: `{{ request.path }}`,
-                data: {
-                    'action': action,
-                    'pk': id,
-                },
+                data: {'action': action, 'pk': id},
                 success: function (data) {
                     setTimeout($.unblockUI, 1);
                     if (data.result === true) {
                         $('#modalNombre').html(text);
                         $('.detalleProd').html(data.data);
-
                         const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
                         modal.show();
                     } else {
@@ -507,43 +485,33 @@
             }, function (res) {
                 if (!res.error) {
                     session_id = res.session_id;
-                    console.log("Session ID recibido:", res.session_id);
                     const wsUrl = `${wsProtocol}//${window.location.host}/ws/session/${session_id}/`;
-                    if (sessionSocket) {
-                        sessionSocket.close();
-                    }
+                    if (sessionSocket) sessionSocket.close();
                     sessionSocket = new ReconnectingWebSocket(wsUrl, null, {reconnectInterval: 1500});
 
-                    sessionSocket.onopen = function (e) {
+                    sessionSocket.onopen = function () {
                         $.post('', {
                             'session_id': res.session_id,
                             'action': 'create_session',
                             'csrfmiddlewaretoken': '{{ csrf_token }}'
                         });
-                        console.log('Conexión WebSocket establecida');
                     };
 
                     sessionSocket.onmessage = function (e) {
                         const data = JSON.parse(e.data);
-                        console.log(data)
                         switch (data.event) {
                             case 'qr_code':
-
                                 $('#qrContent').html('<div style="position: relative; display: inline-block;max-width: 264px;"><div class="_akaz" style="position: absolute; top: 37%; left: 35%;"><span class="x1rg5ohu x16dsc37 x82xf8i"><svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 64 64"><path fill="#FFF" d="M6.525 43.936a29.596 29.596 0 0 1-3.039-13.075C3.494 14.568 16.755 1.313 33.05 1.313c7.904.004 15.328 3.082 20.91 8.666 5.581 5.586 8.653 13.01 8.65 20.907-.007 16.294-13.266 29.549-29.558 29.549a29.648 29.648 0 0 1-12.508-2.771L1.391 62.687l5.134-18.751z"></path><path fill="currentColor" d="M50.801 13.135c-4.739-4.742-11.039-7.354-17.752-7.357-13.837 0-25.094 11.253-25.099 25.085a25.039 25.039 0 0 0 3.349 12.541l-3.56 12.999 13.304-3.488a25.084 25.084 0 0 0 11.996 3.054h.011c13.83 0 25.088-11.256 25.095-25.087.002-6.703-2.607-13.005-7.344-17.747zM33.05 51.733h-.008a20.866 20.866 0 0 1-10.62-2.906l-.762-.452-7.894 2.07 2.108-7.694-.497-.789a20.802 20.802 0 0 1-3.189-11.097c.004-11.496 9.361-20.85 20.87-20.85a20.73 20.73 0 0 1 14.746 6.115 20.733 20.733 0 0 1 6.104 14.752c-.006 11.497-9.363 20.851-20.858 20.851z"></path><path fill="currentColor" d="M25.429 19.26a8.65 8.65 0 0 0-1.028.011 2.352 2.352 0 0 0-.95.255c-.221.114-.427.277-.75.582-.305.288-.481.54-.668.782a6.974 6.974 0 0 0-1.443 4.291l.001.003a8.243 8.243 0 0 0 .844 3.607c1.043 2.307 2.763 4.746 5.035 7.008a24.676 24.676 0 0 0 1.657 1.6 24.145 24.145 0 0 0 9.814 5.229s.751.179 1.391.218c.021.001.04.003.061.003a9.207 9.207 0 0 0 1.422-.033 5.086 5.086 0 0 0 2.129-.59c.423-.225.623-.337.978-.561 0 0 .11-.072.319-.23.345-.257.558-.438.845-.736.211-.22.394-.479.534-.772.2-.417.401-1.213.481-1.874.061-.505.042-.781.036-.952-.011-.275-.238-.558-.487-.678l-1.486-.668s-2.222-.967-3.581-1.587a1.278 1.278 0 0 0-.452-.104c-.341-.021-.723.068-.966.324v-.004c-.013-.001-.182.145-2.031 2.385-.102.122-.341.387-.754.362a1.086 1.086 0 0 1-.185-.029 3.402 3.402 0 0 1-.49-.17c-.316-.134-.427-.185-.643-.278l-.013-.006a15.361 15.361 0 0 1-4.013-2.556 15.88 15.88 0 0 1-.927-.885c-1.074-1.041-1.953-2.148-2.607-3.24-.035-.06-.09-.146-.15-.242-.107-.174-.225-.381-.262-.523-.095-.376.157-.678.157-.678s.622-.68.911-1.05c.278-.356.518-.704.671-.952.301-.484.39-.982.238-1.37a216.767 216.767 0 0 0-2.219-5.215c-.156-.339-.598-.589-1.005-.636a6.284 6.284 0 0 0-.414-.041"></path></svg></span></div><img src="' + data.qr_code + '" class="img-fluid" style="max-width: 264px;display: block;"></div>');
                                 $('#qrContent').append('<p class="qr-status mt-3"><i class="fas fa-info-circle text-primary me-1"></i>Escanee este código con su WhatsApp para conectar</p>');
                                 break;
                             case 'ready':
                             case 'authenticated':
                                 $('#qrContent').html('<div class="alert alert-success">Sesión iniciada correctamente</div>');
-
-                                const modalAgregarSesion = document.getElementById('modalAgregarSesion');
                                 const bsModal = bootstrap.Modal.getInstance(modalAgregarSesion);
-
                                 if (bsModal) {
                                     setTimeout(() => {
                                         modalAgregarSesion.addEventListener('hidden.bs.modal', function handler() {
                                             modalAgregarSesion.removeEventListener('hidden.bs.modal', handler);
-
                                             formModal(`${data.session_id}`, 'Editar datos de sesión', 'change_modal');
                                         });
                                         bsModal.hide();
@@ -558,19 +526,11 @@
                                 $('#qrContent').html(`<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i> ${data.msgerror}</div>`);
                                 break;
                         }
-
-                        if (data.msgerror) {
-                            alertaDanger(data.msgerror, 3000);
-                        }
+                        if (data.msgerror) alertaDanger(data.msgerror, 3000);
                     };
 
-                    sessionSocket.onclose = function (e) {
-                        console.log('Conexión WebSocket cerrada');
-                    };
-
-                    sessionSocket.onerror = function (e) {
-                        console.error('Error en WebSocket:', e);
-                    };
+                    sessionSocket.onclose = function () { };
+                    sessionSocket.onerror = function (e) { console.error('Error en WebSocket:', e); };
                     $('#qrContent').html('<div class="spinner-border text-success my-4" role="status" style="width: 3rem; height: 3rem;"><span class="visually-hidden">Cargando...</span></div><p class="mb-0 text-muted">Generando código QR, por favor espere...</p>');
                 } else {
                     $('#qrContent').html('<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>' + res.message + '</div>');
@@ -580,11 +540,44 @@
                 $('#qrContent').html('<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>Error de conexión al servidor</div>');
             });
         });
+
         modalAgregarSesion.addEventListener('hidden.bs.modal', function () {
             if (sessionSocket) sessionSocket.close();
         });
     </script>
+
     <script>
+        function verificarConexion(id) {
+            pantallaespera();
+            $.post('', {
+                action: 'verificar_conexion',
+                id: id,
+                csrfmiddlewaretoken: '{{ csrf_token }}'
+            })
+            .done(function(r) {
+                setTimeout($.unblockUI, 1);
+                if (r.error) {
+                    alertaDanger(r.message || 'No se pudo verificar la sesión');
+                    if (r.connected === false && r.estado_previo === 'conectado') {
+                        setTimeout(() => location.reload(), 1500);
+                    }
+                    return;
+                }
+                if (r.connected) {
+                    alertaSuccess(r.message || 'Conexión activa');
+                } else {
+                    alertaWarning(r.message || 'Sin conexión real con WhatsApp');
+                }
+                if (r.estado !== r.estado_previo) {
+                    setTimeout(() => location.reload(), 1500);
+                }
+            })
+            .fail(function() {
+                setTimeout($.unblockUI, 1);
+                alertaDanger('Error de comunicación con el servidor');
+            });
+        }
+
         function reconectarSesion(id, btn) {
             if (!confirm('¿Intentar reconectar esta sesión ahora?')) return;
             const $btn = $(btn);
@@ -610,16 +603,10 @@
                 alertaWarning('Selecciona una sesión primero');
                 return;
             }
-
-            $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Sincronizando...');
-
             $.ajax({
                 url: '{% url "sync_contacts" %}',
                 type: 'POST',
-                data: {
-                    session_id: sesionId,
-                    csrfmiddlewaretoken: '{{ csrf_token }}'
-                },
+                data: { session_id: sesionId, csrfmiddlewaretoken: '{{ csrf_token }}' },
                 success: function (response) {
                     if (response.success) {
                         alertaWarning('Sincronización de contactos iniciada. Los nombres se actualizarán en breve.');
@@ -629,11 +616,63 @@
                 },
                 error: function (xhr, status, error) {
                     alertaWarning('Error al sincronizar contactos: ' + error);
-                },
-                complete: function () {
-                    $('#btn-sync-contacts').prop('disabled', false).html('<i class="fa fa-sync"></i> Sincronizar contactos');
                 }
             });
         }
+
+        /* ===== PRUEBA DE ENVÍO DE MENSAJE ===== */
+        function abrirModalPruebaEnvio(id, numero) {
+            $('#pruebaEnvioSessionId').val(id);
+            $('#pruebaEnvioDestino').val(numero || '');
+            $('#pruebaEnvioTexto').val('');
+            $('#pruebaEnvioResultado').addClass('d-none').html('');
+            const modal = new bootstrap.Modal(document.getElementById('modalPruebaEnvio'));
+            modal.show();
+        }
+
+        $('#btnEnviarPrueba').on('click', function () {
+            const $btn = $(this);
+            const id = $('#pruebaEnvioSessionId').val();
+            const destino = $('#pruebaEnvioDestino').val().trim();
+            const texto = $('#pruebaEnvioTexto').val().trim();
+            const $result = $('#pruebaEnvioResultado');
+            $result.addClass('d-none').html('');
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Enviando...');
+
+            $.post('', {
+                action: 'probar_envio_mensaje',
+                id: id,
+                numero_destino: destino,
+                texto: texto,
+                csrfmiddlewaretoken: '{{ csrf_token }}'
+            })
+            .done(function (r) {
+                $btn.prop('disabled', false).html('<i class="fas fa-paper-plane me-1"></i>Enviar mensaje');
+                if (r.error) {
+                    $result.removeClass('d-none').html(
+                        `<div class="alert alert-danger mb-0">
+                            <strong><i class="fas fa-exclamation-triangle me-1"></i>Error:</strong> ${r.message}
+                            ${r.destino ? `<div class="small mt-1">Destino: <code>${r.destino}</code></div>` : ''}
+                        </div>`
+                    );
+                } else {
+                    $result.removeClass('d-none').html(
+                        `<div class="alert alert-success mb-2">
+                            <i class="fas fa-check-circle me-1"></i>${r.message}
+                         </div>
+                         <div class="test-log-line">✓ Destino: ${r.destino}
+✓ Message ID: ${r.message_id || '(no devuelto)'}
+─────────────────
+${r.texto}</div>`
+                    );
+                }
+            })
+            .fail(function () {
+                $btn.prop('disabled', false).html('<i class="fas fa-paper-plane me-1"></i>Enviar mensaje');
+                $result.removeClass('d-none').html(
+                    '<div class="alert alert-danger mb-0">Error de comunicación con el servidor.</div>'
+                );
+            });
+        });
     </script>
 {% endblock %}

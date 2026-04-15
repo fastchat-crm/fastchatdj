@@ -10,7 +10,8 @@ from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.tools import tool
 
 from whatsapp.models import ConversacionWhatsApp
 from .memoria_django import DjangoChatMessageHistory
@@ -290,6 +291,7 @@ class AgenteConsultor:
         prompt_template_text='',
         contexto_estatico=None,
         detectar_fin: bool = False,
+        perfil=None,
     ):
         self.provider = 'gemini' if provider == 2 else 'openai'
         self.apikey = apikey
@@ -298,6 +300,7 @@ class AgenteConsultor:
         self.vectorstore_enlaces_path = vectorstore_enlaces_path
         self.contexto_estatico: str | None = contexto_estatico or None
         self.detectar_fin = detectar_fin
+        self.perfil = perfil  # PerfilNegocioIA — usado por herramientas de tool-calling
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
         self.vectorstore = self._load_vectorstore()
@@ -511,62 +514,43 @@ class AgenteConsultor:
         h.add_ai_message(f"LISTA_GUARDADA:{data_json}")
 
     # ------------------------------------------------------------------
-    # Consulta principal — 1 llamada LLM
+    # Helpers compartidos (contexto, tokens, prompt)
     # ------------------------------------------------------------------
 
-    def consultar(self, pregunta: str, descripcion_agente: str = '') -> ConsultaResultado:
-        contexto_previo = self._contexto_previo()
+    def _construir_contexto(self, pregunta: str, contexto_previo: str) -> tuple[str, bool]:
+        """Construye el contexto RAG combinando FAISS + BM25 + contexto_estatico.
 
-        # ── Saludo en primer mensaje — sin LLM ───────────────────────────
-        if self._es_primer_mensaje() and _es_saludo(pregunta):
-            bienvenida = (
-                self.conversacion
-                and self.conversacion.contacto
-                and self.conversacion.contacto.sesion.mensaje_bienvenida
-            ) or "Hola 👋, ¿en qué puedo ayudarte?"
-            h = self._chat_history()
-            if h:
-                h.add_user_message(pregunta)
-                h.add_ai_message(bienvenida)
-            return ConsultaResultado(respuesta=bienvenida)
-
-        # ------------------------------------------------------------------
-        # Contexto: estático / RAG / ack simple
-        # ------------------------------------------------------------------
+        Retorna (contexto, sin_datos). sin_datos=True si no hay vectorstore ni
+        contexto_estatico y el agente debe responder 'No tengo esa información.'
+        """
         _sin_datos = False
         _es_ack = _es_ack_simple(pregunta) and not self._es_primer_mensaje()
-        _presupuesto = _MAX_CONTEXT_CHARS  # se ajusta abajo si es consulta amplia
-        _es_amplia = False   # accesible fuera del else
-        _query_faiss = pregunta  # fallback si es ACK
+        _presupuesto = _MAX_CONTEXT_CHARS
+        _es_amplia = False
+        _query_faiss = pregunta
 
         if _es_ack:
-            # Confirmación breve — no necesita FAISS. El historial es suficiente.
             contexto = ""
             logger.debug("ACK simple — omitiendo FAISS")
-
         else:
             _query_faiss = self._query_retrieval(pregunta, contexto_previo)
-            query_faiss = _query_faiss
-            logger.debug("FAISS query: %r", query_faiss)
+            logger.debug("FAISS query: %r", _query_faiss)
 
-            # Modo amplio para consultas de catálogo/menú completo
             es_consulta_amplia = _es_consulta_amplia(pregunta)
             _es_amplia = es_consulta_amplia
 
-            # Parámetros según tipo de consulta
             if es_consulta_amplia:
-                _k = _FAISS_K * 4        # más chunks
-                _lambda = 0.0            # pura similitud, secciones contiguas
+                _k = _FAISS_K * 4
+                _lambda = 0.0
                 _presupuesto = min(_MAX_CONTEXT_CHARS * 2, 8_000)
             else:
                 _k = _FAISS_K
-                _lambda = 0.65           # diversidad MMR normal
+                _lambda = 0.65
                 _presupuesto = _MAX_CONTEXT_CHARS
 
-            # Búsqueda híbrida BM25 + FAISS (BM25 primero = keywords exactas)
-            docs = _hybrid_search(self.vectorstore, self._bm25, query_faiss, _k, _lambda)
+            docs = _hybrid_search(self.vectorstore, self._bm25, _query_faiss, _k, _lambda)
             docs_enlaces = _hybrid_search(
-                self.vectorstore_enlaces, self._bm25_enlaces, query_faiss, _k, _lambda
+                self.vectorstore_enlaces, self._bm25_enlaces, _query_faiss, _k, _lambda
             )
             logger.debug(
                 "Hybrid: %d docs + %d enlaces (amplia=%s, bm25=%s)",
@@ -583,20 +567,12 @@ class AgenteConsultor:
                     "Prohibido usar conocimiento externo o inventar datos."
                 )
 
-        # Combinar contexto estático con FAISS.
-        # Hay dos modos:
-        #   A) contexto_estatico ES el documento principal (sin FAISS) → usar presupuesto completo
-        #   B) contexto_estatico es suplemento pequeño al FAISS → cap a _MAX_STATIC_CHARS
         if self.contexto_estatico:
-            sin_faiss = not contexto  # FAISS no devolvió nada (vectorstore_path=None o vacío)
+            sin_faiss = not contexto
             if sin_faiss:
-                # Modo A: el PDF completo está en contexto_estatico
                 if _es_amplia:
-                    # Catálogo completo → enviar el documento COMPLETO sin recortar
-                    # El modelo Gemini tiene ventana de 1M tokens — enviar el doc entero es seguro
                     contexto = self.contexto_estatico
                 else:
-                    # Consulta específica → buscar la sección relevante en el documento
                     contexto = _extraer_seccion_relevante(
                         self.contexto_estatico, _query_faiss, _presupuesto
                     )
@@ -605,7 +581,6 @@ class AgenteConsultor:
                     len(contexto), len(self.contexto_estatico), _es_amplia,
                 )
             else:
-                # Modo B: suplemento pequeño + chunks FAISS
                 estatico_trim = self.contexto_estatico[:_MAX_STATIC_CHARS]
                 faiss_budget  = _presupuesto - len(estatico_trim)
                 faiss_trim    = contexto[:max(faiss_budget, 0)]
@@ -616,42 +591,33 @@ class AgenteConsultor:
                     len(estatico_trim), len(faiss_trim), len(contexto), _presupuesto,
                 )
 
-        # ------------------------------------------------------------------
-        # Construir prompt y llamar al LLM
-        # ------------------------------------------------------------------
+        return contexto, _sin_datos
+
+    def _formatear_prompt(
+        self, pregunta: str, contexto: str, descripcion_agente: str, contexto_previo: str
+    ) -> str:
         try:
-            prompt_final = self._prompt_tpl.format(
-                question=pregunta,
-                context=contexto,
-                descripcion_agente=descripcion_agente,
-                contexto_extra=contexto_previo,
+            return self._prompt_tpl.format(
+                question=pregunta, context=contexto,
+                descripcion_agente=descripcion_agente, contexto_extra=contexto_previo,
             )
         except KeyError as _ke:
-            logger.error("Variable faltante en prompt template: %s — usando template de emergencia", _ke)
+            logger.error("Variable faltante en prompt template: %s — usando fallback", _ke)
             from core.constantes import PROMPT_TEMPLATES
             _tpl_fallback = PromptTemplate.from_template(PROMPT_TEMPLATES.get('es', '') + '\n')
-            prompt_final = _tpl_fallback.format(
-                question=pregunta,
-                context=contexto,
-                descripcion_agente=descripcion_agente,
-                contexto_extra=contexto_previo,
+            return _tpl_fallback.format(
+                question=pregunta, context=contexto,
+                descripcion_agente=descripcion_agente, contexto_extra=contexto_previo,
             )
 
-        try:
-            ai_message = self.llm.invoke(prompt_final)
-            respuesta = ai_message.content
-        except Exception as exc:
-            logger.error("Error invocando LLM: %s", exc)
-            raise
-
-        # Extraer tokens — usar campo estandarizado de LangChain v0.3+ primero
+    def _extraer_tokens(self, ai_message) -> tuple[int, int]:
+        """(tokens_in, tokens_out) desde un AIMessage — compatible Gemini y OpenAI."""
         t_in = t_out = 0
         usage_std = getattr(ai_message, 'usage_metadata', None) or {}
         if usage_std:
             t_in  = usage_std.get('input_tokens', 0) or 0
             t_out = usage_std.get('output_tokens', 0) or 0
         if not (t_in or t_out):
-            # Fallback a response_metadata específico del proveedor
             meta = getattr(ai_message, 'response_metadata', {}) or {}
             if self.provider == 'gemini':
                 usage = meta.get('usage_metadata', {}) or {}
@@ -661,14 +627,49 @@ class AgenteConsultor:
                 usage = meta.get('token_usage', {}) or {}
                 t_in  = usage.get('prompt_tokens', 0) or 0
                 t_out = usage.get('completion_tokens', 0) or 0
-        t_total = t_in + t_out
+        return t_in, t_out
 
-        # Detectar y limpiar señal de fin
+    def _saludo_primer_mensaje(self, pregunta: str) -> str | None:
+        """Si es el primer mensaje y es un saludo, devuelve la bienvenida. Sin LLM."""
+        if not (self._es_primer_mensaje() and _es_saludo(pregunta)):
+            return None
+        return (
+            self.conversacion
+            and self.conversacion.contacto
+            and self.conversacion.contacto.sesion.mensaje_bienvenida
+        ) or "Hola 👋, ¿en qué puedo ayudarte?"
+
+    # ------------------------------------------------------------------
+    # Consulta principal — 1 llamada LLM
+    # ------------------------------------------------------------------
+
+    def consultar(self, pregunta: str, descripcion_agente: str = '') -> ConsultaResultado:
+        contexto_previo = self._contexto_previo()
+
+        bienvenida = self._saludo_primer_mensaje(pregunta)
+        if bienvenida is not None:
+            h = self._chat_history()
+            if h:
+                h.add_user_message(pregunta)
+                h.add_ai_message(bienvenida)
+            return ConsultaResultado(respuesta=bienvenida)
+
+        contexto, _sin_datos = self._construir_contexto(pregunta, contexto_previo)
+        prompt_final = self._formatear_prompt(pregunta, contexto, descripcion_agente, contexto_previo)
+
+        try:
+            ai_message = self.llm.invoke(prompt_final)
+            respuesta = ai_message.content
+        except Exception as exc:
+            logger.error("Error invocando LLM: %s", exc)
+            raise
+
+        t_in, t_out = self._extraer_tokens(ai_message)
+
         fin_detectado = FIN_SIGNAL in respuesta
         if fin_detectado:
             respuesta = respuesta.replace(FIN_SIGNAL, "").strip()
 
-        # Guardar en historial
         h = self._chat_history()
         if h:
             h.add_user_message(pregunta)
@@ -676,57 +677,199 @@ class AgenteConsultor:
 
         return ConsultaResultado(
             respuesta=respuesta, fin_detectado=fin_detectado,
-            tokens_entrada=t_in, tokens_salida=t_out, tokens_total=t_total,
+            tokens_entrada=t_in, tokens_salida=t_out, tokens_total=t_in + t_out,
             sin_datos=_sin_datos,
         )
 
     # ------------------------------------------------------------------
-    # Consulta con listas (modo pedido)
+    # Tool-calling (modo pedido)
     # ------------------------------------------------------------------
 
+    def _build_tools(self) -> list:
+        """Construye las herramientas que el LLM puede invocar vía function-calling.
+
+        Las funciones se definen como closures para acceder a self.listas_memoria
+        y self.perfil sin necesidad de parámetros ocultos.
+        """
+        agente_self = self
+
+        @tool
+        def agregar_al_pedido(item: str, cantidad: int = 1) -> str:
+            """Agrega un producto al pedido del cliente actual.
+
+            Usa esta herramienta cuando el usuario quiera comprar, pedir, reservar
+            o añadir algo a su orden. No la uses para consultas o dudas.
+
+            Args:
+                item: Nombre del producto tal como lo pidió el usuario.
+                cantidad: Cantidad del producto (entero >= 1). Por defecto 1.
+            """
+            if not item or not item.strip():
+                return "Error: item vacío."
+            if cantidad < 1:
+                return "Error: la cantidad debe ser al menos 1."
+            entrada = f"{item.strip()} x{cantidad}" if cantidad > 1 else item.strip()
+            lista = agente_self.listas_memoria.setdefault('pedido', {'items': []})
+            if entrada in lista['items']:
+                return f"Ya estaba en el pedido: {entrada}."
+            lista['items'].append(entrada)
+            agente_self._guardar_listas_en_memoria()
+            return f"OK — agregado '{entrada}'. Pedido actual: {len(lista['items'])} ítem(s)."
+
+        @tool
+        def consultar_producto(nombre: str) -> str:
+            """Busca productos del catálogo del negocio por nombre o descripción.
+
+            Devuelve hasta 5 coincidencias con precio. Usa esta herramienta antes
+            de confirmar un pedido si no estás seguro del nombre exacto o del precio.
+
+            Args:
+                nombre: Término de búsqueda — nombre o palabra clave del producto.
+            """
+            if not agente_self.perfil:
+                return "Catálogo no configurado para este agente."
+            if not nombre or not nombre.strip():
+                return "Error: término de búsqueda vacío."
+            try:
+                from django.db.models import Q
+                qs = agente_self.perfil.get_productos().filter(
+                    Q(nombre__icontains=nombre.strip())
+                    | Q(descripcion__icontains=nombre.strip())
+                )[:5]
+                if not qs:
+                    return f"No se encontraron productos que coincidan con '{nombre}'."
+                lineas = []
+                for p in qs:
+                    desc = f" — {p.descripcion[:80]}" if p.descripcion else ""
+                    lineas.append(f"- {p.nombre}: ${p.precio}{desc}")
+                return "\n".join(lineas)
+            except Exception as exc:
+                logger.error("Error en consultar_producto: %s", exc)
+                return "Error al consultar el catálogo."
+
+        return [agregar_al_pedido, consultar_producto]
+
     def consultar_con_listas(self, pregunta: str, descripcion_agente: str = '') -> ConsultaResultado:
-        resultado = self.consultar(pregunta, descripcion_agente)
-        # NOTA: consultar() ya guardó en historial. Solo sobreescribimos si hay acción de lista.
-        consulta = resultado.respuesta
-        resultado_lista = ''
-        try:
-            comando_data = json.loads(consulta)
-            accion = comando_data.get("accion")
-            lista = comando_data.get("nombre_lista", "pedido")
-            item = comando_data.get("item", "")
+        """Variante de consultar() que habilita tool-calling (function calling).
 
-            if accion == "agregar_item":
-                if lista not in self.listas_memoria:
-                    self.listas_memoria[lista] = {"items": []}
-                if item not in self.listas_memoria[lista]["items"]:
-                    self.listas_memoria[lista]["items"].append(item)
-                    self._guardar_listas_en_memoria()
-                    resultado_lista = f"📝 Agregado a tu pedido: {item}"
-                else:
-                    resultado_lista = f"ℹ️ Ya está en tu pedido: {item}"
+        El LLM puede invocar herramientas como agregar_al_pedido o consultar_producto
+        en un loop acotado a 3 iteraciones. Mantiene fallback al parseo JSON legacy
+        para prompts de agentes antiguos que siguen emitiendo JSON en vez de tool calls.
+        """
+        contexto_previo = self._contexto_previo()
 
-            elif accion == "mostrar_lista":
-                items = self.listas_memoria.get(lista, {}).get("items", [])
-                if not items:
-                    resultado_lista = "📝 Tu pedido está vacío."
-                else:
-                    listado = "\n".join(f"{i+1}. {x}" for i, x in enumerate(items))
-                    resultado_lista = f"📋 Tu pedido:\n{listado}\n\nTotal: {len(items)} ítems"
-
-        except Exception:
-            pass
-
-        if resultado_lista:
-            # Solo actualizar el último mensaje en historial (sustituir respuesta ya guardada)
+        bienvenida = self._saludo_primer_mensaje(pregunta)
+        if bienvenida is not None:
             h = self._chat_history()
             if h:
-                h.update_last_ai_message(resultado_lista)
+                h.add_user_message(pregunta)
+                h.add_ai_message(bienvenida)
+            return ConsultaResultado(respuesta=bienvenida)
 
-        respuesta_final = resultado_lista or consulta
+        contexto, _sin_datos = self._construir_contexto(pregunta, contexto_previo)
+        prompt_final = self._formatear_prompt(pregunta, contexto, descripcion_agente, contexto_previo)
+
+        tools = self._build_tools()
+        tool_map = {t.name: t for t in tools}
+        try:
+            llm_con_tools = self.llm.bind_tools(tools)
+        except Exception as exc:
+            logger.warning("bind_tools no soportado — fallback a consultar() estándar: %s", exc)
+            return self._consultar_con_listas_legacy(pregunta, descripcion_agente)
+
+        mensajes = [HumanMessage(content=prompt_final)]
+        t_in_acc = t_out_acc = 0
+        ai_message = None
+        _MAX_ITER = 3
+
+        for iteracion in range(_MAX_ITER):
+            try:
+                ai_message = llm_con_tools.invoke(mensajes)
+            except Exception as exc:
+                logger.error("Error invocando LLM con tools (iter=%d): %s", iteracion, exc)
+                raise
+            t_in, t_out = self._extraer_tokens(ai_message)
+            t_in_acc += t_in
+            t_out_acc += t_out
+            mensajes.append(ai_message)
+
+            tool_calls = getattr(ai_message, 'tool_calls', None) or []
+            if not tool_calls:
+                break
+
+            for tc in tool_calls:
+                fn = tool_map.get(tc.get('name'))
+                if fn is None:
+                    resultado_tool = f"Herramienta desconocida: {tc.get('name')}"
+                else:
+                    try:
+                        resultado_tool = fn.invoke(tc.get('args') or {})
+                    except Exception as exc:
+                        logger.error("Error ejecutando tool %s: %s", tc.get('name'), exc)
+                        resultado_tool = f"Error ejecutando la herramienta: {exc}"
+                mensajes.append(ToolMessage(
+                    content=str(resultado_tool),
+                    tool_call_id=tc.get('id', ''),
+                ))
+        else:
+            logger.warning("Loop tool-use alcanzó MAX_ITER=%d sin respuesta final", _MAX_ITER)
+
+        respuesta = (ai_message.content or "").strip() if ai_message else ""
+
+        # Fallback backward-compat: si el modelo emitió JSON en vez de llamar tools
+        # (p. ej. prompt antiguo con instrucción "emite {accion:...}"), aplicamos la
+        # acción equivalente usando las mismas tools.
+        if respuesta and respuesta.lstrip().startswith('{'):
+            respuesta = self._aplicar_json_legacy(respuesta, tool_map) or respuesta
+
+        fin_detectado = FIN_SIGNAL in respuesta
+        if fin_detectado:
+            respuesta = respuesta.replace(FIN_SIGNAL, "").strip()
+
+        h = self._chat_history()
+        if h:
+            h.add_user_message(pregunta)
+            h.add_ai_message(respuesta)
+
         return ConsultaResultado(
-            respuesta=respuesta_final,
-            fin_detectado=resultado.fin_detectado,
-            tokens_entrada=resultado.tokens_entrada,
-            tokens_salida=resultado.tokens_salida,
-            tokens_total=resultado.tokens_total,
+            respuesta=respuesta, fin_detectado=fin_detectado,
+            tokens_entrada=t_in_acc, tokens_salida=t_out_acc,
+            tokens_total=t_in_acc + t_out_acc, sin_datos=_sin_datos,
         )
+
+    def _aplicar_json_legacy(self, respuesta_json: str, tool_map: dict) -> str:
+        """Parseo JSON legacy para prompts antiguos que aún emiten {accion:...}."""
+        try:
+            data = json.loads(respuesta_json)
+        except Exception:
+            return ""
+        accion = data.get("accion")
+        item   = (data.get("item") or "").strip()
+        if accion == "agregar_item" and item:
+            fn = tool_map.get('agregar_al_pedido')
+            if fn:
+                return str(fn.invoke({'item': item, 'cantidad': int(data.get('cantidad') or 1)}))
+        if accion == "mostrar_lista":
+            items = self.listas_memoria.get(data.get("nombre_lista", "pedido"), {}).get("items", [])
+            if not items:
+                return "📝 Tu pedido está vacío."
+            listado = "\n".join(f"{i+1}. {x}" for i, x in enumerate(items))
+            return f"📋 Tu pedido:\n{listado}\n\nTotal: {len(items)} ítem(s)"
+        return ""
+
+    def _consultar_con_listas_legacy(self, pregunta: str, descripcion_agente: str = '') -> ConsultaResultado:
+        """Ruta de fallback cuando bind_tools no está soportado por el proveedor."""
+        resultado = self.consultar(pregunta, descripcion_agente)
+        tools = self._build_tools()
+        tool_map = {t.name: t for t in tools}
+        reemplazo = self._aplicar_json_legacy(resultado.respuesta, tool_map)
+        if reemplazo:
+            h = self._chat_history()
+            if h:
+                h.update_last_ai_message(reemplazo)
+            return ConsultaResultado(
+                respuesta=reemplazo, fin_detectado=resultado.fin_detectado,
+                tokens_entrada=resultado.tokens_entrada, tokens_salida=resultado.tokens_salida,
+                tokens_total=resultado.tokens_total, sin_datos=resultado.sin_datos,
+            )
+        return resultado

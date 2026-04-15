@@ -1,48 +1,344 @@
+{# Wizard pedagógico para crear / editar un departamento-chatbot. #}
+
+<style>
+    .wiz-steps { display:flex; gap:6px; margin-bottom:1rem; }
+    .wiz-step  {
+        flex:1; padding:8px 10px; border-radius:8px; background:#f1f3f5;
+        font-size:.8rem; color:#495057; position:relative; cursor:pointer;
+        border:1px solid transparent;
+    }
+    .wiz-step.active  { background:#e7f1ff; color:#0d6efd; border-color:#9ec5fe; font-weight:600; }
+    .wiz-step.done    { background:#d1e7dd; color:#0f5132; }
+    .wiz-step .num    { display:inline-block; width:20px; height:20px; text-align:center; line-height:20px;
+                        border-radius:50%; background:#adb5bd; color:#fff; font-size:.72rem; margin-right:6px; }
+    .wiz-step.active .num { background:#0d6efd; }
+    .wiz-step.done   .num { background:#198754; }
+    .wiz-pane        { display:none; }
+    .wiz-pane.active { display:block; }
+
+    .hint-card  { background:#fff8e1; border-left:4px solid #ffc107; padding:10px 14px;
+                  border-radius:6px; font-size:.82rem; margin-bottom:12px; }
+    .hint-card code { background:#fff; padding:1px 4px; border-radius:3px; }
+    .example-chip { display:inline-block; background:#e9ecef; border-radius:12px;
+                    padding:2px 10px; font-size:.72rem; color:#495057; margin:1px 2px; }
+    .nodo-card    { background:#fff; border:1px solid #dee2e6; border-radius:8px; padding:10px;
+                    margin-bottom:10px; }
+    .nodo-card .nodo-head { display:flex; align-items:center; gap:8px; }
+    .tipo-pill    { font-size:.68rem; padding:2px 8px; border-radius:10px; font-weight:600; }
+    .tipo-menu      { background:#cfe2ff; color:#084298; }
+    .tipo-respuesta { background:#d1e7dd; color:#0f5132; }
+    .tipo-pregunta  { background:#fff3cd; color:#664d03; }
+    .tipo-http      { background:#f8d7da; color:#842029; }
+    .tipo-condicional{background:#e2d9f3; color:#432874; }
+    .tipo-handoff   { background:#cff4fc; color:#055160; }
+    .tipo-fin       { background:#e2e3e5; color:#41464b; }
+    .tipo-switch    { background:#fde2e4; color:#6c2a2a; }
+    .tipo-set_variable { background:#d3f9d8; color:#2b8a3e; }
+    .tipo-esperar   { background:#edf2ff; color:#364fc7; }
+    .tipo-inicio    { background:#ffe3e3; color:#c92a2a; }
+
+    /* ═══════════ DIAGRAMA DE FLUJO (paso 4) ═══════════ */
+    .flow-root { padding: 8px 4px; }
+    .flow-start, .flow-entry-label {
+        text-align:center; font-size:.7rem; font-weight:700; letter-spacing:.05em;
+        color:#fff; background:#0d6efd; display:inline-block; padding:4px 14px;
+        border-radius:14px; text-transform:uppercase;
+    }
+    .flow-entry-label { background:#198754; }
+    .flow-node {
+        position:relative; background:#fff; border:1.5px solid #dee2e6;
+        border-radius:10px; padding:10px 12px; max-width: 420px;
+        margin: 0 auto; box-shadow:0 1px 2px rgba(0,0,0,.04);
+    }
+    .flow-node.is-inicio    { border-color:#c92a2a; background:#fff5f5; }
+    .flow-node.is-fin       { border-color:#868e96; background:#f1f3f5; }
+    .flow-node.is-handoff   { border-color:#15aabf; background:#e3fafc; }
+    .flow-node .flow-head   { display:flex; align-items:center; gap:8px; margin-bottom:2px; }
+    .flow-node .flow-name   { font-weight:600; font-size:.88rem; color:#212529; }
+    .flow-node .flow-resp   { font-size:.74rem; color:#6c757d; margin-top:4px; line-height:1.3;
+                              max-height:2.8em; overflow:hidden; }
+    .flow-node .flow-badge-start {
+        position:absolute; top:-10px; left:50%; transform:translateX(-50%);
+        background:#198754; color:#fff; font-size:.6rem; font-weight:700;
+        padding:2px 8px; border-radius:10px; letter-spacing:.05em;
+    }
+
+    /* Conector vertical simple (↓) entre nodos */
+    .flow-connector {
+        display:flex; justify-content:center; align-items:center;
+        flex-direction:column; padding: 6px 0;
+    }
+    .flow-connector .line { width:2px; height:18px; background:#adb5bd; }
+    .flow-connector .arrow {
+        width:0; height:0;
+        border-left:5px solid transparent;
+        border-right:5px solid transparent;
+        border-top:7px solid #adb5bd;
+    }
+
+    /* Children: subgrupo anidado, ramas con etiquetas */
+    .flow-children {
+        position:relative; margin-top: 2px; padding-top: 12px;
+    }
+    .flow-children::before {
+        content:''; position:absolute; top:0; left:50%; width:2px; height:12px;
+        background:#adb5bd; transform:translateX(-50%);
+    }
+    .flow-branches {
+        display:flex; gap:16px; justify-content:center; flex-wrap:wrap;
+        align-items:flex-start;
+    }
+    .flow-branch { flex:0 1 300px; min-width:240px; position:relative;
+                   padding-top: 26px; }
+    .flow-branch::before {
+        content:''; position:absolute; top:0; left:50%; width:2px; height:18px;
+        background:#adb5bd; transform:translateX(-50%);
+    }
+    .flow-branch .branch-label {
+        position:absolute; top:-2px; left:50%; transform:translateX(-50%);
+        background:#fff; border:1px solid #adb5bd; color:#495057;
+        font-size:.65rem; font-weight:600; padding:2px 10px; border-radius:10px;
+        letter-spacing:.04em; text-transform:uppercase; z-index:1;
+    }
+    .flow-empty {
+        text-align:center; color:#868e96; font-style:italic;
+        padding: 32px 0; font-size:.85rem;
+    }
+
+    /* ═══════════ GUÍA POR TIPO DE NODO ═══════════ */
+    .guia-nodo {
+        margin-top:8px; background:#f8f9fa; border-left:3px solid #0d6efd;
+        border-radius:4px; padding:10px 12px; font-size:.8rem;
+    }
+    .guia-nodo .guia-title {
+        font-weight:600; color:#0d6efd; margin-bottom:4px;
+        display:flex; align-items:center; gap:6px;
+    }
+    .guia-nodo .guia-desc { color:#495057; margin-bottom:6px; }
+    .guia-nodo code {
+        background:#fff; padding:1px 4px; border-radius:3px;
+        font-size:.72rem; color:#c92a2a;
+    }
+    .guia-nodo .var-tip {
+        display:inline-block; background:#fff; border:1px solid #dee2e6;
+        border-radius:10px; padding:1px 7px; font-size:.68rem; margin:1px;
+        color:#495057; cursor:pointer;
+    }
+    .guia-nodo .var-tip:hover { background:#e7f1ff; border-color:#9ec5fe; }
+
+    /* Tabla de query params (HTTP) */
+    .kv-table { width:100%; font-size:.78rem; }
+    .kv-table th { color:#6c757d; font-weight:600; font-size:.7rem;
+                   padding: 2px 4px; border-bottom:1px solid #dee2e6; }
+    .kv-table td { padding: 3px 4px; }
+    .kv-table input { font-size:.78rem; padding:3px 6px; }
+
+    /* Opciones de menú */
+    .menu-opciones .opcion-row {
+        display:flex; gap:6px; margin-bottom:4px; align-items:center;
+    }
+    .menu-opciones .opcion-row input { font-size:.78rem; padding:3px 6px; }
+</style>
+
 <div class="row g-2">
     <input type="hidden" value="{{ filtro.pk }}" name="pk">
     <input type="hidden" name="action" value="{{ action }}"/>
-    {% for field in form %}
-        {% if field.is_hidden %}
-            {{ field }}
-        {% else %}
-            <div class="col-lg-{{ field.field.widget.attrs.col }}">
-                <div class="mb-2">
-                    <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label>
-                    {{ field }}
-                    <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
-                </div>
-            </div>
-        {% endif %}
-    {% endfor %}
+
+    {# ═══════════════════════════ STEPPER ═══════════════════════════ #}
+    <div class="col-12">
+        <div class="wiz-steps">
+            <div class="wiz-step active" data-step="1"><span class="num">1</span>Identidad</div>
+            <div class="wiz-step"        data-step="2"><span class="num">2</span>Enrutamiento</div>
+            <div class="wiz-step"        data-step="3"><span class="num">3</span>Flujo de opciones</div>
+            <div class="wiz-step"        data-step="4"><span class="num">4</span>Revisión</div>
+        </div>
+    </div>
 </div>
-<div class="border-top my-3"></div>
 
+{# ═══════════════════════════════════════════════════════════════════ #}
+{# PASO 1 — Identidad                                                 #}
+{# ═══════════════════════════════════════════════════════════════════ #}
+<div class="wiz-pane active" data-pane="1">
+    <div class="hint-card">
+        <strong>¿Qué es un departamento?</strong><br>
+        Es una sección del chatbot con un propósito claro. Ejemplo:
+        <span class="example-chip">Matrículas</span>
+        <span class="example-chip">Soporte técnico</span>
+        <span class="example-chip">Información general</span>
+        <span class="example-chip">Becas</span><br>
+        Más adelante (paso 3) definirás el flujo que se ejecuta dentro de este depto.
+    </div>
 
-<div class="mb-2">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <label class="form-label fw-semibold">Opciones del ChatBot</label>
+    <div class="row g-2">
+        <div class="col-lg-8">
+            <label class="form-label small mb-1">{{ form.nombre.label }}</label>
+            {{ form.nombre }}
+            <div class="form-text">Nombre corto y claro. Se verá en los menús del bot.</div>
+            <div class="invalid-feedback" id="errorMessagenombre"></div>
+        </div>
+        <div class="col-lg-4">
+            <label class="form-label small mb-1">Color identificador</label>
+            {{ form.color }}
+            <div class="form-text">Solo para distinguirlo visualmente en el panel.</div>
+        </div>
+
+        <div class="col-12 mt-2">
+            <label class="form-label small mb-1">{{ form.mensaje_saludo.label }}</label>
+            {{ form.mensaje_saludo }}
+            <div class="form-text">
+                Se envía al cliente al entrar al depto. Puedes usar variables:
+                {% verbatim %}
+                <span class="example-chip">{{contacto.nombre}}</span>
+                <span class="example-chip">{{contacto.numero}}</span>
+                <span class="example-chip">{{sesion.nombre}}</span><br>
+                <em>Ejemplo:</em> <code>🎓 Hola {{contacto.nombre}}, bienvenido al área de Matrículas. ¿En qué te ayudo?</code>
+                {% endverbatim %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ═══════════════════════════════════════════════════════════════════ #}
+{# PASO 2 — Enrutamiento                                              #}
+{# ═══════════════════════════════════════════════════════════════════ #}
+<div class="wiz-pane" data-pane="2">
+    <div class="hint-card">
+        <strong>¿Cómo llegan los mensajes a este departamento?</strong><br>
+        El bot decide el depto correcto en este orden:<br>
+        1️⃣ Coincidencia de <strong>palabras clave</strong> en el mensaje.<br>
+        2️⃣ Número de menú (cuando el cliente elige "1", "2", "3"…).<br>
+        3️⃣ Departamento de entrada de la sesión (configurado en <em>Sesiones</em>).<br>
+        4️⃣ Departamento marcado como <strong>por defecto</strong>.
+    </div>
+
+    <div class="row g-2">
+        <div class="col-12">
+            <label class="form-label small mb-1">{{ form.palabras_clave.label }}</label>
+            {{ form.palabras_clave }}
+            <div class="form-text">
+                Una palabra o frase por línea. Si el mensaje del cliente contiene alguna,
+                se enruta a este depto sin mostrar menú.<br>
+                <em>Ejemplo para "Matrículas":</em>
+                <span class="example-chip">matricula</span>
+                <span class="example-chip">matrícula</span>
+                <span class="example-chip">inscripción</span>
+                <span class="example-chip">pago</span>
+                <span class="example-chip">saldo</span>
+            </div>
+        </div>
+
+        <div class="col-md-6 mt-3">
+            <div class="form-check form-switch">
+                {{ form.es_default }}
+                <label class="form-check-label small fw-semibold" for="id_es_default">
+                    {{ form.es_default.label }}
+                </label>
+            </div>
+            <div class="form-text">
+                Si ningún otro depto matchea, el bot cae aquí. Solo un depto debería
+                estar marcado como default por sesión.
+            </div>
+        </div>
+
+        <div class="col-md-6 mt-3">
+            <div class="form-check form-switch">
+                {{ form.activo_tradicional }}
+                <label class="form-check-label small fw-semibold" for="id_activo_tradicional">
+                    {{ form.activo_tradicional.label }}
+                </label>
+            </div>
+            <div class="form-text">
+                Si lo apagas, el depto NO responde con flujo tradicional — queda
+                solo para handoff/asignación humana.
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ═══════════════════════════════════════════════════════════════════ #}
+{# PASO 3 — Flujo de opciones (árbol)                                 #}
+{# ═══════════════════════════════════════════════════════════════════ #}
+<div class="wiz-pane" data-pane="3">
+    <div class="hint-card">
+        <strong>Construye el flujo que verá el cliente.</strong><br>
+        Cada opción es un <strong>nodo</strong>. Elige su tipo según lo que haga:<br>
+        <span class="tipo-pill tipo-menu">MENÚ</span> lista opciones al usuario &nbsp;
+        <span class="tipo-pill tipo-respuesta">RESPUESTA</span> envía un texto fijo &nbsp;
+        <span class="tipo-pill tipo-pregunta">PREGUNTA</span> captura un dato &nbsp;
+        <span class="tipo-pill tipo-http">HTTP</span> llama a una API &nbsp;
+        <span class="tipo-pill tipo-condicional">CONDICIONAL</span> if/else &nbsp;
+        <span class="tipo-pill tipo-handoff">HANDOFF</span> pasa a humano &nbsp;
+        <span class="tipo-pill tipo-fin">FIN</span> cierra flujo<br>
+        <em class="text-muted">💡 Los tipos avanzados (HTTP, condicional, switch) requieren configuración JSON
+        que se edita en Django Admin hasta que esté el editor visual.</em>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <label class="form-label fw-semibold mb-0">Opciones del ChatBot</label>
         <button type="button" class="btn btn-sm btn-primary" onclick="agregarOpcionRaiz()">
             <i class="fa fa-plus"></i> Agregar opción
         </button>
     </div>
     <ul id="arbolOpciones" class="list-unstyled ps-1 border-start border-2 border-primary-subtle"></ul>
+
+    <div class="mt-3 p-3 bg-light rounded small">
+        <strong>📖 Ejemplo — Centro de atención estudiantil:</strong>
+        <ul class="mb-0 mt-1">
+            <li><span class="tipo-pill tipo-menu">MENÚ</span> <em>"¿En qué te ayudo?"</em> → hijos: "Matrículas", "Notas", "Becas"</li>
+            <li class="ms-3"><span class="tipo-pill tipo-pregunta">PREGUNTA</span> <em>"¿Cuál es tu cédula?"</em> (validación: cedula)</li>
+            <li class="ms-3"><span class="tipo-pill tipo-http">HTTP</span> GET a <code>/alumnos/{cedula}</code> → guarda nombre/saldo</li>
+            <li class="ms-3"><span class="tipo-pill tipo-respuesta">RESPUESTA</span> <em>{% verbatim %}"Hola {{variables.nombre}}, tu saldo es {{variables.saldo}}"{% endverbatim %}</em></li>
+            <li class="ms-3"><span class="tipo-pill tipo-fin">FIN</span> cierra</li>
+        </ul>
+    </div>
 </div>
 
+{# ═══════════════════════════════════════════════════════════════════ #}
+{# PASO 4 — Revisión                                                  #}
+{# ═══════════════════════════════════════════════════════════════════ #}
+<div class="wiz-pane" data-pane="4">
+    <div class="hint-card">
+        <strong>Revisa antes de guardar.</strong> Lo que veas aquí es lo que
+        el cliente experimentará al interactuar con el bot.
+    </div>
+
+    <div id="resumen-depto" class="border rounded p-3 bg-light mb-3">
+        <div class="small text-muted">Cargando resumen…</div>
+    </div>
+
+    <div class="alert alert-info small">
+        <i class="fas fa-lightbulb me-1"></i>
+        <strong>¿Y las llamadas a APIs, credenciales y conexiones con etiquetas?</strong>
+        Se configuran en <em>Django Admin → CRM → Endpoints API / Credenciales / Conexiones</em>.
+        Este wizard cubre el grafo básico (menús, respuestas, preguntas, handoff, fin).
+    </div>
+</div>
+
+{# ═══════════════════════════════════════════════════════════════════ #}
+{# NAVEGACIÓN Y BOTONES                                               #}
+{# ═══════════════════════════════════════════════════════════════════ #}
 <div class="border-top my-3"></div>
 
-<div class="d-flex justify-content-end">
-    <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
-        <i class="fa fa-window-close me-1"></i>Cancelar
+<div class="d-flex justify-content-between">
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="wiz-prev" disabled>
+        <i class="fa fa-arrow-left me-1"></i> Anterior
     </button>
-    <a onclick="saveForm()" href="javascript:void(0)" class="btn btn-success btn-sm">
-        <i class="fa fa-save me-1"></i>Guardar
-    </a>
+    <div>
+        <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
+            <i class="fa fa-window-close me-1"></i> Cancelar
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" id="wiz-next">
+            Siguiente <i class="fa fa-arrow-right ms-1"></i>
+        </button>
+        <a onclick="saveForm()" href="javascript:void(0)" class="btn btn-success btn-sm" id="wiz-save" style="display:none">
+            <i class="fa fa-save me-1"></i> Guardar
+        </a>
+    </div>
     <div class="box_submit" style="display: none">
         <button type="submit" class="btn btn-success btn-sm" id="btnSubmit">
             <i class="fa fa-save me-1"></i>Guardar
         </button>
     </div>
-
 </div>
 
 {{ form.media }}
@@ -54,13 +350,95 @@
 <link rel="stylesheet" href="/static/editor_emoji_picker/editor-emoji.picker.css">
 
 <script>
-
+(function () {
     editorEmojiPicker('id_mensaje_saludo');
+
+    const TIPOS_NODO = [
+        {valor:'respuesta',    label:'Respuesta',   cls:'tipo-respuesta',   desc:'Envía un texto y avanza'},
+        {valor:'menu',         label:'Menú',        cls:'tipo-menu',        desc:'Lista opciones al usuario'},
+        {valor:'pregunta',     label:'Pregunta',    cls:'tipo-pregunta',    desc:'Captura un dato del usuario'},
+        {valor:'http',         label:'HTTP / API',  cls:'tipo-http',        desc:'Llama a una API externa'},
+        {valor:'condicional',  label:'Condicional', cls:'tipo-condicional', desc:'If/else por valor'},
+        {valor:'switch',       label:'Switch',      cls:'tipo-switch',      desc:'Varios casos por valor'},
+        {valor:'set_variable', label:'Set variable',cls:'tipo-set_variable',desc:'Asignar variable'},
+        {valor:'esperar',      label:'Esperar',     cls:'tipo-esperar',     desc:'Delay en segundos'},
+        {valor:'handoff',      label:'Handoff',     cls:'tipo-handoff',     desc:'Transferir a humano'},
+        {valor:'fin',          label:'Fin',         cls:'tipo-fin',         desc:'Cierra el flujo'},
+        {valor:'inicio',       label:'Inicio',      cls:'tipo-inicio',      desc:'Nodo de arranque explícito'},
+    ];
+
     var opcionesCargadas;
     try {
-        opcionesCargadas = JSON.parse('{{ opciones_json|safe }}');
+        opcionesCargadas = JSON.parse('{{ opciones_json|escapejs }}');
     } catch (e) {
         opcionesCargadas = [];
+    }
+
+    var ENDPOINTS_DISPONIBLES = [];
+    try {
+        ENDPOINTS_DISPONIBLES = JSON.parse('{{ endpoints_json|escapejs }}') || [];
+    } catch (e) {
+        ENDPOINTS_DISPONIBLES = [];
+    }
+
+    /* ══════════════════ WIZARD NAV ══════════════════ */
+    let wizStep = 1;
+    const WIZ_MAX = 4;
+
+    function wizGoTo(n) {
+        wizStep = Math.max(1, Math.min(WIZ_MAX, n));
+        $('.wiz-step').removeClass('active done').each(function () {
+            const s = parseInt($(this).data('step'));
+            if (s < wizStep) $(this).addClass('done');
+            if (s === wizStep) $(this).addClass('active');
+        });
+        $('.wiz-pane').removeClass('active');
+        $(`.wiz-pane[data-pane="${wizStep}"]`).addClass('active');
+        $('#wiz-prev').prop('disabled', wizStep === 1);
+        if (wizStep === WIZ_MAX) {
+            $('#wiz-next').hide();
+            $('#wiz-save').show();
+            renderResumen();
+        } else {
+            $('#wiz-next').show();
+            $('#wiz-save').hide();
+        }
+    }
+
+    $('#wiz-prev').on('click', () => wizGoTo(wizStep - 1));
+    $('#wiz-next').on('click', () => {
+        if (!validarPaso(wizStep)) return;
+        wizGoTo(wizStep + 1);
+    });
+    $('.wiz-step').on('click', function () {
+        const target = parseInt($(this).data('step'));
+        if (target < wizStep) wizGoTo(target);
+        else if (target === wizStep + 1 && validarPaso(wizStep)) wizGoTo(target);
+    });
+
+    function validarPaso(n) {
+        if (n === 1) {
+            if (!$('#id_nombre').val().trim()) {
+                alertaWarning('El nombre del departamento es obligatorio.');
+                $('#id_nombre').focus();
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /* ══════════════════ ÁRBOL DE NODOS ══════════════════ */
+
+    function pillFor(tipo) {
+        const t = TIPOS_NODO.find(x => x.valor === tipo) || TIPOS_NODO[0];
+        return `<span class="tipo-pill ${t.cls}">${t.label.toUpperCase()}</span>`;
+    }
+
+    function selectTipoHTML(tipoActual) {
+        const opts = TIPOS_NODO.map(t =>
+            `<option value="${t.valor}" ${t.valor === tipoActual ? 'selected' : ''}>${t.label} — ${t.desc}</option>`
+        ).join('');
+        return `<select class="form-select form-select-sm nodo-tipo" style="max-width:260px">${opts}</select>`;
     }
 
     function initArbolOpciones() {
@@ -73,8 +451,18 @@
 
     function cargarOpcionesDesdeBackend(lista, $ul) {
         lista.forEach(op => {
-            const $nodo = $(crearNodo(op.nombre, op.respuesta, false));
+            const tipo = op.tipo_nodo || 'respuesta';
+            const $nodo = $(crearNodo(op.nombre, op.respuesta, false, tipo));
             $nodo.data('id', op.id);
+            $nodo.data('config', op.config || {});
+            $nodo.data('endpoint_id', op.endpoint_id || null);
+            $nodo.data('variable_destino', op.variable_destino || '');
+            $nodo.data('validacion_tipo', op.validacion_tipo || 'none');
+            $nodo.data('validacion_expresion', op.validacion_expresion || '');
+            $nodo.data('mensaje_error', op.mensaje_error || '');
+            $nodo.data('reintentos_max', op.reintentos_max || 3);
+            $nodo.data('es_inicio', !!op.es_inicio);
+            renderGuiaEnNodo($nodo);  // re-render con config cargada
             $ul.append($nodo);
             if (op.hijos && op.hijos.length > 0) {
                 const $subul = $nodo.find('ul').first();
@@ -84,73 +472,491 @@
     }
 
     function agregarOpcionRaiz() {
-        const $nodo = $(crearNodo('', '', true));
+        const $nodo = $(crearNodo('', '', true, 'menu'));
         $('#arbolOpciones').append($nodo);
         actualizarOrden();
         initSortable($('#arbolOpciones'));
     }
 
-    function crearNodo(nombre = '', respuesta = '', modoEdicion = false) {
-        const $li = $('<li class="mb-3"></li>');
+    /* ══════════════════ GUÍA POR TIPO DE NODO ══════════════════ */
 
-        const editableHTML = modoEdicion
-            ? `<input type="text" class="form-control form-control-sm editable-input" value="${nombre}">`
-            : `
-        <span class="editable-text">${nombre}</span>
-        <input type="text" class="form-control form-control-sm d-none editable-input" value="${nombre}">
-        <button type="button" class="btn btn-sm btn-link text-primary px-1 btn-edit" title="Editar">
-            <i class="fa fa-pencil"></i>
-        </button>
-        <button type="button" class="btn btn-sm btn-link text-success d-none px-1 btn-save" title="Guardar">
-            <i class="fa fa-check"></i>
-        </button>
-        <button type="button" class="btn btn-sm btn-link text-danger d-none px-1 btn-cancel" title="Cancelar">
-            <i class="fa fa-times"></i>
-        </button>`;
+    const VARS_COMUNES = [
+        '{{contacto.nombre}}', '{{contacto.numero}}', '{{conversacion.id}}',
+        '{{sesion.numero}}', '{{mensaje.texto}}'
+    ];
 
-        const html = `
-        <div class="ms-2 border-start ps-3">
-            <div class="row align-items-center mb-1">
-                <div class="col-auto d-flex align-items-center gap-1 orden-label text-muted fw-semibold user-select-none" title="Arrastrar para mover" style="cursor: grab;">
-                    <i class="fa fa-grip-lines fa-lg text-secondary"></i>
-                    <span class="orden-numero">1</span>
+    function varsPills() {
+        return VARS_COMUNES.map(v => `<span class="var-tip" data-var="${v}">${v}</span>`).join(' ');
+    }
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+            '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        }[c]));
+    }
+
+    function kvRow(k, v, i, kind, phK, phV) {
+        phK = phK || 'clave (ej: cedula)';
+        phV = phV || 'valor o {{variables.cedula}}';
+        return `
+            <tr class="kv-row" data-idx="${i}">
+                <td><input type="text" class="form-control form-control-sm kv-k"
+                           placeholder="${phK}" value="${esc(k)}"></td>
+                <td><input type="text" class="form-control form-control-sm kv-v"
+                           placeholder="${phV}" value="${esc(v)}"></td>
+                <td><button type="button" class="btn btn-sm btn-link text-danger p-0 btn-del-kv">
+                    <i class="fa fa-times"></i></button></td>
+            </tr>`;
+    }
+
+    const GUIAS = {
+        respuesta: () => `
+            <div class="guia-title">📨 Respuesta simple</div>
+            <div class="guia-desc">
+                El bot envía el texto de "Texto / respuesta" y avanza. Inserta variables:<br>
+                ${varsPills()}
+            </div>
+            <div><strong>Ejemplo:</strong> <code>Hola {{contacto.nombre}}, en un momento te atiendo.</code></div>
+        `,
+
+        menu: ($li) => {
+            const cfg = $li.data('config') || {};
+            const opciones = (cfg.opciones && cfg.opciones.length) ? cfg.opciones
+                            : [{etiqueta:'', salida:''}, {etiqueta:'', salida:''}];
+            const rows = opciones.map((op, i) => `
+                <div class="opcion-row" data-idx="${i}">
+                    <input type="text" class="form-control form-control-sm op-etq"
+                           placeholder="Ej: Consultar matrícula" value="${esc(op.etiqueta || '')}">
+                    <input type="text" class="form-control form-control-sm op-sal"
+                           style="max-width:140px" placeholder="salida (ej: matricula)"
+                           value="${esc(op.salida || op.valor || '')}">
+                    <button type="button" class="btn btn-sm btn-link text-danger p-0 btn-del-op">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>`).join('');
+            return `
+                <div class="guia-title">📋 Menú de opciones</div>
+                <div class="guia-desc">
+                    Muestra una lista al usuario. Cada opción tiene <strong>etiqueta</strong>
+                    (lo que ve el cliente) y <strong>salida</strong> (nombre interno de la rama).
+                    Las conexiones etiquetadas se enlazan en <em>Admin → Conexiones entre nodos</em>.
                 </div>
-                <div class="col-8 pe-0">
-                    <div class="d-flex align-items-center gap-2 editable-wrapper">
-                        ${editableHTML}
+                <div class="menu-opciones">${rows}</div>
+                <button type="button" class="btn btn-sm btn-outline-primary mt-1 btn-add-op">
+                    <i class="fa fa-plus"></i> Agregar opción
+                </button>
+                <div class="mt-2" style="font-size:.72rem">
+                    <strong>Ejemplo:</strong>
+                    "Consultar matrícula" → salida=<code>matricula</code>;
+                    "Hablar con asesor" → salida=<code>asesor</code>
+                </div>`;
+        },
+
+        pregunta: ($li) => {
+            const varDest   = $li.data('variable_destino') || '';
+            const validacion= $li.data('validacion_tipo') || 'none';
+            const reintentos= $li.data('reintentos_max') || 3;
+            const msgErr    = $li.data('mensaje_error') || '';
+            const lista = [
+                ['none','Sin validación'],['email','Email'],['numero','Número'],
+                ['telefono','Teléfono'],['fecha','Fecha (YYYY-MM-DD)'],
+                ['cedula','Cédula EC'],['ruc','RUC'],['regex','Regex personalizada'],
+            ];
+            const optsVal = lista.map(v =>
+                `<option value="${v[0]}" ${v[0]===validacion?'selected':''}>${v[1]}</option>`
+            ).join('');
+            return `
+                <div class="guia-title">❓ Pregunta — capturar dato del usuario</div>
+                <div class="guia-desc">
+                    Envía la pregunta (arriba) y guarda la respuesta del usuario en una variable.
+                    Luego úsala con <code>{{variables.NOMBRE}}</code> en nodos posteriores.
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label small mb-0">Guardar en variable</label>
+                        <input type="text" class="form-control form-control-sm pg-var"
+                               placeholder="Ej: cedula" value="${esc(varDest)}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small mb-0">Validación</label>
+                        <select class="form-select form-select-sm pg-val">${optsVal}</select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small mb-0">Reintentos máx</label>
+                        <input type="number" class="form-control form-control-sm pg-ret"
+                               min="0" value="${reintentos}">
+                    </div>
+                    <div class="col-12 mt-1">
+                        <label class="form-label small mb-0">Mensaje si falla validación</label>
+                        <input type="text" class="form-control form-control-sm pg-err"
+                               placeholder="Ej: Cédula inválida, 10 dígitos numéricos."
+                               value="${esc(msgErr)}">
                     </div>
                 </div>
-                <div class="col-3 text-end ps-1">
-                    <button type="button" class="btn btn-sm btn-link text-success px-1" onclick="agregarSubopcion(this)" title="Agregar subopción">
-                        <i class="fa fa-plus"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-link text-danger px-1" onclick="eliminarNodo(this)" title="Eliminar">
-                        <i class="fa fa-trash"></i>
-                    </button>
+                <div class="mt-2" style="font-size:.72rem">
+                    <strong>Ejemplo:</strong> pregunta "¿Cuál es tu cédula?" →
+                    variable <code>cedula</code>, validación <code>cedula</code>.
+                    El siguiente nodo HTTP puede usar <code>{{variables.cedula}}</code>.
+                </div>`;
+        },
+
+        http: ($li) => {
+            const cfg = $li.data('config') || {};
+            const endpointId = $li.data('endpoint_id') || '';
+            const metodo   = (cfg.metodo || 'GET').toUpperCase();
+            const path     = cfg.path || '';
+            const plantilla= cfg.plantilla_respuesta || '';
+            const query    = cfg.query || {};
+            const extraer  = cfg.extraer || [];
+
+            const metodos = ['GET','POST','PUT','PATCH','DELETE'];
+            const optsMetodo = metodos.map(m =>
+                `<option value="${m}" ${m===metodo?'selected':''}>${m}</option>`).join('');
+
+            let optsEndpoint = '';
+            if (!ENDPOINTS_DISPONIBLES.length) {
+                optsEndpoint = '<option value="">(no hay endpoints — créalos en Admin → Endpoints API)</option>';
+            } else {
+                optsEndpoint = '<option value="">— elige un endpoint —</option>' +
+                    ENDPOINTS_DISPONIBLES.map(e =>
+                        `<option value="${e.id}" ${String(e.id)===String(endpointId)?'selected':''}>${esc(e.nombre)} — ${esc(e.base_url)}</option>`
+                    ).join('');
+            }
+
+            const queryEntries = Object.entries(query);
+            const kvRowsHtml = queryEntries.length
+                ? queryEntries.map(([k,v],i) => kvRow(k, v, i, 'query')).join('')
+                : kvRow('cedula', '{{variables.cedula}}', 0, 'query');
+
+            const extRowsHtml = extraer.length
+                ? extraer.map((x,i) => kvRow(x.variable || '', x.jsonpath || '', i, 'extraer',
+                                              'Variable destino', 'JSON path (ej: data.saldo)')).join('')
+                : kvRow('saldo', 'data.saldo', 0, 'extraer', 'Variable destino', 'JSON path (ej: data.saldo)');
+
+            return `
+                <div class="guia-title">🌐 HTTP — llamar a una API</div>
+                <div class="guia-desc">
+                    Llama a una API externa. Si responde 2xx toma la rama <code>ok</code>;
+                    si falla, <code>error</code>. Las variables capturadas antes
+                    (p.ej. <code>{{variables.cedula}}</code>) se inyectan en path/query/body.
                 </div>
-            </div>
-            <div class="row mb-2">
-                <div class="col-12">
-                    <textarea class="form-control form-control-sm border-0 border-bottom rounded-0 shadow-none bg-light" rows="2" placeholder="Respuesta">${respuesta}</textarea>
+
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-0">Método</label>
+                        <select class="form-select form-select-sm http-metodo">${optsMetodo}</select>
+                    </div>
+                    <div class="col-md-9">
+                        <label class="form-label small mb-0">Endpoint (base URL + credencial)</label>
+                        <select class="form-select form-select-sm http-endpoint">${optsEndpoint}</select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small mb-0">Path (después de la base URL)</label>
+                        <input type="text" class="form-control form-control-sm http-path"
+                               placeholder="/alumnos/{{variables.cedula}}/saldo" value="${esc(path)}">
+                        <div class="form-text" style="font-size:.7rem">
+                            Puedes incluir variables en el path. Click para insertar:
+                            ${varsPills()}
+                        </div>
+                    </div>
+
+                    <div class="col-12 mt-2">
+                        <label class="form-label small mb-0">
+                            <strong>Variables a enviar</strong>
+                            — en GET van como <em>query string</em>; en POST/PUT como body JSON
+                        </label>
+                        <table class="kv-table">
+                            <thead><tr>
+                                <th style="width:38%">Parámetro</th>
+                                <th>Valor (fijo o <code>{{variables.x}}</code>)</th>
+                                <th style="width:28px"></th>
+                            </tr></thead>
+                            <tbody class="kv-body" data-kind="query">${kvRowsHtml}</tbody>
+                        </table>
+                        <button type="button" class="btn btn-sm btn-outline-primary mt-1 btn-add-kv" data-kind="query">
+                            <i class="fa fa-plus"></i> Agregar parámetro
+                        </button>
+                    </div>
+
+                    <div class="col-12 mt-2">
+                        <label class="form-label small mb-0">
+                            <strong>Extraer de la respuesta</strong> → guardar en variables
+                        </label>
+                        <table class="kv-table">
+                            <thead><tr>
+                                <th style="width:38%">Variable</th>
+                                <th>JSON path (sin <code>$.</code>)</th>
+                                <th style="width:28px"></th>
+                            </tr></thead>
+                            <tbody class="kv-body" data-kind="extraer">${extRowsHtml}</tbody>
+                        </table>
+                        <button type="button" class="btn btn-sm btn-outline-primary mt-1 btn-add-kv" data-kind="extraer">
+                            <i class="fa fa-plus"></i> Agregar extracción
+                        </button>
+                    </div>
+
+                    <div class="col-12 mt-2">
+                        <label class="form-label small mb-0">Plantilla de respuesta al usuario (opcional)</label>
+                        <textarea class="form-control form-control-sm http-tpl" rows="2"
+                                  placeholder="Tu saldo es {{variables.saldo}} — cliente {{variables.nombre}}">${esc(plantilla)}</textarea>
+                    </div>
                 </div>
+
+                <div class="mt-2" style="font-size:.72rem">
+                    <strong>Ejemplo GET:</strong>
+                    base <code>https://api.miu.edu</code> + path <code>/saldo</code>
+                    + parámetros <code>cedula={{variables.cedula}}</code>,
+                    <code>periodo=2026-1</code>
+                    → <code>GET https://api.miu.edu/saldo?cedula=1710034065&amp;periodo=2026-1</code>
+                </div>`;
+        },
+
+        condicional: ($li) => {
+            const cfg = $li.data('config') || {};
+            const operador = cfg.operador || 'and';
+            return `
+                <div class="guia-title">🔀 Condicional — If / Else</div>
+                <div class="guia-desc">
+                    Evalúa condiciones y toma rama <code>true</code> o <code>false</code>.
+                    Operadores: <code>==</code>, <code>!=</code>, <code>&gt;</code>, <code>&lt;</code>,
+                    <code>contiene</code>, <code>vacio</code>… Se edita completo en Admin.
+                </div>
+                <div><strong>Ejemplo de config:</strong></div>
+                <pre style="font-size:.68rem; background:#fff; padding:6px; border-radius:4px; margin:4px 0 0">{
+  "operador": "and",
+  "condiciones": [
+    {"izq": "{{variables.saldo}}", "op": ">", "der": "0"}
+  ]
+}</pre>
+                <div class="form-text">Operador actual en config: <code>${operador}</code></div>`;
+        },
+
+        switch: () => `
+            <div class="guia-title">🎛️ Switch — rama por valor</div>
+            <div class="guia-desc">Compara variable vs varios casos. Se edita en Admin.</div>
+            <pre style="font-size:.68rem; background:#fff; padding:6px; border-radius:4px">{
+  "valor": "{{variables.tipo_cliente}}",
+  "casos": [
+    {"match": "vip", "salida": "vip"},
+    {"match": "regular", "salida": "regular"}
+  ]
+}</pre>`,
+
+        set_variable: () => `
+            <div class="guia-title">🏷️ Set variable</div>
+            <div class="guia-desc">Asigna un valor (con variables o fijo) a una variable. Se edita en Admin.</div>
+            <pre style="font-size:.68rem; background:#fff; padding:6px; border-radius:4px">{
+  "asignaciones": [
+    {"variable": "saludo", "expresion": "Hola {{contacto.nombre}}"}
+  ]
+}</pre>`,
+
+        esperar: ($li) => {
+            const cfg = $li.data('config') || {};
+            const seg = cfg.segundos || 1;
+            return `
+                <div class="guia-title">⏱️ Esperar — delay</div>
+                <div class="guia-desc">Pausa antes de avanzar (máx 10s).</div>
+                <label class="form-label small mb-0">Segundos</label>
+                <input type="number" class="form-control form-control-sm esp-seg"
+                       min="0" max="10" step="0.5" value="${seg}" style="max-width:120px">`;
+        },
+
+        handoff: () => `
+            <div class="guia-title">🙋 Handoff — transferir a humano</div>
+            <div class="guia-desc">
+                Pasa la conversación a un asesor. El texto que se envía es el
+                "Texto / respuesta" de arriba (o el "Mensaje de transferencia" de la sesión si está vacío).
             </div>
-            <ul class="list-unstyled ms-4 border-start border-1 border-secondary-subtle ps-2 mt-2"></ul>
-        </div>
-    `;
+            <div><strong>Ejemplo:</strong> <code>Un asesor te va a contactar en un momento.</code></div>`,
+
+        fin: () => `
+            <div class="guia-title">🏁 Fin — cerrar conversación</div>
+            <div class="guia-desc">Marca la conversación como finalizada y envía la despedida.</div>
+            <div><strong>Ejemplo:</strong> <code>Listo, gracias por escribirnos 🙌</code></div>`,
+
+        inicio: () => `
+            <div class="guia-title">▶️ Inicio</div>
+            <div class="guia-desc">Punto de entrada explícito del flujo. Normalmente no necesitas
+                este tipo: tu primer nodo ya actúa como inicio.</div>`,
+    };
+
+    function renderGuiaEnNodo($li) {
+        const tipo = $li.data('tipo_nodo') || 'respuesta';
+        const $slot = $li.find('.guia-nodo-slot').first();
+        $slot.empty();
+        const gen = GUIAS[tipo];
+        const html = gen ? gen($li) : '';
+        if (html) $slot.html(`<div class="guia-nodo">${html}</div>`);
+
+        // Insertar variable al hacer click en pill
+        $slot.find('.var-tip').off('click').on('click', function () {
+            const v = $(this).data('var');
+            const $ta = $li.find('.respuesta-txt').first();
+            const ta = $ta[0];
+            if (!ta) return;
+            const s = ta.selectionStart, e = ta.selectionEnd;
+            ta.value = ta.value.slice(0, s) + v + ta.value.slice(e);
+            ta.selectionStart = ta.selectionEnd = s + v.length;
+            ta.focus();
+        });
+
+        // Listeners específicos por tipo
+        $li.find('.btn-add-kv').off('click').on('click', function () {
+            const kind = $(this).data('kind');
+            const ph = kind === 'extraer'
+                ? ['Variable destino', 'JSON path (ej: data.saldo)']
+                : ['clave', 'valor o {{variables.x}}'];
+            const $tbody = $li.find(`.kv-body[data-kind="${kind}"]`);
+            $tbody.append(kvRow('', '', $tbody.children().length, kind, ph[0], ph[1]));
+        });
+        $slot.off('click.kvdel').on('click.kvdel', '.btn-del-kv', function () {
+            $(this).closest('tr').remove();
+        });
+        $li.find('.btn-add-op').off('click').on('click', function () {
+            $li.find('.menu-opciones').append(`
+                <div class="opcion-row">
+                    <input type="text" class="form-control form-control-sm op-etq" placeholder="Etiqueta">
+                    <input type="text" class="form-control form-control-sm op-sal" style="max-width:140px" placeholder="salida">
+                    <button type="button" class="btn btn-sm btn-link text-danger p-0 btn-del-op"><i class="fa fa-times"></i></button>
+                </div>`);
+        });
+        $li.find('.menu-opciones').off('click.opdel').on('click.opdel', '.btn-del-op', function () {
+            $(this).closest('.opcion-row').remove();
+        });
+    }
+
+    /** Lee los valores del editor de la guía al momento de serializar. */
+    function leerGuia($li) {
+        const tipo = $li.data('tipo_nodo') || 'respuesta';
+        let config = {};
+        const extras = {
+            variable_destino: '',
+            validacion_tipo: 'none',
+            validacion_expresion: '',
+            mensaje_error: '',
+            reintentos_max: 3,
+            endpoint_id: null,
+        };
+
+        if (tipo === 'menu') {
+            config.mensaje = $li.find('.respuesta-txt').val().trim();
+            config.opciones = [];
+            $li.find('.menu-opciones .opcion-row').each(function () {
+                const etq = $(this).find('.op-etq').val().trim();
+                const sal = $(this).find('.op-sal').val().trim();
+                if (etq) config.opciones.push({etiqueta: etq, salida: sal, valor: sal || etq});
+            });
+        } else if (tipo === 'pregunta') {
+            config.pregunta = $li.find('.respuesta-txt').val().trim();
+            extras.variable_destino = $li.find('.pg-var').val().trim();
+            extras.validacion_tipo = $li.find('.pg-val').val() || 'none';
+            extras.reintentos_max = parseInt($li.find('.pg-ret').val() || 3, 10);
+            extras.mensaje_error = $li.find('.pg-err').val().trim();
+        } else if (tipo === 'http') {
+            config.metodo = $li.find('.http-metodo').val() || 'GET';
+            config.path = $li.find('.http-path').val().trim();
+            config.query = {};
+            $li.find('.kv-body[data-kind="query"] .kv-row').each(function () {
+                const k = $(this).find('.kv-k').val().trim();
+                const v = $(this).find('.kv-v').val();
+                if (k) config.query[k] = v;
+            });
+            config.extraer = [];
+            $li.find('.kv-body[data-kind="extraer"] .kv-row').each(function () {
+                const varname = $(this).find('.kv-k').val().trim();
+                const jpath = $(this).find('.kv-v').val().trim();
+                if (varname) config.extraer.push({variable: varname, jsonpath: jpath});
+            });
+            config.plantilla_respuesta = $li.find('.http-tpl').val();
+            extras.endpoint_id = $li.find('.http-endpoint').val() || null;
+        } else if (tipo === 'esperar') {
+            config.segundos = parseFloat($li.find('.esp-seg').val() || 1);
+        } else {
+            // tipos que no tienen UI (respuesta/handoff/fin/inicio/condicional/switch/set_variable)
+            config = $li.data('config') || {};
+        }
+
+        return { config, extras };
+    }
+
+    function crearNodo(nombre = '', respuesta = '', modoEdicion = false, tipoNodo = 'respuesta') {
+        const $li = $('<li class="mb-2"></li>');
+        const editableHTML = modoEdicion
+            ? `<input type="text" class="form-control form-control-sm editable-input" value="${nombre}" placeholder="Ej: Consultar matrícula">`
+            : `
+                <span class="editable-text">${nombre}</span>
+                <input type="text" class="form-control form-control-sm d-none editable-input" value="${nombre}">
+                <button type="button" class="btn btn-sm btn-link text-primary px-1 btn-edit" title="Editar">
+                    <i class="fa fa-pencil"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-link text-success d-none px-1 btn-save" title="Guardar">
+                    <i class="fa fa-check"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-link text-danger d-none px-1 btn-cancel" title="Cancelar">
+                    <i class="fa fa-times"></i>
+                </button>`;
+
+        const html = `
+            <div class="nodo-card ms-2 border-start ps-3">
+                <div class="nodo-head mb-1">
+                    <span class="orden-label text-muted fw-semibold" title="Arrastrar para mover" style="cursor: grab;">
+                        <i class="fa fa-grip-lines text-secondary"></i>
+                        <span class="orden-numero">1</span>
+                    </span>
+                    ${pillFor(tipoNodo)}
+                    <span class="nodo-tipo-slot"></span>
+                    <div class="editable-wrapper d-flex align-items-center gap-1 flex-grow-1">${editableHTML}</div>
+                    <div class="text-end flex-shrink-0">
+                        <button type="button" class="btn btn-sm btn-link text-success px-1" onclick="agregarSubopcion(this)" title="Agregar subopción">
+                            <i class="fa fa-plus"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-link text-danger px-1" onclick="eliminarNodo(this)" title="Eliminar">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="row g-2 mb-1">
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted mb-0">Tipo de nodo</label>
+                        ${selectTipoHTML(tipoNodo)}
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label small text-muted mb-0">Texto / respuesta</label>
+                        <textarea class="form-control form-control-sm respuesta-txt" rows="2"
+                                  placeholder="Ej: 'Te voy a pedir tu cédula para continuar.'">${respuesta}</textarea>
+                    </div>
+                </div>
+                <div class="guia-nodo-slot"></div>
+                <ul class="list-unstyled ms-4 border-start border-1 border-secondary-subtle ps-2 mt-2"></ul>
+            </div>
+        `;
 
         $li.html(html);
+        $li.data('tipo_nodo', tipoNodo);
+        $li.data('config', {});   // config inicial vacía; renderGuia lo puebla
         if (!modoEdicion) agregarEventosEdicion($li);
+
+        // Cambio de tipo → actualizar pill y re-renderizar la guía
+        $li.find('.nodo-tipo').on('change', function () {
+            const nuevo = $(this).val();
+            $li.data('tipo_nodo', nuevo);
+            $li.find('.nodo-head .tipo-pill').first().replaceWith(pillFor(nuevo));
+            $li.data('config', {});   // al cambiar de tipo, limpiamos el editor
+            renderGuiaEnNodo($li);
+        });
+
+        renderGuiaEnNodo($li);
         return $li[0];
     }
 
     function agregarEventosEdicion($li) {
-        const $wrapper = $li.find('.editable-wrapper');
-        const $text = $wrapper.find('.editable-text');
-        const $input = $wrapper.find('.editable-input');
+        const $wrapper = $li.find('.editable-wrapper').first();
+        const $text    = $wrapper.find('.editable-text');
+        const $input   = $wrapper.find('.editable-input');
         const $btnEdit = $wrapper.find('.btn-edit');
         const $btnSave = $wrapper.find('.btn-save');
         const $btnCancel = $wrapper.find('.btn-cancel');
-
         let valorOriginal = $input.val();
 
         $btnEdit.on('click', function () {
@@ -158,43 +964,30 @@
             $text.addClass('d-none');
             $input.removeClass('d-none').val(valorOriginal).focus();
             $btnEdit.addClass('d-none');
-            $btnSave.removeClass('d-none');
-            $btnCancel.removeClass('d-none');
+            $btnSave.removeClass('d-none'); $btnCancel.removeClass('d-none');
         });
-
         $btnSave.on('click', function () {
-            const nuevoValor = $input.val().trim();
-            if (nuevoValor !== '') {
-                $text.text(nuevoValor);
-            }
-            $input.addClass('d-none');
-            $text.removeClass('d-none');
-            $btnSave.addClass('d-none');
-            $btnCancel.addClass('d-none');
-            $btnEdit.removeClass('d-none');
+            const nv = $input.val().trim();
+            if (nv) $text.text(nv);
+            $input.addClass('d-none'); $text.removeClass('d-none');
+            $btnSave.addClass('d-none'); $btnCancel.addClass('d-none'); $btnEdit.removeClass('d-none');
         });
-
         $btnCancel.on('click', function () {
-            $input.val(valorOriginal);
-            $input.addClass('d-none');
+            $input.val(valorOriginal).addClass('d-none');
             $text.removeClass('d-none');
-            $btnSave.addClass('d-none');
-            $btnCancel.addClass('d-none');
-            $btnEdit.removeClass('d-none');
+            $btnSave.addClass('d-none'); $btnCancel.addClass('d-none'); $btnEdit.removeClass('d-none');
         });
     }
 
     function agregarSubopcion(boton) {
         const $li = $(boton).closest('li');
-        const nombre = $li.find('.editable-text').first().text().trim() || $li.find('.editable-input').val().trim();
-        const respuesta = $li.find('textarea').first().val().trim();
-
-        if (!nombre || !respuesta) {
-            alertaWarning("Debes ingresar nombre y respuesta antes de agregar subopciones.");
+        const nombre = $li.find('.editable-text').first().text().trim()
+                      || $li.find('.editable-input').first().val().trim();
+        if (!nombre) {
+            alertaWarning('Escribe primero el nombre de esta opción antes de agregar subopciones.');
             return;
         }
-
-        const $nodo = $(crearNodo('', '', true));
+        const $nodo = $(crearNodo('', '', true, 'respuesta'));
         const $subul = $li.find('ul').first();
         $subul.append($nodo);
         initSortable($subul);
@@ -202,6 +995,7 @@
     }
 
     function eliminarNodo(boton) {
+        if (!confirm('¿Eliminar este nodo y todos sus hijos?')) return;
         $(boton).closest('li').remove();
         actualizarOrden();
     }
@@ -216,25 +1010,16 @@
                 contador++;
             });
         }
-
         asignarOrden($('#arbolOpciones'));
     }
 
     function initSortable($ul) {
         new Sortable($ul[0], {
-            group: 'chatbot',
-            handle: '.orden-label',
-            animation: 150,
-            fallbackOnBody: true,
-            swapThreshold: 0.65,
-            onEnd: function () {
-                actualizarOrden();
-            }
+            group: 'chatbot', handle: '.orden-label', animation: 150,
+            fallbackOnBody: true, swapThreshold: 0.65,
+            onEnd: actualizarOrden,
         });
-
-        $ul.find('ul').each(function () {
-            initSortable($(this));
-        });
+        $ul.find('ul').each(function () { initSortable($(this)); });
     }
 
     function serializar($ul) {
@@ -242,12 +1027,24 @@
         $ul.children('li').each(function () {
             const $li = $(this);
             const id = $li.data('id') || null;
-            const nombre = $li.find('.editable-text').first().text().trim() || $li.find('.editable-input').val().trim();
-            const respuesta = $li.find('textarea').first().val().trim();
+            const nombre = $li.find('.editable-text').first().text().trim()
+                         || $li.find('.editable-input').first().val().trim();
+            const respuesta = $li.find('.respuesta-txt').first().val().trim();
+            const tipo_nodo = $li.data('tipo_nodo') || $li.find('.nodo-tipo').first().val() || 'respuesta';
             const hijos = serializar($li.find('ul').first());
-
+            const { config, extras } = leerGuia($li);
+            const es_inicio = !!$li.data('es_inicio');
             if (nombre || respuesta) {
-                const item = {nombre, respuesta, hijos};
+                const item = {
+                    nombre, respuesta, tipo_nodo, hijos, config,
+                    es_inicio,
+                    variable_destino: extras.variable_destino || '',
+                    validacion_tipo: extras.validacion_tipo || 'none',
+                    validacion_expresion: extras.validacion_expresion || '',
+                    mensaje_error: extras.mensaje_error || '',
+                    reintentos_max: extras.reintentos_max || 3,
+                    endpoint_id: extras.endpoint_id || null,
+                };
                 if (id) item.id = id;
                 resultado.push(item);
             }
@@ -255,56 +1052,171 @@
         return resultado;
     }
 
+    /* ══════════════════ RESUMEN PASO 4 ══════════════════ */
+
+    function escapeHtml(s) {
+        return String(s || '').replace(/[&<>"']/g, c => ({
+            '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        }[c]));
+    }
+
+    function flowNode(n, esPrimero) {
+        const tipo = n.tipo_nodo || 'respuesta';
+        const pill = pillFor(tipo);
+        const clase = ['flow-node'];
+        if (tipo === 'inicio')  clase.push('is-inicio');
+        if (tipo === 'fin')     clase.push('is-fin');
+        if (tipo === 'handoff') clase.push('is-handoff');
+
+        const nombre = escapeHtml(n.nombre || '(sin nombre)');
+        const resp = n.respuesta ? `<div class="flow-resp">"${escapeHtml(n.respuesta.slice(0,140))}${n.respuesta.length>140?'…':''}"</div>` : '';
+        const badgeInicio = esPrimero ? '<span class="flow-badge-start">INICIO</span>' : '';
+
+        return `
+            <div class="${clase.join(' ')}">
+                ${badgeInicio}
+                <div class="flow-head">${pill}<span class="flow-name">${nombre}</span></div>
+                ${resp}
+            </div>`;
+    }
+
+    function flowConnector() {
+        return `<div class="flow-connector"><div class="line"></div><div class="arrow"></div></div>`;
+    }
+
+    /**
+     * Pinta una lista de nodos hermanos.
+     * - Si la lista tiene 1 solo nodo → secuencia vertical (nodo → conector → nodo…).
+     * - Si tiene >1 nodo → se trata como ramas paralelas (caso típico de un
+     *   padre tipo menú: cada hijo es una rama).
+     */
+    function flowList(nodos, esNivelRaiz) {
+        if (!nodos || !nodos.length) return '';
+
+        // Nivel raíz o cuando la rama tiene un solo hijo: secuencia vertical
+        if (esNivelRaiz || nodos.length === 1) {
+            let html = '';
+            nodos.forEach((n, i) => {
+                if (i > 0) html += flowConnector();
+                html += flowNode(n, esNivelRaiz && i === 0);
+                if (n.hijos && n.hijos.length) {
+                    html += flowChildren(n.hijos);
+                }
+            });
+            return html;
+        }
+
+        // Varios nodos hermanos dentro de una rama: apilados
+        return nodos.map((n, i) => {
+            const sep = i > 0 ? flowConnector() : '';
+            const sub = (n.hijos && n.hijos.length) ? flowChildren(n.hijos) : '';
+            return sep + flowNode(n, false) + sub;
+        }).join('');
+    }
+
+    /** Bloque de ramas bajo un nodo padre (hijos). */
+    function flowChildren(hijos) {
+        const branches = hijos.map(h => {
+            const label = h.nombre ? escapeHtml(h.nombre.slice(0, 22)) : 'rama';
+            const inner = flowNode(h, false)
+                + ((h.hijos && h.hijos.length) ? flowChildren(h.hijos) : '');
+            return `<div class="flow-branch">
+                        <span class="branch-label">${label}</span>
+                        ${inner}
+                    </div>`;
+        }).join('');
+        return `<div class="flow-children"><div class="flow-branches">${branches}</div></div>`;
+    }
+
+    function renderResumen() {
+        const nombre = escapeHtml($('#id_nombre').val().trim() || '(sin nombre)');
+        const saludo = ($('#id_mensaje_saludo').val() || '').trim();
+        const palabras = ($('#id_palabras_clave').val() || '').split('\n').map(s=>s.trim()).filter(Boolean);
+        const esDefault = $('#id_es_default').is(':checked');
+        const activo = $('#id_activo_tradicional').is(':checked');
+        const arbol = serializar($('#arbolOpciones'));
+
+        const flowHtml = arbol.length
+            ? flowList(arbol, true)
+            : '<div class="flow-empty">— Sin nodos. Agrega opciones en el Paso 3 —</div>';
+
+        $('#resumen-depto').html(`
+            <div class="mb-3">
+                <strong>📁 ${nombre}</strong>
+                ${esDefault ? '<span class="badge bg-warning ms-2">DEFAULT</span>' : ''}
+                ${!activo ? '<span class="badge bg-secondary ms-2">FLUJO INACTIVO</span>' : ''}
+            </div>
+            ${saludo ? `
+                <div class="mb-3 p-2 bg-white border rounded small">
+                    <span class="text-muted">📢 Saludo al entrar:</span><br>
+                    <em>"${escapeHtml(saludo)}"</em>
+                </div>` : ''}
+            <div class="mb-3 small">
+                <strong>🔑 Palabras clave de entrada:</strong>
+                ${palabras.length ? palabras.map(p=>`<span class="example-chip">${escapeHtml(p)}</span>`).join(' ') : '<em class="text-muted">ninguna</em>'}
+            </div>
+
+            <hr class="my-3">
+
+            <div class="text-center mb-2">
+                <span class="flow-entry-label"><i class="fas fa-comment-dots me-1"></i> Mensaje del cliente</span>
+            </div>
+            <div class="flow-connector"><div class="line"></div><div class="arrow"></div></div>
+
+            <div class="flow-root">
+                ${flowHtml}
+            </div>
+
+            <div class="small text-muted mt-3 text-center">
+                <i class="fas fa-info-circle"></i>
+                Las ramas son cómo se bifurca el flujo según la elección/resultado de cada nodo.
+            </div>
+        `);
+    }
+
+    /* ══════════════════ GUARDAR ══════════════════ */
+
     function saveForm() {
         const $form = $('#frmDepartamento');
         const $opciones = $('#arbolOpciones li');
         let valido = true;
 
         $opciones.each(function () {
-            const nombre = $(this).find('.editable-text').first().text().trim() || $(this).find('.editable-input').val().trim();
-            const respuesta = $(this).find('textarea').first().val().trim();
-
+            const nombre = $(this).find('.editable-text').first().text().trim()
+                         || $(this).find('.editable-input').first().val().trim();
             if (!nombre) {
                 alertaWarning('Todas las opciones deben tener un nombre.');
-                $(this).find('.editable-input, .editable-text').first().focus();
-                valido = false;
-                return false;
-            }
-            if (!respuesta) {
-                alertaWarning('Todas las opciones deben tener una respuesta.');
-                $(this).find('textarea').first().focus();
-                valido = false;
-                return false;
+                valido = false; return false;
             }
         });
-
         if (!valido) return;
 
         const jsonData = serializar($('#arbolOpciones'));
         $form.find('input[name="arbol_json"]').remove();
-
-        const $inputHidden = $('<input>', {
-            type: 'hidden',
-            name: 'arbol_json',
-            value: JSON.stringify(jsonData)
-        });
-
-        $form.append($inputHidden);
+        $form.append($('<input>', { type:'hidden', name:'arbol_json', value: JSON.stringify(jsonData) }));
         $form.submit();
     }
 
     $('#modalDetalle').on('hidden.bs.modal', function () {
         $('#arbolOpciones').empty();
+        wizGoTo(1);
     });
-
     $('#modalDetalle').on('shown.bs.modal', function () {
         initArbolOpciones();
+        wizGoTo(1);
     });
+
+    // Exponer funciones llamadas desde onclick inline en el HTML generado.
+    window.agregarOpcionRaiz = agregarOpcionRaiz;
+    window.agregarSubopcion  = agregarSubopcion;
+    window.eliminarNodo      = eliminarNodo;
+    window.saveForm          = saveForm;
+
+    // Si el modal ya está abierto cuando cargó el script (caso "editar"),
+    // inicializar el árbol de una vez.
+    if ($('#modalDetalle').hasClass('show') || $('#modalDetalle').is(':visible')) {
+        initArbolOpciones();
+        wizGoTo(1);
+    }
+})();
 </script>
-
-
-
-
-
-
-

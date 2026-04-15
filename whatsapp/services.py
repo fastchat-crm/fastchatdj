@@ -520,6 +520,35 @@ class WhatsAppService:
                 'error': f"Error de conexión: {str(e)}"
             }
 
+    def check_session_status(self, session_id):
+        """
+        Consulta al servidor Node el estado real de la sesión.
+        `connected` refleja el estado del socket en memoria (conexión viva con WhatsApp),
+        `isActive` es la bandera persistida en BD del lado Node.
+        """
+        try:
+            response = requests.get(
+                f"{self.base_url}/session/{session_id}",
+                headers=self.headers,
+                timeout=10,
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    'success': True,
+                    'is_active': bool(data.get('isActive')),
+                    'connected': bool(data.get('connected')),
+                    'last_activity': data.get('lastActivity'),
+                    'qr_code': data.get('qrCode'),
+                }
+            if response.status_code == 404:
+                return {'success': False, 'not_found': True, 'error': 'Sesión no encontrada en el servidor de WhatsApp'}
+            return {'success': False, 'error': f"Error {response.status_code}: {response.text}"}
+        except requests.exceptions.Timeout:
+            return {'success': False, 'error': 'Timeout al consultar el servidor de WhatsApp'}
+        except Exception as e:
+            return {'success': False, 'error': f"Error de conexión: {str(e)}"}
+
     def close_session(self, session_id):
         """
         Cierra una sesión de WhatsApp

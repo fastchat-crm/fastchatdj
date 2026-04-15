@@ -1,0 +1,39 @@
+{% if trazas %}
+    <div class="trace-timeline">
+        {% for t in trazas %}
+            <div class="trace-step trace-{{ t.nivel }}">
+                <div class="trace-dot bg-{{ t.color }}">
+                    <i class="fa-solid {{ t.icono }}"></i>
+                </div>
+                <div class="trace-content">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                        <div>
+                            <strong class="trace-etapa">{{ t.get_etapa_display }}</strong>
+                            <span class="badge bg-{{ t.color }} bg-opacity-10 text-{{ t.color }} ms-2">{{ t.get_nivel_display }}</span>
+                            {% if t.latencia_ms %}
+                                <span class="badge bg-light text-dark ms-1">
+                                    <i class="fa-regular fa-clock me-1"></i>{{ t.latencia_ms }} ms
+                                </span>
+                            {% endif %}
+                        </div>
+                        <small class="text-muted">{{ t.fecha|date:"d/m/Y H:i:s" }}</small>
+                    </div>
+                    {% if t.detalle %}
+                        <pre class="trace-detalle">{{ t.detalle }}</pre>
+                    {% endif %}
+                    <small class="text-muted">
+                        {% if t.sesion %}<i class="fab fa-whatsapp me-1"></i>{{ t.sesion.numero|default:t.sesion.session_id }}{% endif %}
+                        {% if t.numero %} · <i class="fa-solid fa-phone me-1"></i>{{ t.numero }}{% endif %}
+                        {% if t.conversacion_id %} · conv #{{ t.conversacion_id }}{% endif %}
+                        {% if t.mensaje_id %} · msg #{{ t.mensaje_id }}{% endif %}
+                    </small>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="text-center text-muted py-4">
+        <i class="fa-solid fa-inbox fa-2x mb-2"></i>
+        <p class="mb-0">No hay trazas para este filtro.</p>
+    </div>
+{% endif %}

@@ -109,7 +109,8 @@ class RespuestaEntrenadaIAForm(ModelFormBase):
 class DepartamentoChatBotForm(ModelFormBase):
     class Meta:
         model = DepartamentoChatBot
-        exclude = ('usuario_modificacion', 'fecha_modificacion', 'usuario_creacion', 'fecha_registro', 'status')
+        fields = ('nombre', 'color', 'mensaje_saludo',
+                  'palabras_clave', 'es_default', 'activo_tradicional')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
@@ -118,13 +119,31 @@ class DepartamentoChatBotForm(ModelFormBase):
             self.fields[k].widget.attrs['class'] = 'form-control'
             if k in ('nombre',):
                 self.fields[k].widget.attrs['col'] = '8'
+                self.fields[k].widget.attrs['placeholder'] = 'Ej: Matrículas y cobranzas'
             elif k in ('color',):
                 self.fields[k].widget.attrs['col'] = '4'
                 self.fields[k].widget = forms.TextInput(attrs={
-                    'type': 'color',
-                    'class': 'form-control',
-                    'col': '4'
+                    'type': 'color', 'class': 'form-control', 'col': '4',
                 })
+            elif k == 'mensaje_saludo':
+                self.fields[k].widget.attrs['rows'] = 3
+                self.fields[k].widget.attrs['col'] = '12'
+                self.fields[k].widget.attrs['placeholder'] = (
+                    '🎓 Hola {{contacto.nombre}}, bienvenido al Centro de Atención. '
+                    '¿En qué te ayudo hoy?'
+                )
+                self.fields[k].required = False
+            elif k == 'palabras_clave':
+                self.fields[k].widget.attrs['rows'] = 4
+                self.fields[k].widget.attrs['col'] = '12'
+                self.fields[k].widget.attrs['placeholder'] = (
+                    'matricula\nmatrícula\ninscripción\npago\nsaldo'
+                )
+                self.fields[k].required = False
+            elif k in ('es_default', 'activo_tradicional'):
+                self.fields[k].widget.attrs['class'] = 'form-check-input'
+                self.fields[k].widget.attrs['col'] = '6'
+                self.fields[k].required = False
 
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'

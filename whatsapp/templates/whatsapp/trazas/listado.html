@@ -1,0 +1,337 @@
+{% extends 'base.html' %}
+{% load templatefunctions %}
+
+{% block head %}
+<style>
+    :root {
+        --trz-border: #e9ecef;
+        --trz-muted: #6c757d;
+    }
+
+    .trz-stats { margin-bottom: 1.1rem; }
+    .trz-stat-tile {
+        background: #fff;
+        border: 1px solid var(--trz-border);
+        border-radius: 12px;
+        padding: 0.9rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+    }
+    .trz-stat-tile .trz-icon {
+        width: 40px; height: 40px; border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1rem; flex-shrink: 0;
+    }
+    .trz-icon.bg-total   { background:#e7f1ff; color:#0d6efd; }
+    .trz-icon.bg-info    { background:#cfe2ff; color:#084298; }
+    .trz-icon.bg-success { background:#d1e7dd; color:#0f5132; }
+    .trz-icon.bg-warn    { background:#fff3cd; color:#664d03; }
+    .trz-icon.bg-err     { background:#f8d7da; color:#842029; }
+    .trz-stat-value { font-size: 1.35rem; font-weight: 700; line-height: 1.1; }
+    .trz-stat-label { font-size: .72rem; color: var(--trz-muted); text-transform: uppercase; letter-spacing: .03em; }
+
+    .trz-filter-card {
+        background: #fff; border: 1px solid var(--trz-border);
+        border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: 1.1rem;
+    }
+
+    table.trz-table { background: #fff; border-radius: 12px; overflow: hidden; border: 1px solid var(--trz-border); }
+    table.trz-table thead { background: #f8f9fa; }
+    table.trz-table thead th { font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; color: var(--trz-muted); font-weight: 600; padding: .7rem .85rem; }
+    table.trz-table tbody td { padding: .65rem .85rem; font-size: .88rem; vertical-align: middle; }
+    table.trz-table tbody tr { cursor: pointer; transition: background .12s; }
+    table.trz-table tbody tr:hover { background: #fafbfc; }
+
+    .trz-etapa-chip {
+        display: inline-flex; align-items: center; gap: .35rem;
+        padding: .22rem .6rem; border-radius: 999px; font-size: .75rem; font-weight: 500;
+    }
+    .etapa-success { background: #d1e7dd; color: #0f5132; }
+    .etapa-info    { background: #cfe2ff; color: #084298; }
+    .etapa-warning { background: #fff3cd; color: #664d03; }
+    .etapa-error   { background: #f8d7da; color: #842029; }
+
+    .trz-detail-preview { color: var(--trz-muted); font-size: .8rem; max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: bottom; }
+
+    /* Timeline (modal) */
+    .trace-timeline { position: relative; padding-left: 1.5rem; }
+    .trace-timeline::before {
+        content: ''; position: absolute; left: 14px; top: 0; bottom: 0;
+        width: 2px; background: #dee2e6;
+    }
+    .trace-step {
+        position: relative; margin-bottom: 1.1rem; padding-left: 1rem;
+    }
+    .trace-dot {
+        position: absolute; left: -1.5rem; top: 3px;
+        width: 30px; height: 30px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; font-size: .8rem;
+        box-shadow: 0 0 0 3px #fff;
+    }
+    .trace-content {
+        background: #f8f9fa; border: 1px solid var(--trz-border);
+        border-radius: 9px; padding: .7rem .9rem;
+    }
+    .trace-etapa { font-size: .92rem; color: #212529; }
+    .trace-detalle {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        background: #fff; border: 1px solid var(--trz-border);
+        border-radius: 6px; padding: .55rem .7rem;
+        font-size: .76rem; margin: .5rem 0; max-height: 220px; overflow: auto;
+        white-space: pre-wrap; word-break: break-word; color: #343a40;
+    }
+    .trace-step.trace-error .trace-content { border-left: 3px solid #dc3545; }
+    .trace-step.trace-warning .trace-content { border-left: 3px solid #ffc107; }
+    .trace-step.trace-success .trace-content { border-left: 3px solid #198754; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ===== STATS ===== #}
+<div class="row g-2 trz-stats">
+    <div class="col-6 col-md">
+        <div class="trz-stat-tile">
+            <div class="trz-icon bg-total"><i class="fa-solid fa-list"></i></div>
+            <div>
+                <div class="trz-stat-value">{{ stats.total }}</div>
+                <div class="trz-stat-label">Total eventos</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="trz-stat-tile">
+            <div class="trz-icon bg-success"><i class="fa-solid fa-check"></i></div>
+            <div>
+                <div class="trz-stat-value">{{ stats.success }}</div>
+                <div class="trz-stat-label">Exitosos</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="trz-stat-tile">
+            <div class="trz-icon bg-warn"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <div>
+                <div class="trz-stat-value">{{ stats.warning }}</div>
+                <div class="trz-stat-label">Advertencias</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="trz-stat-tile">
+            <div class="trz-icon bg-err"><i class="fa-solid fa-circle-xmark"></i></div>
+            <div>
+                <div class="trz-stat-value">{{ stats.error }}</div>
+                <div class="trz-stat-label">Errores</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="trz-stat-tile">
+            <div class="trz-icon bg-info"><i class="fa-solid fa-circle-info"></i></div>
+            <div>
+                <div class="trz-stat-value">{{ stats.info }}</div>
+                <div class="trz-stat-label">Info</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ===== FILTROS ===== #}
+<div class="trz-filter-card">
+    <form method="GET" class="row g-3 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small text-muted mb-1">Numero</label>
+            <input type="text" name="numero" class="form-control" value="{{ numero|default:'' }}" placeholder="593...">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small text-muted mb-1">Sesion</label>
+            <select name="sesion" class="form-select">
+                <option value="">Todas</option>
+                {% for s in sesiones %}
+                    <option value="{{ s.id }}" {% if sesion_sel == s.id %}selected{% endif %}>
+                        {{ s.numero|default:s.session_id }}{% if s.nombre %} — {{ s.nombre }}{% endif %}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small text-muted mb-1">Etapa</label>
+            <select name="etapa" class="form-select">
+                <option value="">Todas</option>
+                {% for k, v in etapas %}
+                    <option value="{{ k }}" {% if etapa_sel == k %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small text-muted mb-1">Nivel</label>
+            <select name="nivel" class="form-select">
+                <option value="">Todos</option>
+                {% for k, v in niveles %}
+                    <option value="{{ k }}" {% if nivel_sel == k %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small text-muted mb-1">Desde</label>
+            <input type="date" name="fecha_desde" class="form-control" value="{{ fecha_desde|default:'' }}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small text-muted mb-1">Hasta</label>
+            <input type="date" name="fecha_hasta" class="form-control" value="{{ fecha_hasta|default:'' }}">
+        </div>
+        <div class="col-md-3">
+            <div class="form-check mt-4 pt-1">
+                <input type="checkbox" name="solo_problemas" value="1" class="form-check-input" id="soloProblemas"
+                       {% if solo_problemas %}checked{% endif %}>
+                <label class="form-check-label small" for="soloProblemas">Solo problemas (errores y advertencias)</label>
+            </div>
+        </div>
+        <div class="col-md-3 d-flex gap-2">
+            <button type="submit" class="btn btn-primary flex-grow-1">
+                <i class="fas fa-filter me-1"></i>Filtrar
+            </button>
+            {% if url_vars %}
+                <a href="{{ request.path }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-times"></i>
+                </a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+{# ===== LISTADO ===== #}
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <span class="small text-muted">{{ list_count }} evento{{ list_count|pluralize }}</span>
+    <small class="text-muted">
+        <i class="fa-solid fa-lightbulb me-1"></i>
+        Haz clic en una fila para ver el timeline completo del mensaje.
+    </small>
+</div>
+
+<div class="table-responsive">
+    <table class="table trz-table mb-0">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Etapa</th>
+                <th>Sesion / Numero</th>
+                <th>Conversacion</th>
+                <th>Detalle</th>
+                <th class="text-end">Latencia</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in listado %}
+                <tr onclick="verTimeline({{ t.mensaje_id|default:'null' }}, {{ t.conversacion_id|default:'null' }}, '{{ t.numero|default:'' }}')">
+                    <td>
+                        <div>{{ t.fecha|date:"d/m/Y" }}</div>
+                        <small class="text-muted">{{ t.fecha|date:"H:i:s" }}</small>
+                    </td>
+                    <td>
+                        <span class="trz-etapa-chip etapa-{{ t.nivel }}">
+                            <i class="fa-solid {{ t.icono }}"></i>
+                            {{ t.get_etapa_display }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if t.sesion %}
+                            <div><i class="fab fa-whatsapp text-success me-1"></i>{{ t.sesion.numero|default:t.sesion.session_id|truncatechars:20 }}</div>
+                        {% endif %}
+                        {% if t.numero %}
+                            <small class="text-muted">{{ t.numero }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if t.conversacion_id %}
+                            <span class="badge bg-light text-dark">#{{ t.conversacion_id }}</span>
+                            {% if t.conversacion.contacto.contacto_nombre %}
+                                <small class="d-block text-muted">{{ t.conversacion.contacto.contacto_nombre|truncatechars:22 }}</small>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted small">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if t.detalle %}
+                            <span class="trz-detail-preview" title="{{ t.detalle }}">{{ t.detalle|truncatechars:80 }}</span>
+                        {% else %}
+                            <span class="text-muted small">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if t.latencia_ms %}
+                            <span class="badge bg-light text-dark">{{ t.latencia_ms }} ms</span>
+                        {% else %}
+                            <span class="text-muted small">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-5">
+                        <i class="fa-solid fa-inbox fa-2x mb-2"></i>
+                        <p class="mb-0">No hay trazas registradas con estos filtros.</p>
+                        <small>Cuando un mensaje llegue al webhook, aparecera aqui el pipeline completo.</small>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">{% include 'paginacion.html' %}</div>
+</div>
+
+{# ===== MODAL TIMELINE ===== #}
+<div class="modal fade" id="modalTimeline" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fa-solid fa-route me-2"></i>Timeline del pipeline
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="timelineContent">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block jscript %}
+<script>
+    function verTimeline(mensajeId, conversacionId, numero) {
+        const modal = new bootstrap.Modal(document.getElementById('modalTimeline'));
+        $('#timelineContent').html('<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>');
+        modal.show();
+
+        const params = { action: 'ver_timeline' };
+        if (mensajeId) params.mensaje_id = mensajeId;
+        else if (conversacionId) params.conversacion_id = conversacionId;
+        else if (numero) params.numero = numero;
+
+        $.get('{{ request.path }}', params, function(res) {
+            if (res.result) {
+                $('#timelineContent').html(res.data);
+            } else {
+                $('#timelineContent').html('<div class="alert alert-warning">No se pudo cargar el timeline.</div>');
+            }
+        }, 'json').fail(function() {
+            $('#timelineContent').html('<div class="alert alert-danger">Error al cargar el timeline.</div>');
+        });
+    }
+</script>
+{% endblock %}

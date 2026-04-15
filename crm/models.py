@@ -638,6 +638,19 @@ class DepartamentoChatBot(ModeloBase):
     nombre = models.CharField(max_length=100, verbose_name="Nombre")
     color = models.CharField(max_length=100, verbose_name="Color", default='')
     mensaje_saludo = models.TextField(verbose_name="Mensaje de saludo", default='')
+    palabras_clave = models.TextField(
+        blank=True, default='',
+        verbose_name='Palabras clave de entrada',
+        help_text='Una por línea. Si el mensaje entrante contiene alguna, se enruta aquí. Vacío = sólo por elección explícita.'
+    )
+    es_default = models.BooleanField(
+        default=False, verbose_name='Departamento por defecto',
+        help_text='Se usa cuando no hay match de palabras clave ni selección previa.'
+    )
+    activo_tradicional = models.BooleanField(
+        default=True, verbose_name='Flujo tradicional activo',
+        help_text='Si está desactivado, el departamento no responde con flujo (sirve sólo para handoff humano).'
+    )
 
     class Meta:
         verbose_name = 'Departamento ChatBot'
@@ -655,6 +668,15 @@ class DepartamentoChatBot(ModeloBase):
                     'nombre': opcion.nombre,
                     'respuesta': opcion.respuesta,
                     'orden': opcion.orden,
+                    'tipo_nodo': opcion.tipo_nodo,
+                    'config': opcion.config or {},
+                    'endpoint_id': opcion.endpoint_id,
+                    'variable_destino': opcion.variable_destino or '',
+                    'validacion_tipo': opcion.validacion_tipo or 'none',
+                    'validacion_expresion': opcion.validacion_expresion or '',
+                    'mensaje_error': opcion.mensaje_error or '',
+                    'reintentos_max': opcion.reintentos_max or 3,
+                    'es_inicio': bool(opcion.es_inicio),
                     'hijos': construir_arbol(opcion.subopciones.filter(status=True).order_by('orden'))
                 })
             return resultado
@@ -665,20 +687,254 @@ class DepartamentoChatBot(ModeloBase):
     def obtener_perfiles(self):
         return self.perfildepartamentochatbot_set.filter(status=True).order_by('usuario__first_name')
 
+    def nodo_inicio(self):
+        return self.opciondepartamentochatbot_set.filter(es_inicio=True, status=True).first() \
+            or self.opciondepartamentochatbot_set.filter(opcion_padre__isnull=True, status=True).order_by('orden').first()
+
+    def get_palabras_clave(self) -> list:
+        return [p.strip().lower() for p in (self.palabras_clave or '').splitlines() if p.strip()]
+
 
 class OpcionDepartamentoChatBot(ModeloBase):
+    """
+    Nodo de flujo estilo n8n. Cada nodo tiene:
+      - `tipo_nodo`: qué hace (menu, pregunta, http, condicional, etc.)
+      - `config` (JSON): parámetros tipados por tipo de nodo.
+      - Conexiones salientes: vía `ConexionNodoChatbot` (DAG, con ramas etiquetadas).
+        Se mantiene `opcion_padre` como fallback legacy (árbol simple de menús).
+
+    Expresiones en `config`/strings: sintaxis `{{variables.x}}`, `{{contacto.numero}}`,
+    `{{response.body.data[0].nombre}}`. El motor las resuelve al ejecutar.
+    """
+    TIPOS_NODO = [
+        ('inicio',       'Inicio'),
+        ('menu',         'Menú de opciones'),
+        ('respuesta',    'Enviar respuesta'),
+        ('pregunta',     'Capturar entrada del usuario'),
+        ('http',         'Llamada HTTP (API externa)'),
+        ('condicional',  'If / Else'),
+        ('switch',       'Switch por valor'),
+        ('set_variable', 'Definir variable(s)'),
+        ('handoff',      'Transferir a humano'),
+        ('esperar',      'Esperar (delay)'),
+        ('fin',          'Fin de conversación'),
+    ]
+    VALIDACIONES = [
+        ('none',   'Sin validación'),
+        ('regex',  'Regex personalizada'),
+        ('email',  'Email'),
+        ('numero', 'Número'),
+        ('cedula', 'Cédula (EC)'),
+        ('ruc',    'RUC (EC)'),
+        ('fecha',  'Fecha (YYYY-MM-DD)'),
+        ('telefono', 'Teléfono'),
+    ]
+
     departamento = models.ForeignKey(DepartamentoChatBot, on_delete=models.CASCADE, verbose_name="Departamento")
     orden = models.PositiveSmallIntegerField(default=0, verbose_name="Orden")
     nombre = models.CharField(max_length=100, verbose_name="Nombre")
-    respuesta = models.TextField(verbose_name="Respuesta", default='')
+    respuesta = models.TextField(verbose_name="Respuesta", default='', blank=True)
     opcion_padre = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subopciones', verbose_name="Opción padre")
 
+    tipo_nodo = models.CharField(max_length=20, choices=TIPOS_NODO, default='respuesta', verbose_name='Tipo de nodo')
+    es_inicio = models.BooleanField(default=False, verbose_name='Nodo de inicio del flujo')
+    config = models.JSONField(
+        default=dict, blank=True,
+        verbose_name='Parámetros (JSON)',
+        help_text='Parámetros específicos del tipo de nodo. Ver plantillas en la documentación.'
+    )
+
+    endpoint = models.ForeignKey(
+        'EndpointApiChatbot', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='nodos',
+        verbose_name='Endpoint API', help_text='Sólo para tipo HTTP.'
+    )
+
+    variable_destino = models.CharField(
+        max_length=80, blank=True, default='',
+        verbose_name='Variable destino',
+        help_text='Nombre de la variable donde se guarda la entrada del usuario o la respuesta de la API.'
+    )
+    validacion_tipo = models.CharField(max_length=20, choices=VALIDACIONES, default='none', verbose_name='Validación')
+    validacion_expresion = models.CharField(max_length=250, blank=True, default='', verbose_name='Regex de validación')
+    mensaje_error = models.TextField(blank=True, default='', verbose_name='Mensaje si la validación falla')
+    reintentos_max = models.PositiveSmallIntegerField(default=3, verbose_name='Reintentos máximos')
+
+    posicion_x = models.FloatField(default=0, verbose_name='Posición X (editor)')
+    posicion_y = models.FloatField(default=0, verbose_name='Posición Y (editor)')
+
     class Meta:
-        verbose_name = 'Opción Departamento ChatBot'
-        verbose_name_plural = 'Opciones Departamentos ChatBot'
+        verbose_name = 'Nodo de Flujo ChatBot'
+        verbose_name_plural = 'Nodos de Flujo ChatBot'
+        ordering = ['departamento', 'orden', 'id']
 
     def __str__(self):
-        return f"{self.departamento.nombre} - {self.nombre}"
+        return f"{self.departamento.nombre} · [{self.get_tipo_display()}] {self.nombre}"
+
+    def siguientes(self, etiqueta: str = ''):
+        """Devuelve nodos destino por etiqueta de salida (vacío = default)."""
+        qs = self.salidas.filter(status=True).order_by('orden')
+        if etiqueta:
+            qs = qs.filter(etiqueta=etiqueta)
+        return [c.nodo_destino for c in qs]
+
+    def siguiente_default(self):
+        conn = self.salidas.filter(status=True, etiqueta='').order_by('orden').first()
+        if conn:
+            return conn.nodo_destino
+        hijo = self.subopciones.filter(status=True).order_by('orden').first()
+        return hijo
+
+
+class CredencialApiChatbot(ModeloBase):
+    """
+    Credencial reutilizable entre varios endpoints (estilo n8n Credentials).
+    NOTA: los secretos se guardan en `secretos` (JSON). Si el proyecto añade
+    cifrado a nivel de aplicación, migrar aquí. Por ahora va en claro igual
+    que `ApiKeyIA.descripcion`.
+    """
+    TIPOS_AUTH = [
+        ('none',          'Sin autenticación'),
+        ('bearer',        'Bearer token'),
+        ('basic',         'Basic auth (usuario/contraseña)'),
+        ('apikey_header', 'API Key en header'),
+        ('apikey_query',  'API Key en query string'),
+        ('custom_header', 'Header(s) personalizado(s)'),
+    ]
+    nombre = models.CharField(max_length=100, verbose_name='Nombre')
+    tipo = models.CharField(max_length=20, choices=TIPOS_AUTH, default='none', verbose_name='Tipo de autenticación')
+    secretos = models.JSONField(
+        default=dict, blank=True,
+        verbose_name='Secretos (JSON)',
+        help_text='Ej Bearer: {"token": "..."}. Basic: {"usuario": "...", "password": "..."}. '
+                  'ApiKey: {"nombre_header": "X-API-Key", "valor": "..."}. Custom: {"headers": {"H1": "v1"}}.'
+    )
+    descripcion = models.TextField(blank=True, default='', verbose_name='Descripción')
+
+    class Meta:
+        verbose_name = 'Credencial API ChatBot'
+        verbose_name_plural = 'Credenciales API ChatBot'
+
+    def __str__(self):
+        return f"{self.nombre} ({self.get_tipo_display()})"
+
+
+class EndpointApiChatbot(ModeloBase):
+    """
+    Endpoint HTTP reutilizable. Un nodo tipo `http` apunta a uno de estos
+    y sólo sobre-escribe path/body/query en su `config`.
+    """
+    nombre = models.CharField(max_length=120, verbose_name='Nombre')
+    base_url = models.CharField(
+        max_length=500, verbose_name='Base URL',
+        help_text='Ej: https://api.miservicio.com. Sin slash final.'
+    )
+    credencial = models.ForeignKey(
+        CredencialApiChatbot, on_delete=models.PROTECT,
+        null=True, blank=True, related_name='endpoints',
+        verbose_name='Credencial'
+    )
+    headers_default = models.JSONField(
+        default=dict, blank=True,
+        verbose_name='Headers por defecto (JSON)',
+        help_text='Ej: {"Content-Type": "application/json", "Accept": "application/json"}'
+    )
+    timeout_seg = models.PositiveSmallIntegerField(default=15, verbose_name='Timeout (segundos)')
+    descripcion = models.TextField(blank=True, default='', verbose_name='Descripción')
+
+    class Meta:
+        verbose_name = 'Endpoint API ChatBot'
+        verbose_name_plural = 'Endpoints API ChatBot'
+
+    def __str__(self):
+        return f"{self.nombre} [{self.base_url}]"
+
+
+class ConexionNodoChatbot(ModeloBase):
+    """
+    Arista del grafo entre nodos. Permite múltiples salidas por nodo,
+    diferenciadas por `etiqueta`:
+      - ''           → salida por defecto (flujo lineal)
+      - 'true'/'false' → ramas de `condicional`
+      - 'ok'/'error' → ramas de `http`
+      - 'opcion_1'/'opcion_2'… → ramas de `menu`/`switch`
+      - 'timeout'     → ramo cuando se agotan los reintentos de `pregunta`
+    """
+    nodo_origen = models.ForeignKey(
+        OpcionDepartamentoChatBot, on_delete=models.CASCADE,
+        related_name='salidas', verbose_name='Nodo origen'
+    )
+    nodo_destino = models.ForeignKey(
+        OpcionDepartamentoChatBot, on_delete=models.CASCADE,
+        related_name='entradas', verbose_name='Nodo destino'
+    )
+    etiqueta = models.CharField(max_length=60, blank=True, default='', verbose_name='Etiqueta de salida')
+    orden = models.PositiveSmallIntegerField(default=0)
+    descripcion = models.CharField(max_length=200, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Conexión entre nodos'
+        verbose_name_plural = 'Conexiones entre nodos'
+        ordering = ['nodo_origen', 'orden']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['nodo_origen', 'nodo_destino', 'etiqueta'],
+                name='uniq_conexion_chatbot'
+            ),
+        ]
+
+    def __str__(self):
+        etq = f"[{self.etiqueta}]" if self.etiqueta else ''
+        return f"{self.nodo_origen_id} →{etq} {self.nodo_destino_id}"
+
+
+class EstadoFlujoChatbot(ModeloBase):
+    """
+    Estado runtime del flujo para una conversación. Persiste en qué nodo
+    quedó el contacto y qué variables ha capturado.
+    """
+    conversacion = models.OneToOneField(
+        'whatsapp.ConversacionWhatsApp', on_delete=models.CASCADE,
+        related_name='estado_flujo', verbose_name='Conversación'
+    )
+    departamento = models.ForeignKey(
+        DepartamentoChatBot, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='estados_runtime',
+        verbose_name='Departamento'
+    )
+    nodo_actual = models.ForeignKey(
+        OpcionDepartamentoChatBot, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+',
+        verbose_name='Nodo actual'
+    )
+    variables = models.JSONField(default=dict, blank=True, verbose_name='Variables capturadas')
+    intentos = models.PositiveSmallIntegerField(default=0, verbose_name='Intentos en el nodo actual')
+    finalizado = models.BooleanField(default=False, verbose_name='Flujo finalizado')
+    en_handoff = models.BooleanField(
+        default=False, verbose_name='En handoff humano',
+        help_text='True cuando la conversación fue transferida a un asesor. '
+                  'El motor no responde mientras esté en true.'
+    )
+    actualizado = models.DateTimeField(auto_now=True, verbose_name='Última actualización')
+
+    class Meta:
+        verbose_name = 'Estado de Flujo ChatBot'
+        verbose_name_plural = 'Estados de Flujo ChatBot'
+
+    def __str__(self):
+        dep = self.departamento.nombre if self.departamento else '—'
+        nod = self.nodo_actual.nombre if self.nodo_actual else '—'
+        return f"Conv#{self.conversacion_id} · {dep} · nodo: {nod}"
+
+    def set_variable(self, nombre: str, valor):
+        self.variables = {**(self.variables or {}), nombre: valor}
+
+    def reset(self):
+        self.nodo_actual = None
+        self.variables = {}
+        self.intentos = 0
+        self.finalizado = False
+        self.en_handoff = False
 
 
 class PerfilDepartamentoChatBot(ModeloBase):
@@ -808,3 +1064,48 @@ class AccionFinConversacion(ModeloBase):
             return self.plantilla_mensaje.format(**contexto)
         except (KeyError, ValueError):
             return self.plantilla_mensaje
+
+
+class AuditoriaAgenteIA(models.Model):
+    """Analisis generado por IA sobre la configuracion de un agente.
+    Guarda snapshot de la config, metricas, y sugerencias devueltas por el LLM.
+    """
+    ESTADO_CHOICES = (
+        ('pendiente', 'Pendiente'),
+        ('generado',  'Generado'),
+        ('aplicado',  'Aplicado parcialmente'),
+        ('cerrado',   'Aplicado completo'),
+        ('error',     'Error'),
+    )
+    agente = models.ForeignKey(
+        AgentesIA, on_delete=models.CASCADE, related_name='auditorias',
+        verbose_name='Agente auditado',
+    )
+    usuario = models.ForeignKey(
+        'autenticacion.Usuario', on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name='Usuario que solicito',
+    )
+    estado = models.CharField(max_length=15, choices=ESTADO_CHOICES, default='pendiente')
+    # Snapshot de la config que se audito (para poder rollback)
+    snapshot_prompt = models.TextField(blank=True, null=True)
+    snapshot_contexto = models.TextField(blank=True, null=True)
+    # Metricas calculadas al momento de la auditoria
+    metricas = models.JSONField(default=dict, blank=True)
+    # Respuesta del LLM (JSON estructurado con sugerencias)
+    sugerencias = models.JSONField(default=dict, blank=True)
+    # Log de aplicacion: {campo: {aplicado_en, usuario}}
+    aplicaciones = models.JSONField(default=dict, blank=True)
+    razonamiento = models.TextField(blank=True, null=True)
+    error_mensaje = models.TextField(blank=True, null=True)
+    respuesta_cruda = models.TextField(blank=True, null=True, verbose_name='Respuesta cruda del LLM (debug)')
+    tokens_usados = models.PositiveIntegerField(default=0)
+    modelo_usado = models.CharField(max_length=80, blank=True, null=True)
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Auditoria de Agente IA'
+        verbose_name_plural = 'Auditorias de Agentes IA'
+        ordering = ['-fecha', '-id']
+
+    def __str__(self):
+        return f"Auditoria #{self.id} — {self.agente.nombre} ({self.estado})"

@@ -14,7 +14,7 @@ from crm.forms import PerfilNegocioIAForm, ProductoIAForm, ServicioIAForm, Respu
     ActividadEconomicaForm, AgentesIAForm, ApiKeyIAForm
 from crm.models import PerfilNegocioIA, ProductoIA, ServicioIA, RespuestaEntrenadaIA, Industria, ActividadEconomica, \
     AgentesIA, DetalleAgentesAI, ApiKeyIA, ReglaFinConversacion, AccionFinConversacion, ConsumoTokenIA, \
-    AlertaConsumoIA
+    AlertaConsumoIA, AuditoriaAgenteIA
 from core.funciones import addData, secure_module, log, get_encrypt
 
 
@@ -278,6 +278,42 @@ def entrenamiento_ia_view(request):
                         filtro.save()
                         log(f"API Key reactivada {filtro}", request, "change", obj=filtro.id)
                         res_json = {"error": False, "reload": True}
+                    elif action == 'auditoria_generar':
+                        from agents_ai.auditor_agente import ejecutar_auditoria
+                        agente = AgentesIA.objects.get(pk=int(request.POST['agente_id']), perfil=perfil)
+                        dias = int(request.POST.get('dias', 30) or 30)
+                        auditoria = ejecutar_auditoria(agente, usuario=request.user, dias=dias)
+                        if auditoria.estado == 'error':
+                            res_json = {'error': True, 'message': auditoria.error_mensaje or 'Fallo la auditoria'}
+                        else:
+                            res_json = {
+                                'error': False,
+                                'auditoria_id': auditoria.id,
+                                'tokens': auditoria.tokens_usados,
+                                'modelo': auditoria.modelo_usado,
+                                'razonamiento': auditoria.razonamiento,
+                                'sugerencias': auditoria.sugerencias,
+                                'metricas': auditoria.metricas,
+                            }
+                    elif action == 'auditoria_aplicar':
+                        from agents_ai.auditor_agente import aplicar_sugerencia
+                        auditoria = AuditoriaAgenteIA.objects.select_related('agente__perfil').get(
+                            pk=int(request.POST['auditoria_id']), agente__perfil=perfil,
+                        )
+                        campo = request.POST.get('campo')
+                        if campo not in ('prompt_template', 'contexto_estatico'):
+                            raise ValueError('Campo no soportado')
+                        aplicar_sugerencia(auditoria, campo, usuario=request.user)
+                        log(f"Aplicada sugerencia IA ({campo}) del agente {auditoria.agente}", request, "change", obj=auditoria.agente.id)
+                        res_json = {'error': False, 'campo': campo, 'estado': auditoria.estado}
+                    elif action == 'auditoria_revertir':
+                        from agents_ai.auditor_agente import revertir_auditoria
+                        auditoria = AuditoriaAgenteIA.objects.select_related('agente__perfil').get(
+                            pk=int(request.POST['auditoria_id']), agente__perfil=perfil,
+                        )
+                        revertir_auditoria(auditoria, usuario=request.user)
+                        log(f"Revertida auditoria IA del agente {auditoria.agente}", request, "change", obj=auditoria.agente.id)
+                        res_json = {'error': False, 'estado': auditoria.estado}
                     elif action == 'testapikey':
                         filtro = ApiKeyIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
                         try:
@@ -333,6 +369,47 @@ def entrenamiento_ia_view(request):
                         return JsonResponse({"result": True, 'data': template.render(data)})
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})
+                elif action == 'auditoria_historial':
+                    try:
+                        pk = int(request.GET['id'])
+                        agente = AgentesIA.objects.get(pk=pk, perfil=perfil)
+                        historial = AuditoriaAgenteIA.objects.filter(agente=agente).order_by('-fecha')[:20]
+                        data_rows = []
+                        for a in historial:
+                            data_rows.append({
+                                'id': a.id,
+                                'fecha': a.fecha.strftime('%d/%m/%Y %H:%M'),
+                                'estado': a.get_estado_display(),
+                                'estado_raw': a.estado,
+                                'modelo': a.modelo_usado or '',
+                                'tokens': a.tokens_usados,
+                                'usuario': str(a.usuario) if a.usuario else '',
+                                'resumen': (a.razonamiento or '')[:150],
+                            })
+                        return JsonResponse({'result': True, 'historial': data_rows})
+                    except Exception as ex:
+                        return JsonResponse({'result': False, 'message': str(ex)})
+                elif action == 'auditoria_detalle':
+                    try:
+                        pk = int(request.GET['id'])
+                        auditoria = AuditoriaAgenteIA.objects.select_related('agente__perfil').get(pk=pk, agente__perfil=perfil)
+                        return JsonResponse({
+                            'result': True,
+                            'auditoria_id': auditoria.id,
+                            'estado': auditoria.estado,
+                            'estado_display': auditoria.get_estado_display(),
+                            'razonamiento': auditoria.razonamiento or '',
+                            'sugerencias': auditoria.sugerencias or {},
+                            'metricas': auditoria.metricas or {},
+                            'snapshot_prompt': auditoria.snapshot_prompt or '',
+                            'snapshot_contexto': auditoria.snapshot_contexto or '',
+                            'aplicaciones': auditoria.aplicaciones or {},
+                            'fecha': auditoria.fecha.strftime('%d/%m/%Y %H:%M'),
+                            'tokens': auditoria.tokens_usados,
+                            'modelo': auditoria.modelo_usado or '',
+                        })
+                    except Exception as ex:
+                        return JsonResponse({'result': False, 'message': str(ex)})
                 elif action == 'vercontexto':
                     try:
                         pk = int(request.GET['id'])

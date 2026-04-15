@@ -1,7 +1,9 @@
-ge{% extends 'base.html' %}
+{% extends 'base.html' %}
+{% load static %}
 {% block atras %}{{ request.path }}{% endblock %}
 
 {% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/chat_traza.css' %}">
     <style>
         /* ── Reset & layout ─────────────────────────────────────────────── */
         .chat-page-wrapper {
@@ -1004,7 +1006,7 @@ ge{% extends 'base.html' %}
             });
 
             /* ── Burbuja ────────────────────────────────────────────────── */
-            function appendBubble(tipo, texto) {
+            function appendBubble(tipo, texto, traza) {
                 const empty = document.getElementById('empty-state');
                 if (empty) empty.remove();
 
@@ -1024,10 +1026,78 @@ ge{% extends 'base.html' %}
                     '<div class="msg-content">' +
                     '<div class="msg-bubble ' + bubCls + '">' + escHtml(texto) + '</div>' +
                     '<span class="msg-time">' + label + ' · ' + now + '</span>' +
+                    (traza ? renderTraza(traza) : '') +
                     '</div>';
 
                 chatBody.insertBefore(row, typingRow);
                 scrollBottom(true);
+            }
+
+            /* ── Panel de trazabilidad ──────────────────────────────────── */
+            function renderTraza(t) {
+                if (!t) return '';
+                const score = t.score_calidad != null ? t.score_calidad : null;
+                const scoreCls = score == null ? 'good' : (score >= 80 ? 'good' : score >= 50 ? 'warn' : 'bad');
+                const lat = t.latencia_llm_ms || t.latencia_total_ms || 0;
+                const latCls = lat > 5000 ? 'highlight-slow' : lat < 1500 ? 'highlight-fast' : '';
+
+                let problemasHtml = '';
+                if (t.problemas && t.problemas.length) {
+                    problemasHtml = '<div class="chat-traza-problemas">' +
+                        t.problemas.map(p =>
+                            '<span class="chat-traza-problema tipo-' + p.tipo + '">' +
+                            '<i class="fas fa-triangle-exclamation"></i>' + escHtml(p.label) +
+                            '</span>'
+                        ).join('') + '</div>';
+                } else {
+                    problemasHtml = '<div class="chat-traza-problemas">' +
+                        '<span class="chat-traza-ok"><i class="fas fa-check"></i>Sin problemas detectados</span>' +
+                        '</div>';
+                }
+
+                let etapasHtml = '';
+                if (t.etapas && t.etapas.length) {
+                    etapasHtml = '<div class="chat-traza-etapas">' +
+                        t.etapas.map(e =>
+                            '<div class="chat-traza-etapa ' + (e.ok ? '' : 'error') + '">' +
+                            '<span class="dot"></span>' +
+                            '<div>' +
+                            '<div class="lbl">' + escHtml(e.label) + '</div>' +
+                            (e.detalle ? '<div class="det">' + escHtml(e.detalle) + '</div>' : '') +
+                            '</div>' +
+                            '<span class="ts">+' + e.ts_ms + 'ms</span>' +
+                            '</div>'
+                        ).join('') + '</div>';
+                }
+
+                const scoreBadge = score != null
+                    ? '<span class="score ' + scoreCls + '">' + score + '/100</span>'
+                    : '';
+
+                return (
+                    '<div class="chat-traza">' +
+                    '<span class="chat-traza-toggle" onclick="this.parentElement.classList.toggle(\'open\')">' +
+                    '<i class="fas fa-chart-pulse"></i>Trazabilidad ' + scoreBadge +
+                    '<i class="fas fa-chevron-down"></i>' +
+                    '</span>' +
+                    '<div class="chat-traza-panel">' +
+                    '<div class="chat-traza-grid">' +
+                    '<div class="chat-traza-cell"><div class="k">Modelo</div><div class="v">' + escHtml(t.modelo || '—') + '</div></div>' +
+                    '<div class="chat-traza-cell"><div class="k">Proveedor</div><div class="v">' + escHtml(t.proveedor || '—') + '</div></div>' +
+                    '<div class="chat-traza-cell ' + latCls + '"><div class="k">Latencia LLM</div><div class="v">' + lat + ' ms</div></div>' +
+                    '<div class="chat-traza-cell"><div class="k">Latencia total</div><div class="v">' + (t.latencia_total_ms || 0) + ' ms</div></div>' +
+                    '<div class="chat-traza-cell"><div class="k">Tokens in</div><div class="v">' + (t.tokens_in || 0) + '</div></div>' +
+                    '<div class="chat-traza-cell"><div class="k">Tokens out</div><div class="v">' + (t.tokens_out || 0) + '</div></div>' +
+                    '<div class="chat-traza-cell"><div class="k">Tokens total</div><div class="v">' + (t.tokens_total || 0) + '</div></div>' +
+                    '<div class="chat-traza-cell"><div class="k">Chars respuesta</div><div class="v">' + (t.caracteres_respuesta || 0) + '</div></div>' +
+                    '<div class="chat-traza-cell"><div class="k">RAG</div><div class="v">' + (t.usa_rag ? 'Sí' : 'No') + '</div></div>' +
+                    '<div class="chat-traza-cell"><div class="k">Contexto estático</div><div class="v">' + (t.usa_contexto_estatico ? 'Sí' : 'No') + '</div></div>' +
+                    '</div>' +
+                    problemasHtml +
+                    etapasHtml +
+                    '</div>' +
+                    '</div>'
+                );
             }
 
             function escHtml(t) {
@@ -1229,7 +1299,7 @@ ge{% extends 'base.html' %}
                                 log.warn('Agente sin datos de entrenamiento — respuesta no confiable');
                                 noDataBanner.classList.add('visible');
                             }
-                            appendBubble('ia', res.respuesta);
+                            appendBubble('ia', res.respuesta, res.traza);
                             if (res.fin_detectado) {
                                 marcarFinConversacion();
                             }

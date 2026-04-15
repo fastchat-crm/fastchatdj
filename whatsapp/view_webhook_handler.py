@@ -27,6 +27,7 @@ from .models import (
     EstadisticasConversacion
 )
 from .services import WhatsAppService
+from .trazas import registrar as _traza
 
 logger = logging.getLogger(__name__)
 
@@ -435,6 +436,11 @@ def process_incoming_message(session, event_data, channel_layer):
             fecha=message_date,
             mensaje_id_externo=message_id
         )
+        _traza(
+            etapa='mensaje_guardado', sesion=session, conversacion=conversation, mensaje=message,
+            numero=from_number, nivel='info',
+            detalle={'tipo': message_type, 'preview': (message_text or '')[:200], 'msg_id_ext': message_id},
+        )
 
         # Actualizar estadísticas
         update_conversation_stats(conversation)
@@ -461,6 +467,11 @@ def process_incoming_message(session, event_data, channel_layer):
                 session.session_id, session.agente_ia.nombre, session.agente_ia.id,
                 _keys_activas, _keys_total,
             )
+            _traza(
+                etapa='ia_desactivada', sesion=session, conversacion=conversation, mensaje=message,
+                numero=from_number, nivel='warning',
+                detalle=f"Agente {session.agente_ia.nombre} tiene {_keys_activas}/{_keys_total} API Keys activas",
+            )
             # Notificar al usuario del CRM si el agente no tiene keys activas (una vez cada 10 min)
             if _keys_activas == 0:
                 try:
@@ -484,6 +495,46 @@ def process_incoming_message(session, event_data, channel_layer):
                 except Exception:
                     pass
 
+        # ────────────────────────────────────────────────────────────
+        # Motor del chatbot TRADICIONAL (flujo/API, estilo n8n).
+        # Se activa SÓLO si la sesión lo pide por su `modo_bot`. No
+        # interfiere con el pipeline IA: si no maneja el mensaje y el
+        # modo es 'hibrido', cae al bloque IA de más abajo.
+        # ────────────────────────────────────────────────────────────
+        _modo_bot = (session.modo_bot or 'ia')
+        if _modo_bot in ('tradicional', 'hibrido'):
+            try:
+                from crm.motor_flujo_chatbot import procesar_mensaje_tradicional
+                _res_motor = procesar_mensaje_tradicional(
+                    session, conversation, contacto, message_text or ''
+                )
+            except Exception as _ex_motor:
+                logger.exception("Motor flujo falló conv=%s: %s", conversation.id, _ex_motor)
+                _res_motor = None
+
+            _traza(
+                etapa='motor_flujo', sesion=session, conversacion=conversation, mensaje=message,
+                numero=from_number, nivel='info',
+                detalle={
+                    'modo_bot': _modo_bot,
+                    'manejado': bool(_res_motor and _res_motor.manejado),
+                    'fallback_ia': bool(_res_motor and _res_motor.fallback_ia),
+                    'handoff': bool(_res_motor and _res_motor.handoff),
+                    'finalizado': bool(_res_motor and _res_motor.finalizado),
+                    'respuestas': len(_res_motor.respuestas) if _res_motor else 0,
+                    'error': getattr(_res_motor, 'error', '') if _res_motor else '',
+                },
+            )
+
+            # El motor manejó la conversación → cortar aquí.
+            if _res_motor and (_res_motor.manejado or _res_motor.handoff or _res_motor.finalizado):
+                return JsonResponse({'status': 'ok', 'modo': 'tradicional'})
+
+            # modo='tradicional' puro: sin match → no delegamos a IA.
+            if _modo_bot == 'tradicional':
+                return JsonResponse({'status': 'ok', 'modo': 'tradicional_sin_match'})
+            # modo='hibrido' sin match → se deja caer al bloque IA de abajo.
+
         departamentos = conversation.sesion.departamentos.all().annotate(
             numero_opcion=Window(
                 expression=RowNumber(),
@@ -493,6 +544,11 @@ def process_incoming_message(session, event_data, channel_layer):
         departamentos_msg = 'Escribe el número del departamento para continuar:\n'
         if _ia_activa and conversation.ai_activo:
             agente = session.agente_ia
+            _traza(
+                etapa='agente_asignado', sesion=session, conversacion=conversation, mensaje=message,
+                numero=from_number, nivel='info',
+                detalle={'agente': agente.nombre, 'agente_id': agente.id, 'keys_activas': agente.apikey.filter(estado=True).count()},
+            )
 
             # ── Detección de reintento ────────────────────────────────────
             texto_normalizado = (message_text or '').strip().lower()
@@ -552,6 +608,8 @@ def process_incoming_message(session, event_data, channel_layer):
                 respuesta_enviada = False
                 resultado = None
                 for apikey in agente.apikey.filter(estado=True):
+                    import time as _time
+                    _t0 = _time.time()
                     try:
                         from agents_ai.agente_consultor import AgenteConsultor
                         _prompt_tpl = (agente.prompt_template or '').strip()
@@ -563,13 +621,39 @@ def process_incoming_message(session, event_data, channel_layer):
                             conversacion=conversation, prompt_template_text=_prompt_tpl,
                             contexto_estatico=agente.contexto_estatico or None,
                             detectar_fin=detectar_fin_llm,
+                            perfil=agente.perfil,
+                        )
+                        _traza(
+                            etapa='llm_invocado', sesion=session, conversacion=conversation, mensaje=message,
+                            numero=from_number, nivel='info',
+                            detalle={'provider': apikey.proveedor, 'apikey_id': apikey.id, 'modelo': getattr(consultor, 'model_name', '')},
                         )
                         if agente.anotar_listas:
                             resultado = consultor.consultar_con_listas(message_text, agente.descripcion)
                         else:
                             resultado = consultor.consultar(message_text, agente.descripcion)
+                        _lat_llm = int((_time.time() - _t0) * 1000)
+                        _traza(
+                            etapa='llm_respondio', sesion=session, conversacion=conversation, mensaje=message,
+                            numero=from_number, nivel='success', latencia_ms=_lat_llm,
+                            detalle={
+                                'preview': (resultado.respuesta or '')[:300],
+                                'tokens_total': getattr(resultado, 'tokens_total', 0),
+                                'apikey_id': apikey.id,
+                            },
+                        )
                         send_result = whatsapp_service.send_text_message(
                             conversation.sesion.session_id, contacto.from_number, resultado.respuesta
+                        )
+                        _send_ok = isinstance(send_result, dict) and send_result.get('success')
+                        _traza(
+                            etapa='mensaje_enviado' if _send_ok else 'envio_fallido',
+                            sesion=session, conversacion=conversation, mensaje=message,
+                            numero=from_number, nivel='success' if _send_ok else 'error',
+                            detalle={
+                                'message_id': send_result.get('message_id') if isinstance(send_result, dict) else None,
+                                'error': send_result.get('error') if isinstance(send_result, dict) else None,
+                            },
                         )
                         respuesta_enviada = True
                         # Crear mensaje IA inmediatamente para que el webhook no lo duplique sin el flag
@@ -606,6 +690,11 @@ def process_incoming_message(session, event_data, channel_layer):
                         break
                     except Exception as ex:
                         logger.error("API Key %s falló para agente %s: %s", apikey.id, agente.nombre, ex)
+                        _traza(
+                            etapa='llm_error', sesion=session, conversacion=conversation, mensaje=message,
+                            numero=from_number, nivel='error', latencia_ms=int((_time.time() - _t0) * 1000),
+                            detalle={'apikey_id': apikey.id, 'provider': apikey.proveedor, 'error': str(ex)[:1500]},
+                        )
                         # Solo desactivar la key si el error es de autenticación/cuota de la API,
                         # no por bugs propios del código (NameError, AttributeError, etc.)
                         _es_error_api = any(
@@ -638,6 +727,11 @@ def process_incoming_message(session, event_data, channel_layer):
                             apikey.save(update_fields=['msgerror'])
                         continue
                 if not respuesta_enviada:
+                    _traza(
+                        etapa='sin_respuesta', sesion=session, conversacion=conversation, mensaje=message,
+                        numero=from_number, nivel='error',
+                        detalle='Ningun API Key del agente logro responder (ver trazas llm_error previas).',
+                    )
                     whatsapp_service.send_text_message(
                         conversation.sesion.session_id, contacto.from_number,
                         'Lo siento, en este momento no puedo procesar tu consulta. Por favor escribe *reintentar* en unos momentos o contacta a un asesor.'
@@ -663,6 +757,11 @@ def process_incoming_message(session, event_data, channel_layer):
 
             except Exception as ex:
                 logger.error("Error inesperado en agente IA para sesión %s: %s", session.session_id, ex, exc_info=True)
+                _traza(
+                    etapa='error_general', sesion=session, conversacion=conversation, mensaje=message,
+                    numero=from_number, nivel='error',
+                    detalle=str(ex)[:2000],
+                )
                 whatsapp_service.send_text_message(
                     conversation.sesion.session_id, contacto.from_number,
                     'Lo siento, ocurrió un error inesperado. Escribe *reintentar* para volver a intentarlo.'

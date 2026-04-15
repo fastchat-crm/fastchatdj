@@ -10,22 +10,30 @@ from .models import SesionWhatsApp, Contacto, ConversacionWhatsApp, MensajeWhats
 class SesionWhatsAppForm(ModelFormBase):
     class Meta:
         model = SesionWhatsApp
-        fields = ('nombre', 'min_sesion', 'language', 'agente_ia', 'departamentos', 'mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff',)
+        fields = ('nombre', 'min_sesion', 'language', 'modo_bot', 'agente_ia',
+                  'departamentos', 'departamento_default',
+                  'mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff',)
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
         super(SesionWhatsAppForm, self).__init__(*args, **kwargs)
         self.fields['departamentos'].queryset = DepartamentoChatBot.objects.filter(status=True).order_by('nombre')
+        self.fields['departamento_default'].queryset = DepartamentoChatBot.objects.filter(status=True).order_by('nombre')
+        self.fields['departamento_default'].required = False
+        self.fields['departamento_default'].empty_label = '— (ninguno) —'
         for k, v in self.fields.items():
             if k in ('mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff',):
                 self.fields[k].widget.attrs['rows'] = '5'
                 self.fields[k].widget.attrs['class'] = "summernote"
             if k in ('min_sesion',):
                 self.fields[k].widget.attrs['col'] = '3'
-            if k in ('departamentos','language', 'agente_ia'):
+            if k in ('departamentos', 'departamento_default', 'language', 'agente_ia'):
                 self.fields[k].widget.attrs['col'] = '12'
                 self.fields[k].widget.attrs['class'] = "jselect2"
                 self.fields[k].required = False
+            if k in ('modo_bot',):
+                self.fields[k].widget.attrs['col'] = '12'
+                self.fields[k].widget.attrs['class'] = "form-control"
             if k in ('nombre',):
                 self.fields[k].widget.attrs['col'] = '9'
             if ver:

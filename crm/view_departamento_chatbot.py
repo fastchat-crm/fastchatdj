@@ -14,7 +14,7 @@ from core.funciones import addData, paginador, salva_auditoria, secure_module, r
 from core.funciones_adicionales import salva_logs, customgetattr
 from .forms import IndustriaForm, ActividadEconomicaForm, DepartamentoChatBotForm, AddPerfilDepartamentoChatBotForm
 from .models import Industria, ActividadEconomica, DepartamentoChatBot, OpcionDepartamentoChatBot, \
-    PerfilDepartamentoChatBot
+    PerfilDepartamentoChatBot, EndpointApiChatbot
 from django.contrib import messages
 
 
@@ -126,6 +126,10 @@ def departamentoChatbotsView(request):
             if action == 'add':
                 try:
                     data["form"] = Formulario()
+                    data["endpoints_json"] = json.dumps(list(
+                        EndpointApiChatbot.objects.filter(status=True).order_by('nombre')
+                        .values('id', 'nombre', 'base_url')
+                    ))
                     template = get_template("crm/departamento_chatbots/form.html")
                     return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:
@@ -138,6 +142,10 @@ def departamentoChatbotsView(request):
                     data["filtro"] = filtro
                     data["form"] = Formulario(instance=filtro)
                     data["opciones_json"] = json.dumps(filtro.obtener_arbol_opciones())
+                    data["endpoints_json"] = json.dumps(list(
+                        EndpointApiChatbot.objects.filter(status=True).order_by('nombre')
+                        .values('id', 'nombre', 'base_url')
+                    ))
                     template = get_template("crm/departamento_chatbots/form.html")
                     return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:
@@ -210,31 +218,86 @@ def departamentoChatbotsView(request):
         return render(request, 'crm/departamento_chatbots/view.html', data)
 
 
+TIPOS_NODO_VALIDOS = {t[0] for t in OpcionDepartamentoChatBot.TIPOS_NODO}
+VALIDACIONES_VALIDAS = {v[0] for v in OpcionDepartamentoChatBot.VALIDACIONES}
+
+
+def _aplicar_campos_nodo(opcion, item, padre):
+    from crm.models import EndpointApiChatbot
+
+    tipo_nodo = item.get('tipo_nodo') or 'respuesta'
+    if tipo_nodo not in TIPOS_NODO_VALIDOS:
+        tipo_nodo = 'respuesta'
+    validacion_tipo = item.get('validacion_tipo') or 'none'
+    if validacion_tipo not in VALIDACIONES_VALIDAS:
+        validacion_tipo = 'none'
+
+    opcion.tipo_nodo = tipo_nodo
+    opcion.es_inicio = bool(item.get('es_inicio')) and padre is None
+
+    # config: si el frontend manda un dict NO vacío, actualiza; si manda vacío,
+    # preserva el existente (para no borrar config editada sólo en Admin).
+    cfg = item.get('config')
+    if isinstance(cfg, dict) and cfg:
+        opcion.config = cfg
+    elif not opcion.config:
+        opcion.config = {}
+
+    opcion.variable_destino = (item.get('variable_destino') or '').strip()[:80]
+    opcion.validacion_tipo = validacion_tipo
+    opcion.validacion_expresion = (item.get('validacion_expresion') or '').strip()[:250]
+    opcion.mensaje_error = (item.get('mensaje_error') or '').strip()
+    try:
+        opcion.reintentos_max = max(0, int(item.get('reintentos_max') or 3))
+    except (TypeError, ValueError):
+        opcion.reintentos_max = 3
+
+    endpoint_id = item.get('endpoint_id')
+    if endpoint_id:
+        try:
+            opcion.endpoint = EndpointApiChatbot.objects.filter(pk=int(endpoint_id), status=True).first()
+        except (TypeError, ValueError):
+            opcion.endpoint = None
+    else:
+        opcion.endpoint = None
+
+
 def sincronizar_opciones(departamento, lista, padre=None):
     nuevos_ids = []
+    ids_al_nivel_raiz = []
 
     for index, item in enumerate(lista, 1):
         opcion_id = item.get('id', None)
+
         if opcion_id and OpcionDepartamentoChatBot.objects.filter(id=opcion_id, departamento=departamento).exists():
             opcion = OpcionDepartamentoChatBot.objects.get(id=opcion_id)
-            opcion.nombre = item.get('nombre', '').strip()
-            opcion.respuesta = item.get('respuesta', '').strip()
-            opcion.orden = index
-            opcion.opcion_padre = padre
-            opcion.save()
         else:
-            opcion = OpcionDepartamentoChatBot.objects.create(
-                departamento=departamento,
-                nombre=item.get('nombre', '').strip(),
-                respuesta=item.get('respuesta', '').strip(),
-                orden=index,
-                opcion_padre=padre
-            )
+            opcion = OpcionDepartamentoChatBot(departamento=departamento)
+
+        opcion.nombre = item.get('nombre', '').strip()
+        opcion.respuesta = item.get('respuesta', '').strip()
+        opcion.orden = index
+        opcion.opcion_padre = padre
+        _aplicar_campos_nodo(opcion, item, padre)
+        opcion.save()
+
         nuevos_ids.append(opcion.id)
+        if padre is None:
+            ids_al_nivel_raiz.append(opcion.id)
 
         hijos = item.get('hijos', [])
         if hijos:
             nuevos_ids += sincronizar_opciones(departamento, hijos, padre=opcion)
+
+    # Asegurar que haya al menos un nodo raíz con es_inicio=True.
+    # Si ninguno lo tiene, se marca el primero (por orden) para que el motor
+    # tenga un punto de entrada claro.
+    if padre is None and ids_al_nivel_raiz:
+        hay_inicio = OpcionDepartamentoChatBot.objects.filter(
+            id__in=ids_al_nivel_raiz, es_inicio=True, status=True
+        ).exists()
+        if not hay_inicio:
+            OpcionDepartamentoChatBot.objects.filter(id=ids_al_nivel_raiz[0]).update(es_inicio=True)
 
     return nuevos_ids
 

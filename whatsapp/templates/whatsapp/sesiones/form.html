@@ -30,7 +30,7 @@
     </li>
     <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-agente" type="button">
-            <i class="fas fa-robot me-1"></i> Agente IA
+            <i class="fas fa-robot me-1"></i> Bot / IA
         </button>
     </li>
     <li class="nav-item">
@@ -70,24 +70,103 @@
         </div>
     </div>
 
-    {# ── TAB 2: AGENTE IA ──────────────────────────────────────────── #}
+    {# ── TAB 2: BOT / IA ───────────────────────────────────────────── #}
     <div class="tab-pane fade" id="tab-agente">
-        <div class="row g-2">
-            <div class="col-12">
-                <p class="section-label">Agente de inteligencia artificial</p>
-                <label class="form-label small mb-1">{{ form.agente_ia.label }}</label>
-                {{ form.agente_ia }}
-                <div class="form-text">El agente responderá automáticamente a los mensajes entrantes.</div>
-                <div class="invalid-feedback" id="errorMessageagente_ia"></div>
+
+        {# ── Paso 1: Cómo responderá esta sesión ─────────────────── #}
+        <p class="section-label">Paso 1 — ¿Cómo responderá esta sesión?</p>
+        <p class="small text-muted mb-2">
+            Elige el modo de respuesta automática. Puedes cambiarlo en cualquier momento.
+        </p>
+
+        <div class="row g-2 mb-3" id="modo-bot-cards">
+            <div class="col-6 col-md-3">
+                <div class="tipo-card card border-2 text-center py-2 px-1" data-modo="ia">
+                    <div class="tc-icon"><i class="fas fa-robot text-primary"></i></div>
+                    <div class="tc-name">Agente IA</div>
+                    <div class="tc-desc">Responde la IA con tu base de conocimiento</div>
+                </div>
             </div>
-            <div class="col-12 mt-2">
-                <p class="section-label">Departamentos del chatbot</p>
-                <label class="form-label small mb-1">{{ form.departamentos.label }}</label>
-                {{ form.departamentos }}
-                <div class="form-text">Si configuras departamentos, el usuario podrá seleccionar uno antes de ser atendido.</div>
-                <div class="invalid-feedback" id="errorMessagedepartamentos"></div>
+            <div class="col-6 col-md-3">
+                <div class="tipo-card card border-2 text-center py-2 px-1" data-modo="tradicional">
+                    <div class="tc-icon"><i class="fas fa-project-diagram text-success"></i></div>
+                    <div class="tc-name">Chatbot tradicional</div>
+                    <div class="tc-desc">Menú/flujo con APIs y pasos fijos</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="tipo-card card border-2 text-center py-2 px-1" data-modo="hibrido">
+                    <div class="tc-icon"><i class="fas fa-layer-group text-warning"></i></div>
+                    <div class="tc-name">Híbrido</div>
+                    <div class="tc-desc">Flujo primero, IA si no matchea</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="tipo-card card border-2 text-center py-2 px-1" data-modo="ninguno">
+                    <div class="tc-icon"><i class="fas fa-user-friends text-secondary"></i></div>
+                    <div class="tc-name">Solo humanos</div>
+                    <div class="tc-desc">Sin automatización — agentes reales</div>
+                </div>
             </div>
         </div>
+
+        {# Campo real oculto — los clicks en las cards lo actualizan #}
+        <div style="display:none">
+            <label>{{ form.modo_bot.label }}</label>
+            {{ form.modo_bot }}
+        </div>
+
+        {# Explicación dinámica del modo elegido #}
+        <div class="alert alert-info py-2 small mb-3" id="modo-bot-help">
+            <!-- se llena desde JS -->
+        </div>
+
+        {# ── Paso 2: Configuración del agente IA (visible si ia/hibrido) ── #}
+        <div id="bloque-ia" class="mb-3">
+            <p class="section-label">Paso 2 — Agente de Inteligencia Artificial</p>
+            <p class="small text-muted mb-2">
+                Es el agente IA configurado en <em>CRM → Entrenamiento</em>. Necesita al menos
+                una API Key activa para poder responder.
+            </p>
+            <label class="form-label small mb-1">{{ form.agente_ia.label }}</label>
+            {{ form.agente_ia }}
+            <div class="form-text">
+                Ejemplo: <em>"Agente Soporte Académico v2"</em> — lee tu FAQ y documentación entrenada.
+            </div>
+            <div class="invalid-feedback" id="errorMessageagente_ia"></div>
+        </div>
+
+        {# ── Paso 3: Configuración del chatbot tradicional (tradicional/hibrido) ── #}
+        <div id="bloque-tradicional">
+            <p class="section-label">Paso 3 — Chatbot tradicional (flujo/APIs)</p>
+            <p class="small text-muted mb-2">
+                El chatbot tradicional usa <strong>departamentos</strong> con un flujo de menús, preguntas,
+                llamadas a APIs y condicionales. Cada departamento tiene su propio grafo de nodos.
+                Configúralos en <em>CRM → Departamentos &amp; Chatbots</em>.
+            </p>
+
+            <div class="row g-2">
+                <div class="col-12">
+                    <label class="form-label small mb-1">Departamentos disponibles en esta sesión</label>
+                    {{ form.departamentos }}
+                    <div class="form-text">
+                        Ejemplo: <em>"Matrículas"</em>, <em>"Soporte Técnico"</em>, <em>"Información General"</em>.
+                        El bot puede enrutar al depto correcto según palabras clave o elección del usuario.
+                    </div>
+                    <div class="invalid-feedback" id="errorMessagedepartamentos"></div>
+                </div>
+                <div class="col-12 mt-2">
+                    <label class="form-label small mb-1">Departamento por defecto (de entrada)</label>
+                    {{ form.departamento_default }}
+                    <div class="form-text">
+                        Si el mensaje del cliente no matchea ninguna palabra clave, el bot lo lleva
+                        directo a este depto. Ejemplo: <em>"Información General"</em>.
+                    </div>
+                    <div class="invalid-feedback" id="errorMessagedepartamento_default"></div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     {# ── TAB 3: MENSAJES ───────────────────────────────────────────── #}
@@ -325,6 +404,52 @@
     ['id_mensaje_bienvenida', 'id_mensaje_despedida'].forEach(editorEmojiPicker);
     $(function () {
         $('.jselect2').select2({ width: '100%', placeholder: 'Seleccione opciones', allowClear: true });
+    });
+
+    /* ── Selector visual de modo_bot ────────────────────────────── */
+    const MODO_INFO = {
+        ia: {
+            html: '<strong>Agente IA:</strong> toda la conversación la maneja el agente IA con tu base de conocimiento. ' +
+                  'Requiere que el agente tenga API Keys activas. No ejecuta flujos tradicionales.',
+            showIA: true, showTrad: false
+        },
+        tradicional: {
+            html: '<strong>Chatbot tradicional:</strong> responde SIEMPRE con el flujo de departamentos ' +
+                  '(menús, preguntas, APIs). No se invoca la IA. Úsalo para procesos estrictos como ' +
+                  'consultas de matrícula, pagos o menús fijos.',
+            showIA: false, showTrad: true
+        },
+        hibrido: {
+            html: '<strong>Híbrido:</strong> primero intenta responder con el flujo tradicional. ' +
+                  'Si el mensaje no matchea ningún departamento ni keyword, delega al agente IA. ' +
+                  'Útil para FAQ estructurada + conversación libre de respaldo.',
+            showIA: true, showTrad: true
+        },
+        ninguno: {
+            html: '<strong>Solo humanos:</strong> ninguna respuesta automática. Todos los mensajes ' +
+                  'esperan a que un agente humano los atienda desde el panel.',
+            showIA: false, showTrad: false
+        }
+    };
+
+    function renderModoBot(modo) {
+        modo = modo || 'ia';
+        $('#modo-bot-cards .tipo-card').removeClass('selected');
+        $(`#modo-bot-cards .tipo-card[data-modo="${modo}"]`).addClass('selected');
+        const cfg = MODO_INFO[modo] || MODO_INFO.ia;
+        $('#modo-bot-help').html(cfg.html);
+        $('#bloque-ia').toggle(cfg.showIA);
+        $('#bloque-tradicional').toggle(cfg.showTrad);
+        $('#id_modo_bot').val(modo);
+    }
+
+    $(function () {
+        const modoInicial = $('#id_modo_bot').val() || 'ia';
+        renderModoBot(modoInicial);
+    });
+
+    $(document).on('click', '#modo-bot-cards .tipo-card', function () {
+        renderModoBot($(this).data('modo'));
     });
 
     /* ── Helpers AJAX ── */

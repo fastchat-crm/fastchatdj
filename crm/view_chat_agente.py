@@ -3,6 +3,7 @@ import mimetypes
 import os
 import sys
 import tempfile
+import time
 from types import SimpleNamespace
 
 from django.contrib.auth.decorators import login_required
@@ -91,6 +92,14 @@ def chat_agente_view(request, agente_enc_id):
             # SimpleNamespace provee el .id que AgenteConsultor usa para memoria
             fake_conv = SimpleNamespace(id=session_id, contacto=None)
 
+            _t0 = time.time()
+            traza_etapas = [{
+                'etapa': 'inicio',
+                'label': 'Pregunta recibida',
+                'ok': True,
+                'detalle': f'"{pregunta[:120]}"' + ('...' if len(pregunta) > 120 else ''),
+                'ts_ms': 0,
+            }]
             try:
                 consultor = AgenteConsultor(
                     vectorstore_path=vs_path,
@@ -101,17 +110,57 @@ def chat_agente_view(request, agente_enc_id):
                     prompt_template_text=(agente.prompt_template or '').strip() or PROMPT_TEMPLATES.get('es', ''),
                     contexto_estatico=agente.contexto_estatico or None,
                     detectar_fin=detectar_fin_llm,
+                    perfil=agente.perfil,
                 )
+                traza_etapas.append({
+                    'etapa': 'consultor_listo',
+                    'label': 'Consultor configurado',
+                    'ok': True,
+                    'detalle': f'Proveedor: {"Gemini" if apikey_obj.proveedor == 2 else "OpenAI"} | Modelo: {consultor.model_name}',
+                    'ts_ms': int((time.time() - _t0) * 1000),
+                })
+                _t_llm = time.time()
                 if agente.anotar_listas:
                     resultado = consultor.consultar_con_listas(pregunta, agente.descripcion)
                 else:
                     resultado = consultor.consultar(pregunta, agente.descripcion)
+                _lat_llm = int((time.time() - _t_llm) * 1000)
+                traza_etapas.append({
+                    'etapa': 'llm_respondio',
+                    'label': 'LLM respondió',
+                    'ok': True,
+                    'detalle': f'Latencia: {_lat_llm} ms · Tokens: {resultado.tokens_total} (in={resultado.tokens_entrada}, out={resultado.tokens_salida})',
+                    'ts_ms': int((time.time() - _t0) * 1000),
+                })
             except Exception as ex:
                 line = sys.exc_info()[-1].tb_lineno
+                traza_etapas.append({
+                    'etapa': 'error',
+                    'label': 'Error en pipeline',
+                    'ok': False,
+                    'detalle': f'Linea {line}: {str(ex)[:400]}',
+                    'ts_ms': int((time.time() - _t0) * 1000),
+                })
                 return JsonResponse({
                     'error': True,
-                    'message': f'Error al consultar el agente (línea {line}): {ex}'
+                    'message': f'Error al consultar el agente (línea {line}): {ex}',
+                    'traza': {'etapas': traza_etapas},
                 })
+
+            # Detectar problemas de calidad en la respuesta
+            from agents_ai.auditor_agente import _detectar_respuestas_problema
+            flags = _detectar_respuestas_problema(resultado.respuesta or '')
+            problemas = []
+            if flags.get('rechazo'):  problemas.append({'tipo': 'rechazo', 'label': 'Respuesta de rechazo ("no tengo esa info")'})
+            if flags.get('muy_larga'): problemas.append({'tipo': 'muy_larga', 'label': f'Muy larga ({len(resultado.respuesta or "")} chars)'})
+            if flags.get('wiki'):     problemas.append({'tipo': 'wiki', 'label': 'Estilo Wikipedia detectado'})
+            if flags.get('vacia'):    problemas.append({'tipo': 'vacia', 'label': 'Respuesta vacía'})
+            if resultado.sin_datos:   problemas.append({'tipo': 'sin_datos', 'label': 'Sin datos del vectorstore (fallback a conocimiento general)'})
+
+            # Score rapido: 100 - (20 por cada problema)
+            score = max(0, 100 - len(problemas) * 20)
+            if problemas and all(p['tipo'] in ('sin_datos',) for p in problemas):
+                score = min(score + 10, 100)  # sin_datos solo no es tan grave
 
             fin_detectado = fin_por_frase or resultado.fin_detectado
 
@@ -150,6 +199,22 @@ def chat_agente_view(request, agente_enc_id):
                 'respuesta': resultado.respuesta,
                 'fin_detectado': fin_detectado,
                 'sin_datos': resultado.sin_datos,
+                'traza': {
+                    'latencia_total_ms': int((time.time() - _t0) * 1000),
+                    'latencia_llm_ms': _lat_llm,
+                    'tokens_in': resultado.tokens_entrada,
+                    'tokens_out': resultado.tokens_salida,
+                    'tokens_total': resultado.tokens_total,
+                    'modelo': consultor.model_name,
+                    'proveedor': 'Gemini' if apikey_obj.proveedor == 2 else 'OpenAI',
+                    'caracteres_respuesta': len(resultado.respuesta or ''),
+                    'score_calidad': score,
+                    'problemas': problemas,
+                    'usa_rag': bool(agente.vectorstore_path),
+                    'usa_contexto_estatico': bool(agente.contexto_estatico),
+                    'fin_detectado': fin_detectado,
+                    'etapas': traza_etapas,
+                },
             })
 
         # ── Enviar imagen o audio al agente ───────────────────────────────
@@ -304,6 +369,7 @@ def _procesar_audio(tmp_path, filename, texto_adicional, apikey_obj, provider, a
         conversacion=fake_conv,
         prompt_template_text=agente.prompt_template,
         contexto_estatico=agente.contexto_estatico or None,
+        perfil=agente.perfil,
     )
     resultado = consultor.consultar(pregunta, agente.descripcion)
 

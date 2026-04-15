@@ -1,0 +1,434 @@
+/* ========== sesionws.css — estilos de /whatsapp/sesiones/ ========== */
+
+:root {
+    --ws-green: #25D366;
+    --ws-green-dark: #128C7E;
+    --ws-bg: #f7f8fa;
+    --ws-muted: #6c757d;
+    --ws-border: #e9ecef;
+}
+
+/* ========== STATS BAR ========== */
+.stats-row {
+    margin-bottom: 1.25rem;
+}
+
+.stat-tile {
+    background: #fff;
+    border: 1px solid var(--ws-border);
+    border-radius: 14px;
+    padding: 1rem 1.15rem;
+    transition: box-shadow .15s ease, transform .15s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.stat-tile:hover {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+    transform: translateY(-1px);
+}
+
+.stat-tile.active {
+    border-color: var(--ws-green);
+    box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.12);
+}
+
+.stat-tile .stat-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.stat-tile .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: #212529;
+}
+
+.stat-tile .stat-label {
+    font-size: 0.78rem;
+    color: var(--ws-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.stat-icon.icon-total   { background: #e7f1ff; color: #0d6efd; }
+.stat-icon.icon-conn    { background: #d1f5dd; color: #15803d; }
+.stat-icon.icon-pend    { background: #fff4d6; color: #b45309; }
+.stat-icon.icon-off     { background: #f1f3f5; color: #495057; }
+.stat-icon.icon-err     { background: #ffe1e1; color: #b91c1c; }
+
+/* ========== FILTER BAR ========== */
+.filter-card {
+    background: #fff;
+    border: 1px solid var(--ws-border);
+    border-radius: 14px;
+    padding: 1rem 1.15rem;
+    margin-bottom: 1.25rem;
+}
+
+.filter-card .form-control,
+.filter-card .form-select {
+    border-radius: 9px;
+}
+
+.estado-chip {
+    border: 1px solid var(--ws-border);
+    background: #fff;
+    padding: 0.35rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    color: #495057;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.estado-chip:hover {
+    background: #f8f9fa;
+    color: #212529;
+}
+
+.estado-chip.active {
+    background: #212529;
+    color: #fff;
+    border-color: #212529;
+}
+
+.estado-chip .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.dot-conectado    { background: #22c55e; }
+.dot-pendiente    { background: #f59e0b; }
+.dot-desconectado { background: #6c757d; }
+.dot-error        { background: #ef4444; }
+
+/* ========== SESSION CARDS ========== */
+/*
+ * IMPORTANTE: overflow VISIBLE para que el dropdown de acciones no se corte.
+ * La franja de color se implementa con ::before con su propio border-radius.
+ */
+.session-card {
+    background: #fff;
+    border: 1px solid var(--ws-border);
+    border-radius: 14px;
+    overflow: visible;            /* <-- permite que el dropdown salga del card */
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.session-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+}
+
+/* Franja de color lateral izquierda via pseudo-elemento */
+.session-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    border-top-left-radius: 14px;
+    border-bottom-left-radius: 14px;
+    background: #dee2e6;
+    z-index: 0;
+}
+
+.session-card.stripe-conectado::before    { background: linear-gradient(to bottom, #22c55e, #15803d); }
+.session-card.stripe-pendiente::before    { background: linear-gradient(to bottom, #fbbf24, #b45309); }
+.session-card.stripe-desconectado::before { background: linear-gradient(to bottom, #adb5bd, #6c757d); }
+.session-card.stripe-error::before        { background: linear-gradient(to bottom, #f87171, #b91c1c); }
+
+.session-card .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 1rem 1.1rem 0.5rem 1.3rem;
+    gap: 0.5rem;
+    position: relative;
+    z-index: 1;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.25rem 0.65rem;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.pill-conectado    { background: #d1f5dd; color: #15803d; }
+.pill-pendiente    { background: #fff4d6; color: #b45309; }
+.pill-desconectado { background: #f1f3f5; color: #495057; }
+.pill-error        { background: #ffe1e1; color: #b91c1c; }
+
+.status-pill .dot-live {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #22c55e;
+    position: relative;
+}
+
+.status-pill.pill-conectado .dot-live::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    background: #22c55e;
+    opacity: 0.5;
+    animation: live-pulse 1.6s infinite;
+}
+
+@keyframes live-pulse {
+    0%   { transform: scale(0.8); opacity: 0.6; }
+    70%  { transform: scale(1.8); opacity: 0;   }
+    100% { transform: scale(1.8); opacity: 0;   }
+}
+
+.session-card .session-id {
+    color: var(--ws-muted);
+    font-size: 0.72rem;
+    font-weight: 500;
+}
+
+.session-card .card-body-sess {
+    padding: 0.75rem 1.1rem 1rem 1.3rem;
+    flex: 1 1 auto;
+    position: relative;
+    z-index: 1;
+}
+
+.sess-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--ws-border);
+    flex-shrink: 0;
+}
+
+.sess-avatar-placeholder {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #f1f3f5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #adb5bd;
+    flex-shrink: 0;
+}
+
+.sess-name {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #212529;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sess-number {
+    font-size: 0.85rem;
+    color: #495057;
+    margin-top: 2px;
+}
+
+.sess-observacion {
+    font-size: 0.75rem;
+    color: var(--ws-muted);
+    margin-top: 3px;
+    display: block;
+}
+
+.sess-meta {
+    font-size: 0.78rem;
+    color: var(--ws-muted);
+    margin-top: 0.85rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+}
+
+.sess-meta .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.sess-meta .meta-item i {
+    width: 14px;
+    color: #adb5bd;
+}
+
+.sess-dept-chips {
+    margin-top: 0.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.sess-dept-chips .chip {
+    background: #f1f3f5;
+    color: #495057;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+.sess-error {
+    margin-top: 0.7rem;
+    background: #fff5f5;
+    border-left: 3px solid #ef4444;
+    color: #991b1b;
+    padding: 0.45rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    line-height: 1.35;
+}
+
+.session-card .card-footer-sess {
+    padding: 0.7rem 1.1rem 0.9rem 1.3rem;
+    border-top: 1px solid var(--ws-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    background: #fafbfc;
+    border-bottom-left-radius: 14px;
+    border-bottom-right-radius: 14px;
+    position: relative;
+    z-index: 1;
+}
+
+.card-footer-sess .btn {
+    font-size: 0.82rem;
+}
+
+/*
+ * Garantiza que el dropdown se muestre SOBRE el resto del card y no sea recortado
+ * por cards vecinas con z-index posterior.
+ */
+.card-footer-sess .dropdown {
+    position: static;
+}
+
+.card-footer-sess .dropdown-menu {
+    z-index: 1080;
+}
+
+.session-card:has(.dropdown-menu.show) {
+    z-index: 10;
+}
+
+/* ========== EMPTY STATE ========== */
+.empty-state {
+    background: #fff;
+    border: 2px dashed var(--ws-border);
+    border-radius: 16px;
+    padding: 3.5rem 1.5rem;
+    text-align: center;
+}
+
+.empty-state .empty-icon {
+    width: 88px;
+    height: 88px;
+    margin: 0 auto 1.25rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #e7f1ff, #d1f5dd);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ws-green-dark);
+    font-size: 2.3rem;
+}
+
+.empty-state h4 {
+    color: #212529;
+    margin-bottom: 0.4rem;
+}
+
+.empty-state p {
+    color: var(--ws-muted);
+    margin-bottom: 1.25rem;
+}
+
+/* ========== PAGE HEADER ========== */
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.page-header h4 {
+    margin: 0;
+    font-weight: 600;
+}
+
+.page-header .result-count {
+    font-size: 0.85rem;
+    color: var(--ws-muted);
+}
+
+/* ========== QR MODAL ========== */
+._akau ._akaz {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 2;
+    width: 64px;
+    height: 64px;
+    margin-top: -32px;
+    margin-left: -32px;
+    -webkit-user-select: none;
+}
+
+.qr-container img {
+    border-radius: 8px;
+    margin-left: -21px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* ========== TEST SEND MODAL ========== */
+.test-log-line {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8rem;
+    background: #0f172a;
+    color: #a7f3d0;
+    padding: 0.75rem;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}

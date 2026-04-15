@@ -1,3 +1,4 @@
+{% load static %}
 <style>
     .guide-callout {
         background: #f0f4ff;
@@ -64,6 +65,14 @@
             {% endif %}
         </button>
     </li>
+    {% if filtro %}
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-auditor" type="button">
+            <i class="fas fa-wand-magic-sparkles me-1"></i> Asistente IA
+            <span class="badge ms-1" style="font-size:.6rem; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff;">NEW</span>
+        </button>
+    </li>
+    {% endif %}
 </ul>
 
 <div class="tab-content">
@@ -408,6 +417,44 @@
 
         {% endif %}
     </div>
+
+    {# ── TAB 5: ASISTENTE IA ──────────────────────────────────────── #}
+    {% if filtro %}
+    <div class="tab-pane fade" id="at-auditor">
+        <link rel="stylesheet" href="{% static 'stylenew/auditor.css' %}">
+
+        <div class="aud-hero">
+            <h5><i class="fas fa-wand-magic-sparkles me-2"></i>Asistente IA de configuración</h5>
+            <p>
+                Análisis automático de la salud operativa de este agente y sugerencias para mejorar
+                su prompt, FAQ y cobertura de preguntas — impulsado por el mismo LLM del agente.
+            </p>
+        </div>
+
+        <div class="aud-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-aud-generar" data-agente-id="{{ filtro.id }}">
+                <i class="fas fa-play me-1"></i>Generar análisis ahora
+            </button>
+            <select class="form-select form-select-sm" id="aud-dias" style="max-width:170px;">
+                <option value="7">Últimos 7 días</option>
+                <option value="15">Últimos 15 días</option>
+                <option value="30" selected>Últimos 30 días</option>
+                <option value="60">Últimos 60 días</option>
+            </select>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-aud-historial" data-agente-id="{{ filtro.id }}">
+                <i class="fas fa-clock-rotate-left me-1"></i>Historial
+            </button>
+        </div>
+
+        <div id="aud-body">
+            <div class="aud-empty">
+                <i class="fas fa-sparkles"></i>
+                <h6>Sin análisis aún</h6>
+                <p class="small">Haz clic en <strong>Generar análisis</strong>. Tomaré las últimas conversaciones, detectaré problemas y te propondré mejoras al prompt y FAQ.</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
 </div>{# /tab-content #}
 
@@ -792,3 +839,189 @@
         });
     })();
 </script>
+
+{# ===== ASISTENTE IA (AUDITOR) ===== #}
+{% if filtro %}
+<script>
+(function() {
+    'use strict';
+    const csrf = $('[name=csrfmiddlewaretoken]').val();
+    const ruta = '{{ request.path }}';
+
+    function escapeHtml(s) {
+        return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function renderMetricas(m) {
+        const cls = (pct, umbralWarn, umbralBad) => pct >= umbralBad ? 'bad' : pct >= umbralWarn ? 'warn' : 'good';
+        return `
+            <div class="aud-metrics">
+                <div class="aud-metric"><div class="label">Mensajes IA</div><div class="value">${m.total_mensajes_ia || 0}</div></div>
+                <div class="aud-metric ${cls(m.pct_rechazos, 5, 15)}"><div class="label">% Rechazos</div><div class="value">${m.pct_rechazos || 0}%</div></div>
+                <div class="aud-metric ${cls(m.pct_largas, 10, 25)}"><div class="label">% Muy largas</div><div class="value">${m.pct_largas || 0}%</div></div>
+                <div class="aud-metric ${cls(m.pct_wiki, 5, 15)}"><div class="label">% Estilo Wiki</div><div class="value">${m.pct_wiki || 0}%</div></div>
+                <div class="aud-metric ${m.trazas_error > 0 ? 'bad':'good'}"><div class="label">Errores pipeline</div><div class="value">${m.trazas_error || 0}</div></div>
+                <div class="aud-metric"><div class="label">Docs entren.</div><div class="value">${m.docs_entrenamiento || 0}</div></div>
+                <div class="aud-metric ${m.api_keys_activas === 0 ? 'bad':'good'}"><div class="label">API Keys</div><div class="value">${m.api_keys_activas || 0}</div></div>
+            </div>
+        `;
+    }
+
+    function renderSugerencias(auditoriaId, s, m) {
+        const cambios = (s.cambios_clave || []).map(c => `<div class="aud-cambio">${escapeHtml(c)}</div>`).join('');
+        const faq = (s.faq_sugerido || []).map(f => `
+            <div class="aud-faq-item">
+                <div class="q"><i class="fas fa-question-circle me-1"></i>${escapeHtml(f.pregunta || '')}</div>
+                <div class="a">${escapeHtml(f.respuesta || '')}</div>
+            </div>
+        `).join('');
+        const gaps = (s.gaps_de_entrenamiento || []).map(g => `<span class="aud-chip">${escapeHtml(g)}</span>`).join('');
+        const topRech = (m.top_preguntas_rechazadas || []).map(r => `<li>[${r.veces}x] ${escapeHtml(r.pregunta)}</li>`).join('');
+
+        return `
+            ${renderMetricas(m)}
+            ${topRech ? `<div class="aud-list-card"><h6><i class="fas fa-ban me-1 text-danger"></i>Top preguntas rechazadas</h6><ul class="small mb-0" style="padding-left:1.1rem">${topRech}</ul></div>` : ''}
+            <div class="aud-razonamiento"><strong><i class="fas fa-brain me-1"></i>Análisis:</strong>\n${escapeHtml(s.razonamiento || '')}</div>
+            ${cambios ? `<div class="aud-list-card"><h6><i class="fas fa-list-check me-1 text-primary"></i>Cambios clave propuestos</h6>${cambios}</div>` : ''}
+
+            <h6 class="mt-3"><i class="fas fa-terminal me-1 text-primary"></i>Prompt Template</h6>
+            <div class="aud-diff">
+                <div class="aud-diff-col current">
+                    <header>Actual</header>
+                    <pre>${escapeHtml(s._snapshot_prompt || '')}</pre>
+                </div>
+                <div class="aud-diff-col proposed">
+                    <header>Sugerido</header>
+                    <pre>${escapeHtml(s.prompt_template_nuevo || '(sin sugerencia)')}</pre>
+                </div>
+            </div>
+            <div class="mb-3 d-flex gap-2">
+                <button type="button" class="btn btn-success btn-sm aud-apply" data-aud="${auditoriaId}" data-campo="prompt_template"
+                        ${s.prompt_template_nuevo ? '' : 'disabled'}>
+                    <i class="fas fa-check me-1"></i>Aplicar prompt sugerido
+                </button>
+            </div>
+
+            <h6 class="mt-3"><i class="fas fa-book me-1 text-primary"></i>Contexto Estático (FAQ)</h6>
+            <div class="aud-diff">
+                <div class="aud-diff-col current">
+                    <header>Actual</header>
+                    <pre>${escapeHtml(s._snapshot_contexto || '(vacío)')}</pre>
+                </div>
+                <div class="aud-diff-col proposed">
+                    <header>Sugerido</header>
+                    <pre>${escapeHtml(s.contexto_estatico_nuevo || '(sin sugerencia)')}</pre>
+                </div>
+            </div>
+            <div class="mb-3 d-flex gap-2">
+                <button type="button" class="btn btn-success btn-sm aud-apply" data-aud="${auditoriaId}" data-campo="contexto_estatico"
+                        ${s.contexto_estatico_nuevo ? '' : 'disabled'}>
+                    <i class="fas fa-check me-1"></i>Aplicar contexto sugerido
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm aud-revert" data-aud="${auditoriaId}">
+                    <i class="fas fa-rotate-left me-1"></i>Revertir cambios
+                </button>
+            </div>
+
+            ${faq ? `<div class="aud-list-card"><h6><i class="fas fa-comments me-1 text-primary"></i>FAQ detallado sugerido</h6>${faq}</div>` : ''}
+            ${gaps ? `<div class="aud-list-card"><h6><i class="fas fa-graduation-cap me-1 text-primary"></i>Gaps de entrenamiento detectados</h6>${gaps}</div>` : ''}
+        `;
+    }
+
+    $(document).off('click', '#btn-aud-generar').on('click', '#btn-aud-generar', function() {
+        const agenteId = $(this).data('agente-id');
+        const dias = $('#aud-dias').val();
+        $('#aud-body').html('<div class="aud-loading"><div class="spinner-border" role="status"></div><p class="mt-3">Analizando con IA... esto puede tomar 10-30 segundos</p></div>');
+        $.post(ruta, {
+            action: 'auditoria_generar', agente_id: agenteId, dias: dias, csrfmiddlewaretoken: csrf
+        }).done(function(r) {
+            if (r.error) {
+                $('#aud-body').html('<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-1"></i>'+escapeHtml(r.message)+'</div>');
+                return;
+            }
+            r.sugerencias._snapshot_prompt = '{{ filtro.prompt_template|escapejs }}';
+            r.sugerencias._snapshot_contexto = '{{ filtro.contexto_estatico|default:""|escapejs }}';
+            $('#aud-body').html(
+                '<div class="alert alert-success py-2 mb-2"><i class="fas fa-check-circle me-1"></i>' +
+                'Auditoría #' + r.auditoria_id + ' generada · Modelo: <strong>' + escapeHtml(r.modelo) +
+                '</strong> · Tokens: <strong>' + (r.tokens || 0) + '</strong></div>' +
+                renderSugerencias(r.auditoria_id, r.sugerencias, r.metricas)
+            );
+        }).fail(function() {
+            $('#aud-body').html('<div class="alert alert-danger">Error de comunicación con el servidor.</div>');
+        });
+    });
+
+    $(document).off('click', '.aud-apply').on('click', '.aud-apply', function() {
+        const $btn = $(this);
+        const aud = $btn.data('aud');
+        const campo = $btn.data('campo');
+        if (!confirm('¿Aplicar la sugerencia de '+campo+'? Se guardará como cambio en el agente (puedes revertir).')) return;
+        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Aplicando...');
+        $.post(ruta, {
+            action: 'auditoria_aplicar', auditoria_id: aud, campo: campo, csrfmiddlewaretoken: csrf
+        }).done(function(r) {
+            if (r.error) {
+                alertaDanger(r.message || 'Error al aplicar');
+                $btn.prop('disabled', false).html('<i class="fas fa-check me-1"></i>Aplicar');
+            } else {
+                alertaSuccess('Sugerencia aplicada. Recargará en 2 segundos.');
+                setTimeout(() => location.reload(), 2000);
+            }
+        }).fail(function() {
+            alertaDanger('Error de comunicación');
+            $btn.prop('disabled', false);
+        });
+    });
+
+    $(document).off('click', '.aud-revert').on('click', '.aud-revert', function() {
+        const aud = $(this).data('aud');
+        if (!confirm('¿Revertir los cambios a la versión anterior al análisis?')) return;
+        $.post(ruta, {
+            action: 'auditoria_revertir', auditoria_id: aud, csrfmiddlewaretoken: csrf
+        }).done(function(r) {
+            if (r.error) { alertaDanger(r.message || 'Error'); return; }
+            alertaSuccess('Revertido a la versión previa');
+            setTimeout(() => location.reload(), 2000);
+        });
+    });
+
+    $(document).off('click', '#btn-aud-historial').on('click', '#btn-aud-historial', function() {
+        const agenteId = $(this).data('agente-id');
+        $.get(ruta, { action: 'auditoria_historial', id: agenteId }, function(r) {
+            if (!r.result) { alertaDanger(r.message || 'Error'); return; }
+            if (!r.historial.length) {
+                $('#aud-body').html('<div class="aud-empty"><i class="fas fa-clock-rotate-left"></i><h6>Sin auditorías previas</h6></div>');
+                return;
+            }
+            const rows = r.historial.map(h => `
+                <div class="aud-history-row aud-row-item" data-id="${h.id}">
+                    <div>
+                        <div><strong>#${h.id}</strong> · ${h.fecha} · ${escapeHtml(h.modelo)}</div>
+                        <small class="text-muted">${escapeHtml(h.resumen)}...</small>
+                    </div>
+                    <span class="estado-pill estado-${h.estado_raw}">${h.estado}</span>
+                </div>
+            `).join('');
+            $('#aud-body').html('<h6 class="mb-2"><i class="fas fa-clock-rotate-left me-1"></i>Historial de auditorías</h6>'+rows);
+        }, 'json');
+    });
+
+    $(document).off('click', '.aud-row-item').on('click', '.aud-row-item', function() {
+        const id = $(this).data('id');
+        $('#aud-body').html('<div class="aud-loading"><div class="spinner-border"></div></div>');
+        $.get(ruta, { action: 'auditoria_detalle', id: id }, function(r) {
+            if (!r.result) { $('#aud-body').html('<div class="alert alert-danger">'+escapeHtml(r.message)+'</div>'); return; }
+            const s = r.sugerencias || {};
+            s._snapshot_prompt = r.snapshot_prompt;
+            s._snapshot_contexto = r.snapshot_contexto;
+            s.razonamiento = r.razonamiento;
+            $('#aud-body').html(
+                '<div class="alert alert-info py-2"><i class="fas fa-info-circle me-1"></i>Auditoría #'+r.auditoria_id+' · '+r.fecha+' · <span class="estado-pill estado-'+r.estado+' ms-1">'+escapeHtml(r.estado_display)+'</span></div>' +
+                renderSugerencias(r.auditoria_id, s, r.metricas || {})
+            );
+        }, 'json');
+    });
+})();
+</script>
+{% endif %}

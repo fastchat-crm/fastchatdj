@@ -6,6 +6,7 @@ from .view_industria import industriaView
 from .view_mientrenamiento import entrenamiento_ia_view
 from .view_departamento_chatbot import departamentoChatbotsView
 from .view_perfilempresa import perfil_empresa
+from .view_prueba_chatbot import probar_chatbot_view
 
 crm_urls = (
     {
@@ -43,4 +44,10 @@ for u in crm_urls:
 # Chat de prueba para un agente IA (ID encriptado en la URL)
 urlpatterns.append(
     path('entrenamiento/chat/<str:agente_enc_id>/', chat_agente_view, name='chat_agente')
+)
+
+# Chat de prueba (dry-run) del flujo tradicional de una sesión WhatsApp
+urlpatterns.append(
+    path('departamentos_chatbots/prueba/<str:sesion_enc_id>/',
+         probar_chatbot_view, name='probar_chatbot')
 )

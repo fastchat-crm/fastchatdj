@@ -25,6 +25,13 @@ ESTADOS_SESION = (
     ('error', 'Error'),
 )
 
+MODOS_BOT = (
+    ('ninguno',     'Sin bot (sólo humanos)'),
+    ('tradicional', 'Chatbot tradicional (flujo/menús/APIs)'),
+    ('ia',          'Agente IA'),
+    ('hibrido',     'Híbrido: flujo tradicional, cae a IA si no matchea'),
+)
+
 
 class SesionWhatsApp(ModeloBase):
     nombre = models.CharField(max_length=150, blank=True, null=True, verbose_name='Nombre')
@@ -48,6 +55,17 @@ class SesionWhatsApp(ModeloBase):
                                        help_text='Se envía al cliente cuando la IA transfiere a un agente humano')
     min_sesion = models.IntegerField(default=0, verbose_name='Minutos de sesión')
     departamentos = models.ManyToManyField('crm.DepartamentoChatBot', verbose_name='Departamentos', blank=True)
+    modo_bot = models.CharField(
+        max_length=15, choices=MODOS_BOT, default='ia',
+        verbose_name='Modo del bot',
+        help_text='Define si la sesión responde con flujo tradicional, agente IA, híbrido o sólo humanos.'
+    )
+    departamento_default = models.ForeignKey(
+        'crm.DepartamentoChatBot', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='sesiones_default',
+        verbose_name='Departamento de entrada (tradicional)',
+        help_text='Flujo que se ejecuta cuando llega un mensaje y no hay match por palabras clave.'
+    )
     #IDIOMA
     language = models.CharField('Idioma', max_length=50, choices=LANGUAGES, default='es')
     agente_ia = models.ForeignKey('crm.AgentesIA', on_delete=models.PROTECT, null=True, blank=True)
@@ -557,4 +575,100 @@ class MensajeWhatsAppProgramado(ModeloBase):
     class Meta:
         verbose_name = 'Mensaje WhatsApp Programado'
         verbose_name_plural = 'Mensajes WhatsApp Programados'
+
+
+ETAPAS_TRAZA = (
+    # Eventos del lado Django (pipeline IA)
+    ('webhook_recibido',    'Webhook recibido'),
+    ('mensaje_guardado',    'Mensaje guardado en BD'),
+    ('ia_desactivada',      'IA desactivada (sin agente o sin API Keys)'),
+    ('agente_asignado',     'Agente IA asignado'),
+    ('llm_invocado',        'LLM invocado'),
+    ('llm_respondio',       'LLM devolvio respuesta'),
+    ('llm_error',           'Error invocando LLM'),
+    ('mensaje_enviado',     'Respuesta enviada a WhatsApp'),
+    ('envio_fallido',       'Envio a WhatsApp fallo'),
+    ('sin_respuesta',       'Ningun API Key logro responder'),
+    ('error_general',       'Error inesperado en el pipeline'),
+    ('fin_conversacion',    'Fin de conversacion detectado'),
+    # Eventos del lado Node.js (servicio WhatsApp)
+    ('node_mensaje_entrante',  '[Node] Mensaje entrante de WhatsApp'),
+    ('node_webhook_disparado', '[Node] Webhook disparado a Django'),
+    ('node_envio_intento',     '[Node] Intento de envio a baileys'),
+    ('node_envio_exito',       '[Node] Baileys confirmo el envio'),
+    ('node_envio_error',       '[Node] Error en baileys al enviar'),
+    ('node_ack_recibido',      '[Node] ACK de WhatsApp recibido'),
+    ('node_socket_caido',      '[Node] Socket de sesion caido'),
+    ('node_reconectando',      '[Node] Reconectando sesion'),
+    ('node_rate_limited',      '[Node] Rate limit alcanzado'),
+)
+
+NIVELES_TRAZA = (
+    ('info',    'Info'),
+    ('warning', 'Advertencia'),
+    ('error',   'Error'),
+    ('success', 'Exito'),
+)
+
+
+class TrazaMensajeIA(models.Model):
+    """Registro cronologico de cada paso del pipeline de respuesta IA, para diagnosticar
+    por que un mensaje no genero respuesta del bot."""
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='trazas', verbose_name='Sesion'
+    )
+    conversacion = models.ForeignKey(
+        'whatsapp.ConversacionWhatsApp', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='trazas', verbose_name='Conversacion'
+    )
+    mensaje = models.ForeignKey(
+        'whatsapp.MensajeWhatsApp', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='trazas', verbose_name='Mensaje'
+    )
+    numero = models.CharField(max_length=80, blank=True, null=True, db_index=True, verbose_name='Numero')
+    etapa = models.CharField(max_length=30, choices=ETAPAS_TRAZA, db_index=True)
+    nivel = models.CharField(max_length=10, choices=NIVELES_TRAZA, default='info', db_index=True)
+    detalle = models.TextField(blank=True, null=True, verbose_name='Detalle / payload / error')
+    latencia_ms = models.PositiveIntegerField(blank=True, null=True, verbose_name='Latencia (ms)')
+    fecha = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = 'Traza de mensaje IA'
+        verbose_name_plural = 'Trazas de mensajes IA'
+        ordering = ['-fecha', '-id']
+        indexes = [
+            models.Index(fields=['numero', '-fecha']),
+            models.Index(fields=['sesion', '-fecha']),
+            models.Index(fields=['conversacion', '-fecha']),
+        ]
+
+    def __str__(self):
+        return f"[{self.fecha:%Y-%m-%d %H:%M:%S}] {self.get_etapa_display()} ({self.nivel})"
+
+    @property
+    def icono(self):
+        return {
+            'webhook_recibido':  'fa-inbox',
+            'mensaje_guardado':  'fa-database',
+            'ia_desactivada':    'fa-robot',
+            'agente_asignado':   'fa-user-gear',
+            'llm_invocado':      'fa-microchip',
+            'llm_respondio':     'fa-comment-dots',
+            'llm_error':         'fa-triangle-exclamation',
+            'mensaje_enviado':   'fa-paper-plane',
+            'envio_fallido':     'fa-xmark',
+            'sin_respuesta':     'fa-ban',
+            'error_general':     'fa-bug',
+            'fin_conversacion':  'fa-flag-checkered',
+        }.get(self.etapa, 'fa-circle-info')
+
+    @property
+    def color(self):
+        return {
+            'info':    'primary',
+            'success': 'success',
+            'warning': 'warning',
+            'error':   'danger',
+        }.get(self.nivel, 'secondary')
         ordering = ['fecha', 'hora']
