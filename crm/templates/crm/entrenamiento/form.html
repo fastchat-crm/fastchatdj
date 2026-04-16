@@ -135,6 +135,23 @@
             color:#475569; font-size:.72rem;
             white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
         }
+        .apikey-modelo {
+            flex-grow:1;
+            display:inline-flex; align-items:center; gap:4px;
+            padding:3px 9px; border-radius:4px;
+            font-size:.74rem; font-weight:600;
+        }
+        .apikey-modelo.ok {
+            background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0;
+        }
+        .apikey-modelo.ok code {
+            background:rgba(21,128,61,.12); color:#15803d;
+            padding:1px 5px; border-radius:3px; font-size:.72rem;
+        }
+        .apikey-modelo.missing {
+            background:#fef3c7; color:#92400e; border:1px solid #fde68a;
+        }
+        .apikey-modelo.missing small { font-weight:500; opacity:.75; }
 
         .apikey-error {
             background:#fef2f2; border:1px solid #fecaca;
@@ -515,13 +532,25 @@
                                         </div>
                                         <div class="apikey-title-group">
                                             <h6 class="mb-0">{{ l.alias|default:l.get_proveedor_display }}</h6>
-                                            <small class="apikey-provider">{{ l.get_proveedor_display }}{% if l.modelo %} · <code>{{ l.modelo }}</code>{% else %} · <span class="text-muted">(default)</span>{% endif %}</small>
+                                            <small class="apikey-provider">{{ l.get_proveedor_display }}</small>
                                         </div>
                                         <span class="apikey-estado badge {% if l.estado %}bg-success{% else %}bg-danger{% endif %}" id="badge-estado-{{ l.pk }}">
                                             {{ l.estado|yesno:'Activa,Inactiva' }}
                                         </span>
                                     </div>
                                     <div class="apikey-card-body">
+                                        <div class="apikey-info-row">
+                                            <span class="apikey-label"><i class="fas fa-microchip"></i> Modelo</span>
+                                            {% if l.modelo %}
+                                                <span class="apikey-modelo ok" title="Modelo asignado">
+                                                    <i class="fas fa-check-circle me-1"></i><code>{{ l.modelo }}</code>
+                                                </span>
+                                            {% else %}
+                                                <span class="apikey-modelo missing" title="No hay modelo asignado — usará el default del proveedor">
+                                                    <i class="fas fa-exclamation-triangle me-1"></i>Sin asignar <small class="ms-1">(usa default del provider)</small>
+                                                </span>
+                                            {% endif %}
+                                        </div>
                                         <div class="apikey-info-row">
                                             <span class="apikey-label"><i class="fas fa-key"></i> Key</span>
                                             <code class="apikey-value" title="{{ l.descripcion }}">{{ l.descripcion|slice:":16" }}…{{ l.descripcion|slice:"-4:" }}</code>
