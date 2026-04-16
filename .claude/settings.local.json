@@ -26,7 +26,8 @@
       "Bash(awk '{print $NF}')",
       "Bash(xargs ls *)",
       "Bash(git show *)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "WebFetch(domain:www.zolutium-es.com)"
     ]
   }
 }

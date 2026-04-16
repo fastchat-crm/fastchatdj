@@ -110,7 +110,9 @@ AgenteConsultor.responder() → FAISS similarity search → LangChain prompt →
 WhatsAppService.send_message() → WHATSAPP_API_URL (Node.js)
 ```
 
-**Webhook event types handled:** `qr_code`, `ready`, `authenticated`, `auth_failure`, `disconnected`, `message`, `message_sent`, `message_reaction`, `message_revoked`, `message_ack`, `contact_changed`, `group_join`, `group_leave`.
+**Webhook event types handled:** `qr_code`, `ready`, `authenticated`, `auth_failure`, `disconnected`, `rate_limited`, `message`, `message_sent`, `message_reaction`, `message_revoked`, `message_ack`, `contact_changed`, `group_join`, `group_leave`.
+
+**Rate-limit handling:** When the Node.js service hits its per-session send cap, it emits a `rate_limited` event with `{count, max, windowMs, retryAfterMs, windowStart}`. Django stores a cache flag `wa_rate_limited_<session_id>` (TTL = `retryAfterMs`) and notifies superusers (throttled). While the flag is active, `process_incoming_message` short-circuits before bienvenida/IA/avisos to avoid amplifying saturation, and replies once per conversation per window with a soft "estamos saturados" message. The pause is logged as `node_rate_limited` traza.
 
 ### REST API Endpoint
 

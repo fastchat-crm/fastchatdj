@@ -14,6 +14,7 @@ import base64
 import os
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.core.cache import cache
 from django.conf import settings
 from crm.acciones_fin import ejecutar_acciones_fin
 from crm.models import ReglaFinConversacion, ConsumoTokenIA
@@ -223,6 +224,55 @@ def webhook_handler(request):
             )
 
             logger.info(f"Sesión {session_id} desconectada")
+
+        elif event_type == 'rate_limited':
+            try:
+                retry_after_ms = int(event_data.get('retryAfterMs') or 60000)
+            except (TypeError, ValueError):
+                retry_after_ms = 60000
+            retry_after_s = max(5, min(int(retry_after_ms / 1000), 600))
+
+            cache.set(
+                f'wa_rate_limited_{session.id}',
+                {
+                    'retry_after_s': retry_after_s,
+                    'count': event_data.get('count'),
+                    'max': event_data.get('max'),
+                    'window_ms': event_data.get('windowMs'),
+                    'window_start': event_data.get('windowStart'),
+                },
+                timeout=retry_after_s,
+            )
+
+            _traza(
+                etapa='node_rate_limited', sesion=session, nivel='warning',
+                detalle={
+                    'count': event_data.get('count'),
+                    'max': event_data.get('max'),
+                    'window_ms': event_data.get('windowMs'),
+                    'retry_after_ms': retry_after_ms,
+                    'window_start': event_data.get('windowStart'),
+                },
+            )
+
+            notificar_superusers_error(
+                titulo=f'WhatsApp rate-limit alcanzado — sesión "{session.nombre or session.session_id}"',
+                cuerpo=(
+                    f'La sesión <strong>{session.nombre or session.session_id}</strong> alcanzó el límite '
+                    f'de {event_data.get("max", "?")} envíos por ventana '
+                    f'({int((event_data.get("windowMs") or 60000) / 1000)}s). '
+                    f'La IA pausará envíos durante {retry_after_s}s para no saturar más.'
+                ),
+                url=f'/whatsapp/trazas/?sesion={session.id}',
+                cache_key=f'notif_rate_limited_{session.id}',
+                cooldown_segundos=600,
+            )
+
+            save_log_entry(f'HS: SESION {session_id} RATE_LIMITED', request, event_type, obj=session)
+            logger.warning(
+                "Sesión %s rate-limited: count=%s/%s, retry en %ss",
+                session_id, event_data.get('count'), event_data.get('max'), retry_after_s,
+            )
 
         elif event_type == 'message':
             if session.estado != 'conectado':
@@ -446,6 +496,33 @@ def process_incoming_message(session, event_data, channel_layer):
 
         # Actualizar estadísticas
         update_conversation_stats(conversation)
+
+        # ── Cortar envío si Node ya nos avisó que está rate-limited ──
+        # Evita amplificar la saturación enviando bienvenida/IA/avisos durante la ventana.
+        _rate_info = cache.get(f'wa_rate_limited_{session.id}')
+        if _rate_info:
+            _retry_s = int(_rate_info.get('retry_after_s', 60) or 60)
+            _traza(
+                etapa='node_rate_limited', sesion=session, conversacion=conversation, mensaje=message,
+                numero=from_number, nivel='warning',
+                detalle={
+                    'retry_after_s': _retry_s,
+                    'count': _rate_info.get('count'),
+                    'max': _rate_info.get('max'),
+                    'motivo': 'mensaje entrante saltado durante ventana rate-limit',
+                },
+            )
+            _aviso_key = f'aviso_rate_limit_conv_{conversation.id}'
+            if not cache.get(_aviso_key):
+                cache.set(_aviso_key, 1, timeout=_retry_s)
+                try:
+                    WhatsAppService().send_text_message(
+                        conversation.sesion.session_id, contacto.from_number,
+                        '⏳ Estamos recibiendo muchos mensajes. Te responderemos en unos momentos.',
+                    )
+                except Exception:
+                    logger.exception("No se pudo enviar aviso rate-limit a %s", from_number)
+            return JsonResponse({'status': 'ok', 'rate_limited': True, 'retry_after_s': _retry_s})
 
         whatsapp_service = WhatsAppService()
         primer_mensaje = not conversation.bienvenida_enviado
