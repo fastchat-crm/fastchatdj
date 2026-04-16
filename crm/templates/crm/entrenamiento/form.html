@@ -653,9 +653,12 @@
                         </div>
                         {# Tab 4: FAQs activas #}
                         <div class="tab-pane fade" id="ctxTabFaqs">
-                            <div class="mb-2 d-flex justify-content-between align-items-start">
-                                <small class="text-muted">FAQs aprobadas que el agente usa para responder. Las top <span id="ctxFaqTopN">—</span> (por prioridad) se inyectan <strong>literalmente</strong> en el prompt.</small>
+                            <div class="mb-2 d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                                <small class="text-muted flex-grow-1">FAQs aprobadas que el agente usa para responder. Las top <span id="ctxFaqTopN">—</span> (por prioridad) se inyectan <strong>literalmente</strong> en el prompt.</small>
                                 <span id="ctxFaqPendBadge" class="badge bg-warning text-dark" style="display:none"></span>
+                                <button type="button" class="btn btn-sm btn-primary" id="ctxBtnAprenderAhora" title="Procesa conversaciones cerradas con sentimiento positivo y genera FAQs pendientes">
+                                    <i class="fas fa-graduation-cap me-1"></i>Aprender de conversaciones ahora
+                                </button>
                             </div>
                             <div id="ctxContenidoFaqs">Cargando…</div>
                         </div>
@@ -679,7 +682,7 @@
     <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
-                <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form" novalidate>
                     {% csrf_token %}
                     <div class="modal-header">
                         <h5 class="modal-title" id="modalNombre"></h5>
@@ -768,7 +771,11 @@
     }
 
     /* ── Ver contexto — 3 tabs ── */
+    // Guardamos el id del agente abierto para el botón "Aprender ahora"
+    window._ctxAgenteId = null;
+
     function verContexto(id, nombre) {
+        window._ctxAgenteId = id;
         // Reset
         document.getElementById('ctxTitulo').textContent = nombre;
         document.getElementById('ctxModeBadge').textContent = '';
@@ -928,6 +935,44 @@
     }
 
     /* ── Procesar agente ── */
+    /* ── Aprender de conversaciones ahora (botón en tab FAQs del modal "Ver contexto") ── */
+    $(document).on('click', '#ctxBtnAprenderAhora', function() {
+        const id = window._ctxAgenteId;
+        if (!id) { alertaWarning('No se identificó el agente.'); return; }
+        if (!confirm('¿Procesar ahora las conversaciones cerradas del agente para generar FAQs pendientes?\n\nSolo procesa conversaciones con sentimiento positivo o neutral que no hayan sido analizadas antes. Puede tardar unos segundos.')) return;
+        const $btn = $(this);
+        const orig = $btn.html();
+        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Procesando…');
+        $.post('{{ request.path }}', {
+            action: 'faq_aprender_ahora',
+            agente_id: id,
+            csrfmiddlewaretoken: '{{ csrf_token }}',
+        }, function(r) {
+            const x = Array.isArray(r) ? r[0] : r;
+            if (x && x.error) {
+                alertaWarning(x.message || 'Error ejecutando el aprendizaje.');
+                $btn.prop('disabled', false).html(orig);
+                return;
+            }
+            const msg = 'Procesadas: ' + (x.procesadas || 0) +
+                        '  ·  FAQs pendientes creadas: ' + (x.faqs_creadas || 0) +
+                        (x.total_candidatas === 0 ? ' (sin conversaciones nuevas)' : '');
+            alertaSuccess(msg);
+            $btn.prop('disabled', false).html(orig);
+            // Recargar el modal entero para mostrar los nuevos contadores/FAQs
+            const titulo = document.getElementById('ctxTitulo').textContent;
+            verContexto(id, titulo);
+            // Activar el tab FAQs para mostrar el resultado
+            setTimeout(() => {
+                const faqsTab = document.querySelector('#ctxTabs button[data-bs-target="#ctxTabFaqs"]');
+                if (faqsTab) new bootstrap.Tab(faqsTab).show();
+            }, 400);
+        }, 'json').fail(function() {
+            alertaWarning('Error de conexión.');
+            $btn.prop('disabled', false).html(orig);
+        });
+    });
+
     function procesarAgente(id, nombre, btn) {
         Swal.fire({
             title: 'Procesar "' + nombre + '"',

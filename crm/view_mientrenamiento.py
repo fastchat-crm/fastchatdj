@@ -544,6 +544,18 @@ def entrenamiento_ia_view(request):
                             request, "change", obj=agente.id)
                         return JsonResponse({'error': False, 'count': count})
 
+                    elif action == 'faq_aprender_ahora':
+                        # Ejecuta aprender_conversaciones.py manualmente para este agente
+                        from cron_jobs.aprender_conversaciones import procesar_conversaciones
+                        agente = AgentesIA.objects.get(pk=int(request.POST['agente_id']), perfil=perfil)
+                        try:
+                            resultado = procesar_conversaciones(agente=agente, limite=500)
+                            log(f"Ejecutó aprendizaje manual — agente {agente.nombre}: {resultado}",
+                                request, "add", obj=agente.id)
+                            return JsonResponse({'error': False, **resultado})
+                        except Exception as ex:
+                            return JsonResponse({'error': True, 'message': str(ex)})
+
                     elif action == 'faq_prioridad':
                         from crm.models import FaqAgente as _FA
                         filtro = _FA.objects.get(pk=int(request.POST['id']), agente__perfil=perfil)

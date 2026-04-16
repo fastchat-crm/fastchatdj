@@ -5,28 +5,27 @@ Extrae pares pregunta→respuesta de conversaciones finalizadas exitosas
 (sentimiento positivo o neutral, sin feedback negativo) y los registra como
 FaqAgente en estado 'pendiente' para revisión humana.
 
-El cliente puede aprobar/desactivar cada entrada desde el tab de
-Preguntas Frecuentes del agente. Las aprobadas se inyectan en el prompt
-(top-N por prioridad) y opcionalmente al FAISS.
-
-Ejecutar: python cron_jobs/aprender_conversaciones.py
-Frecuencia sugerida: una vez al día (ej. 02:00 AM)
-
-Solo procesa conversaciones que:
-  - Ya están finalizadas (conversacion_finalizada=True o estado_conversacion=1)
-  - Tienen sentimiento positivo, muy_positiva o neutral
-  - No han sido procesadas aún (aprendizaje_procesado=False)
-  - La sesión tiene un agente_ia configurado
+Se puede ejecutar:
+  - Desde el cron: `python cron_jobs/aprender_conversaciones.py` (procesa todos los agentes)
+  - Desde el código: `procesar_conversaciones(agente=mi_agente)` (un solo agente)
+  - Desde la UI: botón "Aprender ahora" en el modal Ver contexto (view_mientrenamiento)
 """
 import os
 import sys
 
-from django.core.wsgi import get_wsgi_application
+try:
+    import django
+    from django.conf import settings as _settings
+    _configured = bool(getattr(_settings, 'configured', False))
+except Exception:
+    _configured = False
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'fastchatdj.settings')
-
-application = get_wsgi_application()
+if not _configured:
+    # Ejecución como script: bootstrapear Django
+    from django.core.wsgi import get_wsgi_application
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'fastchatdj.settings')
+    application = get_wsgi_application()
 
 from django.db.models import Q
 
@@ -86,32 +85,51 @@ def _extraer_pares(conversacion) -> list[tuple[str, str, int]]:
     return pares[:MAX_PARES_POR_CONV]
 
 
-def run():
+def procesar_conversaciones(agente=None, limite: int = 200, log_fn=None) -> dict:
+    """
+    Procesa conversaciones elegibles y crea FaqAgente pendientes.
+
+    Args:
+        agente: si se pasa, procesa solo conversaciones de ese agente. None = todos.
+        limite: máximo de conversaciones a procesar por corrida.
+        log_fn: función opcional para loguear progreso. Default: logCron.
+
+    Returns:
+        {'procesadas': int, 'faqs_creadas': int, 'total_candidatas': int}
+    """
     from crm.models import FaqAgente
 
-    logCron(PROCESO, 'Iniciando extracción de aprendizaje desde conversaciones')
+    def _log(msg, exito=True):
+        if log_fn:
+            log_fn(msg, exito)
+        else:
+            logCron(PROCESO, msg, exito=exito)
 
-    conversaciones = ConversacionWhatsApp.objects.filter(
+    qs = ConversacionWhatsApp.objects.filter(
         Q(conversacion_finalizada=True) | Q(estado_conversacion=1),
         sentimiento__in=SENTIMIENTOS_OK,
         aprendizaje_procesado=False,
         contacto__sesion__agente_ia__isnull=False,
         contacto__sesion__status=True,
-    ).select_related('contacto__sesion__agente_ia').order_by('-fecha_fin_conversacion')[:200]
+    )
+    if agente is not None:
+        qs = qs.filter(contacto__sesion__agente_ia=agente)
 
-    total = conversaciones.count()
+    qs = qs.select_related('contacto__sesion__agente_ia').order_by('-fecha_fin_conversacion')[:limite]
+    total = qs.count()
+
     if total == 0:
-        logCron(PROCESO, 'Sin conversaciones nuevas para procesar', exito=True)
-        return
+        _log('Sin conversaciones nuevas para procesar')
+        return {'procesadas': 0, 'faqs_creadas': 0, 'total_candidatas': 0}
 
-    logCron(PROCESO, f'{total} conversación(es) a procesar')
+    _log(f'{total} conversación(es) a procesar')
 
     procesadas = 0
     faqs_creadas = 0
 
-    for conv in conversaciones:
-        agente = conv.contacto.sesion.agente_ia
-        if not agente:
+    for conv in qs:
+        ag = conv.contacto.sesion.agente_ia
+        if not ag:
             conv.aprendizaje_procesado = True
             conv.save(update_fields=['aprendizaje_procesado'])
             continue
@@ -119,9 +137,8 @@ def run():
         try:
             pares = _extraer_pares(conv)
             for pregunta, respuesta, msg_id in pares:
-                # Evitar duplicados exactos por pregunta dentro del mismo agente
                 existe = FaqAgente.objects.filter(
-                    agente=agente, pregunta__iexact=pregunta.strip(),
+                    agente=ag, pregunta__iexact=pregunta.strip(),
                 ).exists()
                 if existe:
                     continue
@@ -130,7 +147,7 @@ def run():
                 except MensajeWhatsApp.DoesNotExist:
                     msg_obj = None
                 FaqAgente.objects.create(
-                    agente=agente,
+                    agente=ag,
                     pregunta=pregunta.strip()[:2000],
                     respuesta=respuesta.strip()[:4000],
                     origen='conversacion',
@@ -145,20 +162,19 @@ def run():
             procesadas += 1
 
             if pares:
-                logCron(
-                    PROCESO,
-                    f'Conv #{conv.id}: {len(pares)} FAQ(s) pendiente(s) para "{agente.nombre}"',
-                    exito=True,
-                )
+                _log(f'Conv #{conv.id}: {len(pares)} FAQ(s) pendiente(s) para "{ag.nombre}"')
 
         except Exception as ex:
-            logCron(PROCESO, f'Error procesando conv #{conv.id}: {ex}', exito=False)
+            _log(f'Error procesando conv #{conv.id}: {ex}', exito=False)
 
-    logCron(
-        PROCESO,
-        f'Finalizado — conversaciones: {procesadas}/{total}, FAQs pendientes creadas: {faqs_creadas}',
-        exito=True,
-    )
+    _log(f'Finalizado — conversaciones: {procesadas}/{total}, FAQs pendientes creadas: {faqs_creadas}')
+    return {'procesadas': procesadas, 'faqs_creadas': faqs_creadas, 'total_candidatas': total}
+
+
+def run():
+    """Entry point del cron — procesa todos los agentes."""
+    logCron(PROCESO, 'Iniciando extracción de aprendizaje desde conversaciones')
+    procesar_conversaciones(agente=None)
 
 
 if __name__ == '__main__':

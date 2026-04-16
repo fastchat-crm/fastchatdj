@@ -92,11 +92,11 @@
                     <button class="btn btn-xs btn-light border w-100 mb-1 text-start" type="button"
                             data-bs-toggle="collapse" data-bs-target="#filtros-panel">
                         <i class="fa fa-filter me-1 text-secondary"></i> Filtrar
-                        {% if fecha_desde or fecha_hasta or filtro_sentimiento %}
+                        {% if fecha_desde or fecha_hasta or filtro_sentimiento or filtro_clasificacion %}
                             <span class="badge bg-primary ms-1">●</span>
                         {% endif %}
                     </button>
-                    <div class="collapse {% if fecha_desde or fecha_hasta or filtro_sentimiento %}show{% endif %}" id="filtros-panel">
+                    <div class="collapse {% if fecha_desde or fecha_hasta or filtro_sentimiento or filtro_clasificacion %}show{% endif %}" id="filtros-panel">
                         <div class="border rounded p-2 mb-2 bg-light">
                             <div class="mb-1">
                                 <label class="text-muted mb-0" style="font-size:.72rem;">Desde</label>
@@ -115,6 +115,15 @@
                                     <option value="positivo" {% if filtro_sentimiento == 'positivo' %}selected{% endif %}>😊 Positivo</option>
                                     <option value="neutral"  {% if filtro_sentimiento == 'neutral'  %}selected{% endif %}>😐 Neutral</option>
                                     <option value="negativo" {% if filtro_sentimiento == 'negativo' %}selected{% endif %}>😟 Negativo</option>
+                                </select>
+                            </div>
+                            <div class="mb-1">
+                                <label class="text-muted mb-0" style="font-size:.72rem;">Etapa / Clasificación</label>
+                                <select id="filtro-clasificacion" class="form-select form-select-sm">
+                                    <option value="">Todas</option>
+                                    {% for val, label in ESTADOS_CLASIFICACION %}
+                                        <option value="{{ val }}" {% if filtro_clasificacion == val %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
                                 </select>
                             </div>
                             <div class="d-flex gap-1">
@@ -299,15 +308,17 @@ $(document).ready(function() {
         fecha_desde: '{{ fecha_desde|escapejs }}',
         fecha_hasta: '{{ fecha_hasta|escapejs }}',
         sentimiento: '{{ filtro_sentimiento|escapejs }}',
+        clasificacion: '{{ filtro_clasificacion|default_if_none:""|escapejs }}',
     };
 
     function _buildUrl(extra) {
         let url = '/whatsapp/conversaciones-finalizadas/?load_conversations=true';
-        if (_filtros.sesion_id)   url += '&sesion_id='    + _filtros.sesion_id;
-        if (_filtros.criterio)    url += '&criterio='     + encodeURIComponent(_filtros.criterio);
-        if (_filtros.fecha_desde) url += '&fecha_desde='  + _filtros.fecha_desde;
-        if (_filtros.fecha_hasta) url += '&fecha_hasta='  + _filtros.fecha_hasta;
-        if (_filtros.sentimiento) url += '&sentimiento='  + _filtros.sentimiento;
+        if (_filtros.sesion_id)     url += '&sesion_id='     + _filtros.sesion_id;
+        if (_filtros.criterio)      url += '&criterio='      + encodeURIComponent(_filtros.criterio);
+        if (_filtros.fecha_desde)   url += '&fecha_desde='   + _filtros.fecha_desde;
+        if (_filtros.fecha_hasta)   url += '&fecha_hasta='   + _filtros.fecha_hasta;
+        if (_filtros.sentimiento)   url += '&sentimiento='   + _filtros.sentimiento;
+        if (_filtros.clasificacion) url += '&clasificacion=' + _filtros.clasificacion;
         return url;
     }
 
@@ -495,16 +506,17 @@ $(document).ready(function() {
 
     // ── Filtros de fecha/sentimiento ───────────────────────────────────
     $('#btn-aplicar-filtros').on('click', function() {
-        _filtros.fecha_desde  = $('#filtro-fecha-desde').val();
-        _filtros.fecha_hasta  = $('#filtro-fecha-hasta').val();
-        _filtros.sentimiento  = $('#filtro-sentimiento').val();
+        _filtros.fecha_desde   = $('#filtro-fecha-desde').val();
+        _filtros.fecha_hasta   = $('#filtro-fecha-hasta').val();
+        _filtros.sentimiento   = $('#filtro-sentimiento').val();
+        _filtros.clasificacion = $('#filtro-clasificacion').val();
         cargarConversaciones();
     });
 
     $('#btn-limpiar-filtros').on('click', function() {
-        _filtros.fecha_desde = _filtros.fecha_hasta = _filtros.sentimiento = _filtros.criterio = '';
+        _filtros.fecha_desde = _filtros.fecha_hasta = _filtros.sentimiento = _filtros.criterio = _filtros.clasificacion = '';
         $('#filtro-fecha-desde, #filtro-fecha-hasta').val('');
-        $('#filtro-sentimiento').val('');
+        $('#filtro-sentimiento, #filtro-clasificacion').val('');
         $('#search-conversacion').val('');
         cargarConversaciones();
     });

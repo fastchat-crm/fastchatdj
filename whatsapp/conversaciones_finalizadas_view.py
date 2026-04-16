@@ -211,6 +211,7 @@ def conversacionesFinalizadasView(request):
     fecha_desde = request.GET.get('fecha_desde', '').strip()
     fecha_hasta = request.GET.get('fecha_hasta', '').strip()
     filtro_sentimiento = request.GET.get('sentimiento', '').strip()
+    filtro_clasificacion = request.GET.get('clasificacion', '').strip()
 
     filtros = Q(contacto__status=True, status=True,
                 contacto__sesion__usuario__id=request.user.id,
@@ -237,6 +238,12 @@ def conversacionesFinalizadasView(request):
         filtros &= Q(sentimiento=filtro_sentimiento)
         url_vars += '&sentimiento=' + filtro_sentimiento
 
+    if filtro_clasificacion:
+        filtros &= Q(clasificacion=filtro_clasificacion)
+        url_vars += '&clasificacion=' + filtro_clasificacion
+
+    from .models import ESTADOS_CLASIFICACION
+    data['ESTADOS_CLASIFICACION'] = ESTADOS_CLASIFICACION
     data['conversacion_selected'] = conversacion_selected
     data['url_vars'] = url_vars
     data['today'] = timezone.now().date()
@@ -244,6 +251,7 @@ def conversacionesFinalizadasView(request):
     data['fecha_desde'] = fecha_desde
     data['fecha_hasta'] = fecha_hasta
     data['filtro_sentimiento'] = filtro_sentimiento
+    data['filtro_clasificacion'] = int(filtro_clasificacion) if filtro_clasificacion else ''
 
     # Si es una solicitud AJAX para cargar conversaciones
     if request.GET.get('load_conversations'):
