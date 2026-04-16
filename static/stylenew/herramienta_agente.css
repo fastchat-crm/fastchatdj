@@ -1,3 +1,35 @@
+/* ─── Quickstart: plantillas pre-cargadas + IA-assist ─────────────────── */
+
+.h-quickstart {
+    background: linear-gradient(135deg, rgba(102,126,234,.05) 0%, rgba(118,75,162,.05) 100%);
+    border: 1px solid #e7e7ff;
+    border-radius: 8px;
+    padding: .6rem .8rem;
+}
+.h-quickstart-row {
+    display: flex; align-items: center; flex-wrap: wrap;
+    gap: .35rem;
+}
+.h-quickstart-label { font-size: .78rem; color: #495057; margin-right: .3rem; }
+.h-quickstart-hint {
+    font-size: .7rem; color: #868e96; margin-top: .35rem;
+}
+.btn-h-tpl { font-size: .74rem; }
+.btn-h-tpl i { margin-right: 4px; }
+
+.btn-gradient-ia {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+    color: #fff; border: 0; font-size: .74rem;
+}
+.btn-gradient-ia:hover { color: #fff; opacity: .92; }
+.btn-gradient-ia:disabled { opacity: .6; }
+
+.h-ia-panel {
+    margin-top: .6rem;
+    padding: .6rem .7rem;
+    background: #fff; border: 1px solid #e7e7ff; border-radius: 6px;
+}
+
 /* ─── Tab Herramientas del agente IA ───────────────────────────────────── */
 
 .h-empty {

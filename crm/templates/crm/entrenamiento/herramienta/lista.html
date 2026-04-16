@@ -1,8 +1,56 @@
 {% load static %}
+
+{# ── Atajos de creación: plantillas + asistente IA ─────────────── #}
+<div class="h-quickstart mb-3">
+    <div class="h-quickstart-row">
+        <span class="h-quickstart-label">
+            <i class="fas fa-bolt text-warning me-1"></i>
+            <strong>Inicio rápido:</strong>
+        </span>
+        <button type="button" class="btn btn-sm btn-outline-secondary btn-h-tpl" data-key="seguros_poliza">
+            <i class="fas fa-shield-alt" style="color:#1c7ed6"></i> Seguros — Póliza
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary btn-h-tpl" data-key="restaurante_reserva">
+            <i class="fas fa-utensils" style="color:#fa5252"></i> Restaurante — Reserva
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary btn-h-tpl" data-key="universidad_notas">
+            <i class="fas fa-graduation-cap" style="color:#7048e8"></i> Universidad — Notas
+        </button>
+        <span class="mx-1 text-muted">·</span>
+        <button type="button" class="btn btn-sm btn-gradient-ia" id="btn-h-ia">
+            <i class="fas fa-wand-magic-sparkles me-1"></i> Generar con IA
+        </button>
+    </div>
+    <div class="h-quickstart-hint">
+        Elige una plantilla del sector para llenar el formulario, o describe lo que necesitas y la IA lo arma por ti.
+    </div>
+
+    {# Panel IA-assist, oculto por defecto #}
+    <div class="h-ia-panel" id="h-ia-panel" style="display:none">
+        <label class="form-label small fw-semibold mb-1">
+            <i class="fas fa-wand-magic-sparkles me-1"></i>
+            Describe en una frase qué debe hacer la herramienta
+        </label>
+        <textarea id="h-ia-frase" class="form-control form-control-sm" rows="2"
+                  placeholder="Ej: necesito consultar el saldo pendiente de un cliente usando su número de cédula"></textarea>
+        <div class="d-flex gap-1 mt-2">
+            <button type="button" class="btn btn-sm btn-gradient-ia" id="h-ia-submit" data-agente-id="{{ agente.id }}">
+                <i class="fas fa-magic me-1"></i> Generar configuración
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="h-ia-cancel">
+                Cancelar
+            </button>
+        </div>
+        <div class="h-ia-hint small mt-1 text-muted">
+            La IA usa la API Key del agente. El resultado lo podrás revisar y ajustar antes de guardar.
+        </div>
+    </div>
+</div>
+
 <div class="d-flex align-items-center justify-content-between mb-2">
     <p class="section-header mb-0">Herramientas configuradas</p>
     <button type="button" class="btn btn-primary btn-sm" id="btn-h-nueva" data-agente-id="{{ agente.id }}">
-        <i class="fa fa-plus me-1"></i> Nueva herramienta
+        <i class="fa fa-plus me-1"></i> Nueva herramienta en blanco
     </button>
 </div>
 

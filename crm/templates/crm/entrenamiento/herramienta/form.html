@@ -370,6 +370,23 @@
         });
     });
 
+    // ── Re-init público (usado por prefill de plantillas / IA-assist) ─
+    window.hWizardReinit = function() {
+        try {
+            const initP = JSON.parse(document.getElementById('h-parametros-init').textContent);
+            params = Array.isArray(initP) ? initP : [];
+        } catch(e) { params = []; }
+        try {
+            const initH = JSON.parse(document.getElementById('h-headers-init').textContent);
+            headers = (initH && typeof initH === 'object')
+                ? Object.entries(initH).map(([k,v]) => ({clave: k, valor: v}))
+                : [];
+        } catch(e) { headers = []; }
+        renderParams();
+        renderHeaders();
+        renderUrlPreview();
+    };
+
     // ── Inicializar ──────────────────────────────────────────────────
     renderParams();
     renderHeaders();

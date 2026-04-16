@@ -485,17 +485,95 @@
             }, 'json');
         }
 
-        function abrirForm(herramientaId) {
+        function abrirForm(herramientaId, prefill) {
             const params = {action: 'herramienta_form', agente_id: AGENTE_ID};
             if (herramientaId) params.id = herramientaId;
             $.get(RUTA, params, function(r) {
-                if (r.result) { $('#h-content').html(r.data); }
-                else { alertaWarning(r.message || 'Error cargando el formulario.'); }
+                if (r.result) {
+                    $('#h-content').html(r.data);
+                    if (prefill) aplicarPrefill(prefill);
+                } else {
+                    alertaWarning(r.message || 'Error cargando el formulario.');
+                }
             }, 'json');
+        }
+
+        // Rellena el wizard con valores de plantilla o sugerencia IA
+        function aplicarPrefill(cfg) {
+            try {
+                $('#id_nombre_amigable').val(cfg.nombre_amigable || '');
+                $('#id_nombre').val(cfg.nombre || '');
+                $('#id_descripcion').val(cfg.descripcion || '');
+                $('#id_metodo').val(cfg.metodo || 'GET');
+                $('#id_url').val(cfg.url || '');
+                $('#id_ubicacion_params').val(cfg.ubicacion_params || 'query');
+                $('#id_timeout').val(cfg.timeout || 10);
+                $('#id_plantilla_respuesta').val(cfg.plantilla_respuesta || '');
+                // Los params/headers los gestiona el JS interno del wizard leyendo
+                // los json_script. Reseteamos y re-renderizamos.
+                const parametrosEl = document.getElementById('h-parametros-init');
+                const headersEl = document.getElementById('h-headers-init');
+                if (parametrosEl) parametrosEl.textContent = JSON.stringify(cfg.parametros || []);
+                if (headersEl) headersEl.textContent = JSON.stringify(cfg.headers || {});
+                // Disparar re-inicialización del wizard
+                if (typeof window.hWizardReinit === 'function') window.hWizardReinit();
+                // Preview URL
+                $('#id_url').trigger('input');
+            } catch (e) {
+                console.error('aplicarPrefill error:', e);
+            }
         }
 
         $(document).on('click', '#btn-h-nueva', function() {
             abrirForm(null);
+        });
+
+        // ── Plantillas pre-cargadas ──────────────────────────────────
+        let _tplsCache = null;
+        function fetchTemplates(cb) {
+            if (_tplsCache) { cb(_tplsCache); return; }
+            $.get(RUTA, {action: 'herramienta_templates'}, function(r) {
+                if (r.result) { _tplsCache = r.templates; cb(_tplsCache); }
+                else { alertaWarning(r.message || 'Error cargando plantillas.'); }
+            }, 'json');
+        }
+        $(document).on('click', '.btn-h-tpl', function() {
+            const key = $(this).data('key');
+            fetchTemplates(function(tpls) {
+                const tpl = tpls.find(t => t.key === key);
+                if (!tpl) { alertaWarning('Plantilla no encontrada.'); return; }
+                abrirForm(null, tpl);
+            });
+        });
+
+        // ── IA-assist ────────────────────────────────────────────────
+        $(document).on('click', '#btn-h-ia', function() {
+            $('#h-ia-panel').slideDown(150);
+            setTimeout(() => $('#h-ia-frase').focus(), 160);
+        });
+        $(document).on('click', '#h-ia-cancel', function() {
+            $('#h-ia-panel').slideUp(150);
+            $('#h-ia-frase').val('');
+        });
+        $(document).on('click', '#h-ia-submit', function() {
+            const frase = ($('#h-ia-frase').val() || '').trim();
+            if (!frase) { alertaWarning('Describe qué necesitas.'); return; }
+            const $btn = $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Generando…');
+            $.post(RUTA, {
+                action: 'herramienta_ia_asistida',
+                agente_id: AGENTE_ID,
+                frase: frase,
+                csrfmiddlewaretoken: CSRF,
+            }, function(r) {
+                $btn.prop('disabled', false).html('<i class="fas fa-magic me-1"></i> Generar configuración');
+                const x = Array.isArray(r) ? r[0] : r;
+                if (x && x.error) { alertaWarning(x.message || 'Error'); return; }
+                alertaSuccess('Configuración generada. Revísala antes de guardar.');
+                abrirForm(null, x.config);
+            }, 'json').fail(function() {
+                $btn.prop('disabled', false).html('<i class="fas fa-magic me-1"></i> Generar configuración');
+                alertaWarning('Error de conexión.');
+            });
         });
         $(document).on('click', '.btn-h-edit', function() {
             abrirForm($(this).data('id'));

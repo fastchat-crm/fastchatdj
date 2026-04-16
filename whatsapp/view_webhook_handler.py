@@ -460,6 +460,27 @@ def process_incoming_message(session, event_data, channel_layer):
         else:
             _ia_activa = bool(session.agente_ia and session.agente_ia.apikey.filter(estado=True).exists())
 
+        # Auto-respuesta amigable cuando el medio no fue capturado (imagen/video/documento/sticker)
+        # Audio se procesa por transcripción; los demás no se leen automáticamente.
+        if message_type in ('imagen', 'video', 'documento', 'sticker') and not file_url:
+            try:
+                from django.core.cache import cache
+                _media_key = f'notif_media_skipped_{conversation.id}'
+                if not cache.get(_media_key):
+                    cache.set(_media_key, True, 300)  # throttle 5 min
+                    _tipo_emoji = {'imagen': '📷', 'video': '🎥', 'documento': '📄', 'sticker': '🎨'}.get(message_type, '📎')
+                    _tipo_nombre = {'imagen': 'imagen', 'video': 'video', 'documento': 'documento', 'sticker': 'sticker'}.get(message_type, 'archivo')
+                    _aviso = (
+                        f"{_tipo_emoji} ¡Hola! Recibimos tu {_tipo_nombre}, pero por el momento no podemos "
+                        f"procesarla automáticamente. Si necesitas ayuda, por favor descríbenos tu consulta "
+                        f"por mensaje de texto y con gusto te atendemos. 🙌"
+                    )
+                    whatsapp_service.send_text_message(
+                        conversation.sesion.session_id, contacto.from_number, _aviso, simularEscritura=True
+                    )
+            except Exception as _media_ex:
+                logger.exception("Error enviando aviso media skipped: %s", _media_ex)
+
         # Log diagnóstico cuando la IA no está activa — ayuda a detectar cambios de agente sin keys
         if not _ia_activa and session.agente_ia:
             _keys_total = session.agente_ia.apikey.count()

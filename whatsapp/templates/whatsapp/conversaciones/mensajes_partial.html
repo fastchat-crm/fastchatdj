@@ -141,14 +141,16 @@
 </style>
 
 <script>
-    const _fbCsrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
-    const _fbUrl = '/whatsapp/conversaciones/';
+    if (typeof window._fbInit === 'undefined') {
+    window._fbInit = true;
+    window._fbCsrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+    window._fbUrl  = '/whatsapp/conversaciones/';
 
-    function feedbackOk(msgId, btn) {
+    window.feedbackOk = function(msgId, btn) {
         _sendFeedback(msgId, true, '', '', btn);
     }
 
-    function feedbackKo(msgId, btn) {
+    window.feedbackKo = function(msgId, btn) {
         const allBlocks = document.querySelectorAll('#mensajes-container .msg-row');
         let pregunta = '';
         let found = false;
@@ -164,7 +166,7 @@
         document.getElementById('cf-' + msgId).classList.remove('d-none');
     }
 
-    function enviarCorreccion(msgId) {
+    window.enviarCorreccion = function(msgId) {
         const correccion = document.getElementById('cf-texto-' + msgId).value.trim();
         const pregunta = document.getElementById('cf-pregunta-' + msgId).value.trim();
         if (!correccion) {
@@ -174,7 +176,7 @@
         _sendFeedback(msgId, false, correccion, pregunta, null);
     }
 
-    function _sendFeedback(msgId, esOk, correccion, pregunta, btn) {
+    window._sendFeedback = function(msgId, esOk, correccion, pregunta, btn) {
         fetch(_fbUrl, {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': _fbCsrf},
@@ -200,6 +202,7 @@
             }).catch(() => {
         });
     }
+    } // end if (typeof window._fbInit === 'undefined')
 </script>
 
 {% for mensaje in mensajes %}

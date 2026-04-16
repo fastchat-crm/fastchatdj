@@ -461,6 +461,45 @@ def entrenamiento_ia_view(request):
                         DjangoChatMessageHistory(session_id=session_id).clear()
                         return JsonResponse({'error': False})
 
+                    elif action == 'herramienta_ia_asistida':
+                        from crm.herramienta_templates import PROMPT_IA_ASISTIDA
+                        agente_id = int(request.POST.get('agente_id') or 0)
+                        agente = AgentesIA.objects.get(pk=agente_id, perfil=perfil)
+                        frase = (request.POST.get('frase') or '').strip()
+                        if not frase:
+                            return JsonResponse({'error': True, 'message': 'Describe qué necesita consultar la herramienta.'})
+                        apikey_obj = agente.apikey.filter(estado=True).first()
+                        if not apikey_obj:
+                            return JsonResponse({'error': True, 'message': 'El agente no tiene una API Key activa.'})
+                        try:
+                            # Usamos el mismo patrón del auditor: forzar JSON nativo en Gemini/OpenAI
+                            if apikey_obj.proveedor == 2:
+                                from langchain_google_genai import ChatGoogleGenerativeAI
+                                llm = ChatGoogleGenerativeAI(
+                                    model='gemini-2.5-flash', google_api_key=apikey_obj.descripcion,
+                                    max_output_tokens=4000, temperature=0.3,
+                                    model_kwargs={'response_mime_type': 'application/json'},
+                                )
+                            else:
+                                from langchain_community.chat_models import ChatOpenAI
+                                llm = ChatOpenAI(
+                                    model_name='gpt-4o-mini', openai_api_key=apikey_obj.descripcion,
+                                    max_tokens=4000, temperature=0.3,
+                                    model_kwargs={'response_format': {'type': 'json_object'}},
+                                )
+                            prompt = PROMPT_IA_ASISTIDA.format(descripcion_usuario=frase)
+                            msg = llm.invoke(prompt)
+                            texto = (getattr(msg, 'content', '') or '').strip()
+                            # Quitar posibles fences
+                            if texto.startswith('```'):
+                                texto = texto.strip('`')
+                                if texto.lower().startswith('json'):
+                                    texto = texto[4:].strip()
+                            config = json.loads(texto)
+                            return JsonResponse({'error': False, 'config': config})
+                        except Exception as ex:
+                            return JsonResponse({'error': True, 'message': f'No pude generar la configuración: {ex}'})
+
             except ValueError as ex:
                 res_json.append({'error': True, "message": str(ex)})
             except FormError as ex:
@@ -606,6 +645,12 @@ def entrenamiento_ia_view(request):
                         return JsonResponse({"result": True, 'data': template.render(data_ctx)})
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})
+                if action == 'herramienta_templates':
+                    try:
+                        from crm.herramienta_templates import HERRAMIENTA_TEMPLATES
+                        return JsonResponse({'result': True, 'templates': HERRAMIENTA_TEMPLATES})
+                    except Exception as ex:
+                        return JsonResponse({'result': False, 'message': str(ex)})
                 if action == 'addapikey':
                     try:
                         data["form"] = ApiKeyIAForm()
