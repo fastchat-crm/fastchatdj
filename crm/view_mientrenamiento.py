@@ -278,6 +278,12 @@ def entrenamiento_ia_view(request):
                         filtro.save()
                         log(f"API Key reactivada {filtro}", request, "change", obj=filtro.id)
                         res_json = {"error": False, "reload": True}
+                    elif action == 'limpiar_error_apikey':
+                        filtro = ApiKeyIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
+                        filtro.msgerror = None
+                        filtro.save(update_fields=['msgerror'])
+                        log(f"Error limpiado de API Key {filtro}", request, "change", obj=filtro.id)
+                        return JsonResponse({'error': False})
                     elif action == 'auditoria_generar':
                         from agents_ai.auditor_agente import ejecutar_auditoria
                         agente = AgentesIA.objects.get(pk=int(request.POST['agente_id']), perfil=perfil)
@@ -832,6 +838,12 @@ def entrenamiento_ia_view(request):
                             "herramientas": herramientas_data,
                             "herramientas_activas": herramientas_activas,
                             "herramientas_total": len(herramientas_data),
+                            # ── Enlaces API externas ─────────────────────
+                            "num_enlaces_api": filtro.detalleagentesai_set.filter(status=True, tipo=1, enlace__isnull=False).count(),
+                            # ── Config del agente (para el flujo de lectura) ──
+                            "cfg_history_turns": filtro.cfg_history_turns,
+                            "cfg_max_context_chars": filtro.cfg_max_context_chars,
+                            "cfg_faiss_k": filtro.cfg_faiss_k,
                         })
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})

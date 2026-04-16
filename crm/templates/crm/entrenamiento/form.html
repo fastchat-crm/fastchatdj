@@ -152,6 +152,25 @@
             background:#fef3c7; color:#92400e; border:1px solid #fde68a;
         }
         .apikey-modelo.missing small { font-weight:500; opacity:.75; }
+        .apikey-modelo-hdr {
+            background:rgba(255,255,255,.22); color:#fff;
+            padding:1px 7px; border-radius:3px; font-size:.67rem;
+            display:inline-block; font-family:monospace;
+        }
+        .apikey-modelo-hdr.missing {
+            background:rgba(255,193,7,.32); color:#fff3cd; font-family:inherit;
+        }
+
+        /* Botón X para limpiar el mensaje de error */
+        .apikey-error-clear {
+            background:rgba(185,28,28,.1); color:#b91c1c;
+            border:none; border-radius:3px;
+            width:20px; height:20px; padding:0;
+            display:inline-flex; align-items:center; justify-content:center;
+            cursor:pointer; font-size:.65rem;
+            transition:background .12s;
+        }
+        .apikey-error-clear:hover { background:rgba(185,28,28,.25); }
 
         .apikey-error {
             background:#fef2f2; border:1px solid #fecaca;
@@ -298,6 +317,61 @@
         .ctx-faq-preview summary {
             cursor:pointer; font-size:.75rem; color:#667eea; font-weight:600;
             padding:.3rem 0;
+        }
+
+        /* ── Flujo de lectura del contexto ── */
+        .ctx-flow-step {
+            display:flex; gap:12px;
+            padding:14px; margin-bottom:10px;
+            background:#fff; border:1px solid #e2e8f0;
+            border-left:4px solid #667eea;
+            border-radius:8px;
+            position:relative;
+        }
+        .ctx-flow-step:not(:last-child)::after {
+            content:''; position:absolute;
+            left:29px; bottom:-12px; width:2px; height:12px;
+            background:#cbd5e1;
+        }
+        .ctx-flow-step.inactivo {
+            opacity:.55; border-left-color:#cbd5e1; background:#f8fafc;
+        }
+        .ctx-flow-num {
+            width:38px; height:38px; flex-shrink:0;
+            display:flex; align-items:center; justify-content:center;
+            border-radius:50%; color:#fff; font-size:.9rem;
+            box-shadow:0 2px 6px rgba(0,0,0,.1);
+        }
+        .ctx-flow-body { flex-grow:1; min-width:0; }
+        .ctx-flow-title {
+            font-weight:700; color:#1f2937; font-size:.85rem;
+            margin-bottom:4px;
+        }
+        .ctx-flow-step-num {
+            display:inline-block; font-size:.65rem;
+            padding:1px 6px; border-radius:3px;
+            background:#e0e7ff; color:#4338ca;
+            font-weight:700; margin-right:6px;
+        }
+        .ctx-flow-omitido {
+            display:inline-block; font-size:.62rem;
+            padding:1px 6px; border-radius:3px;
+            background:#fef3c7; color:#92400e;
+            font-weight:600; margin-left:6px;
+        }
+        .ctx-flow-detail {
+            font-size:.76rem; color:#475569;
+            line-height:1.45; margin-bottom:5px;
+        }
+        .ctx-flow-usa {
+            font-size:.68rem; color:#6b7280;
+            background:#f8fafc; padding:4px 8px; border-radius:4px;
+            display:inline-block;
+        }
+        .ctx-flow-usa code {
+            background:#e0e7ff; color:#4338ca;
+            padding:1px 5px; border-radius:3px; font-size:.66rem;
+            margin:0 2px;
         }
 
         /* ── Herramientas ── */
@@ -532,7 +606,14 @@
                                         </div>
                                         <div class="apikey-title-group">
                                             <h6 class="mb-0">{{ l.alias|default:l.get_proveedor_display }}</h6>
-                                            <small class="apikey-provider">{{ l.get_proveedor_display }}</small>
+                                            <small class="apikey-provider">
+                                                {{ l.get_proveedor_display }}
+                                                {% if l.modelo %}
+                                                    · <code class="apikey-modelo-hdr" title="Modelo asignado"><i class="fas fa-microchip me-1"></i>{{ l.modelo }}</code>
+                                                {% else %}
+                                                    · <span class="apikey-modelo-hdr missing" title="Sin modelo asignado — usa el default del provider"><i class="fas fa-exclamation-triangle me-1"></i>sin modelo</span>
+                                                {% endif %}
+                                            </small>
                                         </div>
                                         <span class="apikey-estado badge {% if l.estado %}bg-success{% else %}bg-danger{% endif %}" id="badge-estado-{{ l.pk }}">
                                             {{ l.estado|yesno:'Activa,Inactiva' }}
@@ -555,18 +636,24 @@
                                             <span class="apikey-label"><i class="fas fa-key"></i> Key</span>
                                             <code class="apikey-value" title="{{ l.descripcion }}">{{ l.descripcion|slice:":16" }}…{{ l.descripcion|slice:"-4:" }}</code>
                                         </div>
-                                        {% if l.msgerror %}
-                                        <div class="apikey-error">
-                                            <div class="apikey-error-head">
-                                                <i class="fas fa-exclamation-triangle me-1"></i>
-                                                <strong>Último error</strong>
-                                                <span class="apikey-error-date ms-auto">
-                                                    {% if l.fecha_modificacion %}{{ l.fecha_modificacion|date:"d/m/Y H:i" }}{% else %}—{% endif %}
-                                                </span>
+                                        <div class="apikey-error-container" id="apikey-error-{{ l.pk }}">
+                                            {% if l.msgerror %}
+                                            <div class="apikey-error">
+                                                <div class="apikey-error-head">
+                                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                                    <strong>Último error</strong>
+                                                    <span class="apikey-error-date ms-auto">
+                                                        {% if l.fecha_modificacion %}{{ l.fecha_modificacion|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+                                                    </span>
+                                                    <button type="button" class="apikey-error-clear ms-1" title="Limpiar este error"
+                                                            onclick="limpiarErrorApiKey({{ l.pk }})">
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
+                                                </div>
+                                                <div class="apikey-error-msg" title="{{ l.msgerror }}">{{ l.msgerror|truncatechars:120 }}</div>
                                             </div>
-                                            <div class="apikey-error-msg" title="{{ l.msgerror }}">{{ l.msgerror|truncatechars:120 }}</div>
+                                            {% endif %}
                                         </div>
-                                        {% endif %}
                                         <div class="apikey-actions">
                                             <button type="button" class="btn-apk test"
                                                     onclick="testApiKey({{ l.pk }}, this)"
@@ -760,6 +847,11 @@
                                 <span class="badge bg-primary ms-1" id="ctxBadgeHerramientas" style="font-size:.65rem;"></span>
                             </button>
                         </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#ctxTabFlujo" type="button">
+                                <i class="fas fa-diagram-project me-1"></i>Flujo de lectura
+                            </button>
+                        </li>
                     </ul>
                     <div class="tab-content" id="ctxTabsContent">
                         {# Tab 1: contexto #}
@@ -810,6 +902,13 @@
                                 <small class="text-muted">APIs externas que el agente puede invocar vía tool-calling durante la conversación.</small>
                             </div>
                             <div id="ctxContenidoHerramientas">Cargando…</div>
+                        </div>
+                        {# Tab 6: Flujo de lectura del contexto #}
+                        <div class="tab-pane fade" id="ctxTabFlujo">
+                            <div class="mb-2">
+                                <small class="text-muted">Paso a paso de cómo el agente arma el contexto y en qué orden lee cada fuente cuando recibe un mensaje del cliente.</small>
+                            </div>
+                            <div id="ctxContenidoFlujo">Cargando…</div>
                         </div>
                     </div>
                 </div>
@@ -1013,6 +1112,111 @@
                         : '';
                     faqsEl.innerHTML = items + blk;
                 }
+
+                /* Tab 6: Flujo de lectura del contexto */
+                const flujoEl = document.getElementById('ctxContenidoFlujo');
+                const pasos = [];
+                pasos.push({
+                    num: 1, icon: 'fa-hand', color: '#1971c2',
+                    titulo: 'Llega un mensaje del cliente',
+                    detalle: 'Webhook de WhatsApp recibe el mensaje y lo asocia a la conversación activa. Si el contacto no tiene una conversación abierta, se crea una nueva.',
+                    usa: '<code>ConversacionWhatsApp.obtener_o_crear_activa()</code>'
+                });
+                pasos.push({
+                    num: 2, icon: 'fa-check-double', color: '#28a745',
+                    titulo: 'Guard de duplicados y saludos',
+                    detalle: 'Si el mismo message_id ya fue procesado, se ignora. Si es un saludo puro en el primer turno, se responde con mensaje_bienvenida sin llamar al LLM.',
+                    usa: '<code>_es_saludo()</code> · <code>_es_ack_simple()</code>'
+                });
+                pasos.push({
+                    num: 3, icon: 'fa-history', color: '#fd7e14',
+                    titulo: 'Historial reciente',
+                    detalle: 'Se traen los últimos ' + (res.cfg_history_turns || 10) + ' turnos (cliente+bot) con chars truncados para minimizar tokens. Sirve para continuidad de pedidos y temas.',
+                    usa: '<code>DjangoChatMessageHistory.get_recent()</code>'
+                });
+                const hasFaqs = (res.faqs_top || []).length > 0;
+                pasos.push({
+                    num: 4, icon: 'fa-comments', color: '#228be6',
+                    titulo: 'FAQs top-' + (res.faqs_top_n || 10),
+                    detalle: hasFaqs
+                        ? 'Se inyectan literalmente al inicio del contexto las ' + (res.faqs_top || []).length + ' FAQs aprobadas con mayor prioridad. El LLM las ve antes que cualquier otra información.'
+                        : 'No hay FAQs aprobadas — este paso se omite. Aprueba FAQs pendientes desde el tab Preguntas Frecuentes para que el agente las use.',
+                    usa: '<code>AgenteConsultor._construir_bloque_faq()</code>',
+                    inactivo: !hasFaqs
+                });
+                pasos.push({
+                    num: 5, icon: 'fa-search', color: '#7048e8',
+                    titulo: 'Búsqueda híbrida BM25 + FAISS',
+                    detalle: res.tiene_faiss
+                        ? 'El mensaje del cliente se usa como query. BM25 recupera por keywords exactas y FAISS por similitud semántica. Los resultados se deduplican y se concatenan (presupuesto ' + (res.cfg_max_context_chars || 4000) + ' chars).'
+                        : 'Este agente no tiene FAISS configurado — se omite la búsqueda vectorial.',
+                    usa: '<code>_hybrid_search()</code>',
+                    inactivo: !res.tiene_faiss
+                });
+                const hasEstatico = res.chars_contexto > 0;
+                pasos.push({
+                    num: 6, icon: 'fa-database', color: '#15803d',
+                    titulo: 'Contexto estático',
+                    detalle: hasEstatico
+                        ? 'Si hay FAISS, se combina con ' + Math.min(res.chars_contexto, 2000).toLocaleString() + ' chars del contexto estático. Si no hay FAISS, se extrae la sección más relevante al query (modo A) o todo el contexto (modo amplio).'
+                        : 'No hay contexto estático — el agente depende del FAISS y las FAQs.',
+                    usa: '<code>_extraer_seccion_relevante()</code>',
+                    inactivo: !hasEstatico
+                });
+                const hasEnlaces = (res.num_enlaces_api || 0) > 0 || false;
+                pasos.push({
+                    num: 7, icon: 'fa-plug', color: '#e67e22',
+                    titulo: 'APIs externas (fetch en vivo)',
+                    detalle: hasEnlaces
+                        ? 'Se consultan en tiempo real las URLs configuradas (respetando el cache por fuente) y se anexa el contenido formateado con la observación "CUÁNDO USARLA" para que el LLM sepa cuándo aprovecharlas.'
+                        : 'No hay enlaces API configurados — este paso se omite.',
+                    usa: '<code>AgentesIA.fetch_contexto_apis()</code>',
+                    inactivo: !hasEnlaces
+                });
+                const hasTools = (res.herramientas_activas || 0) > 0;
+                pasos.push({
+                    num: 8, icon: 'fa-tools', color: '#d9480f',
+                    titulo: 'Herramientas (tool-calling)',
+                    detalle: hasTools
+                        ? 'Las ' + res.herramientas_activas + ' herramienta(s) activa(s) se pasan al LLM vía bind_tools. El LLM decide si llamar alguna durante la respuesta; si lo hace, se ejecuta el HTTP real y el resultado vuelve al LLM (loop hasta 3 iteraciones).'
+                        : 'No hay herramientas activas — el LLM solo responde con el contexto.',
+                    usa: '<code>_build_tools()</code> · <code>llm.bind_tools()</code>',
+                    inactivo: !hasTools
+                });
+                pasos.push({
+                    num: 9, icon: 'fa-terminal', color: '#495057',
+                    titulo: 'Prompt final ensamblado',
+                    detalle: 'Se formatea el prompt_template con {question}, {context} (FAQs+estático+FAISS+APIs), {descripcion_agente} y {contexto_extra} (historial). Tamaño: ' + (res.chars_prompt || 0).toLocaleString() + ' chars.',
+                    usa: '<code>_formatear_prompt()</code>'
+                });
+                pasos.push({
+                    num: 10, icon: 'fa-paper-plane', color: '#1864ab',
+                    titulo: 'Invocación al LLM',
+                    detalle: 'Se envía el prompt al modelo LLM usando la API Key del agente (con fallback a las demás si falla). Se respeta el modelo configurado en esa API Key.',
+                    usa: '<code>llm.invoke()</code>'
+                });
+                pasos.push({
+                    num: 11, icon: 'fa-reply', color: '#2b8a3e',
+                    titulo: 'Respuesta y persistencia',
+                    detalle: 'Se extrae el texto, se detecta cierre [FIN_CONVERSACION] si aplica, se guarda en el historial, se incrementa hits de las FAQs usadas y se registra consumo de tokens.',
+                    usa: '<code>_incrementar_hits_faqs()</code> · <code>ConsumoTokenIA</code>'
+                });
+                flujoEl.innerHTML = pasos.map(p => (
+                    '<div class="ctx-flow-step ' + (p.inactivo ? 'inactivo' : '') + '">' +
+                        '<div class="ctx-flow-num" style="background:' + p.color + '">' +
+                            '<i class="fas ' + p.icon + '"></i>' +
+                        '</div>' +
+                        '<div class="ctx-flow-body">' +
+                            '<div class="ctx-flow-title">' +
+                                '<span class="ctx-flow-step-num">Paso ' + p.num + '</span>' +
+                                esc(p.titulo) +
+                                (p.inactivo ? ' <span class="ctx-flow-omitido">omitido</span>' : '') +
+                            '</div>' +
+                            '<div class="ctx-flow-detail">' + esc(p.detalle) + '</div>' +
+                            '<div class="ctx-flow-usa"><strong>Código:</strong> ' + p.usa + '</div>' +
+                        '</div>' +
+                    '</div>'
+                )).join('');
 
                 /* Tab 5: Herramientas */
                 const herrEl = document.getElementById('ctxContenidoHerramientas');
@@ -1402,6 +1606,23 @@
                     const badge = document.getElementById('badge-estado-' + id);
                     if (badge) { badge.className = 'badge bg-success'; badge.textContent = 'Activa'; }
                     Swal.fire({ type: 'success', title: 'Reactivada', text: 'La API Key fue reactivada.', timer: 2000, showConfirmButton: false });
+                }
+            }
+        });
+    }
+
+    function limpiarErrorApiKey(id) {
+        $.ajax({
+            type: 'POST',
+            url: '{{ request.path }}',
+            data: { csrfmiddlewaretoken: '{{ csrf_token }}', action: 'limpiar_error_apikey', id: id },
+            dataType: 'json',
+            success: function(res) {
+                const r = Array.isArray(res) ? res[0] : res;
+                if (r && !r.error) {
+                    const cont = document.getElementById('apikey-error-' + id);
+                    if (cont) { cont.innerHTML = ''; }
+                    if (typeof alertaSuccess === 'function') alertaSuccess('Error limpiado.');
                 }
             }
         });
