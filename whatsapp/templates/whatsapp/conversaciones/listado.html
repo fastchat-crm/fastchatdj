@@ -1040,12 +1040,19 @@
         }
 
         $('.filter-btn').on('click', function() {
-            aplicarFiltro($(this).data('filter'));
+            // Ignorar dropdown-toggle: solo abre/cierra el menú, el filtro lo
+            // aplica el <a.filter-link> dentro del dropdown.
+            if ($(this).hasClass('dropdown-toggle')) return;
+            const f = $(this).data('filter');
+            if (!f) return;
+            aplicarFiltro(f);
         });
 
         $(document).on('click', '.filter-link', function(e) {
             e.preventDefault();
-            aplicarFiltro($(this).data('filter'));
+            const f = $(this).data('filter');
+            if (!f) return;
+            aplicarFiltro(f);
         });
 
         // ====================== TOGGLE BOT =========================

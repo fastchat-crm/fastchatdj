@@ -552,7 +552,8 @@ def conversacionesView(request):
 
 
         except Exception as ex:
-            return JsonResponse({'error': True, 'message': str(ex)})
+            # forms.js espera array para recorrer con forEach — envolver en lista.
+            return JsonResponse([{'error': True, 'message': str(ex)}], safe=False)
 
     # ====================== LISTADO CONVERSACIONES =========================
     criterio = request.GET.get('criterio', '').strip()
