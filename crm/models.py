@@ -205,40 +205,49 @@ class AgentesIA(ModeloBase):
 
     # ── Configuración avanzada de comportamiento IA (override por agente) ────
     cfg_faiss_k = models.PositiveSmallIntegerField(
-        default=5, verbose_name='Chunks FAISS por respuesta (K)',
-        help_text='Cantidad de fragmentos del vectorstore inyectados en cada respuesta. Rango sugerido: 3–10.'
+        default=5, verbose_name='Fragmentos relevantes por respuesta',
+        help_text='Cuántos pedacitos del entrenamiento (PDF/CSV/etc.) le pasamos al bot por cada pregunta. '
+                  'Más = más contexto pero respuestas más lentas y caras. Rango: 3–10. Default: 5.'
     )
     cfg_faiss_fetch_k = models.PositiveSmallIntegerField(
-        default=20, verbose_name='Candidatos FAISS pre-MMR (fetch_k)',
-        help_text='Candidatos previos al filtro de diversidad MMR. Mayor = mejor selección pero más lento. Rango: 10–40.'
+        default=20, verbose_name='Candidatos antes de elegir',
+        help_text='Cuántos fragmentos consideramos antes de quedarnos con los mejores. '
+                  'Mayor = selección de mejor calidad pero un poco más lenta. Rango: 10–40. Default: 20.'
     )
     cfg_max_context_chars = models.PositiveIntegerField(
-        default=4000, verbose_name='Máx chars contexto FAISS',
-        help_text='Tope de caracteres del contexto FAISS para consultas específicas (Modo A). Rango: 2000–8000.'
+        default=4000, verbose_name='Máx caracteres de contexto del entrenamiento',
+        help_text='Tope total de información del entrenamiento que cabe en una respuesta. '
+                  'Si el bot da respuestas cortadas/incompletas, subilo. Rango: 2000–8000. Default: 4000.'
     )
     cfg_max_static_chars = models.PositiveIntegerField(
-        default=2000, verbose_name='Máx chars contexto estático suplementario',
-        help_text='Tope de chars del contexto estático cuando es complemento (Modo B). Rango: 1000–5000.'
+        default=2000, verbose_name='Máx caracteres del texto fijo (cuando complementa)',
+        help_text='Cuando hay entrenamiento Y texto fijo (FAQ/menú), cuánto texto fijo se incluye. '
+                  'Rango: 1000–5000. Default: 2000.'
     )
     cfg_history_turns = models.PositiveSmallIntegerField(
-        default=10, verbose_name='Turnos de historial recordados',
-        help_text='Cantidad de turnos previos (1 turno = 1 cliente + 1 bot). Crítico para continuidad de pedidos. Rango: 5–20.'
+        default=10, verbose_name='Mensajes previos que recuerda',
+        help_text='Cuántos turnos de conversación recuerda el bot (1 turno = 1 mensaje del cliente + 1 respuesta). '
+                  'Subilo si el bot olvida pedidos en conversaciones largas. Rango: 5–20. Default: 10.'
     )
     cfg_user_snippet = models.PositiveSmallIntegerField(
-        default=300, verbose_name='Máx chars de mensaje del cliente en historial',
-        help_text='Trunca el mensaje del cliente al guardarlo en el historial. Rango: 200–600.'
+        default=300, verbose_name='Máx caracteres por mensaje del cliente recordado',
+        help_text='Si el cliente escribe un mensaje muy largo, lo truncamos a esta cantidad para no gastar tokens. '
+                  'Rango: 200–600. Default: 300.'
     )
     cfg_ai_snippet = models.PositiveSmallIntegerField(
-        default=800, verbose_name='Máx chars de respuesta del bot en historial',
-        help_text='Crítico para que el bot recuerde menús/listas largas que generó antes. Rango: 400–2000.'
+        default=800, verbose_name='Máx caracteres por respuesta del bot recordada',
+        help_text='Crítico cuando el bot envía menús/listas largas. Si está muy bajo, el bot olvida lo que ya mostró '
+                  'y se contradice. Rango: 400–2000. Default: 800.'
     )
     cfg_max_output_tokens = models.PositiveIntegerField(
-        default=3000, verbose_name='Máx tokens de salida por respuesta',
-        help_text='Límite de tokens generados por el LLM en una respuesta. Rango: 500–4000.'
+        default=3000, verbose_name='Máx longitud de la respuesta del bot',
+        help_text='Límite de tokens (≈palabras) que el bot puede generar en una sola respuesta. '
+                  'Si las respuestas se cortan a la mitad, subilo. Rango: 500–4000. Default: 3000.'
     )
     cfg_topic_anchor_chars = models.PositiveSmallIntegerField(
-        default=180, verbose_name='Chars del primer mensaje como ancla de tema',
-        help_text='Caracteres del primer mensaje sustantivo del cliente usados como ancla en FAISS. Rango: 100–400.'
+        default=180, verbose_name='Chars del tema inicial conservado',
+        help_text='Cuando la conversación se hace larga, se conserva el primer mensaje sustantivo del cliente '
+                  'como "ancla" para mantener el bot enfocado en el tema original. Rango: 100–400. Default: 180.'
     )
 
     class Meta:

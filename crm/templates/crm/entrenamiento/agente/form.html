@@ -788,12 +788,62 @@
     <div class="tab-pane fade" id="at-comportamiento">
         <div class="guide-callout">
             <i class="fas fa-sliders-h me-1"></i>
-            Variables avanzadas que controlan cómo recupera contexto y cuánto recuerda este agente.
-            Si no estás seguro, deja los valores por defecto. Cada campo muestra su rango sugerido.
-            Aplica desde la próxima respuesta del bot.
+            Estas variables controlan <strong>cómo busca información</strong> y <strong>cuánto recuerda</strong> este agente.
+            Si no estás seguro, deja los valores por defecto. Aplican desde la próxima respuesta del bot.
         </div>
 
-        <p class="section-header mt-2">Recuperación de conocimiento (FAISS)</p>
+        {# ── Glosario ── #}
+        <div class="accordion mb-3" id="glosarioIA">
+            <div class="accordion-item">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed py-2" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#glosarioBody"
+                            style="font-size:.85rem;">
+                        <i class="fas fa-book-open me-2"></i>¿Qué significa cada término? (glosario)
+                    </button>
+                </h2>
+                <div id="glosarioBody" class="accordion-collapse collapse" data-bs-parent="#glosarioIA">
+                    <div class="accordion-body" style="font-size:.83rem;">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-3">📚 Entrenamiento</dt>
+                            <dd class="col-sm-9">Los archivos (PDF, CSV, Excel, JSON) que subiste en la pestaña "Conocimiento". El bot
+                                <strong>sólo</strong> responde con esa información — no inventa.</dd>
+
+                            <dt class="col-sm-3">🔍 FAISS</dt>
+                            <dd class="col-sm-9">El "buscador interno" del bot. Cuando llega una pregunta, parte el entrenamiento en
+                                pedacitos (<em>chunks</em>) y busca los más parecidos a la pregunta. Es como un Google sólo de tus
+                                documentos.</dd>
+
+                            <dt class="col-sm-3">🧩 Chunk / Fragmento</dt>
+                            <dd class="col-sm-9">Un pedacito de tus documentos (típicamente 500–1000 caracteres). En vez de mandarle
+                                el documento completo al bot, le mandamos sólo los pedacitos relevantes a la pregunta.</dd>
+
+                            <dt class="col-sm-3">🎯 MMR</dt>
+                            <dd class="col-sm-9"><em>Maximal Marginal Relevance</em>. Filtro que asegura que los fragmentos seleccionados
+                                no se repitan entre sí — para evitar mandarle al bot 5 párrafos casi iguales y desperdiciar tokens.</dd>
+
+                            <dt class="col-sm-3">📝 Texto fijo</dt>
+                            <dd class="col-sm-9">El "Contexto estático" del agente — texto que se inyecta literalmente en cada respuesta
+                                (ideal para FAQ, menús cortos, políticas). No requiere FAISS.</dd>
+
+                            <dt class="col-sm-3">💬 Turno</dt>
+                            <dd class="col-sm-9">1 mensaje del cliente + 1 respuesta del bot = 1 turno. Si el bot recuerda 10 turnos,
+                                tiene memoria de los últimos ~20 mensajes.</dd>
+
+                            <dt class="col-sm-3">🎟️ Token</dt>
+                            <dd class="col-sm-9">Unidad mínima que cuenta el LLM. Un token ≈ 4 caracteres ≈ 0.75 palabras. Más tokens
+                                = más costo y más lentitud.</dd>
+
+                            <dt class="col-sm-3">⚓ Ancla de tema</dt>
+                            <dd class="col-sm-9">El primer mensaje "real" del cliente (no saludos). Se guarda y reusa cuando la
+                                conversación se alarga, para que el bot no pierda el tema original.</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <p class="section-header mt-2">🔍 Cómo busca información en el entrenamiento</p>
         <div class="row g-2">
             <div class="col-md-6">
                 <label class="form-label small fw-semibold mb-1">{{ form.cfg_faiss_k.label }}</label>
@@ -827,7 +877,7 @@
             </div>
         </div>
 
-        <p class="section-header mt-3">Memoria conversacional</p>
+        <p class="section-header mt-3">💬 Cuánta conversación recuerda</p>
         <div class="row g-2">
             <div class="col-md-6">
                 <label class="form-label small fw-semibold mb-1">{{ form.cfg_history_turns.label }}</label>
@@ -849,7 +899,7 @@
             </div>
         </div>
 
-        <p class="section-header mt-3">Generación de respuesta</p>
+        <p class="section-header mt-3">✍️ Cómo genera la respuesta</p>
         <div class="row g-2">
             <div class="col-md-6">
                 <label class="form-label small fw-semibold mb-1">{{ form.cfg_max_output_tokens.label }}</label>
@@ -1098,6 +1148,57 @@
     }
 
     function funcionAntesDeGuardar() { actualizarDetallesJSON(); return true; }
+
+    /* ── Diagnóstico de errores de guardado ──────────────────────
+       Si el form vuelve con errores, salta al tab que contiene el primer
+       campo inválido y muestra un toast con los nombres de los campos. */
+    (function() {
+        const TAB_POR_CAMPO = {
+            nombre: '#at-basico', descripcion: '#at-basico', apikey: '#at-basico',
+            prompt_template: '#at-prompt',
+            anotar_listas: '#at-conocimiento',
+            cfg_faiss_k: '#at-comportamiento', cfg_faiss_fetch_k: '#at-comportamiento',
+            cfg_max_context_chars: '#at-comportamiento', cfg_max_static_chars: '#at-comportamiento',
+            cfg_history_turns: '#at-comportamiento', cfg_user_snippet: '#at-comportamiento',
+            cfg_ai_snippet: '#at-comportamiento', cfg_max_output_tokens: '#at-comportamiento',
+            cfg_topic_anchor_chars: '#at-comportamiento',
+        };
+        // Observa cambios de clase .is-invalid en los inputs del form
+        const form = document.querySelector('#modalDetalle form');
+        if (!form) return;
+        const observer = new MutationObserver((muts) => {
+            const invalidos = Array.from(form.querySelectorAll('.is-invalid'));
+            if (!invalidos.length) return;
+            const primero = invalidos[0];
+            const nombre = (primero.name || primero.id.replace(/^id_/, ''));
+            const targetTab = TAB_POR_CAMPO[nombre];
+            if (targetTab) {
+                const btn = document.querySelector('#agenteTabs button[data-bs-target="' + targetTab + '"]');
+                if (btn) new bootstrap.Tab(btn).show();
+            }
+            const nombres = invalidos.map(el => el.name || el.id.replace(/^id_/, '')).filter(Boolean);
+            const mensajes = invalidos.map(el => {
+                const msg = document.getElementById('errorMessage' + (el.name || el.id.replace(/^id_/, '')));
+                return msg ? msg.textContent : '';
+            }).filter(Boolean);
+            try {
+                Swal.fire({
+                    type: 'warning',
+                    title: 'Revisa los siguientes campos:',
+                    html: '<ul style="text-align:left">' + nombres.map((n, i) => '<li><strong>' + n + '</strong>' + (mensajes[i] ? ': ' + mensajes[i] : '') + '</li>').join('') + '</ul>',
+                    timer: 8000,
+                });
+            } catch(e) {}
+            // Llamar una sola vez tras el primer set de errores
+            observer.disconnect();
+            // Re-armar tras 2s para la próxima pulsación
+            setTimeout(() => {
+                form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+                observer.observe(form, {subtree: true, attributes: true, attributeFilter: ['class']});
+            }, 2500);
+        });
+        observer.observe(form, {subtree: true, attributes: true, attributeFilter: ['class']});
+    })();
 
     function inicializarEventos() {
         $('#btnAgregarDetalle').off('click').on('click', function() { agregarDetalle(); });
