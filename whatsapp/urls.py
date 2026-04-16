@@ -8,6 +8,8 @@ from .update_profile_view import update_profile_view
 from .view_contacto import contactoView
 from .trazas_view import trazasView
 from .view_webhook_handler import webhook_handler
+from .webhook_batch_view import webhook_handler_batch
+from .heartbeat_view import heartbeat_receiver
 from .trace_receiver_view import trace_receiver
 
 whatsapp_urls = (
@@ -40,6 +42,8 @@ whatsapp_urls = (
 
 urlpatterns = [
     path('webhook_handler/', webhook_handler, name='whatsapp_webhook_handler'),
+    path('webhook_handler/batch/', webhook_handler_batch, name='whatsapp_webhook_handler_batch'),
+    path('heartbeat/', heartbeat_receiver, name='whatsapp_heartbeat'),
     path('trace/', trace_receiver, name='whatsapp_trace_receiver'),
     path('sync-contacts/', sync_contacts_view, name='sync_contacts'),
     path('whatsapp/update-profile/', update_profile_view, name='update_profile'),

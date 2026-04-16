@@ -118,6 +118,14 @@ WhatsAppService.send_message() → WHATSAPP_API_URL (Node.js)
 
 `POST /api/enviar-mensaje/` — sends a WhatsApp message. Rate limited to 30 req/min. Requires active session and valid contact. Defined in `seguridad/api_mensajeria.py`.
 
+### Reliability endpoints (Node → Django)
+
+All require `X-API-Key: <NODE_SECRET_KEY>` header.
+
+- `POST /whatsapp/webhook_handler/batch/` (`webhook_batch_view.py`): drains Node's outbox. Body `{events: [{eventId, type, data}, ...]}` (or bare array). Returns per-item ACK array `{results: [{eventId, ok, status, error?}]}` so Node only deletes confirmed items. Idempotency in `process_incoming_message` (by `mensaje_id_externo`) makes retries safe. Max 200 events per batch.
+- `POST /whatsapp/heartbeat/` (`heartbeat_view.py`): Node pings every 30-60s with `{ts, host, sessions: [{sessionId, estado, queueDepth}]}`. Stored in cache for 180s. Helpers `node_esta_vivo(session_id=None)` and `estado_heartbeat_sesion(session_id)` let other code detect when Node is silent without crashing.
+- `POST /whatsapp/trace/` (`trace_receiver_view.py`): Node-side traces written to `TrazaMensajeIA` so the timeline at `/whatsapp/trazas/` shows both sides.
+
 ### AI Agent Configuration
 
 `AgentesIA` (in `crm/models.py`) is the central config for each chatbot:
