@@ -178,12 +178,6 @@ class RespuestaEntrenadaIA(ModeloBase):
 class AgentesIA(ModeloBase):
     perfil = models.ForeignKey(PerfilNegocioIA, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Perfil Negocio IA')
     apikey = models.ManyToManyField('ApiKeyIA', blank=True, verbose_name='Api Keys IA')
-    modelo = models.CharField(
-        max_length=100, blank=True, default='', choices=MODELOS_DISPONIBLES,
-        verbose_name='Modelo LLM',
-        help_text='Modelo concreto que usará el agente. Debe ser compatible con el provider de la API Key '
-                  '(Gemini con keys Gemini, GPT con keys OpenAI, etc.). Si dejás vacío, se usa el default del provider.'
-    )
     nombre = models.CharField(max_length=255, verbose_name="Nombre de agente")
     descripcion = models.TextField(verbose_name="Descripcion del agente")
     vectorstore_path = models.CharField(
