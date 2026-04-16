@@ -666,9 +666,13 @@
                         </div>
                         {# Tab 3: fuentes #}
                         <div class="tab-pane fade" id="ctxTabFuentes">
-                            <div class="mb-2">
-                                <small class="text-muted">Archivos y textos de entrenamiento que alimentan este agente.</small>
+                            <div class="mb-2 d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                                <small class="text-muted flex-grow-1">Archivos, textos y APIs externas que alimentan este agente. Los enlaces tipo API se descargan e indexan automáticamente.</small>
+                                <button type="button" class="btn btn-sm btn-primary" id="ctxBtnReconstruirEnlaces" title="Descarga de nuevo los datos de todas las URLs tipo enlace y reindexa el conocimiento">
+                                    <i class="fas fa-sync-alt me-1"></i>Reconstruir conocimiento API
+                                </button>
                             </div>
+                            <div id="ctxEnlacesEstado"></div>
                             <div id="ctxContenidoFuentes">Cargando…</div>
                         </div>
                         {# Tab 4: FAQs activas #}
@@ -964,6 +968,76 @@
     }
 
     /* ── Procesar agente ── */
+    /* ── Reconstruir vectorstore de enlaces (APIs externas) ── */
+    $(document).on('click', '#ctxBtnReconstruirEnlaces', function() {
+        const id = window._ctxAgenteId;
+        if (!id) { alertaWarning('No se identificó el agente.'); return; }
+        if (!confirm('¿Reconstruir el conocimiento desde las APIs externas?\n\nSe descargan los datos de cada URL configurada y se re-indexa. Puede tardar 10-30 segundos.')) return;
+        const $btn = $(this);
+        const orig = $btn.html();
+        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Descargando e indexando…');
+        $('#ctxEnlacesEstado').html('<div class="text-muted small p-2"><i class="fas fa-spinner fa-spin me-1"></i>Procesando…</div>');
+        $.post('{{ request.path }}', {
+            action: 'reconstruir_enlaces', id: id,
+            csrfmiddlewaretoken: '{{ csrf_token }}',
+        }, function(r) {
+            const x = Array.isArray(r) ? r[0] : r;
+            $btn.prop('disabled', false).html(orig);
+            if (x && x.error) {
+                $('#ctxEnlacesEstado').html('<div class="alert alert-danger py-2 small"><i class="fas fa-exclamation-triangle me-1"></i>' + (x.message || 'Error') + '</div>');
+                if (x.enlaces) { _renderEnlacesDiag(x.enlaces); }
+                return;
+            }
+            const escCtx = (s) => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            let html = '<div class="alert alert-success py-2 small mb-2">' +
+                '<i class="fas fa-check-circle me-1"></i>Reconstrucción OK — ' +
+                '<strong>' + (x.docs_indexados || 0) + '</strong> documentos indexados · ' +
+                'expira: <strong>' + escCtx(x.expira || 'sin cache') + '</strong>' +
+                '</div>';
+            $('#ctxEnlacesEstado').html(html);
+            _renderEnlacesDiag(x.enlaces);
+            alertaSuccess((x.docs_indexados || 0) + ' documentos indexados del catálogo API.');
+            // Refrescar pestaña actual del modal
+            _ctxCargarDatos(id);
+        }, 'json').fail(function() {
+            $btn.prop('disabled', false).html(orig);
+            $('#ctxEnlacesEstado').html('<div class="alert alert-danger py-2 small">Error de conexión.</div>');
+        });
+    });
+
+    function _renderEnlacesDiag(enlaces) {
+        if (!enlaces || !enlaces.length) return;
+        const escCtx = (s) => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const rows = enlaces.map(e => {
+            const okHttp = e.status_http >= 200 && e.status_http < 300;
+            let badge;
+            if (okHttp) {
+                badge = '<span class="badge bg-success">HTTP ' + e.status_http + '</span>';
+            } else if (e.status_http) {
+                badge = '<span class="badge bg-danger">HTTP ' + e.status_http + '</span>';
+            } else {
+                badge = '<span class="badge bg-warning text-dark">Sin respuesta</span>';
+            }
+            const itemsPart = typeof e.items_detectados !== 'undefined'
+                ? ' · <strong>' + e.items_detectados + '</strong> items detectados <code>' + escCtx(e.estructura || '') + '</code>'
+                : (e.estructura ? ' · estructura <code>' + escCtx(e.estructura) + '</code>' : '');
+            const errorPart = e.error ? '<div class="small text-danger mt-1">⚠ ' + escCtx(e.error) + '</div>' : '';
+            const parsePart = e.error_parse ? '<div class="small text-warning mt-1">⚠ JSON parse: ' + escCtx(e.error_parse) + '</div>' : '';
+            return '<div class="ctx-source-item" style="flex-direction:column;align-items:stretch;">' +
+                '<div class="d-flex align-items-center gap-2 mb-1">' +
+                    badge +
+                    '<span class="small fw-semibold">' + escCtx(e.tipo_dato || '') + '</span>' +
+                    (e.bytes ? '<span class="small text-muted ms-auto">' + (e.bytes/1024).toFixed(1) + ' KB</span>' : '') +
+                '</div>' +
+                '<div class="small" style="font-family:monospace;word-break:break-all;color:#495057;">' + escCtx(e.url) + '</div>' +
+                (itemsPart ? '<div class="small text-muted mt-1">' + itemsPart + '</div>' : '') +
+                errorPart + parsePart +
+            '</div>';
+        }).join('');
+        const prev = $('#ctxEnlacesEstado').html();
+        $('#ctxEnlacesEstado').html(prev + '<div class="mt-2 small fw-semibold">Detalle por enlace:</div>' + rows);
+    }
+
     /* ── Aprender de conversaciones ahora (botón en tab FAQs del modal "Ver contexto") ── */
     $(document).on('click', '#ctxBtnAprenderAhora', function() {
         const id = window._ctxAgenteId;
