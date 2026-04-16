@@ -206,6 +206,26 @@
         }
 
         .row [class*='col-'] { background-clip:content-box; }
+
+        /* ── Modales agrandados (editar/ver-contexto) ── */
+        .modal-wide .modal-dialog {
+            max-width: 92vw;
+            width: 92vw;
+            margin: 1.5rem auto;
+        }
+        .modal-wide .modal-content {
+            max-height: 92vh;
+        }
+        .modal-wide .modal-body {
+            max-height: calc(92vh - 120px);
+            overflow-y: auto;
+        }
+        @media (min-width: 1400px) {
+            .modal-wide .modal-dialog { max-width: 1320px; width: 1320px; }
+        }
+        @media (max-width: 768px) {
+            .modal-wide .modal-dialog { max-width: 98vw; width: 98vw; margin: .5rem auto; }
+        }
     </style>
 {% endblock %}
 
@@ -577,7 +597,7 @@
     </div>
 
     {# ── Modal contexto — 3 pestañas ─────────────────────────────────── #}
-    <div class="modal fade" id="modalContexto" tabindex="-1" aria-hidden="true">
+    <div class="modal fade modal-wide" id="modalContexto" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header border-bottom-0 pb-0">
@@ -679,8 +699,8 @@
     </div>
 
     {# ── Modal formulario (editar/agregar) ──────────────────────────── #}
-    <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal fade modal-wide" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form" novalidate>
                     {% csrf_token %}
