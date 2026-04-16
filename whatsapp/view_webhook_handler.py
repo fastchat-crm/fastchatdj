@@ -401,24 +401,17 @@ def process_incoming_message(session, event_data, channel_layer):
             logger.warning(f"Mensaje duplicado ignorado: {message_id}")
             return
 
-        # Calcular fecha_hora_expira para conversación nueva
-        _min_sesion_val = getattr(session, 'min_sesion', None)
-        _expira_nueva = timezone.now() + timedelta(minutes=int(_min_sesion_val) if _min_sesion_val else 10)
-
-        conversation = ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).first()
-        if conversation is None:
-            try:
-                conversation = ConversacionWhatsApp.objects.create(
-                    contacto=contacto, fecha_hora_expira=_expira_nueva
-                )
+        try:
+            conversation, created = ConversacionWhatsApp.obtener_o_crear_activa(contacto)
+            if created:
                 logger.info("Nueva conversación creada #%s para contacto %s", conversation.id, contacto.id)
-            except Exception as create_err:
-                logger.error(
-                    "ERROR creando conversación para contacto %s (sesión %s): %s — "
-                    "¿Hay migraciones pendientes? Ejecuta: py manage.py migrate",
-                    contacto.id, session.session_id, create_err, exc_info=True
-                )
-                raise
+        except Exception as create_err:
+            logger.error(
+                "ERROR obteniendo/creando conversación para contacto %s (sesión %s): %s — "
+                "¿Hay migraciones pendientes? Ejecuta: py manage.py migrate",
+                contacto.id, session.session_id, create_err, exc_info=True
+            )
+            raise
 
         # Renovar ventana de expiración con cada mensaje entrante del cliente
         if from_number != session.numero:  # sólo mensajes del cliente

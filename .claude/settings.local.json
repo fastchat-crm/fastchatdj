@@ -22,7 +22,9 @@
       "Bash(DJANGO_SETTINGS_MODULE=fastchatdj.settings python -c \"import django; django.setup\\(\\); from django.template.loader import get_template; t = get_template\\('crm/departamento_chatbots/form.html'\\); print\\('template parsea OK'\\)\")",
       "Bash(DJANGO_SETTINGS_MODULE=fastchatdj.settings python -c \"import django; django.setup\\(\\); from django.template.loader import get_template; t = get_template\\('crm/departamento_chatbots/form.html'\\); print\\('OK'\\)\")",
       "Bash(DJANGO_SETTINGS_MODULE=fastchatdj.settings python -c \"import django; django.setup\\(\\); from django.template.loader import get_template; get_template\\('crm/departamento_chatbots/form.html'\\); print\\('template OK'\\); from crm import view_departamento_chatbot; print\\('view OK'\\)\")",
-      "Bash(.venv/Scripts/pip show *)"
+      "Bash(.venv/Scripts/pip show *)",
+      "Bash(awk '{print $NF}')",
+      "Bash(xargs ls *)"
     ]
   }
 }

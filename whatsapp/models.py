@@ -438,6 +438,103 @@ class ConversacionWhatsApp(ModeloBase):
             self.hashed_id = get_encrypt(self.id)[1]
         super().save(*args, **kwargs)
 
+    def cerrar(self, *, enviar_despedida=True, respetar_asignacion_humana=False,
+               respetar_bloqueo_cierre=False):
+        """
+        Cierra la conversación de forma unificada (manual y cronjob).
+
+        Pasos:
+          1. resumir_conversacion() — sentimiento + resumen vía IA (idempotente).
+          2. Registra fecha_fin_conversacion y duracion_conversacion.
+          3. Si enviar_despedida: ejecuta ReglaFinConversacion o, en su defecto,
+             envía el mensaje_despedida clásico de la sesión.
+          4. Marca despedida_enviado=True (si se envió algo),
+             conversacion_finalizada=True y estado_conversacion=1.
+
+        Flags:
+          enviar_despedida: si False, no envía mensaje al cliente
+                            (equivalente a 'terminar-sin-despedida').
+          respetar_asignacion_humana: si True y hay asignado_a, no cierra.
+          respetar_bloqueo_cierre: si True y bloquear_cierre=True con ai_activo=False,
+                                   no cierra.
+
+        Return: True si se cerró, False si fue saltado o ya estaba cerrada.
+        """
+        from crm.acciones_fin import ejecutar_acciones_fin
+        from crm.models import ReglaFinConversacion
+        from whatsapp.services import WhatsAppService
+
+        if self.conversacion_finalizada:
+            return False
+        if respetar_asignacion_humana and self.asignado_a_id:
+            return False
+        if respetar_bloqueo_cierre and self.bloquear_cierre and not self.ai_activo:
+            return False
+
+        sesion = self.contacto.sesion
+
+        self.resumir_conversacion()
+
+        ahora = timezone.now()
+        self.fecha_fin_conversacion = ahora
+        if self.fecha_registro:
+            self.duracion_conversacion = ahora - self.fecha_registro
+
+        if enviar_despedida:
+            regla = ReglaFinConversacion.para_sesion(sesion)
+            if regla:
+                agente_ia = getattr(sesion, 'agente_ia', None)
+                contexto = {
+                    'nombre_contacto': self.contacto.contacto_nombre or self.contacto.from_number,
+                    'numero': self.contacto.from_number,
+                    'sesion': getattr(sesion, 'nombre', str(sesion)),
+                    'sesion_id': sesion.session_id,
+                    'resumen': self.resumen_conversacion or '',
+                    'agente': agente_ia.nombre if agente_ia else '',
+                }
+                ejecutar_acciones_fin(regla, contexto)
+                self.despedida_enviado = True
+            elif getattr(sesion, 'mensaje_despedida', None):
+                resultado = WhatsAppService().send_text_message(
+                    sesion.session_id,
+                    self.contacto.from_number,
+                    sesion.mensaje_despedida,
+                    conversacion_id=self.id,
+                    simularEscritura=True,
+                )
+                if not resultado.get('success'):
+                    raise RuntimeError(resultado.get('error', 'Error enviando despedida'))
+                self.despedida_enviado = True
+
+        self.conversacion_finalizada = True
+        self.estado_conversacion = 1
+
+        self.save(update_fields=[
+            'despedida_enviado',
+            'conversacion_finalizada',
+            'estado_conversacion',
+            'fecha_fin_conversacion',
+            'duracion_conversacion',
+        ])
+        return True
+
+    @classmethod
+    def obtener_o_crear_activa(cls, contacto):
+        """
+        Devuelve (conversacion, created). Busca una conversación activa del
+        contacto (no expirada, no finalizada, estado 0); si no existe, crea
+        una nueva con fecha_hora_expira según session.min_sesion.
+        """
+        conv = cls.objects.sin_expirar.filter(contacto=contacto).first()
+        if conv:
+            return conv, False
+        min_sesion = int(getattr(contacto.sesion, 'min_sesion', None) or 10)
+        conv = cls.objects.create(
+            contacto=contacto,
+            fecha_hora_expira=timezone.now() + relativedelta(minutes=min_sesion),
+        )
+        return conv, True
+
 
 TIPO_MENSAJE_CHOICES = (
     ('texto', 'Texto'),

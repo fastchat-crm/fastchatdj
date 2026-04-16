@@ -444,22 +444,12 @@ def conversacionesView(request):
                         filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))
                     except Exception as ex:
                         raise NameError(f'No se encontró la conversación: {ex}')
-                    contacto = filtro.contacto
-                    if contacto.sesion.mensaje_despedida:
-                        from_number = contacto.from_number
-                        session_id = contacto.sesion.session_id
-                        # Crear instancia del servicio
-                        service = WhatsAppService()
-                        result = service.send_text_message(session_id, from_number, contacto.sesion.mensaje_despedida, conversacion_id=filtro.id, simularEscritura=True)
-                        if not result.get('success'):
-                            raise NameError(f'{result.get("error", "Error desconocido")}')
-                        filtro.despedida_enviado = True
-                    filtro.estado_conversacion = 1
-                    filtro.fecha_fin_conversacion = timezone.now()
-                    res_json.append({ 'error':False, 'url': f'/whatsapp/conversaciones-finalizadas/' })
+                    try:
+                        filtro.cerrar(enviar_despedida=True)
+                    except Exception as ex:
+                        raise NameError(str(ex))
+                    res_json.append({'error': False, 'url': '/whatsapp/conversaciones-finalizadas/'})
                     request.session['contactoId'] = encrypt(filtro.id)
-                    filtro.resumir_conversacion()
-                    filtro.save(request)
                     log(f"Conversación marcada como resuelta {filtro.id}", request, "change", obj=filtro.id)
                     return JsonResponse(res_json, safe=False)
                 elif action == 'terminar-sin-despedida':
@@ -467,12 +457,9 @@ def conversacionesView(request):
                         filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))
                     except Exception as ex:
                         raise NameError(f'No se encontró la conversación: {ex}')
-                    filtro.estado_conversacion = 1
-                    filtro.fecha_fin_conversacion = timezone.now()
-                    res_json.append({ 'error':False, 'url': f'/whatsapp/conversaciones-finalizadas/' })
+                    filtro.cerrar(enviar_despedida=False)
+                    res_json.append({'error': False, 'url': '/whatsapp/conversaciones-finalizadas/'})
                     request.session['contactoId'] = encrypt(filtro.id)
-                    filtro.resumir_conversacion()
-                    filtro.save(request)
                     log(f"Conversación marcada como resuelta {filtro.id}", request, "change", obj=filtro.id)
                     return JsonResponse(res_json, safe=False)
                 elif action == 'transcribe_audio':
