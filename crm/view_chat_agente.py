@@ -106,6 +106,7 @@ def chat_agente_view(request, agente_enc_id):
                     vectorstore_enlaces_path=vectorstore_enlaces_path,
                     provider=apikey_obj.proveedor,
                     apikey=apikey_obj.descripcion,
+                    model_name=(agente.modelo or None),
                     conversacion=fake_conv,
                     prompt_template_text=(agente.prompt_template or '').strip() or PROMPT_TEMPLATES.get('es', ''),
                     contexto_estatico=agente.contexto_estatico or None,
@@ -367,10 +368,12 @@ def _procesar_audio(tmp_path, filename, texto_adicional, apikey_obj, provider, a
         vectorstore_enlaces_path=vectorstore_enlaces_path,
         provider=apikey_obj.proveedor,
         apikey=apikey_obj.descripcion,
+        model_name=(agente.modelo or None),
         conversacion=fake_conv,
         prompt_template_text=agente.prompt_template,
         contexto_estatico=agente.contexto_estatico or None,
         perfil=agente.perfil,
+        agente=agente,
     )
     resultado = consultor.consultar(pregunta, agente.descripcion)
 

@@ -646,7 +646,26 @@ class AgenteConsultor:
             if _sin_datos:
                 _sin_datos = False  # Tenemos FAQ como respaldo
 
+        # ── APIs externas (fuentes tipo=1 fetch en vivo, sin embeddings) ──
+        bloque_apis = self._construir_bloque_apis()
+        if bloque_apis:
+            contexto = f"{contexto}\n\n{bloque_apis}" if contexto else bloque_apis
+            if _sin_datos:
+                _sin_datos = False
+
         return contexto, _sin_datos
+
+    def _construir_bloque_apis(self) -> str:
+        """Trae el texto de las fuentes API (tipo=1) sin recurrir a embeddings.
+        Usa el cache configurado por fuente (`usar_cache`, `tiempo_cache_horas`).
+        """
+        if self.agente is None:
+            return ''
+        try:
+            return self.agente.fetch_contexto_apis() or ''
+        except Exception as exc:
+            logger.debug("No se pudo obtener contexto de APIs: %s", exc)
+            return ''
 
     def _formatear_prompt(
         self, pregunta: str, contexto: str, descripcion_agente: str, contexto_previo: str

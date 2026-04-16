@@ -667,9 +667,9 @@
                         {# Tab 3: fuentes #}
                         <div class="tab-pane fade" id="ctxTabFuentes">
                             <div class="mb-2 d-flex justify-content-between align-items-start gap-2 flex-wrap">
-                                <small class="text-muted flex-grow-1">Archivos, textos y APIs externas que alimentan este agente. Los enlaces tipo API se descargan e indexan automáticamente.</small>
-                                <button type="button" class="btn btn-sm btn-primary" id="ctxBtnReconstruirEnlaces" title="Descarga de nuevo los datos de todas las URLs tipo enlace y reindexa el conocimiento">
-                                    <i class="fas fa-sync-alt me-1"></i>Reconstruir conocimiento API
+                                <small class="text-muted flex-grow-1">Archivos, textos y APIs externas que alimentan este agente. Los enlaces tipo API se consultan <strong>en vivo</strong> al procesar cada mensaje (sin embeddings); se respeta el cache configurado por fuente.</small>
+                                <button type="button" class="btn btn-sm btn-primary" id="ctxBtnReconstruirEnlaces" title="Refresca el cache y consulta cada URL ahora mismo para verificar el contenido">
+                                    <i class="fas fa-sync-alt me-1"></i>Refrescar datos de APIs
                                 </button>
                             </div>
                             <div id="ctxEnlacesEstado"></div>
@@ -989,14 +989,19 @@
                 return;
             }
             const escCtx = (s) => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            const kb = ((x.chars_contexto_apis || 0) / 1024).toFixed(1);
             let html = '<div class="alert alert-success py-2 small mb-2">' +
-                '<i class="fas fa-check-circle me-1"></i>Reconstrucción OK — ' +
-                '<strong>' + (x.docs_indexados || 0) + '</strong> documentos indexados · ' +
-                'expira: <strong>' + escCtx(x.expira || 'sin cache') + '</strong>' +
+                '<i class="fas fa-check-circle me-1"></i>Datos de APIs externas actualizados — ' +
+                '<strong>' + (x.chars_contexto_apis || 0).toLocaleString() + '</strong> caracteres ' +
+                '(<strong>' + kb + ' KB</strong>) listos para inyectar al prompt.' +
                 '</div>';
+            if (x.preview) {
+                html += '<details class="mb-2"><summary class="small text-primary" style="cursor:pointer">Ver preview del contexto que el agente verá</summary>' +
+                        '<pre class="ctx-pane mt-2" style="max-height:280px">' + escCtx(x.preview) + (x.chars_contexto_apis > 3000 ? '\n\n…[mostrando primeros 3000 de ' + x.chars_contexto_apis + ' chars]' : '') + '</pre></details>';
+            }
             $('#ctxEnlacesEstado').html(html);
             _renderEnlacesDiag(x.enlaces);
-            alertaSuccess((x.docs_indexados || 0) + ' documentos indexados del catálogo API.');
+            alertaSuccess('Contexto API actualizado (' + kb + ' KB).');
             // Refrescar pestaña actual del modal
             _ctxCargarDatos(id);
         }, 'json').fail(function() {

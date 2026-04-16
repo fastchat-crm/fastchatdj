@@ -29,6 +29,26 @@ PROVEEDOR_ID_TO_NAME: dict[int, str] = {
 }
 
 
+# Modelos disponibles para cada provider — agrupados por familia.
+# Si dejás esto vacío en el agente, se usa el default del provider (default_model()).
+MODELOS_DISPONIBLES = (
+    # ── Google Gemini ──
+    ('gemini-2.5-flash',          '[Gemini] 2.5 Flash — rápido y económico (default)'),
+    ('gemini-2.5-pro',            '[Gemini] 2.5 Pro — máxima calidad'),
+    ('gemini-1.5-flash',          '[Gemini] 1.5 Flash — versión anterior, estable'),
+    ('gemini-1.5-pro',            '[Gemini] 1.5 Pro — versión anterior, alta calidad'),
+    # ── OpenAI ──
+    ('gpt-4o-mini',               '[OpenAI] GPT-4o Mini — rápido y económico (default)'),
+    ('gpt-4o',                    '[OpenAI] GPT-4o — máxima calidad'),
+    ('gpt-4-turbo',               '[OpenAI] GPT-4 Turbo — alta calidad'),
+    ('gpt-3.5-turbo',             '[OpenAI] GPT-3.5 Turbo — más económico, menor calidad'),
+    # ── Anthropic Claude (cuando se agregue el provider) ──
+    ('claude-haiku-4-5-20251001', '[Claude] Haiku 4.5 — rápido (requiere provider Claude)'),
+    ('claude-sonnet-4-5',         '[Claude] Sonnet 4.5 — balanceado (requiere provider Claude)'),
+    ('claude-opus-4-6',           '[Claude] Opus 4.6 — máxima calidad (requiere provider Claude)'),
+)
+
+
 def get_provider(name_or_id) -> BaseProvider:
     """Devuelve la instancia del provider por nombre ('gemini', 'openai', ...)
     o por id numérico (2=gemini, 3=openai, ...).
@@ -48,4 +68,7 @@ def get_provider(name_or_id) -> BaseProvider:
     return provider
 
 
-__all__ = ['BaseProvider', 'GeminiProvider', 'OpenAIProvider', 'get_provider', 'PROVEEDOR_ID_TO_NAME']
+__all__ = [
+    'BaseProvider', 'GeminiProvider', 'OpenAIProvider',
+    'get_provider', 'PROVEEDOR_ID_TO_NAME', 'MODELOS_DISPONIBLES',
+]

@@ -630,13 +630,14 @@ def process_incoming_message(session, event_data, channel_layer):
                         conversation.sesion.session_id, contacto.from_number
                     )
                 vs_path = agente.vectorstore_path and os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path) or ''
-                vectorstore_enlaces_path = ''
-                try:
-                    agente.build_enlaces_vectorstore()
-                    if agente.vectorstore_enlaces_path:
-                        vectorstore_enlaces_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_enlaces_path)
-                except Exception as _e:
-                    logger.warning("build_enlaces_vectorstore falló para agente %s: %s", agente.id, _e)
+                # Enlaces API (tipo=1) se inyectan ahora al vuelo vía fetch_contexto_apis
+                # dentro de AgenteConsultor._construir_contexto — sin embeddings.
+                # Si hay un vectorstore_enlaces_path pre-existente, se sigue cargando
+                # como respaldo para búsqueda semántica.
+                vectorstore_enlaces_path = (
+                    os.path.join(settings.MEDIA_ROOT, agente.vectorstore_enlaces_path)
+                    if agente.vectorstore_enlaces_path else ''
+                )
                 respuesta_enviada = False
                 resultado = None
                 _keys_activas_qs = agente.apikey.filter(estado=True)
@@ -674,6 +675,7 @@ def process_incoming_message(session, event_data, channel_layer):
                         consultor = AgenteConsultor(
                             vectorstore_path=vs_path, vectorstore_enlaces_path=vectorstore_enlaces_path,
                             provider=apikey.proveedor, apikey=apikey.descripcion,
+                            model_name=(agente.modelo or None),  # vacío → default del provider
                             conversacion=conversation, prompt_template_text=_prompt_tpl,
                             contexto_estatico=agente.contexto_estatico or None,
                             detectar_fin=detectar_fin_llm,

@@ -438,6 +438,7 @@ def entrenamiento_ia_view(request):
                             consultor = AgenteConsultor(
                                 vectorstore_path=vs_path, vectorstore_enlaces_path=vs_enlaces_path,
                                 provider=apikey_obj.proveedor, apikey=apikey_obj.descripcion,
+                                model_name=(agente.modelo or None),
                                 conversacion=fake_conv,
                                 prompt_template_text=(agente.prompt_template or '').strip() or PROMPT_TEMPLATES.get('es', ''),
                                 contexto_estatico=agente.contexto_estatico or None,
@@ -545,98 +546,67 @@ def entrenamiento_ia_view(request):
                         return JsonResponse({'error': False, 'count': count})
 
                     elif action == 'reconstruir_enlaces':
-                        # Fuerza rebuild del vectorstore de enlaces (APIs externas)
-                        from agents_ai.agente_consultor import invalidate_vectorstore_cache
+                        # Invalida el cache de fetch_contexto_apis y ejecuta una
+                        # consulta real a cada URL para mostrar diagnóstico al usuario.
+                        from django.core.cache import cache
                         agente = AgentesIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
                         detalles_enlace = agente.detalleagentesai_set.filter(status=True, tipo=1, enlace__isnull=False)
                         if not detalles_enlace.exists():
                             return JsonResponse({'error': True, 'message': 'Este agente no tiene enlaces API configurados.'})
-                        if not agente.apikey.filter(estado=True).exists():
-                            return JsonResponse({'error': True, 'message': 'El agente no tiene API Key activa (necesaria para embeddings).'})
-                        # Forzar expiración → la próxima llamada reconstruye
-                        agente.vectorstore_enlaces_expira = None
-                        agente.vectorstore_enlaces_path = None
-                        agente.save(update_fields=['vectorstore_enlaces_expira', 'vectorstore_enlaces_path'])
-                        # Ejecutar rebuild ahora mismo
+
+                        # Invalidar cache de cada fuente
+                        for d in detalles_enlace:
+                            cache.delete(f'agente_api_{agente.id}_detalle_{d.id}')
+
+                        # Diagnóstico por URL
                         enlaces_info = []
                         for d in detalles_enlace:
-                            info = {'id': d.id, 'url': d.enlace, 'tipo_dato': d.get_tipo_dato_enlace_display()}
+                            info = {'id': d.id, 'url': d.enlace, 'tipo_dato': d.get_tipo_dato_enlace_display(),
+                                    'observacion': d.descripcion or ''}
                             try:
                                 import requests as _r
-                                headers = {}
+                                headers = {'Accept': 'application/json, text/plain, */*'}
                                 if d.requiere_token and d.token_autorizacion:
                                     headers['Authorization'] = f'Bearer {d.token_autorizacion}'
                                 resp = _r.get(d.enlace, headers=headers, timeout=30)
                                 info['status_http'] = resp.status_code
                                 info['bytes'] = len(resp.content)
-                                if resp.status_code == 200:
-                                    if d.tipo_dato_enlace == 3:
-                                        try:
-                                            j = resp.json()
-                                            if isinstance(j, dict):
-                                                if 'listCatalogo' in j:
-                                                    info['items_detectados'] = len(j['listCatalogo'])
-                                                    info['estructura'] = 'listCatalogo'
-                                                elif 'data' in j and isinstance(j['data'], list):
-                                                    info['items_detectados'] = len(j['data'])
-                                                    info['estructura'] = 'data[]'
-                                                else:
-                                                    info['estructura'] = 'json_generico'
-                                            elif isinstance(j, list):
-                                                info['items_detectados'] = len(j)
-                                                info['estructura'] = 'lista_raiz'
-                                        except Exception as je:
-                                            info['error_parse'] = str(je)[:200]
+                                if resp.status_code == 200 and d.tipo_dato_enlace == 3:
+                                    try:
+                                        j = resp.json()
+                                        if isinstance(j, dict):
+                                            if 'listCatalogo' in j:
+                                                info['items_detectados'] = len(j['listCatalogo'])
+                                                info['estructura'] = 'listCatalogo'
+                                            elif 'data' in j and isinstance(j['data'], list):
+                                                info['items_detectados'] = len(j['data'])
+                                                info['estructura'] = 'data[]'
+                                            else:
+                                                info['estructura'] = 'json_generico'
+                                        elif isinstance(j, list):
+                                            info['items_detectados'] = len(j)
+                                            info['estructura'] = 'lista_raiz'
+                                    except Exception as je:
+                                        info['error_parse'] = str(je)[:200]
                             except Exception as e:
                                 info['error'] = str(e)[:300]
                             enlaces_info.append(info)
 
-                        # Llamar build_enlaces_vectorstore
+                        # Generar el bloque de contexto (para mostrar preview)
                         try:
-                            agente.build_enlaces_vectorstore()
+                            contexto_apis = agente.fetch_contexto_apis(forzar_refresco=True)
                         except Exception as e:
-                            msg = str(e)
-                            if 'API key not valid' in msg or 'API_KEY_INVALID' in msg or 'invalid_api_key' in msg.lower():
-                                pretty = ('❌ La API Key del agente no es válida para generar embeddings. '
-                                          'Ve al tab Identidad → API Key, prueba la key (botón "Test") y si está mala, '
-                                          'agrega una válida de Gemini (https://aistudio.google.com/apikey) u OpenAI.')
-                            elif 'quota' in msg.lower() or 'rate limit' in msg.lower():
-                                pretty = '❌ La API Key alcanzó su cuota o rate limit. Espera unos minutos o usa otra key.'
-                            else:
-                                pretty = f'❌ Error construyendo índice: {msg[:400]}'
-                            return JsonResponse({'error': True, 'message': pretty, 'enlaces': enlaces_info})
+                            return JsonResponse({
+                                'error': True,
+                                'message': f'❌ Error obteniendo datos: {str(e)[:400]}',
+                                'enlaces': enlaces_info,
+                            })
 
-                        agente.refresh_from_db(fields=['vectorstore_enlaces_path', 'vectorstore_enlaces_expira'])
-                        # Invalidar cache in-memory
-                        if agente.vectorstore_enlaces_path:
-                            try:
-                                invalidate_vectorstore_cache(os.path.join(settings.MEDIA_ROOT, agente.vectorstore_enlaces_path))
-                            except Exception:
-                                pass
-                        # Contar documentos indexados (carga FAISS directamente)
-                        docs_count = 0
-                        if agente.vectorstore_enlaces_path:
-                            try:
-                                from langchain_community.vectorstores import FAISS
-                                from langchain_google_genai import GoogleGenerativeAIEmbeddings
-                                from langchain_community.embeddings import OpenAIEmbeddings
-                                apikey_obj = agente.apikey.filter(estado=True).first()
-                                if apikey_obj.proveedor == 2:
-                                    emb = GoogleGenerativeAIEmbeddings(model='models/text-embedding-004', google_api_key=apikey_obj.descripcion)
-                                else:
-                                    emb = OpenAIEmbeddings(openai_api_key=apikey_obj.descripcion)
-                                _path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_enlaces_path)
-                                vs = FAISS.load_local(_path, emb, allow_dangerous_deserialization=True)
-                                if vs and hasattr(vs, 'docstore'):
-                                    docs_count = len(vs.docstore._dict)
-                            except Exception:
-                                pass
-                        log(f"Reconstruyó vectorstore enlaces del agente {agente.nombre}", request, "change", obj=agente.id)
+                        log(f"Refrescó conocimiento API del agente {agente.nombre}", request, "change", obj=agente.id)
                         return JsonResponse({
                             'error': False,
-                            'vectorstore_path': agente.vectorstore_enlaces_path or '',
-                            'expira': agente.vectorstore_enlaces_expira.strftime('%Y-%m-%d %H:%M') if agente.vectorstore_enlaces_expira else '',
-                            'docs_indexados': docs_count,
+                            'chars_contexto_apis': len(contexto_apis or ''),
+                            'preview': (contexto_apis or '')[:3000],
                             'enlaces': enlaces_info,
                         })
 

@@ -14,6 +14,7 @@ from core.validadores import FileMaxSizeInMbValidator
 from whatsapp.models import ConversacionWhatsApp
 from fastchatdj import settings
 from agents_ai.vectorstore_manager import VectorStoreManager
+from agents_ai.providers import MODELOS_DISPONIBLES
 
 # Representa las industrias generales a las que puede pertenecer un negocio
 class Industria(ModeloBase):
@@ -177,6 +178,12 @@ class RespuestaEntrenadaIA(ModeloBase):
 class AgentesIA(ModeloBase):
     perfil = models.ForeignKey(PerfilNegocioIA, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Perfil Negocio IA')
     apikey = models.ManyToManyField('ApiKeyIA', blank=True, verbose_name='Api Keys IA')
+    modelo = models.CharField(
+        max_length=100, blank=True, default='', choices=MODELOS_DISPONIBLES,
+        verbose_name='Modelo LLM',
+        help_text='Modelo concreto que usará el agente. Debe ser compatible con el provider de la API Key '
+                  '(Gemini con keys Gemini, GPT con keys OpenAI, etc.). Si dejás vacío, se usa el default del provider.'
+    )
     nombre = models.CharField(max_length=255, verbose_name="Nombre de agente")
     descripcion = models.TextField(verbose_name="Descripcion del agente")
     vectorstore_path = models.CharField(
@@ -294,6 +301,141 @@ class AgentesIA(ModeloBase):
 
         print(f"DEBUG: JSON generado con {len(detalles_json)} detalles")
         return json.dumps(detalles_json)
+
+    def fetch_contexto_apis(self, forzar_refresco: bool = False) -> str:
+        """
+        Descarga todas las fuentes tipo=1 (enlaces API) y devuelve su
+        contenido formateado como texto plano listo para inyectar al prompt.
+
+        Sin embeddings, sin FAISS — solo HTTP + cache en memoria Django.
+        Respeta `usar_cache` y `tiempo_cache_horas` de cada fuente.
+
+        El texto incluye la "observación" de cada fuente como prefijo
+        [FUENTE ... — CUÁNDO USAR: ...], para que el LLM sepa en qué
+        momento le conviene mirar esa data.
+        """
+        from django.core.cache import cache
+
+        detalles = self.detalleagentesai_set.filter(status=True, tipo=1, enlace__isnull=False)
+        if not detalles.exists():
+            return ''
+
+        def _money_map_to_str(m):
+            if not m:
+                return ''
+            try:
+                items = sorted(m.items(), key=lambda kv: int(kv[0]))
+            except Exception:
+                items = list(m.items())
+            return ', '.join(f'{k}: {v}' for k, v in items if v is not None and str(v).strip() != '')
+
+        def _json_to_text(obj, nivel=0) -> str:
+            indent = '  ' * nivel
+            if isinstance(obj, list):
+                return '\n\n'.join(f'{indent}[{i + 1}]\n{_json_to_text(it, nivel + 1)}'
+                                   for i, it in enumerate(obj))
+            if isinstance(obj, dict):
+                out = []
+                for k, v in obj.items():
+                    if v is None or str(v).strip() == '':
+                        continue
+                    if isinstance(v, (dict, list)):
+                        sub = _json_to_text(v, nivel + 1)
+                        if sub.strip():
+                            out.append(f'{indent}{k}:\n{sub}')
+                    else:
+                        out.append(f'{indent}{k}: {v}')
+                return '\n'.join(out)
+            return f'{indent}{obj}'
+
+        bloques = []
+        for d in detalles:
+            cache_key = f'agente_api_{self.id}_detalle_{d.id}'
+            texto = None
+            if d.usar_cache and not forzar_refresco:
+                texto = cache.get(cache_key)
+
+            if texto is None:
+                try:
+                    headers = {'Accept': 'application/json, text/plain, */*'}
+                    if d.requiere_token and d.token_autorizacion:
+                        headers['Authorization'] = f'Bearer {d.token_autorizacion}'
+                    resp = requests.get(d.enlace, headers=headers, timeout=30)
+                    if resp.status_code != 200:
+                        texto = f'[ERROR HTTP {resp.status_code} al consultar {d.enlace}]'
+                    else:
+                        tipo_dato = d.tipo_dato_enlace  # 1=TEXT, 2=HTML, 3=JSON, 4=EXCEL, 5=CSV
+                        if tipo_dato == 2:
+                            try:
+                                from bs4 import BeautifulSoup
+                                texto = BeautifulSoup(resp.text, 'html.parser').get_text(separator='\n', strip=True)
+                            except Exception:
+                                texto = resp.text
+                        elif tipo_dato == 3:
+                            try:
+                                data = resp.json()
+                            except Exception as je:
+                                texto = f'[JSON inválido: {je}]\n{resp.text[:2000]}'
+                                data = None
+                            if data is not None:
+                                if isinstance(data, dict) and data.get('listCatalogo'):
+                                    lineas = []
+                                    for c in data['listCatalogo']:
+                                        precio = (c.get('precio') or {}).get('real') or ''
+                                        carnada = (c.get('precio') or {}).get('carnada') or ''
+                                        horas = (c.get('horas') or {}).get('total') or ''
+                                        lineas.append(
+                                            f"— {c.get('nombre') or '(sin nombre)'} "
+                                            f"| Categoría: {(c.get('categoria') or {}).get('descripcion') or '—'} "
+                                            f"| Unidad: {c.get('unidad_negocio') or '—'} "
+                                            f"| Precio: ${precio or '—'}"
+                                            + (f" (antes ${carnada})" if carnada and carnada != precio else '')
+                                            + (f" | {horas}h" if horas else '')
+                                            + (f" | Activo: {c.get('activo')}" if c.get('activo') is not None else '')
+                                            + (f" | Fechas: {c.get('fechainicio') or '—'} a {c.get('fechafin') or '—'}"
+                                               if c.get('fechainicio') or c.get('fechafin') else '')
+                                            + (f"\n   Descripción: {(c.get('descripcion') or '')[:500]}"
+                                               if c.get('descripcion') else '')
+                                        )
+                                    texto = f"Total: {len(data['listCatalogo'])} items.\n" + '\n'.join(lineas)
+                                elif isinstance(data, dict) and data.get('data'):
+                                    lineas = []
+                                    for it in data['data']:
+                                        costos = it.get('costos', {}) or {}
+                                        lineas.append(
+                                            f"— {it.get('nombre') or '(sin nombre)'} "
+                                            f"| Periodo: {it.get('periodo') or '—'} "
+                                            f"| Cupo: {it.get('tiene_cupo')} "
+                                            f"| Fechas: {it.get('fechainicio') or '—'} a {it.get('fechafin') or '—'}"
+                                            + (f"\n   Inscripción: {_money_map_to_str(costos.get('inscripcion')) or 'N/D'}"
+                                               f"; Matrícula: {_money_map_to_str(costos.get('matricula')) or 'N/D'}")
+                                            + (f"\n   Requisitos: {(it.get('requisitos') or '')[:300]}"
+                                               if it.get('requisitos') else '')
+                                        )
+                                    texto = f"Total: {len(data['data'])} items.\n" + '\n'.join(lineas)
+                                else:
+                                    texto = _json_to_text(data)
+                        else:
+                            texto = resp.text
+
+                    if d.usar_cache and d.tiempo_cache_horas:
+                        cache.set(cache_key, texto, timeout=d.tiempo_cache_horas * 3600)
+                    elif d.usar_cache:
+                        cache.set(cache_key, texto, timeout=600)  # 10 min por default
+
+                except requests.Timeout:
+                    texto = f'[Timeout (30s) consultando {d.enlace}]'
+                except Exception as e:
+                    texto = f'[Error consultando {d.enlace}: {e}]'
+
+            observacion = (d.descripcion or '').strip()
+            tipo_nombre = d.get_tipo_dato_enlace_display() if hasattr(d, 'get_tipo_dato_enlace_display') else 'datos'
+            encabezado = f'## FUENTE API: {tipo_nombre}'
+            if observacion:
+                encabezado += f'\n## CUÁNDO USARLA: {observacion}'
+            bloques.append(f'{encabezado}\n{texto or "(sin contenido)"}\n## fin fuente ##')
+
+        return '\n\n'.join(bloques)
 
     def build_enlaces_vectorstore(self):
         detalles = self.detalleagentesai_set.filter(status=True, tipo=1, enlace__isnull=False)
