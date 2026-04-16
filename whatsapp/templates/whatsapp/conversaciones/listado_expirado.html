@@ -185,6 +185,16 @@
                                 <i class="fa fa-redo me-1"></i>Reactivar
                             </a>
                         </div>
+                        <div class="dropdown d-inline d-none" id="dropdowns-btn">
+                            <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" data-bs-toggle="dropdown">
+                                <i class="fa fa-ellipsis-v"></i>
+                            </a>
+                            <div class="dropdown-menu dropdown-menu-end">
+                                <a href="javascript:void(0)" class="dropdown-item form_modal" id="cambiar-clasificacion" title="Cambiar clasificacion">
+                                    <i class="fa fa-sync me-2"></i> Cambiar clasificación
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -254,10 +264,27 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal acciones (clasificación, etc.) -->
+    <div class="modal fade" id="modalForm" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalFormTitle"></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body detalleProd"></div>
+                </form>
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block jscript %}
 <script src="/static/js/reconnecting-websocket.min.js"></script>
+<script src="/static/js/forms.js?version=2"></script>
 <script>
 $(document).ready(function() {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -363,7 +390,7 @@ $(document).ready(function() {
         $.unblockUI();
         if (chatSocket) { chatSocket.close(); chatSocket = null; }
         $('#mensajes-container').html('<div class="text-center p-5"><i class="fa fa-comments fa-4x text-muted mb-3"></i><p class="text-muted">Selecciona una conversación</p></div>');
-        $('#reactivar-btn, #ver-resumen-btn, #chat-footer').addClass('d-none').hide();
+        $('#reactivar-btn, #ver-resumen-btn, #chat-footer, #dropdowns-btn').addClass('d-none').hide();
         $('#contacto-nombre').text('Selecciona una conversación');
         $('#contacto-numero, #contacto-hashedId').text('');
         $('#conv-fechas').hide();
@@ -426,10 +453,11 @@ $(document).ready(function() {
                     $('#conv-fechas').hide();
                 }
 
-                $('#marcar-reactivar, #ver-resumen').attr('data-id', id);
+                $('#marcar-reactivar, #ver-resumen, #cambiar-clasificacion').attr('data-id', id);
                 r.estado_active ? $('#reactivar-btn').addClass('d-none').hide()
                                 : $('#reactivar-btn').removeClass('d-none').show();
                 $('#ver-resumen-btn').removeClass('d-none').show();
+                $('#dropdowns-btn').removeClass('d-none').show();
 
                 // Guardar datos para render lazy del panel estadísticas
                 window._lastStatsData = r;
@@ -525,10 +553,44 @@ $(document).ready(function() {
         });
     });
 
+    // ── Acciones del dropdown (cambiar clasificación) ──────────────────
+    $(document).on('click', '#dropdowns-btn .form_modal', function(e) {
+        e.preventDefault();
+        const id = $(this).attr('data-id') || conversacionActiva;
+        const title = $(this).attr('title');
+        const action = $(this).attr('id');
+        if (!id) return;
+        formModal(id, title, action);
+    });
+
     // Cargar conversación preseleccionada desde sesión
     {% if conversacion_selected %}
     cargarMensajes('{{ conversacion_selected.id }}');
     {% endif %}
 });
+
+function formModal(id, text, action) {
+    pantallaespera();
+    $.ajax({
+        type: "GET",
+        url: window.location.pathname,
+        data: {action: action, id: id},
+        success: function(data) {
+            setTimeout($.unblockUI, 1);
+            if (data.result === true) {
+                $('#modalFormTitle').html(text);
+                $('#modalForm .detalleProd').html(data.data);
+                new bootstrap.Modal(document.getElementById('modalForm')).show();
+            } else {
+                mensajeWarning(data.message);
+            }
+        },
+        error: function() {
+            setTimeout($.unblockUI, 1);
+            mensajeWarning("Error de conexión.");
+        },
+        dataType: "json"
+    });
+}
 </script>
 {% endblock %}

@@ -4,7 +4,7 @@ from autenticacion.models import Usuario
 from core.custom_forms import FormModeloBase
 from core.custom_models import ModelFormBase
 from crm.models import PerfilNegocioIA, ActividadEconomica, Industria, ProductoIA, ServicioIA, RespuestaEntrenadaIA, \
-    DepartamentoChatBot, AgentesIA, ApiKeyIA
+    DepartamentoChatBot, AgentesIA, ApiKeyIA, HerramientaAgente
 
 
 class PerfilNegocioIAForm(ModelFormBase):
@@ -174,6 +174,35 @@ class AgentesIAForm(ModelFormBase):
                 self.fields[k].widget.attrs['data-render'] = "switchery"
                 self.fields[k].widget.attrs['data-theme'] = "default"
                 self.fields[k].widget.attrs['col'] = '12'
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+
+class HerramientaAgenteForm(ModelFormBase):
+    class Meta:
+        model = HerramientaAgente
+        fields = (
+            'nombre_amigable', 'nombre', 'descripcion', 'metodo', 'url',
+            'ubicacion_params', 'timeout', 'plantilla_respuesta', 'activo',
+        )
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super().__init__(*args, **kwargs)
+        for k, v in self.fields.items():
+            self.fields[k].widget.attrs['class'] = 'form-control form-control-sm'
+            self.fields[k].widget.attrs['col'] = '12'
+            if k in ('metodo', 'ubicacion_params'):
+                self.fields[k].widget.attrs['class'] = 'form-select form-select-sm'
+                self.fields[k].widget.attrs['col'] = '6'
+            if k == 'timeout':
+                self.fields[k].widget.attrs['col'] = '6'
+                self.fields[k].widget.attrs['min'] = '1'
+                self.fields[k].widget.attrs['max'] = '30'
+            if k == 'activo':
+                self.fields[k].widget.attrs['class'] = "js-switch"
+                self.fields[k].widget.attrs['data-render'] = "switchery"
+                self.fields[k].widget.attrs['data-theme'] = "default"
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 

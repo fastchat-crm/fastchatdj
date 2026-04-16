@@ -335,6 +335,132 @@ def entrenamiento_ia_view(request):
                             filtro.msgerror = str(ex)[:500]
                             filtro.save()
                             res_json = {"error": False, "message": f"❌ Error: {str(ex)[:300]}", "activo": False}
+
+                    # ── Herramientas Agente (tool-calling dinámico) ───────────
+                    elif action == 'herramienta_save':
+                        from crm.forms import HerramientaAgenteForm
+                        from crm.models import HerramientaAgente as _HA
+                        from django.core.exceptions import ValidationError as _VE
+                        agente = AgentesIA.objects.get(pk=int(request.POST['agente_id']), perfil=perfil)
+                        pk = request.POST.get('pk')
+                        instancia = _HA.objects.get(pk=int(pk), agente=agente) if pk else None
+                        form = HerramientaAgenteForm(request.POST, instance=instancia, request=request)
+                        if not form.is_valid():
+                            raise FormError(form)
+                        obj = form.save(commit=False)
+                        obj.agente = agente
+                        # Parámetros (schema dinámico) y headers desde JSON del front
+                        try:
+                            obj.parametros = json.loads(request.POST.get('parametros_json', '[]'))
+                        except Exception:
+                            raise ValueError('Parámetros inválidos (JSON malformado).')
+                        try:
+                            obj.headers = json.loads(request.POST.get('headers_json', '{}'))
+                        except Exception:
+                            raise ValueError('Headers inválidos (JSON malformado).')
+                        try:
+                            obj.clean()
+                        except _VE as ve:
+                            mensajes = '; '.join(f"{k}: {', '.join(v)}" for k, v in ve.message_dict.items()) if hasattr(ve, 'message_dict') else str(ve)
+                            raise ValueError(mensajes)
+                        obj.save()
+                        log(f"{'Edito' if pk else 'Creo'} herramienta '{obj.nombre}' del agente {agente.nombre}",
+                            request, "change" if pk else "add", obj=obj.id)
+                        return JsonResponse({'error': False, 'id': obj.id})
+
+                    elif action == 'herramienta_delete':
+                        from crm.models import HerramientaAgente as _HA
+                        filtro = _HA.objects.get(pk=int(request.POST['id']), agente__perfil=perfil)
+                        filtro.status = False
+                        filtro.save(request)
+                        log(f"Elimino herramienta {filtro.nombre}", request, "del", obj=filtro.id)
+                        return JsonResponse({'error': False})
+
+                    elif action == 'herramienta_toggle_activo':
+                        from crm.models import HerramientaAgente as _HA
+                        filtro = _HA.objects.get(pk=int(request.POST['id']), agente__perfil=perfil)
+                        filtro.activo = not filtro.activo
+                        filtro.save(update_fields=['activo'])
+                        return JsonResponse({'error': False, 'activo': filtro.activo})
+
+                    elif action == 'herramienta_simular':
+                        from django.utils import timezone as _tz
+                        from types import SimpleNamespace
+                        from agents_ai.agente_consultor import AgenteConsultor
+                        from crm.models import LogHerramientaAgente as _Log, HerramientaAgente as _HA
+
+                        agente_id = int(request.POST.get('agente_id') or 0)
+                        agente = AgentesIA.objects.get(pk=agente_id, perfil=perfil)
+                        # Validar que tenga al menos una herramienta activa
+                        if not agente.herramientas.filter(activo=True, status=True).exists():
+                            return JsonResponse({'error': True, 'message': 'El agente no tiene herramientas activas para simular.'})
+
+                        mensaje = (request.POST.get('mensaje') or '').strip()
+                        if not mensaje:
+                            return JsonResponse({'error': True, 'message': 'Escribe un mensaje.'})
+
+                        apikey_obj = agente.apikey.filter(estado=True).first()
+                        if not apikey_obj:
+                            return JsonResponse({'error': True, 'message': 'El agente no tiene una API Key activa.'})
+
+                        vs_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path) if agente.vectorstore_path else None
+                        vs_enlaces_path = None
+                        try:
+                            if agente.vectorstore_enlaces_path:
+                                vs_enlaces_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_enlaces_path)
+                        except Exception:
+                            pass
+
+                        session_id = f"sim-herr-{agente.id}-{request.user.id}"
+                        fake_conv = SimpleNamespace(id=session_id, contacto=None)
+
+                        before = _tz.now()
+                        try:
+                            consultor = AgenteConsultor(
+                                vectorstore_path=vs_path, vectorstore_enlaces_path=vs_enlaces_path,
+                                provider=apikey_obj.proveedor, apikey=apikey_obj.descripcion,
+                                conversacion=fake_conv,
+                                prompt_template_text=(agente.prompt_template or '').strip() or PROMPT_TEMPLATES.get('es', ''),
+                                contexto_estatico=agente.contexto_estatico or None,
+                                perfil=agente.perfil, agente=agente,
+                            )
+                            resultado = consultor.consultar_con_listas(mensaje, agente.descripcion)
+                        except Exception as ex:
+                            return JsonResponse({'error': True, 'message': f'Fallo invocando el agente: {ex}'})
+
+                        # Capturar invocaciones de HerramientaAgente disparadas durante este turno
+                        logs_qs = _Log.objects.filter(
+                            herramienta__agente=agente, fecha__gte=before,
+                        ).select_related('herramienta').order_by('fecha')[:10]
+                        traza = []
+                        for lg in logs_qs:
+                            traza.append({
+                                'herramienta': lg.herramienta.nombre_amigable,
+                                'slug': lg.herramienta.nombre,
+                                'url': lg.request_url,
+                                'params': lg.request_params or {},
+                                'status': lg.response_status,
+                                'duracion_ms': lg.duracion_ms,
+                                'exito': lg.exito,
+                                'error': lg.error_mensaje,
+                                'response_preview': (lg.response_body or '')[:400],
+                            })
+
+                        return JsonResponse({
+                            'error': False,
+                            'respuesta': resultado.respuesta,
+                            'tokens_total': resultado.tokens_total,
+                            'traza': traza,
+                        })
+
+                    elif action == 'herramienta_simular_reset':
+                        from agents_ai.memoria_django import DjangoChatMessageHistory
+                        agente_id = int(request.POST.get('agente_id') or 0)
+                        agente = AgentesIA.objects.get(pk=agente_id, perfil=perfil)
+                        session_id = f"sim-herr-{agente.id}-{request.user.id}"
+                        DjangoChatMessageHistory(session_id=session_id).clear()
+                        return JsonResponse({'error': False})
+
             except ValueError as ex:
                 res_json.append({'error': True, "message": str(ex)})
             except FormError as ex:
@@ -365,6 +491,7 @@ def entrenamiento_ia_view(request):
                         data['detalles_existentes'] = filtro.obtener_detalles_agente()
                         data['regla_fin'] = getattr(filtro, 'regla_fin', None)
                         data['acciones_fin'] = data['regla_fin'].acciones.filter(status=True) if data['regla_fin'] else []
+                        data['herramientas'] = filtro.herramientas.filter(status=True).order_by('nombre')
                         template = get_template("crm/entrenamiento/agente/form.html")
                         return JsonResponse({"result": True, 'data': template.render(data)})
                     except Exception as ex:
@@ -446,6 +573,37 @@ def entrenamiento_ia_view(request):
                             "detalles_count": len(detalles),
                             "detalles": detalles,
                         })
+                    except Exception as ex:
+                        return JsonResponse({"result": False, 'message': str(ex)})
+                if action == 'herramienta_form':
+                    try:
+                        from crm.forms import HerramientaAgenteForm
+                        from crm.models import HerramientaAgente as _HA
+                        agente_id = int(request.GET.get('agente_id') or 0)
+                        agente = AgentesIA.objects.get(pk=agente_id, perfil=perfil)
+                        pk = request.GET.get('id')
+                        herramienta = _HA.objects.get(pk=int(pk), agente=agente) if pk else None
+                        form = HerramientaAgenteForm(instance=herramienta)
+                        data_ctx = dict(data)
+                        data_ctx['form'] = form
+                        data_ctx['herramienta'] = herramienta
+                        data_ctx['agente'] = agente
+                        # Pasar el valor Python crudo — json_script en el template se encarga de serializar
+                        data_ctx['parametros_init'] = herramienta.parametros if herramienta else []
+                        data_ctx['headers_init'] = herramienta.headers if herramienta else {}
+                        template = get_template("crm/entrenamiento/herramienta/form.html")
+                        return JsonResponse({"result": True, 'data': template.render(data_ctx)})
+                    except Exception as ex:
+                        return JsonResponse({"result": False, 'message': str(ex)})
+                if action == 'herramienta_lista':
+                    try:
+                        agente_id = int(request.GET.get('agente_id') or 0)
+                        agente = AgentesIA.objects.get(pk=agente_id, perfil=perfil)
+                        data_ctx = dict(data)
+                        data_ctx['agente'] = agente
+                        data_ctx['herramientas'] = agente.herramientas.filter(status=True).order_by('nombre')
+                        template = get_template("crm/entrenamiento/herramienta/lista.html")
+                        return JsonResponse({"result": True, 'data': template.render(data_ctx)})
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})
                 if action == 'addapikey':

@@ -74,7 +74,7 @@ def sesionesView(request):
                     )
                     destino_fmt = whatsapp_service.format_phone_number(numero_destino)
                     resultado = whatsapp_service.send_text_message(
-                        filtro.session_id, destino_fmt, texto,
+                        filtro.session_id, destino_fmt, texto, simularEscritura=True,
                     )
                     if resultado.get('success'):
                         log(f"Prueba de envío enviada desde sesión {filtro.id} a {destino_fmt}", request, "change", obj=filtro.id)

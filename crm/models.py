@@ -202,6 +202,19 @@ class AgentesIA(ModeloBase):
         verbose_name = 'Respuesta Entrenada IA'
         verbose_name_plural = 'Respuestas Entrenadas IA'
 
+    def requiere_tools(self) -> bool:
+        """True si el agente necesita el loop tool-calling del consultor.
+
+        Se activa cuando tiene `anotar_listas=True` (pedidos en memoria) o
+        tiene al menos una HerramientaAgente activa configurada.
+        """
+        if self.anotar_listas:
+            return True
+        try:
+            return self.herramientas.filter(activo=True, status=True).exists()
+        except Exception:
+            return False
+
     def obtener_detalles_agente(self):
         """
         Función para obtener los detalles existentes de un agente
@@ -1109,3 +1122,144 @@ class AuditoriaAgenteIA(models.Model):
 
     def __str__(self):
         return f"Auditoria #{self.id} — {self.agente.nombre} ({self.estado})"
+
+
+# ─── Herramientas configurables por agente (tool-calling dinámico) ───────────
+
+METODO_HTTP_CHOICES = (
+    ('GET',  'GET'),
+    ('POST', 'POST'),
+)
+
+UBICACION_PARAMS_CHOICES = (
+    ('query', 'Query string (?param=valor)'),
+    ('json',  'JSON body'),
+    ('form',  'Form data (x-www-form-urlencoded)'),
+    ('path',  'En la URL {param}'),
+)
+
+TIPO_PARAM_CHOICES = (
+    ('string',  'Texto'),
+    ('integer', 'Número entero'),
+    ('number',  'Número decimal'),
+    ('boolean', 'Sí/No'),
+)
+
+
+class HerramientaAgente(ModeloBase):
+    """
+    Herramienta (tool) que el LLM puede invocar vía function-calling para
+    consultar una API externa. Cada AgentesIA puede tener múltiples herramientas
+    configurables por el cliente final sin tocar código.
+
+    El schema `parametros` describe los datos que el LLM debe recolectar del
+    usuario antes de llamar la API. Cuando el agente responde, si detecta que
+    el usuario quiere la información que esta tool ofrece, pedirá los datos
+    faltantes de forma natural y luego ejecutará la llamada.
+    """
+    agente = models.ForeignKey(
+        AgentesIA, on_delete=models.CASCADE, related_name='herramientas',
+        verbose_name='Agente',
+    )
+    nombre = models.SlugField(
+        max_length=64, verbose_name='Identificador (slug)',
+        help_text='Identificador interno para el LLM, ej: consultar_saldo. Sin espacios.'
+    )
+    nombre_amigable = models.CharField(
+        max_length=120, verbose_name='Nombre amigable',
+        help_text='Nombre visible para el usuario administrador'
+    )
+    descripcion = models.TextField(
+        verbose_name='Descripción (la ve el LLM)',
+        help_text='Qué hace la herramienta y cuándo usarla. Esta descripción es la que '
+                  'el modelo lee para decidir si llamarla.'
+    )
+    metodo = models.CharField(
+        max_length=10, choices=METODO_HTTP_CHOICES, default='GET', verbose_name='Método HTTP'
+    )
+    url = models.URLField(
+        max_length=500, verbose_name='URL',
+        help_text='URL del endpoint. Puede incluir {param} para sustituir en el path.'
+    )
+    headers = models.JSONField(
+        default=dict, blank=True, verbose_name='Headers estáticos',
+        help_text='Ej: {"Authorization": "Bearer xxx", "Accept": "application/json"}'
+    )
+    parametros = models.JSONField(
+        default=list, blank=True, verbose_name='Parámetros (schema para el LLM)',
+        help_text='Lista de campos que el agente debe pedir al usuario. Cada item: '
+                  '{"nombre": "cedula", "tipo": "string", "descripcion": "...", '
+                  '"requerido": true, "pregunta_sugerida": "¿Me das tu cédula?"}'
+    )
+    ubicacion_params = models.CharField(
+        max_length=10, choices=UBICACION_PARAMS_CHOICES, default='query',
+        verbose_name='Ubicación de parámetros',
+    )
+    plantilla_respuesta = models.TextField(
+        blank=True, default='', verbose_name='Plantilla Jinja de respuesta (opcional)',
+        help_text='Si se define, el LLM verá el resultado formateado. Ej: '
+                  '"Tu saldo es ${{monto}} al {{fecha}}". Vacío = el LLM recibe el JSON crudo.'
+    )
+    timeout = models.PositiveIntegerField(
+        default=10, verbose_name='Timeout (segundos)',
+        help_text='Tiempo máximo de espera. Máximo permitido: 30s.'
+    )
+    activo = models.BooleanField(default=True, verbose_name='Activa')
+
+    class Meta:
+        verbose_name = 'Herramienta de Agente'
+        verbose_name_plural = 'Herramientas de Agentes'
+        ordering = ['agente', 'nombre']
+        constraints = [
+            models.UniqueConstraint(fields=['agente', 'nombre'], name='uniq_herramienta_nombre_por_agente'),
+        ]
+
+    def __str__(self):
+        return f"{self.agente.nombre} — {self.nombre}"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.timeout and self.timeout > 30:
+            raise ValidationError({'timeout': 'El timeout máximo permitido es 30 segundos.'})
+        if not isinstance(self.parametros, list):
+            raise ValidationError({'parametros': 'Debe ser una lista de objetos.'})
+        for idx, p in enumerate(self.parametros):
+            if not isinstance(p, dict):
+                raise ValidationError({'parametros': f'El parámetro #{idx+1} debe ser un objeto.'})
+            if not p.get('nombre'):
+                raise ValidationError({'parametros': f'El parámetro #{idx+1} no tiene nombre.'})
+            if p.get('tipo') not in dict(TIPO_PARAM_CHOICES):
+                raise ValidationError({'parametros': f'Tipo inválido en parámetro "{p.get("nombre")}".'})
+
+
+class LogHerramientaAgente(models.Model):
+    """
+    Auditoría de cada invocación de una HerramientaAgente — crítico para
+    depurar cuando el cliente configura una URL/params mal.
+    """
+    herramienta = models.ForeignKey(
+        HerramientaAgente, on_delete=models.CASCADE, related_name='logs',
+        verbose_name='Herramienta',
+    )
+    conversacion = models.ForeignKey(
+        'whatsapp.ConversacionWhatsApp', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='logs_herramienta', verbose_name='Conversación',
+    )
+    fecha = models.DateTimeField(auto_now_add=True, db_index=True)
+    request_url = models.TextField(blank=True, default='')
+    request_params = models.JSONField(default=dict, blank=True)
+    response_status = models.IntegerField(default=0, verbose_name='Código HTTP')
+    response_body = models.TextField(blank=True, default='', verbose_name='Respuesta (truncada)')
+    duracion_ms = models.PositiveIntegerField(default=0, verbose_name='Duración (ms)')
+    exito = models.BooleanField(default=False)
+    error_mensaje = models.TextField(blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Log de herramienta'
+        verbose_name_plural = 'Logs de herramientas'
+        ordering = ['-fecha']
+        indexes = [models.Index(fields=['herramienta', '-fecha'])]
+
+    def __str__(self):
+        estado = 'OK' if self.exito else 'ERR'
+        return f"[{estado}] {self.herramienta.nombre} ({self.response_status}) @ {self.fecha:%Y-%m-%d %H:%M}"

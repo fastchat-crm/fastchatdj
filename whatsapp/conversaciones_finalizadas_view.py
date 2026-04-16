@@ -11,6 +11,7 @@ from core.funciones import addData, paginador, secure_module, log
 from seguridad.templatetags.templatefunctions import encrypt
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp
 from .services import WhatsAppService
+from .forms import CambiarClasificacionForm
 from .conversaciones_view import _control_respuestas, _tokens_conversacion, _estadisticas_conversacion
 
 @login_required
@@ -77,6 +78,18 @@ def conversacionesFinalizadasView(request):
                 conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
                 data['conversacion'] = conversacion
                 template = get_template("whatsapp/conversaciones/modal_resumen_conversacion.html")
+                return JsonResponse({"result": True, 'data': template.render(data)})
+            except Exception as ex:
+                return JsonResponse({"result": False, 'message': str(ex)})
+        elif action == 'cambiar-clasificacion':
+            try:
+                filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
+                form = CambiarClasificacionForm(instance=filtro)
+                data.update({
+                    'form': form,
+                    'filtro': filtro,
+                })
+                template = get_template("whatsapp/conversaciones/form.html")
                 return JsonResponse({"result": True, 'data': template.render(data)})
             except Exception as ex:
                 return JsonResponse({"result": False, 'message': str(ex)})
@@ -153,6 +166,20 @@ def conversacionesFinalizadasView(request):
                                                         {'mensaje': mensaje},
                                                         request=request)
                     })
+                elif action == 'cambiar-clasificacion':
+                    try:
+                        filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['pk']))
+                    except Exception as ex:
+                        raise NameError(f'No se encontró la conversación: {ex}')
+                    form = CambiarClasificacionForm(request.POST, instance=filtro, request=request)
+                    if form.is_valid():
+                        form.save()
+                        log(f"Clasificación cambiada para la conversación {filtro.id}", request, "edit", obj=filtro.id)
+                        res_json.append({'error': False, 'reload': True})
+                        messages.success(request, 'Clasificación cambiada correctamente.')
+                        return JsonResponse(res_json, safe=False)
+                    else:
+                        raise NameError(f'Error al guardar la clasificación: {form.errors}')
                 elif action == 'marcar-reactivar':
                     try:
                         filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))

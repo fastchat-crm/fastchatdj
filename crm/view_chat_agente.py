@@ -111,6 +111,7 @@ def chat_agente_view(request, agente_enc_id):
                     contexto_estatico=agente.contexto_estatico or None,
                     detectar_fin=detectar_fin_llm,
                     perfil=agente.perfil,
+                    agente=agente,
                 )
                 traza_etapas.append({
                     'etapa': 'consultor_listo',
@@ -120,7 +121,7 @@ def chat_agente_view(request, agente_enc_id):
                     'ts_ms': int((time.time() - _t0) * 1000),
                 })
                 _t_llm = time.time()
-                if agente.anotar_listas:
+                if agente.requiere_tools():
                     resultado = consultor.consultar_con_listas(pregunta, agente.descripcion)
                 else:
                     resultado = consultor.consultar(pregunta, agente.descripcion)

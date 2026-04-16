@@ -254,6 +254,12 @@
                                     <i class="fa fa-download me-1"></i>{{ mensaje.tipo|capfirst }}
                                 </a>
                             {% endif %}
+                        {% else %}
+                            {% if mensaje.tipo in 'imagen,video,audio,documento,sticker' %}
+                                <div class="border rounded p-2 mt-1 text-muted small bg-light d-inline-block">
+                                    <i class="fa fa-paperclip me-1"></i>{{ mensaje.get_tipo_display }} no capturado
+                                </div>
+                            {% endif %}
                         {% endif %}
                     {% endif %}
 
@@ -352,6 +358,12 @@
                                    class="btn btn-sm btn-light border mt-1">
                                     <i class="fa fa-download me-1"></i>{{ mensaje.tipo|capfirst }}
                                 </a>
+                            {% endif %}
+                        {% else %}
+                            {% if mensaje.tipo in 'imagen,video,audio,documento,sticker' %}
+                                <div class="border rounded p-2 mt-1 text-muted small bg-light d-inline-block">
+                                    <i class="fa fa-paperclip me-1"></i>{{ mensaje.get_tipo_display }} no capturado
+                                </div>
                             {% endif %}
                         {% endif %}
                     {% endif %}

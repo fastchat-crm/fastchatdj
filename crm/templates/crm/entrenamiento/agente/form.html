@@ -67,6 +67,12 @@
     </li>
     {% if filtro %}
     <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-herramientas" type="button">
+            <i class="fas fa-plug me-1"></i> Herramientas
+            {% if herramientas %}<span class="badge bg-primary ms-1" style="font-size:.6rem">{{ herramientas|length }}</span>{% endif %}
+        </button>
+    </li>
+    <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-auditor" type="button">
             <i class="fas fa-wand-magic-sparkles me-1"></i> Asistente IA
             <span class="badge ms-1" style="font-size:.6rem; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff;">NEW</span>
@@ -417,6 +423,224 @@
 
         {% endif %}
     </div>
+
+    {# ── TAB: HERRAMIENTAS (APIs externas vía tool-calling) ──────── #}
+    {% if filtro %}
+    <div class="tab-pane fade" id="at-herramientas">
+        <link rel="stylesheet" href="{% static 'stylenew/herramienta_agente.css' %}">
+
+        <div class="guide-callout">
+            <i class="fas fa-lightbulb me-1"></i>
+            Conecta el agente a <strong>APIs externas</strong>: el LLM decide cuándo llamar cada
+            herramienta según la conversación, le pide al usuario los datos que falten de forma
+            natural, consulta la API y usa la respuesta para responder.
+        </div>
+
+        {# ── Simulador de chat (pruebas reales, pega a la API) ────── #}
+        <div class="sim-card" id="sim-card">
+            <div class="sim-header" id="sim-toggle">
+                <i class="fas fa-flask text-primary me-2"></i>
+                <span class="sim-title">Probar el agente con sus herramientas</span>
+                <span class="sim-sub ms-auto">
+                    <i class="fas fa-plug-circle-bolt me-1"></i>
+                    <span id="sim-count">0</span> herramientas activas
+                </span>
+                <i class="fas fa-chevron-down sim-chev ms-2"></i>
+            </div>
+            <div class="sim-body" id="sim-body">
+                <div class="sim-hint">
+                    Envía mensajes reales al agente — pega a las APIs configuradas para verificar veracidad.
+                    Tus mensajes aquí <strong>no llegan a ningún cliente</strong>.
+                </div>
+                <div class="sim-chat" id="sim-chat"></div>
+                <div class="sim-input-row">
+                    <input type="text" class="form-control form-control-sm" id="sim-input"
+                           placeholder="Ej: necesito consultar mi saldo, mi cédula es 0912345678" autocomplete="off">
+                    <button type="button" class="btn btn-primary btn-sm" id="sim-send">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="sim-reset" title="Reiniciar conversación">
+                        <i class="fas fa-rotate-left"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="h-content">
+            {% include 'crm/entrenamiento/herramienta/lista.html' with herramientas=herramientas agente=filtro %}
+        </div>
+    </div>
+
+    {# Scripts y estilos de Herramientas (cargan en tab-show) #}
+    <script>
+    (function() {
+        'use strict';
+        const RUTA = '{{ ruta }}';
+        const CSRF = '{{ csrf_token }}';
+        const AGENTE_ID = '{{ filtro.id }}';
+
+        function cargarLista() {
+            $.get(RUTA, {action: 'herramienta_lista', agente_id: AGENTE_ID}, function(r) {
+                if (r.result) { $('#h-content').html(r.data); }
+            }, 'json');
+        }
+
+        function abrirForm(herramientaId) {
+            const params = {action: 'herramienta_form', agente_id: AGENTE_ID};
+            if (herramientaId) params.id = herramientaId;
+            $.get(RUTA, params, function(r) {
+                if (r.result) { $('#h-content').html(r.data); }
+                else { alertaWarning(r.message || 'Error cargando el formulario.'); }
+            }, 'json');
+        }
+
+        $(document).on('click', '#btn-h-nueva', function() {
+            abrirForm(null);
+        });
+        $(document).on('click', '.btn-h-edit', function() {
+            abrirForm($(this).data('id'));
+        });
+        $(document).on('click', '.btn-h-del', function() {
+            const id = $(this).data('id');
+            if (!confirm('¿Eliminar esta herramienta?')) return;
+            $.post(RUTA, {action: 'herramienta_delete', id: id, csrfmiddlewaretoken: CSRF}, function(r) {
+                const x = Array.isArray(r) ? r[0] : r;
+                if (x && !x.error) { alertaSuccess('Herramienta eliminada.'); cargarLista(); }
+                else { alertaWarning(x.message || 'Error eliminando.'); }
+            }, 'json');
+        });
+        $(document).on('click', '.btn-h-toggle', function() {
+            const id = $(this).data('id');
+            $.post(RUTA, {action: 'herramienta_toggle_activo', id: id, csrfmiddlewaretoken: CSRF}, function(r) {
+                const x = Array.isArray(r) ? r[0] : r;
+                if (x && !x.error) { cargarLista(); actualizarContadorSim(); }
+                else { alertaWarning(x.message || 'Error.'); }
+            }, 'json');
+        });
+
+        // ── Simulador ────────────────────────────────────────────────
+        function actualizarContadorSim() {
+            // Cuenta filas .h-row con clase .activa visibles ahora
+            const n = $('#h-contenedor .h-row.activa').length;
+            $('#sim-count').text(n);
+        }
+        actualizarContadorSim();
+
+        function escSim(s) {
+            return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
+        $('#sim-toggle').on('click', function() {
+            $('#sim-card').toggleClass('open');
+        });
+
+        function addBubble(role, text) {
+            const cls = role === 'user' ? 'sim-b-user' : 'sim-b-bot';
+            const ico = role === 'user' ? 'fa-user' : 'fa-robot';
+            $('#sim-chat').append(`
+                <div class="sim-bubble ${cls}">
+                    <i class="fas ${ico}"></i>
+                    <div class="sim-bubble-text">${escSim(text).replace(/\n/g,'<br>')}</div>
+                </div>
+            `);
+            const ch = document.getElementById('sim-chat');
+            ch.scrollTop = ch.scrollHeight;
+        }
+
+        function addTraza(items) {
+            if (!items || !items.length) return;
+            items.forEach(t => {
+                const statusCls = t.exito ? 'sim-t-ok' : 'sim-t-err';
+                const paramsText = Object.keys(t.params || {}).length
+                    ? Object.entries(t.params).map(([k,v]) => `<code>${escSim(k)}=${escSim(v)}</code>`).join(' ')
+                    : '<span class="text-muted">sin params</span>';
+                const errorHtml = t.error ? `<div class="sim-t-error">⚠ ${escSim(t.error)}</div>` : '';
+                const row = $(`
+                    <div class="sim-traza ${statusCls}">
+                        <div class="sim-traza-head">
+                            <i class="fas fa-plug me-1"></i>
+                            <strong>${escSim(t.herramienta)}</strong>
+                            <span class="badge bg-secondary ms-1">${t.status || '—'}</span>
+                            <span class="sim-traza-time ms-auto">${t.duracion_ms} ms</span>
+                            <i class="fas fa-chevron-down ms-2 sim-traza-chev"></i>
+                        </div>
+                        <div class="sim-traza-body">
+                            <div class="sim-traza-line"><strong>URL:</strong> <code>${escSim(t.url)}</code></div>
+                            <div class="sim-traza-line"><strong>Params:</strong> ${paramsText}</div>
+                            ${errorHtml}
+                            <div class="sim-traza-line"><strong>Respuesta:</strong></div>
+                            <pre class="sim-traza-resp">${escSim(t.response_preview)}</pre>
+                        </div>
+                    </div>
+                `);
+                $('#sim-chat').append(row);
+            });
+            const ch = document.getElementById('sim-chat');
+            ch.scrollTop = ch.scrollHeight;
+        }
+
+        $(document).on('click', '.sim-traza-head', function() {
+            $(this).closest('.sim-traza').toggleClass('open');
+        });
+
+        function sendSim() {
+            const msg = $('#sim-input').val().trim();
+            if (!msg) return;
+            addBubble('user', msg);
+            $('#sim-input').val('').prop('disabled', true);
+            $('#sim-send').prop('disabled', true);
+
+            const typing = $('<div class="sim-bubble sim-b-bot sim-typing"><i class="fas fa-robot"></i><div class="sim-bubble-text"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div></div>');
+            $('#sim-chat').append(typing);
+            const ch = document.getElementById('sim-chat');
+            ch.scrollTop = ch.scrollHeight;
+
+            $.post(RUTA, {
+                action: 'herramienta_simular',
+                agente_id: AGENTE_ID,
+                mensaje: msg,
+                csrfmiddlewaretoken: CSRF,
+            }, function(r) {
+                const x = Array.isArray(r) ? r[0] : r;
+                typing.remove();
+                if (x && x.error) {
+                    addBubble('bot', '❌ ' + (x.message || 'Error en el simulador'));
+                } else {
+                    addTraza(x.traza);
+                    addBubble('bot', x.respuesta || '(respuesta vacía)');
+                }
+                $('#sim-input').prop('disabled', false).focus();
+                $('#sim-send').prop('disabled', false);
+            }, 'json').fail(function() {
+                typing.remove();
+                addBubble('bot', '❌ Error de conexión con el simulador.');
+                $('#sim-input').prop('disabled', false);
+                $('#sim-send').prop('disabled', false);
+            });
+        }
+
+        $('#sim-send').on('click', sendSim);
+        $('#sim-input').on('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendSim(); }
+        });
+
+        $('#sim-reset').on('click', function() {
+            if (!confirm('¿Reiniciar la conversación del simulador?')) return;
+            $.post(RUTA, {
+                action: 'herramienta_simular_reset',
+                agente_id: AGENTE_ID,
+                csrfmiddlewaretoken: CSRF,
+            }, function(r) {
+                const x = Array.isArray(r) ? r[0] : r;
+                if (x && !x.error) {
+                    $('#sim-chat').empty();
+                    alertaSuccess('Conversación reiniciada.');
+                }
+            }, 'json');
+        });
+    })();
+    </script>
+    {% endif %}
 
     {# ── TAB 5: ASISTENTE IA ──────────────────────────────────────── #}
     {% if filtro %}
@@ -1006,6 +1230,10 @@
             $('#aud-body').html('<h6 class="mb-2"><i class="fas fa-clock-rotate-left me-1"></i>Historial de auditorías</h6>'+rows);
         }, 'json');
     });
+
+    if ($('#btn-aud-historial').length) {
+        $('#btn-aud-historial').trigger('click');
+    }
 
     $(document).off('click', '.aud-row-item').on('click', '.aud-row-item', function() {
         const id = $(this).data('id');

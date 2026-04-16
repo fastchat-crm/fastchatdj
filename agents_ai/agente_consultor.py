@@ -292,6 +292,7 @@ class AgenteConsultor:
         contexto_estatico=None,
         detectar_fin: bool = False,
         perfil=None,
+        agente=None,
     ):
         self.provider = 'gemini' if provider == 2 else 'openai'
         self.apikey = apikey
@@ -301,6 +302,7 @@ class AgenteConsultor:
         self.contexto_estatico: str | None = contexto_estatico or None
         self.detectar_fin = detectar_fin
         self.perfil = perfil  # PerfilNegocioIA — usado por herramientas de tool-calling
+        self.agente = agente  # AgentesIA — usado para cargar HerramientaAgente dinámicas
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
         self.vectorstore = self._load_vectorstore()
@@ -767,7 +769,18 @@ class AgenteConsultor:
                 logger.error("Error en consultar_producto: %s", exc)
                 return "Error al consultar el catálogo."
 
-        return [agregar_al_pedido, consultar_producto]
+        tools_estaticas = [agregar_al_pedido, consultar_producto]
+
+        # Herramientas dinámicas configuradas por el cliente en HerramientaAgente
+        tools_dinamicas = []
+        if self.agente is not None:
+            try:
+                from agents_ai.tools_builder import build_tools_de_agente
+                tools_dinamicas = build_tools_de_agente(self.agente, conversacion=self.conversacion)
+            except Exception as exc:
+                logger.warning("Error cargando herramientas dinámicas del agente: %s", exc)
+
+        return tools_estaticas + tools_dinamicas
 
     def consultar_con_listas(self, pregunta: str, descripcion_agente: str = '') -> ConsultaResultado:
         """Variante de consultar() que habilita tool-calling (function calling).

@@ -361,33 +361,42 @@ def process_incoming_message(session, event_data, channel_layer):
             message_type = 'texto'
             message_text = message_content.get('extendedTextMessage', {}).get('text', '')
 
-        # Procesar archivos multimedia
-        media_types = {
-            'imageMessage': ('imagen', 'fileName', 'mimetype', 'caption'),
-            'videoMessage': ('video', 'fileName', 'mimetype', 'caption'),
-            'audioMessage': ('audio', 'fileName', 'mimetype', None),
-            'documentMessage': ('documento', 'fileName', 'mimetype', 'caption'),
-            'stickerMessage': ('sticker', None, 'mimetype', None)
+        # Procesar archivos multimedia — soporta formato nuevo (flat: event_data['mediaType'])
+        # y antiguo (nested: event_data['message']['imageMessage'], etc.)
+        TIPO_MAP = {
+            'imageMessage': 'imagen',
+            'videoMessage': 'video',
+            'audioMessage': 'audio',
+            'documentMessage': 'documento',
+            'stickerMessage': 'sticker',
         }
+        detected_media_key = event_data.get('mediaType')
+        if not detected_media_key:
+            for k in TIPO_MAP:
+                if k in message_content:
+                    detected_media_key = k
+                    break
 
-        for media_key, (type_name, filename_key, mimetype_key, caption_key) in media_types.items():
-            if media_key in message_content:
-                media_msg = message_content.get(media_key, {})
-                message_type = type_name
+        if detected_media_key and detected_media_key in TIPO_MAP:
+            type_name = TIPO_MAP[detected_media_key]
+            message_type = type_name
+            media_msg = message_content.get(detected_media_key, {}) if isinstance(message_content, dict) else {}
 
-                # Obtener el texto del caption si existe
-                if caption_key and caption_key in media_msg:
-                    message_text = media_msg.get(caption_key, '') or type_name or ''
+            caption = event_data.get('caption') or media_msg.get('caption', '')
+            if caption:
+                message_text = caption
+            message_text = message_text or type_name
 
-                message_text = message_text or type_name
-
-                # Procesar archivo multimedia si hay datos
-                if 'mediaData' in event_data and event_data.get('mediaData'):
-                    media_data = event_data['mediaData']
-                    filename = media_msg.get(filename_key, f"{type_name}_{message_id}")
-
-                    # Guardar el archivo
-                    file_url = save_media_file(media_data, filename)
+            if event_data.get('mediaData'):
+                media_data = event_data['mediaData']
+                filename = (
+                    event_data.get('fileName')
+                    or media_msg.get('fileName')
+                    or f"{type_name}_{message_id}"
+                )
+                if detected_media_key == 'stickerMessage' and not filename.lower().endswith('.png'):
+                    filename = f'{filename}.png'
+                file_url = save_media_file(media_data, filename)
 
         # Actualizar la conversación con el último mensaje
         contacto.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
@@ -639,13 +648,14 @@ def process_incoming_message(session, event_data, channel_layer):
                             contexto_estatico=agente.contexto_estatico or None,
                             detectar_fin=detectar_fin_llm,
                             perfil=agente.perfil,
+                            agente=agente,
                         )
                         _traza(
                             etapa='llm_invocado', sesion=session, conversacion=conversation, mensaje=message,
                             numero=from_number, nivel='info',
                             detalle={'provider': apikey.proveedor, 'apikey_id': apikey.id, 'modelo': getattr(consultor, 'model_name', '')},
                         )
-                        if agente.anotar_listas:
+                        if agente.requiere_tools():
                             resultado = consultor.consultar_con_listas(message_text, agente.descripcion)
                         else:
                             resultado = consultor.consultar(message_text, agente.descripcion)
@@ -987,36 +997,41 @@ def process_sent_message(session, event_data, channel_layer):
             message_text = message_content.get('extendedTextMessage', {}).get('text', '')
 
         file_url = None
-        # Procesar archivos multimedia
-        media_types = {
-            'imageMessage': ('imagen', 'fileName', 'mimetype', 'caption'),
-            'videoMessage': ('video', 'fileName', 'mimetype', 'caption'),
-            'audioMessage': ('audio', 'fileName', 'mimetype', None),
-            'documentMessage': ('documento', 'fileName', 'mimetype', 'caption'),
-            'stickerMessage': ('sticker', None, 'mimetype', None)
+        # Procesar archivos multimedia — soporta formato nuevo (flat) y antiguo (nested)
+        TIPO_MAP = {
+            'imageMessage': 'imagen',
+            'videoMessage': 'video',
+            'audioMessage': 'audio',
+            'documentMessage': 'documento',
+            'stickerMessage': 'sticker',
         }
+        detected_media_key = event_data.get('mediaType')
+        if not detected_media_key:
+            for k in TIPO_MAP:
+                if k in message_content:
+                    detected_media_key = k
+                    break
 
-        for media_key, (type_name, filename_key, mimetype_key, caption_key) in media_types.items():
-            if media_key in message_content:
-                media_msg = message_content.get(media_key, {})
-                message_type = type_name
+        if detected_media_key and detected_media_key in TIPO_MAP:
+            type_name = TIPO_MAP[detected_media_key]
+            message_type = type_name
+            media_msg = message_content.get(detected_media_key, {}) if isinstance(message_content, dict) else {}
 
-                # Obtener el texto del caption si existe
-                if caption_key and caption_key in media_msg:
-                    message_text = media_msg.get(caption_key, '') or type_name or ''
+            caption = event_data.get('caption') or media_msg.get('caption', '')
+            if caption:
+                message_text = caption
+            message_text = message_text or type_name
 
-                message_text = message_text or type_name
-
-                # Procesar archivo multimedia si hay datos
-                if 'mediaData' in event_data:
-                    media_data = event_data.get('mediaData')
-                    filename = media_msg.get(filename_key, f"{type_name}_{message_id}")
-
-                    if media_key == 'stickerMessage':
-                        filename = f'{filename}.png'
-
-                    # Guardar el archivo
-                    file_url = save_media_file(media_data, filename)
+            if event_data.get('mediaData'):
+                media_data = event_data['mediaData']
+                filename = (
+                    event_data.get('fileName')
+                    or media_msg.get('fileName')
+                    or f"{type_name}_{message_id}"
+                )
+                if detected_media_key == 'stickerMessage' and not filename.lower().endswith('.png'):
+                    filename = f'{filename}.png'
+                file_url = save_media_file(media_data, filename)
 
         # Actualizar la conversación
         contacto.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
