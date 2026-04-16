@@ -1,0 +1,48 @@
+{% load static %}
+<div class="d-flex align-items-center justify-content-between mb-2">
+    <p class="section-header mb-0">Herramientas configuradas</p>
+    <button type="button" class="btn btn-primary btn-sm" id="btn-h-nueva" data-agente-id="{{ agente.id }}">
+        <i class="fa fa-plus me-1"></i> Nueva herramienta
+    </button>
+</div>
+
+<div id="h-contenedor">
+    {% if herramientas %}
+        {% for h in herramientas %}
+            <div class="h-row {% if h.activo %}activa{% endif %}" data-h-id="{{ h.id }}">
+                <div class="h-icon">
+                    <i class="fas {% if h.metodo == 'POST' %}fa-paper-plane{% else %}fa-cloud-download-alt{% endif %}"></i>
+                </div>
+                <div class="h-body">
+                    <div class="h-name">
+                        {{ h.nombre_amigable }}
+                        <span class="h-method {{ h.metodo }} ms-1">{{ h.metodo }}</span>
+                        <span class="badge-ubicacion ms-1">{{ h.get_ubicacion_params_display }}</span>
+                    </div>
+                    <div class="h-slug">{{ h.nombre }}</div>
+                    <div class="h-desc">{{ h.descripcion|truncatechars:110 }}</div>
+                </div>
+                <div class="h-actions">
+                    <button type="button" class="btn btn-sm btn-outline-{% if h.activo %}success{% else %}secondary{% endif %} btn-h-toggle"
+                            data-id="{{ h.id }}" title="{% if h.activo %}Desactivar{% else %}Activar{% endif %}">
+                        <i class="fas fa-{% if h.activo %}toggle-on{% else %}toggle-off{% endif %}"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary btn-h-edit"
+                            data-id="{{ h.id }}" data-agente-id="{{ agente.id }}" title="Editar">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-h-del"
+                            data-id="{{ h.id }}" title="Eliminar">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="h-empty">
+            <div class="big-icon"><i class="fas fa-plug"></i></div>
+            <div class="fw-semibold">Sin herramientas configuradas</div>
+            <div class="small">Agrega una herramienta para que el agente pueda consultar APIs externas durante la conversación.</div>
+        </div>
+    {% endif %}
+</div>

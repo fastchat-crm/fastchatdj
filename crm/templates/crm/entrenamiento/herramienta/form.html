@@ -1,0 +1,378 @@
+{% load static %}
+<div id="h-form-wrap" data-agente-id="{{ agente.id }}" data-h-id="{{ herramienta.id|default:'' }}">
+
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-h-cancel">
+                <i class="fas fa-arrow-left me-1"></i> Volver a la lista
+            </button>
+        </div>
+        <div class="small text-muted">
+            {% if herramienta %}Editando <strong>{{ herramienta.nombre_amigable }}</strong>{% else %}Nueva herramienta{% endif %}
+        </div>
+    </div>
+
+    <form id="h-form" autocomplete="off">
+        <input type="hidden" name="agente_id" value="{{ agente.id }}">
+        <input type="hidden" name="pk" value="{{ herramienta.id|default:'' }}">
+        {{ parametros_init|json_script:"h-parametros-init" }}
+        {{ headers_init|json_script:"h-headers-init" }}
+
+        {# ── BLOQUE 1 — Identidad ─────────────────────────────────────── #}
+        <div class="wz-block">
+            <div class="wz-block-header">
+                <span class="wz-num">1</span>
+                <span class="wz-title">¿Qué hace esta herramienta?</span>
+                <span class="wz-sub">El LLM lee esta info para decidir cuándo usarla</span>
+            </div>
+            <div class="wz-block-body">
+                <div class="row g-2">
+                    <div class="col-md-8">
+                        <label class="form-label small fw-semibold mb-1">Nombre amigable</label>
+                        {{ form.nombre_amigable }}
+                        <div class="wz-hint">Ej: <em>Consultar saldo pendiente</em>. Solo se usa para identificarla en el panel.</div>
+                        <div class="invalid-feedback" id="errorMessagenombre_amigable"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold mb-1">Identificador (slug)</label>
+                        {{ form.nombre }}
+                        <div class="wz-hint">Sin espacios. Ej: <code>consultar_saldo</code></div>
+                        <div class="invalid-feedback" id="errorMessagenombre"></div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-semibold mb-1">Descripción (la ve el LLM)</label>
+                        {{ form.descripcion }}
+                        <div class="wz-hint">
+                            Sé específico sobre cuándo debe usarse. Ej: <em>"Consulta el saldo pendiente
+                            de un cliente usando su cédula. Úsala cuando el cliente pregunte por su deuda
+                            o estado de cuenta."</em>
+                        </div>
+                        <div class="invalid-feedback" id="errorMessagedescripcion"></div>
+                    </div>
+                    <div class="col-12">
+                        <div class="d-flex align-items-center gap-2">
+                            {{ form.activo }}
+                            <label class="form-label small mb-0 fw-semibold" for="{{ form.activo.id_for_label }}">
+                                Herramienta activa
+                            </label>
+                        </div>
+                        <div class="wz-hint">Si está desactivada, el LLM no la verá.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ── BLOQUE 2 — Campos a pedir ────────────────────────────────── #}
+        <div class="wz-block">
+            <div class="wz-block-header">
+                <span class="wz-num">2</span>
+                <span class="wz-title">Datos que el agente debe pedir al usuario</span>
+                <span class="wz-sub">El LLM los pedirá de forma natural si faltan</span>
+            </div>
+            <div class="wz-block-body">
+                <div class="wz-hint mb-2">
+                    Agrega cada dato que necesitas recolectar. El agente se encargará de preguntarle al
+                    usuario por los que falten antes de llamar la API.
+                </div>
+                <div id="h-params-list"></div>
+                <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="btn-h-add-param">
+                    <i class="fas fa-plus me-1"></i> Agregar campo
+                </button>
+            </div>
+        </div>
+
+        {# ── BLOQUE 3 — API ───────────────────────────────────────────── #}
+        <div class="wz-block">
+            <div class="wz-block-header">
+                <span class="wz-num">3</span>
+                <span class="wz-title">¿A qué API se consulta?</span>
+                <span class="wz-sub">Endpoint que el bot llamará cuando tenga los datos</span>
+            </div>
+            <div class="wz-block-body">
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold mb-1">Método</label>
+                        {{ form.metodo }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold mb-1">Ubicación de parámetros</label>
+                        {{ form.ubicacion_params }}
+                        <div class="wz-hint">Cómo se envían al endpoint. <code>path</code>: <code>{cedula}</code> en la URL.</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold mb-1">Timeout (s)</label>
+                        {{ form.timeout }}
+                    </div>
+                    <div class="col-12 mt-1">
+                        <label class="form-label small fw-semibold mb-1">URL del endpoint</label>
+                        {{ form.url }}
+                        <div class="wz-hint">
+                            Puedes incluir <code>{nombre_del_param}</code> para sustituir en el path.
+                            Ej: <code>https://api.cliente.com/clientes/{cedula}</code>
+                        </div>
+                        <div class="url-preview mt-1" id="h-url-preview">—</div>
+                        <div class="invalid-feedback" id="errorMessageurl"></div>
+                    </div>
+                    <div class="col-12 mt-2">
+                        <label class="form-label small fw-semibold mb-1">Headers estáticos <span class="text-muted fw-normal">(opcional — ej. Authorization)</span></label>
+                        <div id="h-headers-list"></div>
+                        <button type="button" class="btn btn-sm btn-outline-primary mt-1" id="btn-h-add-header">
+                            <i class="fas fa-plus me-1"></i> Agregar header
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ── BLOQUE 4 — Respuesta ─────────────────────────────────────── #}
+        <div class="wz-block">
+            <div class="wz-block-header">
+                <span class="wz-num">4</span>
+                <span class="wz-title">¿Cómo responde el agente?</span>
+                <span class="wz-sub">Opcional — el LLM puede formatear solo</span>
+            </div>
+            <div class="wz-block-body">
+                <label class="form-label small fw-semibold mb-1">Plantilla de respuesta (Jinja)</label>
+                {{ form.plantilla_respuesta }}
+                <div class="wz-hint">
+                    {% verbatim %}Si la API devuelve JSON, puedes formatearlo con variables <code>{{ campo }}</code>.
+                    Ej: <code>Tu saldo es ${{ monto }} con fecha de corte {{ fecha }}</code>.{% endverbatim %}
+                    Vacío = el LLM recibe el JSON crudo y lo interpreta.
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end gap-1 mt-3">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-h-cancel2">
+                <i class="fa fa-window-close me-1"></i>Cancelar
+            </button>
+            <button type="button" class="btn btn-sm btn-success" id="btn-h-save">
+                <i class="fa fa-save me-1"></i>Guardar herramienta
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    const RUTA = '{{ ruta }}';
+    const CSRF = '{{ csrf_token }}';
+    const AGENTE_ID = '{{ agente.id }}';
+
+    // ── Estado (lee JSON seguro desde json_script) ────────────────────
+    let params = [];
+    let headers = [];
+    try {
+        const initP = JSON.parse(document.getElementById('h-parametros-init').textContent);
+        params = Array.isArray(initP) ? initP : [];
+    } catch(e) { params = []; }
+    try {
+        const initH = JSON.parse(document.getElementById('h-headers-init').textContent);
+        if (initH && typeof initH === 'object') {
+            headers = Object.entries(initH).map(([k,v]) => ({clave: k, valor: v}));
+        }
+    } catch(e) { headers = []; }
+
+    // ── Render de params ─────────────────────────────────────────────
+    function renderParams() {
+        const $c = $('#h-params-list').empty();
+        if (params.length === 0) {
+            $c.append('<div class="wz-hint text-center py-2"><em>Sin campos — haz clic en "Agregar campo" si la API requiere parámetros.</em></div>');
+            return;
+        }
+        params.forEach((p, idx) => {
+            const row = $(`
+                <div class="param-row" data-idx="${idx}">
+                    <button type="button" class="param-del" title="Eliminar"><i class="fas fa-times"></i></button>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">Nombre (slug)</label>
+                            <input type="text" class="form-control form-control-sm p-nombre" value="${escAttr(p.nombre||'')}" placeholder="cedula">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small mb-1">Tipo</label>
+                            <select class="form-select form-select-sm p-tipo">
+                                <option value="string" ${p.tipo==='string'?'selected':''}>Texto</option>
+                                <option value="integer" ${p.tipo==='integer'?'selected':''}>Entero</option>
+                                <option value="number" ${p.tipo==='number'?'selected':''}>Decimal</option>
+                                <option value="boolean" ${p.tipo==='boolean'?'selected':''}>Sí/No</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small mb-1">¿Obligatorio?</label>
+                            <select class="form-select form-select-sm p-req">
+                                <option value="true" ${p.requerido!==false?'selected':''}>Sí</option>
+                                <option value="false" ${p.requerido===false?'selected':''}>No</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small mb-1">Ejemplo</label>
+                            <input type="text" class="form-control form-control-sm p-ej" value="${escAttr(p.ejemplo||'')}" placeholder="0912345678">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-1">Descripción (la ve el LLM)</label>
+                            <input type="text" class="form-control form-control-sm p-desc" value="${escAttr(p.descripcion||'')}" placeholder="Cédula de 10 dígitos del cliente">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small mb-1">Pregunta sugerida al usuario <span class="text-muted fw-normal">(opcional)</span></label>
+                            <input type="text" class="form-control form-control-sm p-preg" value="${escAttr(p.pregunta_sugerida||'')}" placeholder="¿Me puedes dar tu número de cédula?">
+                        </div>
+                    </div>
+                </div>
+            `);
+            $c.append(row);
+        });
+    }
+
+    function syncParamsFromDOM() {
+        params = $('#h-params-list .param-row').map(function() {
+            const $r = $(this);
+            return {
+                nombre: $r.find('.p-nombre').val().trim(),
+                tipo: $r.find('.p-tipo').val(),
+                requerido: $r.find('.p-req').val() === 'true',
+                ejemplo: $r.find('.p-ej').val().trim(),
+                descripcion: $r.find('.p-desc').val().trim(),
+                pregunta_sugerida: $r.find('.p-preg').val().trim(),
+            };
+        }).get().filter(p => p.nombre);
+    }
+
+    // ── Render de headers ────────────────────────────────────────────
+    function renderHeaders() {
+        const $c = $('#h-headers-list').empty();
+        headers.forEach((h, idx) => {
+            const row = $(`
+                <div class="header-row" data-idx="${idx}">
+                    <input type="text" class="form-control form-control-sm hd-k" value="${escAttr(h.clave||'')}" placeholder="Authorization">
+                    <input type="text" class="form-control form-control-sm hd-v" value="${escAttr(h.valor||'')}" placeholder="Bearer xxxxx">
+                    <button type="button" class="hd-del" title="Eliminar"><i class="fas fa-times"></i></button>
+                </div>
+            `);
+            $c.append(row);
+        });
+    }
+
+    function syncHeadersFromDOM() {
+        headers = $('#h-headers-list .header-row').map(function() {
+            return {
+                clave: $(this).find('.hd-k').val().trim(),
+                valor: $(this).find('.hd-v').val().trim(),
+            };
+        }).get().filter(h => h.clave);
+    }
+
+    // ── URL preview ──────────────────────────────────────────────────
+    function renderUrlPreview() {
+        const url = $('#id_url').val() || '';
+        if (!url) { $('#h-url-preview').text('—'); return; }
+        const highlighted = escHtml(url).replace(/\{(\w+)\}/g, '<span class="ph">{$1}</span>');
+        $('#h-url-preview').html(highlighted);
+    }
+
+    // ── Utilidades ───────────────────────────────────────────────────
+    function escHtml(s) {
+        return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function escAttr(s) { return escHtml(s).replace(/"/g, '&quot;'); }
+
+    // ── Bindings ─────────────────────────────────────────────────────
+    $('#btn-h-add-param').on('click', function() {
+        syncParamsFromDOM();
+        params.push({nombre: '', tipo: 'string', requerido: true, descripcion: '', pregunta_sugerida: '', ejemplo: ''});
+        renderParams();
+    });
+    $('#h-params-list').on('click', '.param-del', function() {
+        const idx = parseInt($(this).closest('.param-row').data('idx'));
+        syncParamsFromDOM();
+        params.splice(idx, 1);
+        renderParams();
+    });
+
+    $('#btn-h-add-header').on('click', function() {
+        syncHeadersFromDOM();
+        headers.push({clave: '', valor: ''});
+        renderHeaders();
+    });
+    $('#h-headers-list').on('click', '.hd-del', function() {
+        const idx = parseInt($(this).closest('.header-row').data('idx'));
+        syncHeadersFromDOM();
+        headers.splice(idx, 1);
+        renderHeaders();
+    });
+
+    $(document).on('input', '#id_url', renderUrlPreview);
+
+    // Auto-slug
+    $('#id_nombre_amigable').on('blur', function() {
+        const slugInput = $('#id_nombre');
+        if (slugInput.val().trim()) return;
+        const slug = $(this).val().toLowerCase()
+            .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 60);
+        slugInput.val(slug);
+    });
+
+    // ── Cancelar ─────────────────────────────────────────────────────
+    function volverALista() {
+        $.get(RUTA, {action: 'herramienta_lista', agente_id: AGENTE_ID}, function(r) {
+            if (r.result) {
+                $('#h-content').html(r.data);
+            }
+        }, 'json');
+    }
+    $('#btn-h-cancel, #btn-h-cancel2').on('click', volverALista);
+
+    // ── Guardar ──────────────────────────────────────────────────────
+    $('#btn-h-save').on('click', function() {
+        syncParamsFromDOM();
+        syncHeadersFromDOM();
+        // Limpiar errores previos
+        $('#h-form .invalid-feedback').text('').hide();
+        $('#h-form .is-invalid').removeClass('is-invalid');
+
+        const headersObj = {};
+        headers.forEach(h => { if (h.clave) headersObj[h.clave] = h.valor; });
+
+        const fd = new FormData(document.getElementById('h-form'));
+        fd.set('action', 'herramienta_save');
+        fd.set('parametros_json', JSON.stringify(params));
+        fd.set('headers_json', JSON.stringify(headersObj));
+        fd.set('csrfmiddlewaretoken', CSRF);
+
+        const $btn = $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Guardando...');
+
+        $.ajax({
+            url: RUTA, type: 'POST', data: fd,
+            processData: false, contentType: false,
+            dataType: 'json',
+            success: function(res) {
+                const r = Array.isArray(res) ? res[0] : res;
+                if (r && r.error) {
+                    if (r.errors) {
+                        Object.keys(r.errors).forEach(k => {
+                            $('#errorMessage' + k).text(r.errors[k].join(', ')).show();
+                            $('[name="' + k + '"]').addClass('is-invalid');
+                        });
+                    }
+                    alertaWarning(r.message || 'Revisa los campos marcados.');
+                    $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i>Guardar herramienta');
+                } else {
+                    alertaSuccess('Herramienta guardada.');
+                    volverALista();
+                }
+            },
+            error: function() {
+                alertaWarning('Error de conexión.');
+                $btn.prop('disabled', false).html('<i class="fa fa-save me-1"></i>Guardar herramienta');
+            }
+        });
+    });
+
+    // ── Inicializar ──────────────────────────────────────────────────
+    renderParams();
+    renderHeaders();
+    renderUrlPreview();
+})();
+</script>
