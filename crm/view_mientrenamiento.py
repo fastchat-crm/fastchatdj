@@ -595,7 +595,16 @@ def entrenamiento_ia_view(request):
                         try:
                             agente.build_enlaces_vectorstore()
                         except Exception as e:
-                            return JsonResponse({'error': True, 'message': f'Error construyendo índice: {e}', 'enlaces': enlaces_info})
+                            msg = str(e)
+                            if 'API key not valid' in msg or 'API_KEY_INVALID' in msg or 'invalid_api_key' in msg.lower():
+                                pretty = ('❌ La API Key del agente no es válida para generar embeddings. '
+                                          'Ve al tab Identidad → API Key, prueba la key (botón "Test") y si está mala, '
+                                          'agrega una válida de Gemini (https://aistudio.google.com/apikey) u OpenAI.')
+                            elif 'quota' in msg.lower() or 'rate limit' in msg.lower():
+                                pretty = '❌ La API Key alcanzó su cuota o rate limit. Espera unos minutos o usa otra key.'
+                            else:
+                                pretty = f'❌ Error construyendo índice: {msg[:400]}'
+                            return JsonResponse({'error': True, 'message': pretty, 'enlaces': enlaces_info})
 
                         agente.refresh_from_db(fields=['vectorstore_enlaces_path', 'vectorstore_enlaces_expira'])
                         # Invalidar cache in-memory

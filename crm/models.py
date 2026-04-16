@@ -344,6 +344,7 @@ class AgentesIA(ModeloBase):
             else:
                 return f"{indent}{obj}"
 
+        last_error = None
         for apikeyobj in apikeys:
             if not apikeyobj.descripcion:
                 continue
@@ -365,6 +366,13 @@ class AgentesIA(ModeloBase):
                         continue
 
                     descripcion_detalle = (detalle.descripcion or '').strip()
+                    # Prefijo "cuándo usar" — lo ve el LLM en cada chunk recuperado
+                    # Así el agente sabe en qué contexto disparar esta fuente.
+                    def _prefix(tipo_registro: str) -> str:
+                        if not descripcion_detalle:
+                            return ''
+                        return f"[FUENTE: {tipo_registro} — CUÁNDO USAR: {descripcion_detalle}]\n"
+
                     tipo_dato = detalle.tipo_dato_enlace  # 1=TEXT, 2=HTML, 3=JSON, 4=EXCEL, 5=CSV
 
                     # ── TEXT o HTML ──────────────────────────────────────────
@@ -377,9 +385,8 @@ class AgentesIA(ModeloBase):
                                 texto = soup.get_text(separator='\n', strip=True)
                             except Exception:
                                 pass
-                        if descripcion_detalle:
-                            texto = f"{descripcion_detalle}\n\n{texto}"
-                        docs = vs_manager.build_from_string(texto, metadata={"tipo": "texto", "detalle_id": detalle.id})
+                        texto = _prefix('texto') + texto
+                        docs = vs_manager.build_from_string(texto, metadata={"tipo": "texto", "detalle_id": detalle.id, "observacion": descripcion_detalle})
                         documentos.extend(docs)
                         continue
 
@@ -390,6 +397,7 @@ class AgentesIA(ModeloBase):
                     if isinstance(data, dict) and data.get("listCatalogo"):
                         for c in data["listCatalogo"]:
                             page_content = (
+                                f"{_prefix('catálogo de cursos')}"
                                 f"Curso: {c.get('nombre') or ''}\n"
                                 f"Categoría: {(c.get('categoria') or {}).get('descripcion') or ''}\n"
                                 f"Unidad de negocio: {c.get('unidad_negocio') or ''}\n"
@@ -402,6 +410,7 @@ class AgentesIA(ModeloBase):
                             metadata = {
                                 "tipo": "listCatalogo", "detalle_id": detalle.id,
                                 "id": c.get("id"), "slug": c.get("slug"),
+                                "observacion": descripcion_detalle,
                             }
                             docs = vs_manager.build_from_string(page_content, metadata=metadata)
                             documentos.extend(docs)
@@ -411,6 +420,7 @@ class AgentesIA(ModeloBase):
                         for item in data["data"]:
                             costos = item.get("costos", {}) or {}
                             page_content = (
+                                f"{_prefix('oferta por periodo')}"
                                 f"Curso: {item.get('nombre') or ''}\n"
                                 f"Periodo: {item.get('periodo') or ''}\n"
                                 f"Centro de costo: {item.get('centro_costo') or ''}\n"
@@ -425,6 +435,7 @@ class AgentesIA(ModeloBase):
                             metadata = {
                                 "tipo": "oferta_periodo", "detalle_id": detalle.id,
                                 "id": item.get("id"), "nombre": item.get("nombre"),
+                                "observacion": descripcion_detalle,
                             }
                             docs = vs_manager.build_from_string(page_content, metadata=metadata)
                             documentos.extend(docs)
@@ -432,9 +443,8 @@ class AgentesIA(ModeloBase):
                     # ── GENÉRICO: cualquier otra estructura JSON ──────────────
                     else:
                         texto = _json_to_text(data)
-                        if descripcion_detalle:
-                            texto = f"{descripcion_detalle}\n\n{texto}"
-                        docs = vs_manager.build_from_string(texto, metadata={"tipo": "json_generico", "detalle_id": detalle.id})
+                        texto = _prefix('json') + texto
+                        docs = vs_manager.build_from_string(texto, metadata={"tipo": "json_generico", "detalle_id": detalle.id, "observacion": descripcion_detalle})
                         documentos.extend(docs)
 
                 except Exception as e:
@@ -443,7 +453,24 @@ class AgentesIA(ModeloBase):
                     continue
 
             if documentos:
-                vs_path = vs_manager.build_and_save(documentos, nombre_vs)
+                try:
+                    vs_path = vs_manager.build_and_save(documentos, nombre_vs)
+                except Exception as emb_err:
+                    # Error típico: embedding con API key inválida.
+                    last_error = emb_err
+                    err_msg = str(emb_err)
+                    if 'API key not valid' in err_msg or 'API_KEY_INVALID' in err_msg or 'invalid_api_key' in err_msg.lower():
+                        # Marcar esta key como inactiva para no reintentarla
+                        try:
+                            apikeyobj.estado = False
+                            apikeyobj.msgerror = f'Inválida al generar embeddings: {err_msg[:400]}'
+                            apikeyobj.save(update_fields=['estado', 'msgerror'])
+                            print(f"[build_enlaces] API Key #{apikeyobj.id} marcada inactiva por embedding inválido")
+                        except Exception:
+                            pass
+                        continue  # intentar con la siguiente apikey
+                    # Otro error inesperado — propagar
+                    raise
                 agente.vectorstore_enlaces_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
                 agente.vectorstore_enlaces_expira = timezone.now() + timedelta(
                     hours=tiempo_cache_horas if tiempo_cache_horas else 0,
@@ -451,7 +478,11 @@ class AgentesIA(ModeloBase):
                 )
                 agente.save()
                 AgentesIA.objects.bulk_update([agente], ['vectorstore_enlaces_path', 'vectorstore_enlaces_expira'])
-            break
+                return  # éxito — salir
+            # Si no hay documentos y no hay apikeys más, no hay nada que indexar
+        # Ninguna apikey funcionó (o ningún doc se pudo crear)
+        if last_error is not None:
+            raise last_error
 
     def __str__(self):
         return f"{self.nombre}"
