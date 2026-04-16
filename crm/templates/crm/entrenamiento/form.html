@@ -774,30 +774,8 @@
     // Guardamos el id del agente abierto para el botón "Aprender ahora"
     window._ctxAgenteId = null;
 
-    function verContexto(id, nombre) {
-        window._ctxAgenteId = id;
-        // Reset
-        document.getElementById('ctxTitulo').textContent = nombre;
-        document.getElementById('ctxModeBadge').textContent = '';
-        document.getElementById('ctxModeBadge').className = 'ctx-mode-badge';
-        document.getElementById('ctxMeta').textContent = '';
-        document.getElementById('ctxContenidoContexto').textContent = 'Cargando…';
-        document.getElementById('ctxContenidoPrompt').textContent = 'Cargando…';
-        document.getElementById('ctxContenidoFuentes').innerHTML = '<div class="text-muted small p-2">Cargando…</div>';
-        document.getElementById('ctxContenidoFaqs').innerHTML = '<div class="text-muted small p-2">Cargando…</div>';
-        document.getElementById('ctxContenidoHerramientas').innerHTML = '<div class="text-muted small p-2">Cargando…</div>';
-        document.getElementById('ctxBadgeChars').textContent = '';
-        document.getElementById('ctxBadgePrompt').textContent = '';
-        document.getElementById('ctxBadgeFuentes').textContent = '';
-        document.getElementById('ctxBadgeFaqs').textContent = '';
-        document.getElementById('ctxBadgeHerramientas').textContent = '';
-
-        // Activate first tab
-        const firstTabBtn = document.querySelector('#ctxTabs button[data-bs-target="#ctxTabContexto"]');
-        if (firstTabBtn) new bootstrap.Tab(firstTabBtn).show();
-
-        new bootstrap.Modal(document.getElementById('modalContexto')).show();
-
+    // Carga/recarga los datos del modal sin tocar el modal (evita doble backdrop)
+    function _ctxCargarDatos(id) {
         $.ajax({
             type: 'GET',
             url: '{{ request.path }}',
@@ -934,6 +912,37 @@
         });
     }
 
+    // Abre el modal "Ver contexto" la primera vez y dispara la carga
+    function verContexto(id, nombre) {
+        window._ctxAgenteId = id;
+        // Reset visual
+        document.getElementById('ctxTitulo').textContent = nombre;
+        document.getElementById('ctxModeBadge').textContent = '';
+        document.getElementById('ctxModeBadge').className = 'ctx-mode-badge';
+        document.getElementById('ctxMeta').textContent = '';
+        document.getElementById('ctxContenidoContexto').textContent = 'Cargando…';
+        document.getElementById('ctxContenidoPrompt').textContent = 'Cargando…';
+        document.getElementById('ctxContenidoFuentes').innerHTML = '<div class="text-muted small p-2">Cargando…</div>';
+        document.getElementById('ctxContenidoFaqs').innerHTML = '<div class="text-muted small p-2">Cargando…</div>';
+        document.getElementById('ctxContenidoHerramientas').innerHTML = '<div class="text-muted small p-2">Cargando…</div>';
+        document.getElementById('ctxBadgeChars').textContent = '';
+        document.getElementById('ctxBadgePrompt').textContent = '';
+        document.getElementById('ctxBadgeFuentes').textContent = '';
+        document.getElementById('ctxBadgeFaqs').textContent = '';
+        document.getElementById('ctxBadgeHerramientas').textContent = '';
+
+        // Activar primer tab
+        const firstTabBtn = document.querySelector('#ctxTabs button[data-bs-target="#ctxTabContexto"]');
+        if (firstTabBtn) new bootstrap.Tab(firstTabBtn).show();
+
+        // Reutilizar instancia de modal si ya existe (evita crear un segundo backdrop)
+        const el = document.getElementById('modalContexto');
+        const existing = bootstrap.Modal.getInstance(el);
+        (existing || new bootstrap.Modal(el)).show();
+
+        _ctxCargarDatos(id);
+    }
+
     /* ── Procesar agente ── */
     /* ── Aprender de conversaciones ahora (botón en tab FAQs del modal "Ver contexto") ── */
     $(document).on('click', '#ctxBtnAprenderAhora', function() {
@@ -959,14 +968,8 @@
                         (x.total_candidatas === 0 ? ' (sin conversaciones nuevas)' : '');
             alertaSuccess(msg);
             $btn.prop('disabled', false).html(orig);
-            // Recargar el modal entero para mostrar los nuevos contadores/FAQs
-            const titulo = document.getElementById('ctxTitulo').textContent;
-            verContexto(id, titulo);
-            // Activar el tab FAQs para mostrar el resultado
-            setTimeout(() => {
-                const faqsTab = document.querySelector('#ctxTabs button[data-bs-target="#ctxTabFaqs"]');
-                if (faqsTab) new bootstrap.Tab(faqsTab).show();
-            }, 400);
+            // Solo refrescar datos — SIN reabrir el modal (evita backdrop duplicado)
+            _ctxCargarDatos(id);
         }, 'json').fail(function() {
             alertaWarning('Error de conexión.');
             $btn.prop('disabled', false).html(orig);
