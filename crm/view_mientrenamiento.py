@@ -314,6 +314,15 @@ def entrenamiento_ia_view(request):
                         revertir_auditoria(auditoria, usuario=request.user)
                         log(f"Revertida auditoria IA del agente {auditoria.agente}", request, "change", obj=auditoria.agente.id)
                         res_json = {'error': False, 'estado': auditoria.estado}
+                    elif action == 'auditoria_aplicar_faq':
+                        from agents_ai.auditor_agente import aplicar_faq_sugerido
+                        auditoria = AuditoriaAgenteIA.objects.select_related('agente__perfil').get(
+                            pk=int(request.POST['auditoria_id']), agente__perfil=perfil,
+                        )
+                        creadas = aplicar_faq_sugerido(auditoria, usuario=request.user)
+                        log(f"Importadas {creadas} FAQ(s) pendientes del auditor — agente {auditoria.agente}",
+                            request, "add", obj=auditoria.agente.id)
+                        res_json = {'error': False, 'creadas': creadas}
                     elif action == 'testapikey':
                         filtro = ApiKeyIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
                         try:
@@ -461,6 +470,77 @@ def entrenamiento_ia_view(request):
                         DjangoChatMessageHistory(session_id=session_id).clear()
                         return JsonResponse({'error': False})
 
+                    # ── Preguntas Frecuentes (FaqAgente) ──────────────────────
+                    elif action == 'faq_save':
+                        from crm.forms import FaqAgenteForm
+                        from crm.models import FaqAgente as _FA
+                        from django.utils import timezone as _tz
+                        agente = AgentesIA.objects.get(pk=int(request.POST['agente_id']), perfil=perfil)
+                        pk = request.POST.get('pk')
+                        instancia = _FA.objects.get(pk=int(pk), agente=agente) if pk else None
+                        form = FaqAgenteForm(request.POST, instance=instancia, request=request)
+                        if not form.is_valid():
+                            raise FormError(form)
+                        obj = form.save(commit=False)
+                        obj.agente = agente
+                        if not pk:
+                            obj.origen = 'manual'
+                        # Registrar aprobación
+                        if obj.estado == 'aprobada' and (instancia is None or instancia.estado != 'aprobada'):
+                            obj.fecha_aprobacion = _tz.now()
+                            obj.usuario_aprobacion = request.user
+                        obj.save()
+                        log(f"{'Edito' if pk else 'Creo'} FAQ del agente {agente.nombre}",
+                            request, "change" if pk else "add", obj=obj.id)
+                        return JsonResponse({'error': False, 'id': obj.id})
+
+                    elif action == 'faq_delete':
+                        from crm.models import FaqAgente as _FA
+                        filtro = _FA.objects.get(pk=int(request.POST['id']), agente__perfil=perfil)
+                        filtro.status = False
+                        filtro.save(request)
+                        return JsonResponse({'error': False})
+
+                    elif action == 'faq_aprobar':
+                        from crm.models import FaqAgente as _FA
+                        from django.utils import timezone as _tz
+                        filtro = _FA.objects.get(pk=int(request.POST['id']), agente__perfil=perfil)
+                        filtro.estado = 'aprobada'
+                        filtro.fecha_aprobacion = _tz.now()
+                        filtro.usuario_aprobacion = request.user
+                        filtro.save(update_fields=['estado', 'fecha_aprobacion', 'usuario_aprobacion'])
+                        return JsonResponse({'error': False})
+
+                    elif action == 'faq_desactivar':
+                        from crm.models import FaqAgente as _FA
+                        filtro = _FA.objects.get(pk=int(request.POST['id']), agente__perfil=perfil)
+                        filtro.estado = 'desactivada'
+                        filtro.save(update_fields=['estado'])
+                        return JsonResponse({'error': False})
+
+                    elif action == 'faq_bulk_aprobar':
+                        from crm.models import FaqAgente as _FA
+                        from django.utils import timezone as _tz
+                        agente = AgentesIA.objects.get(pk=int(request.POST['agente_id']), perfil=perfil)
+                        ids_raw = request.POST.get('ids', '')
+                        ids = [int(i) for i in ids_raw.split(',') if i.strip().isdigit()]
+                        qs = _FA.objects.filter(id__in=ids, agente=agente, estado='pendiente')
+                        count = qs.update(
+                            estado='aprobada',
+                            fecha_aprobacion=_tz.now(),
+                            usuario_aprobacion=request.user,
+                        )
+                        log(f"Aprobadas {count} FAQ(s) en bulk — agente {agente.nombre}",
+                            request, "change", obj=agente.id)
+                        return JsonResponse({'error': False, 'count': count})
+
+                    elif action == 'faq_prioridad':
+                        from crm.models import FaqAgente as _FA
+                        filtro = _FA.objects.get(pk=int(request.POST['id']), agente__perfil=perfil)
+                        filtro.prioridad = max(0, min(100, int(request.POST.get('prioridad') or 0)))
+                        filtro.save(update_fields=['prioridad'])
+                        return JsonResponse({'error': False, 'prioridad': filtro.prioridad})
+
                     elif action == 'herramienta_ia_asistida':
                         from crm.herramienta_templates import PROMPT_IA_ASISTIDA
                         agente_id = int(request.POST.get('agente_id') or 0)
@@ -531,6 +611,12 @@ def entrenamiento_ia_view(request):
                         data['regla_fin'] = getattr(filtro, 'regla_fin', None)
                         data['acciones_fin'] = data['regla_fin'].acciones.filter(status=True) if data['regla_fin'] else []
                         data['herramientas'] = filtro.herramientas.filter(status=True).order_by('nombre')
+                        _faqs_qs = filtro.faqs.filter(status=True)
+                        data['faqs_contadores'] = {
+                            'pendiente':   _faqs_qs.filter(estado='pendiente').count(),
+                            'aprobada':    _faqs_qs.filter(estado='aprobada').count(),
+                            'desactivada': _faqs_qs.filter(estado='desactivada').count(),
+                        }
                         template = get_template("crm/entrenamiento/agente/form.html")
                         return JsonResponse({"result": True, 'data': template.render(data)})
                     except Exception as ex:
@@ -651,6 +737,46 @@ def entrenamiento_ia_view(request):
                         return JsonResponse({'result': True, 'templates': HERRAMIENTA_TEMPLATES})
                     except Exception as ex:
                         return JsonResponse({'result': False, 'message': str(ex)})
+                if action == 'faq_lista':
+                    try:
+                        agente_id = int(request.GET.get('agente_id') or 0)
+                        agente = AgentesIA.objects.get(pk=agente_id, perfil=perfil)
+                        estado_filtro = (request.GET.get('estado') or '').strip()
+                        qs = agente.faqs.filter(status=True)
+                        if estado_filtro in ('pendiente', 'aprobada', 'desactivada'):
+                            qs = qs.filter(estado=estado_filtro)
+                        qs = qs.select_related('conversacion_origen', 'mensaje_origen', 'auditoria_origen').order_by('-prioridad', '-fecha_registro')
+                        contadores = {
+                            'pendiente':   agente.faqs.filter(status=True, estado='pendiente').count(),
+                            'aprobada':    agente.faqs.filter(status=True, estado='aprobada').count(),
+                            'desactivada': agente.faqs.filter(status=True, estado='desactivada').count(),
+                        }
+                        data_ctx = dict(data)
+                        data_ctx['agente'] = agente
+                        data_ctx['faqs'] = qs
+                        data_ctx['estado_filtro'] = estado_filtro
+                        data_ctx['contadores'] = contadores
+                        template = get_template("crm/entrenamiento/faq/lista.html")
+                        return JsonResponse({"result": True, 'data': template.render(data_ctx)})
+                    except Exception as ex:
+                        return JsonResponse({"result": False, 'message': str(ex)})
+                if action == 'faq_form':
+                    try:
+                        from crm.forms import FaqAgenteForm
+                        from crm.models import FaqAgente as _FA
+                        agente_id = int(request.GET.get('agente_id') or 0)
+                        agente = AgentesIA.objects.get(pk=agente_id, perfil=perfil)
+                        pk = request.GET.get('id')
+                        faq = _FA.objects.get(pk=int(pk), agente=agente) if pk else None
+                        form = FaqAgenteForm(instance=faq)
+                        data_ctx = dict(data)
+                        data_ctx['form'] = form
+                        data_ctx['faq'] = faq
+                        data_ctx['agente'] = agente
+                        template = get_template("crm/entrenamiento/faq/form.html")
+                        return JsonResponse({"result": True, 'data': template.render(data_ctx)})
+                    except Exception as ex:
+                        return JsonResponse({"result": False, 'message': str(ex)})
                 if action == 'addapikey':
                     try:
                         data["form"] = ApiKeyIAForm()

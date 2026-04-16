@@ -4,7 +4,7 @@ from autenticacion.models import Usuario
 from core.custom_forms import FormModeloBase
 from core.custom_models import ModelFormBase
 from crm.models import PerfilNegocioIA, ActividadEconomica, Industria, ProductoIA, ServicioIA, RespuestaEntrenadaIA, \
-    DepartamentoChatBot, AgentesIA, ApiKeyIA, HerramientaAgente
+    DepartamentoChatBot, AgentesIA, ApiKeyIA, HerramientaAgente, FaqAgente
 
 
 class PerfilNegocioIAForm(ModelFormBase):
@@ -153,10 +153,28 @@ class AddPerfilDepartamentoChatBotForm(FormModeloBase):
     usuarios = forms.ModelMultipleChoiceField(label='Personas', queryset=Usuario.objects.filter(status=True))
 
 
+_CFG_RANGES = {
+    'cfg_faiss_k':            (1, 20),
+    'cfg_faiss_fetch_k':      (5, 80),
+    'cfg_max_context_chars':  (500, 16000),
+    'cfg_max_static_chars':   (500, 10000),
+    'cfg_history_turns':      (1, 30),
+    'cfg_user_snippet':       (50, 1500),
+    'cfg_ai_snippet':         (50, 4000),
+    'cfg_max_output_tokens':  (200, 8000),
+    'cfg_topic_anchor_chars': (50, 800),
+}
+
+
 class AgentesIAForm(ModelFormBase):
     class Meta:
         model = AgentesIA
-        fields = ('nombre', 'descripcion','apikey', 'prompt_template', 'anotar_listas')
+        fields = (
+            'nombre', 'descripcion', 'apikey', 'prompt_template', 'anotar_listas',
+            'cfg_faiss_k', 'cfg_faiss_fetch_k', 'cfg_max_context_chars', 'cfg_max_static_chars',
+            'cfg_history_turns', 'cfg_user_snippet', 'cfg_ai_snippet',
+            'cfg_max_output_tokens', 'cfg_topic_anchor_chars',
+        )
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
@@ -174,6 +192,13 @@ class AgentesIAForm(ModelFormBase):
                 self.fields[k].widget.attrs['data-render'] = "switchery"
                 self.fields[k].widget.attrs['data-theme'] = "default"
                 self.fields[k].widget.attrs['col'] = '12'
+            if k in _CFG_RANGES:
+                lo, hi = _CFG_RANGES[k]
+                self.fields[k].widget.attrs['class'] = 'form-control form-control-sm'
+                self.fields[k].widget.attrs['col'] = '6'
+                self.fields[k].widget.attrs['min'] = str(lo)
+                self.fields[k].widget.attrs['max'] = str(hi)
+                self.fields[k].widget.input_type = 'number'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 
@@ -203,6 +228,30 @@ class HerramientaAgenteForm(ModelFormBase):
                 self.fields[k].widget.attrs['class'] = "js-switch"
                 self.fields[k].widget.attrs['data-render'] = "switchery"
                 self.fields[k].widget.attrs['data-theme'] = "default"
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+
+class FaqAgenteForm(ModelFormBase):
+    class Meta:
+        model = FaqAgente
+        fields = ('pregunta', 'respuesta', 'prioridad', 'estado')
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super().__init__(*args, **kwargs)
+        for k, v in self.fields.items():
+            self.fields[k].widget.attrs['class'] = 'form-control form-control-sm'
+            self.fields[k].widget.attrs['col'] = '12'
+            if k == 'prioridad':
+                self.fields[k].widget.attrs['col'] = '6'
+                self.fields[k].widget.attrs['min'] = '0'
+                self.fields[k].widget.attrs['max'] = '100'
+            if k == 'estado':
+                self.fields[k].widget.attrs['class'] = 'form-select form-select-sm'
+                self.fields[k].widget.attrs['col'] = '6'
+            if k in ('pregunta', 'respuesta'):
+                self.fields[k].widget.attrs['rows'] = '2' if k == 'pregunta' else '3'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 

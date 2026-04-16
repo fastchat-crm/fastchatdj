@@ -492,26 +492,57 @@ def conversacionesView(request):
                         }
                     )
 
-                    # Si es incorrecto y hay corrección → agregar al vectorstore
+                    # Si es incorrecto y hay corrección → crear FAQ aprobada + FAISS
                     if not es_correcto and correccion and pregunta:
                         agente = msg.conversacion.sesion.agente_ia
-                        if agente and agente.vectorstore_path and agente.apikey.filter(estado=True).exists():
-                            apikey_obj = agente.apikey.filter(estado=True).first()
-                            provider = {2: 'gemini', 3: 'openai'}.get(apikey_obj.proveedor, 'gemini')
+                        if agente:
+                            # 1. Crear FaqAgente directamente aprobada (el humano ya validó)
                             try:
-                                from agents_ai.vectorstore_manager import VectorStoreManager
-                                import os
-                                from django.conf import settings
-                                storage = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
-                                vsm = VectorStoreManager(storage, provider, apikey_obj.descripcion)
-                                vsm.add_correction(agente.vectorstore_path, pregunta, correccion)
-                                feedback.procesado_vectorstore = True
-                                feedback.save(update_fields=['procesado_vectorstore'])
-                                # Invalidar caché de FAISS del agente
-                                from agents_ai.agente_consultor import AgenteConsultor
-                                AgenteConsultor._faiss_cache.clear()
+                                from crm.models import FaqAgente
+                                from django.utils import timezone as _tz
+                                ya_existe = FaqAgente.objects.filter(
+                                    agente=agente, pregunta__iexact=pregunta.strip(),
+                                ).first()
+                                if ya_existe:
+                                    ya_existe.respuesta = correccion.strip()[:4000]
+                                    ya_existe.estado = 'aprobada'
+                                    ya_existe.origen = 'feedback'
+                                    ya_existe.mensaje_origen = msg
+                                    ya_existe.fecha_aprobacion = _tz.now()
+                                    ya_existe.usuario_aprobacion = request.user
+                                    ya_existe.save()
+                                else:
+                                    FaqAgente.objects.create(
+                                        agente=agente,
+                                        pregunta=pregunta.strip()[:2000],
+                                        respuesta=correccion.strip()[:4000],
+                                        origen='feedback',
+                                        estado='aprobada',
+                                        conversacion_origen=msg.conversacion,
+                                        mensaje_origen=msg,
+                                        fecha_aprobacion=_tz.now(),
+                                        usuario_aprobacion=request.user,
+                                    )
                             except Exception as ex:
-                                log(f"Error al agregar corrección al vectorstore: {ex}", request, "error")
+                                log(f"Error creando FaqAgente desde feedback: {ex}", request, "error")
+
+                            # 2. Agregar al FAISS si está configurado (compatibilidad)
+                            if agente.vectorstore_path and agente.apikey.filter(estado=True).exists():
+                                apikey_obj = agente.apikey.filter(estado=True).first()
+                                provider = {2: 'gemini', 3: 'openai'}.get(apikey_obj.proveedor, 'gemini')
+                                try:
+                                    from agents_ai.vectorstore_manager import VectorStoreManager
+                                    import os
+                                    from django.conf import settings
+                                    storage = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
+                                    vsm = VectorStoreManager(storage, provider, apikey_obj.descripcion)
+                                    vsm.add_correction(agente.vectorstore_path, pregunta, correccion)
+                                    feedback.procesado_vectorstore = True
+                                    feedback.save(update_fields=['procesado_vectorstore'])
+                                    from agents_ai.agente_consultor import AgenteConsultor
+                                    AgenteConsultor._faiss_cache.clear()
+                                except Exception as ex:
+                                    log(f"Error al agregar corrección al vectorstore: {ex}", request, "error")
 
                     return JsonResponse({
                         'error': False,

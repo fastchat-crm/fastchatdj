@@ -85,13 +85,19 @@ def conversacionesFinalizadasView(request):
             try:
                 filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
                 form = CambiarClasificacionForm(instance=filtro)
-                data.update({
+                ctx = {
                     'form': form,
                     'filtro': filtro,
+                    'action': 'cambiar-clasificacion',
+                    'ruta': request.path,
+                }
+                return JsonResponse({
+                    "result": True,
+                    'data': render_to_string("whatsapp/conversaciones/form.html", ctx, request=request),
                 })
-                template = get_template("whatsapp/conversaciones/form.html")
-                return JsonResponse({"result": True, 'data': template.render(data)})
             except Exception as ex:
+                import traceback
+                traceback.print_exc()
                 return JsonResponse({"result": False, 'message': str(ex)})
 
 

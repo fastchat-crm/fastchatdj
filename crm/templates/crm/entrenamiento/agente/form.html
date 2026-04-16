@@ -67,6 +67,13 @@
     </li>
     {% if filtro %}
     <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-faqs" type="button">
+            <i class="fas fa-comments me-1"></i> Preguntas Frecuentes
+            {% if faqs_contadores.pendiente %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6rem" title="Pendientes">{{ faqs_contadores.pendiente }}</span>{% endif %}
+            {% if faqs_contadores.aprobada %}<span class="badge bg-success ms-1" style="font-size:.6rem" title="Aprobadas">{{ faqs_contadores.aprobada }}</span>{% endif %}
+        </button>
+    </li>
+    <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-herramientas" type="button">
             <i class="fas fa-plug me-1"></i> Herramientas
             {% if herramientas %}<span class="badge bg-primary ms-1" style="font-size:.6rem">{{ herramientas|length }}</span>{% endif %}
@@ -79,6 +86,11 @@
         </button>
     </li>
     {% endif %}
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-comportamiento" type="button">
+            <i class="fas fa-sliders-h me-1"></i> Comportamiento IA
+        </button>
+    </li>
 </ul>
 
 <div class="tab-content">
@@ -424,6 +436,59 @@
         {% endif %}
     </div>
 
+    {# ── TAB: PREGUNTAS FRECUENTES (FAQ curables) ──────────────── #}
+    {% if filtro %}
+    <div class="tab-pane fade" id="at-faqs">
+        <link rel="stylesheet" href="{% static 'stylenew/faq_agente.css' %}">
+
+        <div class="guide-callout">
+            <i class="fas fa-lightbulb me-1"></i>
+            Las Preguntas Frecuentes se <strong>inyectan literal en el prompt</strong> del agente (top
+            {{ filtro.faqs_en_prompt|default:10 }} por prioridad). Las demás quedan disponibles vía búsqueda.
+            <strong>Origen automático</strong>: conversaciones positivas, correcciones del auditor IA y feedback humano.
+        </div>
+
+        <div id="faq-content">
+            <div class="text-center py-3 text-muted"><i class="fas fa-spinner fa-spin me-1"></i>Cargando FAQs…</div>
+        </div>
+    </div>
+
+    {# Scripts del tab FAQ — carga la lista al abrir por primera vez #}
+    <script>
+    (function() {
+        'use strict';
+        const RUTA = '{{ ruta }}';
+        const CSRF = '{{ csrf_token }}';
+        const AGENTE_ID = '{{ filtro.id }}';
+        let _faqLoaded = false;
+
+        function cargarLista(estado) {
+            const params = {action: 'faq_lista', agente_id: AGENTE_ID};
+            if (estado) params.estado = estado;
+            $.get(RUTA, params, function(r) {
+                if (r.result) { $('#faq-content').html(r.data); _faqLoaded = true; }
+                else { $('#faq-content').html('<div class="alert alert-warning">'+(r.message||'Error')+'</div>'); }
+            }, 'json');
+        }
+
+        function abrirForm(faqId) {
+            const params = {action: 'faq_form', agente_id: AGENTE_ID};
+            if (faqId) params.id = faqId;
+            $.get(RUTA, params, function(r) {
+                if (r.result) { $('#faq-content').html(r.data); }
+                else { alertaWarning(r.message || 'Error'); }
+            }, 'json');
+        }
+        window.fAbrirForm = abrirForm;
+
+        // Cargar lista cuando el tab se muestre por primera vez
+        $(document).on('shown.bs.tab', 'button[data-bs-target="#at-faqs"]', function() {
+            if (!_faqLoaded) cargarLista();
+        });
+    })();
+    </script>
+    {% endif %}
+
     {# ── TAB: HERRAMIENTAS (APIs externas vía tool-calling) ──────── #}
     {% if filtro %}
     <div class="tab-pane fade" id="at-herramientas">
@@ -491,12 +556,17 @@
             $.get(RUTA, params, function(r) {
                 if (r.result) {
                     $('#h-content').html(r.data);
-                    if (prefill) aplicarPrefill(prefill);
+                    if (prefill) {
+                        // Esperar al siguiente tick para que el wizard haya corrido su IIFE
+                        setTimeout(() => aplicarPrefill(prefill), 30);
+                    }
                 } else {
                     alertaWarning(r.message || 'Error cargando el formulario.');
                 }
             }, 'json');
         }
+        // Exponer a window para que lista.html (plantillas/IA-assist) lo use
+        window.hAbrirForm = abrirForm;
 
         // Rellena el wizard con valores de plantilla o sugerencia IA
         function aplicarPrefill(cfg) {
@@ -528,53 +598,9 @@
             abrirForm(null);
         });
 
-        // ── Plantillas pre-cargadas ──────────────────────────────────
-        let _tplsCache = null;
-        function fetchTemplates(cb) {
-            if (_tplsCache) { cb(_tplsCache); return; }
-            $.get(RUTA, {action: 'herramienta_templates'}, function(r) {
-                if (r.result) { _tplsCache = r.templates; cb(_tplsCache); }
-                else { alertaWarning(r.message || 'Error cargando plantillas.'); }
-            }, 'json');
-        }
-        $(document).on('click', '.btn-h-tpl', function() {
-            const key = $(this).data('key');
-            fetchTemplates(function(tpls) {
-                const tpl = tpls.find(t => t.key === key);
-                if (!tpl) { alertaWarning('Plantilla no encontrada.'); return; }
-                abrirForm(null, tpl);
-            });
-        });
+        // Nota: handlers de plantillas (.btn-h-tpl) e IA-assist (#btn-h-ia, #h-ia-submit)
+        // viven en lista.html — se re-enlazan con cada re-render de la lista.
 
-        // ── IA-assist ────────────────────────────────────────────────
-        $(document).on('click', '#btn-h-ia', function() {
-            $('#h-ia-panel').slideDown(150);
-            setTimeout(() => $('#h-ia-frase').focus(), 160);
-        });
-        $(document).on('click', '#h-ia-cancel', function() {
-            $('#h-ia-panel').slideUp(150);
-            $('#h-ia-frase').val('');
-        });
-        $(document).on('click', '#h-ia-submit', function() {
-            const frase = ($('#h-ia-frase').val() || '').trim();
-            if (!frase) { alertaWarning('Describe qué necesitas.'); return; }
-            const $btn = $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Generando…');
-            $.post(RUTA, {
-                action: 'herramienta_ia_asistida',
-                agente_id: AGENTE_ID,
-                frase: frase,
-                csrfmiddlewaretoken: CSRF,
-            }, function(r) {
-                $btn.prop('disabled', false).html('<i class="fas fa-magic me-1"></i> Generar configuración');
-                const x = Array.isArray(r) ? r[0] : r;
-                if (x && x.error) { alertaWarning(x.message || 'Error'); return; }
-                alertaSuccess('Configuración generada. Revísala antes de guardar.');
-                abrirForm(null, x.config);
-            }, 'json').fail(function() {
-                $btn.prop('disabled', false).html('<i class="fas fa-magic me-1"></i> Generar configuración');
-                alertaWarning('Error de conexión.');
-            });
-        });
         $(document).on('click', '.btn-h-edit', function() {
             abrirForm($(this).data('id'));
         });
@@ -757,6 +783,89 @@
         </div>
     </div>
     {% endif %}
+
+    {# ── TAB: COMPORTAMIENTO IA ──────────────────────────────────── #}
+    <div class="tab-pane fade" id="at-comportamiento">
+        <div class="guide-callout">
+            <i class="fas fa-sliders-h me-1"></i>
+            Variables avanzadas que controlan cómo recupera contexto y cuánto recuerda este agente.
+            Si no estás seguro, deja los valores por defecto. Cada campo muestra su rango sugerido.
+            Aplica desde la próxima respuesta del bot.
+        </div>
+
+        <p class="section-header mt-2">Recuperación de conocimiento (FAISS)</p>
+        <div class="row g-2">
+            <div class="col-md-6">
+                <label class="form-label small fw-semibold mb-1">{{ form.cfg_faiss_k.label }}</label>
+                {{ form.cfg_faiss_k }}
+                <div class="form-text">{{ form.cfg_faiss_k.help_text }}</div>
+                <div class="invalid-feedback" id="errorMessagecfg_faiss_k"></div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-semibold mb-1">{{ form.cfg_faiss_fetch_k.label }}</label>
+                {{ form.cfg_faiss_fetch_k }}
+                <div class="form-text">{{ form.cfg_faiss_fetch_k.help_text }}</div>
+                <div class="invalid-feedback" id="errorMessagecfg_faiss_fetch_k"></div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-semibold mb-1">{{ form.cfg_max_context_chars.label }}</label>
+                {{ form.cfg_max_context_chars }}
+                <div class="form-text">{{ form.cfg_max_context_chars.help_text }}</div>
+                <div class="invalid-feedback" id="errorMessagecfg_max_context_chars"></div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-semibold mb-1">{{ form.cfg_max_static_chars.label }}</label>
+                {{ form.cfg_max_static_chars }}
+                <div class="form-text">{{ form.cfg_max_static_chars.help_text }}</div>
+                <div class="invalid-feedback" id="errorMessagecfg_max_static_chars"></div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-semibold mb-1">{{ form.cfg_topic_anchor_chars.label }}</label>
+                {{ form.cfg_topic_anchor_chars }}
+                <div class="form-text">{{ form.cfg_topic_anchor_chars.help_text }}</div>
+                <div class="invalid-feedback" id="errorMessagecfg_topic_anchor_chars"></div>
+            </div>
+        </div>
+
+        <p class="section-header mt-3">Memoria conversacional</p>
+        <div class="row g-2">
+            <div class="col-md-6">
+                <label class="form-label small fw-semibold mb-1">{{ form.cfg_history_turns.label }}</label>
+                {{ form.cfg_history_turns }}
+                <div class="form-text">{{ form.cfg_history_turns.help_text }}</div>
+                <div class="invalid-feedback" id="errorMessagecfg_history_turns"></div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-semibold mb-1">{{ form.cfg_user_snippet.label }}</label>
+                {{ form.cfg_user_snippet }}
+                <div class="form-text">{{ form.cfg_user_snippet.help_text }}</div>
+                <div class="invalid-feedback" id="errorMessagecfg_user_snippet"></div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-semibold mb-1">{{ form.cfg_ai_snippet.label }}</label>
+                {{ form.cfg_ai_snippet }}
+                <div class="form-text">{{ form.cfg_ai_snippet.help_text }}</div>
+                <div class="invalid-feedback" id="errorMessagecfg_ai_snippet"></div>
+            </div>
+        </div>
+
+        <p class="section-header mt-3">Generación de respuesta</p>
+        <div class="row g-2">
+            <div class="col-md-6">
+                <label class="form-label small fw-semibold mb-1">{{ form.cfg_max_output_tokens.label }}</label>
+                {{ form.cfg_max_output_tokens }}
+                <div class="form-text">{{ form.cfg_max_output_tokens.help_text }}</div>
+                <div class="invalid-feedback" id="errorMessagecfg_max_output_tokens"></div>
+            </div>
+        </div>
+
+        <div class="alert alert-warning mt-3 small mb-0">
+            <i class="fas fa-info-circle me-1"></i>
+            <strong>Nota:</strong> subir mucho los valores aumenta el consumo de tokens (y costo).
+            Si tienes varias API keys, el sistema rota entre ellas si una falla — el comportamiento (memoria, prompt, etc.)
+            es el mismo independientemente de qué key respondió.
+        </div>
+    </div>
 
 </div>{# /tab-content #}
 
@@ -1225,7 +1334,19 @@
                 </button>
             </div>
 
-            ${faq ? `<div class="aud-list-card"><h6><i class="fas fa-comments me-1 text-primary"></i>FAQ detallado sugerido</h6>${faq}</div>` : ''}
+            ${faq ? `
+                <div class="aud-list-card">
+                    <div class="d-flex align-items-center mb-2">
+                        <h6 class="mb-0"><i class="fas fa-comments me-1 text-primary"></i>FAQ detallado sugerido</h6>
+                        <button type="button" class="btn btn-sm btn-primary ms-auto aud-apply-faq" data-aud="${auditoriaId}">
+                            <i class="fas fa-arrow-right-to-bracket me-1"></i>Importar a Preguntas Frecuentes
+                        </button>
+                    </div>
+                    <div class="small text-muted mb-2">
+                        Se crearán como <strong>pendientes</strong> en el tab "Preguntas Frecuentes" — tú decides cuáles aprobar.
+                    </div>
+                    ${faq}
+                </div>` : ''}
             ${gaps ? `<div class="aud-list-card"><h6><i class="fas fa-graduation-cap me-1 text-primary"></i>Gaps de entrenamiento detectados</h6>${gaps}</div>` : ''}
         `;
     }
@@ -1273,6 +1394,27 @@
         }).fail(function() {
             alertaDanger('Error de comunicación');
             $btn.prop('disabled', false);
+        });
+    });
+
+    $(document).off('click', '.aud-apply-faq').on('click', '.aud-apply-faq', function() {
+        const $btn = $(this);
+        const aud = $btn.data('aud');
+        if (!confirm('¿Importar las FAQs sugeridas a la lista de Preguntas Frecuentes? Quedarán como pendientes para que las revises antes de activarlas.')) return;
+        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Importando...');
+        $.post(ruta, {
+            action: 'auditoria_aplicar_faq', auditoria_id: aud, csrfmiddlewaretoken: csrf
+        }).done(function(r) {
+            if (r.error) {
+                alertaDanger(r.message || 'Error al importar');
+                $btn.prop('disabled', false).html('<i class="fas fa-arrow-right-to-bracket me-1"></i>Importar a Preguntas Frecuentes');
+            } else {
+                alertaSuccess('Se importaron ' + (r.creadas || 0) + ' FAQ(s) pendientes. Revísalas en el tab Preguntas Frecuentes.');
+                $btn.prop('disabled', true).html('<i class="fas fa-check me-1"></i>Importadas (' + (r.creadas || 0) + ')');
+            }
+        }).fail(function() {
+            alertaDanger('Error de comunicación');
+            $btn.prop('disabled', false).html('<i class="fas fa-arrow-right-to-bracket me-1"></i>Importar a Preguntas Frecuentes');
         });
     });
 

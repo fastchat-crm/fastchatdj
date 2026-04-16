@@ -611,12 +611,21 @@ def process_incoming_message(session, event_data, channel_layer):
             try:
                 if message_type == 'audio' and not es_reintento:
                     whatsapp_service.send_text_message(
-                        conversation.sesion.session_id, contacto.from_number, 'Procesando...', True
+                        conversation.sesion.session_id, contacto.from_number, 'Procesando...', simularEscritura=True
                     )
-                    message_text = whatsapp_service.sync_transcribe_audio(message)
-                    whatsapp_service.send_text_message(
-                        conversation.sesion.session_id, contacto.from_number, f'Audio recibido: {message_text}', True
-                    )
+                    message_text = whatsapp_service.sync_transcribe_audio(message) or ''
+                    if message_text:
+                        whatsapp_service.send_text_message(
+                            conversation.sesion.session_id, contacto.from_number,
+                            f'Audio recibido: {message_text}', simularEscritura=True
+                        )
+                    else:
+                        whatsapp_service.send_text_message(
+                            conversation.sesion.session_id, contacto.from_number,
+                            'No pude transcribir el audio. ¿Podrías escribir tu consulta? 🙏',
+                            simularEscritura=True,
+                        )
+                        return JsonResponse({'status': 'ok', 'transcripcion_vacia': True})
                     whatsapp_service.send_presence_update(
                         conversation.sesion.session_id, contacto.from_number
                     )

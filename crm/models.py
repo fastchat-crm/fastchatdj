@@ -187,6 +187,11 @@ class AgentesIA(ModeloBase):
         default=False, verbose_name="Anotar listas de productos/servicios en memoria",
         help_text="Si se activa, el agente guardará las listas de productos/servicios en la memoria"
     )
+    faqs_en_prompt = models.PositiveSmallIntegerField(
+        default=10, verbose_name='Cantidad de FAQs en prompt',
+        help_text='Top N FAQs aprobadas (por prioridad) inyectadas literal en el prompt. '
+                  'Las demás quedan disponibles vía RAG.'
+    )
     vectorstore_enlaces_path = models.CharField(
         max_length=1000, blank=True, null=True, verbose_name="Ruta del vector store de Apis y Enlaces"
     )
@@ -196,6 +201,44 @@ class AgentesIA(ModeloBase):
     contexto_estatico = models.TextField(
         blank=True, null=True,
         verbose_name="Contexto estático (texto completo para inyección directa en prompt)"
+    )
+
+    # ── Configuración avanzada de comportamiento IA (override por agente) ────
+    cfg_faiss_k = models.PositiveSmallIntegerField(
+        default=5, verbose_name='Chunks FAISS por respuesta (K)',
+        help_text='Cantidad de fragmentos del vectorstore inyectados en cada respuesta. Rango sugerido: 3–10.'
+    )
+    cfg_faiss_fetch_k = models.PositiveSmallIntegerField(
+        default=20, verbose_name='Candidatos FAISS pre-MMR (fetch_k)',
+        help_text='Candidatos previos al filtro de diversidad MMR. Mayor = mejor selección pero más lento. Rango: 10–40.'
+    )
+    cfg_max_context_chars = models.PositiveIntegerField(
+        default=4000, verbose_name='Máx chars contexto FAISS',
+        help_text='Tope de caracteres del contexto FAISS para consultas específicas (Modo A). Rango: 2000–8000.'
+    )
+    cfg_max_static_chars = models.PositiveIntegerField(
+        default=2000, verbose_name='Máx chars contexto estático suplementario',
+        help_text='Tope de chars del contexto estático cuando es complemento (Modo B). Rango: 1000–5000.'
+    )
+    cfg_history_turns = models.PositiveSmallIntegerField(
+        default=10, verbose_name='Turnos de historial recordados',
+        help_text='Cantidad de turnos previos (1 turno = 1 cliente + 1 bot). Crítico para continuidad de pedidos. Rango: 5–20.'
+    )
+    cfg_user_snippet = models.PositiveSmallIntegerField(
+        default=300, verbose_name='Máx chars de mensaje del cliente en historial',
+        help_text='Trunca el mensaje del cliente al guardarlo en el historial. Rango: 200–600.'
+    )
+    cfg_ai_snippet = models.PositiveSmallIntegerField(
+        default=800, verbose_name='Máx chars de respuesta del bot en historial',
+        help_text='Crítico para que el bot recuerde menús/listas largas que generó antes. Rango: 400–2000.'
+    )
+    cfg_max_output_tokens = models.PositiveIntegerField(
+        default=3000, verbose_name='Máx tokens de salida por respuesta',
+        help_text='Límite de tokens generados por el LLM en una respuesta. Rango: 500–4000.'
+    )
+    cfg_topic_anchor_chars = models.PositiveSmallIntegerField(
+        default=180, verbose_name='Chars del primer mensaje como ancla de tema',
+        help_text='Caracteres del primer mensaje sustantivo del cliente usados como ancla en FAISS. Rango: 100–400.'
     )
 
     class Meta:
@@ -1263,3 +1306,79 @@ class LogHerramientaAgente(models.Model):
     def __str__(self):
         estado = 'OK' if self.exito else 'ERR'
         return f"[{estado}] {self.herramienta.nombre} ({self.response_status}) @ {self.fecha:%Y-%m-%d %H:%M}"
+
+
+# ─── Preguntas Frecuentes curables por agente ──────────────────────────────
+
+FAQ_ORIGEN_CHOICES = (
+    ('manual',       'Ingresada manualmente'),
+    ('auditor',      'Sugerida por auditor IA'),
+    ('conversacion', 'Aprendida de conversación'),
+    ('feedback',     'Corrección de agente humano'),
+)
+
+FAQ_ESTADO_CHOICES = (
+    ('pendiente',    'Pendiente de revisión'),
+    ('aprobada',     'Aprobada (activa)'),
+    ('desactivada',  'Desactivada'),
+)
+
+
+class FaqAgente(ModeloBase):
+    """
+    Pregunta/respuesta curada que complementa el entrenamiento del agente.
+
+    Las top-N (por `prioridad`) en estado `aprobada` se inyectan literal en el
+    prompt de cada respuesta. Las demás quedan disponibles vía búsqueda FAISS
+    al agregarlas al vectorstore cuando se aprueban.
+    """
+    agente = models.ForeignKey(
+        AgentesIA, on_delete=models.CASCADE, related_name='faqs',
+        verbose_name='Agente',
+    )
+    pregunta = models.TextField('Pregunta')
+    respuesta = models.TextField('Respuesta')
+    origen = models.CharField(max_length=15, choices=FAQ_ORIGEN_CHOICES, default='manual')
+    estado = models.CharField(max_length=15, choices=FAQ_ESTADO_CHOICES, default='pendiente')
+    prioridad = models.PositiveSmallIntegerField(
+        default=0, verbose_name='Prioridad',
+        help_text='Mayor = aparece antes en el prompt. Solo afecta las top-N del prompt.'
+    )
+    hits = models.PositiveIntegerField(default=0, verbose_name='Veces usada')
+    conversacion_origen = models.ForeignKey(
+        'whatsapp.ConversacionWhatsApp', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='faqs_generadas',
+        verbose_name='Conversación de origen',
+    )
+    mensaje_origen = models.ForeignKey(
+        'whatsapp.MensajeWhatsApp', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='faqs_generadas',
+        verbose_name='Mensaje de origen',
+    )
+    auditoria_origen = models.ForeignKey(
+        AuditoriaAgenteIA, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='faqs_generadas',
+        verbose_name='Auditoría de origen',
+    )
+    embebido_en_faiss = models.BooleanField(
+        default=False,
+        help_text='True si esta FAQ ya fue indexada en el vectorstore del agente.'
+    )
+    fecha_aprobacion = models.DateTimeField('Fecha de aprobación', null=True, blank=True)
+    usuario_aprobacion = models.ForeignKey(
+        'autenticacion.Usuario', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='faqs_aprobadas',
+        verbose_name='Aprobada por',
+    )
+
+    class Meta:
+        verbose_name = 'FAQ de Agente'
+        verbose_name_plural = 'FAQs de Agentes'
+        ordering = ['-prioridad', '-fecha_registro']
+        indexes = [
+            models.Index(fields=['agente', 'estado']),
+            models.Index(fields=['agente', '-prioridad']),
+        ]
+
+    def __str__(self):
+        return f"[{self.get_estado_display()}] {self.pregunta[:60]}"

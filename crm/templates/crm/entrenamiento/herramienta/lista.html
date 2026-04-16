@@ -47,6 +47,74 @@
     </div>
 </div>
 
+<script>
+// ─── Bindings directos de Inicio rápido (plantillas + IA-assist) ────
+// Se re-ejecuta cada vez que la lista se re-renderiza vía AJAX.
+(function() {
+    'use strict';
+    const RUTA = '{{ ruta }}';
+    const CSRF = '{{ csrf_token }}';
+    const AGENTE_ID = '{{ agente.id }}';
+
+    // Mostrar/ocultar panel IA
+    $('#btn-h-ia').off('click.haia').on('click.haia', function() {
+        const p = $('#h-ia-panel');
+        if (p.is(':visible')) { p.slideUp(150); }
+        else { p.slideDown(150); setTimeout(() => $('#h-ia-frase').focus(), 160); }
+    });
+
+    $('#h-ia-cancel').off('click.haia').on('click.haia', function() {
+        $('#h-ia-panel').slideUp(150);
+        $('#h-ia-frase').val('');
+    });
+
+    // Submit de la frase — llama al LLM y pasa config al wizard
+    $('#h-ia-submit').off('click.haia').on('click.haia', function() {
+        const frase = ($('#h-ia-frase').val() || '').trim();
+        if (!frase) { alertaWarning('Describe qué necesitas.'); return; }
+        const $btn = $(this).prop('disabled', true)
+            .html('<i class="fa fa-spinner fa-spin me-1"></i>Generando…');
+        $.post(RUTA, {
+            action: 'herramienta_ia_asistida',
+            agente_id: AGENTE_ID,
+            frase: frase,
+            csrfmiddlewaretoken: CSRF,
+        }, function(r) {
+            $btn.prop('disabled', false).html('<i class="fas fa-magic me-1"></i> Generar configuración');
+            const x = Array.isArray(r) ? r[0] : r;
+            if (x && x.error) { alertaWarning(x.message || 'Error'); return; }
+            alertaSuccess('Configuración generada. Revísala antes de guardar.');
+            if (typeof window.hAbrirForm === 'function') {
+                window.hAbrirForm(null, x.config);
+            }
+        }, 'json').fail(function(xhr) {
+            $btn.prop('disabled', false).html('<i class="fas fa-magic me-1"></i> Generar configuración');
+            alertaWarning('Error de conexión con el servidor.');
+        });
+    });
+
+    // Plantillas pre-cargadas
+    let _tplsCache = window._hTplsCache || null;
+    function fetchTemplates(cb) {
+        if (_tplsCache) { cb(_tplsCache); return; }
+        $.get(RUTA, {action: 'herramienta_templates'}, function(r) {
+            if (r.result) { _tplsCache = r.templates; window._hTplsCache = r.templates; cb(_tplsCache); }
+            else { alertaWarning(r.message || 'Error cargando plantillas.'); }
+        }, 'json');
+    }
+    $('.btn-h-tpl').off('click.hatpl').on('click.hatpl', function() {
+        const key = $(this).data('key');
+        fetchTemplates(function(tpls) {
+            const tpl = tpls.find(t => t.key === key);
+            if (!tpl) { alertaWarning('Plantilla no encontrada.'); return; }
+            if (typeof window.hAbrirForm === 'function') {
+                window.hAbrirForm(null, tpl);
+            }
+        });
+    });
+})();
+</script>
+
 <div class="d-flex align-items-center justify-content-between mb-2">
     <p class="section-header mb-0">Herramientas configuradas</p>
     <button type="button" class="btn btn-primary btn-sm" id="btn-h-nueva" data-agente-id="{{ agente.id }}">

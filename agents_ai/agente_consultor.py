@@ -48,9 +48,9 @@ _FAISS_K           = 5      # chunks a recuperar
 _FAISS_FETCH_K     = 20     # candidatos pre-MMR
 _MAX_CONTEXT_CHARS = 4_000  # techo del contexto FAISS para consultas específicas
 _MAX_STATIC_CHARS  = 2_000  # máx chars del contexto estático en Modo B (suplemento)
-_HISTORY_TURNS     = 4      # turnos de historial (4 turnos = 8 mensajes)
-_USER_SNIPPET      = 160    # chars por mensaje de usuario en historial
-_AI_SNIPPET        = 240    # chars por respuesta IA en historial
+_HISTORY_TURNS     = 10     # turnos de historial (10 turnos = 20 mensajes) — necesario para continuidad de pedidos
+_USER_SNIPPET      = 300    # chars por mensaje de usuario en historial
+_AI_SNIPPET        = 800    # chars por respuesta IA en historial — antes truncaba menús con precios
 _MAX_OUTPUT_TOKENS = 3000   # tokens de salida — suficiente para menús completos con pizzas/precios
 _TOPIC_ANCHOR_CHARS = 180   # chars del primer mensaje sustantivo como ancla de tema
 # Para consultas amplias en Modo A (sin FAISS) se envía el contexto_estatico completo sin cap
@@ -303,6 +303,24 @@ class AgenteConsultor:
         self.detectar_fin = detectar_fin
         self.perfil = perfil  # PerfilNegocioIA — usado por herramientas de tool-calling
         self.agente = agente  # AgentesIA — usado para cargar HerramientaAgente dinámicas
+
+        # Configuración avanzada — lee del agente si está seteado, sino usa el constante
+        def _cfg(field, default):
+            if agente is None:
+                return default
+            val = getattr(agente, field, None)
+            return val if val else default
+
+        self.cfg_faiss_k           = _cfg('cfg_faiss_k', _FAISS_K)
+        self.cfg_faiss_fetch_k     = _cfg('cfg_faiss_fetch_k', _FAISS_FETCH_K)
+        self.cfg_max_context_chars = _cfg('cfg_max_context_chars', _MAX_CONTEXT_CHARS)
+        self.cfg_max_static_chars  = _cfg('cfg_max_static_chars', _MAX_STATIC_CHARS)
+        self.cfg_history_turns     = _cfg('cfg_history_turns', _HISTORY_TURNS)
+        self.cfg_user_snippet      = _cfg('cfg_user_snippet', _USER_SNIPPET)
+        self.cfg_ai_snippet        = _cfg('cfg_ai_snippet', _AI_SNIPPET)
+        self.cfg_max_output_tokens = _cfg('cfg_max_output_tokens', _MAX_OUTPUT_TOKENS)
+        self.cfg_topic_anchor_chars = _cfg('cfg_topic_anchor_chars', _TOPIC_ANCHOR_CHARS)
+
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
         self.vectorstore = self._load_vectorstore()
@@ -335,6 +353,7 @@ class AgenteConsultor:
         self._prompt_tpl = PromptTemplate.from_template(f'{_tpl_text}\n')
 
         self.listas_memoria: dict = {}
+        self._faq_ids_usadas: list = []  # rellenado por _construir_contexto
         self._cargar_listas_desde_memoria()
 
     # ------------------------------------------------------------------
@@ -357,14 +376,14 @@ class AgenteConsultor:
         if self.provider == "gemini":
             return ChatGoogleGenerativeAI(
                 model=self.model_name, google_api_key=self.apikey,
-                max_output_tokens=_MAX_OUTPUT_TOKENS,
+                max_output_tokens=self.cfg_max_output_tokens,
                 temperature=0.1,  # Baja temperatura → reproduce contexto fielmente, sin inventar
             )
         elif self.provider == "openai":
             from langchain_community.chat_models import ChatOpenAI
             return ChatOpenAI(
                 model_name=self.model_name, openai_api_key=self.apikey,
-                max_tokens=_MAX_OUTPUT_TOKENS,
+                max_tokens=self.cfg_max_output_tokens,
                 temperature=0.1,
             )
         raise ValueError("Proveedor de LLM no soportado")
@@ -413,18 +432,18 @@ class AgenteConsultor:
         if not h:
             return ""
 
-        mensajes = h.get_recent(_HISTORY_TURNS * 2)
+        mensajes = h.get_recent(self.cfg_history_turns * 2)
         if not mensajes:
             return ""
 
         partes = []
         for msg in mensajes:
             if isinstance(msg, HumanMessage):
-                t = msg.content[:_USER_SNIPPET]
-                partes.append(f"U: {t}{'…' if len(msg.content) > _USER_SNIPPET else ''}")
+                t = msg.content[:self.cfg_user_snippet]
+                partes.append(f"U: {t}{'…' if len(msg.content) > self.cfg_user_snippet else ''}")
             elif isinstance(msg, AIMessage):
-                t = msg.content[:_AI_SNIPPET]
-                partes.append(f"A: {t}{'…' if len(msg.content) > _AI_SNIPPET else ''}")
+                t = msg.content[:self.cfg_ai_snippet]
+                partes.append(f"A: {t}{'…' if len(msg.content) > self.cfg_ai_snippet else ''}")
 
         return "Historial reciente:\n" + "\n".join(partes) + "\n\n"
 
@@ -447,7 +466,7 @@ class AgenteConsultor:
                 .first()
             )
             if first and len(first) >= 15 and not _es_ack_simple(first) and not _es_saludo(first):
-                return first[:_TOPIC_ANCHOR_CHARS]
+                return first[:self.cfg_topic_anchor_chars]
         except Exception:
             pass
         return ""
@@ -519,6 +538,43 @@ class AgenteConsultor:
     # Helpers compartidos (contexto, tokens, prompt)
     # ------------------------------------------------------------------
 
+    def _construir_bloque_faq(self) -> tuple[str, list]:
+        """Devuelve (bloque_texto, ids_faqs_usadas).
+
+        Trae las top-N FAQs aprobadas del agente (según faqs_en_prompt, default 10)
+        ordenadas por prioridad desc y las formatea como sección "## Preguntas
+        frecuentes ##" que se inyecta al inicio del contexto. Devuelve "" si el
+        agente no tiene agente asociado o no hay FAQs aprobadas.
+        """
+        if self.agente is None:
+            return "", []
+        try:
+            top_n = max(0, int(getattr(self.agente, 'faqs_en_prompt', 10) or 0))
+        except Exception:
+            top_n = 10
+        if top_n == 0:
+            return "", []
+        try:
+            faqs = list(
+                self.agente.faqs.filter(estado='aprobada', status=True)
+                .order_by('-prioridad', '-fecha_registro')[:top_n]
+                .values('id', 'pregunta', 'respuesta')
+            )
+        except Exception as exc:
+            logger.debug("No se pudieron cargar FAQs del agente: %s", exc)
+            return "", []
+        if not faqs:
+            return "", []
+        lineas = ["## Preguntas frecuentes ##"]
+        for f in faqs:
+            p = (f['pregunta'] or '').strip().replace('\n', ' ')[:300]
+            r = (f['respuesta'] or '').strip().replace('\n', ' ')[:500]
+            if p and r:
+                lineas.append(f"Q: {p}\nA: {r}")
+        lineas.append("## fin FAQ ##")
+        ids = [f['id'] for f in faqs]
+        return "\n".join(lineas), ids
+
     def _construir_contexto(self, pregunta: str, contexto_previo: str) -> tuple[str, bool]:
         """Construye el contexto RAG combinando FAISS + BM25 + contexto_estatico.
 
@@ -527,7 +583,7 @@ class AgenteConsultor:
         """
         _sin_datos = False
         _es_ack = _es_ack_simple(pregunta) and not self._es_primer_mensaje()
-        _presupuesto = _MAX_CONTEXT_CHARS
+        _presupuesto = self.cfg_max_context_chars
         _es_amplia = False
         _query_faiss = pregunta
 
@@ -542,13 +598,13 @@ class AgenteConsultor:
             _es_amplia = es_consulta_amplia
 
             if es_consulta_amplia:
-                _k = _FAISS_K * 4
+                _k = self.cfg_faiss_k * 4
                 _lambda = 0.0
-                _presupuesto = min(_MAX_CONTEXT_CHARS * 2, 8_000)
+                _presupuesto = min(self.cfg_max_context_chars * 2, 8_000)
             else:
-                _k = _FAISS_K
+                _k = self.cfg_faiss_k
                 _lambda = 0.65
-                _presupuesto = _MAX_CONTEXT_CHARS
+                _presupuesto = self.cfg_max_context_chars
 
             docs = _hybrid_search(self.vectorstore, self._bm25, _query_faiss, _k, _lambda)
             docs_enlaces = _hybrid_search(
@@ -583,7 +639,7 @@ class AgenteConsultor:
                     len(contexto), len(self.contexto_estatico), _es_amplia,
                 )
             else:
-                estatico_trim = self.contexto_estatico[:_MAX_STATIC_CHARS]
+                estatico_trim = self.contexto_estatico[:self.cfg_max_static_chars]
                 faiss_budget  = _presupuesto - len(estatico_trim)
                 faiss_trim    = contexto[:max(faiss_budget, 0)]
                 faiss_part    = ("\n\n---\n" + faiss_trim) if faiss_trim else ""
@@ -592,6 +648,15 @@ class AgenteConsultor:
                     "Contexto estático (%d chars) + FAISS (%d chars) = %d total (presupuesto=%d)",
                     len(estatico_trim), len(faiss_trim), len(contexto), _presupuesto,
                 )
+
+        # ── FAQ top-N inyectadas al inicio del contexto ────────────────
+        bloque_faq, faq_ids = self._construir_bloque_faq()
+        if bloque_faq:
+            contexto = f"{bloque_faq}\n\n{contexto}" if contexto else bloque_faq
+            # Incrementar hits en background (no bloquear respuesta)
+            self._faq_ids_usadas = faq_ids
+            if _sin_datos:
+                _sin_datos = False  # Tenemos FAQ como respaldo
 
         return contexto, _sin_datos
 
@@ -696,6 +761,8 @@ class AgenteConsultor:
         if h:
             h.add_user_message(pregunta)
             h.add_ai_message(respuesta)
+
+        self._incrementar_hits_faqs()
 
         return ConsultaResultado(
             respuesta=respuesta, fin_detectado=fin_detectado,
@@ -864,11 +931,27 @@ class AgenteConsultor:
             h.add_user_message(pregunta)
             h.add_ai_message(respuesta)
 
+        self._incrementar_hits_faqs()
+
         return ConsultaResultado(
             respuesta=respuesta, fin_detectado=fin_detectado,
             tokens_entrada=t_in_acc, tokens_salida=t_out_acc,
             tokens_total=t_in_acc + t_out_acc, sin_datos=_sin_datos,
         )
+
+    def _incrementar_hits_faqs(self) -> None:
+        """Suma +1 al contador de uso de las FAQs inyectadas en este turno."""
+        ids = getattr(self, '_faq_ids_usadas', None)
+        if not ids:
+            return
+        try:
+            from django.db.models import F
+            from crm.models import FaqAgente
+            FaqAgente.objects.filter(id__in=ids).update(hits=F('hits') + 1)
+        except Exception as exc:
+            logger.debug("No se pudo incrementar hits de FAQs: %s", exc)
+        finally:
+            self._faq_ids_usadas = []
 
     def _aplicar_json_legacy(self, respuesta_json: str, tool_map: dict) -> str:
         """Parseo JSON legacy para prompts antiguos que aún emiten {accion:...}."""

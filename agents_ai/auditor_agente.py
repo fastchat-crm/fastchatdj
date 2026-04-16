@@ -444,6 +444,52 @@ def aplicar_sugerencia(auditoria, campo, usuario=None):
     return auditoria
 
 
+def aplicar_faq_sugerido(auditoria, usuario=None) -> int:
+    """Importa las entradas `faq_sugerido` del JSON del auditor como FaqAgente
+    en estado 'pendiente' (el cliente aprobará desde el tab de Preguntas Frecuentes).
+
+    Retorna el número de FAQs creadas. Evita duplicados exactos por pregunta
+    dentro del mismo agente.
+    """
+    from crm.models import FaqAgente
+    sug = auditoria.sugerencias or {}
+    lista = sug.get('faq_sugerido') or []
+    if not isinstance(lista, list) or not lista:
+        return 0
+    agente = auditoria.agente
+    creadas = 0
+    for item in lista:
+        if not isinstance(item, dict):
+            continue
+        pregunta = (item.get('pregunta') or '').strip()
+        respuesta = (item.get('respuesta') or '').strip()
+        if not pregunta or not respuesta:
+            continue
+        if FaqAgente.objects.filter(agente=agente, pregunta__iexact=pregunta).exists():
+            continue
+        FaqAgente.objects.create(
+            agente=agente,
+            pregunta=pregunta[:2000],
+            respuesta=respuesta[:4000],
+            origen='auditor',
+            estado='pendiente',
+            auditoria_origen=auditoria,
+        )
+        creadas += 1
+
+    aplicaciones = dict(auditoria.aplicaciones or {})
+    aplicaciones['faq_sugerido'] = {
+        'aplicado_en': timezone.now().isoformat(),
+        'usuario_id': getattr(usuario, 'id', None),
+        'creadas': creadas,
+    }
+    auditoria.aplicaciones = aplicaciones
+    if auditoria.estado == 'generado':
+        auditoria.estado = 'aplicado'
+    auditoria.save()
+    return creadas
+
+
 def revertir_auditoria(auditoria, usuario=None):
     """Restaura el snapshot previo a la auditoria."""
     agente = auditoria.agente

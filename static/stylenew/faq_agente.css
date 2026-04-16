@@ -1,0 +1,99 @@
+/* ─── Tab Preguntas Frecuentes del Agente IA ─────────────────────────── */
+
+.faq-filters {
+    display: flex; gap: .35rem; flex-wrap: wrap; align-items: center;
+    padding: .5rem .6rem;
+    background: #f8f9fa; border-radius: 6px;
+}
+.faq-filter-btn { font-size: .74rem; }
+.faq-filter-btn .badge { margin-left: .3rem; font-size: .68rem; }
+.faq-filter-btn.active {
+    background: #495057; color: #fff; border-color: #495057;
+}
+.faq-filter-btn.active .badge { background: #fff !important; color: #495057 !important; }
+
+/* ─── Filas de FAQs ──────────────────────────────────────────────────── */
+
+.faq-row {
+    position: relative;
+    padding: .7rem .9rem;
+    margin-bottom: .5rem;
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-left: 4px solid #adb5bd;
+    border-radius: 8px;
+    transition: box-shadow .15s, border-color .15s;
+}
+.faq-row:hover { box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+.faq-row.estado-pendiente   { border-left-color: #ffc107; background: #fffdf7; }
+.faq-row.estado-aprobada    { border-left-color: #28a745; }
+.faq-row.estado-desactivada { border-left-color: #6c757d; background: #f8f9fa; opacity: .7; }
+
+.faq-badges {
+    display: flex; gap: .3rem; align-items: center; flex-wrap: wrap;
+    margin-bottom: .35rem;
+}
+
+.faq-estado-badge {
+    display: inline-block; font-size: .65rem; font-weight: 700;
+    padding: 2px 7px; border-radius: 3px; letter-spacing: .02em;
+    text-transform: uppercase;
+}
+.faq-estado-badge.estado-pendiente   { background: #fff3bf; color: #8a6d1a; }
+.faq-estado-badge.estado-aprobada    { background: #d3f9d8; color: #2b8a3e; }
+.faq-estado-badge.estado-desactivada { background: #e9ecef; color: #495057; }
+
+.faq-origen-badge {
+    display: inline-flex; gap: .25rem; align-items: center;
+    font-size: .65rem; padding: 2px 7px; border-radius: 3px;
+    background: #e7e7ff; color: #4c3aa8;
+}
+.faq-origen-badge.origen-conversacion { background: #d0ebff; color: #1864ab; }
+.faq-origen-badge.origen-feedback     { background: #ffdeeb; color: #a61e4d; }
+.faq-origen-badge.origen-auditor      { background: #e7e5ff; color: #5f3dc4; }
+.faq-origen-badge.origen-manual       { background: #f1f3f5; color: #495057; }
+
+.faq-hits {
+    font-size: .65rem; color: #868e96;
+    padding: 2px 6px; background: #f1f3f5; border-radius: 3px;
+}
+
+.faq-q, .faq-a {
+    font-size: .82rem; line-height: 1.35;
+    margin-bottom: .25rem; word-wrap: break-word;
+}
+.faq-q strong { color: #228be6; }
+.faq-a { color: #495057; }
+.faq-a strong { color: #2b8a3e; }
+
+.faq-meta {
+    display: flex; gap: .5rem; align-items: center; flex-wrap: wrap;
+    margin-top: .4rem;
+    font-size: .72rem; color: #868e96;
+}
+.faq-meta .faq-prio {
+    width: 60px; height: 24px; padding: 0 .4rem; font-size: .7rem;
+    transition: background .3s;
+}
+.faq-meta .faq-prio.saved { background: #d3f9d8 !important; }
+.faq-meta .faq-prio-label { font-weight: 600; }
+.faq-meta .faq-traz {
+    font-family: monospace; background: #f1f3f5; padding: 1px 5px; border-radius: 3px;
+}
+
+.faq-actions {
+    position: absolute; top: .5rem; right: .5rem;
+    display: flex; gap: .2rem;
+}
+.faq-actions .btn { padding: .15rem .4rem; font-size: .7rem; }
+
+/* ─── Empty state ───────────────────────────────────────────────────── */
+
+.faq-empty {
+    text-align: center; padding: 2.5rem 1rem;
+    color: #868e96;
+    background: #f8f9fa; border: 1px dashed #dee2e6; border-radius: 8px;
+}
+.faq-empty .big-icon {
+    font-size: 2.2rem; color: #adb5bd; margin-bottom: .6rem;
+}

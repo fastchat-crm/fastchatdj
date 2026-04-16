@@ -1230,5 +1230,57 @@
         $(ctr).prop('disabled', true);
         $.post("{{ request.path }}", { action: 'transcribe_audio' , id: ctr.dataset.id,});
     }
+
+    /* ── Feedback IA (definidas a nivel global; el partial puede re-renderizarse) ── */
+    const _fbCsrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+    const _fbUrl  = '/whatsapp/conversaciones/';
+
+    function feedbackOk(msgId, btn) { _sendFeedback(msgId, true, '', '', btn); }
+
+    function feedbackKo(msgId, btn) {
+        const allBlocks = document.querySelectorAll('#mensajes-container .msg-row');
+        let pregunta = '';
+        let found = false;
+        for (let i = allBlocks.length - 1; i >= 0; i--) {
+            if (found && allBlocks[i].classList.contains('msg-in')) {
+                const p = allBlocks[i].querySelector('.msg-bubble p');
+                if (p) pregunta = p.innerText.trim();
+                break;
+            }
+            if (allBlocks[i].querySelector(`[data-fbid="${msgId}"]`)) found = true;
+        }
+        document.getElementById('cf-pregunta-' + msgId).value = pregunta;
+        document.getElementById('cf-' + msgId).classList.remove('d-none');
+    }
+
+    function enviarCorreccion(msgId) {
+        const correccion = document.getElementById('cf-texto-' + msgId).value.trim();
+        const pregunta   = document.getElementById('cf-pregunta-' + msgId).value.trim();
+        if (!correccion) { alert('Escribe la respuesta correcta antes de guardar.'); return; }
+        _sendFeedback(msgId, false, correccion, pregunta, null);
+    }
+
+    function _sendFeedback(msgId, esOk, correccion, pregunta, btn) {
+        fetch(_fbUrl, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': _fbCsrf},
+            body: new URLSearchParams({
+                action: 'feedback-mensaje', mensaje_id: msgId,
+                es_correcto: esOk ? '1' : '0', correccion, pregunta
+            })
+        }).then(r => r.json()).then(data => {
+            if (data.error) return;
+            const bar = document.querySelector(`.feedback-bar[data-id="${msgId}"]`);
+            if (!bar) return;
+            if (esOk) {
+                bar.innerHTML = '<span class="text-success" style="font-size:.72rem;"><i class="fa fa-thumbs-up"></i> Correcto</span>';
+            } else {
+                const vs = data.procesado_vectorstore ? ' <i class="fa fa-brain" title="Aprendido"></i>' : '';
+                bar.innerHTML = `<span class="text-danger" style="font-size:.72rem;"><i class="fa fa-thumbs-down"></i> Corregido${vs}</span>`;
+                const cf = document.getElementById('cf-' + msgId);
+                if (cf) cf.classList.add('d-none');
+            }
+        }).catch(() => {});
+    }
 </script>
 {% endblock %}

@@ -569,6 +569,13 @@ $(document).ready(function() {
     {% endif %}
 });
 
+async function transcribirAudio(ctr) {
+    $(ctr).find('span').html('Transcribiendo');
+    $(ctr).find('i.fa-ellipsis').removeClass('d-none');
+    $(ctr).prop('disabled', true);
+    $.post('/whatsapp/conversaciones/', { action: 'transcribe_audio', id: ctr.dataset.id });
+}
+
 function formModal(id, text, action) {
     pantallaespera();
     $.ajax({
