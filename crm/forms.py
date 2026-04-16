@@ -169,8 +169,10 @@ _CFG_RANGES = {
 class AgentesIAForm(ModelFormBase):
     class Meta:
         model = AgentesIA
+        # NOTA: `modelo` ya NO está aquí — ahora vive en ApiKeyIA (diferentes
+        # providers por key, cada uno con sus propios modelos).
         fields = (
-            'nombre', 'descripcion', 'apikey', 'modelo', 'prompt_template', 'anotar_listas',
+            'nombre', 'descripcion', 'apikey', 'prompt_template', 'anotar_listas',
             'cfg_faiss_k', 'cfg_faiss_fetch_k', 'cfg_max_context_chars', 'cfg_max_static_chars',
             'cfg_history_turns', 'cfg_user_snippet', 'cfg_ai_snippet',
             'cfg_max_output_tokens', 'cfg_topic_anchor_chars',
@@ -180,9 +182,6 @@ class AgentesIAForm(ModelFormBase):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
         super().__init__(*args, **kwargs)
         self.fields['apikey'].queryset = ApiKeyIA.objects.filter(status=True)
-        # Modelo: añade opción "default del provider" como primer item
-        from agents_ai.providers import MODELOS_DISPONIBLES
-        self.fields['modelo'].choices = (('', '— Default del provider de la API Key —'),) + tuple(MODELOS_DISPONIBLES)
         for k, v in self.fields.items():
             self.fields[k].widget.attrs['class'] = 'form-control'
             self.fields[k].widget.attrs['col'] = '12'
@@ -190,9 +189,6 @@ class AgentesIAForm(ModelFormBase):
                 self.fields[k].widget.attrs['col'] = '12'
             if k in ('apikey',):
                 self.fields[k].widget.attrs['class'] = 'select2'
-            if k in ('modelo',):
-                self.fields[k].widget.attrs['class'] = 'form-select'
-                self.fields[k].widget.attrs['col'] = '12'
             if k in ('anotar_listas'):
                 self.fields[k].widget.attrs['class'] = "js-switch"
                 self.fields[k].widget.attrs['data-render'] = "switchery"
@@ -265,7 +261,7 @@ class FaqAgenteForm(ModelFormBase):
 class ApiKeyIAForm(ModelFormBase):
     class Meta:
         model = ApiKeyIA
-        fields = ('alias', 'proveedor', 'descripcion', 'usuario', 'contrasena', 'estado')
+        fields = ('alias', 'proveedor', 'modelo', 'descripcion', 'usuario', 'contrasena', 'estado')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
@@ -282,6 +278,10 @@ class ApiKeyIAForm(ModelFormBase):
                 self.fields[k].widget.attrs['col'] = '12'
             if k in ('proveedor',):
                 self.fields[k].widget.attrs['class'] = "form-control jselect"
+                self.fields[k].widget.attrs['col'] = '6'
+            if k == 'modelo':
+                self.fields[k].widget.attrs['class'] = 'form-control'
+                self.fields[k].widget.attrs['col'] = '6'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 

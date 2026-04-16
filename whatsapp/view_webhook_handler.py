@@ -675,7 +675,7 @@ def process_incoming_message(session, event_data, channel_layer):
                         consultor = AgenteConsultor(
                             vectorstore_path=vs_path, vectorstore_enlaces_path=vectorstore_enlaces_path,
                             provider=apikey.proveedor, apikey=apikey.descripcion,
-                            model_name=(agente.modelo or None),  # vacío → default del provider
+                            model_name=(apikey.modelo or None),  # vacío → default del provider
                             conversacion=conversation, prompt_template_text=_prompt_tpl,
                             contexto_estatico=agente.contexto_estatico or None,
                             detectar_fin=detectar_fin_llm,

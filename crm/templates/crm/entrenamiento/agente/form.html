@@ -134,10 +134,12 @@
                 <div class="invalid-feedback" id="errorMessageapikey"></div>
             </div>
             <div class="col-12 mt-2">
-                <label class="form-label small fw-semibold mb-1">{{ form.modelo.label }}</label>
-                {{ form.modelo }}
-                <div class="form-text">{{ form.modelo.help_text }}</div>
-                <div class="invalid-feedback" id="errorMessagemodelo"></div>
+                <div class="guide-callout" style="background:#fff9db;border-left-color:#f59e0b">
+                    <i class="fas fa-info-circle me-1"></i>
+                    <strong>Nota:</strong> el modelo LLM ahora se configura <strong>por cada API Key</strong> (no en el agente),
+                    porque cada provider (Gemini, OpenAI, Claude) tiene sus propios modelos.
+                    Edita una API Key para elegir qué modelo usar con esa key.
+                </div>
             </div>
         </div>
     </div>

@@ -81,6 +81,116 @@
         .api-key-badge.ok    { background:#dcfce7; color:#15803d; border-color:#bbf7d0; }
         .api-key-badge.err   { background:#fee2e2; color:#b91c1c; border-color:#fecaca; }
         .api-key-badge.no-keys { background:#fef3c7; color:#92400e; border-color:#fde68a; }
+        .api-key-badge code {
+            background:rgba(0,0,0,.08); padding:0 4px; border-radius:3px;
+            font-size:.67rem; color:inherit;
+        }
+
+        /* ── API Key cards ──────────────────────────────────────────── */
+        .apikey-card {
+            border:1px solid #e5e7eb; border-radius:12px;
+            transition:box-shadow .15s, transform .15s;
+            overflow:hidden;
+        }
+        .apikey-card:hover { box-shadow:0 4px 14px rgba(0,0,0,.06); transform:translateY(-1px); }
+        .apikey-card.inactiva { opacity:.7; }
+
+        .apikey-card-header {
+            display:flex; align-items:center; gap:10px;
+            padding:12px 14px;
+            background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color:#fff;
+        }
+        .apikey-card-header.provider-2 { background:linear-gradient(135deg,#4285f4 0%, #0ea5e9 100%); } /* Gemini azul */
+        .apikey-card-header.provider-3 { background:linear-gradient(135deg,#10a37f 0%, #059669 100%); } /* OpenAI verde */
+
+        .apikey-icon {
+            width:38px; height:38px; flex-shrink:0;
+            display:flex; align-items:center; justify-content:center;
+            background:rgba(255,255,255,.22); border-radius:10px;
+            font-size:1.1rem;
+        }
+        .apikey-title-group { flex-grow:1; min-width:0; }
+        .apikey-title-group h6 {
+            font-weight:700; color:#fff;
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+        .apikey-provider { color:rgba(255,255,255,.88); font-size:.7rem; }
+        .apikey-provider code {
+            background:rgba(255,255,255,.22); color:#fff;
+            padding:0 5px; border-radius:3px; font-size:.68rem;
+        }
+        .apikey-estado { font-size:.65rem; padding:4px 9px; }
+
+        .apikey-card-body { padding:12px 14px; background:#fff; }
+
+        .apikey-info-row {
+            display:flex; gap:6px; align-items:center;
+            margin-bottom:8px; font-size:.78rem;
+        }
+        .apikey-label { color:#6b7280; font-weight:600; }
+        .apikey-value {
+            flex-grow:1; font-family:monospace;
+            background:#f1f5f9; padding:3px 8px; border-radius:4px;
+            color:#475569; font-size:.72rem;
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+
+        .apikey-error {
+            background:#fef2f2; border:1px solid #fecaca;
+            border-radius:6px; padding:8px 10px; margin-bottom:10px;
+        }
+        .apikey-error-head {
+            display:flex; align-items:center; gap:4px;
+            font-size:.72rem; color:#991b1b; margin-bottom:4px;
+        }
+        .apikey-error-date {
+            font-weight:normal; color:#b91c1c; font-size:.68rem;
+            background:#fee2e2; padding:1px 6px; border-radius:3px;
+        }
+        .apikey-error-msg { font-size:.72rem; color:#7f1d1d; line-height:1.35; }
+
+        .apikey-actions {
+            display:flex; flex-wrap:wrap; gap:5px;
+            padding-top:10px; border-top:1px solid #f1f5f9;
+        }
+        .btn-apk {
+            display:inline-flex; align-items:center; gap:5px;
+            font-size:.72rem; font-weight:600;
+            padding:5px 10px; border-radius:6px; border:none;
+            cursor:pointer; transition:background .15s, color .15s;
+        }
+        .btn-apk.test      { background:#fff8e1; color:#92400e; }
+        .btn-apk.test:hover{ background:#fde68a; }
+        .btn-apk.consumo   { background:#e0f2fe; color:#075985; }
+        .btn-apk.consumo:hover { background:#bae6fd; }
+        .btn-apk.alertas   { background:#f1f5f9; color:#475569; }
+        .btn-apk.alertas:hover { background:#e2e8f0; }
+        .btn-apk.alertas-on{ background:#fee2e2; color:#b91c1c; }
+        .btn-apk.alertas-on:hover { background:#fecaca; }
+        .btn-apk.edit      { background:#eff6ff; color:#2563eb; }
+        .btn-apk.edit:hover{ background:#dbeafe; }
+        .btn-apk.reactivar { background:#f0fdf4; color:#15803d; }
+        .btn-apk.reactivar:hover { background:#bbf7d0; }
+        .btn-apk.del       { background:#fff1f2; color:#be123c; }
+        .btn-apk.del:hover { background:#ffe4e6; }
+
+        /* Checklist de configuración del agente */
+        .agent-checklist {
+            display:flex; gap:4px; flex-wrap:wrap;
+            padding:8px; margin-bottom:10px;
+            background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;
+        }
+        .chk-item {
+            display:inline-flex; align-items:center; gap:4px;
+            font-size:.68rem; font-weight:600;
+            padding:3px 7px; border-radius:4px;
+            background:#fff; border:1px solid #e5e7eb;
+        }
+        .chk-item.ok  { color:#15803d; border-color:#bbf7d0; background:#f0fdf4; }
+        .chk-item.off { color:#6b7280; background:#f9fafb; }
+        .chk-item strong { margin-left:3px; font-weight:700; }
+        .chk-item .badge { font-size:.6rem; padding:1px 5px; }
 
         /* Action buttons */
         .agent-actions {
@@ -281,46 +391,48 @@
                                             </div>
 
                                             <div class="agent-card-body">
-                                                {# Stats chips #}
-                                                <div class="agent-stats">
-                                                    {% if l.keys_total == 0 %}
-                                                        <span class="stat-chip warn"><i class="fas fa-key"></i> Sin keys</span>
-                                                    {% elif l.keys_activas == 0 %}
-                                                        <span class="stat-chip err"><i class="fas fa-key"></i> {{ l.keys_total }} key{{ l.keys_total|pluralize }} — inactiva{{ l.keys_total|pluralize }}</span>
-                                                    {% else %}
-                                                        <span class="stat-chip ok"><i class="fas fa-key"></i> {{ l.keys_activas }}/{{ l.keys_total }} activa{{ l.keys_activas|pluralize }}</span>
-                                                    {% endif %}
-
-                                                    {% if l.contexto_estatico %}
-                                                        <span class="stat-chip ctx" title="{{ l.contexto_estatico|length }} chars extraídos">
-                                                            <i class="fas fa-database"></i> {{ l.contexto_estatico|length|filesizeformat }}
-                                                        </span>
-                                                    {% else %}
-                                                        <span class="stat-chip noctx" title="Usa el botón Procesar para extraer el contexto">
-                                                            <i class="fas fa-exclamation-triangle"></i> Sin procesar
-                                                        </span>
-                                                    {% endif %}
-
-                                                    {% if l.vectorstore_path %}
-                                                        <span class="stat-chip info" title="Índice FAISS activo">
-                                                            <i class="fas fa-layer-group"></i> FAISS
-                                                        </span>
-                                                    {% endif %}
+                                                {# Checklist de configuración #}
+                                                <div class="agent-checklist" title="Estado de configuración del agente">
+                                                    <span class="chk-item {% if l.keys_activas %}ok{% else %}off{% endif %}" title="{{ l.keys_activas }} API Key(s) activa(s) de {{ l.keys_total }}">
+                                                        <i class="fas fa-{% if l.keys_activas %}check-circle{% else %}times-circle{% endif %}"></i> API
+                                                    </span>
+                                                    <span class="chk-item {% if l.prompt_configurado %}ok{% else %}off{% endif %}" title="{% if l.prompt_configurado %}Prompt template configurado{% else %}Sin prompt{% endif %}">
+                                                        <i class="fas fa-{% if l.prompt_configurado %}check-circle{% else %}times-circle{% endif %}"></i> Prompt
+                                                    </span>
+                                                    <span class="chk-item {% if l.contexto_estatico or l.num_archivos or l.num_textos %}ok{% else %}off{% endif %}" title="{% if l.contexto_estatico %}Contexto estático {{ l.contexto_estatico|length|filesizeformat }}{% else %}Sin procesar{% endif %} · {{ l.num_archivos }} archivo(s), {{ l.num_textos }} texto(s)">
+                                                        <i class="fas fa-{% if l.contexto_estatico or l.num_archivos or l.num_textos %}check-circle{% else %}times-circle{% endif %}"></i> Docs
+                                                    </span>
+                                                    <span class="chk-item {% if l.num_enlaces_api %}ok{% else %}off{% endif %}" title="{{ l.num_enlaces_api }} enlace(s) API configurado(s)">
+                                                        <i class="fas fa-{% if l.num_enlaces_api %}check-circle{% else %}minus-circle{% endif %}"></i> API ext
+                                                    </span>
+                                                    <span class="chk-item {% if l.num_faqs_aprobadas %}ok{% else %}off{% endif %}" title="{{ l.num_faqs_aprobadas }} FAQ(s) aprobada(s){% if l.num_faqs_pendientes %} · {{ l.num_faqs_pendientes }} pendiente(s){% endif %}">
+                                                        <i class="fas fa-{% if l.num_faqs_aprobadas %}check-circle{% else %}minus-circle{% endif %}"></i> FAQs
+                                                        {% if l.num_faqs_aprobadas %}<strong>{{ l.num_faqs_aprobadas }}</strong>{% endif %}
+                                                        {% if l.num_faqs_pendientes %}<span class="badge bg-warning text-dark ms-1">{{ l.num_faqs_pendientes }}</span>{% endif %}
+                                                    </span>
+                                                    <span class="chk-item {% if l.num_herramientas_activas %}ok{% else %}off{% endif %}" title="{{ l.num_herramientas_activas }} herramienta(s) activa(s)">
+                                                        <i class="fas fa-{% if l.num_herramientas_activas %}check-circle{% else %}minus-circle{% endif %}"></i> Tools
+                                                        {% if l.num_herramientas_activas %}<strong>{{ l.num_herramientas_activas }}</strong>{% endif %}
+                                                    </span>
                                                 </div>
 
-                                                {# API Key badges #}
-                                                <div class="mb-2">
-                                                    {% for api in l.apikey.all %}
-                                                        <span class="api-key-badge {% if api.estado %}ok{% else %}err{% endif %}"
-                                                              title="{% if api.estado %}Activa{% else %}{{ api.msgerror|default:'Inactiva' }}{% endif %}">
-                                                            <i class="fas fa-circle" style="font-size:.45rem;"></i>
-                                                            {{ api.alias|default:api.get_proveedor_display }}
+                                                {# API Keys + modelos #}
+                                                <div class="agent-keys mb-2">
+                                                    {% for k in l.modelos_en_uso %}
+                                                        <span class="api-key-badge ok" title="{{ k.provider }} · {{ k.modelo }}">
+                                                            <i class="fas fa-microchip"></i>
+                                                            {{ k.alias }} · <code>{{ k.modelo }}</code>
                                                         </span>
-                                                    {% empty %}
+                                                    {% endfor %}
+                                                    {% if l.keys_total == 0 %}
                                                         <span class="api-key-badge no-keys">
                                                             <i class="fas fa-exclamation-triangle"></i> Sin API Key
                                                         </span>
-                                                    {% endfor %}
+                                                    {% elif l.keys_activas == 0 %}
+                                                        <span class="api-key-badge err">
+                                                            <i class="fas fa-exclamation-triangle"></i> {{ l.keys_total }} key(s) inactiva(s)
+                                                        </span>
+                                                    {% endif %}
                                                 </div>
 
                                                 {# Action buttons #}
@@ -392,114 +504,91 @@
                 </div>
                 <div class="card-body" id="bloque_apis_ia">
                     <div class="card-body pt-0">
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                <tr>
-                                    <th>Alias / Proveedor</th>
-                                    <th>Api Key</th>
-                                    <th>Último error</th>
-                                    <th class="text-center">Estado</th>
-                                    <th class="text-center">Probar</th>
-                                    <th class="text-center">Consumo</th>
-                                    <th class="text-center">Alertas</th>
-                                    <th class="text-center">Acción</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                {% for l in apis %}
-                                    <tr id="apikey-row-{{ l.pk }}">
-                                        <td>
-                                            <strong>{{ l.alias|default:l.get_proveedor_display }}</strong>
-                                            <br><small class="text-muted">{{ l.get_proveedor_display }}</small>
-                                        </td>
-                                        <td>
-                                            <code class="small text-muted" title="{{ l.descripcion }}">
-                                                {{ l.descripcion|slice:":12" }}…
-                                            </code>
-                                        </td>
-                                        <td>
-                                            {% if l.msgerror %}
-                                                <span class="text-danger small" title="{{ l.msgerror }}">
-                                                    <i class="fas fa-exclamation-circle me-1"></i>{{ l.msgerror|truncatechars:60 }}
+                        {% if apis %}
+                        <div class="row g-3">
+                            {% for l in apis %}
+                            <div class="col-xl-4 col-lg-6 col-md-6" id="apikey-row-{{ l.pk }}">
+                                <div class="card apikey-card h-100 {% if not l.estado %}inactiva{% endif %}">
+                                    <div class="apikey-card-header provider-{{ l.proveedor }}">
+                                        <div class="apikey-icon">
+                                            <i class="fas fa-{% if l.proveedor == 2 %}gem{% elif l.proveedor == 3 %}robot{% else %}key{% endif %}"></i>
+                                        </div>
+                                        <div class="apikey-title-group">
+                                            <h6 class="mb-0">{{ l.alias|default:l.get_proveedor_display }}</h6>
+                                            <small class="apikey-provider">{{ l.get_proveedor_display }}{% if l.modelo %} · <code>{{ l.modelo }}</code>{% else %} · <span class="text-muted">(default)</span>{% endif %}</small>
+                                        </div>
+                                        <span class="apikey-estado badge {% if l.estado %}bg-success{% else %}bg-danger{% endif %}" id="badge-estado-{{ l.pk }}">
+                                            {{ l.estado|yesno:'Activa,Inactiva' }}
+                                        </span>
+                                    </div>
+                                    <div class="apikey-card-body">
+                                        <div class="apikey-info-row">
+                                            <span class="apikey-label"><i class="fas fa-key"></i> Key</span>
+                                            <code class="apikey-value" title="{{ l.descripcion }}">{{ l.descripcion|slice:":16" }}…{{ l.descripcion|slice:"-4:" }}</code>
+                                        </div>
+                                        {% if l.msgerror %}
+                                        <div class="apikey-error">
+                                            <div class="apikey-error-head">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                                <strong>Último error</strong>
+                                                <span class="apikey-error-date ms-auto">
+                                                    {% if l.fecha_modificacion %}{{ l.fecha_modificacion|date:"d/m/Y H:i" }}{% else %}—{% endif %}
                                                 </span>
-                                            {% else %}
-                                                <span class="text-muted small">—</span>
-                                            {% endif %}
-                                        </td>
-                                        <td class="text-center">
-                                            <span class="badge {{ l.estado|yesno:'bg-success,bg-danger' }}" id="badge-estado-{{ l.pk }}">
-                                                {{ l.estado|yesno:'Activa,Inactiva' }}
-                                            </span>
-                                        </td>
-                                        <td class="text-center">
-                                            <button type="button" class="btn btn-sm btn-warning"
+                                            </div>
+                                            <div class="apikey-error-msg" title="{{ l.msgerror }}">{{ l.msgerror|truncatechars:120 }}</div>
+                                        </div>
+                                        {% endif %}
+                                        <div class="apikey-actions">
+                                            <button type="button" class="btn-apk test"
                                                     onclick="testApiKey({{ l.pk }}, this)"
                                                     title="Probar conectividad con el proveedor">
-                                                <i class="fas fa-vial me-1"></i>Probar
+                                                <i class="fas fa-vial"></i> Probar
                                             </button>
-                                        </td>
-                                        <td class="text-center">
-                                            <button type="button" class="btn btn-sm btn-outline-info"
+                                            <button type="button" class="btn-apk consumo"
                                                     onclick="verConsumo({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')"
                                                     title="Ver consumo de tokens">
-                                                <i class="fas fa-chart-bar me-1"></i>Consumo
+                                                <i class="fas fa-chart-bar"></i> Consumo
                                             </button>
-                                        </td>
-                                        <td class="text-center">
                                             <button type="button"
-                                                    class="btn btn-sm {% if l.alerta_consumo and l.alerta_consumo.umbral_diario or l.alerta_consumo and l.alerta_consumo.umbral_mensual %}btn-danger{% else %}btn-outline-secondary{% endif %}"
+                                                    class="btn-apk {% if l.alerta_consumo and l.alerta_consumo.umbral_diario or l.alerta_consumo and l.alerta_consumo.umbral_mensual %}alertas-on{% else %}alertas{% endif %}"
                                                     onclick="verAlerta({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')"
                                                     title="Configurar alertas de consumo">
-                                                <i class="fas fa-bell me-1"></i>Alertas
-                                                {% if l.alerta_consumo and l.alerta_consumo.umbral_diario or l.alerta_consumo and l.alerta_consumo.umbral_mensual %}
-                                                    <span class="badge bg-white text-danger ms-1">ON</span>
-                                                {% endif %}
+                                                <i class="fas fa-bell"></i>
+                                                {% if l.alerta_consumo and l.alerta_consumo.umbral_diario or l.alerta_consumo and l.alerta_consumo.umbral_mensual %}Alertas ON{% else %}Alertas{% endif %}
                                             </button>
-                                        </td>
-                                        <td class="text-center">
-                                            <div class="dropdown">
-                                                <button class="btn btn-icon" type="button"
-                                                        id="dropdownMenuButton-{{ l.pk }}"
-                                                        data-bs-toggle="dropdown" aria-expanded="false"
-                                                        style="background:none;border:none;">
-                                                    <i class="fas fa-ellipsis-v"></i>
-                                                </button>
-                                                <ul class="dropdown-menu dropdown-menu-end"
-                                                    aria-labelledby="dropdownMenuButton-{{ l.pk }}">
-                                                    <li>
-                                                        <a class="dropdown-item"
-                                                           onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeapikey')"
-                                                           href="javascript:void(0);">
-                                                            <i class="fas fa-edit me-2 text-primary"></i>Editar
-                                                        </a>
-                                                    </li>
-                                                    {% if not l.estado %}
-                                                    <li>
-                                                        <a class="dropdown-item" href="javascript:void(0);"
-                                                           onclick="reactivarApiKey({{ l.pk }})">
-                                                            <i class="fas fa-redo me-2 text-success"></i>Reactivar
-                                                        </a>
-                                                    </li>
-                                                    {% endif %}
-                                                    <li>
-                                                        <a class="dropdown-item" href="javascript:void(0);"
-                                                           onclick="eliminarajax({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display }}', 'deleteapikey')">
-                                                            <i class="fas fa-trash me-2 text-danger"></i>Eliminar
-                                                        </a>
-                                                    </li>
-                                                </ul>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                {% empty %}
-                                    <tr>
-                                        <td colspan="7" class="text-center text-muted py-3">Sin API Keys registradas</td>
-                                    </tr>
-                                {% endfor %}
-                                </tbody>
-                            </table>
+                                            <button type="button" class="btn-apk edit"
+                                                    onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeapikey')"
+                                                    title="Editar">
+                                                <i class="fas fa-edit"></i> Editar
+                                            </button>
+                                            {% if not l.estado %}
+                                            <button type="button" class="btn-apk reactivar"
+                                                    onclick="reactivarApiKey({{ l.pk }})"
+                                                    title="Reactivar">
+                                                <i class="fas fa-redo"></i>
+                                            </button>
+                                            {% endif %}
+                                            <button type="button" class="btn-apk del"
+                                                    onclick="eliminarajax({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display }}', 'deleteapikey')"
+                                                    title="Eliminar">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
                         </div>
+                        {% else %}
+                        <div class="empty-state">
+                            <i class="fas fa-key"></i>
+                            <h4>Sin API Keys registradas</h4>
+                            <p class="mb-3">Agrega tu primera API Key de Gemini, OpenAI o Claude.</p>
+                            <button class="btn btn-primary" onclick="formModal('', 'Agregar Api Key', 'addapikey')">
+                                <i class="fas fa-plus me-2"></i>Crear primera API Key
+                            </button>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -648,7 +737,7 @@
                         <div class="tab-pane fade show active" id="ctxTabContexto">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <small class="text-muted">Texto exacto que se inyecta como <code>{context}</code> en el prompt.</small>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="copiarTab('ctxContenidoContexto')">
+                                <button class="btn btn-sm btn-secondary" onclick="copiarTab('ctxContenidoContexto')">
                                     <i class="fas fa-copy me-1"></i>Copiar
                                 </button>
                             </div>
@@ -658,7 +747,7 @@
                         <div class="tab-pane fade" id="ctxTabPrompt">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <small class="text-muted">Prompt completo tal como lo recibe el modelo LLM (con contexto y marcadores de ejemplo).</small>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="copiarTab('ctxContenidoPrompt')">
+                                <button class="btn btn-sm btn-secondary" onclick="copiarTab('ctxContenidoPrompt')">
                                     <i class="fas fa-copy me-1"></i>Copiar
                                 </button>
                             </div>
@@ -787,7 +876,7 @@
     function copiarTab(elId) {
         const el = document.getElementById(elId);
         navigator.clipboard.writeText(el.innerText || el.textContent).then(function() {
-            const btn = el.closest('.tab-pane').querySelector('button.btn-outline-secondary');
+            const btn = el.closest('.tab-pane').querySelector('button.btn-secondary');
             const orig = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-check me-1"></i>Copiado';
             setTimeout(function() { btn.innerHTML = orig; }, 2000);

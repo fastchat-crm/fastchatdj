@@ -438,7 +438,7 @@ def entrenamiento_ia_view(request):
                             consultor = AgenteConsultor(
                                 vectorstore_path=vs_path, vectorstore_enlaces_path=vs_enlaces_path,
                                 provider=apikey_obj.proveedor, apikey=apikey_obj.descripcion,
-                                model_name=(agente.modelo or None),
+                                model_name=(apikey_obj.modelo or None),
                                 conversacion=fake_conv,
                                 prompt_template_text=(agente.prompt_template or '').strip() or PROMPT_TEMPLATES.get('es', ''),
                                 contexto_estatico=agente.contexto_estatico or None,
@@ -1033,6 +1033,26 @@ def entrenamiento_ia_view(request):
                     a.estado_agente = 'ok'
                 else:
                     a.estado_agente = 'err'
+                # ── Checks de configuración para el card ───────────────
+                a.prompt_configurado = bool((a.prompt_template or '').strip())
+                a.num_faqs_aprobadas = a.faqs.filter(status=True, estado='aprobada').count()
+                a.num_faqs_pendientes = a.faqs.filter(status=True, estado='pendiente').count()
+                a.num_herramientas_activas = a.herramientas.filter(status=True, activo=True).count()
+                a.num_enlaces_api = a.detalleagentesai_set.filter(status=True, tipo=1, enlace__isnull=False).count()
+                a.num_archivos = a.detalleagentesai_set.filter(status=True, tipo=2, archivo__isnull=False).count()
+                a.num_textos = a.detalleagentesai_set.filter(status=True, tipo=3).exclude(descripcion__isnull=True).exclude(descripcion='').count()
+                # ── Modelos en uso (del apikey, no del agente) ─────────
+                modelos_en_uso = []
+                for k in keys:
+                    if not k.estado:
+                        continue
+                    mod = (getattr(k, 'modelo', '') or '').strip()
+                    prov_lbl = k.get_proveedor_display() if hasattr(k, 'get_proveedor_display') else ''
+                    if mod:
+                        modelos_en_uso.append({'provider': prov_lbl, 'modelo': mod, 'alias': k.alias or prov_lbl})
+                    else:
+                        modelos_en_uso.append({'provider': prov_lbl, 'modelo': '(default)', 'alias': k.alias or prov_lbl})
+                a.modelos_en_uso = modelos_en_uso
             data['agentes'] = agentes
             data['apis'] = perfil.get_apis()
             # Usuarios para modal de alertas

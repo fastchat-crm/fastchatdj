@@ -769,6 +769,12 @@ class ApiKeyIA(ModeloBase):
     perfil = models.ForeignKey(PerfilNegocioIA, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Perfil Negocio IA')
     descripcion = models.CharField(max_length=255, verbose_name="Api Key")
     proveedor = models.IntegerField(choices=PROVEEDOR_CHOICES, default=1, verbose_name='Proveedor')
+    modelo = models.CharField(
+        max_length=100, blank=True, default='', choices=MODELOS_DISPONIBLES,
+        verbose_name='Modelo LLM',
+        help_text='Modelo concreto a usar con esta API Key. Debe ser compatible con el proveedor '
+                  '(Gemini con keys Gemini, GPT con OpenAI, Claude con Anthropic). Vacío = usa el default del provider.'
+    )
     usuario = models.CharField(max_length=100, blank=True, null=True, verbose_name='Usuario')
     contrasena = models.CharField(max_length=100, blank=True, null=True, verbose_name='Contraseña')
     msgerror = models.TextField(blank=True, null=True, verbose_name='Mensaje de error', editable=False)
@@ -780,7 +786,8 @@ class ApiKeyIA(ModeloBase):
         verbose_name_plural = 'Apis Keys IA'
 
     def __str__(self):
-        return f"[{self.get_proveedor_display()}]: {self.alias}"
+        base = f"[{self.get_proveedor_display()}]: {self.alias}"
+        return f"{base} ({self.modelo})" if self.modelo else base
 
 
 class ConsumoTokenIA(models.Model):
