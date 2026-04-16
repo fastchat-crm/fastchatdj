@@ -541,7 +541,6 @@ def process_incoming_message(session, event_data, channel_layer):
         # Audio se procesa por transcripción; los demás no se leen automáticamente.
         if message_type in ('imagen', 'video', 'documento', 'sticker') and not file_url:
             try:
-                from django.core.cache import cache
                 _media_key = f'notif_media_skipped_{conversation.id}'
                 if not cache.get(_media_key):
                     cache.set(_media_key, True, 300)  # throttle 5 min
@@ -575,7 +574,6 @@ def process_incoming_message(session, event_data, channel_layer):
             # Notificar al usuario del CRM si el agente no tiene keys activas (una vez cada 10 min)
             if _keys_activas == 0:
                 try:
-                    from django.core.cache import cache
                     _notif_key = f'notif_ia_sin_keys_{session.id}'
                     if not cache.get(_notif_key):
                         cache.set(_notif_key, True, 600)  # throttle 10 minutos

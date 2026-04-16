@@ -27,7 +27,8 @@
       "Bash(xargs ls *)",
       "Bash(git show *)",
       "Read(//tmp/**)",
-      "WebFetch(domain:www.zolutium-es.com)"
+      "WebFetch(domain:www.zolutium-es.com)",
+      "WebFetch(domain:mensajeria.broktech.com.ec)"
     ]
   }
 }
