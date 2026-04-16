@@ -305,7 +305,12 @@ def entrenamiento_ia_view(request):
                             raise ValueError('Campo no soportado')
                         aplicar_sugerencia(auditoria, campo, usuario=request.user)
                         log(f"Aplicada sugerencia IA ({campo}) del agente {auditoria.agente}", request, "change", obj=auditoria.agente.id)
-                        res_json = {'error': False, 'campo': campo, 'estado': auditoria.estado}
+                        # Recargar agente para devolver el valor recién aplicado
+                        auditoria.agente.refresh_from_db(fields=[campo])
+                        res_json = {
+                            'error': False, 'campo': campo, 'estado': auditoria.estado,
+                            'nuevo_valor': getattr(auditoria.agente, campo) or '',
+                        }
                     elif action == 'auditoria_revertir':
                         from agents_ai.auditor_agente import revertir_auditoria
                         auditoria = AuditoriaAgenteIA.objects.select_related('agente__perfil').get(
@@ -313,7 +318,12 @@ def entrenamiento_ia_view(request):
                         )
                         revertir_auditoria(auditoria, usuario=request.user)
                         log(f"Revertida auditoria IA del agente {auditoria.agente}", request, "change", obj=auditoria.agente.id)
-                        res_json = {'error': False, 'estado': auditoria.estado}
+                        auditoria.agente.refresh_from_db(fields=['prompt_template', 'contexto_estatico'])
+                        res_json = {
+                            'error': False, 'estado': auditoria.estado,
+                            'prompt_template': auditoria.agente.prompt_template or '',
+                            'contexto_estatico': auditoria.agente.contexto_estatico or '',
+                        }
                     elif action == 'auditoria_aplicar_faq':
                         from agents_ai.auditor_agente import aplicar_faq_sugerido
                         auditoria = AuditoriaAgenteIA.objects.select_related('agente__perfil').get(
@@ -668,11 +678,47 @@ def entrenamiento_ia_view(request):
                         filtro = AgentesIA.objects.get(pk=pk, perfil=perfil)
                         contexto = filtro.contexto_estatico or ''
                         prompt_tpl = filtro.prompt_template or ''
-                        # Armar preview del prompt completo con valores de ejemplo
+
+                        # ── FAQs aprobadas (top-N se inyectan al prompt) ──
+                        top_n = int(filtro.faqs_en_prompt or 0)
+                        faqs_aprob_qs = filtro.faqs.filter(status=True, estado='aprobada').order_by('-prioridad', '-fecha_registro')
+                        faqs_aprob_total = faqs_aprob_qs.count()
+                        faqs_top = list(faqs_aprob_qs[:top_n].values(
+                            'id', 'pregunta', 'respuesta', 'prioridad', 'hits', 'origen'
+                        ))
+                        faqs_pend = filtro.faqs.filter(status=True, estado='pendiente').count()
+
+                        # Construir el bloque FAQ tal como se inyecta en el prompt
+                        bloque_faq = ''
+                        if faqs_top:
+                            lineas = ['## Preguntas frecuentes ##']
+                            for f in faqs_top:
+                                p = (f['pregunta'] or '').strip().replace('\n', ' ')[:300]
+                                r = (f['respuesta'] or '').strip().replace('\n', ' ')[:500]
+                                if p and r:
+                                    lineas.append(f"Q: {p}\nA: {r}")
+                            lineas.append('## fin FAQ ##')
+                            bloque_faq = '\n'.join(lineas)
+
+                        # ── Herramientas (tool-calling) ───────────────────
+                        herramientas_data = list(
+                            filtro.herramientas.filter(status=True).order_by('-activo', 'nombre')
+                            .values('id', 'nombre', 'nombre_amigable', 'descripcion',
+                                    'metodo', 'url', 'ubicacion_params', 'parametros',
+                                    'activo', 'timeout')
+                        )
+                        herramientas_activas = sum(1 for h in herramientas_data if h['activo'])
+
+                        # ── Prompt preview: muestra el prompt exacto que recibe el LLM
+                        # (con FAQ anteponido al contexto, igual que en _construir_contexto)
+                        contexto_con_faq = contexto
+                        if bloque_faq:
+                            contexto_con_faq = f"{bloque_faq}\n\n{contexto}" if contexto else bloque_faq
                         prompt_preview = ''
                         try:
+                            _ctx_for_preview = contexto_con_faq[:5000] + ('\n…[truncado]…' if len(contexto_con_faq) > 5000 else '')
                             prompt_preview = prompt_tpl.replace(
-                                '{context}', contexto[:3000] + ('…' if len(contexto) > 3000 else '')
+                                '{context}', _ctx_for_preview
                             ).replace(
                                 '{descripcion_agente}', filtro.descripcion or ''
                             ).replace(
@@ -682,6 +728,7 @@ def entrenamiento_ia_view(request):
                             )
                         except Exception:
                             prompt_preview = prompt_tpl
+
                         detalles = list(filtro.detalleagentesai_set.filter(status=True).values(
                             'tipo', 'archivo', 'enlace', 'descripcion'
                         ))
@@ -697,6 +744,16 @@ def entrenamiento_ia_view(request):
                             "modo": "estatico" if contexto and not filtro.vectorstore_path else ("faiss" if filtro.vectorstore_path else "sin_datos"),
                             "detalles_count": len(detalles),
                             "detalles": detalles,
+                            # ── Nuevo: FAQs activas en el agente ───────────
+                            "faqs_top_n": top_n,
+                            "faqs_top": faqs_top,
+                            "faqs_aprobadas_total": faqs_aprob_total,
+                            "faqs_pendientes": faqs_pend,
+                            "faqs_bloque_preview": bloque_faq,
+                            # ── Nuevo: Herramientas tool-calling ───────────
+                            "herramientas": herramientas_data,
+                            "herramientas_activas": herramientas_activas,
+                            "herramientas_total": len(herramientas_data),
                         })
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})

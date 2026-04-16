@@ -1379,7 +1379,8 @@
         const $btn = $(this);
         const aud = $btn.data('aud');
         const campo = $btn.data('campo');
-        if (!confirm('¿Aplicar la sugerencia de '+campo+'? Se guardará como cambio en el agente (puedes revertir).')) return;
+        const labelCampo = campo === 'prompt_template' ? 'prompt' : 'contexto estático';
+        if (!confirm('¿Aplicar la sugerencia de ' + labelCampo + '? Se guardará en el agente (puedes revertir desde el mismo panel).')) return;
         $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Aplicando...');
         $.post(ruta, {
             action: 'auditoria_aplicar', auditoria_id: aud, campo: campo, csrfmiddlewaretoken: csrf
@@ -1387,13 +1388,31 @@
             if (r.error) {
                 alertaDanger(r.message || 'Error al aplicar');
                 $btn.prop('disabled', false).html('<i class="fas fa-check me-1"></i>Aplicar');
-            } else {
-                alertaSuccess('Sugerencia aplicada. Recargará en 2 segundos.');
-                setTimeout(() => location.reload(), 2000);
+                return;
             }
+            // Actualizar el form en vivo sin recargar
+            const nuevo = r.nuevo_valor || '';
+            if (campo === 'prompt_template') {
+                const $input = $('#id_prompt_template');
+                if ($input.length) {
+                    $input.val(nuevo).trigger('change');
+                }
+                // Refrescar el snapshot "Actual" del diff en esta misma auditoría
+                $('.aud-diff-col.current pre').filter(function() {
+                    return $(this).closest('.aud-diff').nextAll('.mb-3').find('.aud-apply[data-campo="prompt_template"]').length > 0;
+                }).first().text(nuevo);
+            } else if (campo === 'contexto_estatico') {
+                // El contexto_estatico no está en el form visible; sólo se actualiza en BD.
+                // Refrescamos el snapshot "Actual" en el diff para feedback visual.
+                $('.aud-diff-col.current pre').filter(function() {
+                    return $(this).closest('.aud-diff').nextAll('.mb-3').find('.aud-apply[data-campo="contexto_estatico"]').length > 0;
+                }).first().text(nuevo || '(vacío)');
+            }
+            alertaSuccess('Sugerencia aplicada ✓ — los cambios quedaron en el agente. Puedes seguir editando.');
+            $btn.prop('disabled', true).html('<i class="fas fa-check me-1"></i>Aplicado');
         }).fail(function() {
             alertaDanger('Error de comunicación');
-            $btn.prop('disabled', false);
+            $btn.prop('disabled', false).html('<i class="fas fa-check me-1"></i>Aplicar');
         });
     });
 
@@ -1425,8 +1444,27 @@
             action: 'auditoria_revertir', auditoria_id: aud, csrfmiddlewaretoken: csrf
         }).done(function(r) {
             if (r.error) { alertaDanger(r.message || 'Error'); return; }
-            alertaSuccess('Revertido a la versión previa');
-            setTimeout(() => location.reload(), 2000);
+            // Actualizar el form en vivo
+            if (typeof r.prompt_template !== 'undefined') {
+                $('#id_prompt_template').val(r.prompt_template).trigger('change');
+            }
+            // Refrescar también los snapshots "Actual" del diff visible
+            const promptActual = r.prompt_template || '';
+            const ctxActual = r.contexto_estatico || '';
+            $('.aud-diff').each(function() {
+                const $d = $(this);
+                if ($d.nextAll('.mb-3').find('.aud-apply[data-campo="prompt_template"]').length) {
+                    $d.find('.current pre').text(promptActual);
+                } else if ($d.nextAll('.mb-3').find('.aud-apply[data-campo="contexto_estatico"]').length) {
+                    $d.find('.current pre').text(ctxActual || '(vacío)');
+                }
+            });
+            // Reactivar botones de aplicar
+            $('.aud-apply').each(function() {
+                const c = $(this).data('campo');
+                $(this).prop('disabled', false).html('<i class="fas fa-check me-1"></i>Aplicar ' + (c === 'prompt_template' ? 'prompt' : 'contexto') + ' sugerido');
+            });
+            alertaSuccess('Revertido a la versión previa ✓');
         });
     });
 

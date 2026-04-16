@@ -4,26 +4,19 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import (
     PyPDFLoader, CSVLoader, JSONLoader, UnstructuredExcelLoader
 )
-from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain.docstore.document import Document
+
+from .providers import get_provider
 
 
 class VectorStoreManager:
     def __init__(self, storage_dir, provider: str, apikey: str):
         self.storage_dir = storage_dir
-        self.provider = provider.lower()
+        # Provider: acepta string ('gemini', 'openai') o int — ver providers/__init__.py
+        self._provider_obj = get_provider(provider)
+        self.provider = self._provider_obj.name
         self.apikey = apikey
-
-        if self.provider == "openai":
-            self.embeddings = OpenAIEmbeddings(openai_api_key=self.apikey)
-        elif self.provider == "gemini":
-            self.embeddings = GoogleGenerativeAIEmbeddings(
-                model="models/text-embedding-004", google_api_key=self.apikey
-            )
-        else:
-            raise ValueError("Proveedor de embedding no soportado: use 'openai' o 'gemini'")
-
+        self.embeddings = self._provider_obj.get_embeddings(self.apikey)
         os.makedirs(self.storage_dir, exist_ok=True)
 
     def get_loader(self, file_path):

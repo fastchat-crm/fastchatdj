@@ -340,7 +340,7 @@ class AgentesIA(ModeloBase):
                 continue
             vs_manager = VectorStoreManager(
                 storage_dir=base_dir,
-                provider='gemini' if apikeyobj.proveedor == 2 else 'openai',
+                provider=apikeyobj.proveedor,  # int — el provider registry lo resuelve
                 apikey=apikeyobj.descripcion
             )
             documentos = []
@@ -550,7 +550,7 @@ class DetalleAgentesAI(ModeloBase):
             try:
                 vs_manager = VectorStoreManager(
                     storage_dir=base_dir,
-                    provider='gemini' if apikeyobj.proveedor == 2 else 'openai',
+                    provider=apikeyobj.proveedor,  # int — el provider registry lo resuelve
                     apikey=apikeyobj.descripcion
                 )
                 documentos = []

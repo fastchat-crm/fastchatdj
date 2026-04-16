@@ -142,6 +142,69 @@
         .ctx-mode-badge.faiss    { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
         .ctx-mode-badge.sin_datos{ background:#fef3c7; color:#92400e; border-color:#fde68a; }
 
+        /* ── FAQs activas ── */
+        .ctx-faq-item {
+            background:#fff; border:1px solid #e2e8f0; border-left:3px solid #28a745;
+            border-radius:8px; padding:10px 12px; margin-bottom:8px;
+        }
+        .ctx-faq-head {
+            display:flex; gap:.4rem; align-items:center; flex-wrap:wrap; margin-bottom:.3rem;
+            font-size:.7rem;
+        }
+        .ctx-faq-num { font-weight:700; color:#228be6; }
+        .ctx-faq-prio { background:#fff3bf; color:#8a6d1a; padding:1px 6px; border-radius:3px; }
+        .ctx-faq-hits { background:#e7f5ff; color:#1971c2; padding:1px 6px; border-radius:3px; }
+        .ctx-faq-origen {
+            padding:1px 6px; border-radius:3px;
+            background:#f1f3f5; color:#495057; margin-left:auto;
+        }
+        .ctx-faq-origen.origen-conversacion { background:#d0ebff; color:#1864ab; }
+        .ctx-faq-origen.origen-feedback { background:#ffdeeb; color:#a61e4d; }
+        .ctx-faq-origen.origen-auditor { background:#e7e5ff; color:#5f3dc4; }
+        .ctx-faq-q, .ctx-faq-a {
+            font-size:.78rem; line-height:1.4; margin-bottom:.2rem;
+        }
+        .ctx-faq-q strong { color:#228be6; }
+        .ctx-faq-a { color:#495057; }
+        .ctx-faq-a strong { color:#2b8a3e; }
+        .ctx-faq-preview { margin-top:.8rem; }
+        .ctx-faq-preview summary {
+            cursor:pointer; font-size:.75rem; color:#667eea; font-weight:600;
+            padding:.3rem 0;
+        }
+
+        /* ── Herramientas ── */
+        .ctx-herr-item {
+            background:#fff; border:1px solid #e2e8f0; border-left:3px solid #667eea;
+            border-radius:8px; padding:10px 12px; margin-bottom:8px;
+        }
+        .ctx-herr-item.inactiva { opacity:.55; border-left-color:#adb5bd; }
+        .ctx-herr-head {
+            display:flex; gap:.4rem; align-items:center; flex-wrap:wrap; margin-bottom:.3rem;
+            font-size:.82rem;
+        }
+        .ctx-herr-method {
+            font-family:monospace; font-size:.65rem; font-weight:700;
+            padding:1px 6px; border-radius:3px;
+        }
+        .ctx-herr-method.GET  { background:#e7f5ff; color:#1971c2; }
+        .ctx-herr-method.POST { background:#fff4e6; color:#d9480f; }
+        .ctx-herr-slug {
+            font-family:monospace; font-size:.72rem;
+            background:#f1f3f5; padding:1px 5px; border-radius:3px; color:#495057;
+        }
+        .ctx-herr-url {
+            font-family:monospace; font-size:.72rem; color:#495057;
+            word-break:break-all; margin:.2rem 0;
+        }
+        .ctx-herr-loc { color:#868e96; font-style:italic; }
+        .ctx-herr-desc { font-size:.76rem; color:#495057; margin:.2rem 0; line-height:1.35; }
+        .ctx-herr-params { font-size:.72rem; color:#6c757d; }
+        .ctx-herr-params code {
+            background:#fff3bf; color:#a17c00; padding:1px 4px; border-radius:3px;
+            font-size:.7rem;
+        }
+
         .row [class*='col-'] { background-clip:content-box; }
     </style>
 {% endblock %}
@@ -547,6 +610,18 @@
                                 <span class="badge bg-secondary ms-1" id="ctxBadgeFuentes" style="font-size:.65rem;"></span>
                             </button>
                         </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#ctxTabFaqs" type="button">
+                                <i class="fas fa-comments me-1"></i>FAQs activas
+                                <span class="badge bg-success ms-1" id="ctxBadgeFaqs" style="font-size:.65rem;"></span>
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#ctxTabHerramientas" type="button">
+                                <i class="fas fa-plug me-1"></i>Herramientas
+                                <span class="badge bg-primary ms-1" id="ctxBadgeHerramientas" style="font-size:.65rem;"></span>
+                            </button>
+                        </li>
                     </ul>
                     <div class="tab-content" id="ctxTabsContent">
                         {# Tab 1: contexto #}
@@ -575,6 +650,21 @@
                                 <small class="text-muted">Archivos y textos de entrenamiento que alimentan este agente.</small>
                             </div>
                             <div id="ctxContenidoFuentes">Cargando…</div>
+                        </div>
+                        {# Tab 4: FAQs activas #}
+                        <div class="tab-pane fade" id="ctxTabFaqs">
+                            <div class="mb-2 d-flex justify-content-between align-items-start">
+                                <small class="text-muted">FAQs aprobadas que el agente usa para responder. Las top <span id="ctxFaqTopN">—</span> (por prioridad) se inyectan <strong>literalmente</strong> en el prompt.</small>
+                                <span id="ctxFaqPendBadge" class="badge bg-warning text-dark" style="display:none"></span>
+                            </div>
+                            <div id="ctxContenidoFaqs">Cargando…</div>
+                        </div>
+                        {# Tab 5: Herramientas #}
+                        <div class="tab-pane fade" id="ctxTabHerramientas">
+                            <div class="mb-2">
+                                <small class="text-muted">APIs externas que el agente puede invocar vía tool-calling durante la conversación.</small>
+                            </div>
+                            <div id="ctxContenidoHerramientas">Cargando…</div>
                         </div>
                     </div>
                 </div>
@@ -687,9 +777,13 @@
         document.getElementById('ctxContenidoContexto').textContent = 'Cargando…';
         document.getElementById('ctxContenidoPrompt').textContent = 'Cargando…';
         document.getElementById('ctxContenidoFuentes').innerHTML = '<div class="text-muted small p-2">Cargando…</div>';
+        document.getElementById('ctxContenidoFaqs').innerHTML = '<div class="text-muted small p-2">Cargando…</div>';
+        document.getElementById('ctxContenidoHerramientas').innerHTML = '<div class="text-muted small p-2">Cargando…</div>';
         document.getElementById('ctxBadgeChars').textContent = '';
         document.getElementById('ctxBadgePrompt').textContent = '';
         document.getElementById('ctxBadgeFuentes').textContent = '';
+        document.getElementById('ctxBadgeFaqs').textContent = '';
+        document.getElementById('ctxBadgeHerramientas').textContent = '';
 
         // Activate first tab
         const firstTabBtn = document.querySelector('#ctxTabs button[data-bs-target="#ctxTabContexto"]');
@@ -754,6 +848,77 @@
                             '</div></div>';
                     });
                     fuentesEl.innerHTML = items.join('');
+                }
+
+                /* Tab 4: FAQs activas */
+                const esc = function(s) {
+                    return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+                };
+                document.getElementById('ctxFaqTopN').textContent = res.faqs_top_n || 0;
+                document.getElementById('ctxBadgeFaqs').textContent =
+                    (res.faqs_top || []).length + '/' + (res.faqs_aprobadas_total || 0);
+                const pendBadge = document.getElementById('ctxFaqPendBadge');
+                if (res.faqs_pendientes) {
+                    pendBadge.textContent = res.faqs_pendientes + ' pendientes de revisar';
+                    pendBadge.style.display = '';
+                } else {
+                    pendBadge.style.display = 'none';
+                }
+                const faqsEl = document.getElementById('ctxContenidoFaqs');
+                const faqsList = res.faqs_top || [];
+                if (faqsList.length === 0) {
+                    faqsEl.innerHTML = '<div class="text-muted small p-3 text-center">No hay FAQs aprobadas todavía.<br>Puedes importarlas desde el <strong>Asistente IA</strong>, aprobarlas desde el tab <strong>Preguntas Frecuentes</strong> o crearlas manualmente.</div>';
+                } else {
+                    const items = faqsList.map((f, i) => (
+                        '<div class="ctx-faq-item">' +
+                            '<div class="ctx-faq-head">' +
+                                '<span class="ctx-faq-num">#' + (i+1) + '</span>' +
+                                '<span class="ctx-faq-prio" title="Prioridad"><i class="fas fa-star me-1"></i>' + (f.prioridad || 0) + '</span>' +
+                                (f.hits ? '<span class="ctx-faq-hits" title="Veces usada"><i class="fas fa-eye me-1"></i>' + f.hits + '</span>' : '') +
+                                '<span class="ctx-faq-origen origen-' + f.origen + '">' + esc(f.origen) + '</span>' +
+                            '</div>' +
+                            '<div class="ctx-faq-q"><strong>Q:</strong> ' + esc(f.pregunta) + '</div>' +
+                            '<div class="ctx-faq-a"><strong>A:</strong> ' + esc(f.respuesta) + '</div>' +
+                        '</div>'
+                    )).join('');
+                    const blk = res.faqs_bloque_preview
+                        ? '<details class="ctx-faq-preview"><summary>Ver bloque exacto que se inyecta al prompt</summary><pre class="ctx-pane mt-2">' + esc(res.faqs_bloque_preview) + '</pre></details>'
+                        : '';
+                    faqsEl.innerHTML = items + blk;
+                }
+
+                /* Tab 5: Herramientas */
+                const herrEl = document.getElementById('ctxContenidoHerramientas');
+                const herrActivas = res.herramientas_activas || 0;
+                const herrTotal = res.herramientas_total || 0;
+                document.getElementById('ctxBadgeHerramientas').textContent = herrActivas + '/' + herrTotal;
+                const herrList = res.herramientas || [];
+                if (herrList.length === 0) {
+                    herrEl.innerHTML = '<div class="text-muted small p-3 text-center">Sin herramientas configuradas.<br>Crea una desde el tab <strong>Herramientas</strong> del agente para conectarlo a APIs externas.</div>';
+                } else {
+                    const items = herrList.map(h => {
+                        const params = (h.parametros || []).map(p =>
+                            '<code>' + esc(p.nombre || '') + '</code> <span class="text-muted">(' + esc(p.tipo || 'string') + (p.requerido ? ', requerido' : '') + ')</span>'
+                        ).join(', ') || '<em class="text-muted">sin params</em>';
+                        const activoBadge = h.activo
+                            ? '<span class="badge bg-success">Activa</span>'
+                            : '<span class="badge bg-secondary">Inactiva</span>';
+                        return (
+                            '<div class="ctx-herr-item ' + (h.activo ? '' : 'inactiva') + '">' +
+                                '<div class="ctx-herr-head">' +
+                                    '<span class="ctx-herr-method ' + h.metodo + '">' + h.metodo + '</span>' +
+                                    '<strong>' + esc(h.nombre_amigable || h.nombre) + '</strong>' +
+                                    '<code class="ctx-herr-slug ms-2">' + esc(h.nombre) + '</code>' +
+                                    activoBadge +
+                                '</div>' +
+                                '<div class="ctx-herr-url"><i class="fas fa-link me-1"></i>' + esc(h.url || '—') +
+                                    ' <span class="ctx-herr-loc">(' + esc(h.ubicacion_params) + ')</span></div>' +
+                                '<div class="ctx-herr-desc">' + esc(h.descripcion || '') + '</div>' +
+                                '<div class="ctx-herr-params"><strong>Params:</strong> ' + params + '</div>' +
+                            '</div>'
+                        );
+                    }).join('');
+                    herrEl.innerHTML = items;
                 }
             },
             error: function() {

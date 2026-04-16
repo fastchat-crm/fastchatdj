@@ -7,8 +7,7 @@ import json
 from dataclasses import dataclass
 
 from langchain_core.prompts import PromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from langchain_community.embeddings import OpenAIEmbeddings
+from .providers import get_provider
 from langchain_community.vectorstores import FAISS
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langchain_core.tools import tool
@@ -294,7 +293,9 @@ class AgenteConsultor:
         perfil=None,
         agente=None,
     ):
-        self.provider = 'gemini' if provider == 2 else 'openai'
+        # Provider: acepta string ('gemini', 'openai') o int (2, 3) — ver providers/__init__.py
+        self._provider_obj = get_provider(provider)
+        self.provider = self._provider_obj.name  # mantiene API pública previa para compat
         self.apikey = apikey
         self.model_name = model_name or self.default_model()
         self.vectorstore_path = vectorstore_path
@@ -361,32 +362,19 @@ class AgenteConsultor:
     # ------------------------------------------------------------------
 
     def default_model(self) -> str:
-        return "gemini-2.5-flash" if self.provider == "gemini" else "gpt-4o-mini"
+        return self._provider_obj.default_model()
 
     def _get_embeddings(self):
-        if self.provider == "gemini":
-            return GoogleGenerativeAIEmbeddings(
-                model="models/text-embedding-004", google_api_key=self.apikey
-            )
-        elif self.provider == "openai":
-            return OpenAIEmbeddings(openai_api_key=self.apikey)
-        raise ValueError("Proveedor de embedding no soportado")
+        return self._provider_obj.get_embeddings(self.apikey)
 
     def _get_llm(self):
-        if self.provider == "gemini":
-            return ChatGoogleGenerativeAI(
-                model=self.model_name, google_api_key=self.apikey,
-                max_output_tokens=self.cfg_max_output_tokens,
-                temperature=0.1,  # Baja temperatura → reproduce contexto fielmente, sin inventar
-            )
-        elif self.provider == "openai":
-            from langchain_community.chat_models import ChatOpenAI
-            return ChatOpenAI(
-                model_name=self.model_name, openai_api_key=self.apikey,
-                max_tokens=self.cfg_max_output_tokens,
-                temperature=0.1,
-            )
-        raise ValueError("Proveedor de LLM no soportado")
+        # Baja temperatura → reproduce contexto fielmente, sin inventar
+        return self._provider_obj.get_llm(
+            apikey=self.apikey,
+            model_name=self.model_name,
+            max_output_tokens=self.cfg_max_output_tokens,
+            temperature=0.1,
+        )
 
     def _load_vectorstore(self):
         if not self.vectorstore_path:
@@ -698,23 +686,8 @@ class AgenteConsultor:
         return str(content).strip()
 
     def _extraer_tokens(self, ai_message) -> tuple[int, int]:
-        """(tokens_in, tokens_out) desde un AIMessage — compatible Gemini y OpenAI."""
-        t_in = t_out = 0
-        usage_std = getattr(ai_message, 'usage_metadata', None) or {}
-        if usage_std:
-            t_in  = usage_std.get('input_tokens', 0) or 0
-            t_out = usage_std.get('output_tokens', 0) or 0
-        if not (t_in or t_out):
-            meta = getattr(ai_message, 'response_metadata', {}) or {}
-            if self.provider == 'gemini':
-                usage = meta.get('usage_metadata', {}) or {}
-                t_in  = usage.get('prompt_token_count', 0) or 0
-                t_out = usage.get('candidates_token_count', 0) or 0
-            else:
-                usage = meta.get('token_usage', {}) or {}
-                t_in  = usage.get('prompt_tokens', 0) or 0
-                t_out = usage.get('completion_tokens', 0) or 0
-        return t_in, t_out
+        """(tokens_in, tokens_out) desde un AIMessage — delega al provider concreto."""
+        return self._provider_obj.extract_tokens(ai_message)
 
     def _saludo_primer_mensaje(self, pregunta: str) -> str | None:
         """Si es el primer mensaje y es un saludo, devuelve la bienvenida. Sin LLM."""
