@@ -386,7 +386,19 @@ def sesionesView(request):
     # ====================== LISTADO SESIONES =========================
     data['action'] = action = request.GET.get('action')
     if action == 'change':
-        data['instance'] = instance = SesionWhatsApp.objects.get(id=request.GET['pk'])
+        pk = request.GET.get('pk', '0')
+        # Crear sesion Meta al vuelo si pk=0 y proveedor=meta
+        if pk == '0' and request.GET.get('proveedor') == 'meta':
+            import uuid
+            instance = SesionWhatsApp.objects.create(
+                estado='pendiente', usuario=request.user,
+                session_id=str(uuid.uuid4()),
+                proveedor='meta',
+            )
+            log(f"Sesion Meta creada (ID: {instance.id})", request, "add", obj=instance.id)
+            from django.shortcuts import redirect as _redirect
+            return _redirect(f'{request.path}?action=change&pk={instance.id}')
+        data['instance'] = instance = SesionWhatsApp.objects.get(id=pk)
         data['form'] = form = SesionWhatsAppForm(instance=instance)
         form.fields['agente_ia'].queryset = AgentesIA.objects.filter(perfil=perfil, status=True)
         data['regla_fin'] = getattr(instance, 'regla_fin', None)
