@@ -18,7 +18,7 @@
     .var-pill:hover { background: #e9ecef !important; }
 </style>
 
-<input type="hidden" name="pk" value="{{ instance.id }}">
+<input type="hidden" name="pk" value="{{ instance.id|default:0 }}">
 <input type="hidden" name="action" value="{{ action }}">
 
 {# ── TABS ──────────────────────────────────────────────────────────── #}
@@ -45,7 +45,7 @@
             {% if regla_fin and regla_fin.activo %}<span class="badge bg-danger ms-1" style="font-size:.6rem">ON</span>{% endif %}
         </button>
     </li>
-    <li class="nav-item" id="tab-li-meta" {% if instance.proveedor != 'meta' %}style="display:none;"{% endif %}>
+    <li class="nav-item" id="tab-li-meta" {% if instance and instance.proveedor != 'meta' or not instance and action != 'add_meta' %}style="display:none;"{% endif %}>
         <button class="nav-link" id="tab-btn-meta" data-bs-toggle="tab" data-bs-target="#tab-meta" type="button">
             <i class="fab fa-facebook me-1"></i> Meta Cloud API
             <span class="badge bg-primary ms-1" style="font-size:.6rem">ACTIVO</span>
@@ -427,7 +427,7 @@
         {# Panel informativo cuando la sesion NO es Meta (lo controla JS segun selector) #}
         <div id="meta-not-active-alert"
              class="alert alert-info py-2 d-flex align-items-center gap-2 mb-3"
-             style="font-size:.85rem; {% if instance.proveedor == 'meta' %}display:none;{% endif %}">
+             style="font-size:.85rem; {% if instance and instance.proveedor == 'meta' or action == 'add_meta' %}display:none;{% endif %}">
             <i class="fas fa-info-circle"></i>
             <span>
                 Cambia el proveedor a <strong>Meta Cloud API</strong> en la pestana <em>Basico</em>,
@@ -436,7 +436,7 @@
         </div>
 
         {# Contenido real que solo aplica cuando proveedor=meta #}
-        <div id="meta-config-wrap" {% if instance.proveedor != 'meta' %}style="display:none;"{% endif %}>
+        <div id="meta-config-wrap" {% if instance and instance.proveedor != 'meta' or not instance and action != 'add_meta' %}style="display:none;"{% endif %}>
 
         {# Banner con acceso a la guia paso a paso (colapsable inline, no modal) #}
         <div class="card border-primary border-opacity-50 mb-3" style="background:#f0f7ff;">
@@ -592,7 +592,7 @@
                     <button class="btn btn-outline-secondary" type="button" onclick="copiarMetaToken()">
                         <i class="fa fa-copy"></i>
                     </button>
-                    {% if config_meta %}
+                    {% if config_meta and instance %}
                     <button class="btn btn-outline-warning" type="button" onclick="regenerarVerifyToken({{ instance.id }})"
                             title="Generar un nuevo token (debera reconfigurarse en Meta)">
                         <i class="fa fa-rotate"></i>
@@ -682,10 +682,14 @@
             {% endif %}
 
             <div class="col-12 d-flex gap-2 mt-3">
+                {% if instance %}
                 <button type="button" class="btn btn-primary btn-sm" onclick="guardarConfigMeta({{ instance.id }})">
                     <i class="fa fa-save me-1"></i> Guardar config Meta
                 </button>
-                {% if config_meta %}
+                {% else %}
+                <p class="small text-muted mb-0"><i class="fa fa-info-circle me-1"></i>Guarda la sesion primero, luego podras configurar Meta aqui.</p>
+                {% endif %}
+                {% if config_meta and instance %}
                 <button type="button" class="btn btn-outline-success btn-sm" onclick="verificarMetaConexion({{ instance.id }})">
                     <i class="fa fa-satellite-dish me-1"></i> Verificar conexion con Meta
                 </button>
@@ -833,7 +837,7 @@ de backdrop/z-index al abrir desde el formulario modal de sesion.
 <script>
 (function () {
     const RUTA = '{{ ruta }}';
-    const PK   = '{{ instance.id }}';
+    const PK   = '{{ instance.id|default:0 }}';
     const CSRF = '{{ csrf_token }}';
 
     /* ── Select2 / Summernote ── */

@@ -362,36 +362,38 @@ def sesionesView(request):
                         'verified_name': data.get('verified_name'),
                     })
 
-                elif action == 'crear_sesion_meta':
-                    import uuid as _uuid
-                    session = SesionWhatsApp.objects.create(
-                        estado='pendiente', usuario=request.user,
-                        session_id=str(_uuid.uuid4()),
-                        proveedor='meta',
-                    )
-                    log(f"Sesion Meta creada (ID: {session.id})", request, "add", obj=session.id)
-                    return JsonResponse({
-                        'error': False,
-                        'session_id': session.id,
-                        'message': 'Sesion Meta creada. Completa la configuracion.',
-                    })
+                elif action == 'add_meta':
+                    form = SesionWhatsAppForm(request.POST, request.FILES)
+                    if not form.is_valid():
+                        raise FormError(form)
+                    obj = form.save(commit=False)
+                    obj.usuario = request.user
+                    obj.session_id = str(uuid.uuid4())
+                    obj.proveedor = 'meta'
+                    obj.estado = 'pendiente'
+                    obj.save()
+                    form.save_m2m()
+                    log(f"Sesion Meta creada: {obj.nombre or obj.id}", request, "add", obj=obj.id)
+                    res_json.append({'error': False, 'reload': True})
+                    return JsonResponse(res_json, safe=False)
 
                 elif action == 'delete_force':
                     session_id = request.POST.get('id')
                     session = SesionWhatsApp.objects.filter(id=session_id).first()
-                    if session:
-                        from django.utils import timezone
-                        tiempo_sin_numero = timezone.now() - session.fecha_registro
-                        if tiempo_sin_numero.total_seconds() > 600:  # 10 minutos
-                            session.delete()
-                            log(f"Sesión eliminada forzadamente por inactividad sin número (ID: {session_id})", request,
-                                "delete_force", obj=session_id)
-                            return JsonResponse({'error': False, 'message': 'Sesión eliminada forzadamente.'})
-                        else:
-                            return JsonResponse(
-                                {'error': True, 'message': 'La sesión no supera los 10 minutos sin número.'})
-                    else:
-                        return JsonResponse({'error': True, 'message': 'Sesión no encontrada o ya tiene número.'})
+                    if not session:
+                        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
+                    # Permitir eliminar si: esta pendiente, o es vacia (sin numero + >10 min)
+                    if session.estado == 'pendiente':
+                        session.delete()
+                        log(f"Sesión pendiente eliminada (ID: {session_id})", request, "delete_force", obj=session_id)
+                        return JsonResponse({'error': False, 'message': 'Sesión eliminada.'})
+                    from django.utils import timezone
+                    tiempo_sin_numero = timezone.now() - session.fecha_registro
+                    if not session.numero and tiempo_sin_numero.total_seconds() > 600:
+                        session.delete()
+                        log(f"Sesión vacía eliminada por inactividad (ID: {session_id})", request, "delete_force", obj=session_id)
+                        return JsonResponse({'error': False, 'message': 'Sesión eliminada.'})
+                    return JsonResponse({'error': True, 'message': 'Solo se pueden eliminar sesiones en estado pendiente o vacías sin número.'})
         except FormError as ex:
             res_json.append(ex.dict_error)
         except Exception as ex:
@@ -412,13 +414,20 @@ def sesionesView(request):
         return render(request, 'whatsapp/sesiones/form.html', data)
     if action == 'change_modal':
         try:
-            data['instance'] = instance = SesionWhatsApp.objects.get(id=request.GET['pk'])
-            data['form'] = form = SesionWhatsAppForm(instance=instance)
+            pk = request.GET.get('pk', '')
+            if pk == 'new_meta':
+                data['instance'] = None
+                data['action'] = 'add_meta'
+                data['form'] = form = SesionWhatsAppForm(initial={'proveedor': 'meta'})
+            else:
+                data['instance'] = instance = SesionWhatsApp.objects.get(id=pk)
+                data['form'] = form = SesionWhatsAppForm(instance=instance)
             form.fields['agente_ia'].queryset = AgentesIA.objects.filter(perfil=perfil, status=True)
-            data['regla_fin'] = getattr(instance, 'regla_fin', None)
+            instance = data.get('instance')
+            data['regla_fin'] = getattr(instance, 'regla_fin', None) if instance else None
             data['acciones_fin'] = data['regla_fin'].acciones.filter(status=True) if data['regla_fin'] else []
-            data['tiene_plantilla_agente'] = bool(instance.agente_ia and getattr(instance.agente_ia, 'regla_fin', None))
-            data['config_meta'] = config_meta = getattr(instance, 'config_meta', None)
+            data['tiene_plantilla_agente'] = bool(instance and instance.agente_ia and getattr(instance.agente_ia, 'regla_fin', None))
+            data['config_meta'] = config_meta = getattr(instance, 'config_meta', None) if instance else None
             data['config_meta_form'] = ConfigMetaForm(instance=config_meta) if config_meta else ConfigMetaForm()
             data['meta_webhook_url'] = request.build_absolute_uri(reverse('whatsapp_meta_webhook'))
             template = get_template("whatsapp/sesiones/form_modal.html")

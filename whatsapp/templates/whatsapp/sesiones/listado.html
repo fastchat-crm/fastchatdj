@@ -317,7 +317,8 @@
                                             </a>
                                         </li>
                                     {% endif %}{# /es_baileys conectado #}
-                                    {% if s.is_empty_session %}
+                                    {% if s.is_empty_session or s.estado == 'pendiente' %}
+                                        <li><hr class="dropdown-divider"></li>
                                         <li>
                                             <a class="dropdown-item text-danger" href="javascript:void(0);"
                                                onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete_force', '¿Eliminar esta sesión?')">
@@ -493,21 +494,7 @@
     <script src="/static/js/forms.js?version=1"></script>
     <script>
         function crearSesionMeta() {
-            pantallaespera();
-            $.post('{{ request.path }}', {
-                csrfmiddlewaretoken: '{{ csrf_token }}',
-                action: 'crear_sesion_meta'
-            }, function(r) {
-                setTimeout($.unblockUI, 1);
-                if (r && r.error === false && r.session_id) {
-                    formModal(r.session_id, 'Nueva sesion Meta Cloud API', 'change_modal');
-                } else {
-                    mensajeWarning((r && r.message) || 'Error creando sesion');
-                }
-            }).fail(function() {
-                setTimeout($.unblockUI, 1);
-                mensajeWarning('Error de conexion');
-            });
+            formModal('new_meta', 'Nueva sesion Meta Cloud API', 'change_modal');
         }
 
         function formModal(id, text, action) {
