@@ -98,6 +98,17 @@ def modulo_grupo(request):
                 else:
                     raise FormError(form)
 
+            elif action == 'cambiar_prioridades':
+                import json as _json
+                cambios = _json.loads(request.POST.get('cambios', '[]'))
+                with transaction.atomic():
+                    for c in cambios:
+                        ModuloGrupo.objects.filter(pk=int(c['id']), status=True).update(
+                            prioridad=int(c.get('prioridad', 0))
+                        )
+                log(f"Prioridades actualizadas: {len(cambios)} grupo(s)", request, "change")
+                return JsonResponse({'error': False, 'message': f'{len(cambios)} prioridad(es) actualizada(s).'})
+
             elif action == 'delete':
 
                 modulo = ModuloGrupo.objects.get(pk=int(request.POST['id']))

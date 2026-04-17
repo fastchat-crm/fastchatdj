@@ -98,9 +98,29 @@
             <h4>Sesiones de WhatsApp</h4>
             <span class="result-count">{{ list_count }} resultado{{ list_count|pluralize }}</span>
         </div>
-        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalAgregarSesion">
-            <i class="fas fa-plus-circle me-2"></i>Nueva sesión
-        </button>
+        <div class="dropdown">
+            <button class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                <i class="fas fa-plus-circle me-2"></i>Nueva sesión
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                <li>
+                    <a class="dropdown-item" href="javascript:void(0);"
+                       data-bs-toggle="modal" data-bs-target="#modalAgregarSesion">
+                        <i class="fab fa-whatsapp me-2 text-success"></i>
+                        <strong>Baileys</strong>
+                        <div class="text-muted" style="font-size:.72rem;margin-left:1.7rem;">Conexión vía QR (no oficial)</div>
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <a class="dropdown-item" href="?action=change&pk=0&proveedor=meta">
+                        <i class="fab fa-facebook me-2 text-primary"></i>
+                        <strong>Meta Cloud API</strong>
+                        <div class="text-muted" style="font-size:.72rem;margin-left:1.7rem;">Conexión oficial (requiere verificación)</div>
+                    </a>
+                </li>
+            </ul>
+        </div>
     </div>
 
     {# ===== SESSION GRID ===== #}
@@ -204,24 +224,32 @@
                         </div>
 
                         <div class="card-footer-sess">
-                            {% if s.estado == 'conectado' %}
-                                <button class="btn btn-outline-success btn-sm"
-                                        onclick="abrirModalPruebaEnvio({{ s.id }}, '{{ s.numero|default:'' }}')">
-                                    <i class="fas fa-paper-plane me-1"></i> Probar envío
-                                </button>
-                            {% elif s.estado == 'desconectado' and not s.desconectado_manualmente %}
-                                <button class="btn btn-warning btn-sm"
-                                        onclick="reconectarSesion({{ s.id }}, this)">
-                                    <i class="fas fa-plug me-1"></i> Reconectar
-                                </button>
-                            {% elif s.estado == 'pendiente' or s.estado == 'desconectado' %}
-                                <button class="btn btn-success btn-sm" data-bs-toggle="modal"
-                                        data-bs-target="#modalAgregarSesion"
-                                        data-qr="{{ s.qr_code }}" data-session-id="{{ s.id }}">
-                                    <i class="fas fa-qrcode me-1"></i> Ver QR
-                                </button>
+                            {% if s.es_baileys %}
+                                {# ── Acciones de footer: solo Baileys ── #}
+                                {% if s.estado == 'conectado' %}
+                                    <button class="btn btn-outline-success btn-sm"
+                                            onclick="abrirModalPruebaEnvio({{ s.id }}, '{{ s.numero|default:'' }}')">
+                                        <i class="fas fa-paper-plane me-1"></i> Probar envío
+                                    </button>
+                                {% elif s.estado == 'desconectado' and not s.desconectado_manualmente %}
+                                    <button class="btn btn-warning btn-sm"
+                                            onclick="reconectarSesion({{ s.id }}, this)">
+                                        <i class="fas fa-plug me-1"></i> Reconectar
+                                    </button>
+                                {% elif s.estado == 'pendiente' or s.estado == 'desconectado' %}
+                                    <button class="btn btn-success btn-sm" data-bs-toggle="modal"
+                                            data-bs-target="#modalAgregarSesion"
+                                            data-qr="{{ s.qr_code }}" data-session-id="{{ s.id }}">
+                                        <i class="fas fa-qrcode me-1"></i> Ver QR
+                                    </button>
+                                {% else %}
+                                    <span></span>
+                                {% endif %}
                             {% else %}
-                                <span></span>
+                                {# ── Acciones de footer: solo Meta ── #}
+                                <a href="/whatsapp/plantillas/?sesion={{ s.id }}" class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-file-lines me-1"></i> Plantillas
+                                </a>
                             {% endif %}
 
                             <div class="dropdown">
@@ -236,6 +264,7 @@
                                             Modificar
                                         </a>
                                     </li>
+                                    {% if s.es_baileys %}
                                     <li>
                                         <a class="dropdown-item" href="javascript:void(0);"
                                            onclick="verificarConexion({{ s.id }})">
@@ -243,6 +272,7 @@
                                             Verificar conexión
                                         </a>
                                     </li>
+                                    {% endif %}
                                     {% if s.proveedor == 'meta' %}
                                         <li>
                                             <a class="dropdown-item"
@@ -262,7 +292,7 @@
                                             </a>
                                         </li>
                                     {% endif %}
-                                    {% if s.estado == 'conectado' %}
+                                    {% if s.estado == 'conectado' and s.es_baileys %}
                                         <li>
                                             <a class="dropdown-item" href="javascript:void(0);"
                                                onclick="abrirModalPruebaEnvio({{ s.id }}, '{{ s.numero|default:'' }}')">
@@ -285,7 +315,7 @@
                                                 Desconectar sesión
                                             </a>
                                         </li>
-                                    {% endif %}
+                                    {% endif %}{# /es_baileys conectado #}
                                     {% if s.is_empty_session %}
                                         <li>
                                             <a class="dropdown-item text-danger" href="javascript:void(0);"

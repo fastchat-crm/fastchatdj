@@ -60,6 +60,8 @@ def sesionesView(request):
                 elif action == 'probar_envio_mensaje':
                     from django.utils import timezone as _tz
                     filtro = model.objects.get(pk=int(request.POST['id']))
+                    if not filtro.es_baileys:
+                        return JsonResponse({'error': True, 'message': 'Probar envío solo está disponible para sesiones Baileys.'})
                     if filtro.estado != 'conectado':
                         return JsonResponse({'error': True, 'message': 'La sesión no está conectada.'})
                     numero_destino = (request.POST.get('numero_destino') or '').strip()
@@ -92,6 +94,8 @@ def sesionesView(request):
                     })
                 elif action == 'verificar_conexion':
                     filtro = model.objects.get(pk=int(request.POST['id']))
+                    if not filtro.es_baileys:
+                        return JsonResponse({'error': True, 'message': 'Verificar conexión solo aplica para sesiones Baileys. Para Meta usa "Verificar conexión con Meta" en el formulario.'})
                     if not filtro.session_id:
                         return JsonResponse({'error': True, 'message': 'La sesión no tiene session_id asignado.'})
                     result = whatsapp_service.check_session_status(filtro.session_id)
@@ -132,6 +136,8 @@ def sesionesView(request):
                     })
                 elif action == 'reconectar':
                     filtro = model.objects.get(pk=int(request.POST['id']))
+                    if not filtro.es_baileys:
+                        return JsonResponse({'error': True, 'message': 'Reconectar solo aplica para sesiones Baileys.'})
                     webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
                     result = whatsapp_service.create_session(filtro, webhook_url)
                     if result.get('success'):
@@ -147,6 +153,8 @@ def sesionesView(request):
                         return JsonResponse({'error': True, 'message': result.get('error') or 'No se pudo reconectar'})
                 elif action == 'delete':
                     filtro = model.objects.get(pk=int(request.POST['id']))
+                    if not filtro.es_baileys:
+                        return JsonResponse({'error': True, 'message': 'Desconectar solo aplica para sesiones Baileys. Las sesiones Meta se gestionan desde el panel de Meta.'})
                     result = whatsapp_service.close_session(filtro.session_id)
                     if 'success' in result:
                         if not result['success']:
