@@ -48,16 +48,20 @@ def sesionesView(request):
                     res_json = {'error': False, 'qr': session.qr_code, 'session_id': session.id}
                     return JsonResponse(res_json, safe=False)
                 elif action == 'create_session':
-                    import time
+                    import time, logging as _lg
+                    _logger = _lg.getLogger(__name__)
                     webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
                     session_id = request.POST['session_id']
                     session = SesionWhatsApp.objects.get(id=session_id)
-                    # Si la sesión venía rota (desconectada/error), forzar reset del auth state en Node
-                    # para evitar el bucle max_reconnect_attempts. Esto NO toca la fila en Django.
-                    if session.estado in ('desconectado', 'error'):
-                        whatsapp_service.close_session(session.session_id)
-                        time.sleep(1.5)
+                    forzar_reset = (request.POST.get('reset') == '1') or session.estado in ('desconectado', 'error', 'pendiente')
+                    _logger.warning("CREATE_SESSION id=%s sessionId=%s estado=%s reset=%s",
+                                    session.id, session.session_id, session.estado, forzar_reset)
+                    if forzar_reset:
+                        close_res = whatsapp_service.close_session(session.session_id)
+                        _logger.warning("CREATE_SESSION close_session result=%s", close_res)
+                        time.sleep(2.0)
                     result = whatsapp_service.create_session(session, webhook_url)
+                    _logger.warning("CREATE_SESSION create_session result=%s", result)
                     if not result.get('success'):
                         error_detalle = result.get('error') or 'No se pudo crear la sesión en el servicio Node.js'
                         session.estado = 'error'
@@ -148,17 +152,18 @@ def sesionesView(request):
                         ),
                     })
                 elif action == 'reconectar':
-                    import time
+                    import time, logging as _lg
+                    _logger = _lg.getLogger(__name__)
                     filtro = model.objects.get(pk=int(request.POST['id']))
                     if not filtro.es_baileys:
                         return JsonResponse({'error': True, 'message': 'Reconectar solo aplica para sesiones Baileys.'})
                     webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
-                    # Reset del auth state en Node antes de recrear, para evitar el bucle max_reconnect_attempts.
-                    # No afecta la fila Django ni sus conversaciones; solo borra credenciales en el servicio Node.
-                    if filtro.estado in ('desconectado', 'error'):
-                        whatsapp_service.close_session(filtro.session_id)
-                        time.sleep(1.5)
+                    _logger.warning("RECONECTAR id=%s sessionId=%s estado=%s", filtro.id, filtro.session_id, filtro.estado)
+                    close_res = whatsapp_service.close_session(filtro.session_id)
+                    _logger.warning("RECONECTAR close_session result=%s", close_res)
+                    time.sleep(2.0)
                     result = whatsapp_service.create_session(filtro, webhook_url)
+                    _logger.warning("RECONECTAR create_session result=%s", result)
                     if result.get('success'):
                         filtro.estado = 'pendiente'
                         filtro.error_mensaje = None
