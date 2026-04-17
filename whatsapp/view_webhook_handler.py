@@ -182,14 +182,20 @@ def webhook_handler(request):
             session.save()
 
         elif event_type == 'auth_failure':
-            # Actualizar el estado de la sesión
+            detalle_auth = (
+                event_data.get('error')
+                or event_data.get('message')
+                or event_data.get('reason')
+                or ''
+            )
             session.estado = 'error'
-            session.error_mensaje = "Error de autenticación"
+            session.error_mensaje = f"Error de autenticación: {detalle_auth}" if detalle_auth else "Error de autenticación"
             session.save()
+            msgerror = session.error_mensaje
 
-            save_log_entry(f'HS: SESION {session_id} auth_failure'.upper(), request, event_type, obj=session)
+            save_log_entry(f'HS: SESION {session_id} auth_failure {detalle_auth}'.upper(), request, event_type, obj=session)
+            logger.error("AUTH_FAILURE session=%s payload=%s", session_id, event_data)
 
-            # Notificar a través de WebSockets
             async_to_sync(channel_layer.group_send)(
                 f"whatsapp_session_{session.id}",
                 {
@@ -197,33 +203,34 @@ def webhook_handler(request):
                     'event': 'auth_failure',
                     'session_id': session.id,
                     'error': session.error_mensaje,
-                    'msgerror': msgerror
+                    'msgerror': msgerror,
+                    'payload': event_data,
                 }
             )
 
-            logger.error(f"Error de autenticación en la sesión {session_id}")
-
         elif event_type == 'disconnected':
-            # Actualizar el estado de la sesión
+            reason = event_data.get('reason', 'unknown')
+            detalle_disc = event_data.get('error') or event_data.get('message') or ''
             session.estado = 'desconectado'
             session.desconectado_manualmente = False  # desconexión inesperada → reconectable
+            session.error_mensaje = f"Desconectado ({reason}){f': {detalle_disc}' if detalle_disc else ''}"
             session.save()
+            msgerror = session.error_mensaje
 
-            save_log_entry(f'HS: SESION {session_id} disconnected'.upper(), request, event_type, obj=session)
+            save_log_entry(f'HS: SESION {session_id} disconnected reason={reason} {detalle_disc}'.upper(), request, event_type, obj=session)
+            logger.warning("DISCONNECTED session=%s reason=%s payload=%s", session_id, reason, event_data)
 
-            # Notificar a través de WebSockets
             async_to_sync(channel_layer.group_send)(
                 f"whatsapp_session_{session.id}",
                 {
                     'type': 'whatsapp_event',
                     'event': 'disconnected',
                     'session_id': session.id,
-                    'reason': event_data.get('reason', 'unknown'),
-                    'msgerror': msgerror
+                    'reason': reason,
+                    'msgerror': msgerror,
+                    'payload': event_data,
                 }
             )
-
-            logger.info(f"Sesión {session_id} desconectada")
 
         elif event_type == 'rate_limited':
             try:

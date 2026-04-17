@@ -52,6 +52,13 @@ def sesionesView(request):
                     session_id = request.POST['session_id']
                     session = SesionWhatsApp.objects.get(id=session_id)
                     result = whatsapp_service.create_session(session, webhook_url)
+                    if not result.get('success'):
+                        error_detalle = result.get('error') or 'No se pudo crear la sesión en el servicio Node.js'
+                        session.estado = 'error'
+                        session.error_mensaje = error_detalle[:500]
+                        session.save(update_fields=['estado', 'error_mensaje'])
+                        log(f"Fallo create_session ID={session.id}: {error_detalle}", request, "create_session", obj=session.id)
+                        return JsonResponse({'error': True, 'message': error_detalle, 'session_id': session.id}, safe=False)
                     session.qr_code = result.get('qr_code')
                     session.save()
                     log(f"Crear sesión WhatsApp pendiente (ID: {session.id})", request, "create_session", obj=session.id)
