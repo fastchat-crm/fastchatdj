@@ -48,18 +48,32 @@ def sesionesView(request):
                     res_json = {'error': False, 'qr': session.qr_code, 'session_id': session.id}
                     return JsonResponse(res_json, safe=False)
                 elif action == 'create_session':
-                    import time, logging as _lg
+                    import logging as _lg
                     _logger = _lg.getLogger(__name__)
                     webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
                     session_id = request.POST['session_id']
                     session = SesionWhatsApp.objects.get(id=session_id)
-                    forzar_reset = (request.POST.get('reset') == '1') or session.estado in ('desconectado', 'error', 'pendiente')
-                    _logger.warning("CREATE_SESSION id=%s sessionId=%s estado=%s reset=%s",
-                                    session.id, session.session_id, session.estado, forzar_reset)
-                    if forzar_reset:
-                        close_res = whatsapp_service.close_session(session.session_id)
-                        _logger.warning("CREATE_SESSION close_session result=%s", close_res)
-                        time.sleep(2.0)
+                    # Si la sesión venía rota, rotar el sessionId (UUID) para que Node arranque
+                    # con auth state limpio. La PK Django (id) NO cambia → FK intactas.
+                    rotar = (request.POST.get('reset') == '1') or session.estado in ('desconectado', 'error')
+                    _logger.warning("CREATE_SESSION id=%s sessionId=%s estado=%s rotar=%s",
+                                    session.id, session.session_id, session.estado, rotar)
+                    if rotar:
+                        old_uuid = session.session_id
+                        # best-effort: cleanup del viejo en Node (no bloqueante si falla)
+                        try:
+                            close_res = whatsapp_service.close_session(old_uuid)
+                            _logger.warning("CREATE_SESSION close_session(%s) result=%s", old_uuid, close_res)
+                        except Exception as _ex:
+                            _logger.warning("CREATE_SESSION close_session(%s) excepcion=%s", old_uuid, _ex)
+                        new_uuid = str(uuid.uuid4())
+                        session.session_id = new_uuid
+                        session.qr_code = ''
+                        session.whatsapp_id = ''
+                        session.estado = 'pendiente'
+                        session.error_mensaje = None
+                        session.save(update_fields=['session_id', 'qr_code', 'whatsapp_id', 'estado', 'error_mensaje'])
+                        _logger.warning("CREATE_SESSION rotado %s → %s (Django id=%s)", old_uuid, new_uuid, session.id)
                     result = whatsapp_service.create_session(session, webhook_url)
                     _logger.warning("CREATE_SESSION create_session result=%s", result)
                     if not result.get('success'):
@@ -69,8 +83,8 @@ def sesionesView(request):
                         session.save(update_fields=['estado', 'error_mensaje'])
                         log(f"Fallo create_session ID={session.id}: {error_detalle}", request, "create_session", obj=session.id)
                         return JsonResponse({'error': True, 'message': error_detalle, 'session_id': session.id}, safe=False)
-                    session.qr_code = result.get('qr_code')
-                    session.save()
+                    session.qr_code = result.get('qr_code') or ''
+                    session.save(update_fields=['qr_code'])
                     log(f"Crear sesión WhatsApp pendiente (ID: {session.id})", request, "create_session", obj=session.id)
                     res_json = {'error': False, 'qr': session.qr_code, 'session_id': session.id}
                     return JsonResponse(res_json, safe=False)
@@ -152,16 +166,29 @@ def sesionesView(request):
                         ),
                     })
                 elif action == 'reconectar':
-                    import time, logging as _lg
+                    import logging as _lg
                     _logger = _lg.getLogger(__name__)
                     filtro = model.objects.get(pk=int(request.POST['id']))
                     if not filtro.es_baileys:
                         return JsonResponse({'error': True, 'message': 'Reconectar solo aplica para sesiones Baileys.'})
                     webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
                     _logger.warning("RECONECTAR id=%s sessionId=%s estado=%s", filtro.id, filtro.session_id, filtro.estado)
-                    close_res = whatsapp_service.close_session(filtro.session_id)
-                    _logger.warning("RECONECTAR close_session result=%s", close_res)
-                    time.sleep(2.0)
+                    # Rotar UUID: cleanup del viejo + nuevo sessionId. Django id no cambia, FK intactas.
+                    old_uuid = filtro.session_id
+                    try:
+                        close_res = whatsapp_service.close_session(old_uuid)
+                        _logger.warning("RECONECTAR close_session(%s) result=%s", old_uuid, close_res)
+                    except Exception as _ex:
+                        _logger.warning("RECONECTAR close_session(%s) excepcion=%s", old_uuid, _ex)
+                    new_uuid = str(uuid.uuid4())
+                    filtro.session_id = new_uuid
+                    filtro.qr_code = ''
+                    filtro.whatsapp_id = ''
+                    filtro.estado = 'pendiente'
+                    filtro.error_mensaje = None
+                    filtro.desconectado_manualmente = False
+                    filtro.save(update_fields=['session_id', 'qr_code', 'whatsapp_id', 'estado', 'error_mensaje', 'desconectado_manualmente'])
+                    _logger.warning("RECONECTAR rotado %s → %s (Django id=%s)", old_uuid, new_uuid, filtro.id)
                     result = whatsapp_service.create_session(filtro, webhook_url)
                     _logger.warning("RECONECTAR create_session result=%s", result)
                     if result.get('success'):
