@@ -17,6 +17,7 @@ urlpatterns = [
     re_path(r'^restorepass/', restaurar),
     re_path(r'^restoreusername/', recordarusername),
     re_path(r'^changepass/', changepass),
+    path('privacidad/', terminosycondiciones),
     path('terminosycondiciones/', terminosycondiciones),
 
 ]
