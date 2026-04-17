@@ -530,7 +530,7 @@
 
         modalAgregarSesion.addEventListener('shown.bs.modal', function (e) {
             if (sessionSocket) sessionSocket.close();
-            const sessionId = e.relatedTarget.getAttribute('data-session-id') || session_id;
+            const sessionId = (e.relatedTarget && e.relatedTarget.getAttribute('data-session-id')) || session_id;
             $.post('', {
                 'last_session_id': sessionId,
                 'action': 'add',
@@ -637,12 +637,15 @@
             $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Reconectando...');
             $.post('', { action: 'reconectar', id: id, csrfmiddlewaretoken: '{{ csrf_token }}' })
                 .done(function(r) {
+                    $btn.prop('disabled', false).html('<i class="fas fa-plug me-1"></i> Reconectar');
                     if (r.error) {
                         alertaDanger(r.message || 'No se pudo reconectar');
-                        $btn.prop('disabled', false).html('<i class="fas fa-plug me-1"></i> Reconectar');
                     } else {
-                        alertaSuccess(r.message || 'Reconexión iniciada');
-                        setTimeout(() => location.reload(), 2000);
+                        session_id = id;
+                        var fakeBtn = document.createElement('button');
+                        fakeBtn.setAttribute('data-session-id', id);
+                        var modal = bootstrap.Modal.getOrCreateInstance(modalAgregarSesion);
+                        modal.show(fakeBtn);
                     }
                 })
                 .fail(function() {

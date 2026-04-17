@@ -1023,6 +1023,13 @@ def entrenamiento_ia_view(request):
                               )
                               .order_by('-total')[:10]
                         )
+                        por_origen_qs = (
+                            qs.exclude(origen='').exclude(origen__isnull=True)
+                              .values('origen')
+                              .annotate(llamadas=Count('id'), total=Sum('tokens_total'))
+                              .order_by('-total')
+                        )
+                        ORIGEN_LABELS = dict(ConsumoTokenIA._meta.get_field('origen').choices)
                         return JsonResponse({
                             'result': True,
                             'apikey_alias': str(apikey),
@@ -1039,6 +1046,60 @@ def entrenamiento_ia_view(request):
                                 {'agente': r['agente__nombre'], 'llamadas': r['llamadas'], 'total': r['total'] or 0}
                                 for r in por_agente
                             ],
+                            'por_origen': [
+                                {'origen': r['origen'], 'label': str(ORIGEN_LABELS.get(r['origen'], r['origen'])),
+                                 'llamadas': r['llamadas'], 'total': r['total'] or 0}
+                                for r in por_origen_qs
+                            ],
+                        })
+                    except Exception as ex:
+                        return JsonResponse({"result": False, 'message': str(ex)})
+
+                elif action == 'consumo_detalle':
+                    try:
+                        from django.utils.dateparse import parse_date
+                        import datetime
+                        pk = int(request.GET['id'])
+                        apikey = ApiKeyIA.objects.get(pk=pk, perfil=perfil)
+                        qs = ConsumoTokenIA.objects.filter(apikey=apikey)
+                        dia = request.GET.get('dia')
+                        origen = request.GET.get('origen')
+                        fecha_inicio = request.GET.get('fecha_inicio')
+                        fecha_fin = request.GET.get('fecha_fin')
+                        if dia:
+                            d = parse_date(dia)
+                            if d:
+                                qs = qs.filter(fecha__date=d)
+                        else:
+                            hoy = datetime.date.today()
+                            fi = parse_date(fecha_inicio or '') or (hoy - datetime.timedelta(days=29))
+                            ff = parse_date(fecha_fin or '') or hoy
+                            qs = qs.filter(fecha__date__gte=fi, fecha__date__lte=ff)
+                        if origen:
+                            qs = qs.filter(origen=origen)
+                        registros = qs.order_by('-fecha')[:100].values(
+                            'id', 'fecha', 'tokens_entrada', 'tokens_salida', 'tokens_total',
+                            'modelo', 'origen', 'prompt_preview', 'agente__nombre',
+                        )
+                        ORIGEN_LABELS = dict(ConsumoTokenIA._meta.get_field('origen').choices)
+                        return JsonResponse({
+                            'result': True,
+                            'registros': [
+                                {
+                                    'id': r['id'],
+                                    'fecha': r['fecha'].strftime('%d/%m/%Y %H:%M:%S') if r['fecha'] else '',
+                                    'tokens_entrada': r['tokens_entrada'] or 0,
+                                    'tokens_salida': r['tokens_salida'] or 0,
+                                    'tokens_total': r['tokens_total'] or 0,
+                                    'modelo': r['modelo'] or '',
+                                    'origen': r['origen'] or '',
+                                    'origen_label': str(ORIGEN_LABELS.get(r['origen'], r['origen'] or '')),
+                                    'prompt_preview': r['prompt_preview'] or '',
+                                    'agente': r['agente__nombre'] or '',
+                                }
+                                for r in registros
+                            ],
+                            'total': qs.count(),
                         })
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})

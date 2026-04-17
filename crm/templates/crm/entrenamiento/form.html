@@ -773,32 +773,73 @@
 
                     <div class="row g-3">
                         {# Tabla por día #}
-                        <div class="col-md-8">
-                            <p class="small fw-semibold text-muted text-uppercase mb-2" style="letter-spacing:.05em">Detalle por día</p>
-                            <div class="table-responsive" style="max-height:340px;overflow-y:auto">
+                        <div class="col-md-5">
+                            <p class="small fw-semibold text-muted text-uppercase mb-2" style="letter-spacing:.05em">
+                                <i class="fas fa-calendar-day me-1"></i>Por dia
+                                <span class="text-primary" style="font-size:.65rem">(clic para ver detalle)</span>
+                            </p>
+                            <div class="table-responsive" style="max-height:280px;overflow-y:auto">
                                 <table class="table table-sm table-hover" id="consumo-tabla-dias">
                                     <thead class="table-light sticky-top">
                                         <tr>
                                             <th>Fecha</th>
                                             <th class="text-end">Llamadas</th>
-                                            <th class="text-end">Prompt</th>
-                                            <th class="text-end">Respuesta</th>
-                                            <th class="text-end">Total</th>
+                                            <th class="text-end">Tokens</th>
                                         </tr>
                                     </thead>
                                     <tbody id="consumo-tbody-dias">
-                                        <tr><td colspan="5" class="text-center text-muted py-3">Selecciona un rango y pulsa Consultar</td></tr>
+                                        <tr><td colspan="3" class="text-center text-muted py-3">Selecciona un rango y pulsa Consultar</td></tr>
                                     </tbody>
                                 </table>
                             </div>
                         </div>
-                        {# Top agentes #}
+                        {# Por origen #}
                         <div class="col-md-4">
-                            <p class="small fw-semibold text-muted text-uppercase mb-2" style="letter-spacing:.05em">Por agente</p>
+                            <p class="small fw-semibold text-muted text-uppercase mb-2" style="letter-spacing:.05em">
+                                <i class="fas fa-layer-group me-1"></i>Por origen
+                                <span class="text-primary" style="font-size:.65rem">(clic para filtrar)</span>
+                            </p>
+                            <div id="consumo-origenes">
+                                <p class="text-muted small">—</p>
+                            </div>
+                        </div>
+                        {# Top agentes #}
+                        <div class="col-md-3">
+                            <p class="small fw-semibold text-muted text-uppercase mb-2" style="letter-spacing:.05em">
+                                <i class="fas fa-robot me-1"></i>Por agente
+                            </p>
                             <div id="consumo-agentes">
                                 <p class="text-muted small">—</p>
                             </div>
                         </div>
+                    </div>
+
+                    {# Panel de detalle individual (se abre al clic) #}
+                    <div id="consumo-detalle-panel" class="mt-3" style="display:none;">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <p class="small fw-semibold text-muted text-uppercase mb-0" style="letter-spacing:.05em">
+                                <i class="fas fa-list me-1"></i>Detalle: <span id="consumo-detalle-titulo"></span>
+                            </p>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="$('#consumo-detalle-panel').slideUp(150)">
+                                <i class="fas fa-times me-1"></i>Cerrar
+                            </button>
+                        </div>
+                        <div class="table-responsive" style="max-height:300px;overflow-y:auto">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th>Fecha/hora</th>
+                                        <th>Origen</th>
+                                        <th>Agente</th>
+                                        <th>Modelo</th>
+                                        <th class="text-end">Tokens</th>
+                                        <th style="max-width:250px;">Prompt</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="consumo-detalle-tbody"></tbody>
+                            </table>
+                        </div>
+                        <p class="small text-muted mt-1 mb-0" id="consumo-detalle-count"></p>
                     </div>
 
                 </div>
@@ -1515,20 +1556,47 @@
             document.getElementById('c-entrada').textContent  = fmtN(res.totales.entrada);
             document.getElementById('c-salida').textContent   = fmtN(res.totales.salida);
 
-            // Tabla por día
+            // Ocultar panel detalle al recargar
+            $('#consumo-detalle-panel').hide();
+
+            // Tabla por día (clickeable)
             const tbody = document.getElementById('consumo-tbody-dias');
             if (!res.por_dia.length) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Sin datos para el período seleccionado</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">Sin datos</td></tr>';
             } else {
                 tbody.innerHTML = res.por_dia.map(r =>
-                    `<tr>
+                    `<tr style="cursor:pointer;" onclick="cargarDetalle({dia:'${r.dia}'},'${r.dia}')">
                         <td>${r.dia}</td>
                         <td class="text-end">${fmtN(r.llamadas)}</td>
-                        <td class="text-end text-info">${fmtN(r.entrada)}</td>
-                        <td class="text-end text-warning">${fmtN(r.salida)}</td>
                         <td class="text-end fw-semibold">${fmtN(r.total)}</td>
                     </tr>`
                 ).join('');
+            }
+
+            // Por origen (clickeable)
+            const divOr = document.getElementById('consumo-origenes');
+            if (!res.por_origen || !res.por_origen.length) {
+                divOr.innerHTML = '<p class="text-muted small">Sin datos</p>';
+            } else {
+                const maxO = Math.max(...res.por_origen.map(o => o.total));
+                const colores = {
+                    whatsapp:'success', chat_crm:'primary', webservice:'info',
+                    imagen:'warning', resumidor:'secondary', sentimiento:'secondary',
+                    auditor:'dark', plantilla:'primary', herramienta:'warning'
+                };
+                divOr.innerHTML = res.por_origen.map(o => {
+                    const pct = maxO ? Math.round((o.total / maxO) * 100) : 0;
+                    const col = colores[o.origen] || 'secondary';
+                    return `<div class="mb-2" style="cursor:pointer;" onclick="cargarDetalle({origen:'${o.origen}'},'${o.label}')">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span class="badge bg-${col} me-1" style="font-size:.65rem;">${o.label}</span>
+                            <span class="fw-semibold text-nowrap">${fmtN(o.total)} <small class="text-muted">(${o.llamadas})</small></span>
+                        </div>
+                        <div class="progress" style="height:5px">
+                            <div class="progress-bar bg-${col}" style="width:${pct}%"></div>
+                        </div>
+                    </div>`;
+                }).join('');
             }
 
             // Por agente
@@ -1541,7 +1609,7 @@
                     const pct = maxT ? Math.round((a.total / maxT) * 100) : 0;
                     return `<div class="mb-2">
                         <div class="d-flex justify-content-between small mb-1">
-                            <span class="text-truncate me-2" style="max-width:160px" title="${a.agente}">${a.agente}</span>
+                            <span class="text-truncate me-2" style="max-width:120px" title="${a.agente}">${a.agente}</span>
                             <span class="fw-semibold">${fmtN(a.total)}</span>
                         </div>
                         <div class="progress" style="height:5px">
@@ -1554,6 +1622,42 @@
             setTimeout($.unblockUI, 1);
             alertaWarning('Error de conexión.');
         });
+    }
+
+    function cargarDetalle(filtros, titulo) {
+        var params = { action: 'consumo_detalle', id: _consumoApikeyId };
+        params.fecha_inicio = document.getElementById('consumo-desde').value;
+        params.fecha_fin = document.getElementById('consumo-hasta').value;
+        if (filtros.dia) params.dia = filtros.dia;
+        if (filtros.origen) params.origen = filtros.origen;
+
+        document.getElementById('consumo-detalle-titulo').textContent = titulo;
+        document.getElementById('consumo-detalle-tbody').innerHTML =
+            '<tr><td colspan="6" class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
+        $('#consumo-detalle-panel').slideDown(150);
+
+        $.get(_RUTA, params, function(res) {
+            if (!res.result) { alertaWarning(res.message || 'Error'); return; }
+            var tb = document.getElementById('consumo-detalle-tbody');
+            if (!res.registros.length) {
+                tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Sin registros</td></tr>';
+            } else {
+                tb.innerHTML = res.registros.map(function(r) {
+                    return '<tr>' +
+                        '<td class="small text-nowrap">' + r.fecha + '</td>' +
+                        '<td><span class="badge bg-secondary" style="font-size:.65rem;">' + r.origen_label + '</span></td>' +
+                        '<td class="small">' + (r.agente || '<span class="text-muted">—</span>') + '</td>' +
+                        '<td class="small"><code>' + r.modelo + '</code></td>' +
+                        '<td class="text-end small fw-semibold">' + fmtN(r.tokens_total) + '</td>' +
+                        '<td class="small text-truncate" style="max-width:220px;" title="' + (r.prompt_preview || '').replace(/"/g, '&quot;') + '">' +
+                            (r.prompt_preview || '<span class="text-muted">—</span>') +
+                        '</td>' +
+                    '</tr>';
+                }).join('');
+            }
+            document.getElementById('consumo-detalle-count').textContent =
+                'Mostrando ' + res.registros.length + ' de ' + res.total + ' registro(s)';
+        }, 'json');
     }
 
     function verConsumo(id, alias) {
