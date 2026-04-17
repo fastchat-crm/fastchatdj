@@ -392,6 +392,22 @@ def ejecutar_auditoria(agente, usuario=None, apikey_obj=None, dias=30):
         auditoria.modelo_usado = modelo
         auditoria.tokens_usados = tokens
 
+        # Registrar consumo de tokens
+        if tokens and apikey_obj:
+            try:
+                from crm.models import ConsumoTokenIA
+                from crm.alertas_consumo import verificar_alerta_consumo
+                ConsumoTokenIA.objects.create(
+                    apikey=apikey_obj, agente=agente,
+                    tokens_entrada=0, tokens_salida=0,
+                    tokens_total=tokens, modelo=modelo,
+                    origen='auditor',
+                    prompt_preview='Auditoria de agente IA',
+                )
+                verificar_alerta_consumo(apikey_obj, tokens)
+            except Exception:
+                logger.exception("Error registrando consumo del auditor")
+
         datos = _parsear_json_respuesta(respuesta)
         auditoria.sugerencias = datos
         auditoria.razonamiento = datos.get('razonamiento') or ''

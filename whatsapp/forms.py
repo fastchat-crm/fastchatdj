@@ -4,13 +4,17 @@ from django.utils.safestring import mark_safe
 from autenticacion.models import Usuario
 from core.custom_models import ModelFormBase
 from crm.models import DepartamentoChatBot
-from .models import SesionWhatsApp, Contacto, ConversacionWhatsApp, MensajeWhatsAppProgramado
+from .models import (
+    SesionWhatsApp, Contacto, ConversacionWhatsApp, MensajeWhatsAppProgramado,
+    ConfigMeta, PlantillaWhatsApp,
+)
 
 
 class SesionWhatsAppForm(ModelFormBase):
     class Meta:
         model = SesionWhatsApp
-        fields = ('nombre', 'min_sesion', 'language', 'modo_bot', 'agente_ia',
+        fields = ('nombre', 'min_sesion', 'language', 'proveedor',
+                  'modo_bot', 'agente_ia',
                   'departamentos', 'departamento_default',
                   'mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff',)
 
@@ -27,15 +31,78 @@ class SesionWhatsAppForm(ModelFormBase):
                 self.fields[k].widget.attrs['class'] = "summernote"
             if k in ('min_sesion',):
                 self.fields[k].widget.attrs['col'] = '3'
-            if k in ('departamentos', 'departamento_default', 'language', 'agente_ia'):
+            if k in ('departamentos', 'departamento_default', 'language', 'agente_ia', 'proveedor'):
                 self.fields[k].widget.attrs['col'] = '12'
                 self.fields[k].widget.attrs['class'] = "jselect2"
+            if k in ('proveedor',):
+                self.fields[k].required = True
+            if k in ('departamentos', 'departamento_default', 'language', 'agente_ia'):
                 self.fields[k].required = False
             if k in ('modo_bot',):
                 self.fields[k].widget.attrs['col'] = '12'
                 self.fields[k].widget.attrs['class'] = "form-control"
             if k in ('nombre',):
                 self.fields[k].widget.attrs['col'] = '9'
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+
+class PlantillaWhatsAppForm(ModelFormBase):
+    class Meta:
+        model = PlantillaWhatsApp
+        fields = ('nombre', 'idioma', 'categoria',
+                  'header_tipo', 'header_contenido',
+                  'cuerpo', 'footer')
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super(PlantillaWhatsAppForm, self).__init__(*args, **kwargs)
+        for k, v in self.fields.items():
+            self.fields[k].widget.attrs['class'] = 'form-control'
+            self.fields[k].widget.attrs['col'] = '6'
+            if k in ('nombre',):
+                self.fields[k].widget.attrs['placeholder'] = 'confirmacion_cita'
+                self.fields[k].widget.attrs['pattern'] = '[a-z0-9_]+'
+                self.fields[k].help_text = 'Solo minusculas, numeros y guiones bajos. Es el identificador en Meta.'
+            if k in ('cuerpo',):
+                self.fields[k].widget.attrs['col'] = '12'
+                self.fields[k].widget.attrs['rows'] = '5'
+                self.fields[k].widget.attrs['placeholder'] = 'Hola {{1}}, tu cita esta confirmada para el {{2}}.'
+            if k in ('header_contenido', 'footer'):
+                self.fields[k].widget.attrs['col'] = '12'
+            if k in ('categoria', 'header_tipo', 'idioma'):
+                self.fields[k].widget.attrs['class'] = 'form-control jselect2'
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+
+class ConfigMetaForm(ModelFormBase):
+    class Meta:
+        model = ConfigMeta
+        fields = ('waba_id', 'phone_number_id', 'business_account_id',
+                  'display_phone_number', 'access_token', 'app_id', 'app_secret',
+                  'webhook_verify_token')
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super(ConfigMetaForm, self).__init__(*args, **kwargs)
+        for k, v in self.fields.items():
+            # Los campos Meta se guardan por la accion "guardar_config_meta"
+            # (no por el submit principal del form de sesion). Los marcamos como
+            # no requeridos a nivel HTML/Django para evitar que bloqueen el
+            # submit principal cuando la sesion esta en modo Baileys. La
+            # validacion real se hace manualmente en la vista.
+            self.fields[k].required = False
+            self.fields[k].widget.attrs['class'] = 'form-control'
+            self.fields[k].widget.attrs['col'] = '6'
+            self.fields[k].widget.attrs.pop('required', None)
+            if k == 'access_token':
+                self.fields[k].widget.attrs['col'] = '12'
+                self.fields[k].widget.attrs['rows'] = '3'
+            if k == 'app_secret':
+                self.fields[k].widget.attrs['type'] = 'password'
+            if k == 'webhook_verify_token':
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 

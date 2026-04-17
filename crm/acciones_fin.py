@@ -60,14 +60,16 @@ def _enviar_email(destinatario: str, mensaje: str, contexto: dict) -> None:
 
 
 def _enviar_whatsapp(numero_destino: str, mensaje: str, contexto: dict) -> None:
-    from whatsapp.services import WhatsAppService
+    from whatsapp.services import get_whatsapp_service
+    from whatsapp.models import SesionWhatsApp
     sesion_id = contexto.get('sesion_id')
     if not sesion_id:
         logger.warning("AccionFinConversacion whatsapp: no hay sesion_id en contexto, se omite.")
         return
+    sesion = SesionWhatsApp.objects.filter(session_id=sesion_id).first()
     numero_fmt = numero_destino.strip().lstrip('+')
     to = f"{numero_fmt}@s.whatsapp.net" if '@' not in numero_fmt else numero_fmt
-    WhatsAppService().send_text_message(sesion_id, to, mensaje)
+    get_whatsapp_service(sesion).send_text_message(sesion_id, to, mensaje)
     logger.info("Mensaje WA de fin enviado a %s vía sesión %s", numero_destino, sesion_id)
 
 

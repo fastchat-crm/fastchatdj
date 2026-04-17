@@ -25,6 +25,11 @@ ESTADOS_SESION = (
     ('error', 'Error'),
 )
 
+PROVEEDORES_SESION = (
+    ('baileys', 'Baileys (WhatsApp Web)'),
+    ('meta',    'Meta Cloud API'),
+)
+
 MODOS_BOT = (
     ('ninguno',     'Sin bot (sólo humanos)'),
     ('tradicional', 'Chatbot tradicional (flujo/menús/APIs)'),
@@ -73,6 +78,19 @@ class SesionWhatsApp(ModeloBase):
         default=False, verbose_name='Desconectado manualmente',
         help_text='True cuando el usuario desconectó la sesión a propósito. El cron no intentará reconectarla.'
     )
+    proveedor = models.CharField(
+        max_length=20, choices=PROVEEDORES_SESION, default='baileys',
+        verbose_name='Proveedor WhatsApp',
+        help_text='Define el transporte: Baileys (no oficial, vía Node) o Meta Cloud API (oficial).'
+    )
+
+    @property
+    def es_meta(self):
+        return self.proveedor == 'meta'
+
+    @property
+    def es_baileys(self):
+        return self.proveedor == 'baileys'
 
     def is_connected(self):
         return self.estado == 'conectado'
@@ -339,7 +357,8 @@ class ConversacionWhatsApp(ModeloBase):
             for apikey in agente.apikey.all():
                 try:
                     consultor = AgenteResumidor(
-                        provider=apikey.proveedor, apikey=apikey.descripcion, conversacion=self
+                        provider=apikey.proveedor, apikey=apikey.descripcion, conversacion=self,
+                        apikey_obj=apikey, agente_obj=agente,
                     )
                     analisis = consultor.analizar_sentimiento()
                     # Guardar sentimiento
@@ -462,7 +481,7 @@ class ConversacionWhatsApp(ModeloBase):
         """
         from crm.acciones_fin import ejecutar_acciones_fin
         from crm.models import ReglaFinConversacion
-        from whatsapp.services import WhatsAppService
+        from whatsapp.services import get_whatsapp_service
 
         if self.conversacion_finalizada:
             return False
@@ -495,7 +514,7 @@ class ConversacionWhatsApp(ModeloBase):
                 ejecutar_acciones_fin(regla, contexto)
                 self.despedida_enviado = True
             elif getattr(sesion, 'mensaje_despedida', None):
-                resultado = WhatsAppService().send_text_message(
+                resultado = get_whatsapp_service(sesion).send_text_message(
                     sesion.session_id,
                     self.contacto.from_number,
                     sesion.mensaje_despedida,
@@ -768,4 +787,262 @@ class TrazaMensajeIA(models.Model):
             'warning': 'warning',
             'error':   'danger',
         }.get(self.nivel, 'secondary')
+
+
+# ============================================================================
+# Modelos especificos de Meta Cloud API
+# ============================================================================
+
+QUALITY_RATING_META = (
+    ('GREEN',   'Alta'),
+    ('YELLOW',  'Media'),
+    ('RED',     'Baja'),
+    ('UNKNOWN', 'Desconocida'),
+)
+
+MESSAGING_LIMIT_TIER = (
+    ('TIER_50',        '50 conversaciones/día'),
+    ('TIER_250',       '250 conversaciones/día'),
+    ('TIER_1K',        '1.000 conversaciones/día'),
+    ('TIER_10K',       '10.000 conversaciones/día'),
+    ('TIER_100K',      '100.000 conversaciones/día'),
+    ('TIER_UNLIMITED', 'Ilimitado'),
+)
+
+
+class ConfigMeta(ModeloBase):
+    """Configuracion Meta Cloud API por sesion. OneToOne con SesionWhatsApp.
+
+    Existe solo cuando la sesion tiene proveedor='meta'. Contiene credenciales
+    y metadata que solo aplica a este transporte."""
+    sesion = models.OneToOneField(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='config_meta', verbose_name='Sesion'
+    )
+
+    # Identificadores Meta
+    waba_id = models.CharField(
+        max_length=100, db_index=True,
+        verbose_name='WhatsApp Business Account ID',
+        help_text='ID de la cuenta WABA en Meta. Una WABA puede contener varios numeros.'
+    )
+    phone_number_id = models.CharField(
+        max_length=100, unique=True,
+        verbose_name='Phone Number ID',
+        help_text='ID del numero especifico en Meta. Usado como routing ID para enviar mensajes.'
+    )
+    business_account_id = models.CharField(
+        max_length=100, blank=True, null=True,
+        verbose_name='Business Account ID (opcional)'
+    )
+    display_phone_number = models.CharField(
+        max_length=30, blank=True, null=True,
+        verbose_name='Numero visible',
+        help_text='Numero formateado tal como Meta lo muestra (+593 99 999 9999).'
+    )
+
+    # Credenciales (TODO: cifrar con Fernet cuando core/encryption este listo)
+    access_token = models.TextField(
+        verbose_name='System User Access Token',
+        help_text='Token permanente generado en Meta Business Manager.'
+    )
+    app_id = models.CharField(max_length=50, blank=True, null=True)
+    app_secret = models.CharField(max_length=100, blank=True, null=True)
+
+    # Webhook
+    webhook_verify_token = models.CharField(
+        max_length=60,
+        verbose_name='Verify token del webhook',
+        help_text='Token auto-generado que el cliente copia al configurar el webhook en Meta.'
+    )
+    webhook_verificado_en = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Webhook verificado en'
+    )
+
+    # Estado reportado por Meta
+    quality_rating = models.CharField(
+        max_length=20, choices=QUALITY_RATING_META, default='UNKNOWN',
+        verbose_name='Quality rating'
+    )
+    messaging_limit_tier = models.CharField(
+        max_length=30, choices=MESSAGING_LIMIT_TIER, blank=True, null=True,
+        verbose_name='Limite de mensajeria'
+    )
+    business_verification_status = models.CharField(
+        max_length=30, blank=True, null=True,
+        verbose_name='Estado de verificacion del negocio'
+    )
+
+    # Auditoria
+    ultima_sincronizacion = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Configuracion Meta'
+        verbose_name_plural = 'Configuraciones Meta'
+
+    def __str__(self):
+        return f"Meta · WABA {self.waba_id} · {self.display_phone_number or self.phone_number_id}"
+
+
+CATEGORIAS_PLANTILLA = (
+    ('UTILITY',        'Utilidad'),
+    ('MARKETING',      'Marketing'),
+    ('AUTHENTICATION', 'Autenticacion'),
+)
+
+ESTADOS_PLANTILLA_META = (
+    ('BORRADOR',  'Borrador (no enviada a Meta)'),
+    ('PENDING',   'Pendiente de aprobacion'),
+    ('APPROVED',  'Aprobada'),
+    ('REJECTED',  'Rechazada'),
+    ('PAUSED',    'Pausada'),
+    ('DISABLED',  'Deshabilitada'),
+)
+
+HEADER_TIPOS_PLANTILLA = (
+    ('NONE',     'Sin encabezado'),
+    ('TEXT',     'Texto'),
+    ('IMAGE',    'Imagen'),
+    ('VIDEO',    'Video'),
+    ('DOCUMENT', 'Documento'),
+)
+
+
+class PlantillaWhatsApp(ModeloBase):
+    """Plantilla de mensaje pre-aprobada por Meta.
+
+    Necesaria para iniciar conversaciones fuera de la ventana de 24h o para
+    enviar contenido promocional. Se administra via API de Meta y su estado
+    se sincroniza con esta tabla."""
+    config_meta = models.ForeignKey(
+        ConfigMeta, on_delete=models.CASCADE,
+        related_name='plantillas', verbose_name='Configuracion Meta'
+    )
+
+    # Identidad
+    nombre = models.CharField(
+        max_length=512,
+        verbose_name='Nombre',
+        help_text='Slug en minusculas con guiones bajos. Ej: confirmacion_cita.'
+    )
+    idioma = models.CharField(
+        max_length=10, default='es',
+        verbose_name='Idioma',
+        help_text='Codigo ISO que espera Meta. Ej: es, es_MX, en_US.'
+    )
+    categoria = models.CharField(
+        max_length=20, choices=CATEGORIAS_PLANTILLA,
+        verbose_name='Categoria Meta'
+    )
+
+    # Contenido
+    header_tipo = models.CharField(
+        max_length=20, choices=HEADER_TIPOS_PLANTILLA, default='NONE',
+        verbose_name='Tipo de encabezado'
+    )
+    header_contenido = models.TextField(
+        blank=True, null=True,
+        verbose_name='Contenido del encabezado',
+        help_text='Texto con {{1}}, o URL de imagen/video/documento segun tipo.'
+    )
+    cuerpo = models.TextField(
+        verbose_name='Cuerpo',
+        help_text='Texto principal. Usa {{1}}, {{2}} para variables.'
+    )
+    footer = models.CharField(
+        max_length=60, blank=True, null=True,
+        verbose_name='Pie (opcional)'
+    )
+    botones_json = models.JSONField(
+        default=list, blank=True,
+        verbose_name='Botones',
+        help_text='Lista de botones. Cada uno: {"type": "URL|QUICK_REPLY|PHONE_NUMBER", "text": "...", "url": "..."}'
+    )
+    variables_json = models.JSONField(
+        default=list, blank=True,
+        verbose_name='Variables',
+        help_text='Metadata de cada placeholder. Ej: [{"nombre": "cliente", "ejemplo": "Hector"}]'
+    )
+
+    # Estado Meta
+    id_meta = models.CharField(
+        max_length=100, blank=True, null=True,
+        verbose_name='ID en Meta',
+        help_text='ID que devuelve Meta al crear la plantilla.'
+    )
+    estado_meta = models.CharField(
+        max_length=20, choices=ESTADOS_PLANTILLA_META, default='BORRADOR',
+        verbose_name='Estado en Meta'
+    )
+    motivo_rechazo = models.TextField(blank=True, null=True, verbose_name='Motivo de rechazo')
+    fecha_aprobacion = models.DateTimeField(null=True, blank=True)
+    ultima_sincronizacion = models.DateTimeField(null=True, blank=True)
+
+    # Uso
+    veces_enviada = models.PositiveIntegerField(default=0, verbose_name='Veces enviada')
+    ultimo_envio = models.DateTimeField(null=True, blank=True, verbose_name='Ultimo envio')
+
+    class Meta:
+        verbose_name = 'Plantilla WhatsApp'
+        verbose_name_plural = 'Plantillas WhatsApp'
+        unique_together = [('config_meta', 'nombre', 'idioma')]
+        ordering = ['-fecha_modificacion', 'nombre']
+
+    def __str__(self):
+        return f"{self.nombre} ({self.idioma}) · {self.get_estado_meta_display()}"
+
+    @property
+    def aprobada(self):
+        return self.estado_meta == 'APPROVED'
+
+    @property
+    def color_estado(self):
+        return {
+            'BORRADOR': 'secondary',
+            'PENDING':  'warning',
+            'APPROVED': 'success',
+            'REJECTED': 'danger',
+            'PAUSED':   'info',
+            'DISABLED': 'dark',
+        }.get(self.estado_meta, 'secondary')
+
+
+class EventoMetaRecibido(ModeloBase):
+    """Auditoria cruda de cada webhook que Meta envia a Django.
+
+    Se guarda el payload completo para poder reprocesar o diagnosticar. Es el
+    equivalente Meta de las trazas Baileys — pero del lado de la recepcion, no
+    del pipeline IA."""
+    config_meta = models.ForeignKey(
+        ConfigMeta, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='eventos_recibidos',
+        verbose_name='Configuracion Meta'
+    )
+    tipo_evento = models.CharField(
+        max_length=50, db_index=True,
+        verbose_name='Tipo de evento',
+        help_text='Ej: messages, statuses, message_template_status_update.'
+    )
+    payload_json = models.JSONField(verbose_name='Payload crudo')
+    firma_valida = models.BooleanField(
+        default=False,
+        verbose_name='Firma HMAC valida',
+        help_text='True si X-Hub-Signature-256 coincide con app_secret.'
+    )
+    procesado = models.BooleanField(default=False, verbose_name='Procesado')
+    error_procesamiento = models.TextField(blank=True, null=True)
+    recibido_en = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = 'Evento Meta recibido'
+        verbose_name_plural = 'Eventos Meta recibidos'
+        ordering = ['-recibido_en', '-id']
+        indexes = [
+            models.Index(fields=['tipo_evento', '-recibido_en']),
+            models.Index(fields=['procesado', '-recibido_en']),
+        ]
+
+    def __str__(self):
+        return f"[{self.recibido_en:%Y-%m-%d %H:%M:%S}] {self.tipo_evento}"
         ordering = ['fecha', 'hora']

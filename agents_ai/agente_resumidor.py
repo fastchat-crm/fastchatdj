@@ -8,13 +8,16 @@ from .memoria_django import DjangoChatMessageHistory
 
 
 class AgenteResumidor:
-    def __init__(self, provider, apikey, model_name=None, conversacion=None):
+    def __init__(self, provider, apikey, model_name=None, conversacion=None,
+                 apikey_obj=None, agente_obj=None):
         self.provider = provider == 2 and 'gemini' or provider == 3 and 'openai'
         self.apikey = apikey
         self.model_name = model_name or self.default_model()
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
         self.conversacion = conversacion
+        self.apikey_obj = apikey_obj
+        self.agente_obj = agente_obj
         self._historia = (
             DjangoChatMessageHistory(session_id=str(conversacion.id))
             if conversacion else None
@@ -61,7 +64,9 @@ class AgenteResumidor:
             "entre un cliente y un asistente:\n\n"
             f"{texto_chat}\n\nResumen:"
         )
-        return self.llm.invoke(prompt).content
+        resp = self.llm.invoke(prompt)
+        self._registrar_consumo(resp, origen='resumidor', prompt_preview='Resumir conversacion')
+        return resp.content
 
     def analizar_sentimiento(self) -> dict:
         """Analiza el tono/sentimiento de la conversación del cliente.
@@ -99,7 +104,9 @@ Criterios de sentimiento:
 - agresiva: cliente frustrado, usa lenguaje fuerte, exige, insulta o presiona"""
 
         try:
-            raw = self.llm.invoke(prompt).content.strip()
+            resp = self.llm.invoke(prompt)
+            self._registrar_consumo(resp, origen='sentimiento', prompt_preview='Analisis de sentimiento')
+            raw = resp.content.strip()
             # Extraer JSON aunque haya texto envolvente
             match = re.search(r'\{.*\}', raw, re.DOTALL)
             if match:
@@ -122,3 +129,32 @@ Criterios de sentimiento:
         except Exception:
             pass
         return {"sentimiento": "neutral", "puntuacion": 5, "resumen": ""}
+
+    def _registrar_consumo(self, respuesta_llm, origen='resumidor', prompt_preview=''):
+        if not self.apikey_obj:
+            return
+        try:
+            from crm.models import ConsumoTokenIA
+            from crm.alertas_consumo import verificar_alerta_consumo
+            meta = getattr(respuesta_llm, 'response_metadata', {}) or {}
+            usage = (
+                getattr(respuesta_llm, 'usage_metadata', None)
+                or meta.get('usage_metadata')
+                or meta.get('token_usage')
+                or {}
+            )
+            tokens_e = usage.get('input_tokens') or usage.get('prompt_token_count') or usage.get('prompt_tokens') or 0
+            tokens_s = usage.get('output_tokens') or usage.get('candidates_token_count') or usage.get('completion_tokens') or 0
+            if tokens_e or tokens_s:
+                ConsumoTokenIA.objects.create(
+                    apikey=self.apikey_obj, agente=self.agente_obj,
+                    conversacion=self.conversacion,
+                    tokens_entrada=tokens_e, tokens_salida=tokens_s,
+                    tokens_total=tokens_e + tokens_s,
+                    modelo=self.model_name,
+                    origen=origen, prompt_preview=(prompt_preview or '')[:300],
+                )
+                verificar_alerta_consumo(self.apikey_obj, tokens_e + tokens_s)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('Error registrando consumo en AgenteResumidor')

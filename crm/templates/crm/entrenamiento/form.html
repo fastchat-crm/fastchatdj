@@ -672,6 +672,11 @@
                                                 <i class="fas fa-bell"></i>
                                                 {% if l.alerta_consumo and l.alerta_consumo.umbral_diario or l.alerta_consumo and l.alerta_consumo.umbral_mensual %}Alertas ON{% else %}Alertas{% endif %}
                                             </button>
+                                            <button type="button" class="btn-apk test"
+                                                    onclick="verDocsWebService('{{ l.webservice_token|default:''|escapejs }}', '{{ l.get_proveedor_display|escapejs }}', '{{ l.modelo|default:''|escapejs }}', {{ l.pk }})"
+                                                    title="Documentacion del WebService IA">
+                                                <i class="fas fa-code"></i> WebService
+                                            </button>
                                             <button type="button" class="btn-apk edit"
                                                     onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeapikey')"
                                                     title="Editar">
@@ -989,6 +994,22 @@
                     <button type="button" class="btn btn-danger" onclick="guardarAlerta()">
                         <i class="fas fa-save me-1"></i>Guardar alertas
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Modal generico para documentacion WebService #}
+    <div class="modal fade" id="genericModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2 bg-primary text-white">
+                    <h6 class="modal-title" id="genericModalLabel"></h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="genericModalBody"></div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
@@ -1755,6 +1776,219 @@
         text = text.replace(/\[/g, '__braceleft__');
         text = text.replace(/\]/g, '__braceright__');
         return text;
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       Modal WebService IA — documentacion interactiva
+       ══════════════════════════════════════════════════════════════════ */
+    function verDocsWebService(wsToken, proveedorNombre, modelo, apikeyId) {
+        var baseUrl = window.location.origin + '/api/ia/consultar/';
+        if (!wsToken) {
+            // Token no generado aun — forzar generacion
+            $.post(window.location.pathname, {
+                csrfmiddlewaretoken: '{{ csrf_token }}',
+                action: 'regenerar_ws_token',
+                id: apikeyId
+            }, function(r) {
+                if (r && r.error === false && r.token) {
+                    verDocsWebService(r.token, proveedorNombre, modelo, apikeyId);
+                } else {
+                    alert((r && r.message) || 'Error generando token');
+                }
+            });
+            return;
+        }
+        var keyMask = wsToken;
+
+        var html = `
+        <div class="p-1">
+            <h6 class="mb-3"><i class="fas fa-plug me-2 text-primary"></i>WebService IA — Documentacion</h6>
+
+            <div class="alert alert-info py-2 small mb-3">
+                <strong>Endpoint:</strong> <code>POST ${baseUrl}</code><br>
+                <strong>Proveedor:</strong> ${proveedorNombre} ${modelo ? '· Modelo: ' + modelo : ''}<br>
+                <strong>Rate limit:</strong> 60 req/min
+            </div>
+
+            <div class="card border mb-3">
+                <div class="card-body py-2 px-3">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <strong class="small"><i class="fas fa-key me-1"></i> Token de acceso WebService</strong>
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:.75rem;"
+                                    onclick="navigator.clipboard.writeText('${wsToken}'); $(this).html('<i class=\\'fas fa-check\\'></i>'); setTimeout(()=>$(this).html('<i class=\\'fas fa-copy\\'></i>'), 1500);">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-warning btn-sm py-0 px-2" style="font-size:.75rem;"
+                                    onclick="regenerarWsToken(${apikeyId})" title="Generar nuevo token (invalida el anterior)">
+                                <i class="fas fa-rotate"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <code class="d-block bg-dark text-light p-2 rounded" style="font-size:.78rem;word-break:break-all;">${wsToken}</code>
+                    <div class="form-text mt-1">
+                        Este token es <strong>independiente</strong> de la API Key del proveedor (Gemini/OpenAI).
+                        Tu clave del LLM nunca se expone en los headers HTTP.
+                    </div>
+                </div>
+            </div>
+
+            <ul class="nav nav-tabs nav-tabs-sm mb-3" role="tablist">
+                <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ws-tab-texto">Texto</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ws-tab-imagen">Imagen</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ws-tab-audio">Audio</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ws-tab-python">Python</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ws-tab-respuesta">Respuesta</button></li>
+            </ul>
+
+            <div class="tab-content">
+
+                <div class="tab-pane fade show active" id="ws-tab-texto">
+                    <p class="small text-muted mb-2"><strong>cURL — Consulta de texto</strong></p>
+                    <pre class="bg-dark text-light p-3 rounded small" style="white-space:pre-wrap;"><code>curl -X POST ${baseUrl} \\
+  -H "Authorization: Bearer ${keyMask}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "mensaje": "Cuales son sus servicios principales?",
+    "agente_id": 4
+  }'</code></pre>
+                </div>
+
+                <div class="tab-pane fade" id="ws-tab-imagen">
+                    <p class="small text-muted mb-2"><strong>cURL — Enviar imagen para analisis</strong></p>
+                    <pre class="bg-dark text-light p-3 rounded small" style="white-space:pre-wrap;"><code>curl -X POST ${baseUrl} \\
+  -H "Authorization: Bearer ${keyMask}" \\
+  -F "mensaje=Que ves en esta imagen?" \\
+  -F "archivo=@foto.jpg"</code></pre>
+                    <div class="alert alert-warning py-1 small mt-2">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Formatos soportados: JPG, PNG, GIF, WebP. Max 20MB.
+                        El modelo multimodal (Gemini Vision / GPT-4V) analiza la imagen.
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="ws-tab-audio">
+                    <p class="small text-muted mb-2"><strong>cURL — Enviar audio para transcribir + consultar</strong></p>
+                    <pre class="bg-dark text-light p-3 rounded small" style="white-space:pre-wrap;"><code>curl -X POST ${baseUrl} \\
+  -H "Authorization: Bearer ${keyMask}" \\
+  -F "mensaje=Responde segun lo que dice el audio" \\
+  -F "archivo=@nota_voz.ogg"</code></pre>
+                    <div class="alert alert-info py-1 small mt-2">
+                        <i class="fas fa-info-circle me-1"></i>
+                        El audio se transcribe localmente con Whisper (sin gastar tokens).
+                        La transcripcion se inyecta al prompt y se procesa con el agente IA.
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="ws-tab-python">
+                    <p class="small text-muted mb-2"><strong>Python — Ejemplo completo</strong></p>
+                    <pre class="bg-dark text-light p-3 rounded small" style="white-space:pre-wrap;"><code>import requests
+
+API_URL = "${baseUrl}"
+API_KEY = "${keyMask}"
+
+# Consulta de texto
+r = requests.post(API_URL, json={
+    "mensaje": "Cuales son sus horarios de atencion?",
+    "agente_id": 4,
+}, headers={"Authorization": f"Bearer {API_KEY}"})
+print(r.json())
+
+# Consulta con imagen
+r = requests.post(API_URL, data={
+    "mensaje": "Describe esta imagen",
+}, files={
+    "archivo": open("foto.jpg", "rb"),
+}, headers={"Authorization": f"Bearer {API_KEY}"})
+print(r.json())
+
+# Consulta con audio
+r = requests.post(API_URL, data={
+    "mensaje": "Que dice este audio?",
+}, files={
+    "archivo": open("nota.ogg", "rb"),
+}, headers={"Authorization": f"Bearer {API_KEY}"})
+print(r.json())</code></pre>
+                </div>
+
+                <div class="tab-pane fade" id="ws-tab-respuesta">
+                    <p class="small text-muted mb-2"><strong>Formato de respuesta</strong></p>
+                    <pre class="bg-dark text-light p-3 rounded small" style="white-space:pre-wrap;"><code>// Exitosa (200)
+{
+  "error": false,
+  "respuesta": "Nuestros horarios son...",
+  "tokens": {
+    "entrada": 245,
+    "salida": 89,
+    "total": 334
+  },
+  "modelo": "gemini-2.5-flash",
+  "session_id": "",
+  "tipo_procesado": "texto",
+  "latencia_ms": 1250
+}
+
+// Error (401)
+{
+  "error": true,
+  "message": "API Key invalida o desactivada.",
+  "code": "AUTH_INVALID"
+}
+
+// Error (400)
+{
+  "error": true,
+  "message": "Campo mensaje es requerido.",
+  "code": "MISSING_FIELD"
+}</code></pre>
+
+                    <p class="small text-muted mb-2 mt-3"><strong>Campos del request</strong></p>
+                    <table class="table table-sm small mb-0">
+                        <thead><tr><th>Campo</th><th>Tipo</th><th>Requerido</th><th>Descripcion</th></tr></thead>
+                        <tbody>
+                            <tr><td><code>mensaje</code></td><td>string</td><td>Si</td><td>Pregunta o prompt</td></tr>
+                            <tr><td><code>agente_id</code></td><td>int</td><td>No</td><td>ID del agente. Si no se pasa, usa el primero asociado a la key.</td></tr>
+                            <tr><td><code>session_id</code></td><td>string</td><td>No</td><td>ID para mantener contexto entre llamadas (multi-turno).</td></tr>
+                            <tr><td><code>archivo</code></td><td>file</td><td>No</td><td>Imagen, audio o documento adjunto. Usar multipart/form-data.</td></tr>
+                        </tbody>
+                    </table>
+
+                    <p class="small text-muted mb-2 mt-3"><strong>Codigos de error</strong></p>
+                    <table class="table table-sm small mb-0">
+                        <thead><tr><th>Code</th><th>Status</th><th>Descripcion</th></tr></thead>
+                        <tbody>
+                            <tr><td><code>AUTH_MISSING</code></td><td>401</td><td>Falta header Authorization</td></tr>
+                            <tr><td><code>AUTH_INVALID</code></td><td>401</td><td>API Key invalida o desactivada</td></tr>
+                            <tr><td><code>MISSING_FIELD</code></td><td>400</td><td>Campo requerido no enviado</td></tr>
+                            <tr><td><code>AGENT_NOT_FOUND</code></td><td>404</td><td>Agente no encontrado para esta key</td></tr>
+                            <tr><td><code>NO_AGENT</code></td><td>404</td><td>Ningún agente asociado a esta key</td></tr>
+                            <tr><td><code>PROCESSING_ERROR</code></td><td>500</td><td>Error del LLM o procesamiento</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </div>`;
+
+        $('#genericModalLabel').text('WebService IA');
+        $('#genericModalBody').html(html);
+        new bootstrap.Modal($('#genericModal')[0]).show();
+    }
+
+    function regenerarWsToken(apikeyId) {
+        if (!confirm('Generar nuevo token? El anterior dejara de funcionar inmediatamente.')) return;
+        $.post(window.location.pathname, {
+            csrfmiddlewaretoken: '{{ csrf_token }}',
+            action: 'regenerar_ws_token',
+            id: apikeyId
+        }, function(r) {
+            if (r && r.error === false) {
+                alert('Nuevo token generado. Cierra este modal y vuelve a abrir WebService para verlo.');
+                bootstrap.Modal.getInstance($('#genericModal')[0]).hide();
+            } else {
+                alert((r && r.message) || 'Error');
+            }
+        });
     }
     </script>
 {% endblock %}

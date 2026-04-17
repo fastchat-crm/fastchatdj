@@ -207,12 +207,14 @@
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end"
                                         aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                                        {% if l.sesion.es_baileys %}
                                         <li>
                                             <a class="dropdown-item"
                                                href="?action=mensajes_programados&id={{ l.pk }}">
                                                 <i class="fas fa-clock me-2 text-default"></i>Mensajes Programados
                                             </a>
                                         </li>
+                                        {% endif %}
                                         <li>
                                             <a class="dropdown-item"
                                                href="javascript:void(0);"

@@ -11,9 +11,9 @@ from django.urls import reverse
 from core.custom_forms import FormError
 from core.funciones import addData, paginador, secure_module, log, redirectAfterPostGet
 from crm.models import AgentesIA, PerfilNegocioIA, ReglaFinConversacion, AccionFinConversacion
-from .forms import SesionWhatsAppForm
-from .models import SesionWhatsApp
-from .services import WhatsAppService
+from .forms import SesionWhatsAppForm, ConfigMetaForm
+from .models import SesionWhatsApp, ConfigMeta
+from .services import WhatsAppService, get_whatsapp_service
 
 
 @login_required
@@ -238,6 +238,122 @@ def sesionesView(request):
                     accion.delete()
                     return JsonResponse({'error': False})
 
+                # ── Configuracion Meta Cloud API ───────────────────────────
+                elif action == 'guardar_config_meta':
+                    import secrets
+                    session = SesionWhatsApp.objects.get(id=request.POST['pk'])
+                    config, _ = ConfigMeta.objects.get_or_create(
+                        sesion=session,
+                        defaults={
+                            'waba_id': '',
+                            'phone_number_id': '',
+                            'access_token': '',
+                            'webhook_verify_token': secrets.token_urlsafe(32),
+                        },
+                    )
+                    # Validacion manual de los campos obligatorios (el form los
+                    # tiene required=False para no bloquear el submit principal
+                    # cuando la sesion esta en modo Baileys).
+                    obligatorios = {
+                        'waba_id':         'WABA ID',
+                        'phone_number_id': 'Phone Number ID',
+                        'access_token':    'Access Token',
+                    }
+                    faltantes = [
+                        label for campo, label in obligatorios.items()
+                        if not (request.POST.get(campo) or '').strip()
+                    ]
+                    if faltantes:
+                        return JsonResponse({
+                            'error': True,
+                            'message': 'Completa los campos obligatorios: ' + ', '.join(faltantes) + '.',
+                        })
+                    form = ConfigMetaForm(request.POST, instance=config)
+                    if not form.is_valid():
+                        raise FormError(form)
+                    obj = form.save()
+
+                    # Garantizar que la sesion quede marcada como proveedor=meta
+                    if session.proveedor != 'meta':
+                        session.proveedor = 'meta'
+                        session.save(update_fields=['proveedor'])
+
+                    # URL de webhook para que el cliente la copie a Meta
+                    webhook_url = request.build_absolute_uri(reverse('whatsapp_meta_webhook'))
+                    log(f"Config Meta guardada para sesion {session.id}", request, "change", obj=session.id)
+                    return JsonResponse({
+                        'error': False,
+                        'message': 'Configuracion Meta guardada correctamente.',
+                        'webhook_url': webhook_url,
+                        'verify_token': obj.webhook_verify_token,
+                    })
+
+                elif action == 'regenerar_verify_token':
+                    import secrets
+                    session = SesionWhatsApp.objects.get(id=request.POST['pk'])
+                    config = getattr(session, 'config_meta', None)
+                    if not config:
+                        return JsonResponse({'error': True, 'message': 'La sesion no tiene configuracion Meta todavia.'})
+                    config.webhook_verify_token = secrets.token_urlsafe(32)
+                    config.webhook_verificado_en = None
+                    config.save(update_fields=['webhook_verify_token', 'webhook_verificado_en'])
+                    log(f"Verify token regenerado para sesion {session.id}", request, "change", obj=session.id)
+                    return JsonResponse({
+                        'error': False,
+                        'verify_token': config.webhook_verify_token,
+                        'message': 'Nuevo verify token generado. Actualizalo en Meta Developer Portal.',
+                    })
+
+                elif action == 'verificar_meta_conexion':
+                    # Intenta hacer una consulta liviana a Graph API con el token almacenado
+                    import requests
+                    session = SesionWhatsApp.objects.get(id=request.POST['pk'])
+                    config = getattr(session, 'config_meta', None)
+                    if not config:
+                        return JsonResponse({'error': True, 'message': 'Sesion sin ConfigMeta.'})
+                    if not config.access_token or not config.phone_number_id:
+                        return JsonResponse({'error': True, 'message': 'Faltan credenciales Meta (token o phone_number_id).'})
+                    try:
+                        from .services_meta import GRAPH_API_BASE
+                        r = requests.get(
+                            f'{GRAPH_API_BASE}/{config.phone_number_id}',
+                            headers={'Authorization': f'Bearer {config.access_token}'},
+                            params={'fields': 'display_phone_number,verified_name,quality_rating,messaging_limit_tier'},
+                            timeout=10,
+                        )
+                    except Exception as e:
+                        return JsonResponse({'error': True, 'message': f'Error de conexion: {str(e)}'})
+                    if r.status_code != 200:
+                        return JsonResponse({
+                            'error': True,
+                            'message': f'Meta respondio {r.status_code}: {r.text[:400]}',
+                        })
+                    data = r.json()
+                    # Persistir info descubierta
+                    from django.utils import timezone as _tz
+                    config.display_phone_number = data.get('display_phone_number') or config.display_phone_number
+                    config.quality_rating = (data.get('quality_rating') or 'UNKNOWN').upper()
+                    if data.get('messaging_limit_tier'):
+                        config.messaging_limit_tier = data.get('messaging_limit_tier')
+                    config.ultima_sincronizacion = _tz.now()
+                    config.save(update_fields=[
+                        'display_phone_number', 'quality_rating',
+                        'messaging_limit_tier', 'ultima_sincronizacion',
+                    ])
+                    # Replicar numero en la sesion si no esta seteado
+                    if not session.numero and config.display_phone_number:
+                        session.numero = ''.join(c for c in config.display_phone_number if c.isdigit())
+                        session.estado = 'conectado'
+                        session.save(update_fields=['numero', 'estado'])
+                    return JsonResponse({
+                        'error': False,
+                        'message': 'Conexion con Meta verificada correctamente.',
+                        'display_phone_number': config.display_phone_number,
+                        'quality_rating': config.get_quality_rating_display(),
+                        'messaging_limit_tier': config.get_messaging_limit_tier_display() if config.messaging_limit_tier else None,
+                        'verified_name': data.get('verified_name'),
+                    })
+
                 elif action == 'delete_force':
                     session_id = request.POST.get('id')
                     session = SesionWhatsApp.objects.filter(id=session_id).first()
@@ -268,6 +384,9 @@ def sesionesView(request):
         data['regla_fin'] = getattr(instance, 'regla_fin', None)
         data['acciones_fin'] = data['regla_fin'].acciones.filter(status=True) if data['regla_fin'] else []
         data['tiene_plantilla_agente'] = bool(instance.agente_ia and getattr(instance.agente_ia, 'regla_fin', None))
+        data['config_meta'] = config_meta = getattr(instance, 'config_meta', None)
+        data['config_meta_form'] = ConfigMetaForm(instance=config_meta) if config_meta else ConfigMetaForm()
+        data['meta_webhook_url'] = request.build_absolute_uri(reverse('whatsapp_meta_webhook'))
         return render(request, 'whatsapp/sesiones/form.html', data)
     if action == 'change_modal':
         try:

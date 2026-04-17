@@ -126,6 +126,31 @@ All require `X-API-Key: <NODE_SECRET_KEY>` header.
 - `POST /whatsapp/heartbeat/` (`heartbeat_view.py`): Node pings every 30-60s with `{ts, host, sessions: [{sessionId, estado, queueDepth}]}`. Stored in cache for 180s. Helpers `node_esta_vivo(session_id=None)` and `estado_heartbeat_sesion(session_id)` let other code detect when Node is silent without crashing.
 - `POST /whatsapp/trace/` (`trace_receiver_view.py`): Node-side traces written to `TrazaMensajeIA` so the timeline at `/whatsapp/trazas/` shows both sides.
 
+### Multi-provider architecture (Baileys + Meta Cloud API)
+
+`SesionWhatsApp.proveedor` is a choice field (`'baileys'` | `'meta'`) that acts as the transport switch. Helpers `sesion.es_baileys` / `sesion.es_meta` are provided for readability.
+
+- **Baileys (legacy, default)**: Session fields `qr_code`, `whatsapp_id`, `desconectado_manualmente`, `contacts_list`, `contacts_length` live directly on `SesionWhatsApp`. Transport goes through Node.js via `WhatsAppService`.
+- **Meta Cloud API**: Session has a `ConfigMeta` OneToOne extension (`sesion.config_meta`) holding `waba_id`, `phone_number_id`, `access_token`, `webhook_verify_token`, `quality_rating`, `messaging_limit_tier`, etc. All Meta-specific config is isolated here — the shared models (`Contacto`, `ConversacionWhatsApp`, `MensajeWhatsApp`, `AgenteIA`, etc.) are agnostic and don't change.
+
+Meta-specific models (all in `whatsapp/models.py`):
+- `ConfigMeta` — per-session config (OneToOne).
+- `PlantillaWhatsApp` — message templates linked to `ConfigMeta`. Required for proactive messages outside the 24h window. Fields: `nombre`, `idioma`, `categoria` (`UTILITY`/`MARKETING`/`AUTHENTICATION`), `header_tipo`, `cuerpo`, `footer`, `botones_json`, `variables_json`, `estado_meta` (`BORRADOR`/`PENDING`/`APPROVED`/`REJECTED`/`PAUSED`/`DISABLED`).
+- `EventoMetaRecibido` — raw audit log of every webhook Meta posts (payload, HMAC validity, processed flag). Read-only from UI.
+
+When adding a feature that talks to WhatsApp, branch on `sesion.proveedor` and dispatch to the appropriate service. Do not access Baileys-specific fields (`qr_code`, `whatsapp_id`, etc.) without guarding `es_baileys`.
+
+**Parallel files per transport:**
+| Role | Baileys | Meta Cloud API |
+|---|---|---|
+| Receiver (webhook) | `whatsapp/view_webhook_handler.py` → `/whatsapp/webhook_handler/` | `whatsapp/meta_webhook_view.py` → `/whatsapp/meta_webhook/` |
+| Sender (service) | `whatsapp/services.py` → `WhatsAppService` | `whatsapp/services_meta.py` → `MetaWhatsAppService` |
+| Dispatcher | — | `services.get_whatsapp_service(sesion)` returns the right instance |
+
+The Meta receiver handles GET (Meta verification handshake using `ConfigMeta.webhook_verify_token`), POST with HMAC-SHA256 signed events (using `ConfigMeta.app_secret`), and translates Meta's payload shape to the internal Baileys-style format before calling the same `process_incoming_message()`. All raw Meta events are logged to `EventoMetaRecibido` for audit/replay.
+
+`MetaWhatsAppService` mirrors the public interface of `WhatsAppService` (`send_text_message`, `send_presence_update`, `send_media_message`, `close_session`) so existing call sites can migrate by switching to `get_whatsapp_service(sesion).send_text_message(...)`. Meta-only extras: `send_template()`, `crear_plantilla_en_meta()`, `sincronizar_plantillas()`, `descargar_media()`. Unsupported ops (presence, user image) return `{'success': True, 'skipped': '...'}`.
+
 ### AI Agent Configuration
 
 `AgentesIA` (in `crm/models.py`) is the central config for each chatbot:

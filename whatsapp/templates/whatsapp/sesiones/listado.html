@@ -123,6 +123,14 @@
                                 {% endif %}
                                 {{ s.get_estado_display }}
                             </span>
+                            <span class="proveedor-badge proveedor-{{ s.proveedor }}"
+                                  title="Proveedor: {{ s.get_proveedor_display }}">
+                                {% if s.proveedor == 'meta' %}
+                                    <i class="fab fa-facebook"></i> Meta
+                                {% else %}
+                                    <i class="fab fa-whatsapp"></i> Baileys
+                                {% endif %}
+                            </span>
                             <span class="session-id">#{{ s.id }}</span>
                         </div>
 
@@ -235,6 +243,15 @@
                                             Verificar conexión
                                         </a>
                                     </li>
+                                    {% if s.proveedor == 'meta' %}
+                                        <li>
+                                            <a class="dropdown-item"
+                                               href="/whatsapp/plantillas/?sesion={{ s.id }}">
+                                                <i class="fa-solid fa-file-lines me-2 text-primary"></i>
+                                                Ver plantillas
+                                            </a>
+                                        </li>
+                                    {% endif %}
                                     {% if s.departamentos.all %}
                                         <li>
                                             <a class="dropdown-item"

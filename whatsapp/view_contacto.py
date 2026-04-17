@@ -87,6 +87,8 @@ def contactoView(request):
                     res_json={"error":False}
                 elif action == 'addMensajeProgramado':
                     filtro = model.objects.get(pk=int(encrypt(request.POST['pk'])))
+                    if not filtro.sesion.es_baileys:
+                        raise ValueError("Los mensajes programados solo estan disponibles para sesiones Baileys. Las sesiones Meta requieren plantillas pre-aprobadas.")
                     form = MensajeWhatsAppProgramadoForm(request.POST, request.FILES, request=request)
                     if not form.is_valid():
                         raise FormError(form)
@@ -112,6 +114,8 @@ def contactoView(request):
                     messages.success(request, f"Mensaje agregado correctamente")
                 elif action == 'changeMensajeProgramado':
                     filtro = MensajeWhatsAppProgramado.objects.get(pk=int(encrypt(request.POST['pk'])))
+                    if not filtro.contacto.sesion.es_baileys:
+                        raise ValueError("Los mensajes programados solo estan disponibles para sesiones Baileys.")
                     form = MensajeWhatsAppProgramadoForm(request.POST, request.FILES, request=request, instance=filtro)
                     if not form.is_valid():
                         raise FormError(form)
@@ -139,6 +143,8 @@ def contactoView(request):
                     mensaje = MensajeWhatsAppProgramado.objects.get(pk=int(request.POST['id']))
                     if not mensaje:
                         raise ValueError("Mensaje programado no encontrado.")
+                    if not mensaje.contacto.sesion.es_baileys:
+                        raise ValueError("Los mensajes programados solo estan disponibles para sesiones Baileys.")
                     if not mensaje.enviado:
                         sesion_id = mensaje.sesion.session_id
                         from_number = mensaje.from_number
@@ -218,6 +224,9 @@ def contactoView(request):
             elif action == 'mensajes_programados':
                 try:
                     contacto = model.objects.get(pk=int(request.GET['id']))
+                    if not contacto.sesion.es_baileys:
+                        messages.error(request, "Los mensajes programados solo estan disponibles para sesiones Baileys. Las sesiones Meta requieren plantillas pre-aprobadas.")
+                        return redirect(request.path)
                     filtros, url_vars = Q(contacto=contacto, status=True), f'&action={action}&id={contacto.id}'
                     listado = MensajeWhatsAppProgramado.objects.filter(filtros).order_by('fecha')
                     data.update({
@@ -235,6 +244,9 @@ def contactoView(request):
                 try:
                     pk = int(request.GET['id'])
                     filtro = model.objects.get(pk=pk)
+                    if not filtro.sesion.es_baileys:
+                        messages.error(request, "Los mensajes programados solo estan disponibles para sesiones Baileys.")
+                        return redirect(request.path)
                     data["filtro"] = filtro
                     data["pk"] = pk
                     data["form"] = form = MensajeWhatsAppProgramadoForm()

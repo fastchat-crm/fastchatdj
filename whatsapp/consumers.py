@@ -3,7 +3,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.template.loader import render_to_string
 from .models import ConversacionWhatsApp, MensajeWhatsApp
-from .services import WhatsAppService
+from .services import WhatsAppService, get_whatsapp_service
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -45,7 +45,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
         conversacion = ConversacionWhatsApp.objects.filter(
             contacto__sesion__usuario__id=self.user.id, id=conversacion_id
         ).first()
-        whatsapp_service = WhatsAppService()
+        if not conversacion:
+            return
+        whatsapp_service = get_whatsapp_service(conversacion.sesion)
         whatsapp_service.send_presence_update(conversacion.sesion.session_id, conversacion.from_number)
 
     @database_sync_to_async
@@ -53,7 +55,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
         conversacion = ConversacionWhatsApp.objects.filter(
             contacto__sesion__usuario__id=self.user.id, id=conversacion_id
         ).first()
-        whatsapp_service = WhatsAppService()
+        if not conversacion:
+            return
+        whatsapp_service = get_whatsapp_service(conversacion.sesion)
         whatsapp_service.quit_presence_update(conversacion.sesion.session_id, conversacion.from_number)
 
     @database_sync_to_async

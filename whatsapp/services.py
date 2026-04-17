@@ -595,3 +595,25 @@ class WhatsAppService:
 
         # Asegurarse de que tenga el formato correcto para WhatsApp
         return f"{clean_number}@s.whatsapp.net"
+
+
+def get_whatsapp_service(sesion=None, proveedor: str | None = None):
+    """Dispatcher agnostico al transporte.
+
+    Devuelve el servicio correspondiente segun `sesion.proveedor` o el argumento
+    `proveedor` explicito. Asi el resto del codigo escribe:
+
+        service = get_whatsapp_service(sesion)
+        service.send_text_message(sesion.session_id, to, text)
+
+    ...y no se entera si por debajo habla con Node/Baileys o con Meta Graph API.
+    """
+    prov = proveedor
+    if prov is None and sesion is not None:
+        prov = getattr(sesion, 'proveedor', 'baileys')
+    prov = (prov or 'baileys').lower()
+
+    if prov == 'meta':
+        from .services_meta import MetaWhatsAppService
+        return MetaWhatsAppService()
+    return WhatsAppService()

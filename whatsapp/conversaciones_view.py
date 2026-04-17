@@ -12,7 +12,7 @@ from core.funciones import addData, paginador, secure_module, log
 from seguridad.templatetags.templatefunctions import encrypt
 from .forms import CambiarClasificacionForm, CambiarNombreContactoForm, AsignarAgenteForm
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp, SENTIMIENTO_CHOICES
-from .services import WhatsAppService
+from .services import WhatsAppService, get_whatsapp_service
 
 def _estadisticas_conversacion(conversacion):
     """Devuelve dict completo de estadísticas para el panel de la conversación."""
@@ -247,8 +247,8 @@ def conversacionesView(request):
                     archivo = request.FILES.get('archivo')  # Obtener archivo si existe
                     conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
 
-                    # Crear instancia del servicio
-                    service = WhatsAppService()
+                    # Crear instancia del servicio segun proveedor de la sesion
+                    service = get_whatsapp_service(conversacion.sesion)
 
                     # Determinar tipo antes de leer el archivo
                     tipo_mensaje = 'texto'
@@ -391,7 +391,7 @@ def conversacionesView(request):
                                 handoff_msg = getattr(sesion, 'mensaje_handoff', None)
                                 if not handoff_msg:
                                     handoff_msg = f'Hola, te atenderá {nombre_asignado}. En breve te contactamos.'
-                                service = WhatsAppService()
+                                service = get_whatsapp_service(sesion)
                                 service.send_text_message(
                                     sesion.session_id,
                                     filtro.contacto.from_number,

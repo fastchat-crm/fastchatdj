@@ -27,7 +27,7 @@ from .models import (
     MensajeWhatsApp,
     EstadisticasConversacion
 )
-from .services import WhatsAppService
+from .services import WhatsAppService, get_whatsapp_service
 from .trazas import registrar as _traza, notificar_superusers_error, fallback_permitido
 
 logger = logging.getLogger(__name__)
@@ -320,6 +320,16 @@ def webhook_handler(request):
         return JsonResponse({'message': 'JSON inválido'}, status=400)
     except Exception as e:
         logger.exception(f"Error procesando webhook: {str(e)}")
+        try:
+            _traza(
+                etapa='error_general',
+                sesion=locals().get('session'),
+                numero=locals().get('from_number'),
+                nivel='error',
+                detalle=f'webhook_handler: {type(e).__name__}: {str(e)[:1500]}',
+            )
+        except Exception:
+            pass
         return JsonResponse({'message': f'Error: {str(e)}'}, status=500)
 
 def construir_chat_history(conversacion, from_number, numero_agente, max_pares=5, max_chars=1000):
@@ -470,6 +480,10 @@ def process_incoming_message(session, event_data, channel_layer):
                 "¿Hay migraciones pendientes? Ejecuta: py manage.py migrate",
                 contacto.id, session.session_id, create_err, exc_info=True
             )
+            _traza(
+                etapa='error_general', sesion=session, numero=from_number, nivel='error',
+                detalle=f'obtener_o_crear_activa contacto_id={contacto.id}: {type(create_err).__name__}: {str(create_err)[:1500]}',
+            )
             raise
 
         # Renovar ventana de expiración con cada mensaje entrante del cliente
@@ -516,7 +530,7 @@ def process_incoming_message(session, event_data, channel_layer):
             if not cache.get(_aviso_key):
                 cache.set(_aviso_key, 1, timeout=_retry_s)
                 try:
-                    WhatsAppService().send_text_message(
+                    get_whatsapp_service(session).send_text_message(
                         conversation.sesion.session_id, contacto.from_number,
                         '⏳ Estamos recibiendo muchos mensajes. Te responderemos en unos momentos.',
                     )
@@ -524,7 +538,7 @@ def process_incoming_message(session, event_data, channel_layer):
                     logger.exception("No se pudo enviar aviso rate-limit a %s", from_number)
             return JsonResponse({'status': 'ok', 'rate_limited': True, 'retry_after_s': _retry_s})
 
-        whatsapp_service = WhatsAppService()
+        whatsapp_service = get_whatsapp_service(session)
         primer_mensaje = not conversation.bienvenida_enviado
         numero_opcion_respondido = (message_text or '').replace(' ', '')
         numero_opcion_respondido = numero_opcion_respondido.isdigit() and numero_opcion_respondido or -1
@@ -601,18 +615,20 @@ def process_incoming_message(session, event_data, channel_layer):
         # ────────────────────────────────────────────────────────────
         _modo_bot = (session.modo_bot or 'ia')
         if _modo_bot in ('tradicional', 'hibrido'):
+            _ex_motor = None
             try:
                 from crm.motor_flujo_chatbot import procesar_mensaje_tradicional
                 _res_motor = procesar_mensaje_tradicional(
                     session, conversation, contacto, message_text or ''
                 )
-            except Exception as _ex_motor:
+            except Exception as _ex_motor_raised:
+                _ex_motor = _ex_motor_raised
                 logger.exception("Motor flujo falló conv=%s: %s", conversation.id, _ex_motor)
                 _res_motor = None
 
             _traza(
                 etapa='motor_flujo', sesion=session, conversacion=conversation, mensaje=message,
-                numero=from_number, nivel='info',
+                numero=from_number, nivel=('error' if _ex_motor else 'info'),
                 detalle={
                     'modo_bot': _modo_bot,
                     'manejado': bool(_res_motor and _res_motor.manejado),
@@ -620,7 +636,10 @@ def process_incoming_message(session, event_data, channel_layer):
                     'handoff': bool(_res_motor and _res_motor.handoff),
                     'finalizado': bool(_res_motor and _res_motor.finalizado),
                     'respuestas': len(_res_motor.respuestas) if _res_motor else 0,
-                    'error': getattr(_res_motor, 'error', '') if _res_motor else '',
+                    'error': (
+                        f'{type(_ex_motor).__name__}: {str(_ex_motor)[:500]}' if _ex_motor
+                        else (getattr(_res_motor, 'error', '') if _res_motor else '')
+                    ),
                 },
             )
 
@@ -817,6 +836,8 @@ def process_incoming_message(session, event_data, channel_layer):
                                     tokens_salida=resultado.tokens_salida,
                                     tokens_total=resultado.tokens_total,
                                     modelo=consultor.model_name,
+                                    origen='whatsapp',
+                                    prompt_preview=(message_text or '')[:300],
                                 )
                                 verificar_alerta_consumo(apikey, resultado.tokens_total)
                             except Exception:
@@ -1056,6 +1077,18 @@ def process_incoming_message(session, event_data, channel_layer):
 
     except Exception as e:
         logger.exception(f"Error procesando mensaje entrante: {str(e)}")
+        try:
+            _traza(
+                etapa='error_general',
+                sesion=session,
+                conversacion=locals().get('conversation'),
+                mensaje=locals().get('message'),
+                numero=locals().get('from_number'),
+                nivel='error',
+                detalle=f'process_incoming_message: {type(e).__name__}: {str(e)[:1500]}',
+            )
+        except Exception:
+            pass
 
 def process_sent_message(session, event_data, channel_layer):
     """
@@ -1204,6 +1237,15 @@ def process_sent_message(session, event_data, channel_layer):
 
     except Exception as e:
         logger.exception(f"Error procesando mensaje enviado: {str(e)}")
+        try:
+            _traza(
+                etapa='error_general', sesion=session,
+                numero=locals().get('to_number'),
+                nivel='error',
+                detalle=f'process_sent_message: {type(e).__name__}: {str(e)[:1500]}',
+            )
+        except Exception:
+            pass
 
 def process_deleted_message(session, event_data, channel_layer):
     """
@@ -1258,6 +1300,13 @@ def process_deleted_message(session, event_data, channel_layer):
 
     except Exception as e:
         logger.exception(f"Error procesando mensaje eliminado: {str(e)}")
+        try:
+            _traza(
+                etapa='error_general', sesion=session, nivel='error',
+                detalle=f'process_deleted_message: {type(e).__name__}: {str(e)[:1500]}',
+            )
+        except Exception:
+            pass
 
 def process_edited_message(session, event_data, fromchat, channel_layer):
     """
@@ -1326,6 +1375,13 @@ def process_edited_message(session, event_data, fromchat, channel_layer):
 
     except Exception as e:
         logger.exception(f"Error procesando mensaje editado: {str(e)}")
+        try:
+            _traza(
+                etapa='error_general', sesion=session, nivel='error',
+                detalle=f'process_edited_message: {type(e).__name__}: {str(e)[:1500]}',
+            )
+        except Exception:
+            pass
 
 def process_contact_update(session, event_data, channel_layer):
     """
@@ -1355,6 +1411,13 @@ def process_contact_update(session, event_data, channel_layer):
 
     except Exception as e:
         logger.exception(f"Error procesando actualización de contacto: {str(e)}")
+        try:
+            _traza(
+                etapa='error_general', sesion=session, nivel='error',
+                detalle=f'process_contact_update: {type(e).__name__}: {str(e)[:1500]}',
+            )
+        except Exception:
+            pass
 
 def process_profile_update(session, event_data, channel_layer):
     """
@@ -1378,6 +1441,13 @@ def process_profile_update(session, event_data, channel_layer):
 
     except Exception as e:
         logger.exception(f"Error procesando actualización de perfil: {str(e)}")
+        try:
+            _traza(
+                etapa='error_general', sesion=session, nivel='error',
+                detalle=f'process_profile_update: {type(e).__name__}: {str(e)[:1500]}',
+            )
+        except Exception:
+            pass
 
 def save_media_file(media_base64, filename):
     try:
@@ -1437,3 +1507,13 @@ def update_conversation_stats(conversation):
 
     except Exception as e:
         logger.exception(f"Error actualizando estadísticas de conversación: {str(e)}")
+        try:
+            _traza(
+                etapa='error_general',
+                sesion=getattr(conversation, 'sesion', None) if 'conversation' in locals() else None,
+                conversacion=locals().get('conversation'),
+                nivel='error',
+                detalle=f'update_conversation_stats: {type(e).__name__}: {str(e)[:1500]}',
+            )
+        except Exception:
+            pass

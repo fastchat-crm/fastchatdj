@@ -45,6 +45,12 @@
             {% if regla_fin and regla_fin.activo %}<span class="badge bg-danger ms-1" style="font-size:.6rem">ON</span>{% endif %}
         </button>
     </li>
+    <li class="nav-item" id="tab-li-meta" {% if instance.proveedor != 'meta' %}style="display:none;"{% endif %}>
+        <button class="nav-link" id="tab-btn-meta" data-bs-toggle="tab" data-bs-target="#tab-meta" type="button">
+            <i class="fab fa-facebook me-1"></i> Meta Cloud API
+            <span class="badge bg-primary ms-1" style="font-size:.6rem">ACTIVO</span>
+        </button>
+    </li>
 </ul>
 
 <div class="tab-content">
@@ -62,7 +68,16 @@
                 {{ form.min_sesion }}
                 <div class="invalid-feedback" id="errorMessagemin_sesion"></div>
             </div>
-            <div class="col-12">
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1">{{ form.proveedor.label }}</label>
+                {{ form.proveedor }}
+                <div class="form-text">
+                    <i class="fas fa-info-circle"></i>
+                    Baileys = conexion no oficial (QR). Meta = Cloud API oficial (requiere verificacion de empresa).
+                </div>
+                <div class="invalid-feedback" id="errorMessageproveedor"></div>
+            </div>
+            <div class="col-12 col-md-6">
                 <label class="form-label small mb-1">{{ form.language.label }}</label>
                 {{ form.language }}
                 <div class="invalid-feedback" id="errorMessagelanguage"></div>
@@ -389,7 +404,428 @@
         </div>
     </div>
 
+    {# ── TAB 5: META CLOUD API ─────────────────────────────────────── #}
+    <div class="tab-pane fade" id="tab-meta">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <div>
+                <p class="section-label mb-0">Configuracion Meta Cloud API</p>
+                <small class="text-muted">
+                    Solo aplica cuando esta sesion tiene <strong>Proveedor = Meta Cloud API</strong>.
+                </small>
+            </div>
+            {% if config_meta %}
+                <span class="badge bg-{% if config_meta.webhook_verificado_en %}success{% else %}secondary{% endif %}">
+                    {% if config_meta.webhook_verificado_en %}
+                        <i class="fa fa-check-circle me-1"></i>Webhook verificado
+                    {% else %}
+                        <i class="fa fa-hourglass-half me-1"></i>Webhook sin verificar
+                    {% endif %}
+                </span>
+            {% endif %}
+        </div>
+
+        {# Panel informativo cuando la sesion NO es Meta (lo controla JS segun selector) #}
+        <div id="meta-not-active-alert"
+             class="alert alert-info py-2 d-flex align-items-center gap-2 mb-3"
+             style="font-size:.85rem; {% if instance.proveedor == 'meta' %}display:none;{% endif %}">
+            <i class="fas fa-info-circle"></i>
+            <span>
+                Cambia el proveedor a <strong>Meta Cloud API</strong> en la pestana <em>Basico</em>,
+                guarda la sesion, y vuelve aqui para completar las credenciales.
+            </span>
+        </div>
+
+        {# Contenido real que solo aplica cuando proveedor=meta #}
+        <div id="meta-config-wrap" {% if instance.proveedor != 'meta' %}style="display:none;"{% endif %}>
+
+        {# Banner con acceso a la guia paso a paso (colapsable inline, no modal) #}
+        <div class="card border-primary border-opacity-50 mb-3" style="background:#f0f7ff;">
+            <div class="card-body py-2 px-3 d-flex align-items-center gap-3 flex-wrap">
+                <i class="fa fa-circle-question fa-2x text-primary"></i>
+                <div class="flex-grow-1">
+                    <strong>Primera vez configurando Meta?</strong>
+                    <div class="small text-muted">
+                        Revisa la guia paso a paso para saber donde sacar cada valor en Meta Business Manager.
+                    </div>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-toggle-guia-meta">
+                    <i class="fa fa-book-open me-1"></i>
+                    <span id="btn-toggle-guia-meta-label">Ver guia paso a paso</span>
+                </button>
+            </div>
+        </div>
+
+        {# ═══ GUIA PASO A PASO (colapsable inline) ═══ #}
+        <div id="guia-meta-inline" class="card border-primary border-opacity-25 mb-3" style="display:none;">
+            <div class="card-header bg-primary text-white py-2 px-3 d-flex align-items-center justify-content-between">
+                <span><i class="fab fa-facebook me-2"></i><strong>Guia paso a paso — Conectar con Meta Cloud API</strong></span>
+                <button type="button" class="btn-close btn-close-white" id="btn-cerrar-guia-meta" aria-label="Cerrar"></button>
+            </div>
+            <div class="card-body">
+
+                <div class="alert alert-warning d-flex align-items-start gap-2 mb-3" style="font-size:.85rem;">
+                    <i class="fa fa-triangle-exclamation mt-1"></i>
+                    <div>
+                        <strong>Requisito previo:</strong>
+                        la empresa debe estar <strong>verificada en Meta Business Manager</strong>
+                        (proceso que toma 1-3 semanas). Sin esto, Meta no habilita produccion.
+                        <a href="https://www.facebook.com/business/help/2058515294227817" target="_blank" rel="noopener">
+                            Ver requisitos de verificacion
+                            <i class="fa fa-up-right-from-square ms-1" style="font-size:.75em;"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <ol class="guia-meta-steps mb-0">
+
+                    <li class="mb-3">
+                        <strong class="text-primary">Paso 1 — Crea una App en Meta for Developers</strong>
+                        <ul class="small">
+                            <li>Ir a <a href="https://developers.facebook.com/" target="_blank" rel="noopener">developers.facebook.com</a>
+                                → <em>My Apps</em> → <em>Create App</em> → tipo <strong>Business</strong>.</li>
+                            <li>Agregar el producto: <strong>WhatsApp Business Platform</strong>.</li>
+                            <li>En <em>Settings → Basic</em> anota el <strong>App ID</strong> y el <strong>App Secret</strong>
+                                (clic en <em>Show</em>, te pide tu contrasena de Facebook).</li>
+                        </ul>
+                        <div class="badge bg-light text-dark border">
+                            <i class="fa fa-arrow-right me-1"></i> Copia en FastChat: <code>App ID</code>, <code>App Secret</code>
+                        </div>
+                    </li>
+
+                    <li class="mb-3">
+                        <strong class="text-primary">Paso 2 — Registra un numero de WhatsApp</strong>
+                        <ul class="small">
+                            <li>En tu App → <em>WhatsApp → API Setup</em>.</li>
+                            <li>Veras un numero de testing gratuito (1.000 conversaciones/mes, ideal para probar).</li>
+                            <li>Para produccion: clic en <em>Add phone number</em> y registra una linea dedicada.</li>
+                            <li>Copia el <strong>WABA ID</strong> y el <strong>Phone Number ID</strong>.</li>
+                        </ul>
+                        <div class="badge bg-light text-dark border">
+                            <i class="fa fa-arrow-right me-1"></i> Copia en FastChat: <code>WABA ID</code>, <code>Phone Number ID</code>
+                        </div>
+                    </li>
+
+                    <li class="mb-3">
+                        <strong class="text-primary">Paso 3 — Crea un System User y genera un Token permanente</strong>
+                        <ul class="small">
+                            <li>Ir a <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noopener">business.facebook.com/settings/system-users</a>
+                                → <em>Add</em>.</li>
+                            <li>Nombre sugerido: <code>fastchatdj-integration</code>, rol: <strong>Admin</strong>.</li>
+                            <li>Asignale acceso a la <strong>App</strong> (Full Control) y a la <strong>WABA</strong> (Full Control).</li>
+                            <li>Clic en <em>Generate new token</em> → elige la App → marca permisos:
+                                <code>whatsapp_business_management</code>, <code>whatsapp_business_messaging</code>,
+                                <code>business_management</code>.</li>
+                            <li><strong>Copia el token inmediatamente</strong> (empieza con <code>EAAB...</code>).
+                                <span class="text-danger">Meta solo lo muestra una vez.</span></li>
+                        </ul>
+                        <div class="badge bg-light text-dark border">
+                            <i class="fa fa-arrow-right me-1"></i> Copia en FastChat: <code>System User Access Token</code>
+                        </div>
+                    </li>
+
+                    <li class="mb-3">
+                        <strong class="text-primary">Paso 4 — Guarda la configuracion en FastChat</strong>
+                        <ul class="small">
+                            <li>Pega los valores obligatorios: <code>WABA ID</code>, <code>Phone Number ID</code>, <code>Access Token</code>.</li>
+                            <li>Clic en <strong>Guardar config Meta</strong>.</li>
+                            <li>FastChat generara automaticamente un <strong>Verify Token</strong>.</li>
+                        </ul>
+                    </li>
+
+                    <li class="mb-3">
+                        <strong class="text-primary">Paso 5 — Configura el Webhook en Meta</strong>
+                        <ul class="small">
+                            <li>developers.facebook.com → tu App → <em>WhatsApp → Configuration → Webhook → Edit</em>.</li>
+                            <li><strong>Callback URL:</strong> la URL que FastChat muestra arriba.</li>
+                            <li><strong>Verify Token:</strong> el generado en el paso 4.</li>
+                            <li>Clic <em>Verify and save</em>. Meta debe responder "Verified ✓".</li>
+                            <li>Suscribete a: <code>messages</code> y <code>message_template_status_update</code>.</li>
+                        </ul>
+                    </li>
+
+                    <li class="mb-3">
+                        <strong class="text-primary">Paso 6 — Verifica la conexion end-to-end</strong>
+                        <ul class="small">
+                            <li>Clic en <strong>Verificar conexion con Meta</strong>.</li>
+                            <li>Si todo esta OK, se rellena el numero, quality rating, y tier.</li>
+                            <li>La sesion pasa a estado <strong>Conectado</strong>.</li>
+                        </ul>
+                    </li>
+
+                    <li class="mb-0">
+                        <strong class="text-primary">Paso 7 — Crea plantillas (mensajes fuera de 24h)</strong>
+                        <ul class="small">
+                            <li>Ir a <a href="/whatsapp/plantillas/" target="_blank">/whatsapp/plantillas/</a>.</li>
+                            <li>Nueva plantilla → nombre, idioma, categoria, cuerpo con
+                                {% verbatim %}<code>{{1}}</code>, <code>{{2}}</code>{% endverbatim %}.</li>
+                            <li><strong>Guardar y someter a Meta</strong> → FastChat actualiza el estado automaticamente.</li>
+                        </ul>
+                    </li>
+                </ol>
+
+                <hr class="my-3">
+
+                <div class="small text-muted">
+                    <strong><i class="fa fa-lightbulb me-1 text-warning"></i>Consejo:</strong>
+                    Si te trabas, revisa la
+                    <a href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started" target="_blank" rel="noopener">
+                        documentacion oficial de Meta <i class="fa fa-up-right-from-square" style="font-size:.75em;"></i>
+                    </a>
+                    o consulta <a href="/whatsapp/trazas/" target="_blank">/whatsapp/trazas/</a> para diagnosticar.
+                </div>
+            </div>
+        </div>
+
+        <div class="card border bg-light mb-3">
+            <div class="card-body py-2 px-3">
+                <p class="small mb-2 fw-semibold"><i class="fa fa-link me-1"></i> Webhook URL a registrar en Meta:</p>
+                <div class="input-group input-group-sm mb-2">
+                    <input type="text" class="form-control" readonly value="{{ meta_webhook_url }}" id="meta-webhook-url">
+                    <button class="btn btn-outline-secondary" type="button" onclick="copiarMetaUrl()">
+                        <i class="fa fa-copy"></i>
+                    </button>
+                </div>
+                <p class="small mb-2 fw-semibold"><i class="fa fa-key me-1"></i> Verify Token:</p>
+                <div class="input-group input-group-sm">
+                    <input type="text" class="form-control" readonly id="meta-verify-token"
+                           value="{% if config_meta %}{{ config_meta.webhook_verify_token }}{% else %}(se genera al guardar){% endif %}">
+                    <button class="btn btn-outline-secondary" type="button" onclick="copiarMetaToken()">
+                        <i class="fa fa-copy"></i>
+                    </button>
+                    {% if config_meta %}
+                    <button class="btn btn-outline-warning" type="button" onclick="regenerarVerifyToken({{ instance.id }})"
+                            title="Generar un nuevo token (debera reconfigurarse en Meta)">
+                        <i class="fa fa-rotate"></i>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-2" id="form-config-meta">
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1">
+                    WABA ID *
+                    <i class="fa fa-info-circle text-primary ms-1"
+                       title="ID numerico de la cuenta de WhatsApp Business en Meta. Ej: 109876543210987"></i>
+                </label>
+                {{ config_meta_form.waba_id }}
+                <div class="form-text">
+                    business.facebook.com → Business Settings → WhatsApp Accounts
+                </div>
+                <div class="invalid-feedback" id="errorMessagewaba_id"></div>
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1">
+                    Phone Number ID *
+                    <i class="fa fa-info-circle text-primary ms-1"
+                       title="ID interno del numero (NO es el numero telefonico). Meta lo usa para rutear envios."></i>
+                </label>
+                {{ config_meta_form.phone_number_id }}
+                <div class="form-text">
+                    developers.facebook.com → tu App → WhatsApp → API Setup
+                </div>
+                <div class="invalid-feedback" id="errorMessagephone_number_id"></div>
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1">Business Account ID
+                    <span class="text-muted">(opcional)</span></label>
+                {{ config_meta_form.business_account_id }}
+                <div class="form-text">Solo si vas a operar sobre el Business Manager completo. Dejalo vacio si no estas seguro.</div>
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1">Numero visible
+                    <span class="text-muted">(auto-detectado)</span></label>
+                {{ config_meta_form.display_phone_number }}
+                <div class="form-text">Se rellena automaticamente al verificar conexion. Ej: +593 99 999 9999</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label small mb-1">
+                    System User Access Token *
+                    <i class="fa fa-info-circle text-primary ms-1"
+                       title="Token permanente (no expira) generado desde un System User en Business Manager."></i>
+                </label>
+                {{ config_meta_form.access_token }}
+                <div class="form-text">
+                    <strong>El campo mas importante.</strong> business.facebook.com → Users → System Users → Add → Generate new token.
+                    Permisos requeridos: <code>whatsapp_business_management</code>, <code>whatsapp_business_messaging</code>.
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1">App ID
+                    <span class="text-muted">(opcional)</span></label>
+                {{ config_meta_form.app_id }}
+                <div class="form-text">developers.facebook.com → tu App → cabecera</div>
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1">
+                    App Secret
+                    <i class="fa fa-info-circle text-primary ms-1"
+                       title="Valida que los webhooks entrantes vengan realmente de Meta (firma HMAC)."></i>
+                </label>
+                {{ config_meta_form.app_secret }}
+                <div class="form-text">developers.facebook.com → tu App → Settings → Basic → <em>Show</em> en App Secret.</div>
+            </div>
+
+            {% if config_meta and config_meta.quality_rating and config_meta.quality_rating != 'UNKNOWN' %}
+            <div class="col-12 mt-2">
+                <div class="alert alert-info py-2 small mb-0">
+                    <strong>Quality rating:</strong> {{ config_meta.get_quality_rating_display }}
+                    {% if config_meta.messaging_limit_tier %}
+                        · <strong>Limite:</strong> {{ config_meta.get_messaging_limit_tier_display }}
+                    {% endif %}
+                    {% if config_meta.ultima_sincronizacion %}
+                        · Ultima sync: {{ config_meta.ultima_sincronizacion|date:"d/m/Y H:i" }}
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="col-12 d-flex gap-2 mt-3">
+                <button type="button" class="btn btn-primary btn-sm" onclick="guardarConfigMeta({{ instance.id }})">
+                    <i class="fa fa-save me-1"></i> Guardar config Meta
+                </button>
+                {% if config_meta %}
+                <button type="button" class="btn btn-outline-success btn-sm" onclick="verificarMetaConexion({{ instance.id }})">
+                    <i class="fa fa-satellite-dish me-1"></i> Verificar conexion con Meta
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        <script>
+        function copiarMetaUrl() {
+            const el = document.getElementById('meta-webhook-url');
+            el.select(); document.execCommand('copy');
+            if (typeof alertaSuccess === 'function') alertaSuccess('URL copiada');
+        }
+        function copiarMetaToken() {
+            const el = document.getElementById('meta-verify-token');
+            el.select(); document.execCommand('copy');
+            if (typeof alertaSuccess === 'function') alertaSuccess('Token copiado');
+        }
+        function guardarConfigMeta(sesionId) {
+            const datos = { action: 'guardar_config_meta', pk: sesionId };
+            $('#form-config-meta').find('input, textarea').each(function() {
+                const name = $(this).attr('name');
+                if (name) datos[name] = $(this).val();
+            });
+            if (typeof post === 'function') {
+                post(datos, function(r) {
+                    if (r && r.error === false) {
+                        if (r.verify_token) $('#meta-verify-token').val(r.verify_token);
+                        alertaSuccess(r.message || 'Configuracion Meta guardada');
+                    }
+                });
+            } else {
+                $.post(window.location.pathname, datos, function(r) {
+                    if (r && r.error === false) {
+                        if (r.verify_token) $('#meta-verify-token').val(r.verify_token);
+                        alert(r.message || 'Guardado');
+                    } else if (r) {
+                        alert(r.message || 'Error');
+                    }
+                });
+            }
+        }
+        function regenerarVerifyToken(sesionId) {
+            if (!confirm('Se generara un nuevo token. Tendras que volver a configurarlo en Meta. Continuar?')) return;
+            $.post(window.location.pathname, { action: 'regenerar_verify_token', pk: sesionId }, function(r) {
+                if (r && r.error === false) {
+                    $('#meta-verify-token').val(r.verify_token);
+                    if (typeof alertaSuccess === 'function') alertaSuccess(r.message);
+                    else alert(r.message);
+                }
+            });
+        }
+        function verificarMetaConexion(sesionId) {
+            $.post(window.location.pathname, { action: 'verificar_meta_conexion', pk: sesionId }, function(r) {
+                if (r && r.error === false) {
+                    let msg = r.message + '\n';
+                    if (r.display_phone_number) msg += 'Numero: ' + r.display_phone_number + '\n';
+                    if (r.quality_rating) msg += 'Calidad: ' + r.quality_rating + '\n';
+                    if (r.messaging_limit_tier) msg += 'Limite: ' + r.messaging_limit_tier;
+                    alert(msg);
+                    setTimeout(function() { location.reload(); }, 1500);
+                } else {
+                    alert((r && r.message) || 'Error');
+                }
+            });
+        }
+
+        /* ── Toggle del panel de guia inline (reemplaza el modal) ── */
+        (function () {
+            var panel   = $('#guia-meta-inline');
+            var btn     = $('#btn-toggle-guia-meta');
+            var btnLbl  = $('#btn-toggle-guia-meta-label');
+            var btnClose = $('#btn-cerrar-guia-meta');
+            function abrir() {
+                panel.slideDown(180);
+                btnLbl.text('Ocultar guia');
+                btn.removeClass('btn-primary').addClass('btn-outline-primary');
+                setTimeout(function () {
+                    // Scroll suave al panel recien abierto
+                    var top = panel.offset() ? panel.offset().top - 60 : 0;
+                    $('html, body').animate({ scrollTop: top }, 200);
+                }, 200);
+            }
+            function cerrar() {
+                panel.slideUp(150);
+                btnLbl.text('Ver guia paso a paso');
+                btn.removeClass('btn-outline-primary').addClass('btn-primary');
+            }
+            btn.on('click', function () {
+                if (panel.is(':visible')) cerrar(); else abrir();
+            });
+            btnClose.on('click', cerrar);
+        })();
+
+        /* ── Sincronizar visibilidad de la pestana Meta con el selector ── */
+        (function () {
+            function actualizarTabMeta() {
+                var sel = $('[name="proveedor"]');
+                if (!sel.length) return;
+                var esMeta = String(sel.val() || '').toLowerCase() === 'meta';
+                $('#tab-li-meta').toggle(esMeta);
+                $('#meta-config-wrap').toggle(esMeta);
+                $('#meta-not-active-alert').toggle(!esMeta);
+                // Quitar required HTML5 de inputs Meta cuando no aplica
+                $('#form-config-meta input, #form-config-meta textarea, #form-config-meta select').each(function () {
+                    if (!esMeta) {
+                        $(this).removeAttr('required');
+                    }
+                });
+                // Si el usuario estaba parado sobre el tab Meta y cambio a Baileys,
+                // mandamos el foco al tab Basico para evitar panes ocultos activos.
+                if (!esMeta && $('#tab-btn-meta').hasClass('active')) {
+                    var btnBasico = $('[data-bs-target="#tab-basico"]').first();
+                    if (btnBasico.length && typeof bootstrap !== 'undefined') {
+                        new bootstrap.Tab(btnBasico[0]).show();
+                    }
+                }
+            }
+            // Ejecutar al cargar y cuando cambie el selector (soporta select2)
+            $(document).on('change', '[name="proveedor"]', actualizarTabMeta);
+            setTimeout(actualizarTabMeta, 150);  // despues de que select2 se inicialice
+        })();
+        </script>
+    </div> {# /meta-config-wrap #}
+    </div> {# /tab-meta pane #}
+
 </div>{# /tab-content #}
+
+{% comment %}
+Modal antiguo eliminado: la guia ahora vive inline en el tab Meta
+(ver div #guia-meta-inline). Los modales anidados causaban problemas
+de backdrop/z-index al abrir desde el formulario modal de sesion.
+{% endcomment %}
+
+<style>
+.guia-meta-steps { padding-left: 1.2rem; }
+.guia-meta-steps > li { padding-left: .3rem; margin-bottom: 1rem; }
+.guia-meta-steps ul { margin-top: .25rem; margin-bottom: .25rem; }
+.guia-meta-steps code { background: #f1f3f5; padding: 1px 5px; border-radius: 3px; font-size: .85em; }
+</style>
 
 {{ form.media }}
 <script src="/static/editor_emoji_picker/editor-emoji-picker.js"></script>

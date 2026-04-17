@@ -421,6 +421,36 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
+/* ========== PROVEEDOR BADGE (card) ========== */
+.proveedor-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    line-height: 1;
+    margin-left: 6px;
+    white-space: nowrap;
+}
+
+.proveedor-baileys {
+    background: #e6f4ea;
+    color: #1e8e3e;
+    border: 1px solid #b8e0c4;
+}
+
+.proveedor-meta {
+    background: #e8f0fe;
+    color: #1967d2;
+    border: 1px solid #aecbfa;
+}
+
+.proveedor-badge i {
+    font-size: 0.78rem;
+}
+
 /* ========== TEST SEND MODAL ========== */
 .test-log-line {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

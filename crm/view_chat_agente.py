@@ -20,6 +20,36 @@ from crm.models import AgentesIA, PerfilNegocioIA, ConsumoTokenIA
 
 from langchain_core.messages import HumanMessage, AIMessage
 
+import logging
+_logger = logging.getLogger(__name__)
+
+
+def _registrar_consumo_tokens(respuesta_llm, apikey_obj, agente=None, modelo='',
+                              conversacion=None, origen='chat_crm', prompt_preview=''):
+    """Extrae tokens de la respuesta LangChain y crea ConsumoTokenIA + verifica alertas."""
+    try:
+        from crm.alertas_consumo import verificar_alerta_consumo
+        meta = getattr(respuesta_llm, 'response_metadata', {}) or {}
+        usage = (
+            getattr(respuesta_llm, 'usage_metadata', None)
+            or meta.get('usage_metadata')
+            or meta.get('token_usage')
+            or {}
+        )
+        tokens_e = usage.get('input_tokens') or usage.get('prompt_token_count') or usage.get('prompt_tokens') or 0
+        tokens_s = usage.get('output_tokens') or usage.get('candidates_token_count') or usage.get('completion_tokens') or 0
+        if tokens_e or tokens_s:
+            ConsumoTokenIA.objects.create(
+                apikey=apikey_obj, agente=agente, conversacion=conversacion,
+                tokens_entrada=tokens_e, tokens_salida=tokens_s,
+                tokens_total=tokens_e + tokens_s,
+                modelo=modelo or getattr(respuesta_llm, 'model', ''),
+                origen=origen, prompt_preview=(prompt_preview or '')[:300],
+            )
+            verificar_alerta_consumo(apikey_obj, tokens_e + tokens_s)
+    except Exception:
+        _logger.exception('Error registrando consumo de tokens')
+
 
 @login_required
 def chat_agente_view(request, agente_enc_id):
@@ -176,6 +206,8 @@ def chat_agente_view(request, agente_enc_id):
                         tokens_salida=resultado.tokens_salida,
                         tokens_total=resultado.tokens_total,
                         modelo=consultor.model_name,
+                        origen='chat_crm',
+                        prompt_preview=(pregunta or '')[:300],
                     )
                     verificar_alerta_consumo(apikey_obj, resultado.tokens_total)
                 except Exception:
@@ -334,6 +366,8 @@ def _analizar_imagen(tmp_path, filename, texto_adicional, apikey_obj, provider, 
                 tokens_entrada=tokens_e, tokens_salida=tokens_s,
                 tokens_total=tokens_e + tokens_s,
                 modelo=getattr(llm, 'model', 'multimodal'),
+                origen='imagen',
+                prompt_preview=(texto_adicional or 'Analisis de imagen')[:300],
             )
     except Exception:
         pass
@@ -343,7 +377,7 @@ def _analizar_imagen(tmp_path, filename, texto_adicional, apikey_obj, provider, 
 
 def _procesar_audio(tmp_path, filename, texto_adicional, apikey_obj, provider, agente, session_id):
     """Transcribe el audio y lo procesa con el agente RAG."""
-    transcripcion = _transcribir_audio(tmp_path, filename, apikey_obj, provider)
+    transcripcion = _transcribir_audio(tmp_path, filename, apikey_obj, provider, agente=agente)
 
     pregunta = transcripcion
     if texto_adicional:
@@ -386,6 +420,8 @@ def _procesar_audio(tmp_path, filename, texto_adicional, apikey_obj, provider, a
                 tokens_salida=resultado.tokens_salida,
                 tokens_total=resultado.tokens_total,
                 modelo=consultor.model_name,
+                origen='chat_crm',
+                prompt_preview=(pregunta or '')[:300],
             )
             verificar_alerta_consumo(apikey_obj, resultado.tokens_total)
         except Exception:
@@ -400,25 +436,21 @@ def _procesar_audio(tmp_path, filename, texto_adicional, apikey_obj, provider, a
     })
 
 
-def _transcribir_audio(tmp_path, filename, apikey_obj, provider) -> str:
-    """Transcribe audio con Whisper (OpenAI) o Gemini multimodal."""
-    if provider == 'openai':
-        import openai as openai_lib
-        client = openai_lib.OpenAI(api_key=apikey_obj.descripcion)
-        with open(tmp_path, 'rb') as f:
-            transcription = client.audio.transcriptions.create(model='whisper-1', file=f)
-        return transcription.text.strip()
-    else:
-        # Gemini multimodal — transcripción de audio
-        mime_type = mimetypes.guess_type(filename)[0] or 'audio/mpeg'
-        b64 = _leer_base64(tmp_path)
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        llm = ChatGoogleGenerativeAI(
-            model='gemini-2.0-flash', google_api_key=apikey_obj.descripcion
-        )
-        msg = HumanMessage(content=[
-            {"type": "text", "text": "Transcribe exactamente lo que dice este audio, en el idioma en que fue hablado. Solo devuelve la transcripción, sin comentarios adicionales."},
-            {"type": "media", "mime_type": mime_type, "data": b64},
-        ])
-        resp = llm.invoke([msg])
-        return resp.content.strip()
+def _transcribir_audio(tmp_path, filename, apikey_obj=None, provider=None, agente=None) -> str:
+    """Transcribe audio usando Whisper local (gratis, sin tokens).
+    Antes usaba Gemini multimodal / OpenAI Whisper API — reemplazado por
+    el mismo pipeline local que ya usa el webhook de WhatsApp."""
+    from whatsapp.transcribe_whatsapp_audio import convert_audio, transcribe_audio, extract_voiced_audio
+    wav_file = ''
+    voiced_wav = ''
+    try:
+        wav_file = convert_audio(tmp_path, tmp_path + '.wav')
+        voiced_wav = extract_voiced_audio(wav_file, tmp_path + '_voiced.wav')
+        return transcribe_audio(voiced_wav, model_size='base', lang='es')
+    finally:
+        for f in (wav_file, voiced_wav):
+            if f and os.path.exists(f):
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass

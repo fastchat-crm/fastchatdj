@@ -11,6 +11,8 @@ from .view_webhook_handler import webhook_handler
 from .webhook_batch_view import webhook_handler_batch
 from .heartbeat_view import heartbeat_receiver
 from .trace_receiver_view import trace_receiver
+from .meta_webhook_view import meta_webhook
+from .plantillas_view import plantillasView
 
 whatsapp_urls = (
     {
@@ -38,6 +40,11 @@ whatsapp_urls = (
         "url": 'trazas/',
         "vista": trazasView,
     },
+    {
+        "nombre": "Plantillas WhatsApp",
+        "url": 'plantillas/',
+        "vista": plantillasView,
+    },
 )
 
 urlpatterns = [
@@ -45,6 +52,7 @@ urlpatterns = [
     path('webhook_handler/batch/', webhook_handler_batch, name='whatsapp_webhook_handler_batch'),
     path('heartbeat/', heartbeat_receiver, name='whatsapp_heartbeat'),
     path('trace/', trace_receiver, name='whatsapp_trace_receiver'),
+    path('meta_webhook/', meta_webhook, name='whatsapp_meta_webhook'),
     path('sync-contacts/', sync_contacts_view, name='sync_contacts'),
     path('whatsapp/update-profile/', update_profile_view, name='update_profile'),
 ]

@@ -780,7 +780,7 @@ def procesar_mensaje_tradicional(session, conversation, contacto, texto) -> Resu
     """
     # Imports perezosos: evitan ciclos y desacoplan el módulo.
     from crm.models import EstadoFlujoChatbot
-    from whatsapp.services import WhatsAppService
+    from whatsapp.services import get_whatsapp_service
 
     if (session.modo_bot or 'ia') not in ('tradicional', 'hibrido'):
         return ResultadoFlujo(manejado=False)
@@ -796,7 +796,7 @@ def procesar_mensaje_tradicional(session, conversation, contacto, texto) -> Resu
         estado.reset()
         estado.save()
 
-    motor = MotorFlujo(session, conversation, contacto, texto, estado, WhatsAppService())
+    motor = MotorFlujo(session, conversation, contacto, texto, estado, get_whatsapp_service(session))
     try:
         motor.ejecutar()
     except Exception as e:

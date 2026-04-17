@@ -339,6 +339,12 @@ def entrenamiento_ia_view(request):
                         log(f"Importadas {creadas} FAQ(s) pendientes del auditor — agente {auditoria.agente}",
                             request, "add", obj=auditoria.agente.id)
                         res_json = {'error': False, 'creadas': creadas}
+                    elif action == 'regenerar_ws_token':
+                        filtro = ApiKeyIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
+                        filtro.regenerar_webservice_token()
+                        log(f"WebService token regenerado para API Key {filtro.pk}", request, "change", obj=filtro.pk)
+                        return JsonResponse({'error': False, 'token': filtro.webservice_token, 'message': 'Token regenerado.'})
+
                     elif action == 'testapikey':
                         filtro = ApiKeyIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
                         try:
@@ -664,6 +670,30 @@ def entrenamiento_ia_view(request):
                             prompt = PROMPT_IA_ASISTIDA.format(descripcion_usuario=frase)
                             msg = llm.invoke(prompt)
                             texto = (getattr(msg, 'content', '') or '').strip()
+                            # Registrar consumo de tokens
+                            try:
+                                _meta = getattr(msg, 'response_metadata', {}) or {}
+                                _usage = (
+                                    getattr(msg, 'usage_metadata', None)
+                                    or _meta.get('usage_metadata')
+                                    or _meta.get('token_usage')
+                                    or {}
+                                )
+                                _te = _usage.get('input_tokens') or _usage.get('prompt_token_count') or _usage.get('prompt_tokens') or 0
+                                _ts = _usage.get('output_tokens') or _usage.get('candidates_token_count') or _usage.get('completion_tokens') or 0
+                                if _te or _ts:
+                                    ConsumoTokenIA.objects.create(
+                                        apikey=apikey_obj, agente=agente,
+                                        tokens_entrada=_te, tokens_salida=_ts,
+                                        tokens_total=_te + _ts,
+                                        modelo=getattr(llm, 'model', 'herramienta-builder'),
+                                        origen='herramienta',
+                                        prompt_preview=(frase or '')[:300],
+                                    )
+                                    from crm.alertas_consumo import verificar_alerta_consumo
+                                    verificar_alerta_consumo(apikey_obj, _te + _ts)
+                            except Exception:
+                                pass
                             # Quitar posibles fences
                             if texto.startswith('```'):
                                 texto = texto.strip('`')

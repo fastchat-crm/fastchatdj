@@ -774,6 +774,11 @@ class ApiKeyIA(ModeloBase):
     msgerror = models.TextField(blank=True, null=True, verbose_name='Mensaje de error', editable=False)
     estado = models.BooleanField(default=True, verbose_name='Estado')
     alias = models.CharField(max_length=100, blank=True, null=True, verbose_name='Alias')
+    webservice_token = models.CharField(
+        max_length=64, blank=True, null=True, unique=True,
+        verbose_name='Token WebService',
+        help_text='Token para autenticar llamadas al endpoint /api/ia/consultar/. Se genera automaticamente.',
+    )
 
     class Meta:
         verbose_name = 'Api Keys IA'
@@ -782,6 +787,17 @@ class ApiKeyIA(ModeloBase):
     def __str__(self):
         base = f"[{self.get_proveedor_display()}]: {self.alias}"
         return f"{base} ({self.modelo})" if self.modelo else base
+
+    def save(self, *args, **kwargs):
+        if not self.webservice_token:
+            import secrets
+            self.webservice_token = secrets.token_urlsafe(48)
+        super().save(*args, **kwargs)
+
+    def regenerar_webservice_token(self):
+        import secrets
+        self.webservice_token = secrets.token_urlsafe(48)
+        self.save(update_fields=['webservice_token'])
 
 
 class ConsumoTokenIA(models.Model):
@@ -803,6 +819,27 @@ class ConsumoTokenIA(models.Model):
     tokens_salida = models.IntegerField(default=0, verbose_name='Tokens salida (respuesta)')
     tokens_total = models.IntegerField(default=0, verbose_name='Tokens total')
     modelo = models.CharField(max_length=100, blank=True, default='', verbose_name='Modelo')
+    origen = models.CharField(
+        max_length=30, blank=True, default='', db_index=True,
+        verbose_name='Origen',
+        choices=[
+            ('whatsapp',    'WhatsApp (mensaje entrante)'),
+            ('chat_crm',    'Chat de prueba CRM'),
+            ('webservice',  'WebService API externa'),
+            ('resumidor',   'Resumen de conversacion'),
+            ('sentimiento', 'Analisis de sentimiento'),
+            ('auditor',     'Auditoria de agente'),
+            ('plantilla',   'Generacion de plantilla'),
+            ('herramienta', 'Generacion de herramienta'),
+            ('imagen',      'Analisis de imagen'),
+            ('otro',        'Otro'),
+        ],
+    )
+    prompt_preview = models.CharField(
+        max_length=300, blank=True, default='',
+        verbose_name='Preview del prompt',
+        help_text='Primeros 300 chars del mensaje/pregunta enviada al LLM.',
+    )
 
     class Meta:
         verbose_name = 'Consumo de Tokens IA'
