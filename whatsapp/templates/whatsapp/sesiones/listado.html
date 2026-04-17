@@ -113,7 +113,7 @@
                 </li>
                 <li><hr class="dropdown-divider"></li>
                 <li>
-                    <a class="dropdown-item" href="?action=change&pk=0&proveedor=meta">
+                    <a class="dropdown-item" href="javascript:void(0);" onclick="crearSesionMeta()">
                         <i class="fab fa-facebook me-2 text-primary"></i>
                         <strong>Meta Cloud API</strong>
                         <div class="text-muted" style="font-size:.72rem;margin-left:1.7rem;">Conexión oficial (requiere verificación)</div>
@@ -259,7 +259,8 @@
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end shadow-sm">
                                     <li>
-                                        <a href="?action=change&pk={{ s.id }}" class="dropdown-item formmodal">
+                                        <a href="javascript:void(0);" class="dropdown-item"
+                                           onclick="formModal({{ s.id }}, 'Editar sesion: {{ s.nombre|default:s.numero|escapejs }}', 'change_modal')">
                                             <i class="fa-solid fa-pen-to-square me-2 text-success"></i>
                                             Modificar
                                         </a>
@@ -471,7 +472,7 @@
 
     {# ===== MODAL GENÉRICO (detalle formulario) ===== #}
     <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
             <div class="modal-content">
                 <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
                     {% csrf_token %}
@@ -491,6 +492,24 @@
     <script src="/static/js/reconnecting-websocket.min.js"></script>
     <script src="/static/js/forms.js?version=1"></script>
     <script>
+        function crearSesionMeta() {
+            pantallaespera();
+            $.post('{{ request.path }}', {
+                csrfmiddlewaretoken: '{{ csrf_token }}',
+                action: 'crear_sesion_meta'
+            }, function(r) {
+                setTimeout($.unblockUI, 1);
+                if (r && r.error === false && r.session_id) {
+                    formModal(r.session_id, 'Nueva sesion Meta Cloud API', 'change_modal');
+                } else {
+                    mensajeWarning((r && r.message) || 'Error creando sesion');
+                }
+            }).fail(function() {
+                setTimeout($.unblockUI, 1);
+                mensajeWarning('Error de conexion');
+            });
+        }
+
         function formModal(id, text, action) {
             pantallaespera();
             $.ajax({

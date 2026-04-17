@@ -362,6 +362,20 @@ def sesionesView(request):
                         'verified_name': data.get('verified_name'),
                     })
 
+                elif action == 'crear_sesion_meta':
+                    import uuid as _uuid
+                    session = SesionWhatsApp.objects.create(
+                        estado='pendiente', usuario=request.user,
+                        session_id=str(_uuid.uuid4()),
+                        proveedor='meta',
+                    )
+                    log(f"Sesion Meta creada (ID: {session.id})", request, "add", obj=session.id)
+                    return JsonResponse({
+                        'error': False,
+                        'session_id': session.id,
+                        'message': 'Sesion Meta creada. Completa la configuracion.',
+                    })
+
                 elif action == 'delete_force':
                     session_id = request.POST.get('id')
                     session = SesionWhatsApp.objects.filter(id=session_id).first()
@@ -386,19 +400,7 @@ def sesionesView(request):
     # ====================== LISTADO SESIONES =========================
     data['action'] = action = request.GET.get('action')
     if action == 'change':
-        pk = request.GET.get('pk', '0')
-        # Crear sesion Meta al vuelo si pk=0 y proveedor=meta
-        if pk == '0' and request.GET.get('proveedor') == 'meta':
-            import uuid
-            instance = SesionWhatsApp.objects.create(
-                estado='pendiente', usuario=request.user,
-                session_id=str(uuid.uuid4()),
-                proveedor='meta',
-            )
-            log(f"Sesion Meta creada (ID: {instance.id})", request, "add", obj=instance.id)
-            from django.shortcuts import redirect as _redirect
-            return _redirect(f'{request.path}?action=change&pk={instance.id}')
-        data['instance'] = instance = SesionWhatsApp.objects.get(id=pk)
+        data['instance'] = instance = SesionWhatsApp.objects.get(id=request.GET['pk'])
         data['form'] = form = SesionWhatsAppForm(instance=instance)
         form.fields['agente_ia'].queryset = AgentesIA.objects.filter(perfil=perfil, status=True)
         data['regla_fin'] = getattr(instance, 'regla_fin', None)
@@ -416,6 +418,9 @@ def sesionesView(request):
             data['regla_fin'] = getattr(instance, 'regla_fin', None)
             data['acciones_fin'] = data['regla_fin'].acciones.filter(status=True) if data['regla_fin'] else []
             data['tiene_plantilla_agente'] = bool(instance.agente_ia and getattr(instance.agente_ia, 'regla_fin', None))
+            data['config_meta'] = config_meta = getattr(instance, 'config_meta', None)
+            data['config_meta_form'] = ConfigMetaForm(instance=config_meta) if config_meta else ConfigMetaForm()
+            data['meta_webhook_url'] = request.build_absolute_uri(reverse('whatsapp_meta_webhook'))
             template = get_template("whatsapp/sesiones/form_modal.html")
             return JsonResponse({"result": True, 'data': template.render(data)})
         except Exception as ex:
