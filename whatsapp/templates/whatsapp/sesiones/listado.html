@@ -276,10 +276,41 @@
                                     {% endif %}
                                     {% if s.proveedor == 'meta' %}
                                         <li>
+                                            <a class="dropdown-item fw-bold"
+                                               href="javascript:void(0);"
+                                               onclick="verResumenMeta({{ s.id }}, '{{ s.nombre|default:s.numero|escapejs }}')">
+                                                <i class="fa-brands fa-meta me-2 text-warning"></i>
+                                                Resumen Meta + Pasos a seguir
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item"
+                                               href="javascript:void(0);"
+                                               onclick="validarNumeroMeta({{ s.id }})">
+                                                <i class="fa-solid fa-satellite-dish me-2 text-success"></i>
+                                                Validar número en Meta
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
                                             <a class="dropdown-item"
                                                href="/whatsapp/plantillas/?sesion={{ s.id }}">
                                                 <i class="fa-solid fa-file-lines me-2 text-primary"></i>
                                                 Ver plantillas
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item"
+                                               href="/whatsapp/campanas/?sesion={{ s.id }}">
+                                                <i class="fa-solid fa-bullhorn me-2 text-success"></i>
+                                                Ver campañas
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item"
+                                               href="/whatsapp/campanas/?sesion_id={{ s.id }}&action=add">
+                                                <i class="fa-solid fa-plus-circle me-2 text-success"></i>
+                                                Nueva campaña
                                             </a>
                                         </li>
                                         <li>
@@ -494,6 +525,104 @@
             </div>
         </div>
     </div>
+
+    {# ===== MODAL: RESUMEN META ===== #}
+    <div class="modal fade" id="modalResumenMeta" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-warning bg-opacity-10">
+                    <h5 class="modal-title"><i class="fa-brands fa-meta text-warning me-2"></i><span id="resumenMetaTitulo">Resumen Meta</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="resumenMetaBody">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-warning" role="status"></div>
+                        <div class="mt-3 text-muted">Cargando configuración...</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ===== MODAL: VALIDAR NÚMERO META ===== #}
+    <div class="modal fade" id="modalValidarMeta" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fa fa-satellite-dish text-success me-2"></i>Validación del número en Meta</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="validarMetaBody">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-success" role="status"></div>
+                        <div class="mt-3 text-muted">Consultando Meta Graph API...</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    async function verResumenMeta(sesionId, nombre){
+        document.getElementById('resumenMetaTitulo').textContent = nombre;
+        const body = document.getElementById('resumenMetaBody');
+        body.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-warning"></div><div class="mt-3 text-muted">Cargando configuración...</div></div>';
+        const modal = new bootstrap.Modal(document.getElementById('modalResumenMeta'));
+        modal.show();
+        try {
+            const r = await fetch('?action=resumen_meta&pk=' + sesionId);
+            const j = await r.json();
+            if (j.result) body.innerHTML = j.data;
+            else body.innerHTML = '<div class="alert alert-danger">' + (j.message || 'Error') + '</div>';
+        } catch (e) {
+            body.innerHTML = '<div class="alert alert-danger">Error: ' + e.message + '</div>';
+        }
+    }
+
+    async function validarNumeroMeta(sesionId){
+        const body = document.getElementById('validarMetaBody');
+        body.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-success"></div><div class="mt-3 text-muted">Consultando Meta Graph API...</div></div>';
+        const modal = new bootstrap.Modal(document.getElementById('modalValidarMeta'));
+        modal.show();
+        try {
+            const fd = new FormData();
+            fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+            fd.append('action', 'verificar_meta_conexion');
+            fd.append('id', sesionId);
+            const r = await fetch('', {method: 'POST', body: fd});
+            const j = await r.json();
+            if (j.error){
+                body.innerHTML = `
+                    <div class="alert alert-danger d-flex gap-2">
+                        <i class="fa fa-times-circle fa-2x"></i>
+                        <div><strong>No se pudo validar el número</strong><br>
+                        <small>${j.message || 'Error desconocido'}</small></div>
+                    </div>`;
+            } else {
+                body.innerHTML = `
+                    <div class="alert alert-success d-flex gap-2">
+                        <i class="fa fa-check-circle fa-2x"></i>
+                        <div><strong>Número validado correctamente en Meta</strong></div>
+                    </div>
+                    <table class="table table-sm">
+                        <tr><th>Número visible</th><td><code>${j.display_phone_number || '—'}</code></td></tr>
+                        <tr><th>Nombre verificado</th><td>${j.verified_name || '—'}</td></tr>
+                        <tr><th>Quality rating</th><td><span class="badge bg-success">${j.quality_rating || 'Desconocido'}</span></td></tr>
+                        <tr><th>Messaging tier</th><td>${j.messaging_limit_tier || '—'}</td></tr>
+                    </table>
+                    <small class="text-muted">${j.message || ''}</small>`;
+            }
+        } catch (e) {
+            body.innerHTML = '<div class="alert alert-danger">Error: ' + e.message + '</div>';
+        }
+    }
+    </script>
 {% endblock %}
 
 {% block jscript %}

@@ -501,6 +501,121 @@ def sesionesView(request):
         data['instance'] = instance = SesionWhatsApp.objects.get(id=request.GET['pk'])
         data['listado'] = instance.get_log_entries().filter(change_message__istartswith='HS: ')
         return render(request, 'whatsapp/sesiones/historial_de_sesiones.html', data)
+    if action == 'resumen_meta':
+        # Modal-resumen de configuración Meta: qué está configurado y qué falta
+        try:
+            instance = SesionWhatsApp.objects.get(id=request.GET['pk'], usuario=request.user)
+        except SesionWhatsApp.DoesNotExist:
+            return JsonResponse({'result': False, 'message': 'Sesión no encontrada'})
+        if instance.proveedor != 'meta':
+            return JsonResponse({'result': False, 'message': 'Esta vista solo aplica a sesiones Meta.'})
+
+        cfg = getattr(instance, 'config_meta', None)
+        checks = []
+        # 1. Credenciales Meta
+        checks.append({
+            'nombre': 'Credenciales Meta Cloud API',
+            'ok':     bool(cfg and cfg.waba_id and cfg.phone_number_id and cfg.access_token),
+            'detalle': (
+                f'WABA: {cfg.waba_id} · Phone: {cfg.display_phone_number or cfg.phone_number_id}'
+                if cfg and cfg.waba_id else 'Sin WABA/Phone Number ID/Access Token configurados.'
+            ),
+            'accion_url': f'/whatsapp/sesiones/?action=change_modal&pk={instance.id}',
+            'accion_label': 'Configurar credenciales',
+        })
+        # 2. Webhook verificado
+        checks.append({
+            'nombre': 'Webhook Meta verificado',
+            'ok':     bool(cfg and cfg.webhook_verificado_en),
+            'detalle': (
+                f'Verificado el {cfg.webhook_verificado_en:%Y-%m-%d %H:%M}'
+                if cfg and cfg.webhook_verificado_en
+                else 'El callback en Meta Developer Portal aún no validó el verify_token.'
+            ),
+            'accion_url': 'https://developers.facebook.com/apps',
+            'accion_label': 'Abrir Meta Developer',
+        })
+        # 3. App secret (firma HMAC)
+        checks.append({
+            'nombre': 'App Secret configurado (firma HMAC)',
+            'ok':     bool(cfg and cfg.app_secret),
+            'detalle': 'Valida la autenticidad de cada webhook entrante.' if cfg and cfg.app_secret else 'Sin app_secret: los webhooks se aceptan sin validación HMAC.',
+            'accion_url': f'/whatsapp/sesiones/?action=change_modal&pk={instance.id}',
+            'accion_label': 'Editar sesión',
+        })
+        # 4. Quality rating
+        checks.append({
+            'nombre': 'Quality rating',
+            'ok':     bool(cfg and cfg.quality_rating in ('GREEN', 'YELLOW')),
+            'detalle': f'Meta reporta: {cfg.get_quality_rating_display() if cfg else "Desconocida"}',
+            'accion_url': None,
+            'accion_label': None,
+        })
+        # 5. Agente IA
+        checks.append({
+            'nombre': 'Agente IA asignado',
+            'ok':     bool(instance.agente_ia),
+            'detalle': f'Agente: {instance.agente_ia.nombre}' if instance.agente_ia else 'Sin agente IA: las conversaciones no se responden automáticamente.',
+            'accion_url': f'/whatsapp/sesiones/?action=change_modal&pk={instance.id}',
+            'accion_label': 'Asignar agente',
+        })
+        # 6. Plantillas aprobadas
+        from .models import PlantillaWhatsApp
+        plantillas_ok = PlantillaWhatsApp.objects.filter(
+            config_meta=cfg, estado_meta='APPROVED', status=True,
+        ).count() if cfg else 0
+        checks.append({
+            'nombre': 'Plantillas aprobadas por Meta',
+            'ok':     plantillas_ok > 0,
+            'detalle': f'{plantillas_ok} plantilla(s) aprobadas.' if plantillas_ok else 'Sin plantillas aprobadas: no podrás iniciar conversaciones fuera de la ventana de 24h.',
+            'accion_url': f'/whatsapp/plantillas/?sesion={instance.id}',
+            'accion_label': 'Gestionar plantillas',
+        })
+        # 7. Horarios de atención
+        horarios_n = instance.horarios.filter(status=True, activo=True).count()
+        checks.append({
+            'nombre': 'Horarios de atención',
+            'ok':     horarios_n > 0,
+            'detalle': f'{horarios_n} franja(s) horaria(s) activa(s).' if horarios_n else 'Sin horarios: la sesión responde 24/7.',
+            'accion_url': f'/whatsapp/horarios/?sesion={instance.id}',
+            'accion_label': 'Configurar horarios',
+        })
+        # 8. Pixel Meta / CAPI
+        checks.append({
+            'nombre': 'Pixel Meta (CAPI) para atribución Ads',
+            'ok':     bool(instance.pixel_meta_id),
+            'detalle': f'Pixel: {instance.pixel_meta.nombre}' if instance.pixel_meta_id else 'Sin pixel vinculado: no se reportarán conversiones a Meta Ads.',
+            'accion_url': '/admin/whatsapp/pixelmeta/',
+            'accion_label': 'Crear/vincular pixel',
+        })
+        # 9. Campañas
+        campanas_n = instance.campanas.filter(status=True).count()
+        checks.append({
+            'nombre': 'Campañas creadas',
+            'ok':     campanas_n > 0,
+            'detalle': f'{campanas_n} campaña(s) creada(s) en esta sesión.' if campanas_n else 'Aún no has creado campañas para esta sesión.',
+            'accion_url': f'/whatsapp/campanas/?sesion={instance.id}',
+            'accion_label': 'Ver campañas',
+        })
+        # 10. Round-robin
+        checks.append({
+            'nombre': 'Asignación automática (round-robin)',
+            'ok':     bool(instance.auto_asignar_round_robin),
+            'detalle': 'Activado: nuevas conversaciones se asignan a agentes disponibles.' if instance.auto_asignar_round_robin else 'Desactivado: las conversaciones requieren asignación manual.',
+            'accion_url': f'/whatsapp/sesiones/?action=change_modal&pk={instance.id}',
+            'accion_label': 'Activar',
+        })
+
+        total_ok = sum(1 for c in checks if c['ok'])
+        data['sesion'] = instance
+        data['config_meta'] = cfg
+        data['checks'] = checks
+        data['total_ok'] = total_ok
+        data['total_checks'] = len(checks)
+        data['completitud_pct'] = int(100 * total_ok / len(checks))
+        data['webhook_url'] = request.build_absolute_uri(reverse('whatsapp_meta_webhook'))
+        template = get_template("whatsapp/sesiones/resumen_meta.html")
+        return JsonResponse({"result": True, 'data': template.render(data)})
     criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, usuario_id=request.user.id), ''
     estado = request.GET.get('estado', '')
     if criterio:

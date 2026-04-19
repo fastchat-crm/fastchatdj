@@ -6,261 +6,317 @@
 
 {% block content %}
 <div class="container-fluid p-0 horarios-page">
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+
+    {# ===== EXPLICACIÓN DEL MÓDULO ===== #}
+    <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
+        <i class="fa fa-clock fa-2x"></i>
         <div>
-            <h4 class="mb-0"><i class="fa fa-clock me-2 text-primary"></i>Horarios de atención</h4>
-            <small class="text-muted">{{ descripcion }}</small>
+            <strong>¿Para qué sirve este módulo?</strong><br>
+            <small>
+                Configura los <strong>horarios de atención</strong> de cada sesión de WhatsApp/Instagram/Messenger.
+                Cuando un cliente escribe <strong>fuera de estos horarios</strong>, el sistema responde automáticamente
+                con el mensaje que definas y evita enrutar la conversación a agentes humanos. También puedes agregar
+                <strong>excepciones</strong> (feriados, días especiales) que sobrescriben el horario semanal regular.
+            </small>
         </div>
-        <form method="GET" class="d-flex gap-2">
-            <input type="text" name="q" value="{{ q_negocio }}" class="form-control form-control-sm"
-                   placeholder="Buscar por negocio, sesión o número..." style="min-width:260px">
-            {% if sesion_actual %}<input type="hidden" name="sesion" value="{{ sesion_actual.id }}">{% endif %}
-            <button class="btn btn-sm btn-outline-primary"><i class="fa fa-search"></i></button>
-            {% if q_negocio %}<a href="{{ ruta }}" class="btn btn-sm btn-outline-secondary"><i class="fa fa-times"></i></a>{% endif %}
-        </form>
     </div>
 
-    <div class="row g-3">
-        <div class="col-lg-3">
-            <div class="card h-100">
-                <div class="card-header py-2 d-flex justify-content-between align-items-center">
-                    <strong><i class="fa fa-list me-1 text-muted"></i>Sesiones</strong>
-                    <span class="badge bg-secondary">{{ sesiones|length }}</span>
-                </div>
-                <div class="list-group list-group-flush sesion-list">
-                    {% for s in sesiones %}
-                        <a href="?sesion={{ s.id }}{% if q_negocio %}&q={{ q_negocio }}{% endif %}"
-                           class="list-group-item list-group-item-action {% if sesion_actual.id == s.id %}active{% endif %}">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div class="text-truncate me-2">
-                                    <div class="fw-medium text-truncate">{{ s.nombre|default:s.numero }}</div>
-                                    <div class="small text-muted text-truncate">
-                                        {% if s.usuario.perfil_ia.nombre_empresa %}
-                                            <i class="fa fa-briefcase me-1"></i>{{ s.usuario.perfil_ia.nombre_empresa }}
-                                        {% else %}
-                                            <i class="fa fa-phone me-1"></i>{{ s.numero }}
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                <span class="badge bg-{% if s.proveedor == 'meta' %}warning{% else %}info{% endif %}">
-                                    {{ s.get_proveedor_display }}
-                                </span>
-                            </div>
-                        </a>
-                    {% empty %}
-                        <div class="text-center p-3 text-muted small">Sin sesiones</div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-9">
-            {% if sesion_actual %}
-            {% csrf_token %}
-            <div class="card mb-3 border-primary">
-                <div class="card-body py-2">
-                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                        <div>
-                            <h5 class="mb-0">{{ sesion_actual.nombre|default:sesion_actual.numero }}
-                                <span class="badge bg-{% if sesion_actual.proveedor == 'meta' %}warning{% else %}info{% endif %} ms-1">
-                                    {{ sesion_actual.get_proveedor_display }}
-                                </span>
-                            </h5>
-                            <small class="text-muted">
-                                <i class="fa fa-briefcase me-1"></i>{{ negocio|default:"Sin negocio asignado" }}
-                                · <i class="fa fa-phone ms-2 me-1"></i>{{ sesion_actual.numero }}
-                            </small>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalDuplicar">
-                                <i class="fa fa-copy me-1"></i>Usar como plantilla
-                            </button>
-                            {% if sesion_actual.es_meta %}
-                                <button class="btn btn-sm btn-warning" onclick="enviarMeta({{ sesion_actual.id }})">
-                                    <i class="fa-brands fa-meta me-1"></i>Enviar a Meta
-                                </button>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row g-3">
-                <div class="col-md-12">
-                    <div class="card">
-                        <div class="card-header py-2"><strong>Mensaje fuera de horario</strong></div>
-                        <div class="card-body">
-                            <textarea id="msgFH" class="form-control mb-2" rows="2"
-                                placeholder="Ej: Nuestro horario es Lun-Vie 9:00-18:00. Te responderemos al volver.">{{ sesion_actual.mensaje_fuera_horario|default:"" }}</textarea>
-                            <div class="row g-2 align-items-end">
-                                <div class="col-md-5">
-                                    <label class="form-label small mb-1">Zona horaria</label>
-                                    <input id="tzFH" class="form-control form-control-sm"
-                                           value="{{ sesion_actual.zona_horaria|default:'America/Guayaquil' }}">
-                                </div>
-                                <div class="col-md-3">
-                                    <button class="btn btn-sm btn-primary w-100" onclick="guardarMsgFH({{ sesion_actual.id }})">
-                                        <i class="fa fa-save me-1"></i>Guardar
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-md-7">
-                    <div class="card h-100">
-                        <div class="card-header py-2 d-flex justify-content-between align-items-center">
-                            <strong><i class="fa fa-calendar-week me-1"></i>Horarios semanales</strong>
-                            <span class="badge bg-primary">{{ horarios|length }}</span>
-                        </div>
-                        <div class="card-body p-0">
-                            <table class="table table-sm table-hover mb-0">
-                                <thead class="table-light">
-                                    <tr><th>Día</th><th>Desde</th><th>Hasta</th><th></th></tr>
-                                </thead>
-                                <tbody>
-                                {% for h in horarios %}
-                                    <tr>
-                                        <td>{{ h.get_dia_semana_display }}</td>
-                                        <td>{{ h.hora_inicio }}</td>
-                                        <td>{{ h.hora_fin }}</td>
-                                        <td class="text-end">
-                                            <button class="btn btn-sm btn-outline-danger py-0" onclick="delHorario({{ h.id }})">
-                                                <i class="fa fa-trash"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                {% empty %}
-                                    <tr><td colspan="4" class="text-center text-muted py-3">
-                                        Sin horarios. Por defecto abierto 24/7.
-                                    </td></tr>
-                                {% endfor %}
-                                </tbody>
-                            </table>
-                            <form onsubmit="addHorario(event)" class="row g-2 p-2 bg-light m-0 border-top">
-                                <div class="col-md-3">
-                                    <select name="dia_semana" class="form-select form-select-sm">
-                                        {% for code,name in dias_semana %}<option value="{{ code }}">{{ name }}</option>{% endfor %}
-                                    </select>
-                                </div>
-                                <div class="col-md-3"><input name="hora_inicio" type="time" class="form-control form-control-sm" required></div>
-                                <div class="col-md-3"><input name="hora_fin" type="time" class="form-control form-control-sm" required></div>
-                                <div class="col-md-3"><button class="btn btn-sm btn-success w-100"><i class="fa fa-plus"></i></button></div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-
+    {# ===== SELECTOR DE SESIÓN (combo, no sidebar) ===== #}
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="GET" class="row g-2 align-items-end mb-0">
                 <div class="col-md-5">
-                    <div class="card h-100">
-                        <div class="card-header py-2 d-flex justify-content-between align-items-center">
-                            <strong><i class="fa fa-calendar-xmark me-1"></i>Excepciones / feriados</strong>
-                            <span class="badge bg-secondary">{{ excepciones|length }}</span>
-                        </div>
-                        <div class="card-body p-0">
-                            <table class="table table-sm table-hover mb-0">
-                                <thead class="table-light">
-                                    <tr><th>Fecha</th><th>Abierto</th><th>Motivo</th><th></th></tr>
-                                </thead>
-                                <tbody>
-                                {% for e in excepciones %}
-                                    <tr>
-                                        <td>{{ e.fecha|date:"d/m/Y" }}</td>
-                                        <td>{% if e.abierto %}<span class="badge bg-success">Sí</span>{% else %}<span class="badge bg-danger">No</span>{% endif %}</td>
-                                        <td class="small">{{ e.motivo|truncatechars:25 }}</td>
-                                        <td class="text-end">
-                                            <button class="btn btn-sm btn-outline-danger py-0" onclick="delExcepcion({{ e.id }})">
-                                                <i class="fa fa-trash"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                {% empty %}
-                                    <tr><td colspan="4" class="text-center text-muted py-3">Sin excepciones</td></tr>
-                                {% endfor %}
-                                </tbody>
-                            </table>
-                            <form onsubmit="addExcepcion(event)" class="row g-2 p-2 bg-light m-0 border-top">
-                                <div class="col-md-5"><input name="fecha" type="date" class="form-control form-control-sm" required></div>
-                                <div class="col-md-4"><select name="abierto" class="form-select form-select-sm">
-                                    <option value="false">Cerrado</option>
-                                    <option value="true">Abierto</option>
-                                </select></div>
-                                <div class="col-md-12"><input name="motivo" class="form-control form-control-sm" placeholder="Motivo (opcional)"></div>
-                                <div class="col-md-12"><button class="btn btn-sm btn-success w-100"><i class="fa fa-plus me-1"></i>Agregar</button></div>
-                            </form>
-                        </div>
-                    </div>
+                    <label class="form-label small mb-1">
+                        <i class="fa fa-search me-1 text-muted"></i> Buscar negocio o sesión
+                    </label>
+                    <input type="text" name="q" value="{{ q_negocio }}" class="form-control"
+                           placeholder="Nombre del negocio, nombre de sesión o número...">
                 </div>
-            </div>
-            {% else %}
-                <div class="card"><div class="card-body text-center text-muted py-5">
-                    <i class="fa fa-clock fa-3x mb-3 d-block"></i>
-                    Selecciona una sesión de la lista para configurar sus horarios.
-                </div></div>
-            {% endif %}
+                <div class="col-md-5">
+                    <label class="form-label small mb-1">
+                        <i class="fa fa-list me-1 text-muted"></i> Sesión a configurar
+                    </label>
+                    <select name="sesion" class="form-select select2" onchange="this.form.submit()">
+                        <option value="">— Selecciona una sesión —</option>
+                        {% for s in sesiones %}
+                            <option value="{{ s.id }}" {% if sesion_actual.id == s.id %}selected{% endif %}>
+                                {{ s.nombre|default:s.numero }}
+                                {% if s.usuario.perfil_ia.nombre_empresa %} — {{ s.usuario.perfil_ia.nombre_empresa }}{% endif %}
+                                ({{ s.get_proveedor_display }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100">
+                        <i class="fa fa-filter"></i> Aplicar
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
     {% if sesion_actual %}
-    <div class="modal fade" id="modalDuplicar" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="fa fa-copy me-2"></i>Aplicar estos horarios a otra sesión</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    {% csrf_token %}
+
+    {# ===== HEADER SESIÓN ACTUAL ===== #}
+    <div class="card mb-3 border-primary">
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h5 class="mb-0">
+                        {{ sesion_actual.nombre|default:sesion_actual.numero }}
+                        <span class="badge bg-{% if sesion_actual.proveedor == 'meta' %}warning{% else %}info{% endif %} ms-1">
+                            {{ sesion_actual.get_proveedor_display }}
+                        </span>
+                    </h5>
+                    <small class="text-muted">
+                        <i class="fa fa-briefcase me-1"></i>{{ negocio|default:"Sin negocio asignado" }}
+                        <i class="fa fa-phone ms-2 me-1"></i>{{ sesion_actual.numero }}
+                    </small>
                 </div>
-                <div class="modal-body">
-                    <p class="text-muted small">
-                        Copia los horarios semanales, mensaje fuera de horario y zona horaria de
-                        <strong>{{ sesion_actual.nombre|default:sesion_actual.numero }}</strong>
-                        hacia la sesión destino. Los horarios actuales de la sesión destino serán reemplazados.
-                    </p>
-                    <label class="form-label">Sesión destino</label>
-                    <select id="destinoSel" class="form-select">
-                        {% for s in todas_sesiones %}
-                            <option value="{{ s.id }}">
-                                {{ s.nombre|default:s.numero }}
-                                {% if s.usuario.perfil_ia.nombre_empresa %}· {{ s.usuario.perfil_ia.nombre_empresa }}{% endif %}
-                            </option>
-                        {% empty %}
-                            <option disabled>No hay otras sesiones</option>
-                        {% endfor %}
-                    </select>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalDuplicar">
+                        <i class="fa fa-copy me-1"></i> Usar como plantilla
+                    </button>
+                    {% if sesion_actual.es_meta %}
+                        <button class="btn btn-sm btn-warning" onclick="enviarMeta({{ sesion_actual.id }})">
+                            <i class="fa-brands fa-meta me-1"></i> Enviar a Meta
+                        </button>
+                    {% endif %}
                 </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button class="btn btn-primary" onclick="duplicarHorarios({{ sesion_actual.id }})">
-                        <i class="fa fa-copy me-1"></i>Aplicar
+            </div>
+        </div>
+    </div>
+
+    {# ===== MENSAJE FUERA DE HORARIO ===== #}
+    <div class="card mb-3">
+        <div class="card-header py-2">
+            <strong><i class="fa fa-comment-dots text-primary me-1"></i>Mensaje fuera de horario</strong>
+            <small class="text-muted ms-2">Se envía automáticamente cuando un cliente escribe fuera del horario configurado</small>
+        </div>
+        <div class="card-body">
+            <textarea id="msgFH" class="form-control mb-2" rows="2"
+                placeholder="Ej: Nuestro horario es Lun-Vie 9:00-18:00. Te responderemos al volver.">{{ sesion_actual.mensaje_fuera_horario|default:"" }}</textarea>
+            <div class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label small mb-1">Zona horaria</label>
+                    <input id="tzFH" class="form-control form-control-sm"
+                           value="{{ sesion_actual.zona_horaria|default:'America/Guayaquil' }}">
+                    <small class="text-muted">Ej: America/Guayaquil, America/Bogota, America/Mexico_City, UTC</small>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-sm btn-primary w-100" onclick="guardarMsgFH({{ sesion_actual.id }})">
+                        <i class="fa fa-save me-1"></i> Guardar
                     </button>
                 </div>
             </div>
         </div>
     </div>
+
+    <div class="row g-3">
+        {# ===== HORARIOS SEMANALES ===== #}
+        <div class="col-md-7">
+            <div class="card h-100">
+                <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                    <strong><i class="fa fa-calendar-week text-primary me-1"></i>Horarios semanales</strong>
+                    <span class="badge bg-primary">{{ horarios|length }}</span>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>Día</th><th>Desde</th><th>Hasta</th><th class="text-end pe-3">Acciones</th></tr>
+                        </thead>
+                        <tbody>
+                        {% for h in horarios %}
+                            <tr>
+                                <td>{{ h.get_dia_semana_display }}</td>
+                                <td>{{ h.hora_inicio }}</td>
+                                <td>{{ h.hora_fin }}</td>
+                                <td class="text-end pe-3">
+                                    <button class="btn btn-sm btn-outline-danger py-0" onclick="delHorario({{ h.id }})">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="4" class="text-muted text-center py-3">
+                                Sin horarios configurados. Por defecto la sesión se considera <strong>abierta 24/7</strong>.
+                            </td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-footer bg-white">
+                    <form id="formHorario" class="row g-2 align-items-end" onsubmit="addHorario(event)">
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">Día</label>
+                            <select name="dia_semana" class="form-select form-select-sm">
+                                {% for code,name in dias_semana %}<option value="{{ code }}">{{ name }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small mb-1">Desde</label>
+                            <input name="hora_inicio" type="time" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small mb-1">Hasta</label>
+                            <input name="hora_fin" type="time" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-sm btn-success w-100">
+                                <i class="fa fa-plus"></i> Agregar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        {# ===== EXCEPCIONES (FERIADOS) ===== #}
+        <div class="col-md-5">
+            <div class="card h-100">
+                <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                    <strong><i class="fa fa-calendar-day text-warning me-1"></i>Excepciones (feriados o días especiales)</strong>
+                    <span class="badge bg-warning text-dark">{{ excepciones|length }}</span>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>Fecha</th><th>Abierto</th><th>Motivo</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                        {% for e in excepciones %}
+                            <tr>
+                                <td>{{ e.fecha|date:"d/m/Y" }}</td>
+                                <td>
+                                    {% if e.abierto %}<span class="badge bg-success">Sí</span>
+                                    {% else %}<span class="badge bg-danger">No</span>{% endif %}
+                                </td>
+                                <td><small>{{ e.motivo|default:"—" }}</small></td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-danger py-0" onclick="delExcepcion({{ e.id }})">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="4" class="text-muted text-center py-3">Sin excepciones</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-footer bg-white">
+                    <form id="formExcepcion" class="row g-2 align-items-end" onsubmit="addExcepcion(event)">
+                        <div class="col-md-5">
+                            <label class="form-label small mb-1">Fecha</label>
+                            <input name="fecha" type="date" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small mb-1">¿Abierto?</label>
+                            <select name="abierto" class="form-select form-select-sm">
+                                <option value="false">No</option>
+                                <option value="true">Sí</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">Motivo</label>
+                            <input name="motivo" class="form-control form-control-sm" placeholder="Feriado, etc.">
+                        </div>
+                        <div class="col-12">
+                            <button class="btn btn-sm btn-success w-100">
+                                <i class="fa fa-plus"></i> Agregar excepción
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ===== MODAL DUPLICAR ===== #}
+    <div class="modal fade" id="modalDuplicar" tabindex="-1">
+        <div class="modal-dialog">
+            <form class="modal-content" onsubmit="duplicarHorarios(event)">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fa fa-copy me-2"></i>Usar estos horarios como plantilla</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted">
+                        Copia los horarios de <strong>{{ sesion_actual.nombre|default:sesion_actual.numero }}</strong>
+                        a otra sesión (reemplaza los horarios existentes).
+                    </p>
+                    <label class="form-label">Sesión destino</label>
+                    <select name="destino_id" class="form-select" required>
+                        <option value="">Selecciona una sesión...</option>
+                        {% for s in todas_sesiones %}
+                            <option value="{{ s.id }}">{{ s.nombre|default:s.numero }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Duplicar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% else %}
+        <div class="alert alert-warning text-center py-4">
+            <i class="fa fa-hand-point-up fa-2x mb-2 d-block"></i>
+            <strong>Selecciona una sesión arriba para configurar sus horarios.</strong>
+        </div>
     {% endif %}
 </div>
 
+{# ===== LOADING OVERLAY (se muestra durante async) ===== #}
+<div id="loadingOverlay" class="loading-overlay" style="display:none;">
+    <div class="loading-box">
+        <div class="spinner-border text-primary" role="status" style="width:3rem;height:3rem;"></div>
+        <div class="mt-3 text-primary fw-bold" id="loadingMsg">Procesando...</div>
+    </div>
+</div>
+
 <script>
-const CSRF_H = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+const CSRF = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
 const SID = {{ sesion_actual.id|default:"null" }};
 
-async function post(action, extras){
-    const fd = new FormData();
-    fd.append('csrfmiddlewaretoken', CSRF_H);
-    fd.append('action', action);
-    for (const k in extras) fd.append(k, extras[k]);
-    const r = await fetch('', {method:'POST', body: fd});
-    return r.json();
+// ----- Loading overlay helpers -----
+function showLoading(msg){
+    document.getElementById('loadingMsg').textContent = msg || 'Procesando...';
+    document.getElementById('loadingOverlay').style.display = 'flex';
 }
+function hideLoading(){
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+async function post(action, extras, msgLoading){
+    showLoading(msgLoading || 'Procesando...');
+    try {
+        const fd = new FormData();
+        fd.append('csrfmiddlewaretoken', CSRF);
+        fd.append('action', action);
+        for (const k in extras) fd.append(k, extras[k]);
+        const r = await fetch('', {method:'POST', body: fd});
+        const j = await r.json();
+        return j;
+    } finally {
+        hideLoading();
+    }
+}
+
+// ----- Acciones -----
 async function guardarMsgFH(sid){
     const j = await post('guardar_mensaje_fuera_horario', {
         sesion_id: sid,
         mensaje: document.getElementById('msgFH').value,
         zona_horaria: document.getElementById('tzFH').value,
-    });
-    if (typeof Swal !== 'undefined') Swal.fire(j.error?'Error':'Guardado', j.message||'', j.error?'error':'success');
-    else alert(j.error? j.message : 'Guardado');
+    }, 'Guardando mensaje...');
+    if(j.error) alert(j.message || 'Error'); else toast('Mensaje guardado correctamente');
 }
+
 async function addHorario(ev){
     ev.preventDefault(); const f = ev.target;
     const j = await post('add_horario', {
@@ -268,40 +324,54 @@ async function addHorario(ev){
         dia_semana: f.dia_semana.value,
         hora_inicio: f.hora_inicio.value,
         hora_fin: f.hora_fin.value,
-    });
-    if (!j.error) location.reload(); else alert(j.message);
+    }, 'Agregando horario...');
+    if(!j.error) location.reload(); else alert(j.message);
 }
+
 async function delHorario(id){
-    if (!confirm('¿Eliminar este horario?')) return;
-    const j = await post('delete_horario', {id});
-    if (!j.error) location.reload();
+    if(!confirm('¿Eliminar este horario?')) return;
+    const j = await post('delete_horario', {id}, 'Eliminando horario...');
+    if(!j.error) location.reload(); else alert(j.message);
 }
+
 async function addExcepcion(ev){
     ev.preventDefault(); const f = ev.target;
     const j = await post('add_excepcion', {
-        sesion_id: SID, fecha: f.fecha.value,
-        abierto: f.abierto.value, motivo: f.motivo.value,
-    });
-    if (!j.error) location.reload(); else alert(j.message);
+        sesion_id: SID,
+        fecha: f.fecha.value,
+        abierto: f.abierto.value,
+        motivo: f.motivo.value,
+    }, 'Agregando excepción...');
+    if(!j.error) location.reload(); else alert(j.message);
 }
+
 async function delExcepcion(id){
-    if (!confirm('¿Eliminar esta excepción?')) return;
-    const j = await post('delete_excepcion', {id});
-    if (!j.error) location.reload();
+    if(!confirm('¿Eliminar esta excepción?')) return;
+    const j = await post('delete_excepcion', {id}, 'Eliminando excepción...');
+    if(!j.error) location.reload(); else alert(j.message);
 }
-async function duplicarHorarios(origenId){
-    const destino = document.getElementById('destinoSel').value;
-    if (!destino) return;
-    const j = await post('duplicar', {origen_id: origenId, destino_id: destino});
-    if (typeof Swal !== 'undefined') Swal.fire(j.error?'Error':'Listo', j.message||'', j.error?'error':'success');
-    else alert(j.message || 'OK');
-    if (!j.error) bootstrap.Modal.getInstance(document.getElementById('modalDuplicar')).hide();
+
+async function duplicarHorarios(ev){
+    ev.preventDefault();
+    const destino = ev.target.destino_id.value;
+    const j = await post('duplicar', {origen_id: SID, destino_id: destino}, 'Duplicando horarios...');
+    if(!j.error){ alert(j.message); location.href='?sesion='+destino; }
+    else alert(j.message);
 }
+
 async function enviarMeta(sid){
-    if (!confirm('¿Enviar la configuración de horarios a Meta?')) return;
-    const j = await post('enviar_meta', {sesion_id: sid});
-    if (typeof Swal !== 'undefined') Swal.fire(j.error?'Error':'Meta', j.message||'', j.error?'error':'success');
-    else alert(j.message || 'OK');
+    const j = await post('enviar_meta', {sesion_id: sid}, 'Enviando configuración a Meta...');
+    alert(j.error ? j.message : j.message);
+}
+
+// ----- Toast simple -----
+function toast(msg){
+    const t = document.createElement('div');
+    t.className = 'fc-toast';
+    t.innerHTML = '<i class="fa fa-check-circle text-success me-2"></i>' + msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.classList.add('fc-toast-show'), 10);
+    setTimeout(() => { t.classList.remove('fc-toast-show'); setTimeout(() => t.remove(), 300); }, 2500);
 }
 </script>
 {% endblock %}

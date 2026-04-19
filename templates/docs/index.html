@@ -179,15 +179,35 @@
             border-color: #243040;
         }
 
+        .docs-table {
+            --bs-table-bg: transparent;
+            --bs-table-color: #d8e4ef;
+            --bs-table-striped-bg: rgba(255, 255, 255, .03);
+            --bs-table-striped-color: #d8e4ef;
+            --bs-table-hover-bg: rgba(37, 211, 102, .06);
+            --bs-table-hover-color: #ffffff;
+            color: #d8e4ef;
+            background: transparent;
+        }
+
         .docs-table td {
+            background: transparent !important;
+            color: #d8e4ef;
             border-color: #243040;
-            color: #000000;
             font-size: .9rem;
             vertical-align: top;
         }
 
+        .docs-table td strong {
+            color: #ffffff;
+        }
+
+        .docs-table td code {
+            color: #7dd3a8;
+        }
+
         .docs-table tr:hover td {
-            {#background: rgba(255, 255, 255, .03);#}
+            background: rgba(37, 211, 102, .06) !important;
         }
 
         code {

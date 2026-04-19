@@ -1,36 +1,56 @@
-.horarios-page .sesion-list {
-    max-height: 70vh;
-    overflow-y: auto;
+.horarios-page .card { border-radius: 8px; }
+.horarios-page .card-header {
+    font-size: 0.95rem;
+    background: #f8fafc;
 }
-
-.horarios-page .sesion-list .list-group-item {
-    border-left: 3px solid transparent;
-    transition: border-color .15s, background .15s;
-}
-
-.horarios-page .sesion-list .list-group-item.active {
-    background: #e7f1ff;
-    color: inherit;
-    border-color: #0d6efd;
-    font-weight: 500;
-}
-
-.horarios-page .sesion-list .list-group-item:hover:not(.active) {
-    border-color: #adb5bd;
-    background: #f8f9fa;
-}
-
 .horarios-page .card-header strong {
     font-size: .875rem;
     letter-spacing: .3px;
 }
-
 .horarios-page .table-sm td,
 .horarios-page .table-sm th {
     padding: .4rem .6rem;
     vertical-align: middle;
 }
+.horarios-page .badge.bg-warning { color: #212529; }
 
-.horarios-page .badge.bg-warning {
-    color: #212529;
+/* Loading overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(3px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.loading-box {
+    background: white;
+    padding: 30px 45px;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+    text-align: center;
+    min-width: 220px;
+}
+
+/* Toast */
+.fc-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: white;
+    border-left: 4px solid #10b981;
+    padding: 12px 20px;
+    border-radius: 6px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+    z-index: 10000;
+    opacity: 0;
+    transform: translateX(30px);
+    transition: all 0.3s ease;
+    font-size: 0.95rem;
+}
+.fc-toast.fc-toast-show {
+    opacity: 1;
+    transform: translateX(0);
 }

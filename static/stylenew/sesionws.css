@@ -462,3 +462,49 @@
     white-space: pre-wrap;
     word-break: break-word;
 }
+
+/* ========== FIX: SCROLL DEL MODAL DE EDICIÓN DE SESIÓN ==========
+   El modal tiene modal-dialog-scrollable (bootstrap scrollea el .modal-body),
+   pero cuando la sesión es Meta y muestra la ConfigMeta, algún contenedor
+   interno no deja al modal-body crecer. Este bloque fuerza el layout correcto. */
+#modalDetalle.modal {
+    overflow-y: auto;
+}
+#modalDetalle .modal-dialog.modal-dialog-scrollable {
+    max-height: calc(100vh - 3.5rem);
+    height: calc(100vh - 3.5rem);
+}
+#modalDetalle .modal-content {
+    max-height: calc(100vh - 3.5rem);
+    overflow: hidden;
+}
+#modalDetalle .modal-body.detalleProd {
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    flex: 1 1 auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 1rem 1.25rem 2rem 1.25rem;
+}
+/* Cards anidadas no deben imponer altura */
+#modalDetalle .modal-body .card,
+#modalDetalle .modal-body .tab-pane,
+#modalDetalle .modal-body .tab-content {
+    overflow: visible !important;
+    max-height: none !important;
+}
+/* Las nav-tabs de Baileys/Meta que se sticken al top */
+#modalDetalle .modal-body .nav-tabs {
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 5;
+    margin: 0 -1.25rem 1rem -1.25rem;
+    padding: 0 1.25rem;
+}
+/* Asegurar form dentro del modal no limite altura */
+#modalDetalle form.form {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
