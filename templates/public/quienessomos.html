@@ -8,110 +8,11 @@
 {% block content %}
 
     <section class="container" style="margin-top: 39px">
-        <div class="row align-items-center py-1 py-sm-3 py-md-4 my-lg-2 qs-wrapper">
+        <div class="row align-items-center py-1 py-sm-3 py-md-4 my-lg-2" style="padding: 15px">
             <div class="col-lg-12"><br><br>
-
-                <h1>Quiénes Somos</h1>
-                <p class="qs-slogan">
-                    Transformamos ideas en sistemas inteligentes que venden, escalan y perduran.
-                </p>
-                <p class="qs-tagline">
-                    Menos bla bla, más producto funcionando.
-                </p>
-
-                <div class="qs-card">
-                    <p>
-                        <strong>Código Base EC</strong> es una empresa ecuatoriana de desarrollo de software
-                        especializada en la creación de sistemas inteligentes a la medida. Combinamos inteligencia
-                        artificial, integraciones empresariales y experiencia en procesos locales para entregar
-                        soluciones que realmente operan en producción — no prototipos.
-                    </p>
-                    <p class="mb-0">
-                        Trabajamos con empresas en Ecuador y la región para automatizar su atención al cliente,
-                        digitalizar su facturación y firma electrónica, y gestionar operaciones de extremo a extremo
-                        con tecnología robusta y mantenible.
-                    </p>
-                </div>
-
-                <h2>Qué hacemos</h2>
-                <div class="qs-card">
-                    <ul class="qs-list">
-                        <li>
-                            <i class="fa fa-robot"></i>
-                            <span><strong>IA + WhatsApp Business:</strong> chatbots que atienden y convierten.</span>
-                        </li>
-                        <li>
-                            <i class="fa fa-file-invoice-dollar"></i>
-                            <span><strong>Facturación &amp; Firma Electrónica</strong> (Ecuador, SRI).</span>
-                        </li>
-                        <li>
-                            <i class="fa fa-utensils"></i>
-                            <span><strong>Restaurantes:</strong> pedidos, tiempos, inventario en vivo.</span>
-                        </li>
-                        <li>
-                            <i class="fa fa-truck"></i>
-                            <span><strong>Logística &amp; Inventario:</strong> trazabilidad de punta a punta.</span>
-                        </li>
-                        <li>
-                            <i class="fa fa-ticket-alt"></i>
-                            <span><strong>Tickets &amp; Flujos:</strong> alertas, automatización y control.</span>
-                        </li>
-                        <li>
-                            <i class="fa fa-mobile-alt"></i>
-                            <span><strong>Apps Móviles (Flutter):</strong> Android/iOS listas para crecer.</span>
-                        </li>
-                        <li>
-                            <i class="fa fa-user-check"></i>
-                            <span><strong>Talento Humano + Face ID:</strong> evaluación y biometría.</span>
-                        </li>
-                        <li>
-                            <i class="fa fa-graduation-cap"></i>
-                            <span><strong>Académico:</strong> gestión integral para universidades.</span>
-                        </li>
-                    </ul>
-                </div>
-
-                <div class="qs-stack">
-                    <strong><i class="fa fa-layer-group"></i>&nbsp;Stack tecnológico</strong>
-                    Python · Django · Flutter · PostgreSQL · AI · WhatsApp Cloud API · Integraciones SRI/Firma
-                </div>
-
-                <h2>Nuestro enfoque</h2>
-                <div class="qs-card">
-                    <p>
-                        Creemos en el software que funciona. Por eso cada proyecto en Código Base EC se construye
-                        con tres principios simples: entender el problema de negocio, entregar un producto estable
-                        en el menor tiempo posible y acompañar al cliente durante la operación real. Así evitamos
-                        lo que más duele en la industria: sistemas bonitos que nadie termina de usar.
-                    </p>
-                </div>
-
-                <h2>Contacto</h2>
-                <div class="qs-contact">
-                    <p><strong>Empresa:</strong> Código Base EC</p>
-                    <p><strong>País:</strong> Ecuador</p>
-                    {% if confi.email %}
-                        <p><strong>Correo:</strong>
-                            <a href="mailto:{{ confi.email }}">{{ confi.email }}</a>
-                        </p>
-                    {% endif %}
-                    {% if telefonoempresa %}
-                        <p><strong>WhatsApp:</strong>
-                            <a href="https://wa.me/593{{ telefonoempresa }}" target="_blank">
-                                +593 {{ telefonoempresa }}
-                            </a>
-                        </p>
-                    {% endif %}
-                    {% if confi.web %}
-                        <p><strong>Sitio web:</strong>
-                            <a href="{{ confi.web }}" target="_blank">{{ confi.web }}</a>
-                        </p>
-                    {% endif %}
-                    {% if confi.direccion %}
-                        <p><strong>Dirección:</strong> {{ confi.direccion }}</p>
-                    {% endif %}
-                </div>
-
+                {% if confi.terminosycondiciones %}
+                    {{ confi.terminosycondiciones|safe }}
+                {% endif %}
             </div>
         </div>
     </section>
