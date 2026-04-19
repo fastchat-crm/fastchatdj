@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0">
+    <a href="/whatsapp/campanas/" class="btn btn-link mb-2"><i class="fa fa-arrow-left"></i> Volver</a>
+    <h4>{{ campana.nombre }} <small class="text-muted">· {{ campana.get_estado_display }}</small></h4>
+    <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card"><div class="card-body text-center">
+            <div class="text-muted small">Objetivo</div><div class="h4">{{ campana.total_objetivo }}</div></div></div></div>
+        <div class="col-md-3"><div class="card"><div class="card-body text-center">
+            <div class="text-muted small">Enviados</div><div class="h4 text-success">{{ campana.total_enviados }}</div></div></div></div>
+        <div class="col-md-3"><div class="card"><div class="card-body text-center">
+            <div class="text-muted small">Fallidos</div><div class="h4 text-danger">{{ campana.total_fallidos }}</div></div></div></div>
+        <div class="col-md-3"><div class="card"><div class="card-body text-center">
+            <div class="text-muted small">Tasa respuesta</div><div class="h4">{{ campana.tasa_respuesta_pct }}%</div></div></div></div>
+    </div>
+    <div class="card"><div class="card-body">
+        <h6>Envíos (últimos 200)</h6>
+        <table class="table table-sm">
+            <thead><tr><th>Contacto</th><th>Estado</th><th>Fecha</th><th>Respondió</th><th>Error</th></tr></thead>
+            <tbody>
+            {% for e in envios %}
+                <tr><td>{{ e.contacto.contacto_nombre|default:e.contacto.contacto_numero }}</td>
+                    <td><span class="badge bg-secondary">{{ e.get_estado_display }}</span></td>
+                    <td>{{ e.fecha_envio|date:"d/m/Y H:i"|default:"—" }}</td>
+                    <td>{% if e.respondio %}<i class="fa fa-check text-success"></i>{% endif %}</td>
+                    <td class="text-danger small">{{ e.error|truncatechars:60 }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+</div>
+{% endblock %}

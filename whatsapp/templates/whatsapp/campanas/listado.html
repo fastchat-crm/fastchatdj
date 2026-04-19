@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+<div class="container-fluid p-0">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-0">Campañas</h4>
+            <small class="text-muted">Envío masivo segmentado · respeta rate limit y ventana horaria</small>
+        </div>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCampana">
+            <i class="fa fa-plus"></i> Nueva campaña
+        </button>
+    </div>
+
+    <div class="card"><div class="card-body">
+        <table class="table align-middle">
+            <thead><tr>
+                <th>Nombre</th><th>Sesión</th><th>Tipo</th><th>Estado</th>
+                <th>Objetivo</th><th>Enviados</th><th>Fallidos</th><th>Progreso</th><th></th>
+            </tr></thead>
+            <tbody>
+            {% for c in page_obj %}
+                <tr>
+                    <td><strong>{{ c.nombre }}</strong><br><small class="text-muted">{{ c.descripcion|truncatechars:60 }}</small></td>
+                    <td>{{ c.sesion.nombre|default:c.sesion.numero }}</td>
+                    <td>{{ c.get_tipo_display }}</td>
+                    <td><span class="badge bg-secondary">{{ c.get_estado_display }}</span></td>
+                    <td>{{ c.total_objetivo }}</td>
+                    <td class="text-success">{{ c.total_enviados }}</td>
+                    <td class="text-danger">{{ c.total_fallidos }}</td>
+                    <td><div class="progress" style="height:8px"><div class="progress-bar" style="width:{{ c.progreso_pct }}%"></div></div>
+                        <small>{{ c.progreso_pct }}%</small></td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-info" href="?action=detalle&pk={{ c.id }}"><i class="fa fa-list"></i></a>
+                        {% if c.estado == 'borrador' or c.estado == 'pausada' %}
+                            <button class="btn btn-sm btn-outline-success btn-send" data-id="{{ c.id }}">Enviar</button>
+                        {% endif %}
+                        {% if c.estado == 'enviando' %}
+                            <button class="btn btn-sm btn-outline-warning btn-pause" data-id="{{ c.id }}">Pausar</button>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="9" class="text-center text-muted">Aún no tienes campañas. Crea la primera.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% include 'paginador.html' %}
+    </div></div>
+</div>
+
+<div class="modal fade" id="modalCampana" tabindex="-1">
+    <div class="modal-dialog modal-lg"><form class="modal-content" onsubmit="crearCampana(event)">
+        {% csrf_token %}
+        <div class="modal-header"><h5 class="modal-title">Nueva campaña</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <div class="row g-3">
+                <div class="col-md-6"><label>Nombre *</label><input name="nombre" class="form-control" required></div>
+                <div class="col-md-6"><label>Sesión *</label>
+                    <select name="sesion" class="form-select" required>
+                        {% for s in sesiones %}<option value="{{ s.id }}">{{ s.nombre|default:s.numero }} · {{ s.get_proveedor_display }}</option>{% endfor %}
+                    </select></div>
+                <div class="col-md-6"><label>Tipo</label>
+                    <select name="tipo" class="form-select"><option value="texto">Texto</option>
+                        <option value="plantilla">Plantilla Meta</option><option value="media">Media + caption</option></select></div>
+                <div class="col-md-6"><label>Throttle (msg/min)</label><input name="throttle_por_minuto" type="number" value="20" class="form-control"></div>
+                <div class="col-12"><label>Mensaje (usa {nombre} y {numero})</label>
+                    <textarea name="mensaje_texto" rows="3" class="form-control"></textarea></div>
+                <div class="col-md-6"><label>Etiquetas a incluir</label>
+                    <select name="etiquetas_incluir[]" multiple class="form-select">
+                        {% for e in etiquetas %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}
+                    </select></div>
+                <div class="col-md-6"><label>Etiquetas a excluir</label>
+                    <select name="etiquetas_excluir[]" multiple class="form-select">
+                        {% for e in etiquetas %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}
+                    </select></div>
+                <div class="col-md-6"><label>Plantilla Meta (si tipo=plantilla)</label>
+                    <select name="plantilla_id" class="form-select"><option value="">—</option>
+                        {% for p in plantillas %}<option value="{{ p.id }}">{{ p.nombre }} ({{ p.idioma }})</option>{% endfor %}
+                    </select></div>
+                <div class="col-md-6"><label>Canales permitidos</label>
+                    <select name="canales[]" multiple class="form-select">
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="instagram">Instagram</option>
+                        <option value="messenger">Messenger</option>
+                    </select></div>
+            </div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-primary">Crear (queda en borrador)</button></div>
+    </form></div>
+</div>
+
+<script>
+const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
+async function postForm(action, extras){
+    const fd = new FormData(); fd.append('csrfmiddlewaretoken', CSRF); fd.append('action', action);
+    for (const k in extras) fd.append(k, extras[k]);
+    const r = await fetch('', {method:'POST', body: fd}); return r.json();
+}
+async function crearCampana(ev){
+    ev.preventDefault(); const fd = new FormData(ev.target); fd.append('action','add');
+    const r = await fetch('', {method:'POST', body: fd}); const j = await r.json();
+    if(!j.error) location.reload(); else alert(j.message);
+}
+document.querySelectorAll('.btn-send').forEach(b => b.onclick = async () => {
+    if(!confirm('¿Enviar ahora? Los mensajes se despachan en el próximo tick del cron.')) return;
+    const j = await postForm('enviar_ahora', {id: b.dataset.id});
+    if(!j.error) location.reload(); else alert(j.message);
+});
+document.querySelectorAll('.btn-pause').forEach(b => b.onclick = async () => {
+    const j = await postForm('pausar', {id: b.dataset.id});
+    if(!j.error) location.reload();
+});
+</script>
+{% endblock %}

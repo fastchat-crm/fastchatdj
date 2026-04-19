@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/pipeline.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-0">Pipeline de ventas</h4>
+            <small class="text-muted">Tablero Kanban · arrastra las tarjetas entre etapas para avanzar oportunidades</small>
+        </div>
+        <div class="d-flex gap-2">
+            <select class="form-select" id="selPipeline" onchange="location='?pipeline='+this.value">
+                {% for p in pipelines %}
+                    <option value="{{ p.id }}" {% if pipeline_actual.id == p.id %}selected{% endif %}>{{ p.nombre }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoPipeline">
+                <i class="fa fa-plus"></i> Nuevo pipeline
+            </button>
+        </div>
+    </div>
+
+    {% if pipeline_actual %}
+    <div class="kanban-wrap">
+        <div class="kanban-board">
+            {% for col in columnas %}
+            <div class="kanban-col" data-etapa="{{ col.etapa.id }}">
+                <div class="kanban-col-header" style="border-top:4px solid {{ col.etapa.color }}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <strong>{{ col.etapa.nombre }}</strong>
+                        <span class="badge bg-light text-dark">{{ col.n }}</span>
+                    </div>
+                    <small class="text-muted">Forecast: {{ col.total_valor|floatformat:2 }}</small>
+                </div>
+                <div class="kanban-col-body">
+                    {% for card in col.cards %}
+                    <div class="kanban-card" draggable="true" data-card="{{ card.id }}" data-conv="{{ card.conversacion_id }}">
+                        <div class="kanban-card-title">
+                            {{ card.conversacion.contacto_nombre|default:card.conversacion.contacto.contacto_numero }}
+                        </div>
+                        <div class="kanban-card-meta">
+                            <small class="text-muted">{{ card.fecha_cambio_etapa|date:"d/m H:i" }}</small>
+                            {% if card.valor_estimado %}
+                                <span class="badge bg-success">{{ card.moneda }} {{ card.valor_estimado }}</span>
+                            {% endif %}
+                        </div>
+                        {% if card.conversacion.ctwa_clid %}
+                            <div class="kanban-card-ctwa"><i class="fa fa-bullhorn text-warning"></i> CTWA: {{ card.conversacion.campaign_id|default:"—" }}</div>
+                        {% endif %}
+                        {% if card.nota %}<div class="kanban-card-nota">{{ card.nota|truncatechars:90 }}</div>{% endif %}
+                    </div>
+                    {% empty %}
+                        <div class="kanban-empty">Sin tarjetas</div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+            <div class="kanban-col kanban-col-add">
+                <button class="btn btn-link" data-bs-toggle="modal" data-bs-target="#modalNuevaEtapa">
+                    <i class="fa fa-plus"></i> Agregar etapa
+                </button>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">No hay pipelines. Crea el primero para empezar.</div>
+    {% endif %}
+</div>
+
+{# --- Modales --- #}
+<div class="modal fade" id="modalNuevoPipeline" tabindex="-1">
+    <div class="modal-dialog"><form class="modal-content" onsubmit="crearPipeline(event)">
+        {% csrf_token %}
+        <div class="modal-header"><h5 class="modal-title">Nuevo pipeline</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <div class="mb-3"><label>Nombre</label>
+                <input type="text" name="nombre" class="form-control" required></div>
+            <div class="mb-3"><label>Descripción</label>
+                <input type="text" name="descripcion" class="form-control"></div>
+        </div>
+        <div class="modal-footer">
+            <button type="submit" class="btn btn-primary">Crear</button>
+        </div>
+    </form></div>
+</div>
+
+<div class="modal fade" id="modalNuevaEtapa" tabindex="-1">
+    <div class="modal-dialog"><form class="modal-content" onsubmit="crearEtapa(event)">
+        {% csrf_token %}
+        <div class="modal-header"><h5 class="modal-title">Nueva etapa</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <input type="hidden" name="pipeline_id" value="{{ pipeline_actual.id|default:'' }}">
+            <div class="mb-3"><label>Nombre</label><input name="nombre" class="form-control" required></div>
+            <div class="mb-3"><label>Color</label><input name="color" type="color" class="form-control form-control-color" value="#6c757d"></div>
+            <div class="mb-3"><label>Probabilidad de cierre (%)</label>
+                <input name="probabilidad_cierre" type="number" min="0" max="100" value="0" class="form-control"></div>
+            <div class="form-check"><input type="checkbox" name="es_ganado" value="true" class="form-check-input"> <label class="form-check-label">Etapa "ganado" (dispara Purchase a CAPI)</label></div>
+            <div class="form-check"><input type="checkbox" name="es_perdido" value="true" class="form-check-input"> <label class="form-check-label">Etapa "perdido"</label></div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-primary">Agregar</button></div>
+    </form></div>
+</div>
+
+<script>
+const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
+async function crearPipeline(ev){ ev.preventDefault(); const fd = new FormData(ev.target); fd.append('action','add_pipeline');
+    const r = await fetch('', {method:'POST', body: fd}); const j = await r.json();
+    if(!j.error) location.href='?pipeline='+j.pipeline_id; else alert(j.message);
+}
+async function crearEtapa(ev){ ev.preventDefault(); const fd = new FormData(ev.target); fd.append('action','add_etapa');
+    fd.append('es_ganado', ev.target.es_ganado.checked ? 'true':'false');
+    fd.append('es_perdido', ev.target.es_perdido.checked ? 'true':'false');
+    const r = await fetch('', {method:'POST', body: fd}); const j = await r.json();
+    if(!j.error) location.reload(); else alert(j.message);
+}
+// Drag & drop
+document.querySelectorAll('.kanban-card').forEach(c => {
+    c.addEventListener('dragstart', e => e.dataTransfer.setData('text/card', c.dataset.card));
+});
+document.querySelectorAll('.kanban-col').forEach(col => {
+    col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drop-hover');});
+    col.addEventListener('dragleave', e => col.classList.remove('drop-hover'));
+    col.addEventListener('drop', async e => {
+        e.preventDefault(); col.classList.remove('drop-hover');
+        const cardId = e.dataTransfer.getData('text/card');
+        const etapaId = col.dataset.etapa;
+        if(!cardId || !etapaId) return;
+        const fd = new FormData(); fd.append('csrfmiddlewaretoken', CSRF);
+        fd.append('action','mover_card'); fd.append('card_id', cardId); fd.append('etapa_id', etapaId);
+        const r = await fetch('', {method:'POST', body: fd}); const j = await r.json();
+        if(!j.error) location.reload(); else alert(j.message);
+    });
+});
+</script>
+{% endblock %}

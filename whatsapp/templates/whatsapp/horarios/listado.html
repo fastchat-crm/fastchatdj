@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0">
+    <h4>Horarios de atención</h4>
+    <div class="row g-3">
+        <div class="col-md-3">
+            <div class="list-group">
+                {% for s in sesiones %}
+                    <a href="?sesion={{ s.id }}" class="list-group-item list-group-item-action {% if sesion_actual.id == s.id %}active{% endif %}">
+                        {{ s.nombre|default:s.numero }}
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="col-md-9">
+            {% if sesion_actual %}
+            {% csrf_token %}
+            <div class="card mb-3"><div class="card-body">
+                <h6>Mensaje fuera de horario</h6>
+                <textarea id="msgFH" class="form-control mb-2" rows="2">{{ sesion_actual.mensaje_fuera_horario|default:"" }}</textarea>
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-5"><label>Zona horaria</label>
+                        <input id="tzFH" class="form-control" value="{{ sesion_actual.zona_horaria|default:'America/Guayaquil' }}"></div>
+                    <div class="col-md-3"><button class="btn btn-primary" onclick="guardarMsgFH({{ sesion_actual.id }})">Guardar</button></div>
+                </div>
+            </div></div>
+            <div class="card mb-3"><div class="card-body">
+                <h6>Horarios semanales</h6>
+                <table class="table table-sm">
+                    <thead><tr><th>Día</th><th>Desde</th><th>Hasta</th><th></th></tr></thead>
+                    <tbody>
+                    {% for h in horarios %}
+                        <tr><td>{{ h.get_dia_semana_display }}</td><td>{{ h.hora_inicio }}</td><td>{{ h.hora_fin }}</td>
+                            <td><button class="btn btn-sm btn-outline-danger" onclick="delHorario({{ h.id }})"><i class="fa fa-trash"></i></button></td></tr>
+                    {% empty %}
+                        <tr><td colspan="4" class="text-muted">Sin horarios. Por defecto abierto 24/7.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <form onsubmit="addHorario(event)" class="row g-2 align-items-end">
+                    <div class="col-md-3"><label>Día</label>
+                        <select name="dia_semana" class="form-select">{% for code,name in dias_semana %}<option value="{{ code }}">{{ name }}</option>{% endfor %}</select></div>
+                    <div class="col-md-3"><label>Desde</label><input name="hora_inicio" type="time" class="form-control" required></div>
+                    <div class="col-md-3"><label>Hasta</label><input name="hora_fin" type="time" class="form-control" required></div>
+                    <div class="col-md-3"><button class="btn btn-success">Agregar</button></div>
+                </form>
+            </div></div>
+            <div class="card"><div class="card-body">
+                <h6>Excepciones (feriados o días especiales)</h6>
+                <table class="table table-sm">
+                    <thead><tr><th>Fecha</th><th>Abierto</th><th>Motivo</th><th></th></tr></thead>
+                    <tbody>
+                    {% for e in excepciones %}
+                        <tr><td>{{ e.fecha|date:"d/m/Y" }}</td>
+                            <td>{% if e.abierto %}<span class="badge bg-success">Sí</span>{% else %}<span class="badge bg-danger">No</span>{% endif %}</td>
+                            <td>{{ e.motivo }}</td>
+                            <td><button class="btn btn-sm btn-outline-danger" onclick="delExcepcion({{ e.id }})"><i class="fa fa-trash"></i></button></td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <form onsubmit="addExcepcion(event)" class="row g-2 align-items-end">
+                    <div class="col-md-3"><label>Fecha</label><input name="fecha" type="date" class="form-control" required></div>
+                    <div class="col-md-2"><label>Abierto</label><select name="abierto" class="form-select"><option value="false">No</option><option value="true">Sí</option></select></div>
+                    <div class="col-md-4"><label>Motivo</label><input name="motivo" class="form-control"></div>
+                    <div class="col-md-3"><button class="btn btn-success">Agregar</button></div>
+                </form>
+            </div></div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
+const SID = {{ sesion_actual.id|default:"null" }};
+async function post(action, extras){
+    const fd = new FormData(); fd.append('csrfmiddlewaretoken', CSRF); fd.append('action', action);
+    for (const k in extras) fd.append(k, extras[k]);
+    const r = await fetch('', {method:'POST', body: fd}); return r.json();
+}
+async function guardarMsgFH(sid){
+    const j = await post('guardar_mensaje_fuera_horario', {sesion_id: sid, mensaje: document.getElementById('msgFH').value, zona_horaria: document.getElementById('tzFH').value});
+    alert(j.error? j.message : 'Guardado');
+}
+async function addHorario(ev){ ev.preventDefault(); const f = ev.target;
+    const j = await post('add_horario', {sesion_id: SID, dia_semana: f.dia_semana.value, hora_inicio: f.hora_inicio.value, hora_fin: f.hora_fin.value});
+    if(!j.error) location.reload();
+}
+async function delHorario(id){ if(!confirm('¿Eliminar?')) return; const j = await post('delete_horario', {id}); if(!j.error) location.reload();}
+async function addExcepcion(ev){ ev.preventDefault(); const f = ev.target;
+    const j = await post('add_excepcion', {sesion_id: SID, fecha: f.fecha.value, abierto: f.abierto.value, motivo: f.motivo.value});
+    if(!j.error) location.reload();
+}
+async function delExcepcion(id){ if(!confirm('¿Eliminar?')) return; const j = await post('delete_excepcion', {id}); if(!j.error) location.reload();}
+</script>
+{% endblock %}

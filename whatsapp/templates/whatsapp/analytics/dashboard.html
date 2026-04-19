@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4>Analytics · últimos {{ rango_dias }} días</h4>
+        <select class="form-select w-auto" onchange="location='?dias='+this.value">
+            <option value="7"  {% if rango_dias == 7 %}selected{% endif %}>7 días</option>
+            <option value="30" {% if rango_dias == 30 %}selected{% endif %}>30 días</option>
+            <option value="90" {% if rango_dias == 90 %}selected{% endif %}>90 días</option>
+        </select>
+    </div>
+
+    <div id="kpis" class="row g-3 mb-3"></div>
+
+    <div class="row g-3">
+        <div class="col-md-8"><div class="card"><div class="card-body">
+            <h6>Conversaciones por día</h6><canvas id="chartDia"></canvas>
+        </div></div></div>
+        <div class="col-md-4"><div class="card"><div class="card-body">
+            <h6>Por canal de origen</h6><canvas id="chartCanal"></canvas>
+        </div></div></div>
+        <div class="col-md-6"><div class="card"><div class="card-body">
+            <h6>Por clasificación</h6><canvas id="chartClas"></canvas>
+        </div></div></div>
+        <div class="col-md-6"><div class="card"><div class="card-body">
+            <h6>Sentimiento</h6><canvas id="chartSent"></canvas>
+        </div></div></div>
+        <div class="col-12"><div class="card"><div class="card-body">
+            <h6>Ranking de agentes (mensajes enviados)</h6><canvas id="chartAgentes"></canvas>
+        </div></div></div>
+        <div class="col-12"><div class="card"><div class="card-body">
+            <h6>ROI por campaña CTWA (atribución Meta Ads)</h6>
+            <table class="table table-sm" id="tblCtwa"><thead>
+                <tr><th>Campaign ID</th><th>Ad ID</th><th>Conversaciones</th><th>Leads</th><th>Clientes</th><th>Conv. %</th></tr>
+            </thead><tbody></tbody></table>
+        </div></div></div>
+        <div class="col-12"><div class="card"><div class="card-body">
+            <h6>Pipeline forecast</h6>
+            <table class="table table-sm" id="tblForecast"><thead>
+                <tr><th>Pipeline</th><th>Etapa</th><th>Cards</th><th>Probabilidad</th><th>Valor</th><th>Valor ponderado</th></tr>
+            </thead><tbody></tbody></table>
+        </div></div></div>
+    </div>
+</div>
+
+<script>
+const CLAS = {0:'Sin clasificar',1:'Lead',2:'Prospecto',3:'Oportunidad',4:'Cliente',5:'No interesado'};
+async function load(){
+    const r = await fetch('?action=data&dias={{ rango_dias }}'); const d = await r.json();
+    // KPIs
+    const k = d.kpis;
+    document.getElementById('kpis').innerHTML = `
+      ${kpi('Conversaciones', k.total_conversaciones, 'primary')}
+      ${kpi('Abiertas', k.abiertas, 'warning')}
+      ${kpi('Leads', k.leads, 'info')}
+      ${kpi('Clientes', k.clientes, 'success')}
+      ${kpi('Mensajes IA', k.mensajes_ia + ' ('+k.pct_ia+'%)', 'secondary')}
+      ${kpi('CAPI enviados', d.capi.total + ' / OK '+d.capi.ok, 'dark')}
+    `;
+    // Chart día
+    new Chart(document.getElementById('chartDia'), {
+        type:'line', data:{ labels:d.por_dia.map(x=>x.d), datasets:[{label:'Conversaciones', data:d.por_dia.map(x=>x.n), borderColor:'#0d6efd', tension:0.3}]},
+        options:{responsive:true, plugins:{legend:{display:false}}}
+    });
+    // Canal
+    new Chart(document.getElementById('chartCanal'), {
+        type:'doughnut', data:{ labels:d.por_canal.map(x=>x.origen_canal||'whatsapp'), datasets:[{data:d.por_canal.map(x=>x.n), backgroundColor:['#25d366','#e4405f','#1877f2','#888']}]}
+    });
+    // Clasificación
+    new Chart(document.getElementById('chartClas'), {
+        type:'bar', data:{ labels:d.por_clasificacion.map(x=>CLAS[x.clasificacion]||'?'), datasets:[{label:'Conv', data:d.por_clasificacion.map(x=>x.n), backgroundColor:'#0d6efd'}]},
+        options:{plugins:{legend:{display:false}}}
+    });
+    // Sentimiento
+    new Chart(document.getElementById('chartSent'), {
+        type:'pie', data:{ labels:d.por_sentimiento.map(x=>x.sentimiento), datasets:[{data:d.por_sentimiento.map(x=>x.n)}]}
+    });
+    // Agentes
+    new Chart(document.getElementById('chartAgentes'), {
+        type:'bar', data:{ labels:d.ranking_agentes.map(x=>(x.agente__first_name||x.agente__username)), datasets:[{label:'Mensajes', data:d.ranking_agentes.map(x=>x.n), backgroundColor:'#198754'}]},
+        options:{indexAxis:'y'}
+    });
+    // CTWA tabla
+    const tb = document.querySelector('#tblCtwa tbody');
+    d.roi_ctwa.forEach(r => {
+        const conv = r.total ? ((r.clientes/r.total)*100).toFixed(1) : 0;
+        tb.innerHTML += `<tr><td>${r.campaign_id||'—'}</td><td>${r.ad_id||'—'}</td><td>${r.total}</td><td>${r.leads}</td><td>${r.clientes}</td><td>${conv}%</td></tr>`;
+    });
+    if(!d.roi_ctwa.length) tb.innerHTML = '<tr><td colspan="6" class="text-muted text-center">Sin conversaciones CTWA en este rango</td></tr>';
+    // Forecast
+    const tf = document.querySelector('#tblForecast tbody');
+    d.pipeline_forecast.forEach(r => {
+        const ponderado = (r.total * (r.etapa__probabilidad_cierre||0) / 100).toFixed(2);
+        tf.innerHTML += `<tr><td>${r.etapa__pipeline__nombre}</td><td>${r.etapa__nombre}</td><td>${r.n}</td><td>${r.etapa__probabilidad_cierre}%</td><td>${r.moneda} ${r.total.toFixed(2)}</td><td><strong>${r.moneda} ${ponderado}</strong></td></tr>`;
+    });
+}
+function kpi(label,val,color){ return `<div class="col-md-2"><div class="card border-${color}"><div class="card-body text-center p-2">
+    <div class="small text-muted">${label}</div><div class="h5 mb-0 text-${color}">${val}</div></div></div></div>`;}
+load();
+</script>
+{% endblock %}
