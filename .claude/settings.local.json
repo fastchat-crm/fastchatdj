@@ -30,7 +30,22 @@
       "WebFetch(domain:www.zolutium-es.com)",
       "WebFetch(domain:mensajeria.broktech.com.ec)",
       "Bash(awk '/^def process_incoming_message/,/^def [a-z]/' whatsapp/view_webhook_handler.py)",
-      "Bash(ls *)"
+      "Bash(ls *)",
+      "Bash(iconv -f UTF-16 -t UTF-8 requirements.txt)"
     ]
-  }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Execute /caveman full now.\"}}'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+  "outputStyle": "default"
 }

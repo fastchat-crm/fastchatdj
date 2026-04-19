@@ -18,7 +18,7 @@ from .forms import ContactoForm, MensajeWhatsAppProgramadoForm, AddContactoForm
 from .models import Contacto, SesionWhatsApp, MensajeWhatsAppProgramado
 from django.contrib import messages
 
-from .services import WhatsAppService
+from .services import get_whatsapp_service
 
 
 @login_required
@@ -31,7 +31,6 @@ def contactoView(request):
             }
     model = Contacto
     Formulario = ContactoForm
-    whatsapp_service = WhatsAppService()
 
     if request.method == 'POST':
         res_json = []
@@ -150,6 +149,7 @@ def contactoView(request):
                         from_number = mensaje.from_number
                         archivo = mensaje.archivo
                         texto = mensaje.mensaje
+                        whatsapp_service = get_whatsapp_service(mensaje.contacto.sesion)
                         response = whatsapp_service.send_text_message(sesion_id, from_number, texto,simularEscritura=True)
                         if not response.get('success', False):
                             raise ValueError(f"Error al enviar mensaje programado: {mensaje.__str__()}")

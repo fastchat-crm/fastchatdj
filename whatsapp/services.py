@@ -616,4 +616,10 @@ def get_whatsapp_service(sesion=None, proveedor: str | None = None):
     if prov == 'meta':
         from .services_meta import MetaWhatsAppService
         return MetaWhatsAppService()
+    if prov == 'instagram':
+        from .services_instagram import InstagramService
+        return InstagramService()
+    if prov == 'messenger':
+        from .services_instagram import MessengerService
+        return MessengerService()
     return WhatsAppService()

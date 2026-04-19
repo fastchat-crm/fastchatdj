@@ -40,6 +40,11 @@ def webhook_handler(request):
     """
     logger.info("WEBHOOK_RECV ip=%s len=%d", request.META.get('REMOTE_ADDR', '?'), len(request.body))
     # Verificar la clave API
+    # Este endpoint recibe SOLO eventos Baileys desde Node.js. Los eventos Meta
+    # llegan a /whatsapp/meta_webhook/ (meta_webhook_view.py). Por eso aqui se
+    # instancia WhatsAppService directamente para los handlers de QR/ready/auth/
+    # close. Mas abajo (en el handler de 'message') la variable se reasigna a
+    # get_whatsapp_service(session) por si la sesion termina ruteando a Meta.
     whatsapp_service = WhatsAppService()
     try:
         # Parsear los datos recibidos
@@ -413,6 +418,14 @@ def process_incoming_message(session, event_data, channel_layer):
         if userImage:
             contacto.contacto_foto = f'data:image/jpg;base64,{get_image_as_base64(userImage)}'
 
+        # Multi-canal: marcar canal y external_id la primera vez
+        canal_evt = event_data.get('_canal') or 'whatsapp'
+        if not contacto.canal or contacto.canal == 'whatsapp':
+            contacto.canal = canal_evt
+        ext_id = event_data.get('_external_id')
+        if ext_id and not contacto.external_id:
+            contacto.external_id = ext_id
+
         contacto.save()
 
         # Determinar el tipo de mensaje y su contenido
@@ -481,6 +494,45 @@ def process_incoming_message(session, event_data, channel_layer):
             conversation, created = ConversacionWhatsApp.obtener_o_crear_activa(contacto)
             if created:
                 logger.info("Nueva conversación creada #%s para contacto %s", conversation.id, contacto.id)
+                # Hereda canal del contacto
+                if contacto.canal and conversation.origen_canal != contacto.canal:
+                    conversation.origen_canal = contacto.canal
+                # Capturar referral CTWA / CTIG si vino en el evento
+                referral = event_data.get('_referral') or {}
+                if referral:
+                    conversation.referral_payload_json = referral
+                    conversation.referral_source_type = (referral.get('source_type') or referral.get('type') or 'AD').upper()[:20]
+                    conversation.referral_source_url = referral.get('source_url') or referral.get('url')
+                    conversation.referral_headline = (referral.get('headline') or '')[:500]
+                    conversation.referral_body = referral.get('body') or referral.get('description')
+                    conversation.referral_medium = (referral.get('media_type') or referral.get('image_url') and 'image' or '')[:20] or None
+                    conversation.ctwa_clid = (
+                        referral.get('ctwa_clid')
+                        or referral.get('ad_id')
+                        or (referral.get('ref') if isinstance(referral.get('ref'), str) else None)
+                    )
+                    conversation.ad_id = referral.get('ad_id')
+                    conversation.adset_id = referral.get('adset_id')
+                    conversation.campaign_id = referral.get('campaign_id') or referral.get('source_id')
+                conversation.save(update_fields=[
+                    'origen_canal', 'referral_payload_json', 'referral_source_type',
+                    'referral_source_url', 'referral_headline', 'referral_body',
+                    'referral_medium', 'ctwa_clid', 'ad_id', 'adset_id', 'campaign_id',
+                ])
+                # Round-robin: auto-asignar agente humano si la sesión lo pide
+                if getattr(session, 'auto_asignar_round_robin', False):
+                    try:
+                        from .services_round_robin import asignar_automaticamente
+                        asignar_automaticamente(conversation)
+                    except Exception:
+                        logger.exception("Round-robin falló para conv=%s", conversation.id)
+                # CAPI: reportar Lead si la conversación trae atribución
+                if conversation.ctwa_clid or conversation.ad_id:
+                    try:
+                        from .services_capi import reportar_lead_si_corresponde
+                        reportar_lead_si_corresponde(conversation)
+                    except Exception:
+                        logger.exception("CAPI Lead falló para conv=%s", conversation.id)
         except Exception as create_err:
             logger.error(
                 "ERROR obteniendo/creando conversación para contacto %s (sesión %s): %s — "

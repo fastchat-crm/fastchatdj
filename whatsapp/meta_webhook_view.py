@@ -312,6 +312,22 @@ def _meta_a_evento_interno(msg_meta: dict, value: dict, sesion: SesionWhatsApp) 
         if media_data:
             evento_interno['mediaData'] = media_data
 
+        # Bloque referral: presente cuando el contacto entra desde un anuncio
+        # Click-to-WhatsApp (CTWA). Meta lo entrega tanto en el mensaje
+        # como, a veces, en el `value.referral` global.
+        referral = msg_meta.get('referral') or value.get('referral') or {}
+        if referral:
+            evento_interno['_referral'] = referral
+        # External id (wa_id) — para deduplicación multi-canal
+        wa_id = None
+        for c in value.get('contacts') or []:
+            if c.get('wa_id'):
+                wa_id = c['wa_id']
+                break
+        if wa_id:
+            evento_interno['_external_id'] = wa_id
+        evento_interno['_canal'] = 'whatsapp'
+
         return evento_interno
 
     except Exception:

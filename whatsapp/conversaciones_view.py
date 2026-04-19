@@ -463,6 +463,10 @@ def conversacionesView(request):
                     log(f"Conversación marcada como resuelta {filtro.id}", request, "change", obj=filtro.id)
                     return JsonResponse(res_json, safe=False)
                 elif action == 'transcribe_audio':
+                    # transcribe_audio es provider-agnostic: solo procesa el archivo local
+                    # con whisper, no habla con Node ni Meta. Usar WhatsAppService directo
+                    # esta OK aqui (el dispatcher no aplica porque MetaWhatsAppService
+                    # delega esta misma funcion a WhatsAppService internamente).
                     service = WhatsAppService()
                     msg = MensajeWhatsApp.objects.select_related('conversacion__contacto__sesion').get(id=request.POST['id'])
                     service.transcribe_audio(msg, 'small', msg.conversacion.contacto.sesion.language.split('-')[0])

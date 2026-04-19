@@ -19,6 +19,9 @@ from .services import WhatsAppService, get_whatsapp_service
 @login_required
 @secure_module
 def sesionesView(request):
+    # WhatsAppService() es Baileys-only: create/reconnect/check/close de sesion
+    # solo aplican al transporte Node. Las acciones que SI funcionan para ambos
+    # proveedores (ej. probar_envio_mensaje) usan get_whatsapp_service(filtro).
     whatsapp_service = WhatsAppService()
     data = {
         'titulo': 'Sesiones WhatsApp',
@@ -91,10 +94,14 @@ def sesionesView(request):
                 elif action == 'probar_envio_mensaje':
                     from django.utils import timezone as _tz
                     filtro = model.objects.get(pk=int(request.POST['id']))
-                    if not filtro.es_baileys:
-                        return JsonResponse({'error': True, 'message': 'Probar envío solo está disponible para sesiones Baileys.'})
-                    if filtro.estado != 'conectado':
-                        return JsonResponse({'error': True, 'message': 'La sesión no está conectada.'})
+                    # Validacion de estado por proveedor
+                    if filtro.es_baileys:
+                        if filtro.estado != 'conectado':
+                            return JsonResponse({'error': True, 'message': 'La sesión no está conectada.'})
+                    elif filtro.es_meta:
+                        config = getattr(filtro, 'config_meta', None)
+                        if not config or not config.access_token or not config.phone_number_id:
+                            return JsonResponse({'error': True, 'message': 'La sesión Meta no tiene credenciales completas (access_token / phone_number_id).'})
                     numero_destino = (request.POST.get('numero_destino') or '').strip()
                     if not numero_destino:
                         numero_destino = filtro.numero
@@ -105,8 +112,13 @@ def sesionesView(request):
                         f"Sesión: {filtro.numero or filtro.session_id}\n"
                         f"Fecha: {_tz.now().strftime('%d/%m/%Y %H:%M:%S')}"
                     )
-                    destino_fmt = whatsapp_service.format_phone_number(numero_destino)
-                    resultado = whatsapp_service.send_text_message(
+                    service = get_whatsapp_service(filtro)
+                    # Baileys quiere formato '<num>@s.whatsapp.net'; Meta lo normaliza solo
+                    destino_fmt = (
+                        service.format_phone_number(numero_destino)
+                        if filtro.es_baileys else numero_destino
+                    )
+                    resultado = service.send_text_message(
                         filtro.session_id, destino_fmt, texto, simularEscritura=True,
                     )
                     if resultado.get('success'):

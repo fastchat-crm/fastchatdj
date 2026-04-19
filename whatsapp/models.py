@@ -26,8 +26,26 @@ ESTADOS_SESION = (
 )
 
 PROVEEDORES_SESION = (
-    ('baileys', 'Baileys (WhatsApp Web)'),
-    ('meta',    'Meta Cloud API'),
+    ('baileys',   'Baileys (WhatsApp Web)'),
+    ('meta',      'Meta Cloud API'),
+    ('instagram', 'Instagram DM'),
+    ('messenger', 'Facebook Messenger'),
+)
+
+CANALES_ORIGEN = (
+    ('whatsapp',  'WhatsApp'),
+    ('instagram', 'Instagram'),
+    ('messenger', 'Messenger'),
+    ('otro',      'Otro'),
+)
+
+FUENTES_REFERRAL = (
+    ('AD',         'Anuncio (CTWA/CTIG)'),
+    ('POST',       'Post orgánico'),
+    ('PAGE',       'Página'),
+    ('BUSINESS',   'Catálogo/Business'),
+    ('ORGANIC',    'Orgánico'),
+    ('UNKNOWN',    'Desconocido'),
 )
 
 MODOS_BOT = (
@@ -83,6 +101,24 @@ class SesionWhatsApp(ModeloBase):
         verbose_name='Proveedor WhatsApp',
         help_text='Define el transporte: Baileys (no oficial, vía Node) o Meta Cloud API (oficial).'
     )
+    mensaje_fuera_horario = models.TextField(
+        blank=True, null=True, verbose_name='Mensaje fuera de horario',
+        help_text='Se envía al contacto cuando escribe fuera del horario de atención configurado.'
+    )
+    zona_horaria = models.CharField(
+        max_length=50, default='America/Guayaquil',
+        verbose_name='Zona horaria',
+        help_text='TZ database name, ej. America/Guayaquil, America/Bogota, UTC.'
+    )
+    auto_asignar_round_robin = models.BooleanField(
+        'Auto-asignar a agentes (round-robin)', default=False,
+        help_text='Al entrar una conversación sin agente, asignarla automáticamente al próximo agente disponible.'
+    )
+    pixel_meta = models.ForeignKey(
+        'whatsapp.PixelMeta', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='sesiones_vinculadas', verbose_name='Pixel Meta (CAPI)',
+        help_text='Pixel al que se reportan conversiones de esta sesión.'
+    )
 
     @property
     def es_meta(self):
@@ -91,6 +127,14 @@ class SesionWhatsApp(ModeloBase):
     @property
     def es_baileys(self):
         return self.proveedor == 'baileys'
+
+    @property
+    def es_instagram(self):
+        return self.proveedor == 'instagram'
+
+    @property
+    def es_messenger(self):
+        return self.proveedor == 'messenger'
 
     def is_connected(self):
         return self.estado == 'conectado'
@@ -167,6 +211,23 @@ class Contacto(ModeloBase):
     estado = models.CharField(max_length=20, choices=(('activo', 'Activo'), ('cerrado', 'Cerrado')), default='activo')
     ultimo_mensaje = models.TextField(blank=True, null=True)
     fecha_ultimo_mensaje = models.DateTimeField(blank=True, null=True)
+    # Etiquetas libres (tags) y canal de origen
+    etiquetas = models.ManyToManyField(
+        'whatsapp.EtiquetaContacto', blank=True, related_name='contactos',
+        verbose_name='Etiquetas',
+    )
+    canal = models.CharField(
+        max_length=20, choices=CANALES_ORIGEN, default='whatsapp',
+        verbose_name='Canal', db_index=True,
+        help_text='Canal por el que entró el contacto: whatsapp/instagram/messenger.'
+    )
+    # Identidad externa multi-canal: permite deduplicar el mismo usuario que
+    # contacta por IG + WhatsApp. Lo llena el webhook respectivo.
+    external_id = models.CharField(
+        max_length=120, blank=True, null=True, db_index=True,
+        verbose_name='ID externo',
+        help_text='IGSID / PSID / wa_id según canal.'
+    )
 
     def get_foto_gris(self):
         try:
@@ -302,6 +363,38 @@ class ConversacionWhatsApp(ModeloBase):
     # Análisis de sentimiento (calculado al cerrar)
     sentimiento = models.CharField('Sentimiento', max_length=20, choices=SENTIMIENTO_CHOICES, blank=True, default='')
     puntuacion_sentimiento = models.IntegerField('Puntuación (1-10)', null=True, blank=True)
+
+    # Atribución de campaña (Click-to-WhatsApp / Click-to-Instagram ads).
+    # Se llena al recibir el primer mensaje de una conversación si el payload
+    # Meta trae bloque `referral` (o el homólogo en Instagram Graph API).
+    origen_canal = models.CharField(
+        'Canal de origen', max_length=20, choices=CANALES_ORIGEN,
+        default='whatsapp', db_index=True,
+    )
+    referral_source_type = models.CharField(
+        'Tipo de fuente referral', max_length=20, choices=FUENTES_REFERRAL,
+        blank=True, default='', db_index=True,
+    )
+    ctwa_clid = models.CharField(
+        'CTWA click ID', max_length=300, blank=True, null=True, db_index=True,
+        help_text='Click-to-WhatsApp/IG click ID que envía Meta. Usar como event_id en CAPI.'
+    )
+    ad_id = models.CharField('Ad ID', max_length=100, blank=True, null=True, db_index=True)
+    adset_id = models.CharField('Adset ID', max_length=100, blank=True, null=True, db_index=True)
+    campaign_id = models.CharField('Campaign ID', max_length=100, blank=True, null=True, db_index=True)
+    referral_source_url = models.URLField('URL fuente', max_length=1000, blank=True, null=True)
+    referral_headline = models.CharField('Titular referral', max_length=500, blank=True, null=True)
+    referral_body = models.TextField('Cuerpo referral', blank=True, null=True)
+    referral_medium = models.CharField('Media type referral', max_length=20, blank=True, null=True)
+    referral_payload_json = models.JSONField('Payload referral crudo', null=True, blank=True)
+    # Fuente de campaña interna (broadcast desde el propio CRM). Enlaza con EnvioCampana
+    campana_origen = models.ForeignKey(
+        'whatsapp.Campana', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='conversaciones_generadas', verbose_name='Campaña origen',
+    )
+    # CAPI: marca si ya se envió el evento Lead/Purchase al pixel
+    capi_lead_enviado = models.BooleanField('Lead reportado a CAPI', default=False)
+    capi_purchase_enviado = models.BooleanField('Purchase reportado a CAPI', default=False)
 
     class Meta:
         verbose_name = 'Conversación WhatsApp'
@@ -1045,4 +1138,609 @@ class EventoMetaRecibido(ModeloBase):
 
     def __str__(self):
         return f"[{self.recibido_en:%Y-%m-%d %H:%M:%S}] {self.tipo_evento}"
-        ordering = ['fecha', 'hora']
+
+
+# ============================================================================
+# CRM: Etiquetas (tags), Pipeline (Kanban), Horarios, Campañas
+# ============================================================================
+
+class EtiquetaContacto(ModeloBase):
+    """Etiquetas libres aplicables a contactos para segmentación."""
+    nombre = models.CharField('Nombre', max_length=80)
+    color = models.CharField(
+        'Color', max_length=20, default='#0d6efd',
+        help_text='Color HEX para badge. Ej: #0d6efd'
+    )
+    descripcion = models.CharField('Descripción', max_length=255, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Etiqueta'
+        verbose_name_plural = 'Etiquetas'
+        ordering = ['nombre']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['usuario_creacion', 'nombre'],
+                name='whatsapp_etiqueta_unica_por_usuario',
+            )
+        ]
+
+    def __str__(self):
+        return self.nombre
+
+
+class PipelineVenta(ModeloBase):
+    """Pipeline/tablero Kanban de ventas. Puede haber varios (ej: Ventas, Soporte)."""
+    nombre = models.CharField('Nombre', max_length=120)
+    descripcion = models.CharField('Descripción', max_length=255, blank=True, default='')
+    es_default = models.BooleanField('Pipeline por defecto', default=False)
+
+    class Meta:
+        verbose_name = 'Pipeline de ventas'
+        verbose_name_plural = 'Pipelines de ventas'
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+
+class EtapaPipeline(ModeloBase):
+    """Columna del Kanban. Orden determina posición izquierda→derecha."""
+    pipeline = models.ForeignKey(
+        PipelineVenta, on_delete=models.CASCADE, related_name='etapas'
+    )
+    nombre = models.CharField('Nombre', max_length=80)
+    orden = models.PositiveIntegerField('Orden', default=0, db_index=True)
+    color = models.CharField('Color', max_length=20, default='#6c757d')
+    probabilidad_cierre = models.PositiveIntegerField(
+        'Probabilidad cierre (%)', default=0,
+        help_text='0-100. Usado para forecast ponderado.'
+    )
+    es_ganado = models.BooleanField('Estado ganado (cerrado con éxito)', default=False)
+    es_perdido = models.BooleanField('Estado perdido', default=False)
+
+    class Meta:
+        verbose_name = 'Etapa de pipeline'
+        verbose_name_plural = 'Etapas de pipeline'
+        ordering = ['pipeline', 'orden']
+
+    def __str__(self):
+        return f"{self.pipeline.nombre} · {self.nombre}"
+
+
+class ConversacionEnPipeline(ModeloBase):
+    """Posición de una conversación dentro de un pipeline (card en Kanban)."""
+    conversacion = models.ForeignKey(
+        ConversacionWhatsApp, on_delete=models.CASCADE,
+        related_name='pipelines', verbose_name='Conversación',
+    )
+    etapa = models.ForeignKey(
+        EtapaPipeline, on_delete=models.PROTECT, related_name='cards',
+        verbose_name='Etapa actual',
+    )
+    valor_estimado = models.DecimalField(
+        'Valor estimado', max_digits=14, decimal_places=2, default=0,
+        help_text='Monto potencial del negocio. Usado para forecast.',
+    )
+    moneda = models.CharField('Moneda', max_length=8, default='USD')
+    orden_en_etapa = models.PositiveIntegerField('Orden en etapa', default=0)
+    fecha_cambio_etapa = models.DateTimeField(auto_now=True)
+    fecha_cierre_esperado = models.DateField('Cierre esperado', null=True, blank=True)
+    nota = models.TextField('Nota', blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Card en pipeline'
+        verbose_name_plural = 'Cards en pipeline'
+        ordering = ['etapa__orden', 'orden_en_etapa']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['conversacion', 'etapa'],
+                name='whatsapp_card_unica_conversacion_etapa',
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.conversacion_id} en {self.etapa}"
+
+
+class HistorialEtapaPipeline(models.Model):
+    """Traza de cambios de etapa para una conversación (para análisis de funnel)."""
+    card = models.ForeignKey(
+        ConversacionEnPipeline, on_delete=models.CASCADE,
+        related_name='historial',
+    )
+    etapa_anterior = models.ForeignKey(
+        EtapaPipeline, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='+',
+    )
+    etapa_nueva = models.ForeignKey(
+        EtapaPipeline, on_delete=models.CASCADE,
+        related_name='+',
+    )
+    usuario = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+    )
+    fecha = models.DateTimeField(auto_now_add=True, db_index=True)
+    motivo = models.CharField(max_length=255, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Historial de etapa'
+        verbose_name_plural = 'Historial de etapas'
+        ordering = ['-fecha']
+
+
+# ----------------------------------------------------------------------------
+# Horarios de atención (business hours)
+# ----------------------------------------------------------------------------
+
+DIAS_SEMANA = (
+    (0, 'Lunes'),
+    (1, 'Martes'),
+    (2, 'Miércoles'),
+    (3, 'Jueves'),
+    (4, 'Viernes'),
+    (5, 'Sábado'),
+    (6, 'Domingo'),
+)
+
+
+class HorarioAtencion(ModeloBase):
+    """Horario de atención por sesión. Fuera de horario, el bot responde con
+    `mensaje_fuera_horario` y/o no enruta a agentes humanos."""
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='horarios', verbose_name='Sesión',
+    )
+    dia_semana = models.IntegerField('Día de la semana', choices=DIAS_SEMANA, db_index=True)
+    hora_inicio = models.TimeField('Hora inicio')
+    hora_fin = models.TimeField('Hora fin')
+    activo = models.BooleanField('Activo', default=True)
+
+    class Meta:
+        verbose_name = 'Horario de atención'
+        verbose_name_plural = 'Horarios de atención'
+        ordering = ['sesion', 'dia_semana', 'hora_inicio']
+
+    def __str__(self):
+        return f"{self.get_dia_semana_display()} {self.hora_inicio:%H:%M}–{self.hora_fin:%H:%M}"
+
+
+class ExcepcionHorario(ModeloBase):
+    """Feriados u otras fechas cerradas/abiertas que sobrescriben el horario semanal."""
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='excepciones_horario', verbose_name='Sesión',
+    )
+    fecha = models.DateField('Fecha')
+    abierto = models.BooleanField('¿Abierto este día?', default=False)
+    hora_inicio = models.TimeField('Hora inicio', null=True, blank=True)
+    hora_fin = models.TimeField('Hora fin', null=True, blank=True)
+    motivo = models.CharField('Motivo', max_length=200, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Excepción de horario'
+        verbose_name_plural = 'Excepciones de horario'
+        ordering = ['sesion', 'fecha']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['sesion', 'fecha'],
+                name='whatsapp_excepcion_horario_unica_por_sesion',
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.sesion} · {self.fecha} · {'abierto' if self.abierto else 'cerrado'}"
+
+
+# Campos adicionales para mensaje fuera de horario viven en SesionWhatsApp, añadidos via migración.
+
+
+# ----------------------------------------------------------------------------
+# Campañas masivas
+# ----------------------------------------------------------------------------
+
+TIPOS_CAMPANA = (
+    ('texto',     'Texto plano'),
+    ('plantilla', 'Plantilla Meta'),
+    ('media',     'Media con caption'),
+)
+
+ESTADOS_CAMPANA = (
+    ('borrador',   'Borrador'),
+    ('programada', 'Programada'),
+    ('enviando',   'Enviando'),
+    ('completada', 'Completada'),
+    ('pausada',    'Pausada'),
+    ('cancelada',  'Cancelada'),
+    ('error',      'Con errores'),
+)
+
+
+class Campana(ModeloBase):
+    """Campaña de mensajería masiva (broadcast). Define audiencia + contenido + cronograma."""
+    nombre = models.CharField('Nombre', max_length=150)
+    descripcion = models.TextField('Descripción', blank=True, default='')
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.PROTECT,
+        related_name='campanas', verbose_name='Sesión emisora',
+    )
+    tipo = models.CharField('Tipo', max_length=20, choices=TIPOS_CAMPANA, default='texto')
+    estado = models.CharField('Estado', max_length=20, choices=ESTADOS_CAMPANA, default='borrador', db_index=True)
+
+    # Contenido según tipo
+    mensaje_texto = models.TextField('Mensaje', blank=True, default='')
+    archivo = models.FileField(upload_to='campanas/', blank=True, null=True)
+    plantilla = models.ForeignKey(
+        PlantillaWhatsApp, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='campanas', verbose_name='Plantilla Meta',
+    )
+    plantilla_variables = models.JSONField(
+        'Variables plantilla', default=dict, blank=True,
+        help_text='{"nombre": "contacto_nombre"} mapea placeholder→campo del contacto.'
+    )
+
+    # Audiencia: filtros declarativos sobre contactos
+    etiquetas_incluir = models.ManyToManyField(
+        EtiquetaContacto, blank=True, related_name='campanas_incluir',
+        verbose_name='Etiquetas a incluir',
+    )
+    etiquetas_excluir = models.ManyToManyField(
+        EtiquetaContacto, blank=True, related_name='campanas_excluir',
+        verbose_name='Etiquetas a excluir',
+    )
+    canales = models.JSONField(
+        'Canales permitidos', default=list, blank=True,
+        help_text='Lista de canales: ["whatsapp","instagram","messenger"]. Vacío = todos.'
+    )
+    filtro_clasificacion = models.JSONField(
+        'Clasificaciones', default=list, blank=True,
+        help_text='Lista de integers 0-5 (Sin Clasificar..No Interesado). Vacío = todas.'
+    )
+    filtro_json = models.JSONField(
+        'Filtros adicionales', default=dict, blank=True,
+        help_text='Reservado para filtros futuros (rango fechas, min_mensajes, etc.)'
+    )
+
+    # Cronograma
+    programada_para = models.DateTimeField('Programada para', null=True, blank=True, db_index=True)
+    ventana_inicio = models.TimeField('Ventana inicio', null=True, blank=True,
+                                      help_text='Solo enviar dentro de este rango horario.')
+    ventana_fin = models.TimeField('Ventana fin', null=True, blank=True)
+    throttle_por_minuto = models.PositiveIntegerField(
+        'Throttle (msg/min)', default=20,
+        help_text='Tope de envíos por minuto para no gatillar rate limits.'
+    )
+
+    # Ejecución
+    fecha_inicio_real = models.DateTimeField('Inicio real', null=True, blank=True)
+    fecha_fin_real = models.DateTimeField('Fin real', null=True, blank=True)
+    total_objetivo = models.PositiveIntegerField('Total objetivo', default=0)
+    total_enviados = models.PositiveIntegerField('Enviados', default=0)
+    total_fallidos = models.PositiveIntegerField('Fallidos', default=0)
+    total_respondidos = models.PositiveIntegerField('Respondidos', default=0)
+    error_detalle = models.TextField('Detalle de error', blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Campaña'
+        verbose_name_plural = 'Campañas'
+        ordering = ['-fecha_registro']
+        indexes = [
+            models.Index(fields=['estado', '-fecha_registro']),
+            models.Index(fields=['sesion', '-fecha_registro']),
+        ]
+
+    def __str__(self):
+        return f"{self.nombre} · {self.get_estado_display()}"
+
+    @property
+    def progreso_pct(self):
+        if not self.total_objetivo:
+            return 0
+        return int(round(100 * (self.total_enviados + self.total_fallidos) / self.total_objetivo))
+
+    @property
+    def tasa_respuesta_pct(self):
+        if not self.total_enviados:
+            return 0
+        return int(round(100 * self.total_respondidos / self.total_enviados))
+
+
+ESTADOS_ENVIO_CAMPANA = (
+    ('pendiente', 'Pendiente'),
+    ('enviando',  'Enviando'),
+    ('enviado',   'Enviado'),
+    ('fallido',   'Fallido'),
+    ('respondido','Respondido'),
+    ('saltado',   'Saltado'),
+)
+
+
+class EnvioCampana(ModeloBase):
+    """Registro por-contacto de una campaña. Uno por contacto objetivo."""
+    campana = models.ForeignKey(
+        Campana, on_delete=models.CASCADE, related_name='envios',
+    )
+    contacto = models.ForeignKey(
+        Contacto, on_delete=models.CASCADE, related_name='envios_campana',
+    )
+    estado = models.CharField(
+        max_length=20, choices=ESTADOS_ENVIO_CAMPANA, default='pendiente', db_index=True
+    )
+    mensaje_enviado = models.TextField('Mensaje enviado', blank=True, default='')
+    mensaje_id_externo = models.CharField(max_length=120, blank=True, default='')
+    intentos = models.PositiveSmallIntegerField('Intentos', default=0)
+    fecha_envio = models.DateTimeField(null=True, blank=True)
+    error = models.TextField(blank=True, default='')
+    respondio = models.BooleanField('Respondió', default=False)
+    fecha_respuesta = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Envío de campaña'
+        verbose_name_plural = 'Envíos de campaña'
+        ordering = ['campana', 'contacto']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['campana', 'contacto'],
+                name='whatsapp_envio_campana_unique',
+            )
+        ]
+        indexes = [
+            models.Index(fields=['estado', 'campana']),
+        ]
+
+
+# ----------------------------------------------------------------------------
+# Meta Conversions API (CAPI / Pixel)
+# ----------------------------------------------------------------------------
+
+class PixelMeta(ModeloBase):
+    """Configuración del Pixel/Dataset de Meta para reportar conversiones vía CAPI.
+
+    Un pixel puede estar asociado a una sesión o ser compartido entre varias
+    (por eso es ForeignKey opcional + flag `compartido`). Cuando una conversación
+    cambia a Lead/Cliente, el servicio CAPI envía un evento al pixel.
+    """
+    nombre = models.CharField('Nombre', max_length=120)
+    pixel_id = models.CharField('Pixel ID / Dataset ID', max_length=50, db_index=True)
+    access_token = models.TextField(
+        'CAPI Access Token',
+        help_text='System User token con permiso ads_management sobre este pixel.'
+    )
+    test_event_code = models.CharField(
+        'Test event code', max_length=50, blank=True, default='',
+        help_text='Si está lleno, los eventos salen en modo test (solo visibles en Test Events).'
+    )
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='pixels', verbose_name='Sesión (opcional)',
+    )
+    activo = models.BooleanField('Activo', default=True)
+    evento_lead_nombre = models.CharField(
+        'Nombre evento Lead', max_length=50, default='Lead',
+        help_text='Nombre del evento estándar Meta que se dispara al clasificar como Lead.'
+    )
+    evento_purchase_nombre = models.CharField(
+        'Nombre evento Purchase', max_length=50, default='Purchase'
+    )
+
+    class Meta:
+        verbose_name = 'Pixel Meta (CAPI)'
+        verbose_name_plural = 'Pixels Meta (CAPI)'
+
+    def __str__(self):
+        return f"{self.nombre} · {self.pixel_id}"
+
+
+class EventoCAPI(ModeloBase):
+    """Log de cada evento enviado a Meta CAPI — para auditoría y reintentos."""
+    pixel = models.ForeignKey(
+        PixelMeta, on_delete=models.CASCADE, related_name='eventos_enviados'
+    )
+    conversacion = models.ForeignKey(
+        ConversacionWhatsApp, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='eventos_capi'
+    )
+    event_name = models.CharField('Nombre evento', max_length=50, db_index=True)
+    event_id = models.CharField('Event ID (dedup)', max_length=200, db_index=True)
+    event_time = models.DateTimeField('Event time', db_index=True)
+    valor = models.DecimalField('Valor', max_digits=12, decimal_places=2, default=0)
+    moneda = models.CharField('Moneda', max_length=8, default='USD')
+    ctwa_clid = models.CharField(max_length=300, blank=True, null=True)
+    payload_json = models.JSONField('Payload enviado', default=dict, blank=True)
+    response_status = models.PositiveSmallIntegerField('HTTP status', null=True, blank=True)
+    response_body = models.TextField('Respuesta Meta', blank=True, default='')
+    exitoso = models.BooleanField('Éxito', default=False, db_index=True)
+    error = models.TextField(blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Evento CAPI'
+        verbose_name_plural = 'Eventos CAPI'
+        ordering = ['-event_time']
+        indexes = [
+            models.Index(fields=['-event_time', 'event_name']),
+            models.Index(fields=['exitoso', '-event_time']),
+        ]
+
+    def __str__(self):
+        return f"{self.event_name} · {self.event_time:%Y-%m-%d %H:%M}"
+
+
+# ----------------------------------------------------------------------------
+# Instagram + Messenger configs (paralelo a ConfigMeta)
+# ----------------------------------------------------------------------------
+
+class ConfigInstagram(ModeloBase):
+    """Configuración Instagram Graph API (DMs) por sesión. OneToOne con sesión
+    de proveedor='instagram'."""
+    sesion = models.OneToOneField(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='config_instagram', verbose_name='Sesión'
+    )
+    ig_user_id = models.CharField('Instagram User ID', max_length=100, db_index=True,
+                                  help_text='IG Business Account ID (17..).')
+    page_id = models.CharField('Facebook Page ID', max_length=100, db_index=True,
+                               help_text='Página FB linkeada al IG Business.')
+    username = models.CharField('@username', max_length=120, blank=True, default='')
+    access_token = models.TextField('Access Token (Page)',
+                                    help_text='Page access token con instagram_manage_messages.')
+    app_id = models.CharField(max_length=50, blank=True, null=True)
+    app_secret = models.CharField(max_length=100, blank=True, null=True)
+    webhook_verify_token = models.CharField(max_length=60)
+    webhook_verificado_en = models.DateTimeField(null=True, blank=True)
+    ultima_sincronizacion = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Configuración Instagram'
+        verbose_name_plural = 'Configuraciones Instagram'
+
+    def __str__(self):
+        return f"IG · {self.username or self.ig_user_id}"
+
+
+class ConfigMessenger(ModeloBase):
+    """Configuración Messenger Platform (Facebook Page) por sesión."""
+    sesion = models.OneToOneField(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='config_messenger', verbose_name='Sesión'
+    )
+    page_id = models.CharField('Facebook Page ID', max_length=100, db_index=True)
+    page_name = models.CharField('Page Name', max_length=200, blank=True, default='')
+    access_token = models.TextField('Page access token',
+                                    help_text='Token con pages_messaging.')
+    app_id = models.CharField(max_length=50, blank=True, null=True)
+    app_secret = models.CharField(max_length=100, blank=True, null=True)
+    webhook_verify_token = models.CharField(max_length=60)
+    webhook_verificado_en = models.DateTimeField(null=True, blank=True)
+    ultima_sincronizacion = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Configuración Messenger'
+        verbose_name_plural = 'Configuraciones Messenger'
+
+    def __str__(self):
+        return f"Messenger · {self.page_name or self.page_id}"
+
+
+# ----------------------------------------------------------------------------
+# Round-robin: disponibilidad de agentes
+# ----------------------------------------------------------------------------
+
+class DisponibilidadAgente(ModeloBase):
+    """Estado de disponibilidad por agente. El enrutador round-robin solo asigna
+    conversaciones a agentes con `disponible=True`."""
+    usuario = models.OneToOneField(
+        Usuario, on_delete=models.CASCADE,
+        related_name='disponibilidad', verbose_name='Agente',
+    )
+    disponible = models.BooleanField('Disponible', default=True, db_index=True)
+    max_conversaciones = models.PositiveIntegerField(
+        'Máx. conversaciones simultáneas', default=20,
+        help_text='Round-robin no asigna más allá de este tope.'
+    )
+    sesiones = models.ManyToManyField(
+        SesionWhatsApp, blank=True, related_name='agentes_disponibles',
+        verbose_name='Sesiones que atiende',
+        help_text='Sesiones cuyas conversaciones pueden asignarse a este agente. Vacío = todas.'
+    )
+    departamentos = models.ManyToManyField(
+        'crm.DepartamentoChatBot', blank=True, related_name='agentes_disponibles',
+        verbose_name='Departamentos',
+    )
+    auto_respuesta_fuera_linea = models.TextField(
+        'Auto-respuesta fuera de línea', blank=True, default='',
+    )
+    ultimo_asignado_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Disponibilidad de agente'
+        verbose_name_plural = 'Disponibilidades de agentes'
+        ordering = ['usuario']
+
+    def __str__(self):
+        return f"{self.usuario} · {'disponible' if self.disponible else 'offline'}"
+
+
+class AsignacionAutomatica(models.Model):
+    """Traza de cada asignación automática hecha por el round-robin."""
+    conversacion = models.ForeignKey(
+        ConversacionWhatsApp, on_delete=models.CASCADE,
+        related_name='asignaciones_auto',
+    )
+    agente = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='asignaciones_recibidas_auto',
+    )
+    estrategia = models.CharField(
+        max_length=30, default='round_robin',
+        help_text='round_robin | least_loaded | manual',
+    )
+    fecha = models.DateTimeField(auto_now_add=True, db_index=True)
+    motivo = models.CharField(max_length=200, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Asignación automática'
+        verbose_name_plural = 'Asignaciones automáticas'
+        ordering = ['-fecha']
+
+
+# ----------------------------------------------------------------------------
+# Webhooks salientes (outbound integrations estilo Zapier)
+# ----------------------------------------------------------------------------
+
+EVENTOS_INTEGRACION = (
+    ('conversacion.nueva',        'Conversación nueva'),
+    ('conversacion.cerrada',      'Conversación cerrada'),
+    ('conversacion.clasificada',  'Conversación reclasificada'),
+    ('conversacion.etiquetada',   'Etiqueta agregada'),
+    ('conversacion.etapa',        'Cambio de etapa pipeline'),
+    ('contacto.nuevo',            'Contacto nuevo'),
+    ('mensaje.entrante',          'Mensaje entrante'),
+    ('mensaje.saliente',          'Mensaje saliente'),
+    ('campana.completada',        'Campaña completada'),
+)
+
+
+class WebhookSaliente(ModeloBase):
+    """Webhook configurable que dispara POST a una URL externa ante eventos del
+    CRM. Permite integración estilo Zapier/Make sin dependencia directa."""
+    nombre = models.CharField('Nombre', max_length=120)
+    url = models.URLField('URL destino', max_length=500)
+    eventos = models.JSONField(
+        'Eventos suscritos', default=list,
+        help_text='Lista de eventos. Ej: ["conversacion.nueva","mensaje.entrante"]'
+    )
+    secret = models.CharField(
+        'Secret HMAC', max_length=100, blank=True, default='',
+        help_text='Si se define, firma el body con HMAC-SHA256 en header X-FC-Signature.'
+    )
+    activo = models.BooleanField('Activo', default=True)
+    headers_extra = models.JSONField('Headers extra', default=dict, blank=True)
+    fallos_consecutivos = models.PositiveIntegerField('Fallos consecutivos', default=0)
+    ultimo_error = models.TextField(blank=True, default='')
+    ultima_entrega = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Webhook saliente'
+        verbose_name_plural = 'Webhooks salientes'
+        ordering = ['nombre']
+
+    def __str__(self):
+        return f"{self.nombre} → {self.url}"
+
+
+class EntregaWebhookSaliente(models.Model):
+    """Log de cada entrega (attempt) de webhook saliente."""
+    webhook = models.ForeignKey(
+        WebhookSaliente, on_delete=models.CASCADE, related_name='entregas'
+    )
+    evento = models.CharField(max_length=50, db_index=True)
+    payload = models.JSONField()
+    status_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    respuesta = models.TextField(blank=True, default='')
+    exitoso = models.BooleanField(default=False, db_index=True)
+    fecha = models.DateTimeField(auto_now_add=True, db_index=True)
+    latencia_ms = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Entrega webhook'
+        verbose_name_plural = 'Entregas webhook'
+        ordering = ['-fecha']

@@ -41,8 +41,12 @@ MIN_MINUTOS_ENTRE_INTENTOS = 2
 def run():
     logCron(PROCESO, f'Iniciando — webhook destino: {WEBHOOK_URL}')
 
+    # Solo sesiones Baileys: Meta Cloud API no necesita reconectarse (no hay
+    # socket persistente con Node). Las sesiones Meta viven mientras
+    # access_token + phone_number_id sean validos.
     sesiones = SesionWhatsApp.objects.filter(
         status=True,
+        proveedor='baileys',
         estado__in=['desconectado', 'error'],
         desconectado_manualmente=False,
     ).select_related('usuario')
