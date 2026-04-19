@@ -1,0 +1,115 @@
+<form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form" id="frmModuloGrupoModal">
+    {% csrf_token %}
+    <input type="hidden" name="pk" value="{{ pk|default:0 }}"/>
+    <input type="hidden" name="action" value="{{ action }}"/>
+
+    <div class="row g-1">
+        {% for field in form %}
+            {% if field.is_hidden %}
+                {{ field }}
+            {% else %}
+                <div class="col-lg-12">
+                    <div class="mb-2">
+                        <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label><br>
+                        {% if field.name == 'icono' %}
+                            <div class="input-group">
+                                {{ field }}
+                                <button id="buscarIconoModal" type="button" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i> Buscar Ícono
+                                </button>
+                            </div>
+                        {% else %}
+                            {{ field }}
+                        {% endif %}
+                        {% if field.help_text %}
+                            <div class="small text-muted mt-1">{{ field.help_text }}</div>
+                        {% endif %}
+                        <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+                    </div>
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="mb-3">
+                <label class="form-label small mb-1">URLs de Aplicaciones</label>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-md-6">
+                        <select id="busquedaModal" multiple class="form-select select2-modal"
+                                data-placeholder="Buscar por Aplicación">
+                            {% for c in urls_sistema %}
+                                <option value="{{ c.nombre }}">{{ c.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text border-end-0">
+                                <i class="fa fa-search text-muted"></i>
+                            </span>
+                            <input type="text" id="buscarPorNombreModal"
+                                   class="form-control border-start-0"
+                                   placeholder="Buscar por nombre...">
+                        </div>
+                    </div>
+                </div>
+
+                {% for c in urls_sistema %}
+                    {% if c.sub_urls %}
+                        {% for sc in c.sub_urls %}
+                            {% with '/'|add:c.url|add:sc.url as link_modulo %}
+                                {% autoescape on %}
+                                    <input style="display: none;"
+                                           id="url_{{ forloop.counter }}_{{ forloop.parentloop.counter }}"
+                                           type="checkbox" name="c_modulos"
+                                           value='{{ sc.dicValue }}'
+                                           {% if link_modulo in modulos_seleccionados %}checked{% endif %}>
+                                {% endautoescape %}
+                            {% endwith %}
+                        {% endfor %}
+                    {% else %}
+                        {% with '/'|add:c.url as link_modulo %}
+                            {% autoescape on %}
+                                <input style="display: none;" id="url_{{ forloop.counter }}"
+                                       type="checkbox"
+                                       name="c_modulos"
+                                       value='{"nombre": "{{ c.nombre }}", "url": "/{{ c.url }}", "orden": {{ forloop.counter0 }}}'
+                                       {% if link_modulo in modulos_seleccionados %}checked{% endif %}>
+                            {% endautoescape %}
+                        {% endwith %}
+                    {% endif %}
+                {% endfor %}
+
+                <div id="jstree-modulos-urls-modal" class="border rounded p-3 mt-1 jstree-modal-wrapper">
+                    {% autoescape on %}
+                        <ul>
+                            {% for c in urls_sistema %}
+                                <li data-paraBuscar="{{ c.nombre }}"
+                                    data-nombre="{{ c.nombre|lower }}"
+                                    data-jstree='{"opened":true, "dnd":false}'>
+                                    <label class="me-2">{{ c.nombre }} ({{ c.url }})</label>
+                                    {% if c.sub_urls %}
+                                        <ul>
+                                            {% for sc in c.sub_urls %}
+                                                {% with '/'|add:c.url|add:sc.url as link_modulo %}
+                                                    <li data-nombre="{{ sc.nombre|lower }}"
+                                                        data-jstree='{{ sc.dicJsTree }}'>
+                                                        {{ sc.nombre }} - (/{{ c.url }}{{ sc.url }})
+                                                    </li>
+                                                {% endwith %}
+                                            {% endfor %}
+                                        </ul>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endautoescape %}
+                </div>
+                <div class="invalid-feedback" id="errorMessageurl_aplicaciones"></div>
+            </div>
+        </div>
+    </div>
+</form>

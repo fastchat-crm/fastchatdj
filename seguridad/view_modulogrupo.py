@@ -172,6 +172,19 @@ def modulo_grupo(request):
                 ordenar_modulos_url(data, qs_modulos, modulos_seleccionados)
                 return render(request, 'seguridad/modulogrupo/form.html', data)
 
+            elif action == 'change_modal':
+
+                pk = int(request.GET['pk'])
+                modulo = ModuloGrupo.objects.get(pk=pk)
+                data["pk"] = pk
+                data["action"] = 'change'
+                data["form"] = form = Formulario(instance=modulo)
+                qs_modulos = form.fields["modulos"].queryset
+                data["modulos_seleccionados"] = modulos_seleccionados = list(
+                    modulo.modulos.all().values_list('url', flat=True))
+                ordenar_modulos_url(data, qs_modulos, modulos_seleccionados)
+                return render(request, 'seguridad/modulogrupo/form_modal.html', data)
+
             elif action == 'ver_modulos':
                 pk = int(request.GET['pk'])
                 modulo = ModuloGrupo.objects.get(pk=pk)

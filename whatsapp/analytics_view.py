@@ -47,8 +47,50 @@ def analyticsView(request):
         total_abiertas = total_conv - total_cerradas
         total_clientes = base_qs.filter(clasificacion=4).count()
         total_leads = base_qs.filter(clasificacion__in=[1, 2, 3]).count()
-        total_msgs = MensajeWhatsApp.objects.filter(fecha__gte=desde).count()
-        total_msgs_ia = MensajeWhatsApp.objects.filter(fecha__gte=desde, ia_generado=True).count()
+        msgs_qs = MensajeWhatsApp.objects.filter(fecha__gte=desde)
+        total_msgs = msgs_qs.count()
+        total_msgs_ia = msgs_qs.filter(ia_generado=True).count()
+
+        # ----- Recepción / emisión -----
+        q_saliente = Q(ia_generado=True) | Q(es_automatico=True) | Q(agente__isnull=False)
+        total_entrantes = msgs_qs.filter(~q_saliente).count()
+        total_salientes = msgs_qs.filter(q_saliente).count()
+        total_humanos = msgs_qs.filter(agente__isnull=False).count()
+        total_automaticos = msgs_qs.filter(es_automatico=True, ia_generado=False, agente__isnull=True).count()
+
+        # ----- Consumo Meta Cloud API (conversaciones facturables) -----
+        meta_conv_qs = base_qs.filter(sesion__proveedor='meta')
+        total_conv_meta = meta_conv_qs.count()
+        total_msgs_meta = msgs_qs.filter(conversacion__sesion__proveedor='meta').count()
+        total_plantillas_enviadas = msgs_qs.filter(
+            conversacion__sesion__proveedor='meta',
+            es_automatico=True,
+        ).count()
+
+        # ----- Tiempos de respuesta (segundos) -----
+        tiempos = EstadisticasConversacion.objects.filter(
+            conversacion__in=base_qs,
+        ).aggregate(
+            primera=Avg('tiempo_primera_respuesta'),
+            promedio=Avg('tiempo_respuesta_promedio'),
+        )
+        def _tdsec(td):
+            return round(td.total_seconds(), 1) if td else 0
+
+        # ----- Consumo por sesión -----
+        consumo_por_sesion = list(
+            msgs_qs.values(
+                'conversacion__sesion__id',
+                'conversacion__sesion__nombre',
+                'conversacion__sesion__numero',
+                'conversacion__sesion__proveedor',
+            ).annotate(
+                mensajes=Count('id'),
+                entrantes=Count('id', filter=~q_saliente),
+                salientes=Count('id', filter=q_saliente),
+                ia=Count('id', filter=Q(ia_generado=True)),
+            ).order_by('-mensajes')[:15]
+        )
 
         # ----- Conversaciones por día -----
         from django.db.models.functions import TruncDate
@@ -132,7 +174,18 @@ def analyticsView(request):
                 'mensajes':  total_msgs,
                 'mensajes_ia': total_msgs_ia,
                 'pct_ia': round(100 * total_msgs_ia / total_msgs, 1) if total_msgs else 0,
+                'entrantes': total_entrantes,
+                'salientes': total_salientes,
+                'humanos':   total_humanos,
+                'automaticos': total_automaticos,
+                'pct_recepcion': round(100 * total_entrantes / total_msgs, 1) if total_msgs else 0,
+                'meta_conversaciones': total_conv_meta,
+                'meta_mensajes': total_msgs_meta,
+                'meta_plantillas': total_plantillas_enviadas,
+                'tiempo_primera_respuesta_seg': _tdsec(tiempos.get('primera')),
+                'tiempo_respuesta_promedio_seg': _tdsec(tiempos.get('promedio')),
             },
+            'consumo_por_sesion': consumo_por_sesion,
             'por_dia':           [{'d': str(r['d']), 'n': r['n']} for r in por_dia],
             'por_clasificacion': por_clasificacion,
             'por_canal':         por_canal,

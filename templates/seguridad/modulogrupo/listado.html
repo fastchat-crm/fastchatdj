@@ -1,4 +1,9 @@
 {% extends 'base.html' %}
+{% block head %}
+    <link rel="stylesheet" href="/static/stylenew/modulogrupo.css">
+    <link rel="stylesheet" href="/static/iconos_selector.css">
+    <link href="/static/assets/plugins/jstree/dist/themes/default/style.min.css" rel="stylesheet"/>
+{% endblock %}
 {% block content %}
     <div class="card mb-3">
         <div class="card-body">
@@ -136,6 +141,12 @@
                                         </li>
                                         <li>
                                             <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="editarGrupoModal({{ mod.pk }}, '{{ mod.nombre|escapejs }}')">
+                                                <i class="fas fa-bolt me-2 text-warning"></i>Configurar URLs (modal)
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
                                                onclick="eliminarajax({{ mod.pk }}, '{{ mod.nombre }}', 'delete', '{{ dict_url_vars }}')">
                                                 <i class="fas fa-trash me-2 text-danger"></i>Eliminar
                                             </a>
@@ -148,6 +159,69 @@
                     </tbody>
                 </table>
                 {% include 'paginacion.html' %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade modal-modulogrupo" id="modalEditarGrupo" tabindex="-1"
+         aria-labelledby="modalEditarGrupoLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarGrupoLabel">Configurar URLs del grupo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="modalEditarGrupoBody">
+                    <div class="text-center p-5 text-muted">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <div class="small mt-2">Cargando...</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger btn-sm" data-bs-dismiss="modal">
+                        <i class="fa fa-window-close me-1"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-success btn-sm" id="btnGuardarGrupoModal" disabled>
+                        <i class="fa fa-save me-1"></i> Guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade modal-modulogrupo" id="modalIconsGrupo" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Seleccione un ícono</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="input-group mb-3">
+                        <span class="input-group-text border-end-0">
+                            <i class="fa fa-search text-muted"></i>
+                        </span>
+                        <input id="txtBuscarIconoGrupo" type="search" class="form-control border-start-0"
+                               placeholder="Buscar ícono..."/>
+                    </div>
+                    <div class="nav nav-tabs mb-3" role="tablist">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-iconoirG"
+                                type="button">Iconoir</button>
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-icofontG" type="button">Icofont</button>
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-lineawesomeG" type="button">Line Awesome</button>
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-fontawesomeG" type="button">Font Awesome</button>
+                    </div>
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="tab-iconoirG"><div id="iconoirG-container" class="icon-grid"></div></div>
+                        <div class="tab-pane fade" id="tab-icofontG"><div id="icofontG-container" class="icon-grid"></div></div>
+                        <div class="tab-pane fade" id="tab-lineawesomeG"><div id="lineawesomeG-container" class="icon-grid"></div></div>
+                        <div class="tab-pane fade" id="tab-fontawesomeG"><div id="fontawesomeG-container" class="icon-grid"></div></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="seleccionarIconoGrupo">Seleccionar</button>
+                </div>
             </div>
         </div>
     </div>
@@ -177,7 +251,217 @@
 {% endblock %}
 
 {% block jscript %}
+    <script src="/static/assets/plugins/jstree/dist/jstree.min.js"></script>
     <script>
+        let jstreeModalInstance = null;
+        let iconoSelGrupo = '';
+
+        function editarGrupoModal(pk, nombre) {
+            const modalEl = document.getElementById('modalEditarGrupo');
+            const body = $('#modalEditarGrupoBody');
+            $('#modalEditarGrupoLabel').text('Configurar URLs · ' + nombre);
+            $('#btnGuardarGrupoModal').prop('disabled', true);
+            body.html('<div class="text-center p-5 text-muted"><i class="fas fa-spinner fa-spin fa-2x"></i><div class="small mt-2">Cargando...</div></div>');
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+
+            $.get('{{ ruta }}', {pk: pk, action: 'change_modal'})
+                .done(function (html) {
+                    body.html(html);
+                    initModalForm();
+                    $('#btnGuardarGrupoModal').prop('disabled', false);
+                })
+                .fail(function () {
+                    body.html('<div class="alert alert-danger m-3">Error al cargar el formulario.</div>');
+                });
+        }
+
+        function initModalForm() {
+            $('#modalEditarGrupoBody .select2-modal').select2({
+                width: '100%',
+                dropdownParent: $('#modalEditarGrupo')
+            });
+
+            $('#busquedaModal').on('change', filtrarArbolModal);
+            $('#buscarPorNombreModal').on('input', filtrarArbolModal);
+
+            const $tree = $('#jstree-modulos-urls-modal');
+            $tree.jstree({
+                "core": {
+                    "themes": {"responsive": false},
+                    "check_callback": function (operation, node, node_parent) {
+                        if (operation === 'move_node') {
+                            return this.get_node(node).parent === this.get_node(node_parent).id &&
+                                   node.children.length === 0;
+                        }
+                        return true;
+                    }
+                },
+                "types": {
+                    "default": {"icon": "fa fa-folder text-warning fa-lg"},
+                    "file": {"icon": "fa fa-file text-inverse fa-lg"}
+                },
+                "plugins": ["wholerow", "checkbox", "dnd", "types"]
+            });
+
+            $tree.on("move_node.jstree", function (e, data) {
+                if (data.node.children.length === 0) {
+                    const inp = $tree.jstree(true).get_node(data.parent).children;
+                    for (let i = 0; i < inp.length; i++) {
+                        const mod = $tree.jstree(true).get_node(inp[i]);
+                        try {
+                            const datosMod = JSON.parse($('#' + mod.state.input_id).val());
+                            datosMod.orden = i;
+                            $('#' + mod.state.input_id).val(JSON.stringify(datosMod));
+                        } catch (e) {}
+                    }
+                }
+            });
+
+            $tree.on("changed.jstree", function (e, ppp) {
+                try {
+                    const children = ppp.node.children;
+                    if (children.length > 0) {
+                        for (let i = 0; i < children.length; i++) {
+                            const sel = '#' + children[i];
+                            if ($(sel).data('jstree') && $(sel).data('jstree').url) {
+                                const datos = $(sel).data('jstree');
+                                $('#' + datos.input_id).prop("checked", ppp.action === 'select_node');
+                            }
+                        }
+                    } else {
+                        const datos = ppp.node.data.jstree;
+                        if (datos && datos.url) {
+                            $('#' + datos.input_id).prop("checked", ppp.action === 'select_node');
+                        }
+                    }
+                } catch (e) {}
+            });
+
+            $('#buscarIconoModal').on('click', function () {
+                cargarIconosGrupo();
+                new bootstrap.Modal(document.getElementById('modalIconsGrupo')).show();
+            });
+        }
+
+        function filtrarArbolModal() {
+            const seleccion = $('#busquedaModal').children('option:selected').toArray().map(o => $(o).val().toUpperCase());
+            const texto = ($('#buscarPorNombreModal').val() || '').toLowerCase();
+            $('#jstree-modulos-urls-modal .jstree-container-ul > li').each(function () {
+                let okApp = true;
+                if (seleccion.length > 0) {
+                    const app = ($(this).attr('data-paraBuscar') || '').toUpperCase();
+                    okApp = seleccion.indexOf(app) !== -1;
+                }
+                let okNom = true;
+                if (texto) {
+                    const nombreApp = $(this).attr('data-nombre') || '';
+                    let hallado = nombreApp.includes(texto);
+                    if (!hallado) {
+                        $(this).find('li').each(function () {
+                            const nh = $(this).attr('data-nombre') || '';
+                            if (nh.includes(texto)) { hallado = true; return false; }
+                        });
+                    }
+                    okNom = hallado;
+                }
+                $(this).toggle(okApp && okNom);
+            });
+        }
+
+        let iconosCargadosG = false;
+        function cargarIconosGrupo() {
+            if (iconosCargadosG) return;
+            fetch('/static/js/icons/all-icons-translated.json')
+                .then(r => r.json())
+                .then(data => {
+                    ['iconoir','icofont','lineawesome','fontawesome'].forEach(tipo => {
+                        const cont = $(`#${tipo}G-container`);
+                        cont.empty();
+                        data[tipo].forEach(icon => {
+                            cont.append(`<div class="icon-item" data-icon="${icon.class}" data-en="${icon.en.toLowerCase()}" data-es="${icon.es.toLowerCase()}"><i class="${icon.class}"></i><span class="icon-name">${icon.en} / ${icon.es}</span></div>`);
+                        });
+                    });
+                    $('#modalIconsGrupo .icon-item').on('click', function () {
+                        $('#modalIconsGrupo .icon-item').removeClass('selected-icon');
+                        $(this).addClass('selected-icon');
+                        iconoSelGrupo = $(this).data('icon');
+                    });
+                    iconosCargadosG = true;
+                });
+        }
+
+        $('#txtBuscarIconoGrupo').on('input', function () {
+            const t = $(this).val().toLowerCase();
+            $('#modalIconsGrupo .icon-item').each(function () {
+                const en = $(this).data('en') || '';
+                const es = $(this).data('es') || '';
+                const ic = ($(this).data('icon') || '').toLowerCase();
+                $(this).toggle(en.includes(t) || es.includes(t) || ic.includes(t));
+            });
+        });
+
+        $('#seleccionarIconoGrupo').on('click', function () {
+            if (iconoSelGrupo) {
+                $('#modalEditarGrupoBody #id_icono').val(iconoSelGrupo);
+                bootstrap.Modal.getInstance(document.getElementById('modalIconsGrupo')).hide();
+            } else {
+                mensajeWarning('Por favor seleccione un ícono');
+            }
+        });
+
+        $('#btnGuardarGrupoModal').on('click', function () {
+            const $form = $('#frmModuloGrupoModal');
+            if (!$form.length) return;
+            $form.find('.is-invalid').removeClass('is-invalid');
+            $form.find('.invalid-feedback').html('');
+
+            const fd = new FormData($form[0]);
+            const $btn = $(this);
+            const htmlOri = $btn.html();
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i> Guardando...');
+            pantallaespera();
+
+            $.ajax({
+                type: 'POST',
+                url: '{{ ruta }}',
+                data: fd,
+                dataType: 'json',
+                cache: false,
+                contentType: false,
+                processData: false
+            }).done(function (data) {
+                setTimeout($.unblockUI, 1);
+                $btn.prop('disabled', false).html(htmlOri);
+                if (!Array.isArray(data)) data = [data];
+                let ok = true;
+                data.forEach(function (v) {
+                    if (v.error) {
+                        ok = false;
+                        if (v.form) {
+                            v.form.forEach(function (row) {
+                                Object.keys(row).forEach(function (k) {
+                                    $('#modalEditarGrupoBody #id_' + k).addClass('is-invalid');
+                                    $('#modalEditarGrupoBody #errorMessage' + k).html(row[k]);
+                                });
+                            });
+                            if (v.message) Swal.fire(v.message, '', 'error');
+                        } else {
+                            Swal.fire(v.message || 'Error', '', 'error');
+                        }
+                    }
+                });
+                if (ok) {
+                    bootstrap.Modal.getInstance(document.getElementById('modalEditarGrupo')).hide();
+                    location.reload();
+                }
+            }).fail(function () {
+                setTimeout($.unblockUI, 1);
+                $btn.prop('disabled', false).html(htmlOri);
+                Swal.fire('Error de conexión', '', 'error');
+            });
+        });
+
         function vergrupos(pk, nombre) {
             getPromise('{{ ruta }}', {pk: pk, action: 'ver_grupos'}).then(function (value) {
                 $('#modalListados').find('table').children('thead').children('tr').children('th').html(`Grupo de permisos del grupo ${nombre}`);

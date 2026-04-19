@@ -19,7 +19,7 @@
                 <th>Objetivo</th><th>Enviados</th><th>Fallidos</th><th>Progreso</th><th></th>
             </tr></thead>
             <tbody>
-            {% for c in page_obj %}
+            {% for c in listado %}
                 <tr>
                     <td><strong>{{ c.nombre }}</strong><br><small class="text-muted">{{ c.descripcion|truncatechars:60 }}</small></td>
                     <td>{{ c.sesion.nombre|default:c.sesion.numero }}</td>
@@ -45,7 +45,7 @@
             {% endfor %}
             </tbody>
         </table>
-        {% include 'paginador.html' %}
+        {% include 'paginacion.html' %}
     </div></div>
 </div>
 

@@ -1,0 +1,47 @@
+.modal-modulogrupo .modal-dialog {
+    max-width: 95%;
+    width: 95%;
+}
+
+.modal-modulogrupo .jstree-anchor {
+    white-space: normal !important;
+    height: auto !important;
+    padding-right: 24px;
+}
+
+.modal-modulogrupo .jstree-modal-wrapper {
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+.modal-modulogrupo .icon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+}
+
+.modal-modulogrupo .icon-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px;
+    border: 1px solid #e5e5e5;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.modal-modulogrupo .icon-item.selected-icon {
+    border-color: #0d6efd;
+    background: #e7f1ff;
+}
+
+.modal-modulogrupo .icon-item i {
+    font-size: 22px;
+    margin-bottom: 4px;
+}
+
+.modal-modulogrupo .icon-item .icon-name {
+    font-size: 11px;
+    text-align: center;
+    word-break: break-word;
+}

@@ -17,7 +17,28 @@
 
     <div id="kpis" class="row g-3 mb-3"></div>
 
+    <div class="row g-3 mb-3">
+        <div class="col-md-6"><div class="card border-info">
+            <div class="card-body">
+                <h6 class="card-title"><i class="fa fa-inbox text-info me-1"></i>Recepción de mensajes</h6>
+                <div id="recepKpis" class="row text-center"></div>
+            </div>
+        </div></div>
+        <div class="col-md-6"><div class="card border-warning">
+            <div class="card-body">
+                <h6 class="card-title"><i class="fa-brands fa-meta text-warning me-1"></i>Consumo Meta Cloud API</h6>
+                <div id="metaKpis" class="row text-center"></div>
+            </div>
+        </div></div>
+    </div>
+
     <div class="row g-3">
+        <div class="col-12"><div class="card"><div class="card-body">
+            <h6>Consumo por sesión</h6>
+            <table class="table table-sm" id="tblConsumoSesion"><thead>
+                <tr><th>Sesión</th><th>Proveedor</th><th>Mensajes</th><th>Entrantes</th><th>Salientes</th><th>IA</th></tr>
+            </thead><tbody></tbody></table>
+        </div></div></div>
         <div class="col-md-8"><div class="card"><div class="card-body">
             <h6>Conversaciones por día</h6><canvas id="chartDia"></canvas>
         </div></div></div>
@@ -62,6 +83,30 @@ async function load(){
       ${kpi('Mensajes IA', k.mensajes_ia + ' ('+k.pct_ia+'%)', 'secondary')}
       ${kpi('CAPI enviados', d.capi.total + ' / OK '+d.capi.ok, 'dark')}
     `;
+
+    document.getElementById('recepKpis').innerHTML = `
+      ${miniKpi('Entrantes', k.entrantes, 'info')}
+      ${miniKpi('Salientes', k.salientes, 'primary')}
+      ${miniKpi('Humanos', k.humanos, 'success')}
+      ${miniKpi('Automáticos', k.automaticos, 'secondary')}
+      ${miniKpi('% Recepción', k.pct_recepcion + '%', 'info')}
+      ${miniKpi('1ra respuesta', fmtSeg(k.tiempo_primera_respuesta_seg), 'warning')}
+    `;
+
+    document.getElementById('metaKpis').innerHTML = `
+      ${miniKpi('Conversaciones Meta', k.meta_conversaciones, 'warning')}
+      ${miniKpi('Mensajes Meta', k.meta_mensajes, 'warning')}
+      ${miniKpi('Plantillas enviadas', k.meta_plantillas, 'primary')}
+      ${miniKpi('Tiempo prom. resp.', fmtSeg(k.tiempo_respuesta_promedio_seg), 'info')}
+    `;
+
+    const tbs = document.querySelector('#tblConsumoSesion tbody');
+    (d.consumo_por_sesion || []).forEach(r => {
+        const nombre = r.conversacion__sesion__nombre || r.conversacion__sesion__numero || '—';
+        const prov = (r.conversacion__sesion__proveedor || '').toUpperCase();
+        tbs.innerHTML += `<tr><td>${nombre}</td><td><span class="badge bg-${prov==='META'?'warning':'secondary'}">${prov}</span></td><td>${r.mensajes}</td><td class="text-info">${r.entrantes}</td><td class="text-primary">${r.salientes}</td><td class="text-secondary">${r.ia}</td></tr>`;
+    });
+    if (!(d.consumo_por_sesion || []).length) tbs.innerHTML = '<tr><td colspan="6" class="text-muted text-center">Sin datos</td></tr>';
     // Chart día
     new Chart(document.getElementById('chartDia'), {
         type:'line', data:{ labels:d.por_dia.map(x=>x.d), datasets:[{label:'Conversaciones', data:d.por_dia.map(x=>x.n), borderColor:'#0d6efd', tension:0.3}]},
@@ -101,6 +146,8 @@ async function load(){
 }
 function kpi(label,val,color){ return `<div class="col-md-2"><div class="card border-${color}"><div class="card-body text-center p-2">
     <div class="small text-muted">${label}</div><div class="h5 mb-0 text-${color}">${val}</div></div></div></div>`;}
+function miniKpi(label,val,color){ return `<div class="col p-2"><div class="small text-muted">${label}</div><div class="fw-bold text-${color}">${val}</div></div>`;}
+function fmtSeg(s){ if(!s) return '—'; if(s<60) return s+'s'; const m=Math.floor(s/60); const r=Math.round(s%60); return m+'m '+r+'s';}
 load();
 </script>
 {% endblock %}

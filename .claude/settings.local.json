@@ -31,7 +31,18 @@
       "WebFetch(domain:mensajeria.broktech.com.ec)",
       "Bash(awk '/^def process_incoming_message/,/^def [a-z]/' whatsapp/view_webhook_handler.py)",
       "Bash(ls *)",
-      "Bash(iconv -f UTF-16 -t UTF-8 requirements.txt)"
+      "Bash(iconv -f UTF-16 -t UTF-8 requirements.txt)",
+      "Bash(.venv/Scripts/python.exe -c \"import markdown, pdfkit; print\\('markdown:', markdown.__version__\\); print\\('pdfkit:', pdfkit.__version__\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"import pdfkit; print\\(pdfkit.__version__\\)\")",
+      "Bash(.venv/Scripts/python.exe -m pip install markdown pdfkit)",
+      "Bash(where wkhtmltopdf *)",
+      "Read(//c/Program Files/wkhtmltopdf/**)",
+      "Bash(.venv/Scripts/python.exe -m pip install xhtml2pdf)",
+      "Bash(.venv/Scripts/python.exe -c \"from xhtml2pdf import pisa; print\\('xhtml2pdf OK'\\)\")",
+      "Bash(.venv/Scripts/python.exe docs/generar_pdfs.py)",
+      "Bash(.venv/Scripts/python.exe -X utf8 docs/generar_pdfs.py)",
+      "Bash(xxd)",
+      "Bash(.venv/Scripts/python.exe -m pip show xhtml2pdf markdown)"
     ]
   },
   "hooks": {
