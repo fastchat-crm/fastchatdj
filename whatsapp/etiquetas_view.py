@@ -72,8 +72,16 @@ def etiquetasView(request):
         except Exception as ex:
             return JsonResponse({'error': True, 'message': f'Error: {ex}'})
 
-    listado = EtiquetaContacto.objects.filter(
-        status=True, usuario_creacion=request.user,
-    ).order_by('nombre')
-    paginador(request, listado, 50, data, '')
+    criterio = (request.GET.get('criterio') or '').strip()
+    qs = EtiquetaContacto.objects.filter(status=True, usuario_creacion=request.user)
+    url_vars = ''
+    if criterio:
+        from django.db.models import Q as _Q
+        qs = qs.filter(_Q(nombre__icontains=criterio) | _Q(descripcion__icontains=criterio))
+        data['criterio'] = criterio
+        url_vars += f'&criterio={criterio}'
+    listado = qs.order_by('nombre')
+    data['list_count'] = listado.count()
+    data['url_vars'] = url_vars
+    paginador(request, listado, 50, data, url_vars)
     return render(request, 'whatsapp/etiquetas/listado.html', data)

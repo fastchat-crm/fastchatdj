@@ -3,35 +3,23 @@
     <input type="hidden" name="pk" value="{{ pk|default:0 }}"/>
     <input type="hidden" name="action" value="{{ action }}"/>
 
-    <div class="row g-1">
-        {% for field in form %}
-            {% if field.is_hidden %}
-                {{ field }}
-            {% else %}
-                <div class="col-lg-12">
-                    <div class="mb-2">
-                        <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label><br>
-                        {% if field.name == 'icono' %}
-                            <div class="input-group">
-                                {{ field }}
-                                <button id="buscarIconoModal" type="button" class="btn btn-primary">
-                                    <i class="fas fa-search me-1"></i> Buscar Ícono
-                                </button>
-                            </div>
-                        {% else %}
-                            {{ field }}
-                        {% endif %}
-                        {% if field.help_text %}
-                            <div class="small text-muted mt-1">{{ field.help_text }}</div>
-                        {% endif %}
-                        <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
-                    </div>
-                </div>
-            {% endif %}
-        {% endfor %}
-    </div>
+    {# Inputs ocultos con el resto del formulario: preservamos los valores del grupo
+       para que el POST no los borre, pero el modal de "Configurar URLs" solo
+       muestra el selector de URLs (resto de campos se editan desde el listado). #}
+    {% for field in form %}
+        {% if field.name != 'modulos' %}
+            <input type="hidden" name="{{ field.name }}" value="{{ field.value|default_if_none:'' }}"/>
+        {% endif %}
+    {% endfor %}
 
-    <div class="row mt-3">
+    {% if form.instance.pk %}
+    <div class="alert alert-light border mb-3 py-2 px-3">
+        <small class="text-muted">Configurando URLs del grupo:</small>
+        <strong>{{ form.instance.nombre }}</strong>
+    </div>
+    {% endif %}
+
+    <div class="row">
         <div class="col-12">
             <div class="mb-3">
                 <label class="form-label small mb-1">URLs de Aplicaciones</label>

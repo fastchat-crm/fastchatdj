@@ -8,6 +8,26 @@
 {% block content %}
 <div class="container-fluid p-0">
 
+    {# ===== EXPLICACIÓN DEL MÓDULO ===== #}
+    <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
+        <i class="fa fa-file-lines fa-2x"></i>
+        <div>
+            <strong>¿Para qué sirven las plantillas de WhatsApp?</strong><br>
+            <small>
+                Meta exige que <strong>todo mensaje proactivo</strong> (iniciado por tu negocio) o
+                enviado <strong>fuera de la ventana de 24 horas</strong> use una <em>plantilla pre-aprobada</em>.
+                Cada plantilla pasa por un proceso de aprobación de Meta antes de poder enviarse.<br>
+                <strong>Categorías:</strong>
+                <code>UTILITY</code> (confirmaciones, recordatorios, tracking),
+                <code>MARKETING</code> (promos, ofertas, engagement),
+                <code>AUTHENTICATION</code> (códigos OTP / 2FA).<br>
+                <strong>Flujo:</strong> creas la plantilla aquí (queda en <em>BORRADOR</em>) → la sometes a Meta
+                → Meta la revisa (~minutos a 24h) → cuando queda <em>APPROVED</em> ya puedes usarla en
+                <a href="/whatsapp/campanas/">campañas masivas</a> o envíos individuales.
+            </small>
+        </div>
+    </div>
+
     {# ===== SIN SESIONES META ===== #}
     {% if not sesiones_meta %}
         <div class="alert alert-warning d-flex align-items-center gap-3">

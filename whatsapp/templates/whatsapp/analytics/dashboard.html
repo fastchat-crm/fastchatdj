@@ -6,13 +6,65 @@
 
 {% block content %}
 <div class="container-fluid p-0">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4>Analytics · últimos {{ rango_dias }} días</h4>
-        <select class="form-select w-auto" onchange="location='?dias='+this.value">
-            <option value="7"  {% if rango_dias == 7 %}selected{% endif %}>7 días</option>
-            <option value="30" {% if rango_dias == 30 %}selected{% endif %}>30 días</option>
-            <option value="90" {% if rango_dias == 90 %}selected{% endif %}>90 días</option>
-        </select>
+
+    {# ===== HEADER + FILTROS ===== #}
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="mb-0">
+                    <i class="fa fa-chart-bar text-primary me-2"></i>Analytics
+                    {% if sesion_actual %}
+                        <span class="badge bg-primary ms-2">{{ sesion_actual.nombre|default:sesion_actual.numero }}</span>
+                    {% endif %}
+                </h4>
+                <small class="text-muted">
+                    {% if rango_modo == 'custom' %}Del {{ fecha_desde }} al {{ fecha_hasta }}
+                    {% else %}Últimos {{ rango_dias }} días
+                    {% endif %}
+                </small>
+            </div>
+            <form method="GET" class="row g-2 align-items-end mb-0">
+                <div class="col-md-4">
+                    <label class="form-label small mb-1">Sesión</label>
+                    <select name="sesion" class="form-select select2">
+                        <option value="">Todas las sesiones</option>
+                        {% for s in sesiones %}
+                            <option value="{{ s.id }}" {% if sesion_sel == s.id %}selected{% endif %}>
+                                {{ s.nombre|default:s.numero }} · {{ s.get_proveedor_display }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Rango rápido</label>
+                    <select name="dias" class="form-select"
+                            onchange="if(this.value){document.getElementById('fDesde').value='';document.getElementById('fHasta').value='';this.form.submit();}">
+                        <option value="">— personalizado —</option>
+                        <option value="7"  {% if rango_modo == 'preset' and rango_dias == 7 %}selected{% endif %}>7 días</option>
+                        <option value="30" {% if rango_modo == 'preset' and rango_dias == 30 %}selected{% endif %}>30 días</option>
+                        <option value="60" {% if rango_modo == 'preset' and rango_dias == 60 %}selected{% endif %}>60 días</option>
+                        <option value="90" {% if rango_modo == 'preset' and rango_dias == 90 %}selected{% endif %}>90 días</option>
+                        <option value="180" {% if rango_modo == 'preset' and rango_dias == 180 %}selected{% endif %}>6 meses</option>
+                        <option value="365" {% if rango_modo == 'preset' and rango_dias == 365 %}selected{% endif %}>1 año</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Desde</label>
+                    <input type="date" name="desde" id="fDesde" class="form-control"
+                           value="{% if rango_modo == 'custom' %}{{ fecha_desde }}{% endif %}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Hasta</label>
+                    <input type="date" name="hasta" id="fHasta" class="form-control"
+                           value="{% if rango_modo == 'custom' %}{{ fecha_hasta }}{% endif %}">
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100">
+                        <i class="fa fa-filter me-1"></i> Aplicar
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <div id="kpis" class="row g-3 mb-3"></div>
@@ -72,7 +124,31 @@
 <script>
 const CLAS = {0:'Sin clasificar',1:'Lead',2:'Prospecto',3:'Oportunidad',4:'Cliente',5:'No interesado'};
 async function load(){
-    const r = await fetch('?action=data&dias={{ rango_dias }}'); const d = await r.json();
+    // Construir query string preservando filtros aplicados
+    const params = new URLSearchParams();
+    params.set('action', 'data');
+    {% if rango_modo == 'custom' %}
+        params.set('desde', '{{ fecha_desde }}');
+        params.set('hasta', '{{ fecha_hasta }}');
+    {% else %}
+        params.set('dias', '{{ rango_dias }}');
+    {% endif %}
+    {% if sesion_sel %}params.set('sesion', '{{ sesion_sel }}');{% endif %}
+
+    const r = await fetch('?' + params.toString());
+    if (!r.ok) {
+        document.getElementById('kpis').innerHTML =
+            '<div class="alert alert-danger">Error ' + r.status + ' cargando datos. Revisa la consola.</div>';
+        const t = await r.text();
+        console.error('Analytics error response:', t);
+        return;
+    }
+    const d = await r.json();
+    if (d.error) {
+        document.getElementById('kpis').innerHTML =
+            '<div class="alert alert-danger">Error: ' + (d.message || 'desconocido') + '</div>';
+        return;
+    }
     // KPIs
     const k = d.kpis;
     document.getElementById('kpis').innerHTML = `
@@ -102,9 +178,14 @@ async function load(){
 
     const tbs = document.querySelector('#tblConsumoSesion tbody');
     (d.consumo_por_sesion || []).forEach(r => {
-        const nombre = r.conversacion__sesion__nombre || r.conversacion__sesion__numero || '—';
-        const prov = (r.conversacion__sesion__proveedor || '').toUpperCase();
-        tbs.innerHTML += `<tr><td>${nombre}</td><td><span class="badge bg-${prov==='META'?'warning':'secondary'}">${prov}</span></td><td>${r.mensajes}</td><td class="text-info">${r.entrantes}</td><td class="text-primary">${r.salientes}</td><td class="text-secondary">${r.ia}</td></tr>`;
+        const nombre = r.sesion_nombre || r.sesion_numero || '—';
+        const prov = (r.sesion_proveedor || '').toUpperCase();
+        const provColor = prov==='META' ? 'warning'
+                       : prov==='INSTAGRAM' ? 'danger'
+                       : prov==='MESSENGER' ? 'primary'
+                       : 'secondary';
+        const link = r.sesion_id ? `<a href="?sesion=${r.sesion_id}&dias={{ rango_dias }}">${nombre}</a>` : nombre;
+        tbs.innerHTML += `<tr><td>${link}</td><td><span class="badge bg-${provColor}">${prov}</span></td><td>${r.mensajes}</td><td class="text-info">${r.entrantes}</td><td class="text-primary">${r.salientes}</td><td class="text-secondary">${r.ia}</td></tr>`;
     });
     if (!(d.consumo_por_sesion || []).length) tbs.innerHTML = '<tr><td colspan="6" class="text-muted text-center">Sin datos</td></tr>';
     // Chart día

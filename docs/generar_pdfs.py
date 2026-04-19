@@ -375,16 +375,17 @@ a { color: #2563eb; text-decoration: none; }
 /* --- CÓDIGO --- */
 code {
     font-family: 'Courier New', monospace;
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
+    background: #1e293b;
+    color: #fbbf24;
+    border: 1px solid #334155;
     padding: 1px 6px;
     border-radius: 3px;
     font-size: 9pt;
-    color: #be185d;
+    font-weight: bold;
 }
-pre {
+pre, div.codehilite, div.codehilite pre {
     background: #0f172a;
-    color: #e2e8f0;
+    color: #f1f5f9;
     padding: 12px 14px;
     border-radius: 6px;
     font-family: 'Courier New', monospace;
@@ -394,12 +395,15 @@ pre {
     margin: 0.8em 0;
     border-left: 4px solid #38bdf8;
 }
-pre code {
-    background: transparent;
-    color: inherit;
+div.codehilite { padding: 0; border: none; }
+div.codehilite pre { margin: 0; border-left: 4px solid #38bdf8; }
+pre code, pre code * , div.codehilite code, div.codehilite span {
+    background: transparent !important;
+    color: #f1f5f9 !important;
     padding: 0;
     border: none;
     font-size: inherit;
+    font-weight: normal;
 }
 
 /* --- TABLAS --- */
@@ -663,10 +667,7 @@ def markdown_a_html(md_text: str) -> str:
     """MD -> HTML body con convertor estándar."""
     return markdown.markdown(
         md_text,
-        extensions=['extra', 'codehilite', 'tables', 'fenced_code'],
-        extension_configs={
-            'codehilite': {'noclasses': True, 'pygments_style': 'monokai'},
-        },
+        extensions=['extra', 'tables', 'fenced_code'],
     )
 
 
