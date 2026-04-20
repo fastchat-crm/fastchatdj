@@ -1,0 +1,551 @@
+{% load static %}<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Demo IA de voz</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="{% static 'stylenew/voz_demo.css' %}">
+</head>
+<body class="voz-demo">
+<div class="voz-container">
+    <div class="voz-card">
+        <h1 class="voz-title">Asistente IA de voz</h1>
+        <p class="voz-subtitle">Habla directo desde tu navegador. La IA escucha, piensa y responde.</p>
+
+        <!-- Selector de agente IA -->
+        <div class="voz-field">
+            <label class="voz-label" for="agenteSelector">Agente IA</label>
+            <select id="agenteSelector" class="voz-select">
+                <option value="">-- Pipeline genérico (sin agente) --</option>
+                {% for a in agentes %}
+                    <option value="{{ a.id }}">{{ a.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Selector de voz (browser TTS) -->
+        <div class="voz-field">
+            <label class="voz-label" for="vozSelector">Voz de la IA</label>
+            <select id="vozSelector" class="voz-select">
+                <option value="auto">Auto (mejor voz natural disponible)</option>
+            </select>
+            <div class="voz-hint-inline" id="vozHint">Detectando voces...</div>
+        </div>
+
+        <!-- Estado de conexión / pipeline -->
+        <div class="voz-status">
+            <span class="voz-status-dot" id="statusDot"></span>
+            <span id="statusText">Desconectado</span>
+            <span class="voz-agente-actual" id="agenteActual"></span>
+        </div>
+
+        <!-- Overlay grande de "pensando" / "hablando" -->
+        <div class="voz-bubble" id="vozBubble" data-state="idle">
+            <div class="voz-bubble-core">
+                <span class="voz-bubble-ring"></span>
+                <span class="voz-bubble-ring voz-bubble-ring-2"></span>
+                <span class="voz-bubble-icon" id="bubbleIcon">🎙</span>
+            </div>
+            <div class="voz-bubble-label" id="bubbleLabel">Iniciá la conversación</div>
+        </div>
+
+        <!-- Monitor micrófono: nivel local + VAD servidor -->
+        <div class="voz-monitor">
+            <div class="voz-monitor-row">
+                <span class="voz-monitor-label">Micrófono</span>
+                <div class="voz-meter"><div class="voz-meter-fill" id="meterFill"></div></div>
+                <span class="voz-monitor-value" id="micValue">—</span>
+            </div>
+            <div class="voz-monitor-row">
+                <span class="voz-monitor-label">Servidor</span>
+                <span class="voz-vad voz-vad-idle" id="vadBadge">Sin datos</span>
+            </div>
+        </div>
+
+        <div class="voz-controls">
+            <button class="voz-btn voz-btn-primary" id="btnStart">Iniciar conversación</button>
+            <button class="voz-btn voz-btn-danger" id="btnStop" disabled>Detener</button>
+        </div>
+
+        <div class="voz-transcript" id="transcript">
+            <div class="voz-empty">Aun no hay conversación.</div>
+        </div>
+
+        <p class="voz-hint">Permite el acceso al micrófono. Silencio de ~800ms cierra tu turno.</p>
+
+        <!-- Panel de logs / errores -->
+        <div class="voz-logs-wrap">
+            <div class="voz-logs-header">
+                <button type="button" class="voz-logs-toggle" id="btnToggleLogs">
+                    <span id="logsToggleIcon">▸</span>
+                    <span>Logs del sistema</span>
+                    <span class="voz-logs-counter" id="logsCounter">0</span>
+                </button>
+                <div class="voz-logs-actions">
+                    <label class="voz-logs-filter">
+                        <input type="checkbox" id="logsOnlyErrors"> solo errores
+                    </label>
+                    <button type="button" class="voz-logs-btn" id="btnClearLogs">Limpiar</button>
+                    <button type="button" class="voz-logs-btn" id="btnCopyLogs">Copiar</button>
+                </div>
+            </div>
+            <div class="voz-logs-body" id="logsBody" hidden>
+                <div class="voz-logs-empty">Sin eventos aun. Conectate para ver actividad.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    const TARGET_RATE = 16000;
+
+    let ws = null;
+    let audioCtx = null;
+    let micNode = null;
+    let micStream = null;
+    let analyser = null;
+    let analyserData = null;
+    let rafId = null;
+    let playingUntil = 0;
+    let vadTimeout = null;
+    // Browser TTS — por defecto usamos SpeechSynthesis del navegador porque
+    // suena mas humano que Piper local y no depende del backend. Si llega PCM
+    // del server, lo reproducimos solo si el browser TTS no arranco todavia.
+    let ttsActive = false;
+    let pendingReply = '';
+    let bestVoice = null;
+    let voicesCache = [];
+
+    const dot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const agenteActual = document.getElementById('agenteActual');
+    const transcript = document.getElementById('transcript');
+    const btnStart = document.getElementById('btnStart');
+    const btnStop  = document.getElementById('btnStop');
+    const agenteSelector = document.getElementById('agenteSelector');
+    const meterFill = document.getElementById('meterFill');
+    const micValue = document.getElementById('micValue');
+    const vadBadge = document.getElementById('vadBadge');
+    const bubble = document.getElementById('vozBubble');
+    const bubbleLabel = document.getElementById('bubbleLabel');
+    const bubbleIcon = document.getElementById('bubbleIcon');
+    const vozSelector = document.getElementById('vozSelector');
+    const vozHint = document.getElementById('vozHint');
+    const logsBody = document.getElementById('logsBody');
+    const logsCounter = document.getElementById('logsCounter');
+    const logsOnlyErrors = document.getElementById('logsOnlyErrors');
+    const btnToggleLogs = document.getElementById('btnToggleLogs');
+    const logsToggleIcon = document.getElementById('logsToggleIcon');
+    const btnClearLogs = document.getElementById('btnClearLogs');
+    const btnCopyLogs = document.getElementById('btnCopyLogs');
+
+    // --- Logger in-page: captura eventos + errores para debug sin abrir DevTools ---
+    const MAX_LOGS = 200;
+    let logCount = 0;
+    let errorCount = 0;
+
+    function fmtTime(){
+        const d = new Date();
+        return d.toTimeString().slice(0,8) + '.' + String(d.getMilliseconds()).padStart(3,'0');
+    }
+
+    function logEvent(level, msg, data){
+        logCount++;
+        if (level === 'error' || level === 'warn') errorCount++;
+        logsCounter.textContent = errorCount > 0 ? (logCount + ' · ' + errorCount + ' err') : String(logCount);
+        logsCounter.classList.toggle('has-errors', errorCount > 0);
+
+        // Limpiar placeholder empty
+        const empty = logsBody.querySelector('.voz-logs-empty');
+        if (empty) empty.remove();
+
+        const row = document.createElement('div');
+        row.className = 'voz-log-row voz-log-' + level;
+        if (logsOnlyErrors.checked && level !== 'error' && level !== 'warn') row.classList.add('hidden');
+        let dataStr = '';
+        if (data !== undefined) {
+            try { dataStr = ' ' + (typeof data === 'string' ? data : JSON.stringify(data)); }
+            catch(e) { dataStr = ' [unserializable]'; }
+        }
+        row.innerHTML = '<span class="voz-log-time">' + fmtTime() + '</span>' +
+                        '<span class="voz-log-level">' + level.toUpperCase() + '</span>' +
+                        '<span class="voz-log-msg"></span>';
+        row.querySelector('.voz-log-msg').textContent = msg + dataStr;
+        logsBody.appendChild(row);
+        // Limite buffer
+        while (logsBody.children.length > MAX_LOGS) logsBody.removeChild(logsBody.firstChild);
+        logsBody.scrollTop = logsBody.scrollHeight;
+
+        // Replicar en consola del browser tambien
+        const fn = console[level] || console.log;
+        try { fn.call(console, '[voz]', msg, data !== undefined ? data : ''); } catch(e) {}
+    }
+
+    // Captura errores globales (JS exceptions + promises rejectadas)
+    window.addEventListener('error', (e) => {
+        logEvent('error', 'JS error: ' + (e.message || 'desconocido'),
+                 { file: e.filename, line: e.lineno, col: e.colno });
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+        logEvent('error', 'Promise rejection', String(e.reason || '').slice(0, 400));
+    });
+
+    // Toggle del panel
+    btnToggleLogs.addEventListener('click', () => {
+        const hidden = logsBody.hasAttribute('hidden');
+        if (hidden) { logsBody.removeAttribute('hidden'); logsToggleIcon.textContent = '▾'; }
+        else        { logsBody.setAttribute('hidden', '');  logsToggleIcon.textContent = '▸'; }
+    });
+    btnClearLogs.addEventListener('click', () => {
+        logsBody.innerHTML = '<div class="voz-logs-empty">Limpio.</div>';
+        logCount = 0; errorCount = 0;
+        logsCounter.textContent = '0';
+        logsCounter.classList.remove('has-errors');
+    });
+    btnCopyLogs.addEventListener('click', async () => {
+        const rows = Array.from(logsBody.querySelectorAll('.voz-log-row'))
+            .map(r => r.textContent.replace(/\s+/g, ' ').trim());
+        const text = rows.join('\n');
+        try { await navigator.clipboard.writeText(text); logEvent('info', 'Logs copiados al portapapeles.'); }
+        catch(e) { logEvent('warn', 'No se pudo copiar: ' + e.message); }
+    });
+    logsOnlyErrors.addEventListener('change', () => {
+        const only = logsOnlyErrors.checked;
+        logsBody.querySelectorAll('.voz-log-row').forEach(r => {
+            const isErr = r.classList.contains('voz-log-error') || r.classList.contains('voz-log-warn');
+            r.classList.toggle('hidden', only && !isErr);
+        });
+    });
+
+    function setBubble(state, label, icon){
+        bubble.dataset.state = state;
+        bubbleLabel.textContent = label;
+        if (icon) bubbleIcon.textContent = icon;
+    }
+
+    function cancelBrowserTTS(){
+        try {
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+        } catch(e){}
+        ttsActive = false;
+    }
+
+    // Ranking de voces — preferimos las online neural/natural sobre las
+    // desktop sintetizadas (que suenan "robot 1998").
+    function scoreVoice(v){
+        const name = (v.name || '').toLowerCase();
+        const lang = (v.lang || '').toLowerCase();
+        let score = 0;
+        // Idioma español es prioridad maxima
+        if (/^es[-_]/.test(lang)) score += 100;
+        else if (/^es$/.test(lang)) score += 80;
+        else if (/^pt[-_]br/.test(lang)) score += 20; // portugues brasileno es plan B
+        // Voces neurales / naturales (modernas, suenan humanas)
+        if (/neural|natural/i.test(name)) score += 60;
+        if (/online|wavenet|studio|journey/i.test(name)) score += 50;
+        if (/google/i.test(name)) score += 40;      // Google voices online
+        if (/microsoft.*(online|natural)/i.test(name)) score += 45;
+        // Voces femeninas suelen percibirse mas calidas para asistentes
+        if (/female|helena|sabina|paulina|lupe|ximena|camila|elena|lucia|sofia|valentina|maria/i.test(name)) score += 10;
+        // Penalizar explicitamente voces desktop/eSpeak (robot)
+        if (/espeak|desktop|festival|mbrola/i.test(name)) score -= 30;
+        return score;
+    }
+
+    function populateVoices(){
+        if (!window.speechSynthesis) return;
+        const voces = window.speechSynthesis.getVoices();
+        if (!voces || !voces.length) return;
+        voicesCache = voces.slice().sort((a, b) => scoreVoice(b) - scoreVoice(a));
+        bestVoice = voicesCache[0];
+
+        // Poblar el selector de voz
+        while (vozSelector.options.length > 1) vozSelector.remove(1);
+        voicesCache.forEach((v, i) => {
+            const opt = document.createElement('option');
+            opt.value = v.name;
+            const tag = scoreVoice(v) >= 140 ? ' ★' : (scoreVoice(v) >= 100 ? ' ✓' : '');
+            opt.textContent = v.name + ' (' + v.lang + ')' + tag;
+            vozSelector.appendChild(opt);
+        });
+        vozHint.textContent = bestVoice
+            ? 'Sugerido: ' + bestVoice.name + ' (' + bestVoice.lang + ')'
+            : 'No hay voces TTS disponibles en este browser.';
+    }
+
+    function getSelectedVoice(){
+        const val = vozSelector.value;
+        if (val && val !== 'auto') {
+            const sel = voicesCache.find(v => v.name === val);
+            if (sel) return sel;
+        }
+        return bestVoice;
+    }
+
+    function speakBrowserTTS(texto){
+        if (!window.speechSynthesis || !texto) return;
+        try {
+            cancelBrowserTTS();
+            const utter = new SpeechSynthesisUtterance(texto);
+            const v = getSelectedVoice();
+            if (v) {
+                utter.voice = v;
+                utter.lang  = v.lang;
+            } else {
+                utter.lang = 'es-ES';
+            }
+            utter.rate = 1.0;
+            utter.pitch = 1.05;  // levemente mas calido
+            utter.onstart = () => { ttsActive = true; setBubble('speaking', 'IA hablando', '🔊'); setStatus('speaking', 'IA hablando...'); };
+            utter.onend   = () => { ttsActive = false; setBubble('listening', 'Escuchando', '🎙'); setStatus('listening', 'Escuchando'); };
+            utter.onerror = () => { ttsActive = false; };
+            window.speechSynthesis.speak(utter);
+        } catch(e) { console.warn('browser TTS fail', e); }
+    }
+
+    function buildWsUrl(){
+        const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const base = proto + location.host + '/ws/voz/web/';
+        const ag = agenteSelector.value;
+        return ag ? base + '?agente_id=' + encodeURIComponent(ag) : base;
+    }
+
+    function setStatus(stateClass, texto){
+        dot.className = 'voz-status-dot' + (stateClass ? ' ' + stateClass : '');
+        statusText.textContent = texto;
+    }
+
+    function setVad(speaking){
+        if (vadTimeout) { clearTimeout(vadTimeout); vadTimeout = null; }
+        if (speaking) {
+            vadBadge.textContent = 'Escuchando voz';
+            vadBadge.className = 'voz-vad voz-vad-active';
+        } else {
+            vadBadge.textContent = 'Silencio';
+            vadBadge.className = 'voz-vad voz-vad-silence';
+            // Si no llegan eventos en 3s, marcar "sin datos"
+            vadTimeout = setTimeout(() => {
+                vadBadge.textContent = 'Sin datos';
+                vadBadge.className = 'voz-vad voz-vad-idle';
+            }, 3000);
+        }
+    }
+
+    function addTurn(rol, texto){
+        const empty = transcript.querySelector('.voz-empty');
+        if (empty) empty.remove();
+        const div = document.createElement('div');
+        div.className = 'voz-turn voz-turn-' + rol;
+        div.innerHTML = '<div class="voz-turn-rol">' + (rol === 'cliente' ? 'Tu' : 'IA') + '</div>' +
+                        '<div>' + texto.replace(/</g,'&lt;') + '</div>';
+        transcript.appendChild(div);
+        transcript.scrollTop = transcript.scrollHeight;
+    }
+
+    function playPCM(int16Buffer, sampleRate){
+        // Si el browser TTS ya esta hablando, ignoramos el PCM del server para
+        // no apilar dos voces encima. La browser gana por ser mas rapida/humana.
+        if (ttsActive) return;
+
+        // Resumir AudioContext si el browser lo suspendio (politicas de autoplay)
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(() => {});
+        }
+
+        const f32 = new Float32Array(int16Buffer.length);
+        for (let i = 0; i < int16Buffer.length; i++) {
+            f32[i] = int16Buffer[i] / (int16Buffer[i] < 0 ? 0x8000 : 0x7FFF);
+        }
+        const buf = audioCtx.createBuffer(1, f32.length, sampleRate);
+        buf.copyToChannel(f32, 0);
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        src.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+        const startAt = Math.max(now, playingUntil);
+        src.start(startAt);
+        playingUntil = startAt + buf.duration;
+    }
+
+    function drawMeter(){
+        if (!analyser) return;
+        analyser.getByteTimeDomainData(analyserData);
+        // RMS sobre [-1, 1]
+        let sum = 0;
+        for (let i = 0; i < analyserData.length; i++) {
+            const v = (analyserData[i] - 128) / 128;
+            sum += v * v;
+        }
+        const rms = Math.sqrt(sum / analyserData.length);
+        const pct = Math.min(100, rms * 250);
+        meterFill.style.width = pct.toFixed(1) + '%';
+        meterFill.style.background = pct > 12 ? 'var(--voz-success)' : 'var(--voz-muted)';
+        micValue.textContent = (rms * 100).toFixed(0);
+        rafId = requestAnimationFrame(drawMeter);
+    }
+
+    async function start(){
+        setStatus('', 'Conectando...');
+        btnStart.disabled = true;
+        agenteSelector.disabled = true;
+
+        try {
+            micStream = await navigator.mediaDevices.getUserMedia({
+                audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }
+            });
+            logEvent('info', 'Microfono OK');
+        } catch (err) {
+            logEvent('error', 'getUserMedia fallo', err.message);
+            setStatus('', 'Error micrófono: ' + err.message);
+            btnStart.disabled = false;
+            agenteSelector.disabled = false;
+            return;
+        }
+
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        await audioCtx.audioWorklet.addModule('{% static "voz/audio_processor.js" %}');
+
+        ws = new WebSocket(buildWsUrl());
+        ws.binaryType = 'arraybuffer';
+
+        ws.onopen = () => {
+            setStatus('connected', 'Conectado — escuchando');
+            btnStop.disabled = false;
+            logEvent('info', 'WS conectado', buildWsUrl());
+
+            const source = audioCtx.createMediaStreamSource(micStream);
+
+            // Analyser para meter visual local (confirma que el mic capta)
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 512;
+            analyserData = new Uint8Array(analyser.fftSize);
+            source.connect(analyser);
+            drawMeter();
+
+            // AudioWorklet que envia PCM al WS
+            micNode = new AudioWorkletNode(audioCtx, 'mic-capture', {
+                processorOptions: { targetRate: TARGET_RATE }
+            });
+            micNode.port.onmessage = (e) => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(e.data);
+                }
+            };
+            source.connect(micNode);
+            // no conectamos micNode.connect(destination) para evitar feedback
+        };
+
+        ws.onmessage = (e) => {
+            if (typeof e.data === 'string') {
+                let msg;
+                try { msg = JSON.parse(e.data); }
+                catch (err) { logEvent('error', 'WS json invalido', e.data.slice(0, 200)); return; }
+
+                // Logueamos todos los eventos JSON del server
+                if (msg.event === 'error' || msg.level === 'error') {
+                    logEvent('error', 'Server: ' + (msg.mensaje || msg.message || msg.event), msg);
+                } else if (msg.event === 'warn' || msg.level === 'warn') {
+                    logEvent('warn', 'Server: ' + (msg.mensaje || msg.message || msg.event), msg);
+                } else {
+                    logEvent('info', 'evt ' + msg.event, msg);
+                }
+
+                if (msg.event === 'transcript') {
+                    addTurn('cliente', msg.texto);
+                    setStatus('thinking', 'IA pensando...');
+                    setBubble('thinking', 'La IA esta pensando...', '🤔');
+                } else if (msg.event === 'reply') {
+                    addTurn('ia', msg.texto);
+                    setStatus('speaking', 'IA hablando...');
+                    setBubble('speaking', 'IA respondiendo...', '🔊');
+                    // Disparamos el browser TTS INMEDIATO. Es mas humano que Piper
+                    // y no hay que esperar que el server sintetice → 0 latencia.
+                    pendingReply = msg.texto || '';
+                    if (pendingReply) speakBrowserTTS(pendingReply);
+                } else if (msg.event === 'audio_end') {
+                    // Si el browser TTS no arranco por algun motivo, ultimo intento.
+                    if (!ttsActive && !playingUntil && pendingReply) {
+                        speakBrowserTTS(pendingReply);
+                    }
+                    pendingReply = '';
+                } else if (msg.event === 'ready') {
+                    setStatus('listening', 'Listo — habla cuando quieras');
+                    setBubble('listening', 'Listo — habla cuando quieras', '🎙');
+                    if (msg.agente_nombre) {
+                        agenteActual.textContent = '· ' + msg.agente_nombre;
+                    } else if (msg.agente_id) {
+                        agenteActual.textContent = '· agente ' + msg.agente_id;
+                    } else {
+                        agenteActual.textContent = '· pipeline genérico';
+                    }
+                } else if (msg.event === 'vad') {
+                    setVad(!!msg.speaking);
+                }
+            } else {
+                // binario = PCM 16-bit
+                const pcm = new Int16Array(e.data);
+                playPCM(pcm, TARGET_RATE);
+            }
+        };
+
+        ws.onclose = (ev) => {
+            setStatus('', 'Desconectado');
+            setBubble('idle', 'Conversacion terminada', '🎙');
+            logEvent(ev.code === 1000 ? 'info' : 'warn',
+                     'WS cerrado (code=' + ev.code + ')',
+                     ev.reason || '(sin razon)');
+            cleanup();
+        };
+        ws.onerror = (err) => {
+            logEvent('error', 'WS error', err && err.message || 'sin detalle');
+            setStatus('', 'Error de conexión');
+            setBubble('error', 'Error de conexion', '⚠️');
+        };
+    }
+
+    function cleanup(){
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+        if (vadTimeout) { clearTimeout(vadTimeout); vadTimeout = null; }
+        cancelBrowserTTS();
+        pendingReply = '';
+        if (analyser) { try { analyser.disconnect(); } catch(e){} analyser = null; analyserData = null; }
+        if (micNode) { micNode.disconnect(); micNode = null; }
+        if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+        if (audioCtx) { audioCtx.close(); audioCtx = null; }
+        ws = null;
+        btnStart.disabled = false;
+        btnStop.disabled = true;
+        agenteSelector.disabled = false;
+        meterFill.style.width = '0%';
+        micValue.textContent = '—';
+        vadBadge.textContent = 'Sin datos';
+        vadBadge.className = 'voz-vad voz-vad-idle';
+        agenteActual.textContent = '';
+    }
+
+    function stop(){
+        if (ws) {
+            try { ws.send(JSON.stringify({event:'stop'})); } catch(e){}
+            ws.close();
+        }
+    }
+
+    btnStart.addEventListener('click', start);
+    btnStop.addEventListener('click', stop);
+
+    // Warm-up de voces de SpeechSynthesis (Chrome las pobla async)
+    if (window.speechSynthesis) {
+        populateVoices();
+        window.speechSynthesis.onvoiceschanged = populateVoices;
+        // Algunos browsers tardan 1-2s en poblarlas aun con el event
+        setTimeout(populateVoices, 500);
+        setTimeout(populateVoices, 1500);
+    } else {
+        vozHint.textContent = 'Este navegador no soporta SpeechSynthesis.';
+    }
+})();
+</script>
+</body>
+</html>

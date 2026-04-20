@@ -35,4 +35,7 @@ class ConversacionWhatsAppManager(Manager):
 
     @property
     def expirado(self):
-        return self.get_queryset().filter(Q(conversacion_finalizada=True) | Q(estado_conversacion=1))
+        # Fuente de verdad: estado_conversacion=1. Evita que conversaciones
+        # con conversacion_finalizada=True pero estado_conversacion=0
+        # (estado inconsistente) aparezcan como finalizadas.
+        return self.get_queryset().filter(estado_conversacion=1)

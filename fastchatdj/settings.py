@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     'whatsapp.apps.WhatsappConfig',
     'crm.apps.CrmConfig',
     'agents_ai.apps.AgentsAiConfig',
+    'voz.apps.VozConfig',
     # packages
     'wkhtmltopdf',
     'django_select2',

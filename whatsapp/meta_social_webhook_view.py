@@ -14,17 +14,17 @@ URLs:
 """
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import logging
 
 from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from channels.layers import get_channel_layer
 
+from .common_meta import validar_firma_hmac as _validar_hmac_shared
 from .models import (
     ConfigInstagram,
     ConfigMessenger,
@@ -38,17 +38,42 @@ logger = logging.getLogger(__name__)
 
 
 def _validar_hmac(raw_body: bytes, sig_header: str, secret: str) -> bool:
-    if not secret:
-        return True
-    if not sig_header:
-        return False
+    # Delega en el helper compartido con meta_webhook_view para que haya una
+    # sola implementacion de HMAC-SHA256 en todo el proyecto.
+    return _validar_hmac_shared(raw_body, sig_header, secret)
+
+
+def _cliente_espera_html(request) -> bool:
+    return 'text/html' in (request.META.get('HTTP_ACCEPT') or '').lower()
+
+
+def _render_info(request, proveedor: str, emoji: str, ConfigCls,
+                 estado: str = 'landing', status_code: int = 200):
     try:
-        expected = 'sha256=' + hmac.new(
-            secret.encode('utf-8'), raw_body, hashlib.sha256
-        ).hexdigest()
-        return hmac.compare_digest(expected, sig_header)
+        total = ConfigCls.objects.count()
+        verificados = ConfigCls.objects.exclude(webhook_verificado_en__isnull=True).count()
+        with_app_secret = ConfigCls.objects.exclude(app_secret='').exclude(app_secret__isnull=True).count()
     except Exception:
-        return False
+        total = verificados = with_app_secret = 0
+    ctx = {
+        'estado':            estado,
+        'proveedor':         proveedor,
+        'emoji':             emoji,
+        'total_configs':     total,
+        'verificados':       verificados,
+        'sin_verificar':     max(total - verificados, 0),
+        'with_app_secret':   with_app_secret,
+        'eventos_total':     0,
+        'eventos_procesados': 0,
+        'eventos_con_error':  0,
+        'ultimos_eventos':   [],
+        'webhook_url':       request.build_absolute_uri(request.path),
+        'metodo':            request.method,
+        'ahora':             timezone.now(),
+        'ua_resumido':       (request.META.get('HTTP_USER_AGENT') or '')[:120],
+        'query_string':      request.META.get('QUERY_STRING') or '',
+    }
+    return render(request, 'whatsapp/meta_webhook_info.html', ctx, status=status_code)
 
 
 # ---------------------------------------------------------------------------
@@ -58,10 +83,13 @@ def _validar_hmac(raw_body: bytes, sig_header: str, secret: str) -> bool:
 @csrf_exempt
 def instagram_webhook(request):
     if request.method == 'GET':
-        return _handshake_generico(request, ConfigInstagram, 'instagram')
+        return _handshake_generico(request, ConfigInstagram, 'instagram', '📷')
     if request.method == 'POST':
         return _procesar_post_social(request, ConfigInstagram, 'instagram')
-    return HttpResponse(status=405)
+    if _cliente_espera_html(request):
+        return _render_info(request, 'Instagram DM', '📷', ConfigInstagram,
+                            estado='metodo_no_permitido', status_code=405)
+    return JsonResponse({'error': 'method_not_allowed'}, status=405)
 
 
 # ---------------------------------------------------------------------------
@@ -71,26 +99,40 @@ def instagram_webhook(request):
 @csrf_exempt
 def messenger_webhook(request):
     if request.method == 'GET':
-        return _handshake_generico(request, ConfigMessenger, 'messenger')
+        return _handshake_generico(request, ConfigMessenger, 'messenger', '💬')
     if request.method == 'POST':
         return _procesar_post_social(request, ConfigMessenger, 'messenger')
-    return HttpResponse(status=405)
+    if _cliente_espera_html(request):
+        return _render_info(request, 'Facebook Messenger', '💬', ConfigMessenger,
+                            estado='metodo_no_permitido', status_code=405)
+    return JsonResponse({'error': 'method_not_allowed'}, status=405)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _handshake_generico(request, ConfigCls, canal):
+def _handshake_generico(request, ConfigCls, canal, emoji):
     mode = request.GET.get('hub.mode')
     token = request.GET.get('hub.verify_token')
-    challenge = request.GET.get('hub.challenge', '')
-    if mode != 'subscribe' or not token:
-        return HttpResponse('bad_request', status=400)
+    challenge = request.GET.get('hub.challenge')
+
+    # Sin `hub.challenge` no es Meta haciendo el handshake → alguien probando
+    # la URL desde el navegador. Renderizamos la landing informativa igual que
+    # en meta_webhook.
+    if not (mode and challenge is not None):
+        proveedor_label = 'Instagram DM' if canal == 'instagram' else 'Facebook Messenger'
+        return _render_info(request, proveedor_label, emoji, ConfigCls, estado='landing')
+
+    if mode != 'subscribe':
+        return HttpResponse('invalid_mode', content_type='text/plain', status=400)
+    if not token:
+        return HttpResponse('missing_verify_token', content_type='text/plain', status=400)
+
     config = ConfigCls.objects.filter(webhook_verify_token=token).first()
     if not config:
-        logger.warning("%s webhook: token no coincide", canal)
-        return HttpResponse('forbidden', status=403)
+        logger.warning("%s webhook: token no coincide (prefix=%s)", canal, (token or '')[:8])
+        return HttpResponse('forbidden', content_type='text/plain', status=403)
     config.webhook_verificado_en = timezone.now()
     config.save(update_fields=['webhook_verificado_en'])
     return HttpResponse(challenge, content_type='text/plain', status=200)

@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import timedelta
+from decimal import Decimal
 
 import requests
 from django.core.validators import FileExtensionValidator
@@ -249,6 +250,38 @@ class AgentesIA(ModeloBase):
         default=180, verbose_name='Chars del tema inicial conservado',
         help_text='Cuando la conversación se hace larga, se conserva el primer mensaje sustantivo del cliente '
                   'como "ancla" para mantener el bot enfocado en el tema original. Rango: 100–400. Default: 180.'
+    )
+
+    # ── Persona del bot (humanización) ─────────────────────────────────────
+    nombre_bot = models.CharField(
+        max_length=80, default='Asistente', verbose_name='Nombre del bot',
+        help_text='Nombre con el que se presenta el bot. Ej: "Cami", "Mateo", "Sofía".'
+    )
+    personalidad = models.TextField(
+        blank=True, default='', verbose_name='Personalidad',
+        help_text='Rasgos humanos del bot. Ej: "Soy Cami, 28 años, extrovertida, uso emojis con mesura, '
+                  'soy paciente con clientes nuevos".'
+    )
+    TONO_CHOICES = (
+        ('cercano', 'Cercano'),
+        ('formal', 'Formal'),
+        ('amigable', 'Amigable'),
+        ('vendedor', 'Vendedor'),
+        ('profesional', 'Profesional'),
+    )
+    tono = models.CharField(
+        max_length=20, choices=TONO_CHOICES, default='amigable', verbose_name='Tono',
+        help_text='Registro general del bot al escribir.'
+    )
+    estilo_escritura = models.TextField(
+        blank=True, default='', verbose_name='Estilo de escritura',
+        help_text='Indicaciones de forma. Ej: "mensajes cortos, 2-3 líneas, admite muletillas (dale, mm), '
+                  'no abrir signos de interrogación, emojis 0-2 por mensaje".'
+    )
+    temperature = models.DecimalField(
+        max_digits=3, decimal_places=2, default=Decimal('0.60'),
+        verbose_name='Temperatura (creatividad)',
+        help_text='0.0 = literal/robótico, 1.0 = creativo/variado. 0.6 da variación natural sin inventar datos.'
     )
 
     class Meta:

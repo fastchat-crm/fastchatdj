@@ -16,6 +16,63 @@ from .models import SesionWhatsApp, ConfigMeta
 from .services import WhatsAppService, get_whatsapp_service
 
 
+def _sincronizar_meta_desde_graph(session, config, timeout=10):
+    """Consulta Graph API con config.access_token + phone_number_id y persiste
+    display_phone_number / quality_rating / messaging_limit_tier / ultima_sincronizacion.
+    Si obtiene display_phone_number valido, tambien actualiza session.numero y marca la sesion
+    como 'conectado'. Devuelve (ok: bool, payload: dict).
+    """
+    import requests
+    from django.utils import timezone as _tz
+    from .services_meta import GRAPH_API_BASE
+    if not (config and config.access_token and config.phone_number_id):
+        return False, {'message': 'Faltan credenciales Meta (access_token / phone_number_id).'}
+    try:
+        r = requests.get(
+            f'{GRAPH_API_BASE}/{config.phone_number_id}',
+            headers={'Authorization': f'Bearer {config.access_token}'},
+            params={'fields': 'display_phone_number,verified_name,quality_rating,messaging_limit_tier'},
+            timeout=timeout,
+        )
+    except Exception as e:
+        return False, {'message': f'Error de conexion con Meta: {str(e)}'}
+    if r.status_code != 200:
+        return False, {'message': f'Meta respondio {r.status_code}: {r.text[:400]}'}
+    data = r.json()
+    config.display_phone_number = data.get('display_phone_number') or config.display_phone_number
+    config.quality_rating = (data.get('quality_rating') or 'UNKNOWN').upper()
+    if data.get('messaging_limit_tier'):
+        config.messaging_limit_tier = data.get('messaging_limit_tier')
+    config.ultima_sincronizacion = _tz.now()
+    config.save(update_fields=[
+        'display_phone_number', 'quality_rating',
+        'messaging_limit_tier', 'ultima_sincronizacion',
+    ])
+    numero_sincronizado = None
+    if config.display_phone_number:
+        numero_limpio = ''.join(c for c in config.display_phone_number if c.isdigit())
+        updates = set()
+        if numero_limpio and session.numero != numero_limpio:
+            session.numero = numero_limpio
+            updates.add('numero')
+        if session.estado != 'conectado':
+            session.estado = 'conectado'
+            session.error_mensaje = None
+            updates.add('estado')
+            updates.add('error_mensaje')
+        if updates:
+            session.save(update_fields=list(updates))
+        numero_sincronizado = numero_limpio or None
+    return True, {
+        'message': 'Conexion con Meta verificada correctamente.',
+        'display_phone_number': config.display_phone_number,
+        'quality_rating': config.get_quality_rating_display(),
+        'messaging_limit_tier': config.get_messaging_limit_tier_display() if config.messaging_limit_tier else None,
+        'verified_name': data.get('verified_name'),
+        'numero': numero_sincronizado,
+    }
+
+
 @login_required
 @secure_module
 def sesionesView(request):
@@ -311,6 +368,9 @@ def sesionesView(request):
 
                 # ── Configuracion Meta Cloud API ───────────────────────────
                 elif action == 'guardar_config_meta':
+                    # Guarda SOLO a base de datos. No llama a Graph API, no obliga
+                    # campos completos. El cliente puede guardar incremental y
+                    # sincronizar cuando tenga todo, via "Verificar conexion con Meta".
                     import secrets
                     session = SesionWhatsApp.objects.get(id=request.POST['pk'])
                     config, _ = ConfigMeta.objects.get_or_create(
@@ -322,23 +382,6 @@ def sesionesView(request):
                             'webhook_verify_token': secrets.token_urlsafe(32),
                         },
                     )
-                    # Validacion manual de los campos obligatorios (el form los
-                    # tiene required=False para no bloquear el submit principal
-                    # cuando la sesion esta en modo Baileys).
-                    obligatorios = {
-                        'waba_id':         'WABA ID',
-                        'phone_number_id': 'Phone Number ID',
-                        'access_token':    'Access Token',
-                    }
-                    faltantes = [
-                        label for campo, label in obligatorios.items()
-                        if not (request.POST.get(campo) or '').strip()
-                    ]
-                    if faltantes:
-                        return JsonResponse({
-                            'error': True,
-                            'message': 'Completa los campos obligatorios: ' + ', '.join(faltantes) + '.',
-                        })
                     form = ConfigMetaForm(request.POST, instance=config)
                     if not form.is_valid():
                         raise FormError(form)
@@ -349,14 +392,26 @@ def sesionesView(request):
                         session.proveedor = 'meta'
                         session.save(update_fields=['proveedor'])
 
-                    # URL de webhook para que el cliente la copie a Meta
                     webhook_url = request.build_absolute_uri(reverse('whatsapp_meta_webhook'))
-                    log(f"Config Meta guardada para sesion {session.id}", request, "change", obj=session.id)
+                    # Lista campos que todavia faltan para que el cliente sepa
+                    # que es lo minimo antes de poder sincronizar con Meta.
+                    pendientes = []
+                    if not obj.waba_id:         pendientes.append('WABA ID')
+                    if not obj.phone_number_id: pendientes.append('Phone Number ID')
+                    if not obj.access_token:    pendientes.append('Access Token')
+
+                    log(f"Config Meta guardada (solo BD) para sesion {session.id}. Pendientes: {pendientes or 'ninguno'}",
+                        request, "change", obj=session.id)
                     return JsonResponse({
                         'error': False,
-                        'message': 'Configuracion Meta guardada correctamente.',
+                        'message': (
+                            'Configuracion guardada.' if not pendientes
+                            else 'Configuracion guardada. Para sincronizar con Meta falta: ' + ', '.join(pendientes) + '.'
+                        ),
                         'webhook_url': webhook_url,
                         'verify_token': obj.webhook_verify_token,
+                        'pendientes': pendientes,
+                        'puede_sincronizar': not pendientes,
                     })
 
                 elif action == 'regenerar_verify_token':
@@ -376,59 +431,25 @@ def sesionesView(request):
                     })
 
                 elif action == 'verificar_meta_conexion':
-                    # Intenta hacer una consulta liviana a Graph API con el token almacenado
-                    import requests
                     session = SesionWhatsApp.objects.get(id=request.POST['pk'])
                     if session.proveedor != 'meta':
                         return JsonResponse({'error': True, 'message': 'Esta sesion no usa el proveedor Meta Cloud API.'})
                     config = getattr(session, 'config_meta', None)
                     if not config:
                         return JsonResponse({'error': True, 'message': 'Sesion sin ConfigMeta. Configura WABA ID, phone_number_id y access_token primero.'})
-                    faltan = [campo for campo, valor in (
-                        ('access_token', config.access_token),
-                        ('phone_number_id', config.phone_number_id),
-                    ) if not valor]
-                    if faltan:
-                        return JsonResponse({'error': True, 'message': f'Faltan credenciales Meta: {", ".join(faltan)}.'})
-                    try:
-                        from .services_meta import GRAPH_API_BASE
-                        r = requests.get(
-                            f'{GRAPH_API_BASE}/{config.phone_number_id}',
-                            headers={'Authorization': f'Bearer {config.access_token}'},
-                            params={'fields': 'display_phone_number,verified_name,quality_rating,messaging_limit_tier'},
-                            timeout=10,
-                        )
-                    except Exception as e:
-                        return JsonResponse({'error': True, 'message': f'Error de conexion: {str(e)}'})
-                    if r.status_code != 200:
-                        return JsonResponse({
-                            'error': True,
-                            'message': f'Meta respondio {r.status_code}: {r.text[:400]}',
-                        })
-                    data = r.json()
-                    # Persistir info descubierta
-                    from django.utils import timezone as _tz
-                    config.display_phone_number = data.get('display_phone_number') or config.display_phone_number
-                    config.quality_rating = (data.get('quality_rating') or 'UNKNOWN').upper()
-                    if data.get('messaging_limit_tier'):
-                        config.messaging_limit_tier = data.get('messaging_limit_tier')
-                    config.ultima_sincronizacion = _tz.now()
-                    config.save(update_fields=[
-                        'display_phone_number', 'quality_rating',
-                        'messaging_limit_tier', 'ultima_sincronizacion',
-                    ])
-                    # Replicar numero en la sesion si no esta seteado
-                    if not session.numero and config.display_phone_number:
-                        session.numero = ''.join(c for c in config.display_phone_number if c.isdigit())
-                        session.estado = 'conectado'
-                        session.save(update_fields=['numero', 'estado'])
+                    ok, info = _sincronizar_meta_desde_graph(session, config)
+                    if not ok:
+                        return JsonResponse({'error': True, 'message': info.get('message') or 'No se pudo verificar con Meta.'})
+                    session.refresh_from_db(fields=['numero', 'estado'])
                     return JsonResponse({
                         'error': False,
-                        'message': 'Conexion con Meta verificada correctamente.',
-                        'display_phone_number': config.display_phone_number,
-                        'quality_rating': config.get_quality_rating_display(),
-                        'messaging_limit_tier': config.get_messaging_limit_tier_display() if config.messaging_limit_tier else None,
-                        'verified_name': data.get('verified_name'),
+                        'message': info.get('message'),
+                        'display_phone_number': info.get('display_phone_number'),
+                        'quality_rating': info.get('quality_rating'),
+                        'messaging_limit_tier': info.get('messaging_limit_tier'),
+                        'verified_name': info.get('verified_name'),
+                        'numero': session.numero,
+                        'estado': session.estado,
                     })
 
                 elif action == 'add_meta':

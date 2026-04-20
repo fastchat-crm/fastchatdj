@@ -109,6 +109,17 @@
                 <div class="d-flex align-items-start conversacion-header">
                     <div class="d-flex flex-column min-w-0 flex-grow-1">
                         <div class="d-flex gap-1 flex-wrap mb-1">
+                            {# Badge del proveedor que ATENDIO la conversacion (snapshot congelado al crearla).
+                               Si la sesion migra de Baileys a Meta luego, el historial mantiene su badge real. #}
+                            {% if conversacion.atendida_por_meta %}
+                                <small class="badge bg-primary" title="Atendida via Meta Cloud API"><i class="fa fa-cloud"></i> Meta</small>
+                            {% elif conversacion.atendida_por_baileys %}
+                                <small class="badge bg-success" title="Atendida via Baileys (WhatsApp Web)"><i class="fab fa-whatsapp"></i> Baileys</small>
+                            {% elif conversacion.atendida_por_instagram %}
+                                <small class="badge bg-danger" title="Atendida via Instagram DM"><i class="fab fa-instagram"></i> IG</small>
+                            {% elif conversacion.atendida_por_messenger %}
+                                <small class="badge bg-info text-white" title="Atendida via Facebook Messenger"><i class="fab fa-facebook-messenger"></i> FB</small>
+                            {% endif %}
                             <small class="badge badge-{{ conversacion.get_estado_color_clasificacion }}">
                                 {{ conversacion.get_clasificacion_display }}
                             </small>
@@ -171,15 +182,18 @@
             </div>
         </div>
 
-        <!-- Badge de contador posicionado abajo a la derecha -->
-        {% with no_leidos=conversacion.mensajes.filter.count %}
-            {% if no_leidos > 0 %}
-                <div class="mensaje-badge-container">
-                    <span class="mensaje-badge badge rounded-pill bg-success text-white">
-                        {{ no_leidos }}
-                    </span>
-                </div>
-            {% endif %}
-        {% endwith %}
+        <!-- Badge de contador: solo en conversaciones abiertas (mensajes del contacto sin leer).
+             En finalizadas no aplica: ya no hay nada "pendiente de revisar". -->
+        {% if not show_date %}
+            {% with no_leidos=conversacion.mensajes_no_leidos %}
+                {% if no_leidos > 0 %}
+                    <div class="mensaje-badge-container">
+                        <span class="mensaje-badge badge rounded-pill bg-success text-white">
+                            {{ no_leidos }}
+                        </span>
+                    </div>
+                {% endif %}
+            {% endwith %}
+        {% endif %}
     </a>
 </div>

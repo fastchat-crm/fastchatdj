@@ -322,6 +322,18 @@ class AgenteConsultor:
         self.cfg_max_output_tokens = _cfg('cfg_max_output_tokens', _MAX_OUTPUT_TOKENS)
         self.cfg_topic_anchor_chars = _cfg('cfg_topic_anchor_chars', _TOPIC_ANCHOR_CHARS)
 
+        # Persona del bot — si el agente no tiene los campos (agentes viejos), defaults neutros
+        self.cfg_nombre_bot       = _cfg('nombre_bot', 'Asistente')
+        self.cfg_personalidad     = _cfg('personalidad', '')
+        self.cfg_tono             = _cfg('tono', 'amigable')
+        self.cfg_estilo_escritura = _cfg('estilo_escritura', '')
+        # temperature — DecimalField, convertir a float para el provider
+        _temp_raw = _cfg('temperature', None)
+        try:
+            self.cfg_temperature = float(_temp_raw) if _temp_raw is not None else 0.6
+        except (TypeError, ValueError):
+            self.cfg_temperature = 0.6
+
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
         self.vectorstore = self._load_vectorstore()
@@ -337,7 +349,13 @@ class AgenteConsultor:
         )
 
         # Pre-compilar PromptTemplate una sola vez (no en cada llamada)
-        _VARS_REQUERIDAS = {'question', 'context', 'descripcion_agente', 'contexto_extra'}
+        _VARS_REQUERIDAS = {
+            'question', 'context', 'descripcion_agente', 'contexto_extra',
+            # Persona (humanización) — opcionales en templates antiguos
+            'nombre_bot', 'personalidad', 'tono', 'estilo_escritura',
+            # Variables del contacto y del momento
+            'contacto_nombre', 'hora_local', 'primera_vez_hoy',
+        }
         _tpl_text = prompt_template_text
         if _tpl_text:
             _tpl_candidato = PromptTemplate.from_template(f'{_tpl_text}\n')
@@ -368,12 +386,12 @@ class AgenteConsultor:
         return self._provider_obj.get_embeddings(self.apikey)
 
     def _get_llm(self):
-        # Baja temperatura → reproduce contexto fielmente, sin inventar
+        # Temperature configurable por agente. 0.6 default = variación humana sin inventar datos.
         return self._provider_obj.get_llm(
             apikey=self.apikey,
             model_name=self.model_name,
             max_output_tokens=self.cfg_max_output_tokens,
-            temperature=0.1,
+            temperature=self.cfg_temperature,
         )
 
     def _load_vectorstore(self):
@@ -399,6 +417,61 @@ class AgenteConsultor:
         except Exception as e:
             logger.error("Error cargando vectorstore de enlaces %s: %s", self.vectorstore_enlaces_path, e)
             return None
+
+    # ------------------------------------------------------------------
+    # Variables de contacto (humanización)
+    # ------------------------------------------------------------------
+
+    def _vars_contacto(self) -> dict:
+        """Devuelve variables relativas al contacto y al momento de la conversación:
+        - contacto_nombre : primer nombre o 'cliente'
+        - hora_local      : 'mañana (09:45)' / 'tarde (15:10)' / 'noche (22:30)'
+        - primera_vez_hoy : 'sí' si no hay mensajes previos de hoy en esta conversación
+        """
+        from django.utils import timezone as _tz
+
+        nombre = 'cliente'
+        try:
+            if self.conversacion and self.conversacion.contacto:
+                raw = (self.conversacion.contacto.contacto_nombre or '').strip()
+                if raw:
+                    # Tomar primer token, capitalizar
+                    nombre = raw.split()[0].strip().capitalize()
+        except Exception:
+            pass
+
+        ahora = _tz.localtime()
+        hora = ahora.hour
+        if hora < 12:
+            franja = 'mañana'
+        elif hora < 19:
+            franja = 'tarde'
+        else:
+            franja = 'noche'
+        hora_local = f"{franja} ({ahora.strftime('%H:%M')})"
+
+        primera_vez_hoy = 'sí'
+        try:
+            h = self._historia
+            if h:
+                # Últimos 2 mensajes humanos — si alguno fue hoy antes del actual, no es primera vez
+                from .models import MessageStore
+                hoy_ini = ahora.replace(hour=0, minute=0, second=0, microsecond=0)
+                hubo_hoy = (
+                    MessageStore.objects
+                    .filter(session_id=h.session_id, role='human', created_at__gte=hoy_ini)
+                    .exists()
+                )
+                if hubo_hoy:
+                    primera_vez_hoy = 'no'
+        except Exception:
+            pass
+
+        return {
+            'contacto_nombre': nombre,
+            'hora_local': hora_local,
+            'primera_vez_hoy': primera_vez_hoy,
+        }
 
     # ------------------------------------------------------------------
     # Historial
@@ -670,19 +743,32 @@ class AgenteConsultor:
     def _formatear_prompt(
         self, pregunta: str, contexto: str, descripcion_agente: str, contexto_previo: str
     ) -> str:
+        # Todas las variables posibles — el template solo consume las que declara.
+        _vars_todas = {
+            'question': pregunta,
+            'context': contexto,
+            'descripcion_agente': descripcion_agente,
+            'contexto_extra': contexto_previo,
+            'nombre_bot': self.cfg_nombre_bot,
+            'personalidad': self.cfg_personalidad or '(sin personalidad definida)',
+            'tono': self.cfg_tono,
+            'estilo_escritura': self.cfg_estilo_escritura or '(estilo natural, mensajes cortos)',
+        }
+        # Variables del contacto (nombre, hora, primera vez hoy) — solo se computan
+        # si el template las referencia, para ahorrar una query por mensaje.
+        _input_vars = set(getattr(self._prompt_tpl, 'input_variables', []) or [])
+        if _input_vars & {'contacto_nombre', 'hora_local', 'primera_vez_hoy'}:
+            _vars_todas.update(self._vars_contacto())
+        _kwargs = {k: v for k, v in _vars_todas.items() if k in _input_vars}
         try:
-            return self._prompt_tpl.format(
-                question=pregunta, context=contexto,
-                descripcion_agente=descripcion_agente, contexto_extra=contexto_previo,
-            )
+            return self._prompt_tpl.format(**_kwargs)
         except KeyError as _ke:
             logger.error("Variable faltante en prompt template: %s — usando fallback", _ke)
             from core.constantes import PROMPT_TEMPLATES
             _tpl_fallback = PromptTemplate.from_template(PROMPT_TEMPLATES.get('es', '') + '\n')
-            return _tpl_fallback.format(
-                question=pregunta, context=contexto,
-                descripcion_agente=descripcion_agente, contexto_extra=contexto_previo,
-            )
+            _fb_vars = set(_tpl_fallback.input_variables)
+            _fb_kwargs = {k: v for k, v in _vars_todas.items() if k in _fb_vars}
+            return _tpl_fallback.format(**_fb_kwargs)
 
     @staticmethod
     def _extraer_texto(ai_message) -> str:

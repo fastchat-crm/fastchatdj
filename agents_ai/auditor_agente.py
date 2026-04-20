@@ -6,7 +6,6 @@ import logging
 import re
 from datetime import timedelta
 
-from django.db.models import Count, Q, Avg
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -124,13 +123,10 @@ def recopilar_metricas(agente, dias=30) -> dict:
     except Exception:
         trazas_error = 0
 
-    # Tokens
+    # Tokens (ConsumoTokenIA.fecha — no fecha_registro)
     try:
-        tokens = ConsumoTokenIA.objects.filter(agente=agente, fecha_registro__gte=corte).aggregate(
-            total=Count('id'), suma=Avg('tokens_total'),
-        )
         total_tokens = ConsumoTokenIA.objects.filter(
-            agente=agente, fecha_registro__gte=corte
+            agente=agente, fecha__gte=corte
         ).values_list('tokens_total', flat=True)
         suma_tokens = sum(total_tokens) if total_tokens else 0
     except Exception:
@@ -237,11 +233,11 @@ def _invocar_llm(apikey_obj, prompt_text):
     except ImportError:
         ChatOpenAI = None
 
-    proveedor = apikey_obj.proveedor  # 1=openai, 2=gemini
+    # PROVEEDOR_CHOICES en crm.models: 2=GEMINI, 3=OPENAI, 4=CLAUDE
+    proveedor = apikey_obj.proveedor
     if proveedor == 2:
         if not ChatGoogleGenerativeAI:
             raise RuntimeError("langchain_google_genai no instalado")
-        # Gemini: fuerza salida JSON nativa (evita truncamientos/strings mal escapados)
         llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash",
             google_api_key=apikey_obj.descripcion,
@@ -250,7 +246,7 @@ def _invocar_llm(apikey_obj, prompt_text):
             model_kwargs={"response_mime_type": "application/json"},
         )
         modelo = 'gemini-2.5-flash'
-    else:
+    elif proveedor == 3:
         if not ChatOpenAI:
             raise RuntimeError("ChatOpenAI no disponible")
         llm = ChatOpenAI(
@@ -261,6 +257,23 @@ def _invocar_llm(apikey_obj, prompt_text):
             model_kwargs={"response_format": {"type": "json_object"}},
         )
         modelo = 'gpt-4o-mini'
+    elif proveedor == 4:
+        try:
+            from langchain_anthropic import ChatAnthropic
+        except ImportError:
+            raise RuntimeError("langchain_anthropic no instalado")
+        llm = ChatAnthropic(
+            model="claude-haiku-4-5-20251001",
+            anthropic_api_key=apikey_obj.descripcion,
+            max_tokens=16000,
+            temperature=0.3,
+        )
+        modelo = 'claude-haiku-4-5-20251001'
+    else:
+        raise RuntimeError(
+            f"Proveedor {proveedor} no soportado por el auditor. "
+            f"Usá una API Key con proveedor Gemini, OpenAI o Claude."
+        )
 
     msg = llm.invoke(prompt_text)
     texto = getattr(msg, 'content', '') or ''

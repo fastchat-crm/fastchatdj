@@ -98,6 +98,7 @@ urlpatterns = [
     path('', include('for_django_projects.pwa.urls')),
     path('api/enviar-mensaje/', enviar_mensaje_view, name='api_enviar_mensaje'),
     path('api/ia/consultar/', consultar_ia_view, name='api_ia_consultar'),
+    path('voz/', include('voz.urls')),
     path('docs/', docs_view, name='docs'),
 ]
 

@@ -146,8 +146,8 @@ def conversacionesView(request):
     }
     addData(request, data)
 
-    # Obtener todas las sesiones activas
-    sesiones = SesionWhatsApp.objects.filter(usuario_id=request.user.id, status=True, estado='conectado').order_by('-ultima_conexion')
+    # Todas las sesiones del usuario (incluye desconectadas para ver historial).
+    sesiones = SesionWhatsApp.objects.filter(usuario_id=request.user.id, status=True).order_by('-ultima_conexion')
     data['sesiones'] = sesiones
 
     # Sesión seleccionada (por defecto la primera)

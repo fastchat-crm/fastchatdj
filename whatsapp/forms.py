@@ -13,7 +13,7 @@ from .models import (
 class SesionWhatsAppForm(ModelFormBase):
     class Meta:
         model = SesionWhatsApp
-        fields = ('nombre', 'min_sesion', 'language', 'proveedor',
+        fields = ('nombre', 'numero', 'min_sesion', 'language', 'proveedor',
                   'modo_bot', 'agente_ia',
                   'departamentos', 'departamento_default',
                   'mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff',)
@@ -25,6 +25,19 @@ class SesionWhatsAppForm(ModelFormBase):
         self.fields['departamento_default'].queryset = DepartamentoChatBot.objects.filter(status=True).order_by('nombre')
         self.fields['departamento_default'].required = False
         self.fields['departamento_default'].empty_label = '— (ninguno) —'
+        # El numero se llena solo (Baileys via QR, Meta via Graph API), pero
+        # permitimos edicion manual por si el cliente quiere adelantarlo o
+        # corregir algun caso borde. No es obligatorio.
+        self.fields['numero'].required = False
+        # ModelFormBase ya agrego el asterisco al label en su __init__ porque
+        # el campo era required antes de este override. Lo reseteamos a texto
+        # plano para que el label no muestre "Numero WhatsApp*".
+        self.fields['numero'].label = 'Número WhatsApp'
+        self.fields['numero'].widget.attrs['placeholder'] = 'Se detecta automaticamente (o escribilo si ya lo sabes)'
+        self.fields['numero'].widget.attrs['inputmode'] = 'tel'
+        self.fields['numero'].widget.attrs['autocomplete'] = 'off'
+        self.fields['numero'].widget.attrs['pattern'] = '[0-9+\\-\\s]*'
+        self.fields['numero'].widget.attrs['maxlength'] = '20'
         for k, v in self.fields.items():
             if k in ('mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff',):
                 self.fields[k].widget.attrs['rows'] = '5'

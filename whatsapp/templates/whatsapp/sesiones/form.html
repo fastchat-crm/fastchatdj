@@ -1,3 +1,5 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'stylenew/sesionws.css' %}">
 <style>
     .select2-search__field { width: 100% !important; }
     .select2-container--open { z-index: 9999 !important; }
@@ -76,6 +78,23 @@
                     Baileys = conexion no oficial (QR). Meta = Cloud API oficial (requiere verificacion de empresa).
                 </div>
                 <div class="invalid-feedback" id="errorMessageproveedor"></div>
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1">
+                    {{ form.numero.label }}
+                    <span class="text-muted">(auto-detectado)</span>
+                </label>
+                {{ form.numero }}
+                <div class="form-text">
+                    {% if instance and instance.es_baileys %}
+                        <i class="fas fa-qrcode me-1"></i>Se registra solo cuando se escanee el QR.
+                    {% elif instance and instance.es_meta %}
+                        <i class="fas fa-cloud me-1"></i>Se obtiene de Meta al guardar credenciales en el tab <em>Meta Cloud API</em>.
+                    {% else %}
+                        <i class="fas fa-info-circle me-1"></i>Se registrara solo tras conectar la sesion (QR Baileys o Graph API Meta).
+                    {% endif %}
+                </div>
+                <div class="invalid-feedback" id="errorMessagenumero"></div>
             </div>
             <div class="col-12 col-md-6">
                 <label class="form-label small mb-1">{{ form.language.label }}</label>
@@ -481,11 +500,14 @@
                     <li class="mb-3">
                         <strong class="text-primary">Paso 1 — Crea una App en Meta for Developers</strong>
                         <ul class="small">
-                            <li>Ir a <a href="https://developers.facebook.com/" target="_blank" rel="noopener">developers.facebook.com</a>
+                            <li>Ir a <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">developers.facebook.com/apps</a>
                                 → <em>My Apps</em> → <em>Create App</em> → tipo <strong>Business</strong>.</li>
                             <li>Agregar el producto: <strong>WhatsApp Business Platform</strong>.</li>
-                            <li>En <em>Settings → Basic</em> anota el <strong>App ID</strong> y el <strong>App Secret</strong>
-                                (clic en <em>Show</em>, te pide tu contrasena de Facebook).</li>
+                            <li><strong>App ID</strong>: aparece debajo del nombre de tu App en la cabecera, y tambien en
+                                <em>App Settings → Basic</em> → primer campo. Son ~15 digitos.</li>
+                            <li><strong>App Secret</strong>: <em>App Settings → Basic</em> → campo <em>App Secret</em> → clic en
+                                <em>Show</em> (te pide tu password de Facebook) → copia los 32 caracteres alfanumericos.
+                                <span class="text-warning"><i class="fa fa-triangle-exclamation ms-1"></i>Sensible: no lo compartas.</span></li>
                         </ul>
                         <div class="badge bg-light text-dark border">
                             <i class="fa fa-arrow-right me-1"></i> Copia en FastChat: <code>App ID</code>, <code>App Secret</code>
@@ -502,6 +524,21 @@
                         </ul>
                         <div class="badge bg-light text-dark border">
                             <i class="fa fa-arrow-right me-1"></i> Copia en FastChat: <code>WABA ID</code>, <code>Phone Number ID</code>
+                        </div>
+                    </li>
+
+                    <li class="mb-3">
+                        <strong class="text-secondary">Paso 2b — Business Portfolio ID <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">opcional</span></strong>
+                        <ul class="small">
+                            <li>Ir a <a href="https://business.facebook.com/settings/" target="_blank" rel="noopener">business.facebook.com/settings</a>.</li>
+                            <li>Mira la URL del navegador: <code>…?business_id=<strong>XXXXXXXXXXXXXXX</strong></code> — ese numero largo es el Portfolio ID.</li>
+                            <li>Alternativa: en el panel izquierdo <em>Business Info</em> → arriba del nombre del negocio aparece <em>Business Manager ID</em>.</li>
+                            <li><strong>No es lo mismo que el WABA ID.</strong> El Portfolio es el paraguas que contiene WABA, paginas FB, pixels, etc.</li>
+                            <li>Lo necesitas solo si vas a operar con <strong>multiples WABAs</strong> bajo el mismo portfolio, o sincronizar plantillas a nivel portfolio.</li>
+                            <li>Para un solo numero enviando mensajes: <strong>saltatelo</strong>.</li>
+                        </ul>
+                        <div class="badge bg-light text-dark border">
+                            <i class="fa fa-arrow-right me-1"></i> Copia en FastChat (si lo necesitas): <code>Business Portfolio ID</code>
                         </div>
                     </li>
 
@@ -623,15 +660,48 @@
                 </label>
                 {{ config_meta_form.phone_number_id }}
                 <div class="form-text">
-                    developers.facebook.com → tu App → WhatsApp → API Setup
+                    <strong class="text-warning">No es el telefono</strong> — es un ID largo de Meta.
+                    El numero real lo detectamos solos al guardar y queda en "Numero visible".<br>
+                    <i class="fa fa-external-link-alt me-1"></i>developers.facebook.com → tu App → WhatsApp → API Setup
+                    <a class="ms-2" data-bs-toggle="collapse" href="#helpPhoneNumberId" role="button">
+                        <i class="fa fa-image me-1"></i>Ver ejemplo
+                    </a>
+                </div>
+                <div class="collapse" id="helpPhoneNumberId">
+                    <div class="meta-id-hint">
+                        <div class="meta-id-hint-header">
+                            <span class="dot"></span>
+                            Meta Developer Portal → WhatsApp → API Setup
+                        </div>
+                        <div class="meta-id-mockup">
+                            <div class="row-id"><span class="k">From</span><span class="v muted">Test number</span></div>
+                            <div class="row-id">
+                                <span class="k"><span class="meta-id-hint-arrow">&rarr;</span> Phone number ID</span>
+                                <span class="v highlight">123456789012345</span>
+                            </div>
+                            <div class="row-id"><span class="k">Display number</span><span class="v muted">+1 555 123 4567</span></div>
+                            <div class="row-id"><span class="k">WhatsApp Business Account ID</span><span class="v muted">109876543210987</span></div>
+                        </div>
+                        <div class="small text-muted mt-2">
+                            Copia el valor resaltado — 15 digitos aprox. El "Display number" de abajo es el que tus clientes ven; ese lo obtenemos solos.
+                        </div>
+                    </div>
                 </div>
                 <div class="invalid-feedback" id="errorMessagephone_number_id"></div>
             </div>
             <div class="col-12 col-md-6">
-                <label class="form-label small mb-1">Business Account ID
-                    <span class="text-muted">(opcional)</span></label>
+                <label class="form-label small mb-1">
+                    Business Portfolio ID
+                    <span class="text-muted">(opcional · no es el WABA)</span>
+                    <i class="fa fa-info-circle text-primary ms-1"
+                       title="ID del Business Manager/Portfolio — el paraguas que contiene tu WABA, paginas FB, pixels, etc."></i>
+                </label>
                 {{ config_meta_form.business_account_id }}
-                <div class="form-text">Solo si vas a operar sobre el Business Manager completo. Dejalo vacio si no estas seguro.</div>
+                <div class="form-text">
+                    business.facebook.com/settings → mira la URL: <code>business_id=<strong>XXXXXXXXXX</strong></code>.
+                    Tambien en <em>Business Info</em> arriba del nombre del negocio.<br>
+                    <span class="text-muted">Lo necesitas solo si vas a operar sobre multiples WABAs / plantillas a nivel portfolio. Si solo mandas mensajes con este numero, <strong>dejalo vacio</strong>.</span>
+                </div>
             </div>
             <div class="col-12 col-md-6">
                 <label class="form-label small mb-1">Numero visible
@@ -642,29 +712,56 @@
             <div class="col-12">
                 <label class="form-label small mb-1">
                     System User Access Token *
+                    <span class="text-muted">(empieza con <code>EAAB…</code> o <code>EAAG…</code>)</span>
                     <i class="fa fa-info-circle text-primary ms-1"
                        title="Token permanente (no expira) generado desde un System User en Business Manager."></i>
                 </label>
                 {{ config_meta_form.access_token }}
                 <div class="form-text">
-                    <strong>El campo mas importante.</strong> business.facebook.com → Users → System Users → Add → Generate new token.
-                    Permisos requeridos: <code>whatsapp_business_management</code>, <code>whatsapp_business_messaging</code>.
+                    <strong>El campo mas importante.</strong>
+                    <a href="https://business.facebook.com/latest/settings/system_users" target="_blank" rel="noopener">
+                        business.facebook.com/latest/settings/system_users
+                        <i class="fa fa-up-right-from-square ms-1" style="font-size:.75em;"></i>
+                    </a>
+                    → <em>Add</em> (crea un System User, ej. <code>fastchatdj-integration</code>, rol Admin)
+                    → <em>Add Assets</em> (asocia tu App + tu WABA con Full Control)
+                    → <em>Generate new token</em> → elegi tu App → expiration <strong>Never</strong>.<br>
+                    <strong>Permisos obligatorios:</strong>
+                    <code>whatsapp_business_management</code>, <code>whatsapp_business_messaging</code>.
+                    Recomendado tambien: <code>business_management</code>.<br>
+                    <span class="text-warning"><i class="fa fa-triangle-exclamation me-1"></i>Meta solo lo muestra una vez.</span>
+                    Copialo apenas se genere.
                 </div>
             </div>
             <div class="col-12 col-md-6">
-                <label class="form-label small mb-1">App ID
-                    <span class="text-muted">(opcional)</span></label>
+                <label class="form-label small mb-1">
+                    App ID
+                    <span class="text-muted">(opcional · 15-16 digitos)</span>
+                    <i class="fa fa-info-circle text-primary ms-1"
+                       title="Identificador publico de tu App de Meta for Developers."></i>
+                </label>
                 {{ config_meta_form.app_id }}
-                <div class="form-text">developers.facebook.com → tu App → cabecera</div>
+                <div class="form-text">
+                    <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">developers.facebook.com/apps</a>
+                    → clic en tu App → el numero grande bajo el nombre en la cabecera (ej: <code>123456789012345</code>).<br>
+                    <span class="text-muted">Tambien en <em>App Settings → Basic</em>, primer campo <em>"App ID"</em>.</span>
+                </div>
             </div>
             <div class="col-12 col-md-6">
                 <label class="form-label small mb-1">
                     App Secret
+                    <span class="text-muted">(recomendado · valida webhooks)</span>
                     <i class="fa fa-info-circle text-primary ms-1"
-                       title="Valida que los webhooks entrantes vengan realmente de Meta (firma HMAC)."></i>
+                       title="Sin App Secret no podemos validar que los webhooks realmente vengan de Meta — firma HMAC-SHA256."></i>
                 </label>
                 {{ config_meta_form.app_secret }}
-                <div class="form-text">developers.facebook.com → tu App → Settings → Basic → <em>Show</em> en App Secret.</div>
+                <div class="form-text">
+                    <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">developers.facebook.com/apps</a>
+                    → tu App → menu izquierdo <em>App Settings → Basic</em> → campo <strong>App Secret</strong> → clic en <em>Show</em>
+                    (te pide tu password de Facebook) → copiar los 32 caracteres alfanumericos.<br>
+                    <span class="text-warning"><i class="fa fa-lock me-1"></i>Sensible:</span>
+                    <span class="text-muted">nunca lo expongas en frontend ni lo compartas. Si se filtra, regeneralo en la misma pantalla con <em>Reset</em>.</span>
+                </div>
             </div>
 
             {% if config_meta and config_meta.quality_rating and config_meta.quality_rating != 'UNKNOWN' %}
@@ -681,16 +778,17 @@
             </div>
             {% endif %}
 
-            <div class="col-12 d-flex gap-2 mt-3">
+            <div class="col-12 d-flex gap-2 mt-3 flex-wrap align-items-center">
                 {% if instance %}
                 <button type="button" class="btn btn-primary btn-sm" onclick="guardarConfigMeta({{ instance.id }})">
-                    <i class="fa fa-save me-1"></i> Guardar config Meta
+                    <i class="fa fa-save me-1"></i> Guardar
                 </button>
+                <small class="text-muted"><i class="fa fa-info-circle me-1"></i>Solo persiste los campos. No llama a Meta.</small>
                 {% else %}
                 <p class="small text-muted mb-0"><i class="fa fa-info-circle me-1"></i>Guarda la sesion primero, luego podras configurar Meta aqui.</p>
                 {% endif %}
-                {% if config_meta and instance %}
-                <button type="button" class="btn btn-outline-success btn-sm" onclick="verificarMetaConexion({{ instance.id }})">
+                {% if instance %}
+                <button type="button" class="btn btn-outline-success btn-sm ms-auto" onclick="verificarMetaConexion({{ instance.id }})">
                     <i class="fa fa-satellite-dish me-1"></i> Verificar conexion con Meta
                 </button>
                 {% endif %}
@@ -708,6 +806,17 @@
             el.select(); document.execCommand('copy');
             if (typeof alertaSuccess === 'function') alertaSuccess('Token copiado');
         }
+        function _mostrarResultadoConfigMeta(r) {
+            if (!r) { alertaDanger('Sin respuesta del servidor.'); return; }
+            if (r.error === true) { alertaDanger(r.message || 'Error guardando config Meta.'); return; }
+            if (r.verify_token) $('#meta-verify-token').val(r.verify_token);
+            if (r.puede_sincronizar) {
+                alertaSuccess(r.message || 'Configuracion guardada.');
+            } else {
+                // Guardo OK pero faltan campos para poder sincronizar con Meta luego
+                alertaWarning(r.message || 'Configuracion guardada (incompleta).');
+            }
+        }
         function guardarConfigMeta(sesionId) {
             const datos = { action: 'guardar_config_meta', pk: sesionId };
             $('#form-config-meta').find('input, textarea').each(function() {
@@ -715,21 +824,9 @@
                 if (name) datos[name] = $(this).val();
             });
             if (typeof post === 'function') {
-                post(datos, function(r) {
-                    if (r && r.error === false) {
-                        if (r.verify_token) $('#meta-verify-token').val(r.verify_token);
-                        alertaSuccess(r.message || 'Configuracion Meta guardada');
-                    }
-                });
+                post(datos, _mostrarResultadoConfigMeta);
             } else {
-                $.post(window.location.pathname, datos, function(r) {
-                    if (r && r.error === false) {
-                        if (r.verify_token) $('#meta-verify-token').val(r.verify_token);
-                        alert(r.message || 'Guardado');
-                    } else if (r) {
-                        alert(r.message || 'Error');
-                    }
-                });
+                $.post(window.location.pathname, datos, _mostrarResultadoConfigMeta);
             }
         }
         function regenerarVerifyToken(sesionId) {
@@ -745,14 +842,14 @@
         function verificarMetaConexion(sesionId) {
             $.post(window.location.pathname, { action: 'verificar_meta_conexion', pk: sesionId }, function(r) {
                 if (r && r.error === false) {
-                    let msg = r.message + '\n';
-                    if (r.display_phone_number) msg += 'Numero: ' + r.display_phone_number + '\n';
-                    if (r.quality_rating) msg += 'Calidad: ' + r.quality_rating + '\n';
-                    if (r.messaging_limit_tier) msg += 'Limite: ' + r.messaging_limit_tier;
-                    alert(msg);
+                    let detalle = r.message || 'Verificado.';
+                    if (r.display_phone_number) detalle += ' Numero: ' + r.display_phone_number + '.';
+                    if (r.quality_rating) detalle += ' Calidad: ' + r.quality_rating + '.';
+                    if (r.messaging_limit_tier) detalle += ' Limite: ' + r.messaging_limit_tier + '.';
+                    alertaSuccess(detalle);
                     setTimeout(function() { location.reload(); }, 1500);
                 } else {
-                    alert((r && r.message) || 'Error');
+                    alertaDanger((r && r.message) || 'No se pudo verificar con Meta.');
                 }
             });
         }

@@ -15,6 +15,9 @@ Despues de validar, traducimos el payload Meta al formato interno que ya
 entiende `process_incoming_message` (existente, usado por Baileys) y llamamos
 la misma funcion — asi todo el pipeline IA / trazas / crons reusa codigo.
 
+Si alguien accede con un navegador o curl (sin los params de handshake),
+renderizamos una pagina HTML informativa — util para el dev que prueba la URL.
+
 URL: /whatsapp/meta_webhook/
 """
 import hashlib
@@ -23,6 +26,7 @@ import json
 import logging
 
 from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
@@ -45,7 +49,11 @@ def meta_webhook(request):
         return _verificar_webhook(request)
     if request.method == 'POST':
         return _procesar_evento(request)
-    return HttpResponse(status=405)
+    # Metodo no permitido — si viene del navegador, renderizamos HTML; si es
+    # un cliente programatico respondemos JSON.
+    if _cliente_espera_html(request):
+        return _render_info(request, estado='metodo_no_permitido', status_code=405)
+    return JsonResponse({'error': 'method_not_allowed'}, status=405)
 
 
 # ---------------------------------------------------------------------------
@@ -55,15 +63,31 @@ def meta_webhook(request):
 def _verificar_webhook(request):
     mode = request.GET.get('hub.mode')
     token = request.GET.get('hub.verify_token')
-    challenge = request.GET.get('hub.challenge', '')
+    challenge = request.GET.get('hub.challenge')
 
-    if mode != 'subscribe' or not token:
-        return HttpResponse('bad_request', status=400)
+    # Detectar handshake real de Meta: SIEMPRE trae los 3 parametros.
+    # Si falta `hub.challenge` no es Meta — es alguien probando la URL.
+    es_handshake_meta = bool(mode and challenge is not None)
+
+    if not es_handshake_meta:
+        # Acceso desde navegador / curl / monitoreo: pagina informativa.
+        return _render_info(request, estado='landing')
+
+    # A partir de aqui estamos en el flujo oficial de Meta. Meta espera
+    # respuestas en texto plano (sin HTML), incluso en los errores.
+    if mode != 'subscribe':
+        logger.warning("Meta webhook: hub.mode invalido '%s'", mode)
+        return HttpResponse('invalid_mode', content_type='text/plain', status=400)
+
+    if not token:
+        logger.warning("Meta webhook: falta hub.verify_token en el handshake")
+        return HttpResponse('missing_verify_token', content_type='text/plain', status=400)
 
     config = ConfigMeta.objects.filter(webhook_verify_token=token).first()
     if not config:
-        logger.warning("Meta webhook verify: token no coincide con ninguna ConfigMeta")
-        return HttpResponse('forbidden', status=403)
+        logger.warning("Meta webhook verify: token no coincide con ninguna ConfigMeta (token_prefix=%s)",
+                       (token or '')[:8])
+        return HttpResponse('forbidden', content_type='text/plain', status=403)
 
     config.webhook_verificado_en = timezone.now()
     config.save(update_fields=['webhook_verificado_en'])
@@ -71,6 +95,56 @@ def _verificar_webhook(request):
     logger.info("Meta webhook verificado para ConfigMeta id=%s (WABA %s)",
                 config.id, config.waba_id)
     return HttpResponse(challenge, content_type='text/plain', status=200)
+
+
+# ---------------------------------------------------------------------------
+# Pagina informativa HTML — solo para accesos desde navegador/curl
+# ---------------------------------------------------------------------------
+
+def _cliente_espera_html(request) -> bool:
+    accept = (request.META.get('HTTP_ACCEPT') or '').lower()
+    return 'text/html' in accept
+
+
+def _render_info(request, estado='landing', status_code=200, mensaje_error=None):
+    """Pagina informativa para cuando alguien accede al webhook sin ser Meta.
+    Muestra metricas agregadas (nunca tokens/access_tokens) y ayuda al dev.
+    """
+    try:
+        total_configs    = ConfigMeta.objects.count()
+        verificados      = ConfigMeta.objects.exclude(webhook_verificado_en__isnull=True).count()
+        with_app_secret  = ConfigMeta.objects.exclude(app_secret='').count()
+        eventos_total    = EventoMetaRecibido.objects.count()
+        eventos_procesados = EventoMetaRecibido.objects.filter(procesado=True).count()
+        eventos_con_error  = EventoMetaRecibido.objects.exclude(error_procesamiento__isnull=True).exclude(error_procesamiento='').count()
+        ultimos_eventos  = list(
+            EventoMetaRecibido.objects.order_by('-fecha_registro')
+            .values('id', 'tipo_evento', 'procesado', 'firma_valida', 'fecha_registro', 'error_procesamiento')[:5]
+        )
+    except Exception as e:
+        logger.exception("Error construyendo landing meta_webhook: %s", e)
+        total_configs = verificados = with_app_secret = 0
+        eventos_total = eventos_procesados = eventos_con_error = 0
+        ultimos_eventos = []
+
+    contexto = {
+        'estado':             estado,
+        'mensaje_error':      mensaje_error,
+        'total_configs':      total_configs,
+        'verificados':        verificados,
+        'sin_verificar':      max(total_configs - verificados, 0),
+        'with_app_secret':    with_app_secret,
+        'eventos_total':      eventos_total,
+        'eventos_procesados': eventos_procesados,
+        'eventos_con_error':  eventos_con_error,
+        'ultimos_eventos':    ultimos_eventos,
+        'webhook_url':        request.build_absolute_uri(request.path),
+        'metodo':             request.method,
+        'ahora':              timezone.now(),
+        'ua_resumido':        (request.META.get('HTTP_USER_AGENT') or '')[:120],
+        'query_string':       request.META.get('QUERY_STRING') or '',
+    }
+    return render(request, 'whatsapp/meta_webhook_info.html', contexto, status=status_code)
 
 
 # ---------------------------------------------------------------------------

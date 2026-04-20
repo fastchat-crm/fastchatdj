@@ -76,7 +76,8 @@ def enviar_mensaje_view(request):
             conversacion = ConversacionWhatsApp.objects.filter(contacto=contacto, status=True).first()
             if not conversacion:
                 conversacion = ConversacionWhatsApp.objects.create(
-                    contacto=contacto
+                    contacto=contacto,
+                    proveedor_atencion=getattr(contacto.sesion, 'proveedor', '') or '',
                 )
 
             # --- Envío del mensaje ---

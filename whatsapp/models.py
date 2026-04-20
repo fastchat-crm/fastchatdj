@@ -396,6 +396,15 @@ class ConversacionWhatsApp(ModeloBase):
     capi_lead_enviado = models.BooleanField('Lead reportado a CAPI', default=False)
     capi_purchase_enviado = models.BooleanField('Purchase reportado a CAPI', default=False)
 
+    # Snapshot del proveedor al momento de atender la conversacion. Se congela
+    # porque la sesion puede migrar de proveedor luego (ej. Baileys -> Meta) y
+    # el historial debe reflejar con que servicio se atendio originalmente.
+    proveedor_atencion = models.CharField(
+        'Proveedor de atencion', max_length=20, choices=PROVEEDORES_SESION,
+        blank=True, default='', db_index=True,
+        help_text='Servicio con el que se atendio esta conversacion (baileys/meta/etc). Se congela al crearla.'
+    )
+
     class Meta:
         verbose_name = 'Conversación WhatsApp'
         verbose_name_plural = 'Conversaciones WhatsApp'
@@ -503,12 +512,45 @@ class ConversacionWhatsApp(ModeloBase):
         return self.mensajes.count()
 
     @cached_property
+    def mensajes_no_leidos(self):
+        # Mensajes entrantes del contacto aun sin marcar como leidos. Se usa
+        # en el listado solo para conversaciones abiertas; las finalizadas
+        # no muestran badge (no hay "pendiente" que atender).
+        return self.mensajes.filter(leido=False, remitente=self.contacto_numero).count()
+
+    @cached_property
     def sesion(self):
         return self.contacto.sesion
 
     @cached_property
     def sesion_id(self):
         return self.contacto.sesion_id
+
+    @cached_property
+    def proveedor_efectivo(self):
+        """Proveedor con el que se atendio la conversacion.
+        Usa el snapshot `proveedor_atencion` si esta seteado (conversaciones
+        nuevas); si no, cae al proveedor actual de la sesion (conversaciones
+        anteriores a la migracion). Siempre preferir este helper sobre
+        `sesion.proveedor` para renderizar badges — no cambia aunque la
+        sesion migre de transporte despues."""
+        return self.proveedor_atencion or getattr(self.sesion, 'proveedor', '') or ''
+
+    @property
+    def atendida_por_meta(self):
+        return self.proveedor_efectivo == 'meta'
+
+    @property
+    def atendida_por_baileys(self):
+        return self.proveedor_efectivo == 'baileys'
+
+    @property
+    def atendida_por_instagram(self):
+        return self.proveedor_efectivo == 'instagram'
+
+    @property
+    def atendida_por_messenger(self):
+        return self.proveedor_efectivo == 'messenger'
 
     @cached_property
     def from_number(self):
@@ -641,9 +683,11 @@ class ConversacionWhatsApp(ModeloBase):
         if conv:
             return conv, False
         min_sesion = int(getattr(contacto.sesion, 'min_sesion', None) or 10)
+        proveedor_snapshot = getattr(contacto.sesion, 'proveedor', '') or ''
         conv = cls.objects.create(
             contacto=contacto,
             fecha_hora_expira=timezone.now() + relativedelta(minutes=min_sesion),
+            proveedor_atencion=proveedor_snapshot,
         )
         return conv, True
 

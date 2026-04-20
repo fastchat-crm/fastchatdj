@@ -107,6 +107,7 @@ def _obtener_o_crear_conversacion_prueba(contacto: Contacto) -> ConversacionWhat
         fecha_hora_expira=timezone.now() + timedelta(hours=2),
         ai_activo=True,
         fromMe=False,
+        proveedor_atencion=getattr(contacto.sesion, 'proveedor', '') or '',
     )
 
 

@@ -508,3 +508,72 @@
     height: 100%;
     overflow: hidden;
 }
+
+/* ========== META API SETUP PREVIEW — ayuda para encontrar phone_number_id ========== */
+.meta-id-hint {
+    margin-top: 0.5rem;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: #f8f9fa;
+    padding: 0.75rem 0.9rem;
+    font-size: 0.78rem;
+}
+
+.meta-id-hint-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #495057;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.meta-id-hint-header .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #1877f2;
+    flex-shrink: 0;
+}
+
+.meta-id-mockup {
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    font-family: Menlo, Monaco, Consolas, monospace;
+    font-size: 0.72rem;
+    line-height: 1.6;
+}
+
+.meta-id-mockup .row-id {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.15rem 0;
+    border-bottom: 1px dashed #f0f0f0;
+}
+
+.meta-id-mockup .row-id:last-child { border-bottom: 0; }
+
+.meta-id-mockup .row-id .k {
+    color: #6c757d;
+    min-width: 140px;
+}
+
+.meta-id-mockup .row-id .v { color: #212529; word-break: break-all; }
+
+.meta-id-mockup .row-id .v.highlight {
+    background: #fff3cd;
+    padding: 0 0.3rem;
+    border-radius: 3px;
+    font-weight: 600;
+    color: #664d03;
+}
+
+.meta-id-mockup .row-id .v.muted { color: #adb5bd; }
+
+.meta-id-hint-arrow {
+    display: inline-block;
+    color: #fd7e14;
+    font-weight: 700;
+    margin-right: 0.25rem;
+}

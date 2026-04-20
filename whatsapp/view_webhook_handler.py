@@ -1246,7 +1246,10 @@ def process_sent_message(session, event_data, channel_layer):
 
         conversation = ConversacionWhatsApp.objects.filter(id=conversacion_id).first() or\
                        ConversacionWhatsApp.objects.sin_expirar.filter(contacto=contacto).order_by('-id').first() or \
-                       ConversacionWhatsApp.objects.create(contacto=contacto, fromMe=True)
+                       ConversacionWhatsApp.objects.create(
+                           contacto=contacto, fromMe=True,
+                           proveedor_atencion=getattr(session, 'proveedor', '') or '',
+                       )
 
         # Crear el mensaje
         message = MensajeWhatsApp.objects.create(

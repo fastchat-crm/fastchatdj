@@ -37,8 +37,20 @@ class NormalModel(models.Model):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Campos diferidos (via .only()/.defer() o values_list parciales) — si
+        # tocamos su atributo, Django dispara refresh_from_db() que re-instancia
+        # el modelo → nuevo __init__ → loop infinito. Los salteamos y listo:
+        # los _boolhtml/_money/_a_tag no son criticos si el campo ni siquiera
+        # esta cargado en la instancia.
+        deferred_fields = set()
+        try:
+            deferred_fields = self.get_deferred_fields()
+        except Exception:
+            pass
         for x in self._meta.fields:
             f = x.name
+            if f in deferred_fields:
+                continue
             if isinstance(self._meta.get_field(f), models.BooleanField):
                 is_true = customgetattr(self, f)
                 if is_true == None:
