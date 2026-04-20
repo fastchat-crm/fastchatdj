@@ -601,9 +601,10 @@
             const fd = new FormData();
             fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
             fd.append('action', 'verificar_meta_conexion');
-            fd.append('id', sesionId);
+            fd.append('pk', sesionId);
             const r = await fetch('', {method: 'POST', body: fd});
-            const j = await r.json();
+            let j = await r.json();
+            if (Array.isArray(j)) j = j[0] || {error: true, message: 'Respuesta inesperada del servidor.'};
             if (j.error){
                 body.innerHTML = `
                     <div class="alert alert-danger d-flex gap-2">

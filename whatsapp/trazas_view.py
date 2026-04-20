@@ -7,6 +7,8 @@ from django.template.loader import get_template
 from core.funciones import addData, paginador, secure_module
 from .models import TrazaMensajeIA, SesionWhatsApp, ETAPAS_TRAZA
 
+WS_ETAPAS = ('ws_request', 'ws_respuesta', 'ws_sin_agente', 'ws_error')
+
 
 @login_required
 @secure_module
@@ -42,17 +44,28 @@ def trazasView(request):
         })
 
     # ===== LISTADO PRINCIPAL =====
-    # Filtrar a las sesiones del usuario actual
+    # Scope: sesiones del usuario + trazas del webservice (apikey del perfil del usuario)
+    from crm.models import ApiKeyIA
     sesiones_usuario = SesionWhatsApp.objects.filter(
         usuario_id=request.user.id, status=True
     ).values_list('id', flat=True)
 
-    filtros = Q(sesion_id__in=list(sesiones_usuario))
+    apikeys_usuario = ApiKeyIA.objects.filter(
+        perfil__usuario=request.user, status=True
+    ).order_by('alias', 'descripcion')
+    apikeys_ids = list(apikeys_usuario.values_list('id', flat=True))
+
+    filtros = (
+        Q(sesion_id__in=list(sesiones_usuario))
+        | Q(apikey_id__in=apikeys_ids, etapa__in=WS_ETAPAS)
+    )
 
     numero = (request.GET.get('numero') or '').strip()
     sesion_filtro = request.GET.get('sesion') or ''
     etapa_filtro = request.GET.get('etapa') or ''
     nivel_filtro = request.GET.get('nivel') or ''
+    apikey_filtro = request.GET.get('apikey') or ''
+    solo_webservice = request.GET.get('solo_webservice') == '1'
     solo_problemas = request.GET.get('solo_problemas') == '1'
     fecha_desde = (request.GET.get('fecha_desde') or '').strip()
     fecha_hasta = (request.GET.get('fecha_hasta') or '').strip()
@@ -74,6 +87,19 @@ def trazasView(request):
         filtros &= Q(nivel=nivel_filtro)
         data['nivel_sel'] = nivel_filtro
         url_vars += f'&nivel={nivel_filtro}'
+    if apikey_filtro:
+        try:
+            apikey_pk = int(apikey_filtro)
+            if apikey_pk in apikeys_ids:
+                filtros &= Q(apikey_id=apikey_pk)
+                data['apikey_sel'] = apikey_pk
+                url_vars += f'&apikey={apikey_pk}'
+        except (TypeError, ValueError):
+            pass
+    if solo_webservice:
+        filtros &= Q(etapa__in=WS_ETAPAS)
+        data['solo_webservice'] = True
+        url_vars += '&solo_webservice=1'
     if solo_problemas:
         filtros &= Q(nivel__in=['error', 'warning'])
         data['solo_problemas'] = True
@@ -88,7 +114,7 @@ def trazasView(request):
         url_vars += f'&fecha_hasta={fecha_hasta}'
 
     listado = TrazaMensajeIA.objects.filter(filtros).select_related(
-        'sesion', 'conversacion', 'conversacion__contacto', 'mensaje'
+        'sesion', 'conversacion', 'conversacion__contacto', 'mensaje', 'apikey'
     ).order_by('-fecha', '-id')
 
     # Estadisticas del rango filtrado
@@ -105,6 +131,7 @@ def trazasView(request):
     data['etapas'] = ETAPAS_TRAZA
     data['niveles'] = [('info', 'Info'), ('success', 'Exito'), ('warning', 'Advertencia'), ('error', 'Error')]
     data['sesiones'] = SesionWhatsApp.objects.filter(usuario_id=request.user.id, status=True).order_by('numero')
+    data['apikeys'] = apikeys_usuario
     data['list_count'] = listado.count()
     data['url_vars'] = url_vars
     paginador(request, listado, 30, data, url_vars)

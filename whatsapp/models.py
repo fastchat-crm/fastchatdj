@@ -810,6 +810,11 @@ ETAPAS_TRAZA = (
     ('node_socket_caido',      '[Node] Socket de sesion caido'),
     ('node_reconectando',      '[Node] Reconectando sesion'),
     ('node_rate_limited',      '[Node] Rate limit alcanzado'),
+    # Eventos del webservice externo (/api/ia/consultar/)
+    ('ws_request',      '[WS] Solicitud recibida'),
+    ('ws_respuesta',    '[WS] Respuesta entregada'),
+    ('ws_sin_agente',   '[WS] Agente no encontrado'),
+    ('ws_error',        '[WS] Error procesando solicitud'),
 )
 
 NIVELES_TRAZA = (
@@ -826,6 +831,11 @@ class TrazaMensajeIA(models.Model):
     sesion = models.ForeignKey(
         SesionWhatsApp, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='trazas', verbose_name='Sesion'
+    )
+    apikey = models.ForeignKey(
+        'crm.ApiKeyIA', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='trazas', verbose_name='Api Key / Token WS',
+        help_text='Solo lo llena el pipeline del webservice externo.'
     )
     conversacion = models.ForeignKey(
         'whatsapp.ConversacionWhatsApp', on_delete=models.SET_NULL, null=True, blank=True,
@@ -850,6 +860,7 @@ class TrazaMensajeIA(models.Model):
             models.Index(fields=['numero', '-fecha']),
             models.Index(fields=['sesion', '-fecha']),
             models.Index(fields=['conversacion', '-fecha']),
+            models.Index(fields=['apikey', '-fecha']),
         ]
 
     def __str__(self):
@@ -870,6 +881,10 @@ class TrazaMensajeIA(models.Model):
             'sin_respuesta':     'fa-ban',
             'error_general':     'fa-bug',
             'fin_conversacion':  'fa-flag-checkered',
+            'ws_request':        'fa-cloud-arrow-down',
+            'ws_respuesta':      'fa-cloud-arrow-up',
+            'ws_sin_agente':     'fa-user-slash',
+            'ws_error':          'fa-plug-circle-xmark',
         }.get(self.etapa, 'fa-circle-info')
 
     @property

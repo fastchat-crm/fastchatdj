@@ -3,7 +3,7 @@ import os
 import sys
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
+from django.db import transaction, models
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.contrib import messages
@@ -914,6 +914,84 @@ def entrenamiento_ia_view(request):
                         return JsonResponse({'result': True, 'templates': HERRAMIENTA_TEMPLATES})
                     except Exception as ex:
                         return JsonResponse({'result': False, 'message': str(ex)})
+                if action == 'herramienta_logs_lista':
+                    try:
+                        from crm.models import HerramientaAgente as _HA, LogHerramientaAgente as _HL
+                        from django.utils.dateparse import parse_date
+                        from django.db.models import Count, Avg, Sum
+                        import datetime
+                        agente_id = int(request.GET.get('agente_id') or 0)
+                        agente = AgentesIA.objects.get(pk=agente_id, perfil=perfil)
+                        herramienta_id = request.GET.get('herramienta_id') or ''
+                        estado = (request.GET.get('estado') or '').strip()
+                        hoy = datetime.date.today()
+                        fi = parse_date(request.GET.get('fecha_inicio') or '') or (hoy - datetime.timedelta(days=6))
+                        ff = parse_date(request.GET.get('fecha_fin') or '') or hoy
+                        qs = _HL.objects.filter(
+                            herramienta__agente=agente,
+                            fecha__date__gte=fi, fecha__date__lte=ff,
+                        ).select_related('herramienta', 'conversacion__contacto')
+                        if herramienta_id and str(herramienta_id).isdigit():
+                            qs = qs.filter(herramienta_id=int(herramienta_id))
+                        if estado == 'ok':
+                            qs = qs.filter(exito=True)
+                        elif estado == 'error':
+                            qs = qs.filter(exito=False)
+                        total = qs.count()
+                        qs = qs.order_by('-fecha')[:200]
+                        resumen = _HL.objects.filter(
+                            herramienta__agente=agente,
+                            fecha__date__gte=fi, fecha__date__lte=ff,
+                        ).aggregate(
+                            total=Count('id'),
+                            exitos=Count('id', filter=models.Q(exito=True)),
+                            errores=Count('id', filter=models.Q(exito=False)),
+                            duracion_prom=Avg('duracion_ms'),
+                        )
+                        data_ctx = dict(data)
+                        data_ctx['agente'] = agente
+                        data_ctx['logs'] = qs
+                        data_ctx['total_matches'] = total
+                        data_ctx['resumen'] = resumen
+                        data_ctx['herramientas'] = agente.herramientas.filter(status=True).order_by('nombre')
+                        data_ctx['f_herramienta_id'] = str(herramienta_id)
+                        data_ctx['f_estado'] = estado
+                        data_ctx['f_fecha_inicio'] = str(fi)
+                        data_ctx['f_fecha_fin'] = str(ff)
+                        template = get_template("crm/entrenamiento/herramienta/logs.html")
+                        return JsonResponse({"result": True, 'data': template.render(data_ctx)})
+                    except Exception as ex:
+                        return JsonResponse({"result": False, 'message': str(ex)})
+                if action == 'herramienta_log_detalle':
+                    try:
+                        from crm.models import LogHerramientaAgente as _HL
+                        log_id = int(request.GET.get('id') or 0)
+                        lg = _HL.objects.select_related(
+                            'herramienta__agente__perfil', 'conversacion__contacto'
+                        ).get(pk=log_id, herramienta__agente__perfil=perfil)
+                        contacto = ''
+                        if lg.conversacion and lg.conversacion.contacto:
+                            c = lg.conversacion.contacto
+                            contacto = f"{c} ({getattr(c, 'numero_telefono', '') or ''})"
+                        return JsonResponse({
+                            'result': True,
+                            'id': lg.id,
+                            'fecha': lg.fecha.strftime('%d/%m/%Y %H:%M:%S') if lg.fecha else '',
+                            'herramienta': lg.herramienta.nombre_amigable,
+                            'slug': lg.herramienta.nombre,
+                            'metodo': lg.herramienta.metodo,
+                            'url': lg.request_url,
+                            'params': lg.request_params or {},
+                            'status': lg.response_status,
+                            'exito': lg.exito,
+                            'duracion_ms': lg.duracion_ms,
+                            'response_body': lg.response_body or '',
+                            'error_mensaje': lg.error_mensaje or '',
+                            'contacto': contacto,
+                            'conversacion_id': lg.conversacion_id or None,
+                        })
+                    except Exception as ex:
+                        return JsonResponse({'result': False, 'message': str(ex)})
                 if action == 'faq_lista':
                     try:
                         agente_id = int(request.GET.get('agente_id') or 0)
@@ -1100,6 +1178,109 @@ def entrenamiento_ia_view(request):
                                 for r in registros
                             ],
                             'total': qs.count(),
+                        })
+                    except Exception as ex:
+                        return JsonResponse({"result": False, 'message': str(ex)})
+
+                elif action == 'uso_webservice':
+                    try:
+                        from django.db.models import Sum, Count
+                        from django.utils.dateparse import parse_date
+                        from whatsapp.models import TrazaMensajeIA
+                        import datetime, json as _json
+
+                        pk = int(request.GET['id'])
+                        apikey = ApiKeyIA.objects.get(pk=pk, perfil=perfil)
+                        hoy = datetime.date.today()
+                        fecha_fin = parse_date(request.GET.get('fecha_fin', '')) or hoy
+                        fecha_inicio = parse_date(request.GET.get('fecha_inicio', '')) or (hoy - datetime.timedelta(days=29))
+
+                        WS_ETAPAS = ('ws_request', 'ws_respuesta', 'ws_sin_agente', 'ws_error')
+                        base_qs = TrazaMensajeIA.objects.filter(
+                            apikey=apikey,
+                            etapa__in=WS_ETAPAS,
+                            fecha__date__gte=fecha_inicio,
+                            fecha__date__lte=fecha_fin,
+                        )
+
+                        totales = {
+                            'llamadas': base_qs.filter(etapa='ws_request').count(),
+                            'exitosas': base_qs.filter(etapa='ws_respuesta').count(),
+                            'errores':  base_qs.filter(etapa='ws_error').count(),
+                            'sin_agente': base_qs.filter(etapa='ws_sin_agente').count(),
+                        }
+
+                        # Top IPs (desde ws_request, parseando detalle JSON)
+                        ip_counter = {}
+                        for t in base_qs.filter(etapa='ws_request').only('detalle'):
+                            try:
+                                d = _json.loads(t.detalle) if t.detalle else {}
+                            except Exception:
+                                continue
+                            ip = (d.get('ip') or '').strip() or 'desconocida'
+                            rec = ip_counter.setdefault(ip, {'ip': ip, 'llamadas': 0, 'ua': ''})
+                            rec['llamadas'] += 1
+                            if not rec['ua'] and d.get('user_agent'):
+                                rec['ua'] = (d.get('user_agent') or '')[:80]
+                        top_ips = sorted(ip_counter.values(), key=lambda r: -r['llamadas'])[:10]
+
+                        # Últimas interacciones: emparejar ws_request ↔ ws_respuesta/ws_error por proximidad
+                        eventos = list(
+                            base_qs.order_by('-fecha', '-id').values(
+                                'id', 'fecha', 'etapa', 'nivel', 'detalle', 'latencia_ms',
+                            )[:80]
+                        )
+                        # Pares: cada respuesta/error se empareja con el request más cercano anterior (misma ip+session si posible)
+                        requests_map = {}  # (ip, session_id) → último request no consumido
+                        interacciones = []
+                        for ev in sorted(eventos, key=lambda e: e['fecha']):
+                            try:
+                                det = _json.loads(ev['detalle']) if ev['detalle'] else {}
+                            except Exception:
+                                det = {}
+                            key = (det.get('ip') or '', det.get('session_id') or '')
+                            if ev['etapa'] == 'ws_request':
+                                requests_map[key] = {'ev': ev, 'det': det}
+                            else:
+                                par = requests_map.pop(key, None)
+                                if par is None:
+                                    req_det = {}
+                                    req_ev = None
+                                else:
+                                    req_det = par['det']
+                                    req_ev = par['ev']
+                                interacciones.append({
+                                    '_ts': ev['fecha'],
+                                    'fecha': ev['fecha'].strftime('%d/%m/%Y %H:%M:%S') if ev['fecha'] else '',
+                                    'ip': det.get('ip') or req_det.get('ip') or '',
+                                    'user_agent': (det.get('user_agent') or req_det.get('user_agent') or '')[:120],
+                                    'session_id': det.get('session_id') or req_det.get('session_id') or '',
+                                    'agente': det.get('agente_nombre') or req_det.get('agente_nombre') or '',
+                                    'tipo': det.get('tipo') or req_det.get('tipo') or '',
+                                    'modelo': det.get('modelo') or req_det.get('modelo') or '',
+                                    'mensaje': (det.get('mensaje_preview') or req_det.get('mensaje_preview') or '')[:300],
+                                    'respuesta': (det.get('respuesta_preview') or '')[:500],
+                                    'tokens_total': (det.get('tokens') or {}).get('total') if isinstance(det.get('tokens'), dict) else 0,
+                                    'tokens_entrada': (det.get('tokens') or {}).get('entrada') if isinstance(det.get('tokens'), dict) else 0,
+                                    'tokens_salida': (det.get('tokens') or {}).get('salida') if isinstance(det.get('tokens'), dict) else 0,
+                                    'latencia_ms': ev['latencia_ms'] or 0,
+                                    'estado': ev['etapa'],  # ws_respuesta | ws_error | ws_sin_agente
+                                    'error': det.get('exc') or det.get('code') or '',
+                                })
+                        interacciones.sort(key=lambda r: r['_ts'] or datetime.datetime.min, reverse=True)
+                        interacciones = interacciones[:15]
+                        for r in interacciones:
+                            r.pop('_ts', None)
+
+                        return JsonResponse({
+                            'result': True,
+                            'apikey_alias': str(apikey),
+                            'fecha_inicio': str(fecha_inicio),
+                            'fecha_fin': str(fecha_fin),
+                            'totales': totales,
+                            'top_ips': top_ips,
+                            'interacciones': interacciones,
+                            'trazabilidad_url': f'/whatsapp/trazas/?solo_webservice=1&apikey={apikey.pk}',
                         })
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})

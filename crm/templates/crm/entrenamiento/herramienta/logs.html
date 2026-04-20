@@ -1,0 +1,218 @@
+{% load static %}
+
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-h-logs-back">
+            <i class="fa fa-arrow-left me-1"></i> Volver a la lista
+        </button>
+    </div>
+    <p class="section-header mb-0">Consumo de webservices</p>
+</div>
+
+<div class="h-logs-resumen mb-3">
+    <div class="h-logs-metric">
+        <div class="metric-label">Invocaciones</div>
+        <div class="metric-value">{{ resumen.total|default:0 }}</div>
+    </div>
+    <div class="h-logs-metric ok">
+        <div class="metric-label">Exitosas</div>
+        <div class="metric-value">{{ resumen.exitos|default:0 }}</div>
+    </div>
+    <div class="h-logs-metric err">
+        <div class="metric-label">Con error</div>
+        <div class="metric-value">{{ resumen.errores|default:0 }}</div>
+    </div>
+    <div class="h-logs-metric dur">
+        <div class="metric-label">Duración media</div>
+        <div class="metric-value">
+            {% if resumen.duracion_prom %}{{ resumen.duracion_prom|floatformat:0 }} ms{% else %}—{% endif %}
+        </div>
+    </div>
+</div>
+
+<form id="form-h-logs" class="row g-2 align-items-end mb-3" data-agente-id="{{ agente.id }}">
+    <div class="col-md-3">
+        <label class="form-label small mb-1">Herramienta</label>
+        <select name="herramienta_id" class="form-select form-select-sm">
+            <option value="">Todas</option>
+            {% for h in herramientas %}
+                <option value="{{ h.id }}" {% if f_herramienta_id == h.id|stringformat:"s" %}selected{% endif %}>
+                    {{ h.nombre_amigable }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label small mb-1">Estado</label>
+        <select name="estado" class="form-select form-select-sm">
+            <option value="" {% if not f_estado %}selected{% endif %}>Todos</option>
+            <option value="ok" {% if f_estado == 'ok' %}selected{% endif %}>Éxito</option>
+            <option value="error" {% if f_estado == 'error' %}selected{% endif %}>Error</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small mb-1">Desde</label>
+        <input type="date" name="fecha_inicio" class="form-control form-control-sm" value="{{ f_fecha_inicio }}">
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small mb-1">Hasta</label>
+        <input type="date" name="fecha_fin" class="form-control form-control-sm" value="{{ f_fecha_fin }}">
+    </div>
+    <div class="col-md-1 d-grid">
+        <button type="submit" class="btn btn-sm btn-primary">
+            <i class="fa fa-filter"></i>
+        </button>
+    </div>
+</form>
+
+{% if logs %}
+    <div class="h-logs-lista">
+        {% for lg in logs %}
+            <div class="h-log-row {% if lg.exito %}ok{% else %}err{% endif %}" data-log-id="{{ lg.id }}">
+                <div class="h-log-estado">
+                    {% if lg.exito %}
+                        <i class="fa fa-check-circle text-success" title="Éxito"></i>
+                    {% else %}
+                        <i class="fa fa-times-circle text-danger" title="Error"></i>
+                    {% endif %}
+                    <span class="h-log-status">{{ lg.response_status|default:'—' }}</span>
+                </div>
+                <div class="h-log-body">
+                    <div class="h-log-top">
+                        <span class="h-log-tool">{{ lg.herramienta.nombre_amigable }}</span>
+                        <span class="h-log-method {{ lg.herramienta.metodo }}">{{ lg.herramienta.metodo }}</span>
+                        <span class="h-log-duracion"><i class="fa fa-stopwatch me-1"></i>{{ lg.duracion_ms }} ms</span>
+                        <span class="h-log-fecha">{{ lg.fecha|date:"d/m/Y H:i:s" }}</span>
+                    </div>
+                    <div class="h-log-url">{{ lg.request_url|default:lg.herramienta.url|truncatechars:140 }}</div>
+                    {% if lg.request_params %}
+                        <div class="h-log-params">
+                            <strong>Pidió:</strong>
+                            <code>{{ lg.request_params|truncatechars:200 }}</code>
+                        </div>
+                    {% endif %}
+                    {% if lg.error_mensaje %}
+                        <div class="h-log-error">
+                            <i class="fa fa-exclamation-triangle me-1"></i>{{ lg.error_mensaje|truncatechars:200 }}
+                        </div>
+                    {% endif %}
+                    {% if lg.response_body %}
+                        <div class="h-log-resp-preview">
+                            <strong>Retornó:</strong>
+                            <code>{{ lg.response_body|truncatechars:220 }}</code>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="h-log-actions">
+                    <button type="button" class="btn btn-sm btn-outline-primary btn-h-log-ver" data-id="{{ lg.id }}" title="Ver detalle completo">
+                        <i class="fa fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    {% if total_matches > logs|length %}
+        <div class="text-muted small mt-2">
+            Mostrando los primeros {{ logs|length }} de {{ total_matches }} registros. Ajusta los filtros para ver otros.
+        </div>
+    {% endif %}
+{% else %}
+    <div class="h-empty">
+        <div class="big-icon"><i class="fas fa-clipboard-list"></i></div>
+        <div class="fw-semibold">Sin registros en el rango seleccionado</div>
+        <div class="small">Cada vez que el agente invoque una herramienta durante una conversación se guardará aquí el detalle.</div>
+    </div>
+{% endif %}
+
+{# ── Modal detalle log individual ─────────────────────────────────── #}
+<div class="modal fade" id="modalHLogDetalle" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa fa-file-lines me-2 text-primary"></i>Detalle del consumo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalHLogBody">
+                <div class="text-center py-4"><div class="spinner-border text-primary"></div></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    const RUTA = '{{ ruta }}';
+    const AGENTE_ID = '{{ agente.id }}';
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+            ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    $('#form-h-logs').off('submit.hlogs').on('submit.hlogs', function(e) {
+        e.preventDefault();
+        const fd = $(this).serializeArray().reduce((a, f) => (a[f.name] = f.value, a), {});
+        fd.action = 'herramienta_logs_lista';
+        fd.agente_id = AGENTE_ID;
+        $.get(RUTA, fd, function(r) {
+            if (r.result) { $('#h-content').html(r.data); }
+            else { alertaWarning(r.message || 'Error al filtrar.'); }
+        }, 'json');
+    });
+
+    $('#btn-h-logs-back').off('click.hlogs').on('click.hlogs', function() {
+        if (typeof window.hCargarLista === 'function') { window.hCargarLista(); }
+    });
+
+    $('.btn-h-log-ver').off('click.hlogs').on('click.hlogs', function() {
+        const id = $(this).data('id');
+        const body = document.getElementById('modalHLogBody');
+        body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+        const modal = new bootstrap.Modal(document.getElementById('modalHLogDetalle'));
+        modal.show();
+        $.get(RUTA, {action: 'herramienta_log_detalle', id: id}, function(r) {
+            if (!r.result) {
+                body.innerHTML = '<div class="alert alert-danger">' + esc(r.message || 'Error') + '</div>';
+                return;
+            }
+            const estadoBadge = r.exito
+                ? '<span class="badge bg-success">Éxito</span>'
+                : '<span class="badge bg-danger">Error</span>';
+            let paramsStr = '';
+            try { paramsStr = JSON.stringify(r.params || {}, null, 2); } catch (e) { paramsStr = String(r.params || ''); }
+            let contactoHtml = '';
+            if (r.contacto) {
+                contactoHtml = '<tr><th>Contacto</th><td>' + esc(r.contacto) + '</td></tr>';
+            }
+            let errorHtml = '';
+            if (r.error_mensaje) {
+                errorHtml = '<div class="alert alert-danger small mt-2"><strong>Error:</strong> ' + esc(r.error_mensaje) + '</div>';
+            }
+            body.innerHTML = `
+                <table class="table table-sm mb-2">
+                    <tr><th style="width:140px">Herramienta</th><td><strong>${esc(r.herramienta)}</strong> <code>${esc(r.slug)}</code></td></tr>
+                    <tr><th>Fecha</th><td>${esc(r.fecha)}</td></tr>
+                    <tr><th>Estado</th><td>${estadoBadge} <span class="ms-2 text-muted small">HTTP ${esc(r.status)} · ${esc(r.duracion_ms)} ms</span></td></tr>
+                    <tr><th>Método</th><td><code>${esc(r.metodo)}</code> ${esc(r.url)}</td></tr>
+                    ${contactoHtml}
+                </table>
+                ${errorHtml}
+                <div class="h-log-detalle-block">
+                    <div class="h-log-detalle-title"><i class="fa fa-arrow-up me-1"></i>Qué se le preguntó al webservice</div>
+                    <pre class="h-log-detalle-pre">${esc(paramsStr)}</pre>
+                </div>
+                <div class="h-log-detalle-block">
+                    <div class="h-log-detalle-title"><i class="fa fa-arrow-down me-1"></i>Qué retornó el webservice</div>
+                    <pre class="h-log-detalle-pre">${esc(r.response_body || '(vacío)')}</pre>
+                </div>
+            `;
+        }, 'json').fail(function() {
+            body.innerHTML = '<div class="alert alert-danger">Error cargando el detalle.</div>';
+        });
+    });
+})();
+</script>

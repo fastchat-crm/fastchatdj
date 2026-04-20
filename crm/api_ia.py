@@ -44,7 +44,8 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-from core.funciones import rate_limit
+from core.funciones import rate_limit, get_client_ip
+from whatsapp.trazas import registrar as registrar_traza
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,11 @@ def consultar_ia_view(request):
     apikey_obj = _autenticar(request)
     if isinstance(apikey_obj, JsonResponse):
         return apikey_obj
+
+    # Datos de origen del caller (para "quién" usa el webservice)
+    client_ip = get_client_ip(request) or ''
+    user_agent = (request.META.get('HTTP_USER_AGENT') or '')[:200]
+    referer = (request.META.get('HTTP_REFERER') or '')[:200]
 
     # ── Parsear request ──────────────────────────────────────────────
     mensaje = (request.POST.get('mensaje') or '').strip()
@@ -83,10 +89,24 @@ def consultar_ia_view(request):
     if agente_id:
         agente = AgentesIA.objects.filter(pk=agente_id, apikey=apikey_obj, status=True).first()
         if not agente:
+            registrar_traza(
+                etapa='ws_sin_agente', nivel='warning', apikey=apikey_obj,
+                detalle={
+                    'apikey_id': apikey_obj.id, 'agente_id_pedido': agente_id,
+                    'code': 'AGENT_NOT_FOUND', 'ip': client_ip, 'user_agent': user_agent,
+                },
+            )
             return _error('Agente no encontrado o no asociado a esta API Key.', 'AGENT_NOT_FOUND', 404)
     else:
         agente = AgentesIA.objects.filter(apikey=apikey_obj, status=True).first()
         if not agente:
+            registrar_traza(
+                etapa='ws_sin_agente', nivel='warning', apikey=apikey_obj,
+                detalle={
+                    'apikey_id': apikey_obj.id, 'code': 'NO_AGENT',
+                    'ip': client_ip, 'user_agent': user_agent,
+                },
+            )
             return _error('No hay agentes asociados a esta API Key.', 'NO_AGENT', 404)
 
     # ── Determinar tipo de procesamiento ─────────────────────────────
@@ -106,6 +126,19 @@ def consultar_ia_view(request):
     provider_map = {2: 'gemini', 3: 'openai'}
     provider = provider_map.get(apikey_obj.proveedor, 'gemini')
     model_name = apikey_obj.modelo or ('gemini-2.5-flash' if provider == 'gemini' else 'gpt-4o-mini')
+
+    registrar_traza(
+        etapa='ws_request', nivel='info', apikey=apikey_obj,
+        detalle={
+            'apikey_id': apikey_obj.id, 'agente_id': agente.id,
+            'agente_nombre': agente.nombre, 'tipo': tipo,
+            'session_id': session_id or '', 'modelo': model_name,
+            'mensaje_preview': mensaje[:300],
+            'archivo_nombre': (archivo.name if archivo else ''),
+            'archivo_content_type': (archivo.content_type if archivo else ''),
+            'ip': client_ip, 'user_agent': user_agent, 'referer': referer,
+        },
+    )
 
     t0 = time.time()
 
@@ -129,9 +162,32 @@ def consultar_ia_view(request):
             )
     except Exception as e:
         logger.exception('API IA: error procesando consulta')
+        registrar_traza(
+            etapa='ws_error', nivel='error', apikey=apikey_obj,
+            detalle={
+                'apikey_id': apikey_obj.id, 'agente_id': agente.id, 'tipo': tipo,
+                'exc': str(e)[:500], 'modelo': model_name,
+                'ip': client_ip, 'user_agent': user_agent,
+                'mensaje_preview': mensaje[:300],
+            },
+            latencia_ms=int((time.time() - t0) * 1000),
+        )
         return _error(f'Error interno: {str(e)[:500]}', 'PROCESSING_ERROR', 500)
 
     latencia_ms = int((time.time() - t0) * 1000)
+
+    registrar_traza(
+        etapa='ws_respuesta', nivel='success', apikey=apikey_obj,
+        detalle={
+            'apikey_id': apikey_obj.id, 'agente_id': agente.id,
+            'agente_nombre': agente.nombre, 'tipo': tipo,
+            'tokens': tokens, 'modelo': model_name, 'session_id': session_id or '',
+            'ip': client_ip, 'user_agent': user_agent,
+            'mensaje_preview': mensaje[:300],
+            'respuesta_preview': (respuesta_texto or '')[:500],
+        },
+        latencia_ms=latencia_ms,
+    )
 
     return JsonResponse({
         'error': False,

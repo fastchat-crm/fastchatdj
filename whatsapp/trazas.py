@@ -59,6 +59,7 @@ def registrar(
     nivel='info',
     detalle=None,
     latencia_ms=None,
+    apikey=None,
 ):
     """Inserta una fila en TrazaMensajeIA. Silencia cualquier error para no
     interrumpir el flujo principal.
@@ -91,6 +92,7 @@ def registrar(
             nivel=nivel,
             detalle=detalle,
             latencia_ms=latencia_ms,
+            apikey=apikey,
         )
     except Exception:
         logger.exception("Error registrando traza (etapa=%s)", etapa)

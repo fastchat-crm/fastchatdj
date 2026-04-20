@@ -176,6 +176,19 @@
             </select>
         </div>
         <div class="col-md-3">
+            <label class="form-label small text-muted mb-1">
+                <i class="fas fa-key me-1"></i>Token WebService (API Key)
+            </label>
+            <select name="apikey" class="form-select">
+                <option value="">Todas</option>
+                {% for ak in apikeys %}
+                    <option value="{{ ak.id }}" {% if apikey_sel == ak.id %}selected{% endif %}>
+                        {{ ak.alias|default:ak.get_proveedor_display }}{% if ak.modelo %} · {{ ak.modelo }}{% endif %}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
             <label class="form-label small text-muted mb-1">Desde</label>
             <input type="date" name="fecha_desde" class="form-control" value="{{ fecha_desde|default:'' }}">
         </div>
@@ -188,6 +201,13 @@
                 <input type="checkbox" name="solo_problemas" value="1" class="form-check-input" id="soloProblemas"
                        {% if solo_problemas %}checked{% endif %}>
                 <label class="form-check-label small" for="soloProblemas">Solo problemas (errores y advertencias)</label>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" name="solo_webservice" value="1" class="form-check-input" id="soloWebservice"
+                       {% if solo_webservice %}checked{% endif %}>
+                <label class="form-check-label small" for="soloWebservice">
+                    <i class="fas fa-plug me-1"></i>Solo flujo WebService
+                </label>
             </div>
         </div>
         <div class="col-md-3 d-flex gap-2">
@@ -241,8 +261,14 @@
                         {% if t.sesion %}
                             <div><i class="fab fa-whatsapp text-success me-1"></i>{{ t.sesion.numero|default:t.sesion.session_id|truncatechars:20 }}</div>
                         {% endif %}
+                        {% if t.apikey %}
+                            <div><i class="fas fa-plug text-primary me-1"></i><span class="small">{{ t.apikey.alias|default:t.apikey.get_proveedor_display|truncatechars:22 }}</span></div>
+                        {% endif %}
                         {% if t.numero %}
                             <small class="text-muted">{{ t.numero }}</small>
+                        {% endif %}
+                        {% if not t.sesion and not t.apikey and not t.numero %}
+                            <span class="text-muted small">—</span>
                         {% endif %}
                     </td>
                     <td>

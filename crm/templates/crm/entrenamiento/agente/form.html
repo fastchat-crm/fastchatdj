@@ -557,6 +557,17 @@
                 if (r.result) { $('#h-content').html(r.data); }
             }, 'json');
         }
+        // Exponer para que el template de logs pueda volver a la lista
+        window.hCargarLista = cargarLista;
+
+        function abrirLogs(herramientaId) {
+            const params = {action: 'herramienta_logs_lista', agente_id: AGENTE_ID};
+            if (herramientaId) params.herramienta_id = herramientaId;
+            $.get(RUTA, params, function(r) {
+                if (r.result) { $('#h-content').html(r.data); }
+                else { alertaWarning(r.message || 'Error cargando el consumo.'); }
+            }, 'json');
+        }
 
         function abrirForm(herramientaId, prefill) {
             const params = {action: 'herramienta_form', agente_id: AGENTE_ID};
@@ -611,6 +622,12 @@
 
         $(document).on('click', '.btn-h-edit', function() {
             abrirForm($(this).data('id'));
+        });
+        $(document).on('click', '#btn-h-logs', function() {
+            abrirLogs(null);
+        });
+        $(document).on('click', '.btn-h-logs-tool', function() {
+            abrirLogs($(this).data('id'));
         });
         $(document).on('click', '.btn-h-del', function() {
             const id = $(this).data('id');

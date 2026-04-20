@@ -379,11 +379,17 @@ def sesionesView(request):
                     # Intenta hacer una consulta liviana a Graph API con el token almacenado
                     import requests
                     session = SesionWhatsApp.objects.get(id=request.POST['pk'])
+                    if session.proveedor != 'meta':
+                        return JsonResponse({'error': True, 'message': 'Esta sesion no usa el proveedor Meta Cloud API.'})
                     config = getattr(session, 'config_meta', None)
                     if not config:
-                        return JsonResponse({'error': True, 'message': 'Sesion sin ConfigMeta.'})
-                    if not config.access_token or not config.phone_number_id:
-                        return JsonResponse({'error': True, 'message': 'Faltan credenciales Meta (token o phone_number_id).'})
+                        return JsonResponse({'error': True, 'message': 'Sesion sin ConfigMeta. Configura WABA ID, phone_number_id y access_token primero.'})
+                    faltan = [campo for campo, valor in (
+                        ('access_token', config.access_token),
+                        ('phone_number_id', config.phone_number_id),
+                    ) if not valor]
+                    if faltan:
+                        return JsonResponse({'error': True, 'message': f'Faltan credenciales Meta: {", ".join(faltan)}.'})
                     try:
                         from .services_meta import GRAPH_API_BASE
                         r = requests.get(

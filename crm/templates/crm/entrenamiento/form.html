@@ -842,6 +842,52 @@
                         <p class="small text-muted mt-1 mb-0" id="consumo-detalle-count"></p>
                     </div>
 
+                    {# ══════ Uso WebService externo ══════════════════════════════════════ #}
+                    <div id="uso-ws-panel" class="mt-4 pt-3 border-top" style="display:none;">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <p class="small fw-semibold text-muted text-uppercase mb-0" style="letter-spacing:.05em">
+                                <i class="fas fa-plug text-primary me-1"></i>Uso del WebService externo
+                                <span class="text-muted fw-normal ms-2" id="uso-ws-stats" style="letter-spacing:0;text-transform:none"></span>
+                            </p>
+                            <a href="#" id="uso-ws-link" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary py-0">
+                                <i class="fas fa-route me-1"></i>Abrir trazabilidad
+                            </a>
+                        </div>
+
+                        <div class="row g-3">
+                            {# Top IPs que consumen #}
+                            <div class="col-md-5">
+                                <p class="small fw-semibold text-muted text-uppercase mb-2" style="letter-spacing:.05em">
+                                    <i class="fas fa-network-wired me-1"></i>Top IPs consumiendo
+                                </p>
+                                <div class="table-responsive" style="max-height:240px;overflow-y:auto">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead class="table-light sticky-top">
+                                            <tr>
+                                                <th>IP</th>
+                                                <th>User-Agent</th>
+                                                <th class="text-end">Llamadas</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="uso-ws-ips-tbody">
+                                            <tr><td colspan="3" class="text-center text-muted py-3">—</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {# Últimas interacciones #}
+                            <div class="col-md-7">
+                                <p class="small fw-semibold text-muted text-uppercase mb-2" style="letter-spacing:.05em">
+                                    <i class="fas fa-comments me-1"></i>Últimas interacciones (pregunta → respuesta)
+                                </p>
+                                <div id="uso-ws-interacciones" style="max-height:320px;overflow-y:auto">
+                                    <p class="text-muted small">—</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -1622,6 +1668,89 @@
             setTimeout($.unblockUI, 1);
             alertaWarning('Error de conexión.');
         });
+
+        cargarUsoWebService();
+    }
+
+    function escHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function cargarUsoWebService() {
+        const desde = document.getElementById('consumo-desde').value;
+        const hasta = document.getElementById('consumo-hasta').value;
+        $.get(_RUTA, {
+            action: 'uso_webservice', id: _consumoApikeyId,
+            fecha_inicio: desde, fecha_fin: hasta,
+        }, function (res) {
+            if (!res.result) {
+                document.getElementById('uso-ws-panel').style.display = 'none';
+                return;
+            }
+            const t = res.totales || {};
+            const total = (t.llamadas || 0) + (t.sin_agente || 0);
+            if (total === 0) {
+                // Sin uso WS → ocultar panel
+                document.getElementById('uso-ws-panel').style.display = 'none';
+                return;
+            }
+            document.getElementById('uso-ws-panel').style.display = '';
+            document.getElementById('uso-ws-link').href = res.trazabilidad_url || '#';
+            document.getElementById('uso-ws-stats').textContent =
+                `${fmtN(t.llamadas)} solicitudes · ${fmtN(t.exitosas)} OK · ${fmtN(t.errores)} errores · ${fmtN(t.sin_agente)} sin agente`;
+
+            // Top IPs
+            const tbIps = document.getElementById('uso-ws-ips-tbody');
+            if (!res.top_ips || !res.top_ips.length) {
+                tbIps.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">Sin datos</td></tr>';
+            } else {
+                tbIps.innerHTML = res.top_ips.map(r =>
+                    `<tr>
+                        <td class="small"><code>${escHtml(r.ip)}</code></td>
+                        <td class="small text-truncate" style="max-width:200px" title="${escHtml(r.ua)}">${escHtml(r.ua) || '<span class="text-muted">—</span>'}</td>
+                        <td class="text-end small fw-semibold">${fmtN(r.llamadas)}</td>
+                    </tr>`
+                ).join('');
+            }
+
+            // Interacciones
+            const divI = document.getElementById('uso-ws-interacciones');
+            if (!res.interacciones || !res.interacciones.length) {
+                divI.innerHTML = '<p class="text-muted small">Sin interacciones registradas en este rango.</p>';
+            } else {
+                divI.innerHTML = res.interacciones.map(r => {
+                    const badgeColor = r.estado === 'ws_respuesta' ? 'success'
+                                     : r.estado === 'ws_error' ? 'danger' : 'warning';
+                    const badgeTxt = r.estado === 'ws_respuesta' ? 'OK'
+                                   : r.estado === 'ws_error' ? 'ERROR' : 'SIN AGENTE';
+                    const errLine = r.error ? `<div class="small text-danger mt-1"><i class="fas fa-triangle-exclamation me-1"></i>${escHtml(r.error)}</div>` : '';
+                    const respLine = r.respuesta
+                        ? `<div class="small mt-1" style="color:#0f5132;"><strong>↩ </strong>${escHtml(r.respuesta)}</div>`
+                        : '';
+                    return `
+                    <div class="border rounded p-2 mb-2 bg-white">
+                        <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+                            <div class="small text-muted">
+                                <i class="fas fa-clock me-1"></i>${escHtml(r.fecha)}
+                                ${r.ip ? ` · <code>${escHtml(r.ip)}</code>` : ''}
+                                ${r.agente ? ` · <span class="text-dark">${escHtml(r.agente)}</span>` : ''}
+                                ${r.tipo ? ` · <span class="badge bg-light text-dark" style="font-size:.6rem;">${escHtml(r.tipo)}</span>` : ''}
+                            </div>
+                            <div class="d-flex gap-1 align-items-center flex-shrink-0">
+                                <span class="badge bg-${badgeColor}" style="font-size:.6rem;">${badgeTxt}</span>
+                                ${r.tokens_total ? `<span class="badge bg-dark" style="font-size:.6rem;" title="in:${r.tokens_entrada} out:${r.tokens_salida}">${fmtN(r.tokens_total)} tok</span>` : ''}
+                                ${r.latencia_ms ? `<span class="small text-muted">${r.latencia_ms}ms</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="small"><strong>↳ </strong>${escHtml(r.mensaje) || '<span class="text-muted">(sin mensaje)</span>'}</div>
+                        ${respLine}
+                        ${errLine}
+                    </div>`;
+                }).join('');
+            }
+        }, 'json');
     }
 
     function cargarDetalle(filtros, titulo) {
@@ -1908,10 +2037,17 @@
         <div class="p-1">
             <h6 class="mb-3"><i class="fas fa-plug me-2 text-primary"></i>WebService IA — Documentacion</h6>
 
-            <div class="alert alert-info py-2 small mb-3">
-                <strong>Endpoint:</strong> <code>POST ${baseUrl}</code><br>
-                <strong>Proveedor:</strong> ${proveedorNombre} ${modelo ? '· Modelo: ' + modelo : ''}<br>
-                <strong>Rate limit:</strong> 60 req/min
+            <div class="alert alert-info py-2 small mb-3 d-flex justify-content-between align-items-start gap-2">
+                <div>
+                    <strong>Endpoint:</strong> <code>POST ${baseUrl}</code><br>
+                    <strong>Proveedor:</strong> ${proveedorNombre} ${modelo ? '· Modelo: ' + modelo : ''}<br>
+                    <strong>Rate limit:</strong> 60 req/min
+                </div>
+                <a href="/whatsapp/trazas/?solo_webservice=1&apikey=${apikeyId}" target="_blank" rel="noopener"
+                   class="btn btn-sm btn-outline-primary text-nowrap"
+                   title="Ver trazabilidad de llamadas al WebService para este token">
+                    <i class="fas fa-route me-1"></i> Ver trazabilidad
+                </a>
             </div>
 
             <div class="card border mb-3">

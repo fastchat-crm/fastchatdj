@@ -117,9 +117,15 @@
 
 <div class="d-flex align-items-center justify-content-between mb-2">
     <p class="section-header mb-0">Herramientas configuradas</p>
-    <button type="button" class="btn btn-primary btn-sm" id="btn-h-nueva" data-agente-id="{{ agente.id }}">
-        <i class="fa fa-plus me-1"></i> Nueva herramienta en blanco
-    </button>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-h-logs" data-agente-id="{{ agente.id }}"
+                title="Ver historial de consumo de todas las herramientas">
+            <i class="fa fa-chart-line me-1"></i> Consumo
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-h-nueva" data-agente-id="{{ agente.id }}">
+            <i class="fa fa-plus me-1"></i> Nueva herramienta en blanco
+        </button>
+    </div>
 </div>
 
 <div id="h-contenedor">
@@ -140,8 +146,12 @@
                 </div>
                 <div class="h-actions">
                     <button type="button" class="btn btn-sm btn-outline-{% if h.activo %}success{% else %}secondary{% endif %} btn-h-toggle"
-                            data-id="{{ h.id }}" title="{% if h.activo %}Desactivar{% else %}Activar{% endif %}">
+                            data-id="{{ h.id }}" title="{% if h.activo %}Desactivar (el agente dejará de usarla){% else %}Activar{% endif %}">
                         <i class="fas fa-{% if h.activo %}toggle-on{% else %}toggle-off{% endif %}"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-info btn-h-logs-tool"
+                            data-id="{{ h.id }}" data-agente-id="{{ agente.id }}" title="Ver consumo de esta herramienta">
+                        <i class="fas fa-chart-line"></i>
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-primary btn-h-edit"
                             data-id="{{ h.id }}" data-agente-id="{{ agente.id }}" title="Editar">

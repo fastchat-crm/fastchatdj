@@ -304,3 +304,103 @@
 .sim-t-error {
     color: #dc3545; font-weight: 600; margin-bottom: .3rem;
 }
+
+/* ─── Consumo de webservices (LogHerramientaAgente) ────────────────── */
+
+.h-logs-resumen {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: .5rem;
+}
+.h-logs-metric {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: .5rem .7rem;
+    text-align: center;
+}
+.h-logs-metric.ok  { background: #f2fbf5; border-color: #c8e6d1; }
+.h-logs-metric.err { background: #fdf3f3; border-color: #f0c8c8; }
+.h-logs-metric.dur { background: #f3f7fd; border-color: #c8d9f0; }
+.h-logs-metric .metric-label {
+    font-size: .67rem; text-transform: uppercase; color: #6c757d;
+    letter-spacing: .06em; font-weight: 600;
+}
+.h-logs-metric .metric-value {
+    font-size: 1.15rem; font-weight: 700; color: #212529; margin-top: 2px;
+}
+
+.h-logs-lista {
+    display: flex; flex-direction: column; gap: .4rem;
+}
+.h-log-row {
+    display: flex; align-items: flex-start; gap: .6rem;
+    padding: .5rem .7rem;
+    border: 1px solid #e9ecef;
+    border-left: 3px solid #adb5bd;
+    border-radius: 6px;
+    background: #fff;
+    font-size: .78rem;
+}
+.h-log-row.ok  { border-left-color: #2f9e44; }
+.h-log-row.err { border-left-color: #e03131; background: #fffafa; }
+
+.h-log-estado {
+    text-align: center; min-width: 46px; padding-top: 2px;
+}
+.h-log-estado i { font-size: 1.05rem; display: block; }
+.h-log-status {
+    display: block; font-size: .68rem; color: #495057; margin-top: 2px;
+    font-weight: 600;
+}
+.h-log-body { flex: 1; min-width: 0; }
+.h-log-top {
+    display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+    margin-bottom: 3px;
+}
+.h-log-tool { font-weight: 600; color: #212529; }
+.h-log-method {
+    font-size: .6rem; font-weight: 700;
+    padding: 1px 6px; border-radius: 3px;
+    background: #e7f5ff; color: #1864ab;
+}
+.h-log-method.POST  { background: #fff3bf; color: #8a6d0b; }
+.h-log-method.PUT   { background: #ffe0b3; color: #a55503; }
+.h-log-method.DELETE{ background: #ffd2d2; color: #a11414; }
+.h-log-duracion { color: #6c757d; font-size: .72rem; }
+.h-log-fecha { color: #868e96; font-size: .72rem; margin-left: auto; }
+.h-log-url {
+    color: #495057; word-break: break-all;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .72rem;
+    margin-bottom: 3px;
+}
+.h-log-params, .h-log-resp-preview {
+    font-size: .72rem; color: #495057; margin-top: 2px;
+}
+.h-log-params code, .h-log-resp-preview code {
+    background: #f1f3f5; padding: 1px 4px; border-radius: 3px;
+    word-break: break-all;
+}
+.h-log-error {
+    color: #c92a2a; font-size: .72rem; margin-top: 3px;
+    background: #fff5f5; padding: 3px 6px; border-radius: 4px;
+}
+.h-log-actions { display: flex; align-items: center; }
+
+.h-log-detalle-block { margin-top: .7rem; }
+.h-log-detalle-title {
+    font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    color: #495057; letter-spacing: .05em; margin-bottom: 4px;
+}
+.h-log-detalle-pre {
+    background: #212529; color: #f8f9fa;
+    padding: .5rem .7rem; border-radius: 5px;
+    font-size: .74rem; max-height: 320px; overflow: auto;
+    white-space: pre-wrap; word-break: break-word;
+}
+
+@media (max-width: 640px) {
+    .h-logs-resumen { grid-template-columns: repeat(2, 1fr); }
+    .h-log-fecha { margin-left: 0; }
+}
