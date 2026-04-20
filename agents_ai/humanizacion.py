@@ -1,15 +1,25 @@
 """Utilidades para que las respuestas del bot parezcan humanas en WhatsApp.
 
-Dos piezas:
+Piezas:
 
-- `dividir_en_burbujas(texto, max_chars=180)` — parte la respuesta en 2-4 burbujas
-  respetando párrafos, oraciones y listas. No rompe ítems de lista (líneas que
-  empiezan con "-", "•", "1.", etc.).
+- `dividir_en_burbujas(texto, chars_ideal, chars_max, max_burbujas)` — parte la
+  respuesta en varias burbujas respetando párrafos, oraciones y listas. No rompe
+  ítems de lista (líneas que empiezan con "-", "•", "1.", etc.).
 
-- `calcular_delays(burbuja, previa=None, jitter=True)` — devuelve un par
-  `(lectura, escritura)` en segundos que simula lo que tardaría una persona en
-  leer la burbuja anterior y escribir la actual. Con jitter ±20 % para evitar
+- `calcular_delays(burbuja, previa=None, jitter=True, **limites)` — devuelve el
+  par `(lectura, escritura)` en segundos que simula lo que tardaría una persona
+  en leer la burbuja anterior y escribir la actual. Con jitter ±20 % para evitar
   cadencia robótica.
+
+- `params_burbujas_desde_agente(agente)` / `params_delays_desde_agente(agente)`
+  — leen los campos `humaniz_*` configurados por agente y devuelven kwargs
+  listos para pasar a las funciones de arriba. Fallback a defaults del módulo
+  si el agente no tiene valores configurados.
+
+- `saludo_por_hora(franja, nombre)` — saludos variados por franja horaria.
+
+- `detectar_animo(texto)` — clasifica el tono del mensaje del cliente para
+  guiar al prompt. Regex liviano, sin LLM.
 """
 from __future__ import annotations
 
@@ -17,18 +27,61 @@ import random
 import re
 
 
-# Umbrales calibrados para WhatsApp latinoamericano típico
-_CHARS_POR_BURBUJA_IDEAL = 180
-_CHARS_POR_BURBUJA_MAX   = 320
-_MAX_BURBUJAS            = 4
+# ---------------------------------------------------------------------------
+# Defaults de humanización — se usan si no hay parámetros por agente.
+# Cada AgentesIA tiene sus propios campos `humaniz_*` que sobrescriben esto
+# vía `params_burbujas_desde_agente()` / `params_delays_desde_agente()`.
+# ---------------------------------------------------------------------------
+DEFAULT_CHARS_BURBUJA_IDEAL = 180
+DEFAULT_CHARS_BURBUJA_MAX   = 320
+DEFAULT_MAX_BURBUJAS        = 4
 
-_LECTURA_CHARS_POR_SEG   = 70      # lectura rápida en pantalla
-_ESCRITURA_CHARS_POR_SEG = 25      # tipeo humano promedio
-_LECTURA_MAX_SEG         = 2.5
-_ESCRITURA_MIN_SEG       = 0.6
-_ESCRITURA_MAX_SEG       = 6.0
+DEFAULT_LECTURA_CPS         = 70      # lectura rápida en pantalla
+DEFAULT_ESCRITURA_CPS       = 25      # tipeo humano promedio
+DEFAULT_LECTURA_MAX_SEG     = 2.5
+DEFAULT_ESCRITURA_MIN_SEG   = 0.6
+DEFAULT_ESCRITURA_MAX_SEG   = 6.0
 
 _INICIO_ITEM_LISTA = re.compile(r'^\s*(?:[-*•·]|\d+[.)])\s+', re.UNICODE)
+
+
+def _to_float(val, default):
+    """Convierte valores Decimal/str/None a float con fallback seguro."""
+    try:
+        return float(val) if val is not None else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_int(val, default):
+    try:
+        return int(val) if val is not None else default
+    except (TypeError, ValueError):
+        return default
+
+
+def params_burbujas_desde_agente(agente) -> dict:
+    """Extrae los 3 parámetros de splitter desde un AgentesIA (con fallback)."""
+    if agente is None:
+        return {}
+    return {
+        'chars_ideal':  _to_int(getattr(agente, 'humaniz_chars_burbuja_ideal', None), DEFAULT_CHARS_BURBUJA_IDEAL),
+        'chars_max':    _to_int(getattr(agente, 'humaniz_chars_burbuja_max',   None), DEFAULT_CHARS_BURBUJA_MAX),
+        'max_burbujas': _to_int(getattr(agente, 'humaniz_max_burbujas',        None), DEFAULT_MAX_BURBUJAS),
+    }
+
+
+def params_delays_desde_agente(agente) -> dict:
+    """Extrae los 5 parámetros de delays desde un AgentesIA (con fallback)."""
+    if agente is None:
+        return {}
+    return {
+        'lectura_cps':       _to_int(getattr(agente, 'humaniz_lectura_cps',        None), DEFAULT_LECTURA_CPS),
+        'escritura_cps':     _to_int(getattr(agente, 'humaniz_escritura_cps',      None), DEFAULT_ESCRITURA_CPS),
+        'lectura_max_seg':   _to_float(getattr(agente, 'humaniz_lectura_max_seg',  None), DEFAULT_LECTURA_MAX_SEG),
+        'escritura_min_seg': _to_float(getattr(agente, 'humaniz_escritura_min_seg', None), DEFAULT_ESCRITURA_MIN_SEG),
+        'escritura_max_seg': _to_float(getattr(agente, 'humaniz_escritura_max_seg', None), DEFAULT_ESCRITURA_MAX_SEG),
+    }
 
 
 def _es_linea_de_lista(linea: str) -> bool:
@@ -51,8 +104,9 @@ def _partir_por_oraciones(texto: str) -> list[str]:
 
 def dividir_en_burbujas(
     texto: str,
-    max_chars: int = _CHARS_POR_BURBUJA_IDEAL,
-    max_burbujas: int = _MAX_BURBUJAS,
+    chars_ideal: int = DEFAULT_CHARS_BURBUJA_IDEAL,
+    chars_max: int = DEFAULT_CHARS_BURBUJA_MAX,
+    max_burbujas: int = DEFAULT_MAX_BURBUJAS,
 ) -> list[str]:
     """Divide una respuesta larga en varias burbujas de WhatsApp.
 
@@ -60,15 +114,15 @@ def dividir_en_burbujas(
     - Respeta párrafos (separados por línea en blanco).
     - Nunca rompe una línea de lista — mantiene la lista junta en una burbuja.
     - Si un párrafo es grande sin lista, lo parte por oraciones.
-    - Acumula hasta `max_chars` por burbuja. Si agregar una oración pasa de
-      `_CHARS_POR_BURBUJA_MAX` crea nueva burbuja.
+    - Acumula hasta `chars_ideal` por burbuja. Si agregar una oración pasa de
+      `chars_max` fuerza nueva burbuja.
     - Máximo `max_burbujas`. Si hay más, junta el resto en la última.
-    - Si el texto entero cabe en `max_chars`, devuelve 1 sola burbuja (no divide por dividir).
+    - Si el texto entero cabe en `chars_ideal`, devuelve 1 sola burbuja.
     """
     texto = (texto or '').strip()
     if not texto:
         return []
-    if len(texto) <= max_chars:
+    if len(texto) <= chars_ideal:
         return [texto]
 
     # Párrafos por doble salto de línea
@@ -92,24 +146,24 @@ def dividir_en_burbujas(
         # Listas y párrafos que caben se agregan como bloque completo.
         # Flush antes de agregar si el buffer ya tiene algo Y sumar este
         # párrafo superaría el ideal — así la burbuja actual cierra natural.
-        if tiene_lista or len(parrafo) <= max_chars:
-            if buffer and buffer_len + len(parrafo) + 2 > max_chars:
+        if tiene_lista or len(parrafo) <= chars_ideal:
+            if buffer and buffer_len + len(parrafo) + 2 > chars_ideal:
                 flush_buffer()
             buffer.append(parrafo)
             buffer_len += len(parrafo) + 2
             # Si igual excede el máximo duro, cerrar ya.
-            if buffer_len >= _CHARS_POR_BURBUJA_MAX:
+            if buffer_len >= chars_max:
                 flush_buffer()
             continue
 
         # Párrafo grande sin lista → partir por oraciones
         oraciones = _partir_por_oraciones(parrafo)
         for oracion in oraciones:
-            if buffer and buffer_len + len(oracion) + 1 > max_chars:
+            if buffer and buffer_len + len(oracion) + 1 > chars_ideal:
                 flush_buffer()
             buffer.append(oracion)
             buffer_len += len(oracion) + 1
-            if buffer_len >= _CHARS_POR_BURBUJA_MAX:
+            if buffer_len >= chars_max:
                 flush_buffer()
 
     flush_buffer()
@@ -126,20 +180,35 @@ def calcular_delays(
     burbuja: str,
     previa: str | None = None,
     jitter: bool = True,
+    lectura_cps: int = DEFAULT_LECTURA_CPS,
+    escritura_cps: int = DEFAULT_ESCRITURA_CPS,
+    lectura_max_seg: float = DEFAULT_LECTURA_MAX_SEG,
+    escritura_min_seg: float = DEFAULT_ESCRITURA_MIN_SEG,
+    escritura_max_seg: float = DEFAULT_ESCRITURA_MAX_SEG,
 ) -> tuple[float, float]:
     """Calcula `(lectura_seg, escritura_seg)` para una burbuja.
 
-    - `lectura_seg`: tiempo estimado que el humano tardaría en leer la respuesta
-      previa antes de escribir esta. Si no hay previa, 0.
+    - `lectura_seg`: tiempo que un humano tardaría en leer la respuesta previa
+      antes de escribir esta. Si no hay previa, 0.
     - `escritura_seg`: tiempo proporcional al largo de la burbuja actual.
-    - Con `jitter=True`, ambos valores varían ±20 % para no ser periódicos.
+    - `jitter=True` varía ambos valores ±20 % para evitar cadencia robótica.
+
+    Todos los umbrales pueden pasarse para que cada agente los configure
+    (ver `params_delays_desde_agente()`).
     """
+    # Guardas contra división por cero o negativos que entren por configuración mala
+    lectura_cps   = max(1, int(lectura_cps or DEFAULT_LECTURA_CPS))
+    escritura_cps = max(1, int(escritura_cps or DEFAULT_ESCRITURA_CPS))
+    lectura_max_seg   = max(0.0, float(lectura_max_seg))
+    escritura_min_seg = max(0.0, float(escritura_min_seg))
+    escritura_max_seg = max(escritura_min_seg, float(escritura_max_seg))
+
     prev_len = len(previa or '')
-    lectura = min(_LECTURA_MAX_SEG, prev_len / _LECTURA_CHARS_POR_SEG) if prev_len else 0.0
+    lectura = min(lectura_max_seg, prev_len / lectura_cps) if prev_len else 0.0
 
     escritura = max(
-        _ESCRITURA_MIN_SEG,
-        min(_ESCRITURA_MAX_SEG, len(burbuja) / _ESCRITURA_CHARS_POR_SEG),
+        escritura_min_seg,
+        min(escritura_max_seg, len(burbuja) / escritura_cps),
     )
 
     if jitter:

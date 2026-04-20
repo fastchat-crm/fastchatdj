@@ -858,10 +858,16 @@ def process_incoming_message(session, event_data, channel_layer):
                         # Si humanizar_timing está desactivado, manda todo en una sola burbuja sin sleeps.
                         _humanizar = bool(getattr(agente, 'humanizar_timing', True))
                         if _humanizar:
-                            from agents_ai.humanizacion import dividir_en_burbujas, calcular_delays
-                            burbujas = dividir_en_burbujas(resultado.respuesta or '')
+                            from agents_ai.humanizacion import (
+                                dividir_en_burbujas, calcular_delays,
+                                params_burbujas_desde_agente, params_delays_desde_agente,
+                            )
+                            _params_burbujas = params_burbujas_desde_agente(agente)
+                            _params_delays   = params_delays_desde_agente(agente)
+                            burbujas = dividir_en_burbujas(resultado.respuesta or '', **_params_burbujas)
                         else:
                             burbujas = [resultado.respuesta or '']
+                            _params_delays = {}
 
                         import time as _timing
                         _send_ok = False
@@ -870,7 +876,7 @@ def process_incoming_message(session, event_data, channel_layer):
                         _previa = message_text or ''
                         for _idx, _burbuja in enumerate(burbujas):
                             if _humanizar:
-                                _lectura, _escritura = calcular_delays(_burbuja, _previa)
+                                _lectura, _escritura = calcular_delays(_burbuja, _previa, **_params_delays)
                                 if _lectura > 0:
                                     _timing.sleep(_lectura)
                                 try:

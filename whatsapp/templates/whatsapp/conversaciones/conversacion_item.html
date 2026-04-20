@@ -109,8 +109,10 @@
                 <div class="d-flex align-items-start conversacion-header">
                     <div class="d-flex flex-column min-w-0 flex-grow-1">
                         <div class="d-flex gap-1 flex-wrap mb-1">
-                            {# Badge del proveedor que ATENDIO la conversacion (snapshot congelado al crearla).
-                               Si la sesion migra de Baileys a Meta luego, el historial mantiene su badge real. #}
+                            {% comment %}
+                            Badge del proveedor que ATENDIO la conversacion (snapshot congelado al crearla).
+                            Si la sesion migra de Baileys a Meta luego, el historial mantiene su badge real.
+                            {% endcomment %}
                             {% if conversacion.atendida_por_meta %}
                                 <small class="badge bg-primary" title="Atendida via Meta Cloud API"><i class="fa fa-cloud"></i> Meta</small>
                             {% elif conversacion.atendida_por_baileys %}

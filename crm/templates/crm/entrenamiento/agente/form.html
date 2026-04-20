@@ -82,10 +82,14 @@
     <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-auditor" type="button">
             <i class="fas fa-wand-magic-sparkles me-1"></i> Asistente IA
-            <span class="badge ms-1" style="font-size:.6rem; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff;">NEW</span>
         </button>
     </li>
     {% endif %}
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-humanizacion" type="button">
+            <i class="fas fa-user-astronaut me-1"></i> Humanización
+        </button>
+    </li>
     <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-comportamiento" type="button">
             <i class="fas fa-sliders-h me-1"></i> Comportamiento IA
@@ -808,6 +812,159 @@
         </div>
     </div>
     {% endif %}
+
+    {# ── TAB: HUMANIZACION ───────────────────────────────────────── #}
+    <div class="tab-pane fade" id="at-humanizacion">
+        <div class="guide-callout mb-3">
+            <i class="fas fa-user-astronaut me-1"></i>
+            <strong>¿Para qué sirve?</strong> Controla qué tan humano se siente el bot al chatear:
+            su personalidad, el estilo de escritura y el ritmo con que responde
+            (divide la respuesta en burbujas, simula "escribiendo...", espera como si leyera).
+            Un bot bien humanizado se nota mucho menos que uno que dispara 3 párrafos de un golpe.
+        </div>
+
+        {# ── Sección 1: Persona ── #}
+        <h5 class="mt-2 mb-2 text-primary" style="font-size:.95rem;">
+            <i class="fas fa-id-badge me-1"></i> 1. Persona del bot
+        </h5>
+        <p class="small text-muted mb-3">
+            Qué le decís al modelo sobre "quién es". Se inyecta en el prompt del sistema antes de cada respuesta.
+        </p>
+        <div class="row g-2 mb-4">
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1">{{ form.nombre_bot.label }}</label>
+                {{ form.nombre_bot }}
+                <div class="form-text small">
+                    Se usa si el cliente pregunta "¿con quién hablo?". <strong>Sugerido:</strong> nombres neutros cortos (Cami, Mateo, Sofía).
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1">{{ form.tono.label }}</label>
+                {{ form.tono }}
+                <div class="form-text small">
+                    Registro general. <strong>Cercano</strong>: trato cálido. <strong>Formal</strong>: usted, frases largas. <strong>Vendedor</strong>: empuja al cierre. <strong>Profesional</strong>: información precisa sin adornos.
+                </div>
+            </div>
+            <div class="col-12">
+                <label class="form-label small mb-1">{{ form.personalidad.label }}</label>
+                {{ form.personalidad }}
+                <div class="form-text small">
+                    Describí al bot como si fuera una persona real. Ej:
+                    <em>"Soy Cami, 28, diseñadora. Me gusta dar ejemplos concretos, uso emojis con mesura (0–2 por mensaje), soy paciente con clientes nuevos y nunca prometo cosas que no puedo cumplir."</em>
+                </div>
+            </div>
+            <div class="col-12">
+                <label class="form-label small mb-1">{{ form.estilo_escritura.label }}</label>
+                {{ form.estilo_escritura }}
+                <div class="form-text small">
+                    Reglas de <strong>forma</strong>, no de contenido. Ej:
+                    <em>"Mensajes cortos de 2-3 líneas, admito muletillas (dale, mm, a ver), no abro signos de interrogación, emojis 0–2 por mensaje, no uso mayúsculas gritadas."</em>
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1">{{ form.temperature.label }}</label>
+                {{ form.temperature }}
+                <div class="form-text small">
+                    <strong>Creatividad del modelo.</strong><br>
+                    <code>0.0</code> = siempre la misma respuesta (robot literal).<br>
+                    <code>0.3</code> = precisa con leve variación (atención 1-a-1 formal).<br>
+                    <code>0.6</code> = <strong>sweet spot</strong> (variación humana sin inventar datos). <em>Default.</em><br>
+                    <code>0.9</code> = muy creativa (riesgo de alucinaciones — evitar en prod).<br>
+                    <strong>Rango recomendado: 0.4–0.8</strong>.
+                </div>
+            </div>
+        </div>
+
+        {# ── Sección 2: Timing y burbujas ── #}
+        <h5 class="mt-2 mb-2 text-primary" style="font-size:.95rem;">
+            <i class="fas fa-stopwatch me-1"></i> 2. Timing y burbujas
+        </h5>
+        <p class="small text-muted mb-3">
+            Cuando está activo, la respuesta se parte en varias burbujas con delays — como si un humano estuviera leyendo tu mensaje y escribiendo de a poco.
+            <strong>Si lo desactivás</strong>, el bot manda una sola burbuja instantánea (se siente robot).
+        </p>
+
+        <div class="row g-2 mb-3">
+            <div class="col-12">
+                <div class="form-check form-switch d-flex align-items-center gap-2 p-0 ps-0">
+                    {{ form.humanizar_timing }}
+                    <label class="form-label small mb-0 ms-2">
+                        <strong>{{ form.humanizar_timing.label }}</strong>
+                        <span class="text-muted">— partir respuesta en burbujas con delays humanos</span>
+                    </label>
+                </div>
+                <div class="form-text small">
+                    Off = una burbuja instantánea (más barato, menos humano). On = 2–4 burbujas con pausas simuladas de lectura/escritura.
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-2 mb-3" id="panel-humaniz-params">
+            <div class="col-12">
+                <p class="small text-muted mb-1"><strong>2a. Tamaño de las burbujas</strong> — qué tanto parte cada respuesta en varias "burbujas" cortas.</p>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label small mb-1">{{ form.humaniz_chars_burbuja_ideal.label }}</label>
+                {{ form.humaniz_chars_burbuja_ideal }}
+                <div class="form-text small">Tamaño objetivo. <strong>Rango: 120–240</strong>. Default: 180.</div>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label small mb-1">{{ form.humaniz_chars_burbuja_max.label }}</label>
+                {{ form.humaniz_chars_burbuja_max }}
+                <div class="form-text small">Tope duro por burbuja. <strong>Rango: 240–500</strong>. Default: 320.</div>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label small mb-1">{{ form.humaniz_max_burbujas.label }}</label>
+                {{ form.humaniz_max_burbujas }}
+                <div class="form-text small">Máximo por respuesta. <strong>Rango: 2–6</strong>. Default: 4. Más = conversación más fragmentada.</div>
+            </div>
+
+            <div class="col-12 mt-3">
+                <p class="small text-muted mb-1"><strong>2b. Velocidades simuladas</strong> — "lectura" = pausa antes de empezar a escribir; "escritura" = cuánto tarda en tipear la burbuja (ve <em>typing...</em> en WhatsApp).</p>
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1">{{ form.humaniz_lectura_cps.label }}</label>
+                {{ form.humaniz_lectura_cps }}
+                <div class="form-text small">
+                    Caracteres por segundo de lectura. <strong>Rango: 50–120</strong>. Default: 70.<br>
+                    <span class="text-muted">Más alto = bot "lee" el mensaje rápido y arranca a escribir casi enseguida.</span>
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1">{{ form.humaniz_escritura_cps.label }}</label>
+                {{ form.humaniz_escritura_cps }}
+                <div class="form-text small">
+                    Caracteres por segundo que "tipea". <strong>Rango: 15–40</strong>. Default: 25.<br>
+                    <span class="text-muted">Más bajo = tarda más en enviar (se siente más humano — humano real ~30 CPS).</span>
+                </div>
+            </div>
+
+            <div class="col-12 mt-3">
+                <p class="small text-muted mb-1"><strong>2c. Topes de tiempo</strong> — para que textos largos no generen esperas eternas.</p>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label small mb-1">{{ form.humaniz_lectura_max_seg.label }}</label>
+                {{ form.humaniz_lectura_max_seg }}
+                <div class="form-text small">Pausa máxima de "lectura" entre burbujas (seg). <strong>Rango: 1.5–5.0</strong>. Default: 2.5.</div>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label small mb-1">{{ form.humaniz_escritura_min_seg.label }}</label>
+                {{ form.humaniz_escritura_min_seg }}
+                <div class="form-text small">Piso de "tipeo" por burbuja (seg). <strong>Rango: 0.3–1.5</strong>. Default: 0.6. Evita envíos instantáneos cuando la burbuja es corta.</div>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label small mb-1">{{ form.humaniz_escritura_max_seg.label }}</label>
+                {{ form.humaniz_escritura_max_seg }}
+                <div class="form-text small">Tope de "tipeo" por burbuja (seg). <strong>Rango: 4–12</strong>. Default: 6.0.</div>
+            </div>
+        </div>
+
+        <div class="alert alert-info small mb-0">
+            <i class="fas fa-lightbulb me-1"></i>
+            <strong>Preset recomendado para WhatsApp estándar:</strong>
+            ideal 180 · max 320 · 4 burbujas · lectura 70 cps (máx 2.5s) · escritura 25 cps (0.6–6.0s) · temperatura 0.6. Para un bot más pausado/humano: baja escritura a 15–20 cps.
+        </div>
+    </div>
 
     {# ── TAB: COMPORTAMIENTO IA ──────────────────────────────────── #}
     <div class="tab-pane fade" id="at-comportamiento">

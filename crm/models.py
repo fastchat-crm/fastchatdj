@@ -285,8 +285,52 @@ class AgentesIA(ModeloBase):
     )
     humanizar_timing = models.BooleanField(
         default=True, verbose_name='Humanizar timing y burbujas',
-        help_text='Si está activo, la respuesta se divide en 2-4 burbujas con delays de lectura y escritura '
+        help_text='Si está activo, la respuesta se divide en varias burbujas con delays de lectura y escritura '
                   'proporcionales (típeo humano). Desactivalo para un envío único e instantáneo.'
+    )
+    # ── Parámetros finos de humanización (solo aplican si humanizar_timing=True) ──
+    humaniz_chars_burbuja_ideal = models.PositiveSmallIntegerField(
+        default=180, verbose_name='Chars ideales por burbuja',
+        help_text='Tamaño objetivo de cada burbuja. Al superar este valor, el splitter intenta cerrar burbuja. '
+                  'Rango recomendado: 120–240. Default: 180.'
+    )
+    humaniz_chars_burbuja_max = models.PositiveSmallIntegerField(
+        default=320, verbose_name='Chars máximos por burbuja',
+        help_text='Tope duro por burbuja. Si agregar una oración excede esto, se cierra burbuja obligado. '
+                  'Rango recomendado: 240–500. Default: 320.'
+    )
+    humaniz_max_burbujas = models.PositiveSmallIntegerField(
+        default=4, verbose_name='Máximo de burbujas',
+        help_text='Cuántas burbujas como mucho puede mandar el bot por respuesta. '
+                  'Rango recomendado: 2–6. Default: 4.'
+    )
+    humaniz_lectura_cps = models.PositiveSmallIntegerField(
+        default=70, verbose_name='Chars/seg al leer',
+        help_text='Velocidad de lectura simulada antes de responder. Más alto = pausa más corta antes de escribir. '
+                  'Rango recomendado: 50–120. Default: 70.'
+    )
+    humaniz_escritura_cps = models.PositiveSmallIntegerField(
+        default=25, verbose_name='Chars/seg al escribir',
+        help_text='Velocidad de tipeo simulada. Más bajo = se siente más humano/lento. '
+                  'Rango recomendado: 15–40. Default: 25.'
+    )
+    humaniz_lectura_max_seg = models.DecimalField(
+        max_digits=4, decimal_places=2, default=Decimal('2.50'),
+        verbose_name='Máx segundos de lectura',
+        help_text='Tope de pausa de "lectura" entre burbujas. Evita esperas eternas con textos largos. '
+                  'Rango recomendado: 1.5–5.0. Default: 2.5.'
+    )
+    humaniz_escritura_min_seg = models.DecimalField(
+        max_digits=4, decimal_places=2, default=Decimal('0.60'),
+        verbose_name='Mín segundos de escritura',
+        help_text='Piso de "tipeo" por burbuja. Evita envíos instantáneos en burbujas muy cortas. '
+                  'Rango recomendado: 0.3–1.5. Default: 0.6.'
+    )
+    humaniz_escritura_max_seg = models.DecimalField(
+        max_digits=4, decimal_places=2, default=Decimal('6.00'),
+        verbose_name='Máx segundos de escritura',
+        help_text='Tope de "tipeo" por burbuja para que ningún mensaje tarde eternidades. '
+                  'Rango recomendado: 4–12. Default: 6.0.'
     )
 
     class Meta:
