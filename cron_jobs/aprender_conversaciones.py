@@ -28,9 +28,10 @@ if not _configured:
     application = get_wsgi_application()
 
 from django.db.models import Q
+from django.utils import timezone
 
 from core.funciones import logCron
-from whatsapp.models import ConversacionWhatsApp, MensajeWhatsApp
+from whatsapp.models import ConversacionWhatsApp, MensajeWhatsApp, PerfilContacto
 
 PROCESO = 'Aprendizaje desde Conversaciones'
 
@@ -85,6 +86,43 @@ def _extraer_pares(conversacion) -> list[tuple[str, str, int]]:
     return pares[:MAX_PARES_POR_CONV]
 
 
+def _actualizar_perfil_contacto(conv, ag, log_fn=None) -> bool:
+    """Genera un resumen de la conversación y lo anexa al PerfilContacto.
+
+    Devuelve True si se actualizó el perfil. Silencioso ante errores de LLM
+    — el resto del ciclo sigue corriendo aunque falle.
+    """
+    if not conv.contacto_id or not ag:
+        return False
+    apikey = ag.apikey.filter(estado=True).first()
+    if not apikey:
+        return False
+    # AgenteResumidor sólo soporta provider 2 (gemini) y 3 (openai) hoy.
+    # Si es Claude (4) u otro — saltamos sin romper.
+    if apikey.proveedor not in (2, 3):
+        return False
+    try:
+        from agents_ai.agente_resumidor import AgenteResumidor
+        resumidor = AgenteResumidor(
+            provider=apikey.proveedor,
+            apikey=apikey.descripcion,
+            conversacion=conv,
+            apikey_obj=apikey,
+            agente_obj=ag,
+        )
+        resumen = (resumidor.resumir() or '').strip()
+        if not resumen:
+            return False
+        perfil, _creado = PerfilContacto.objects.get_or_create(contacto_id=conv.contacto_id)
+        fecha = conv.fecha_fin_conversacion or timezone.now()
+        perfil.agregar_resumen(resumen, fecha=fecha)
+        return True
+    except Exception as exc:
+        if log_fn:
+            log_fn(f'Error actualizando PerfilContacto conv #{conv.id}: {exc}', exito=False)
+        return False
+
+
 def procesar_conversaciones(agente=None, limite: int = 200, log_fn=None) -> dict:
     """
     Procesa conversaciones elegibles y crea FaqAgente pendientes.
@@ -126,6 +164,7 @@ def procesar_conversaciones(agente=None, limite: int = 200, log_fn=None) -> dict
 
     procesadas = 0
     faqs_creadas = 0
+    perfiles_actualizados = 0
 
     for conv in qs:
         ag = conv.contacto.sesion.agente_ia
@@ -135,6 +174,10 @@ def procesar_conversaciones(agente=None, limite: int = 200, log_fn=None) -> dict
             continue
 
         try:
+            # Actualizar memoria persistente del contacto (fase 6: memoria cruzada)
+            if _actualizar_perfil_contacto(conv, ag, log_fn=_log):
+                perfiles_actualizados += 1
+
             pares = _extraer_pares(conv)
             for pregunta, respuesta, msg_id in pares:
                 existe = FaqAgente.objects.filter(
@@ -167,8 +210,16 @@ def procesar_conversaciones(agente=None, limite: int = 200, log_fn=None) -> dict
         except Exception as ex:
             _log(f'Error procesando conv #{conv.id}: {ex}', exito=False)
 
-    _log(f'Finalizado — conversaciones: {procesadas}/{total}, FAQs pendientes creadas: {faqs_creadas}')
-    return {'procesadas': procesadas, 'faqs_creadas': faqs_creadas, 'total_candidatas': total}
+    _log(
+        f'Finalizado — conversaciones: {procesadas}/{total}, '
+        f'FAQs pendientes: {faqs_creadas}, perfiles actualizados: {perfiles_actualizados}'
+    )
+    return {
+        'procesadas': procesadas,
+        'faqs_creadas': faqs_creadas,
+        'total_candidatas': total,
+        'perfiles_actualizados': perfiles_actualizados,
+    }
 
 
 def run():

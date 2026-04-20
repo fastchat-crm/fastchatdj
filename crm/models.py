@@ -283,6 +283,11 @@ class AgentesIA(ModeloBase):
         verbose_name='Temperatura (creatividad)',
         help_text='0.0 = literal/robótico, 1.0 = creativo/variado. 0.6 da variación natural sin inventar datos.'
     )
+    humanizar_timing = models.BooleanField(
+        default=True, verbose_name='Humanizar timing y burbujas',
+        help_text='Si está activo, la respuesta se divide en 2-4 burbujas con delays de lectura y escritura '
+                  'proporcionales (típeo humano). Desactivalo para un envío único e instantáneo.'
+    )
 
     class Meta:
         verbose_name = 'Respuesta Entrenada IA'

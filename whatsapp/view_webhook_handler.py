@@ -854,36 +854,68 @@ def process_incoming_message(session, event_data, channel_layer):
                                 'apikey_id': apikey.id,
                             },
                         )
-                        send_result = whatsapp_service.send_text_message(
-                            conversation.sesion.session_id, contacto.from_number, resultado.respuesta
-                        )
-                        _send_ok = isinstance(send_result, dict) and send_result.get('success')
-                        _traza(
-                            etapa='mensaje_enviado' if _send_ok else 'envio_fallido',
-                            sesion=session, conversacion=conversation, mensaje=message,
-                            numero=from_number, nivel='success' if _send_ok else 'error',
-                            detalle={
-                                'message_id': send_result.get('message_id') if isinstance(send_result, dict) else None,
-                                'error': send_result.get('error') if isinstance(send_result, dict) else None,
-                            },
-                        )
-                        respuesta_enviada = True
-                        # Crear mensaje IA inmediatamente para que el webhook no lo duplique sin el flag
-                        try:
-                            MensajeWhatsApp.objects.create(
-                                conversacion=conversation,
-                                remitente=session.numero,
-                                mensaje=resultado.respuesta,
-                                tipo='texto',
-                                fecha=timezone.now(),
-                                mensaje_id_externo=send_result.get('message_id') if isinstance(send_result, dict) else None,
-                                leido=True,
-                                fecha_leido=timezone.now(),
-                                ia_generado=True,
-                                es_automatico=True,
+                        # ── Envío humanizado (burbujas + delays) ──────────────
+                        # Si humanizar_timing está desactivado, manda todo en una sola burbuja sin sleeps.
+                        _humanizar = bool(getattr(agente, 'humanizar_timing', True))
+                        if _humanizar:
+                            from agents_ai.humanizacion import dividir_en_burbujas, calcular_delays
+                            burbujas = dividir_en_burbujas(resultado.respuesta or '')
+                        else:
+                            burbujas = [resultado.respuesta or '']
+
+                        import time as _timing
+                        _send_ok = False
+                        _ultimo_send = None
+                        # La primera "previa" es el mensaje del cliente; luego es la burbuja anterior del bot.
+                        _previa = message_text or ''
+                        for _idx, _burbuja in enumerate(burbujas):
+                            if _humanizar:
+                                _lectura, _escritura = calcular_delays(_burbuja, _previa)
+                                if _lectura > 0:
+                                    _timing.sleep(_lectura)
+                                try:
+                                    whatsapp_service.send_presence_update(
+                                        conversation.sesion.session_id, contacto.from_number
+                                    )
+                                except Exception:
+                                    pass
+                                _timing.sleep(_escritura)
+                            _ultimo_send = whatsapp_service.send_text_message(
+                                conversation.sesion.session_id, contacto.from_number, _burbuja
                             )
-                        except Exception:
-                            pass
+                            _ok_actual = isinstance(_ultimo_send, dict) and _ultimo_send.get('success')
+                            _send_ok = _send_ok or _ok_actual
+                            _traza(
+                                etapa='mensaje_enviado' if _ok_actual else 'envio_fallido',
+                                sesion=session, conversacion=conversation, mensaje=message,
+                                numero=from_number, nivel='success' if _ok_actual else 'error',
+                                detalle={
+                                    'burbuja': _idx + 1,
+                                    'total_burbujas': len(burbujas),
+                                    'message_id': _ultimo_send.get('message_id') if isinstance(_ultimo_send, dict) else None,
+                                    'error': _ultimo_send.get('error') if isinstance(_ultimo_send, dict) else None,
+                                },
+                            )
+                            # Persistir cada burbuja como mensaje IA (el webhook de echo
+                            # detecta el mensaje_id_externo y evita duplicar).
+                            try:
+                                MensajeWhatsApp.objects.create(
+                                    conversacion=conversation,
+                                    remitente=session.numero,
+                                    mensaje=_burbuja,
+                                    tipo='texto',
+                                    fecha=timezone.now(),
+                                    mensaje_id_externo=_ultimo_send.get('message_id') if isinstance(_ultimo_send, dict) else None,
+                                    leido=True,
+                                    fecha_leido=timezone.now(),
+                                    ia_generado=True,
+                                    es_automatico=True,
+                                )
+                            except Exception:
+                                pass
+                            _previa = _burbuja
+                        send_result = _ultimo_send
+                        respuesta_enviada = True
                         # ── Registrar consumo de tokens ──────────────────────
                         if resultado.tokens_total > 0:
                             try:

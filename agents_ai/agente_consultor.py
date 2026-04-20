@@ -355,6 +355,10 @@ class AgenteConsultor:
             'nombre_bot', 'personalidad', 'tono', 'estilo_escritura',
             # Variables del contacto y del momento
             'contacto_nombre', 'hora_local', 'primera_vez_hoy',
+            # Señal de ánimo detectada en el mensaje actual
+            'estado_animo', 'guia_animo',
+            # Memoria persistente cruzada (resúmenes de conversaciones anteriores)
+            'historial_contacto',
         }
         _tpl_text = prompt_template_text
         if _tpl_text:
@@ -421,6 +425,23 @@ class AgenteConsultor:
     # ------------------------------------------------------------------
     # Variables de contacto (humanización)
     # ------------------------------------------------------------------
+
+    def _historial_persistente(self) -> str:
+        """Devuelve el resumen persistente del contacto (PerfilContacto.resumen).
+
+        Si no hay perfil o no hay resumen previo → string vacío. Se inyecta al
+        prompt para que el bot reconozca al cliente recurrente sin releer cada
+        mensaje de conversaciones anteriores.
+        """
+        if not (self.conversacion and self.conversacion.contacto_id):
+            return ''
+        try:
+            perfil = getattr(self.conversacion.contacto, 'perfil_persistente', None)
+            if perfil and perfil.resumen:
+                return perfil.resumen.strip()
+        except Exception:
+            pass
+        return ''
 
     def _vars_contacto(self) -> dict:
         """Devuelve variables relativas al contacto y al momento de la conversación:
@@ -759,6 +780,20 @@ class AgenteConsultor:
         _input_vars = set(getattr(self._prompt_tpl, 'input_variables', []) or [])
         if _input_vars & {'contacto_nombre', 'hora_local', 'primera_vez_hoy'}:
             _vars_todas.update(self._vars_contacto())
+        # Detección de ánimo — solo si el template la usa. Regex liviano, no LLM.
+        if _input_vars & {'estado_animo', 'guia_animo'}:
+            try:
+                from .humanizacion import detectar_animo
+                etiqueta, guia = detectar_animo(pregunta)
+                _vars_todas['estado_animo'] = etiqueta
+                _vars_todas['guia_animo'] = guia
+            except Exception:
+                _vars_todas['estado_animo'] = 'neutral'
+                _vars_todas['guia_animo'] = 'tono natural'
+        # Memoria persistente del contacto (resumen de conversaciones cerradas).
+        # Solo si el template la referencia, para ahorrar una query.
+        if 'historial_contacto' in _input_vars:
+            _vars_todas['historial_contacto'] = self._historial_persistente()
         _kwargs = {k: v for k, v in _vars_todas.items() if k in _input_vars}
         try:
             return self._prompt_tpl.format(**_kwargs)
@@ -795,14 +830,29 @@ class AgenteConsultor:
         return self._provider_obj.extract_tokens(ai_message)
 
     def _saludo_primer_mensaje(self, pregunta: str) -> str | None:
-        """Si es el primer mensaje y es un saludo, devuelve la bienvenida. Sin LLM."""
+        """Si es el primer mensaje y es un saludo, devuelve la bienvenida. Sin LLM.
+
+        Prioridad:
+        1. mensaje_bienvenida configurado a nivel sesión (admin).
+        2. Saludo variado por franja horaria + nombre del contacto.
+        """
         if not (self._es_primer_mensaje() and _es_saludo(pregunta)):
             return None
-        return (
+        bienvenida = (
             self.conversacion
             and self.conversacion.contacto
             and self.conversacion.contacto.sesion.mensaje_bienvenida
-        ) or "Hola 👋, ¿en qué puedo ayudarte?"
+        )
+        if bienvenida:
+            return bienvenida
+        # Saludo variado
+        try:
+            from .humanizacion import saludo_por_hora
+            vc = self._vars_contacto()
+            franja = vc['hora_local'].split(' ', 1)[0]  # "mañana (09:45)" → "mañana"
+            return saludo_por_hora(franja, vc['contacto_nombre'])
+        except Exception:
+            return "Hola 👋, ¿en qué te puedo ayudar?"
 
     # ------------------------------------------------------------------
     # Consulta principal — 1 llamada LLM

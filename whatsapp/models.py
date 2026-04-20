@@ -272,6 +272,76 @@ class Contacto(ModeloBase):
         super().save(*args, **kwargs)
 
 
+class PerfilContacto(ModeloBase):
+    """Memoria persistente cruzada entre conversaciones para un Contacto.
+
+    Se construye/actualiza cuando se cierra una conversación (cron
+    `aprender_conversaciones`). Se inyecta como contexto extra en futuras
+    conversaciones vía la variable `{historial_contacto}` del prompt, para que
+    el bot reconozca al cliente recurrente sin tener que releer todo el historial.
+    """
+    contacto = models.OneToOneField(
+        Contacto, on_delete=models.CASCADE, related_name='perfil_persistente',
+        verbose_name='Contacto',
+    )
+    resumen = models.TextField(
+        blank=True, default='',
+        verbose_name='Resumen persistente',
+        help_text='Ventana rodante del historial del cliente: últimos N resúmenes de conversaciones cerradas.'
+    )
+    intereses_json = models.JSONField(
+        default=dict, blank=True,
+        verbose_name='Intereses y patrones',
+        help_text='Estructura libre. Ej: {"productos_favoritos": ["pizza napolitana"], "horario_comun": "noche"}.'
+    )
+    total_conversaciones = models.PositiveIntegerField(
+        default=0, verbose_name='Total conversaciones procesadas',
+    )
+    ultima_interaccion = models.DateTimeField(
+        null=True, blank=True, verbose_name='Última interacción'
+    )
+    fecha_ultimo_resumen = models.DateTimeField(
+        null=True, blank=True, verbose_name='Fecha del último resumen',
+    )
+
+    # Cap de la ventana rodante — chars. Más de esto trunca desde el inicio.
+    VENTANA_CHARS = 3000
+
+    class Meta:
+        verbose_name = 'Perfil persistente de contacto'
+        verbose_name_plural = 'Perfiles persistentes de contactos'
+
+    def __str__(self):
+        return f"Perfil {self.contacto_id} ({self.total_conversaciones} conv)"
+
+    def agregar_resumen(self, texto_resumen: str, fecha=None) -> None:
+        """Anexa un resumen nuevo a la ventana rodante, trunca desde el inicio
+        si excede VENTANA_CHARS. Pensado para correr al cierre de conversación.
+        """
+        texto_resumen = (texto_resumen or '').strip()
+        if not texto_resumen:
+            return
+        fecha = fecha or timezone.now()
+        entrada = f"[{fecha.strftime('%Y-%m-%d')}] {texto_resumen}".strip()
+        base = (self.resumen or '').strip()
+        nuevo = f"{base}\n{entrada}".strip() if base else entrada
+        # Rolling window: si excede, tirar desde el inicio hasta caber.
+        if len(nuevo) > self.VENTANA_CHARS:
+            exceso = len(nuevo) - self.VENTANA_CHARS
+            nuevo = nuevo[exceso:].lstrip('\n')
+            # Asegurar que arranque en una línea completa
+            if '\n' in nuevo:
+                nuevo = nuevo[nuevo.find('\n') + 1:]
+        self.resumen = nuevo
+        self.total_conversaciones = (self.total_conversaciones or 0) + 1
+        self.ultima_interaccion = fecha
+        self.fecha_ultimo_resumen = fecha
+        self.save(update_fields=[
+            'resumen', 'total_conversaciones', 'ultima_interaccion',
+            'fecha_ultimo_resumen', 'fecha_modificacion',
+        ])
+
+
 ESTADOS_CLASIFICACION = (
     (0, 'Sin Clasificar'),
     (1, 'Lead'),
