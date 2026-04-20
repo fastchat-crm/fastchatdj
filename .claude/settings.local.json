@@ -45,7 +45,8 @@
       "Bash(.venv/Scripts/python.exe -m pip show xhtml2pdf markdown)",
       "Bash(iconv -f UTF-16LE -t UTF-8)",
       "PowerShell($path = 'E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\requirements.txt'; $lines = [System.IO.File]::ReadAllLines\\($path, [System.Text.Encoding]::Unicode\\); Write-Output \"Last 3 original lines:\"; $lines[-3..-1])",
-      "PowerShell($path = 'E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\requirements.txt'; $lines = [System.IO.File]::ReadAllLines\\($path, [System.Text.Encoding]::Unicode\\); $lines = $lines[0..\\($lines.Length-2\\)]; $lines += 'rank-bm25'; $lines += 'audioop-lts; python_version >= \"3.13\"'; [System.IO.File]::WriteAllLines\\($path, $lines, \\(New-Object System.Text.UnicodeEncoding\\($false, $true\\)\\)\\); Write-Output \"Fixed. Last 4 lines:\"; [System.IO.File]::ReadAllLines\\($path, [System.Text.Encoding]::Unicode\\)[-4..-1])"
+      "PowerShell($path = 'E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\requirements.txt'; $lines = [System.IO.File]::ReadAllLines\\($path, [System.Text.Encoding]::Unicode\\); $lines = $lines[0..\\($lines.Length-2\\)]; $lines += 'rank-bm25'; $lines += 'audioop-lts; python_version >= \"3.13\"'; [System.IO.File]::WriteAllLines\\($path, $lines, \\(New-Object System.Text.UnicodeEncoding\\($false, $true\\)\\)\\); Write-Output \"Fixed. Last 4 lines:\"; [System.IO.File]::ReadAllLines\\($path, [System.Text.Encoding]::Unicode\\)[-4..-1])",
+      "Read(//etc/nginx/**)"
     ]
   },
   "hooks": {
