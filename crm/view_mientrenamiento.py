@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import time
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db import transaction, models
@@ -345,27 +346,295 @@ def entrenamiento_ia_view(request):
                         log(f"WebService token regenerado para API Key {filtro.pk}", request, "change", obj=filtro.pk)
                         return JsonResponse({'error': False, 'token': filtro.webservice_token, 'message': 'Token regenerado.'})
 
+                    elif action == 'generar_agente_ia':
+                        try:
+                            apikey_obj = ApiKeyIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
+                        except (ApiKeyIA.DoesNotExist, ValueError, KeyError):
+                            return JsonResponse({'error': True, 'message': 'API Key no encontrada.'})
+                        if not apikey_obj.estado:
+                            return JsonResponse({'error': True, 'message': 'La API Key está desactivada. Reactívala o prueba otra.'})
+                        if not (apikey_obj.descripcion or '').strip():
+                            return JsonResponse({'error': True, 'message': 'La API Key no tiene la clave del proveedor LLM configurada.'})
+                        descripcion_usuario = (request.POST.get('descripcion') or '').strip()
+                        if len(descripcion_usuario) < 15:
+                            return JsonResponse({'error': True, 'message': 'Describe con más detalle qué debe hacer el agente (mínimo 15 caracteres).'})
+                        tono = (request.POST.get('tono') or 'amigable').strip()[:60]
+                        idioma = (request.POST.get('idioma') or 'es').strip()[:8]
+                        try:
+                            from core.constantes import PROMPT_TEMPLATES
+                        except Exception:
+                            PROMPT_TEMPLATES = {}
+                        try:
+                            # LLM con respuesta JSON forzada
+                            if apikey_obj.proveedor == 2:
+                                from langchain_google_genai import ChatGoogleGenerativeAI
+                                llm = ChatGoogleGenerativeAI(
+                                    model=(apikey_obj.modelo or 'gemini-2.5-flash'),
+                                    google_api_key=apikey_obj.descripcion,
+                                    max_output_tokens=4000, temperature=0.4,
+                                    model_kwargs={'response_mime_type': 'application/json'},
+                                )
+                            elif apikey_obj.proveedor == 4:
+                                from langchain_anthropic import ChatAnthropic
+                                # Claude no tiene "response_format"; instruimos JSON por prompt
+                                llm = ChatAnthropic(
+                                    model=(apikey_obj.modelo or 'claude-haiku-4-5-20251001'),
+                                    anthropic_api_key=apikey_obj.descripcion,
+                                    max_tokens=4000, temperature=0.4,
+                                )
+                            else:
+                                from langchain_community.chat_models import ChatOpenAI
+                                llm = ChatOpenAI(
+                                    model_name=(apikey_obj.modelo or 'gpt-4o-mini'),
+                                    openai_api_key=apikey_obj.descripcion,
+                                    max_tokens=4000, temperature=0.4,
+                                    model_kwargs={'response_format': {'type': 'json_object'}},
+                                )
+                            prompt_generador = (
+                                "Eres un arquitecto de agentes conversacionales. El usuario describe lo que necesita "
+                                "y tu tarea es devolver SOLO un JSON válido con estos campos:\n"
+                                '  - "nombre": string corto (máx 60 chars), descriptivo.\n'
+                                '  - "descripcion": string (máx 400 chars) — resumen del rol y alcance del agente.\n'
+                                '  - "prompt_template": string — plantilla completa de sistema para el agente. '
+                                'DEBE incluir los placeholders literales {descripcion_agente}, {contexto_extra}, {question} y {context}. '
+                                'Usa el tono solicitado y sigue el patrón: instrucciones → "====" → "{context}" → "====" → "Respuesta:". '
+                                'NO incluyas datos inventados, solo reglas de comportamiento y estilo.\n'
+                                '  - "contexto_estatico": string opcional — conocimiento fijo/FAQ sugerido que el usuario '
+                                'debería agregar (puede estar vacío si no aplica).\n'
+                                '  - "anotar_listas": bool — true solo si el agente debe recordar listas de productos/servicios.\n\n'
+                                f"Tono: {tono}. Idioma: {idioma}.\n"
+                                f"Necesidad del usuario:\n{descripcion_usuario}\n\n"
+                                "Devuelve exclusivamente el JSON, sin explicaciones, sin ```."
+                            )
+                            msg = llm.invoke(prompt_generador)
+                            texto = (getattr(msg, 'content', '') or '').strip()
+                            if texto.startswith('```'):
+                                texto = texto.strip('`')
+                                if texto.lower().startswith('json'):
+                                    texto = texto[4:].strip()
+                            try:
+                                cfg = json.loads(texto)
+                                if not isinstance(cfg, dict):
+                                    cfg = {}
+                            except Exception:
+                                return JsonResponse({'error': True, 'message': 'La IA devolvió un JSON inválido. Intenta de nuevo o ajusta la descripción.'})
+
+                            def _as_str(v, default=''):
+                                if v is None:
+                                    return default
+                                if isinstance(v, str):
+                                    return v
+                                try:
+                                    return str(v)
+                                except Exception:
+                                    return default
+
+                            default_tpl = PROMPT_TEMPLATES.get('es') or ''
+                            nombre = _as_str(cfg.get('nombre'), 'Agente generado').strip()[:255] or 'Agente generado'
+                            descripcion_ag = _as_str(cfg.get('descripcion'), descripcion_usuario).strip()[:4000] or descripcion_usuario
+                            prompt_tpl = _as_str(cfg.get('prompt_template'), '').strip() or default_tpl
+                            contexto_est_raw = _as_str(cfg.get('contexto_estatico'), '').strip()
+                            contexto_est = contexto_est_raw or None
+                            anotar = bool(cfg.get('anotar_listas'))
+
+                            # Validar placeholders críticos — si faltan, usar plantilla default
+                            required_ph = ('{descripcion_agente}', '{question}', '{context}')
+                            if not prompt_tpl or not all(p in prompt_tpl for p in required_ph):
+                                prompt_tpl = default_tpl
+                            if not prompt_tpl:
+                                # Fallback ultra-conservador por si PROMPT_TEMPLATES falla
+                                prompt_tpl = (
+                                    "Eres un asistente para: {descripcion_agente}\n"
+                                    "{contexto_extra}Cliente: {question}\n====\n{context}\n====\nRespuesta:"
+                                )
+
+                            agente = AgentesIA(
+                                perfil=perfil, nombre=nombre, descripcion=descripcion_ag,
+                                prompt_template=prompt_tpl, contexto_estatico=contexto_est,
+                                anotar_listas=anotar,
+                            )
+                            agente.save(request)
+                            agente.apikey.add(apikey_obj)
+
+                            # Registrar consumo de tokens
+                            try:
+                                _meta = getattr(msg, 'response_metadata', {}) or {}
+                                _usage = (
+                                    getattr(msg, 'usage_metadata', None)
+                                    or _meta.get('usage_metadata')
+                                    or _meta.get('token_usage')
+                                    or {}
+                                )
+                                _te = _usage.get('input_tokens') or _usage.get('prompt_token_count') or _usage.get('prompt_tokens') or 0
+                                _ts = _usage.get('output_tokens') or _usage.get('candidates_token_count') or _usage.get('completion_tokens') or 0
+                                if _te or _ts:
+                                    ConsumoTokenIA.objects.create(
+                                        apikey=apikey_obj, agente=agente,
+                                        tokens_entrada=_te, tokens_salida=_ts,
+                                        tokens_total=_te + _ts,
+                                        modelo=getattr(llm, 'model', 'agente-builder'),
+                                        origen='otro',
+                                        prompt_preview=(descripcion_usuario or '')[:300],
+                                    )
+                                    from crm.alertas_consumo import verificar_alerta_consumo
+                                    verificar_alerta_consumo(apikey_obj, _te + _ts)
+                            except Exception:
+                                pass
+
+                            log(f"Agente IA creado por asistente — {agente.nombre} asignado a API Key {apikey_obj}",
+                                request, "add", obj=agente.id)
+                            return JsonResponse({
+                                'error': False,
+                                'agente_id': agente.id,
+                                'nombre': agente.nombre,
+                                'descripcion': agente.descripcion,
+                                'prompt_template': agente.prompt_template,
+                                'contexto_estatico': agente.contexto_estatico or '',
+                                'anotar_listas': agente.anotar_listas,
+                                'message': f'✅ Agente "{agente.nombre}" creado y asignado a {apikey_obj}.',
+                                'reload': True,
+                            })
+                        except Exception as ex:
+                            return JsonResponse({'error': True, 'message': f'Fallo generando agente: {str(ex)[:400]}'})
+
                     elif action == 'testapikey':
+                        from crm.view_chat_agente import _billing_info_por_proveedor
                         filtro = ApiKeyIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
+                        _default_model_by_provider = {
+                            2: 'gemini-2.5-flash',
+                            3: 'gpt-4o-mini',
+                            4: 'claude-haiku-4-5-20251001',
+                        }
+                        # Usa el modelo real configurado en la ApiKey — así el test refleja
+                        # la quota/plan del modelo que realmente se usa en producción.
+                        modelo_test = (filtro.modelo or '').strip() or _default_model_by_provider.get(filtro.proveedor, 'gpt-4o-mini')
+                        billing_info = _billing_info_por_proveedor(filtro.proveedor)
+                        prompt_prueba = 'Responde solo con la palabra: ok'
                         try:
                             if filtro.proveedor == 2:  # Gemini
                                 from langchain_google_genai import ChatGoogleGenerativeAI
-                                llm = ChatGoogleGenerativeAI(model='gemini-2.5-flash', google_api_key=filtro.descripcion)
+                                llm = ChatGoogleGenerativeAI(
+                                    model=modelo_test, google_api_key=filtro.descripcion,
+                                    max_output_tokens=20, temperature=0,
+                                )
+                            elif filtro.proveedor == 4:  # Claude / Anthropic
+                                from langchain_anthropic import ChatAnthropic
+                                llm = ChatAnthropic(
+                                    model=modelo_test, anthropic_api_key=filtro.descripcion,
+                                    max_tokens=20, temperature=0,
+                                )
                             else:  # OpenAI
                                 from langchain_community.chat_models import ChatOpenAI
-                                llm = ChatOpenAI(model_name='gpt-4o-mini', openai_api_key=filtro.descripcion)
-                            llm.invoke('responde solo: ok')
-                            # Éxito — reactivar si estaba desactivada
+                                llm = ChatOpenAI(
+                                    model_name=modelo_test, openai_api_key=filtro.descripcion,
+                                    max_tokens=20, temperature=0,
+                                )
+                            _t0 = time.time()
+                            _resp = llm.invoke(prompt_prueba)
+                            _lat_ms = int((time.time() - _t0) * 1000)
+                            _respuesta_txt = (getattr(_resp, 'content', '') or '').strip() or '(respuesta vacía)'
+                            # Tokens consumidos en la prueba
+                            _meta = getattr(_resp, 'response_metadata', {}) or {}
+                            _usage = (
+                                getattr(_resp, 'usage_metadata', None)
+                                or _meta.get('usage_metadata')
+                                or _meta.get('token_usage')
+                                or {}
+                            )
+                            _te = _usage.get('input_tokens') or _usage.get('prompt_token_count') or _usage.get('prompt_tokens') or 0
+                            _ts = _usage.get('output_tokens') or _usage.get('candidates_token_count') or _usage.get('completion_tokens') or 0
+                            # Éxito real — reactivar si estaba desactivada
                             if not filtro.estado:
                                 filtro.estado = True
                                 filtro.msgerror = None
                                 filtro.save()
-                            res_json = {"error": False, "message": "✅ API Key válida y funcional.", "activo": True}
+                            res_json = {
+                                "error": False,
+                                "message": f"✅ API Key válida y funcional con el modelo '{modelo_test}'.",
+                                "activo": True,
+                                "billing": billing_info,
+                                "prueba": {
+                                    "prompt": prompt_prueba,
+                                    "respuesta": _respuesta_txt[:500],
+                                    "modelo": modelo_test,
+                                    "tokens_entrada": int(_te or 0),
+                                    "tokens_salida": int(_ts or 0),
+                                    "tokens_total": int((_te or 0) + (_ts or 0)),
+                                    "latencia_ms": _lat_ms,
+                                },
+                            }
                         except Exception as ex:
-                            filtro.estado = False
-                            filtro.msgerror = str(ex)[:500]
-                            filtro.save()
-                            res_json = {"error": False, "message": f"❌ Error: {str(ex)[:300]}", "activo": False}
+                            err_str = str(ex)
+                            err_lower = err_str.lower()
+                            # Clasificación del error
+                            is_quota = ('429' in err_str
+                                        or 'quota' in err_lower
+                                        or 'rate limit' in err_lower
+                                        or 'resource has been exhausted' in err_lower
+                                        or 'too many requests' in err_lower
+                                        or 'credit balance is too low' in err_lower
+                                        or 'insufficient_quota' in err_lower)
+                            is_auth = ('401' in err_str
+                                       or '403' in err_str
+                                       or ('api key' in err_lower and ('invalid' in err_lower or 'not valid' in err_lower))
+                                       or 'unauthenticated' in err_lower
+                                       or 'permission denied' in err_lower
+                                       or 'invalid x-api-key' in err_lower)
+                            is_model = ('404' in err_str
+                                        or ('not found' in err_lower and 'model' in err_lower)
+                                        or 'does not exist' in err_lower)
+
+                            if is_quota:
+                                # Sin cupo → desactivar para que el pipeline no siga intentando consumir.
+                                filtro.estado = False
+                                filtro.msgerror = f'Quota/rate limit excedido ({modelo_test}): {err_str[:400]}'
+                                filtro.save()
+                                res_json = {
+                                    "error": False,
+                                    "message": (
+                                        f"⚠️ Sin cupo en el modelo '{modelo_test}' ({billing_info['proveedor']}). "
+                                        f"La API Key se desactivó para evitar seguir consumiendo. "
+                                        f"Actualiza tu plan de facturación en {billing_info['proveedor']} o espera a que "
+                                        f"el límite se renueve y luego reactívala. "
+                                        f"Detalle: {err_str[:300]}"
+                                    ),
+                                    "activo": False,
+                                    "quota_exceeded": True,
+                                    "billing": billing_info,
+                                }
+                            elif is_auth:
+                                filtro.estado = False
+                                filtro.msgerror = f'Clave inválida/sin permisos: {err_str[:400]}'
+                                filtro.save()
+                                res_json = {
+                                    "error": False,
+                                    "message": f"❌ Clave inválida o sin permisos ({billing_info['proveedor']}): {err_str[:300]}",
+                                    "activo": False,
+                                    "billing": billing_info,
+                                }
+                            elif is_model:
+                                filtro.msgerror = f"Modelo '{modelo_test}' no disponible para esta key: {err_str[:300]}"
+                                filtro.save(update_fields=['msgerror'])
+                                res_json = {
+                                    "error": False,
+                                    "message": (
+                                        f"⚠️ El modelo '{modelo_test}' no existe o no está disponible para esta key de {billing_info['proveedor']}. "
+                                        f"Revisa el campo 'Modelo LLM' de la API Key."
+                                    ),
+                                    "activo": True,
+                                    "modelo_invalido": True,
+                                    "billing": billing_info,
+                                }
+                            else:
+                                filtro.estado = False
+                                filtro.msgerror = err_str[:500]
+                                filtro.save()
+                                res_json = {
+                                    "error": False,
+                                    "message": f"❌ Error ({billing_info['proveedor']}): {err_str[:300]}",
+                                    "activo": False,
+                                    "billing": billing_info,
+                                }
 
                     # ── Herramientas Agente (tool-calling dinámico) ───────────
                     elif action == 'herramienta_save':

@@ -123,9 +123,10 @@ def consultar_ia_view(request):
             tipo = 'documento'
 
     # ── Provider info ────────────────────────────────────────────────
-    provider_map = {2: 'gemini', 3: 'openai'}
+    provider_map = {2: 'gemini', 3: 'openai', 4: 'claude'}
     provider = provider_map.get(apikey_obj.proveedor, 'gemini')
-    model_name = apikey_obj.modelo or ('gemini-2.5-flash' if provider == 'gemini' else 'gpt-4o-mini')
+    _default_model = {'gemini': 'gemini-2.5-flash', 'openai': 'gpt-4o-mini', 'claude': 'claude-haiku-4-5-20251001'}
+    model_name = apikey_obj.modelo or _default_model.get(provider, 'gemini-2.5-flash')
 
     registrar_traza(
         etapa='ws_request', nivel='info', apikey=apikey_obj,
@@ -274,6 +275,9 @@ def _procesar_imagen(mensaje, archivo, agente, apikey_obj, provider, model_name)
     if provider == 'gemini':
         from langchain_google_genai import ChatGoogleGenerativeAI
         llm = ChatGoogleGenerativeAI(model=model_name, google_api_key=apikey_obj.descripcion)
+    elif provider == 'claude':
+        from langchain_anthropic import ChatAnthropic
+        llm = ChatAnthropic(model=(apikey_obj.modelo or 'claude-sonnet-4-5'), anthropic_api_key=apikey_obj.descripcion)
     else:
         from langchain_community.chat_models import ChatOpenAI
         llm = ChatOpenAI(model_name='gpt-4o', openai_api_key=apikey_obj.descripcion)

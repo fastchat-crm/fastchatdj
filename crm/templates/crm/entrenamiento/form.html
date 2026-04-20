@@ -583,15 +583,23 @@
                         <h5 class="mb-0 text-primary"><i class="fas fa-key me-2"></i>APIs Keys AI</h5>
                         <small class="text-muted">Credenciales para conectar con los proveedores de IA.</small>
                         <p class="mb-0 mt-1">
-                            <small><a href="https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com?hl=es-419" target="_blank" class="text-muted">
-                                <i class="fas fa-external-link-alt me-1"></i>Obtener API Key de Google Gemini
-                            </a></small>
+                            <a href="javascript:void(0)" class="small text-primary text-decoration-none"
+                               data-bs-toggle="modal" data-bs-target="#modalGuiaTokens">
+                                <i class="fas fa-book-open me-1"></i>Guía: ¿cómo obtener un token de Gemini, GPT o Claude?
+                            </a>
                         </p>
                     </div>
-                    <a href="javascript:void(0)" class="btn btn-sm btn-dark"
-                       onclick="formModal('', 'Agregar Api Key', 'addapikey')">
-                        <i class="fa fa-plus"></i> Api Key
-                    </a>
+                    <div class="d-flex gap-2">
+                        <a href="javascript:void(0)" class="btn btn-sm btn-outline-primary"
+                           data-bs-toggle="modal" data-bs-target="#modalGuiaTokens"
+                           title="Tour para obtener API Keys de proveedores LLM">
+                            <i class="fas fa-route me-1"></i> Guía tokens
+                        </a>
+                        <a href="javascript:void(0)" class="btn btn-sm btn-dark"
+                           onclick="formModal('', 'Agregar Api Key', 'addapikey')">
+                            <i class="fa fa-plus"></i> Api Key
+                        </a>
+                    </div>
                 </div>
                 <div class="card-body" id="bloque_apis_ia">
                     <div class="card-body pt-0">
@@ -676,6 +684,11 @@
                                                     onclick="verDocsWebService('{{ l.webservice_token|default:''|escapejs }}', '{{ l.get_proveedor_display|escapejs }}', '{{ l.modelo|default:''|escapejs }}', {{ l.pk }})"
                                                     title="Documentacion del WebService IA">
                                                 <i class="fas fa-code"></i> WebService
+                                            </button>
+                                            <button type="button" class="btn-apk edit"
+                                                    onclick="abrirGenerarAgenteIA({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')"
+                                                    title="Crear agente con IA asignado a esta API Key">
+                                                <i class="fas fa-wand-magic-sparkles"></i> Crear agente IA
                                             </button>
                                             <button type="button" class="btn-apk edit"
                                                     onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeapikey')"
@@ -885,6 +898,334 @@
                                     <p class="text-muted small">—</p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ══════ Modal: Guía para obtener tokens (Gemini / OpenAI / Claude) ══════ #}
+    <div class="modal fade" id="modalGuiaTokens" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fa fa-route me-2"></i>Cómo obtener un token (API Key) para IA
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+
+                    <div class="alert alert-light border small mb-3">
+                        <i class="fa fa-info-circle text-primary me-1"></i>
+                        Un <strong>token / API Key</strong> es una credencial secreta que identifica tu cuenta ante
+                        el proveedor de IA. Lo copias, lo pegas en <em>“+ Api Key”</em> y lo usas para chat, audio o imagen.
+                        La clave <strong>no se comparte</strong> con nadie y puedes rotarla en cualquier momento.
+                    </div>
+
+                    <ul class="nav nav-tabs nav-justified mb-3" id="tabsGuiaTokens" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabGeminiGuia" type="button">
+                                <i class="fa fa-gem text-info me-1"></i> Google Gemini
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabOpenAIGuia" type="button">
+                                <i class="fa fa-bolt text-success me-1"></i> OpenAI (GPT)
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabClaudeGuia" type="button">
+                                <i class="fa fa-star text-warning me-1"></i> Anthropic (Claude)
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content">
+
+                        {# ═══ GEMINI ═══ #}
+                        <div class="tab-pane fade show active" id="tabGeminiGuia">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0"><i class="fa fa-gem text-info me-1"></i> Google Gemini</h6>
+                                <span class="badge bg-success">Plan Free disponible</span>
+                            </div>
+                            <p class="small text-muted mb-3">
+                                Cuenta con plan gratuito generoso. Necesitas una cuenta Google y (opcionalmente) un proyecto en Google Cloud para upgrade a pago.
+                            </p>
+
+                            <ol class="small ps-3">
+                                <li class="mb-2">
+                                    Abre <strong>Google AI Studio</strong>:
+                                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="ms-1">
+                                        aistudio.google.com/app/apikey <i class="fa fa-external-link-alt ms-1"></i>
+                                    </a>
+                                </li>
+                                <li class="mb-2">Inicia sesión con tu cuenta Google.</li>
+                                <li class="mb-2">Acepta los términos si es tu primera vez.</li>
+                                <li class="mb-2">Clic en <strong>“Crear clave de API”</strong> / <em>"Create API key"</em>.</li>
+                                <li class="mb-2">Selecciona un proyecto existente o crea uno nuevo (ej. <code>fastchat-ia</code>).</li>
+                                <li class="mb-2">Copia la clave generada (empieza con <code>AIzaSy...</code>). <strong>Guárdala</strong> — no la verás completa de nuevo.</li>
+                                <li class="mb-2">
+                                    Vuelve aquí → <em>+ Api Key</em> → Proveedor: <strong>GEMINI</strong> → pega la clave → Modelo sugerido:
+                                    <code>gemini-2.5-flash</code>.
+                                </li>
+                            </ol>
+
+                            <div class="alert alert-warning py-2 small mb-2">
+                                <strong>Upgrade a plan pago</strong> (para evitar quotas de free tier):
+                                <a href="https://aistudio.google.com/app/plan_information" target="_blank" rel="noopener">
+                                    aistudio.google.com/app/plan_information <i class="fa fa-external-link-alt ms-1"></i>
+                                </a>
+                                · Habilita billing en Google Cloud Console para el proyecto de esa key.
+                            </div>
+                            <div class="alert alert-info py-2 small mb-0">
+                                <strong>Límites Free Tier</strong>:
+                                <a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noopener">
+                                    ai.google.dev/gemini-api/docs/rate-limits <i class="fa fa-external-link-alt ms-1"></i>
+                                </a>
+                                — varían por modelo. Si ves error 429, el plan quedó sin cupo.
+                            </div>
+                        </div>
+
+                        {# ═══ OPENAI ═══ #}
+                        <div class="tab-pane fade" id="tabOpenAIGuia">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0"><i class="fa fa-bolt text-success me-1"></i> OpenAI (GPT)</h6>
+                                <span class="badge bg-secondary">Pago por uso</span>
+                            </div>
+                            <p class="small text-muted mb-3">
+                                OpenAI cobra por tokens consumidos. Necesitas cargar saldo o tarjeta de crédito antes de generar la API Key.
+                            </p>
+
+                            <ol class="small ps-3">
+                                <li class="mb-2">
+                                    Crea una cuenta o inicia sesión en:
+                                    <a href="https://platform.openai.com/signup" target="_blank" rel="noopener" class="ms-1">
+                                        platform.openai.com/signup <i class="fa fa-external-link-alt ms-1"></i>
+                                    </a>
+                                </li>
+                                <li class="mb-2">
+                                    Configura método de pago en <strong>Billing</strong>:
+                                    <a href="https://platform.openai.com/account/billing" target="_blank" rel="noopener" class="ms-1">
+                                        platform.openai.com/account/billing <i class="fa fa-external-link-alt ms-1"></i>
+                                    </a>
+                                    · Agrega tarjeta y carga un mínimo (ej. $5).
+                                </li>
+                                <li class="mb-2">
+                                    Ve a <strong>API Keys</strong>:
+                                    <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" class="ms-1">
+                                        platform.openai.com/api-keys <i class="fa fa-external-link-alt ms-1"></i>
+                                    </a>
+                                </li>
+                                <li class="mb-2">Clic en <strong>“Create new secret key”</strong>.</li>
+                                <li class="mb-2">
+                                    Nómbrala (ej. <code>fastchat-prod</code>), elige un proyecto y permisos
+                                    <em>All</em> (o restringe por scope si prefieres).
+                                </li>
+                                <li class="mb-2">
+                                    Copia la clave (empieza con <code>sk-...</code>). <strong>Sólo se muestra una vez</strong>.
+                                </li>
+                                <li class="mb-2">
+                                    Vuelve aquí → <em>+ Api Key</em> → Proveedor: <strong>OPEN IA</strong> → pega la clave →
+                                    Modelo sugerido: <code>gpt-4o-mini</code> (económico) o <code>gpt-4o</code> (calidad).
+                                </li>
+                            </ol>
+
+                            <div class="alert alert-info py-2 small mb-2">
+                                <strong>Rate limits & cuotas</strong>:
+                                <a href="https://platform.openai.com/docs/guides/rate-limits" target="_blank" rel="noopener">
+                                    platform.openai.com/docs/guides/rate-limits <i class="fa fa-external-link-alt ms-1"></i>
+                                </a>
+                            </div>
+                            <div class="alert alert-warning py-2 small mb-0">
+                                <strong>Tip:</strong> Si recibes <code>insufficient_quota</code>, recarga saldo en Billing.
+                                Los límites son por organización y por modelo.
+                            </div>
+                        </div>
+
+                        {# ═══ CLAUDE ═══ #}
+                        <div class="tab-pane fade" id="tabClaudeGuia">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0"><i class="fa fa-star text-warning me-1"></i> Anthropic (Claude)</h6>
+                                <span class="badge bg-secondary">Pago por uso</span>
+                            </div>
+                            <p class="small text-muted mb-3">
+                                Claude cobra por tokens consumidos. Anthropic ofrece saldo promocional al registrarte.
+                            </p>
+
+                            <ol class="small ps-3">
+                                <li class="mb-2">
+                                    Crea una cuenta o inicia sesión en:
+                                    <a href="https://console.anthropic.com/" target="_blank" rel="noopener" class="ms-1">
+                                        console.anthropic.com <i class="fa fa-external-link-alt ms-1"></i>
+                                    </a>
+                                </li>
+                                <li class="mb-2">
+                                    Verifica tu email y número de teléfono (requerido por Anthropic).
+                                </li>
+                                <li class="mb-2">
+                                    Revisa/carga saldo en <strong>Billing</strong>:
+                                    <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener" class="ms-1">
+                                        console.anthropic.com/settings/billing <i class="fa fa-external-link-alt ms-1"></i>
+                                    </a>
+                                </li>
+                                <li class="mb-2">
+                                    Ve a <strong>API Keys</strong>:
+                                    <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" class="ms-1">
+                                        console.anthropic.com/settings/keys <i class="fa fa-external-link-alt ms-1"></i>
+                                    </a>
+                                </li>
+                                <li class="mb-2">Clic en <strong>“Create Key”</strong>.</li>
+                                <li class="mb-2">
+                                    Nómbrala (ej. <code>fastchat-prod</code>) y elige el workspace.
+                                </li>
+                                <li class="mb-2">
+                                    Copia la clave (empieza con <code>sk-ant-...</code>). <strong>Sólo se muestra una vez</strong>.
+                                </li>
+                                <li class="mb-2">
+                                    Vuelve aquí → <em>+ Api Key</em> → Proveedor: <strong>CLAUDE</strong> → pega la clave →
+                                    Modelo sugerido: <code>claude-haiku-4-5-20251001</code> (rápido) o
+                                    <code>claude-sonnet-4-5</code> (balanceado).
+                                </li>
+                            </ol>
+
+                            <div class="alert alert-warning py-2 small mb-2">
+                                <strong>Importante:</strong> Claude <strong>no ofrece embeddings</strong>.
+                                Si tu agente usa vectorstore (FAISS con archivos PDF/CSV), agrega también una
+                                API Key de Gemini u OpenAI para ese vectorstore — Claude se encarga del chat.
+                            </div>
+                            <div class="alert alert-info py-2 small mb-0">
+                                <strong>Rate limits</strong>:
+                                <a href="https://docs.anthropic.com/claude/reference/rate-limits" target="_blank" rel="noopener">
+                                    docs.anthropic.com/claude/reference/rate-limits <i class="fa fa-external-link-alt ms-1"></i>
+                                </a>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    {# ═══ Consejos generales ═══ #}
+                    <div class="mt-4 pt-3 border-top">
+                        <h6 class="small fw-semibold text-uppercase text-muted mb-2" style="letter-spacing:.05em;">
+                            <i class="fa fa-lightbulb text-warning me-1"></i>Consejos al manejar tokens
+                        </h6>
+                        <ul class="small text-muted mb-0 ps-3">
+                            <li>No compartas la clave ni la subas a GitHub. FastChat la almacena cifrada.</li>
+                            <li>Configura <em>alertas de consumo</em> por key (botón <i class="fa fa-bell"></i>) para que te avisen si pasa un umbral.</li>
+                            <li>Si tu plan free se agota, FastChat detecta el 429 y <strong>desactiva la key automáticamente</strong> para no seguir intentando.</li>
+                            <li>Pulsa <em>“Probar”</em> (<i class="fa fa-plug"></i>) después de registrarla para validar que funciona con el modelo configurado.</li>
+                            <li>Puedes tener varias keys del mismo proveedor (distintos proyectos, saldos separados).</li>
+                        </ul>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <a href="javascript:void(0)" class="btn btn-success"
+                       onclick="bootstrap.Modal.getInstance(document.getElementById('modalGuiaTokens')).hide(); formModal('', 'Agregar Api Key', 'addapikey');">
+                        <i class="fa fa-plus me-1"></i> Ya tengo mi token — Registrarlo
+                    </a>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ══════ Modal: Crear agente con IA (asignado a API Key) ══════════════ #}
+    <div class="modal fade" id="modalGenerarAgenteIA" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-wand-magic-sparkles me-2 text-primary"></i>
+                        Crear agente con IA
+                        <small class="text-muted ms-2" id="ga-ia-apikey-alias" style="font-weight:400;"></small>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+
+                    <div id="ga-ia-form">
+                        <div class="alert alert-info py-2 small mb-3">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Describe qué agente necesitas. La IA (usando tu propia API Key) generará el nombre,
+                            la descripción, el prompt del sistema y opcionalmente un contexto estático.
+                            El agente se creará y quedará asignado automáticamente a esta API Key.
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">¿Qué agente quieres?</label>
+                            <textarea id="ga-ia-descripcion" class="form-control" rows="5"
+                                      placeholder="Ej: Quiero un agente de atención al cliente para un consultorio dental. Debe responder sobre horarios, servicios ofrecidos (limpieza, ortodoncia, blanqueamiento), agendar citas y derivar urgencias al WhatsApp del doctor. Tono cercano y profesional."></textarea>
+                            <div class="form-text">Mínimo 15 caracteres. Mientras más específico, mejor el resultado.</div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-sm-6">
+                                <label class="form-label small fw-semibold">Tono</label>
+                                <select id="ga-ia-tono" class="form-select">
+                                    <option value="amigable" selected>Amigable</option>
+                                    <option value="formal">Formal</option>
+                                    <option value="profesional">Profesional</option>
+                                    <option value="cercano">Cercano / informal</option>
+                                    <option value="técnico">Técnico</option>
+                                    <option value="ventas">Ventas / persuasivo</option>
+                                </select>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label small fw-semibold">Idioma</label>
+                                <select id="ga-ia-idioma" class="form-select">
+                                    <option value="es" selected>Español</option>
+                                    <option value="en">Inglés</option>
+                                    <option value="pt">Portugués</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-primary" id="ga-ia-btn-generar">
+                                <i class="fas fa-wand-magic-sparkles me-1"></i> Generar agente
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="ga-ia-loading" class="text-center py-5" style="display:none;">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-3 mb-0 text-muted">La IA está diseñando tu agente… esto puede tardar 10–30 seg.</p>
+                    </div>
+
+                    <div id="ga-ia-resultado" style="display:none;">
+                        <div class="alert alert-success py-2 small mb-3" id="ga-ia-msg">
+                            <i class="fas fa-check-circle me-1"></i>
+                            <span></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-muted text-uppercase" style="letter-spacing:.05em">Nombre</label>
+                            <div class="p-2 bg-light rounded" id="ga-ia-out-nombre"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-muted text-uppercase" style="letter-spacing:.05em">Descripción</label>
+                            <div class="p-2 bg-light rounded small" id="ga-ia-out-descripcion"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-muted text-uppercase" style="letter-spacing:.05em">Prompt del sistema</label>
+                            <pre class="bg-dark text-light p-3 rounded small" style="max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;" id="ga-ia-out-prompt"></pre>
+                        </div>
+                        <div class="mb-3" id="ga-ia-out-contexto-wrap" style="display:none;">
+                            <label class="form-label small fw-semibold text-muted text-uppercase" style="letter-spacing:.05em">Contexto estático sugerido</label>
+                            <pre class="bg-light border rounded p-2 small" style="max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-word;" id="ga-ia-out-contexto"></pre>
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" class="btn btn-outline-secondary" id="ga-ia-btn-otro">
+                                <i class="fas fa-redo me-1"></i> Generar otro
+                            </button>
+                            <button type="button" class="btn btn-primary" id="ga-ia-btn-abrir-agente">
+                                <i class="fas fa-arrow-right me-1"></i> Ver y afinar el agente
+                            </button>
                         </div>
                     </div>
 
@@ -1558,15 +1899,88 @@
             dataType: 'json',
             success: function(res) {
                 const activo = res.activo !== false;
+                const quotaExceeded = !!res.quota_exceeded;
+                const modeloInvalido = !!res.modelo_invalido;
                 const badge = document.getElementById('badge-estado-' + id);
                 if (badge) {
-                    badge.className = 'badge ' + (activo ? 'bg-success' : 'bg-danger');
-                    badge.textContent = activo ? 'Activa' : 'Inactiva';
+                    let badgeClass = 'bg-success', badgeText = 'Activa';
+                    if (quotaExceeded) {
+                        badgeClass = 'bg-danger'; badgeText = 'Sin cupo — desactivada';
+                    } else if (!activo) {
+                        badgeClass = 'bg-danger'; badgeText = 'Inactiva';
+                    } else if (modeloInvalido) {
+                        badgeClass = 'bg-warning text-dark'; badgeText = 'Modelo inválido';
+                    }
+                    badge.className = 'badge ' + badgeClass;
+                    badge.textContent = badgeText;
                 }
-                if (activo) {
-                    Swal.fire({ type: 'success', title: 'Conexión exitosa', text: res.message || 'API Key válida.', timer: 6000, showConfirmButton: false });
+                const bl = (res.billing || {});
+                const billingLinks = (bl.billing_url || bl.docs_url)
+                    ? ('<div class="mt-3 d-flex gap-2 justify-content-center flex-wrap">' +
+                        (bl.billing_url
+                            ? '<a href="' + bl.billing_url + '" target="_blank" rel="noopener" class="btn btn-sm btn-primary"><i class="fas fa-credit-card me-1"></i>Actualizar plan en ' + (bl.proveedor || 'proveedor') + '</a>'
+                            : '') +
+                        (bl.docs_url
+                            ? '<a href="' + bl.docs_url + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary"><i class="fas fa-book me-1"></i>Ver documentación</a>'
+                            : '') +
+                      '</div>')
+                    : '';
+
+                if (quotaExceeded) {
+                    Swal.fire({
+                        type: 'warning',
+                        title: 'Sin cupo — API Key desactivada',
+                        html: (res.message || '').replace(/\n/g, '<br>') +
+                              '<hr class="my-2"><small class="text-muted">La clave se desactivó automáticamente para evitar seguir consumiendo. ' +
+                              'Actualiza tu plan de facturación o espera a que el cupo se renueve, luego reactívala manualmente.</small>' +
+                              billingLinks,
+                        confirmButtonText: 'Entendido',
+                        width: 560
+                    });
+                } else if (!activo) {
+                    Swal.fire({
+                        type: 'error',
+                        title: 'API Key inválida',
+                        html: (res.message || 'Error de conexión.') + billingLinks,
+                        confirmButtonText: 'Entendido'
+                    });
+                } else if (modeloInvalido) {
+                    Swal.fire({
+                        type: 'warning',
+                        title: 'Modelo no disponible',
+                        html: (res.message || '').replace(/\n/g, '<br>') +
+                              '<hr class="my-2"><small class="text-muted">Edita la API Key y cambia el campo Modelo LLM por uno disponible para tu cuenta.</small>' +
+                              billingLinks,
+                        confirmButtonText: 'Entendido'
+                    });
                 } else {
-                    Swal.fire({ type: 'error', title: 'API Key inválida', text: res.message || 'Error de conexión.' });
+                    const p = res.prueba || {};
+                    const esc = s => String(s == null ? '' : s)
+                        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                        .replace(/"/g,'&quot;');
+                    let pruebaHtml = '';
+                    if (p.respuesta) {
+                        pruebaHtml =
+                            '<div class="text-start mt-2">' +
+                                '<div class="small text-muted mb-1"><i class="fas fa-paper-plane me-1"></i>Prompt enviado:</div>' +
+                                '<div class="p-2 bg-light border rounded small mb-2" style="white-space:pre-wrap;">' + esc(p.prompt) + '</div>' +
+                                '<div class="small text-muted mb-1"><i class="fas fa-reply me-1"></i>Respuesta del modelo:</div>' +
+                                '<div class="p-2 border rounded small mb-2" style="background:#e8f5e9;white-space:pre-wrap;color:#0f5132;">' + esc(p.respuesta) + '</div>' +
+                                '<div class="small text-muted">' +
+                                    '<i class="fas fa-microchip me-1"></i>Modelo: <code>' + esc(p.modelo) + '</code>' +
+                                    ' · <i class="fas fa-stopwatch ms-2 me-1"></i>' + (p.latencia_ms || 0) + ' ms' +
+                                    ' · <i class="fas fa-coins ms-2 me-1"></i>' + (p.tokens_total || 0) + ' tokens' +
+                                    ' (in:' + (p.tokens_entrada || 0) + ' / out:' + (p.tokens_salida || 0) + ')' +
+                                '</div>' +
+                            '</div>';
+                    }
+                    Swal.fire({
+                        type: 'success',
+                        title: 'Conexión exitosa',
+                        html: '<div>' + esc(res.message || 'API Key válida.') + '</div>' + pruebaHtml,
+                        width: pruebaHtml ? 600 : 400,
+                        confirmButtonText: 'Cerrar'
+                    });
                 }
             },
             error: function() {
@@ -1788,6 +2202,76 @@
                 'Mostrando ' + res.registros.length + ' de ' + res.total + ' registro(s)';
         }, 'json');
     }
+
+    /* ══════ Generar agente con IA (asignado a una API Key) ══════════════ */
+    let _gaIaApikeyId = null;
+    let _gaIaAgenteCreadoId = null;
+
+    function abrirGenerarAgenteIA(apikeyId, alias) {
+        _gaIaApikeyId = apikeyId;
+        _gaIaAgenteCreadoId = null;
+        document.getElementById('ga-ia-apikey-alias').textContent = '— ' + (alias || '');
+        document.getElementById('ga-ia-descripcion').value = '';
+        document.getElementById('ga-ia-form').style.display = '';
+        document.getElementById('ga-ia-loading').style.display = 'none';
+        document.getElementById('ga-ia-resultado').style.display = 'none';
+        new bootstrap.Modal(document.getElementById('modalGenerarAgenteIA')).show();
+    }
+
+    document.getElementById('ga-ia-btn-generar').addEventListener('click', function () {
+        const descripcion = document.getElementById('ga-ia-descripcion').value.trim();
+        if (descripcion.length < 15) {
+            alertaWarning('Describe con más detalle qué debe hacer el agente (mínimo 15 caracteres).');
+            return;
+        }
+        document.getElementById('ga-ia-form').style.display = 'none';
+        document.getElementById('ga-ia-resultado').style.display = 'none';
+        document.getElementById('ga-ia-loading').style.display = '';
+
+        $.post(_RUTA, {
+            csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val(),
+            action: 'generar_agente_ia',
+            id: _gaIaApikeyId,
+            descripcion: descripcion,
+            tono: document.getElementById('ga-ia-tono').value,
+            idioma: document.getElementById('ga-ia-idioma').value,
+        }, function (r) {
+            document.getElementById('ga-ia-loading').style.display = 'none';
+            if (!r || r.error) {
+                document.getElementById('ga-ia-form').style.display = '';
+                alertaWarning((r && r.message) || 'No se pudo generar el agente.');
+                return;
+            }
+            _gaIaAgenteCreadoId = r.agente_id;
+            document.querySelector('#ga-ia-msg span').textContent = r.message || 'Agente creado.';
+            document.getElementById('ga-ia-out-nombre').textContent = r.nombre || '';
+            document.getElementById('ga-ia-out-descripcion').textContent = r.descripcion || '';
+            document.getElementById('ga-ia-out-prompt').textContent = r.prompt_template || '';
+            if (r.contexto_estatico) {
+                document.getElementById('ga-ia-out-contexto').textContent = r.contexto_estatico;
+                document.getElementById('ga-ia-out-contexto-wrap').style.display = '';
+            } else {
+                document.getElementById('ga-ia-out-contexto-wrap').style.display = 'none';
+            }
+            document.getElementById('ga-ia-resultado').style.display = '';
+        }, 'json').fail(function () {
+            document.getElementById('ga-ia-loading').style.display = 'none';
+            document.getElementById('ga-ia-form').style.display = '';
+            alertaWarning('Error de conexión al generar el agente.');
+        });
+    });
+
+    document.getElementById('ga-ia-btn-otro').addEventListener('click', function () {
+        document.getElementById('ga-ia-resultado').style.display = 'none';
+        document.getElementById('ga-ia-form').style.display = '';
+    });
+
+    document.getElementById('ga-ia-btn-abrir-agente').addEventListener('click', function () {
+        // Cerrar modal y recargar la página — el agente ya está guardado.
+        // El usuario lo podrá ver en la lista de agentes y editar desde allí.
+        bootstrap.Modal.getInstance(document.getElementById('modalGenerarAgenteIA')).hide();
+        location.reload();
+    });
 
     function verConsumo(id, alias) {
         _consumoApikeyId = id;

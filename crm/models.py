@@ -757,6 +757,7 @@ class DetalleAgentesAI(ModeloBase):
 PROVEEDOR_CHOICES = (
     (2, 'GEMINI'),
     (3, 'OPEN IA'),
+    (4, 'CLAUDE'),
 )
 
 class ApiKeyIA(ModeloBase):

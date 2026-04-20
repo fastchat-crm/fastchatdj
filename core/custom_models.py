@@ -138,7 +138,10 @@ class ModeloBase(NormalModel):
                 update_fields = [*update_fields, 'usuario_modificacion_id', 'fecha_modificacion']
                 kwargs['update_fields'] = list(set(update_fields))
         else:
-            self.fecha_registro = fecha_registro.date()
+            # fecha_registro es DateTimeField → guardamos datetime completo (no sólo date)
+            # para no perder la hora. El atributo transitorio hora_registro se sigue
+            # exponiendo para compatibilidad con plantillas/código legacy.
+            self.fecha_registro = fecha_registro
             self.hora_registro = fecha_registro.time()
             if usuario_id:
                 self.usuario_creacion_id = usuario_id

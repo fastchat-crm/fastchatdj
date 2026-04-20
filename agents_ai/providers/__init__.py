@@ -14,18 +14,21 @@ Cómo agregar un nuevo provider (ej. Claude):
 from .base import BaseProvider
 from .gemini import GeminiProvider
 from .openai import OpenAIProvider
+from .claude import ClaudeProvider
 
 
 # Registry: nombre interno → instancia singleton del provider
 _PROVIDERS: dict[str, BaseProvider] = {
     GeminiProvider.name: GeminiProvider(),
     OpenAIProvider.name: OpenAIProvider(),
+    ClaudeProvider.name: ClaudeProvider(),
 }
 
 # Mapeo id (de crm.models.PROVEEDOR_CHOICES) → nombre interno
 PROVEEDOR_ID_TO_NAME: dict[int, str] = {
     2: 'gemini',
     3: 'openai',
+    4: 'claude',
 }
 
 
@@ -42,10 +45,10 @@ MODELOS_DISPONIBLES = (
     ('gpt-4o',                    '[OpenAI] GPT-4o — máxima calidad'),
     ('gpt-4-turbo',               '[OpenAI] GPT-4 Turbo — alta calidad'),
     ('gpt-3.5-turbo',             '[OpenAI] GPT-3.5 Turbo — más económico, menor calidad'),
-    # ── Anthropic Claude (cuando se agregue el provider) ──
-    ('claude-haiku-4-5-20251001', '[Claude] Haiku 4.5 — rápido (requiere provider Claude)'),
-    ('claude-sonnet-4-5',         '[Claude] Sonnet 4.5 — balanceado (requiere provider Claude)'),
-    ('claude-opus-4-6',           '[Claude] Opus 4.6 — máxima calidad (requiere provider Claude)'),
+    # ── Anthropic Claude ──
+    ('claude-haiku-4-5-20251001', '[Claude] Haiku 4.5 — rápido y económico (default)'),
+    ('claude-sonnet-4-5',         '[Claude] Sonnet 4.5 — balanceado'),
+    ('claude-opus-4-6',           '[Claude] Opus 4.6 — máxima calidad'),
 )
 
 
@@ -69,6 +72,6 @@ def get_provider(name_or_id) -> BaseProvider:
 
 
 __all__ = [
-    'BaseProvider', 'GeminiProvider', 'OpenAIProvider',
+    'BaseProvider', 'GeminiProvider', 'OpenAIProvider', 'ClaudeProvider',
     'get_provider', 'PROVEEDOR_ID_TO_NAME', 'MODELOS_DISPONIBLES',
 ]

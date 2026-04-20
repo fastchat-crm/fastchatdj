@@ -120,7 +120,13 @@
             <div class="card h-100">
                 <div class="card-header py-2 d-flex justify-content-between align-items-center">
                     <strong><i class="fa fa-calendar-week text-primary me-1"></i>Horarios semanales</strong>
-                    <span class="badge bg-primary">{{ horarios|length }}</span>
+                    <div class="d-flex gap-2 align-items-center">
+                        <button type="button" class="btn btn-sm btn-outline-primary py-0"
+                                onclick="abrirIaHorarios()" title="Generar horarios con IA">
+                            <i class="fa fa-wand-magic-sparkles me-1"></i>Generar con IA
+                        </button>
+                        <span class="badge bg-primary">{{ horarios|length }}</span>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <table class="table table-sm table-hover mb-0">
@@ -178,7 +184,13 @@
             <div class="card h-100">
                 <div class="card-header py-2 d-flex justify-content-between align-items-center">
                     <strong><i class="fa fa-calendar-day text-warning me-1"></i>Excepciones (feriados o días especiales)</strong>
-                    <span class="badge bg-warning text-dark">{{ excepciones|length }}</span>
+                    <div class="d-flex gap-2 align-items-center">
+                        <button type="button" class="btn btn-sm btn-outline-primary py-0"
+                                onclick="abrirIaExcepciones()" title="Generar excepciones/feriados con IA">
+                            <i class="fa fa-wand-magic-sparkles me-1"></i>Generar con IA
+                        </button>
+                        <span class="badge bg-warning text-dark">{{ excepciones|length }}</span>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <table class="table table-sm table-hover mb-0">
@@ -263,6 +275,36 @@
         </div>
     </div>
 
+    {# ===== MODAL IA HORARIOS / EXCEPCIONES ===== #}
+    <div class="modal fade" id="modalIaHorarios" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <form class="modal-content" onsubmit="generarIa(event)">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fa fa-wand-magic-sparkles text-primary me-2"></i>
+                        <span id="iaModalTitulo">Generar con IA</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="iaModo" value="horarios">
+                    <div class="alert alert-light border small mb-2" id="iaModalInfo"></div>
+                    <label class="form-label small fw-semibold">Descripción en lenguaje natural</label>
+                    <textarea id="iaDescripcion" class="form-control" rows="4" required
+                              placeholder="Ej: De lunes a viernes de 9:00 a 18:00 con hora de almuerzo de 13:00 a 14:00, sábados medio día de 9:00 a 13:00, cerrado domingos."></textarea>
+                    <small class="text-muted">Usa tu propia API Key IA. La IA convierte texto a horarios/excepciones estructuradas.</small>
+                    <div id="iaResultado" class="mt-3" style="display:none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa fa-wand-magic-sparkles me-1"></i> Generar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     {% else %}
         <div class="alert alert-warning text-center py-4">
             <i class="fa fa-hand-point-up fa-2x mb-2 d-block"></i>
@@ -307,6 +349,24 @@ async function post(action, extras, msgLoading){
     }
 }
 
+// ----- Helpers Swal (proyecto usa `type:`, no `icon:`) -----
+function swalOk(title, text){ Swal.fire({ title, text, type: 'success' }); }
+function swalErr(title, text){ Swal.fire({ title, text: text || '', type: 'error' }); }
+function swalWarn(title, text){ Swal.fire({ title, text: text || '', type: 'warning' }); }
+function swalHtml(title, html, type){ Swal.fire({ title, html, type: type || 'info', width: 640 }); }
+function swalConfirm(title, text){
+    return Swal.fire({
+        title, text, type: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33', cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Sí, continuar', cancelButtonText: 'Cancelar',
+    }).then(r => !!r.value);
+}
+function escHtml(s){
+    return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 // ----- Acciones -----
 async function guardarMsgFH(sid){
     const j = await post('guardar_mensaje_fuera_horario', {
@@ -314,7 +374,7 @@ async function guardarMsgFH(sid){
         mensaje: document.getElementById('msgFH').value,
         zona_horaria: document.getElementById('tzFH').value,
     }, 'Guardando mensaje...');
-    if(j.error) alert(j.message || 'Error'); else toast('Mensaje guardado correctamente');
+    if(j.error) swalErr('Error', j.message || 'No se pudo guardar'); else toast('Mensaje guardado correctamente');
 }
 
 async function addHorario(ev){
@@ -325,13 +385,14 @@ async function addHorario(ev){
         hora_inicio: f.hora_inicio.value,
         hora_fin: f.hora_fin.value,
     }, 'Agregando horario...');
-    if(!j.error) location.reload(); else alert(j.message);
+    if(!j.error) location.reload(); else swalErr('Error', j.message);
 }
 
 async function delHorario(id){
-    if(!confirm('¿Eliminar este horario?')) return;
+    const ok = await swalConfirm('¿Eliminar este horario?', 'Esta acción no se puede deshacer.');
+    if(!ok) return;
     const j = await post('delete_horario', {id}, 'Eliminando horario...');
-    if(!j.error) location.reload(); else alert(j.message);
+    if(!j.error) location.reload(); else swalErr('Error', j.message);
 }
 
 async function addExcepcion(ev){
@@ -342,26 +403,99 @@ async function addExcepcion(ev){
         abierto: f.abierto.value,
         motivo: f.motivo.value,
     }, 'Agregando excepción...');
-    if(!j.error) location.reload(); else alert(j.message);
+    if(!j.error) location.reload(); else swalErr('Error', j.message);
 }
 
 async function delExcepcion(id){
-    if(!confirm('¿Eliminar esta excepción?')) return;
+    const ok = await swalConfirm('¿Eliminar esta excepción?', 'Esta acción no se puede deshacer.');
+    if(!ok) return;
     const j = await post('delete_excepcion', {id}, 'Eliminando excepción...');
-    if(!j.error) location.reload(); else alert(j.message);
+    if(!j.error) location.reload(); else swalErr('Error', j.message);
 }
 
 async function duplicarHorarios(ev){
     ev.preventDefault();
     const destino = ev.target.destino_id.value;
     const j = await post('duplicar', {origen_id: SID, destino_id: destino}, 'Duplicando horarios...');
-    if(!j.error){ alert(j.message); location.href='?sesion='+destino; }
-    else alert(j.message);
+    if(!j.error){
+        await Swal.fire({ title: 'Duplicado', text: j.message, type: 'success' });
+        location.href='?sesion='+destino;
+    } else swalErr('Error al duplicar', j.message);
 }
 
 async function enviarMeta(sid){
     const j = await post('enviar_meta', {sesion_id: sid}, 'Enviando configuración a Meta...');
-    alert(j.error ? j.message : j.message);
+    const m = j.meta || {};
+    const detalle = '<div class="text-start small">' +
+        '<div class="mb-2"><strong>Endpoint:</strong><br><code style="font-size:.72rem;word-break:break-all;">' + escHtml(m.endpoint || '—') + '</code></div>' +
+        (m.status != null ? '<div><strong>HTTP Status:</strong> <span class="badge bg-' + (m.status>=200&&m.status<300?'success':'danger') + '">' + m.status + '</span></div>' : '') +
+        (m.horarios_txt ? '<div class="mt-2"><strong>Horarios enviados:</strong><br><small>' + escHtml(m.horarios_txt) + '</small></div>' : '') +
+        (m.about_sent ? '<div class="mt-2"><strong>About (≤139 chars):</strong><br><small>' + escHtml(m.about_sent) + '</small></div>' : '') +
+        (m.response ? '<div class="mt-2"><strong>Respuesta Meta:</strong><pre class="bg-light border rounded p-2 small mb-0" style="max-height:180px;overflow:auto;white-space:pre-wrap;">' + escHtml(JSON.stringify(m.response, null, 2)) + '</pre></div>' : '') +
+        (m.exception ? '<div class="mt-2 text-danger"><strong>Excepción:</strong> ' + escHtml(m.exception) + '</div>' : '') +
+        '</div>';
+    if (j.error) {
+        swalHtml('❌ ' + (j.message || 'Error enviando a Meta'), detalle, 'error');
+    } else {
+        swalHtml('✅ ' + j.message, detalle, 'success');
+    }
+}
+
+// ----- IA horarios / excepciones -----
+function abrirIaHorarios(){
+    document.getElementById('iaModo').value = 'horarios';
+    document.getElementById('iaModalTitulo').textContent = 'Generar horarios con IA';
+    document.getElementById('iaModalInfo').innerHTML = '<i class="fa fa-info-circle text-primary me-1"></i>Describe los horarios de atención en texto natural. La IA creará los bloques semanales.';
+    document.getElementById('iaDescripcion').value = '';
+    document.getElementById('iaDescripcion').placeholder = 'Ej: Lun-Vie 9:00-18:00 con almuerzo de 13:00 a 14:00, Sábado 9:00-13:00, cerrado domingos.';
+    document.getElementById('iaResultado').style.display = 'none';
+    new bootstrap.Modal(document.getElementById('modalIaHorarios')).show();
+}
+function abrirIaExcepciones(){
+    document.getElementById('iaModo').value = 'excepciones';
+    document.getElementById('iaModalTitulo').textContent = 'Generar excepciones/feriados con IA';
+    document.getElementById('iaModalInfo').innerHTML = '<i class="fa fa-info-circle text-primary me-1"></i>Describe feriados, días especiales o fechas cerradas. La IA resuelve fechas estándar (ej. “feriados de Ecuador”, “Navidad y Año Nuevo”).';
+    document.getElementById('iaDescripcion').value = '';
+    document.getElementById('iaDescripcion').placeholder = 'Ej: Cerrado 25 de diciembre y 1 de enero. Horario reducido 24 y 31 de diciembre. Feriados oficiales de Ecuador este año.';
+    document.getElementById('iaResultado').style.display = 'none';
+    new bootstrap.Modal(document.getElementById('modalIaHorarios')).show();
+}
+
+async function generarIa(ev){
+    ev.preventDefault();
+    const modo = document.getElementById('iaModo').value;
+    const descripcion = document.getElementById('iaDescripcion').value.trim();
+    if (descripcion.length < 10){
+        swalWarn('Describe con más detalle', 'Mínimo 10 caracteres.');
+        return;
+    }
+    const action = (modo === 'excepciones') ? 'generar_excepciones_ia' : 'generar_horarios_ia';
+    const j = await post(action, { sesion_id: SID, descripcion }, 'Consultando IA...');
+    if (j.error){
+        let html = '<div class="text-start small">' + escHtml(j.message || 'Error IA') + '</div>';
+        if (j.raw_preview) {
+            html += '<div class="text-start small mt-2 text-muted"><strong>Respuesta cruda de la IA:</strong>' +
+                    '<pre class="bg-light border rounded p-2 small mt-1 mb-0" style="max-height:200px;overflow:auto;white-space:pre-wrap;">' +
+                    escHtml(j.raw_preview) + '</pre></div>';
+        }
+        Swal.fire({ title: 'No se pudo generar', html, type: 'error', width: 600 });
+        return;
+    }
+    const items = (modo === 'excepciones') ? (j.excepciones || []) : (j.horarios || []);
+    const resumen = items.length
+        ? '<ul class="small mb-0 ps-3">' + items.map(it => (
+            modo === 'excepciones'
+                ? '<li>' + escHtml(it.fecha) + ' — ' + (it.abierto ? 'Abierto' : 'Cerrado') + (it.motivo ? ' · ' + escHtml(it.motivo) : '') + '</li>'
+                : '<li>Día ' + it.dia_semana + ' · ' + escHtml(it.hora_inicio) + ' - ' + escHtml(it.hora_fin) + '</li>'
+        )).join('') + '</ul>'
+        : '<em>Sin items generados.</em>';
+    await Swal.fire({
+        title: '✅ ' + j.message,
+        html: resumen,
+        type: 'success',
+        width: 560,
+    });
+    location.reload();
 }
 
 // ----- Toast simple -----

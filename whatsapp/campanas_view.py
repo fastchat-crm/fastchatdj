@@ -205,6 +205,154 @@ def _manejar_post(request):
                 ).update(status=False)
                 return JsonResponse({'error': False})
 
+            if action == 'add_etiqueta':
+                nombre = (request.POST.get('nombre') or '').strip()[:80]
+                color = (request.POST.get('color') or '#0d6efd').strip()[:20]
+                descripcion = (request.POST.get('descripcion') or '').strip()[:255]
+                if not nombre:
+                    return JsonResponse({'error': True, 'message': 'Ingresa un nombre para la etiqueta.'})
+                existente = EtiquetaContacto.objects.filter(
+                    usuario_creacion=request.user, nombre__iexact=nombre, status=True,
+                ).first()
+                if existente:
+                    return JsonResponse({
+                        'error': False, 'id': existente.id, 'nombre': existente.nombre,
+                        'color': existente.color, 'existia': True,
+                    })
+                et = EtiquetaContacto(nombre=nombre, color=color, descripcion=descripcion)
+                et.save(request)
+                log(f'Etiqueta "{et.nombre}" creada desde Campañas', request, 'add', obj=et.id)
+                return JsonResponse({
+                    'error': False, 'id': et.id, 'nombre': et.nombre,
+                    'color': et.color, 'existia': False,
+                })
+
+            if action == 'campana_ia':
+                sesion_id = request.POST.get('sesion_id')
+                sesion = SesionWhatsApp.objects.filter(
+                    id=sesion_id, usuario=request.user, status=True,
+                ).first() if sesion_id else None
+                if not sesion:
+                    return JsonResponse({'error': True, 'message': 'Selecciona una sesión primero.'})
+                descripcion_usuario = (request.POST.get('descripcion') or '').strip()
+                if len(descripcion_usuario) < 15:
+                    return JsonResponse({'error': True, 'message': 'Describe con más detalle la campaña (mínimo 15 caracteres).'})
+
+                # Buscar la primera ApiKey activa del perfil del usuario
+                from crm.models import ApiKeyIA, ConsumoTokenIA, PerfilNegocioIA
+                perfil = PerfilNegocioIA.objects.filter(usuario=request.user).first()
+                apikey_obj = ApiKeyIA.objects.filter(
+                    perfil=perfil, estado=True, status=True,
+                ).first() if perfil else None
+                if not apikey_obj:
+                    return JsonResponse({'error': True, 'message': 'No tienes una API Key activa. Configura una en Entrenamiento > API Keys.'})
+                if not (apikey_obj.descripcion or '').strip():
+                    return JsonResponse({'error': True, 'message': 'La API Key no tiene la clave del proveedor LLM configurada.'})
+
+                try:
+                    if apikey_obj.proveedor == 2:
+                        from langchain_google_genai import ChatGoogleGenerativeAI
+                        llm = ChatGoogleGenerativeAI(
+                            model=(apikey_obj.modelo or 'gemini-2.5-flash'),
+                            google_api_key=apikey_obj.descripcion,
+                            max_output_tokens=2000, temperature=0.7,
+                            model_kwargs={'response_mime_type': 'application/json'},
+                        )
+                    elif apikey_obj.proveedor == 4:
+                        from langchain_anthropic import ChatAnthropic
+                        llm = ChatAnthropic(
+                            model=(apikey_obj.modelo or 'claude-haiku-4-5-20251001'),
+                            anthropic_api_key=apikey_obj.descripcion,
+                            max_tokens=2000, temperature=0.7,
+                        )
+                    else:
+                        from langchain_community.chat_models import ChatOpenAI
+                        llm = ChatOpenAI(
+                            model_name=(apikey_obj.modelo or 'gpt-4o-mini'),
+                            openai_api_key=apikey_obj.descripcion,
+                            max_tokens=2000, temperature=0.7,
+                            model_kwargs={'response_format': {'type': 'json_object'}},
+                        )
+                    prompt = (
+                        "Eres un especialista en campañas de marketing por WhatsApp/Instagram/Messenger. "
+                        "Genera SOLO un JSON válido con estos campos para crear una campaña:\n"
+                        '  - "nombre": string corto (máx 60 chars).\n'
+                        '  - "descripcion": string (máx 200 chars) interna para el operador.\n'
+                        '  - "mensaje_texto": string — el mensaje a enviar, tono directo, incluye placeholders '
+                        '{nombre} y/o {numero} donde corresponda. Máx 800 chars. No uses markdown ni emojis excesivos.\n'
+                        '  - "tipo": uno de ["texto", "plantilla", "media"].\n'
+                        '  - "throttle_por_minuto": int entre 10 y 60.\n'
+                        f"Canal principal: {sesion.get_proveedor_display()}.\n"
+                        f"Objetivo de la campaña del usuario:\n{descripcion_usuario}\n\n"
+                        "Devuelve exclusivamente el JSON, sin explicaciones, sin ```."
+                    )
+                    import json as _json, time as _time
+                    _t0 = _time.time()
+                    msg = llm.invoke(prompt)
+                    _lat_ms = int((_time.time() - _t0) * 1000)
+                    texto = (getattr(msg, 'content', '') or '').strip()
+                    if texto.startswith('```'):
+                        texto = texto.strip('`')
+                        if texto.lower().startswith('json'):
+                            texto = texto[4:].strip()
+                    try:
+                        cfg = _json.loads(texto)
+                        if not isinstance(cfg, dict):
+                            cfg = {}
+                    except Exception:
+                        return JsonResponse({'error': True, 'message': 'La IA devolvió JSON inválido. Intenta de nuevo.'})
+
+                    def _s(v, d=''):
+                        if v is None: return d
+                        return v if isinstance(v, str) else str(v)
+
+                    nombre = _s(cfg.get('nombre'), 'Campaña generada').strip()[:150] or 'Campaña generada'
+                    descripcion = _s(cfg.get('descripcion'), '').strip()[:500]
+                    mensaje_texto = _s(cfg.get('mensaje_texto'), '').strip()[:4000]
+                    tipo = _s(cfg.get('tipo'), 'texto').strip().lower()
+                    if tipo not in ('texto', 'plantilla', 'media'):
+                        tipo = 'texto'
+                    try:
+                        throttle = int(cfg.get('throttle_por_minuto') or 20)
+                    except (TypeError, ValueError):
+                        throttle = 20
+                    throttle = max(5, min(throttle, 200))
+
+                    # Registrar consumo
+                    try:
+                        _meta = getattr(msg, 'response_metadata', {}) or {}
+                        _usage = (
+                            getattr(msg, 'usage_metadata', None)
+                            or _meta.get('usage_metadata') or _meta.get('token_usage') or {}
+                        )
+                        _te = _usage.get('input_tokens') or _usage.get('prompt_token_count') or _usage.get('prompt_tokens') or 0
+                        _ts = _usage.get('output_tokens') or _usage.get('candidates_token_count') or _usage.get('completion_tokens') or 0
+                        if _te or _ts:
+                            ConsumoTokenIA.objects.create(
+                                apikey=apikey_obj,
+                                tokens_entrada=_te, tokens_salida=_ts,
+                                tokens_total=_te + _ts,
+                                modelo=getattr(llm, 'model', 'campana-builder'),
+                                origen='otro',
+                                prompt_preview=descripcion_usuario[:300],
+                            )
+                            from crm.alertas_consumo import verificar_alerta_consumo
+                            verificar_alerta_consumo(apikey_obj, _te + _ts)
+                    except Exception:
+                        pass
+
+                    return JsonResponse({
+                        'error': False,
+                        'campana': {
+                            'nombre': nombre, 'descripcion': descripcion,
+                            'mensaje_texto': mensaje_texto, 'tipo': tipo,
+                            'throttle_por_minuto': throttle,
+                        },
+                        'latencia_ms': _lat_ms,
+                    })
+                except Exception as ex:
+                    return JsonResponse({'error': True, 'message': f'Fallo generando la campaña: {str(ex)[:400]}'})
+
             return JsonResponse({'error': True, 'message': f'Acción desconocida: {action}'})
 
     except Exception as ex:

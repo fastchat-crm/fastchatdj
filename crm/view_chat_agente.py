@@ -166,6 +166,8 @@ def chat_agente_view(request, agente_enc_id):
                 })
             except Exception as ex:
                 line = sys.exc_info()[-1].tb_lineno
+                modelo_cfg = (apikey_obj.modelo or '').strip() or ('gemini-2.5-flash' if apikey_obj.proveedor == 2 else 'gpt-4o-mini')
+                msg_limpio, activo_final, flags = _clasificar_error_llm(ex, apikey_obj=apikey_obj, modelo_str=modelo_cfg)
                 traza_etapas.append({
                     'etapa': 'error',
                     'label': 'Error en pipeline',
@@ -173,11 +175,15 @@ def chat_agente_view(request, agente_enc_id):
                     'detalle': f'Linea {line}: {str(ex)[:400]}',
                     'ts_ms': int((time.time() - _t0) * 1000),
                 })
-                return JsonResponse({
+                payload = {
                     'error': True,
-                    'message': f'Error al consultar el agente (línea {line}): {ex}',
+                    'message': msg_limpio,
                     'traza': {'etapas': traza_etapas},
-                })
+                }
+                if activo_final is False:
+                    payload['apikey_desactivada'] = True
+                payload.update(flags)
+                return JsonResponse(payload)
 
             # Detectar problemas de calidad en la respuesta
             from agents_ai.auditor_agente import _detectar_respuestas_problema
@@ -277,6 +283,97 @@ def chat_agente_view(request, agente_enc_id):
 # Procesamiento de archivos multimedia (imagen / audio)
 # ---------------------------------------------------------------------------
 
+def _billing_info_por_proveedor(proveedor):
+    """URL de gestión de planes/facturación y nombre legible por proveedor."""
+    if proveedor == 2:
+        return {
+            'proveedor': 'Google Gemini',
+            'billing_url': 'https://aistudio.google.com/app/plan_information',
+            'docs_url': 'https://ai.google.dev/gemini-api/docs/rate-limits',
+        }
+    if proveedor == 3:
+        return {
+            'proveedor': 'OpenAI',
+            'billing_url': 'https://platform.openai.com/account/billing',
+            'docs_url': 'https://platform.openai.com/docs/guides/rate-limits',
+        }
+    if proveedor == 4:
+        return {
+            'proveedor': 'Anthropic Claude',
+            'billing_url': 'https://console.anthropic.com/settings/billing',
+            'docs_url': 'https://docs.anthropic.com/claude/reference/rate-limits',
+        }
+    return {'proveedor': 'LLM', 'billing_url': '', 'docs_url': ''}
+
+
+def _clasificar_error_llm(ex, apikey_obj=None, modelo_str=''):
+    """Devuelve (message, activo_final, flags) para mostrar un error amigable
+    del LLM y opcionalmente desactivar la API Key cuando el plan se quedó sin cupo.
+    """
+    err_str = str(ex)
+    err_lower = err_str.lower()
+    is_quota = ('429' in err_str
+                or 'quota' in err_lower
+                or 'rate limit' in err_lower
+                or 'resource has been exhausted' in err_lower
+                or 'too many requests' in err_lower
+                or 'credit balance is too low' in err_lower
+                or 'insufficient_quota' in err_lower)
+    is_auth = ('401' in err_str
+               or '403' in err_str
+               or ('api key' in err_lower and ('invalid' in err_lower or 'not valid' in err_lower))
+               or 'unauthenticated' in err_lower
+               or 'permission denied' in err_lower
+               or 'invalid x-api-key' in err_lower)
+    is_model = ('404' in err_str
+                or ('not found' in err_lower and 'model' in err_lower)
+                or 'does not exist' in err_lower)
+    proveedor_id = getattr(apikey_obj, 'proveedor', None)
+    billing = _billing_info_por_proveedor(proveedor_id) if proveedor_id else {
+        'proveedor': 'LLM', 'billing_url': '', 'docs_url': '',
+    }
+    flags = {'billing': billing}
+    if is_quota:
+        flags['quota_exceeded'] = True
+        modelo_lbl = modelo_str or 'el modelo configurado'
+        msg = (
+            f"⚠️ Sin cupo en {modelo_lbl} ({billing['proveedor']} · quota/rate limit). "
+            "La API Key se desactivó automáticamente para evitar seguir consumiendo. "
+            f"Actualiza tu plan de facturación en {billing['proveedor']} o espera a que "
+            "el límite se renueve y luego reactívala."
+        )
+        if apikey_obj is not None:
+            try:
+                apikey_obj.estado = False
+                apikey_obj.msgerror = f'Quota/rate limit ({modelo_lbl}): {err_str[:400]}'
+                apikey_obj.save()
+            except Exception:
+                pass
+        return msg, False, flags
+    if is_auth:
+        flags['auth_error'] = True
+        if apikey_obj is not None:
+            try:
+                apikey_obj.estado = False
+                apikey_obj.msgerror = f'Clave inválida/sin permisos: {err_str[:400]}'
+                apikey_obj.save()
+            except Exception:
+                pass
+        return "❌ Clave inválida o sin permisos del proveedor LLM. La API Key se desactivó.", False, flags
+    if is_model:
+        flags['modelo_invalido'] = True
+        modelo_lbl = modelo_str or 'el modelo configurado'
+        if apikey_obj is not None:
+            try:
+                apikey_obj.msgerror = f"Modelo '{modelo_lbl}' no disponible: {err_str[:400]}"
+                apikey_obj.save(update_fields=['msgerror'])
+            except Exception:
+                pass
+        return f"⚠️ El modelo '{modelo_lbl}' no está disponible para esta API Key. Edita la key y cambia el Modelo LLM.", True, flags
+    # Otro: no tocamos la key, solo mostramos mensaje corto
+    return f"❌ Error del proveedor LLM: {err_str[:300]}", None, flags
+
+
 def _handle_media(request, agente, session_id):
     """Procesa imagen o audio enviados desde el chat de prueba."""
     archivo = request.FILES.get('archivo')
@@ -290,7 +387,8 @@ def _handle_media(request, agente, session_id):
     if not apikey_obj:
         return JsonResponse({'error': True, 'message': 'Este agente no tiene una API Key activa.'})
 
-    provider = 'gemini' if apikey_obj.proveedor == 2 else 'openai'
+    _provider_map = {2: 'gemini', 3: 'openai', 4: 'claude'}
+    provider = _provider_map.get(apikey_obj.proveedor, 'openai')
     ext = os.path.splitext(archivo.name)[1].lower()
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
@@ -306,8 +404,13 @@ def _handle_media(request, agente, session_id):
         else:
             return JsonResponse({'error': True, 'message': 'Tipo de medio no soportado.'})
     except Exception as ex:
-        line = sys.exc_info()[-1].tb_lineno
-        return JsonResponse({'error': True, 'message': f'Error procesando archivo (línea {line}): {ex}'})
+        modelo_cfg = (apikey_obj.modelo or '').strip() or ('gemini-2.0-flash' if provider == 'gemini' else 'gpt-4o')
+        msg, activo, flags = _clasificar_error_llm(ex, apikey_obj=apikey_obj, modelo_str=modelo_cfg)
+        payload = {'error': True, 'message': msg}
+        if activo is False:
+            payload['apikey_desactivada'] = True
+        payload.update(flags)
+        return JsonResponse(payload)
     finally:
         try:
             os.unlink(tmp_path)
@@ -342,14 +445,26 @@ def _analizar_imagen(tmp_path, filename, texto_adicional, apikey_obj, provider, 
     ]
     msg = HumanMessage(content=content)
 
+    # Usa el modelo configurado en la ApiKey; fallback a uno multimodal razonable.
+    modelo_cfg = (apikey_obj.modelo or '').strip()
     if provider == 'gemini':
         from langchain_google_genai import ChatGoogleGenerativeAI
         llm = ChatGoogleGenerativeAI(
-            model='gemini-2.0-flash', google_api_key=apikey_obj.descripcion
+            model=(modelo_cfg or 'gemini-2.0-flash'),
+            google_api_key=apikey_obj.descripcion,
+        )
+    elif provider == 'claude':
+        from langchain_anthropic import ChatAnthropic
+        llm = ChatAnthropic(
+            model=(modelo_cfg or 'claude-sonnet-4-5'),
+            anthropic_api_key=apikey_obj.descripcion,
         )
     else:
         from langchain_community.chat_models import ChatOpenAI
-        llm = ChatOpenAI(model_name='gpt-4o', openai_api_key=apikey_obj.descripcion)
+        llm = ChatOpenAI(
+            model_name=(modelo_cfg or 'gpt-4o'),
+            openai_api_key=apikey_obj.descripcion,
+        )
 
     resp = llm.invoke([msg])
     respuesta = resp.content.strip()

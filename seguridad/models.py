@@ -135,8 +135,22 @@ class Notificacion(ModeloBase):
         return u'Notificación: %s - Para: %s' % (self.titulo, self.destinatario)
 
     def diasingresado(self):
-        fecha_hora_registro = datetime.combine(self.fecha_registro, self.hora_registro)
+        # fecha_registro es DateTimeField (ver ModeloBase). Antes se intentaba combinar
+        # con self.hora_registro, que no existe como campo → AttributeError.
+        fh = self.fecha_registro
+        if fh is None:
+            return ''
+        if isinstance(fh, datetime):
+            fecha_hora_registro = fh
+        else:
+            # En caso extremo de que sea un date, asume medianoche
+            fecha_hora_registro = datetime.combine(fh, datetime.min.time())
+        # Normalizar timezone para la resta
         tiempo_actual = timezone.now()
+        if timezone.is_aware(tiempo_actual) and timezone.is_naive(fecha_hora_registro):
+            fecha_hora_registro = timezone.make_aware(fecha_hora_registro, timezone.get_current_timezone())
+        elif timezone.is_naive(tiempo_actual) and timezone.is_aware(fecha_hora_registro):
+            tiempo_actual = timezone.make_aware(tiempo_actual, timezone.get_current_timezone())
         tiempo_transcurrido = tiempo_actual - fecha_hora_registro
         dias = tiempo_transcurrido.days
         segundos = tiempo_transcurrido.seconds
