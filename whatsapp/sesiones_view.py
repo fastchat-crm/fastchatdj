@@ -16,6 +16,89 @@ from .models import SesionWhatsApp, ConfigMeta
 from .services import WhatsAppService, get_whatsapp_service
 
 
+def _hint_error_meta(error_text: str) -> dict:
+    """Decodifica el error de Graph API y devuelve un dict:
+        {'text': str, 'link': str|None, 'link_label': str|None}
+    `text` es la recomendacion en prosa. `link` es una URL CTA opcional para
+    que la UI arme un boton. Si no hay match devuelve {'text': '', ...}.
+    """
+    import re as _re, json as _json
+    EMPTY = {'text': '', 'link': None, 'link_label': None}
+    if not error_text:
+        return EMPTY
+    try:
+        m = _re.search(r'\{.*\}', str(error_text), flags=_re.DOTALL)
+        if not m:
+            return EMPTY
+        err = _json.loads(m.group(0)).get('error') or {}
+    except Exception:
+        return EMPTY
+    code = err.get('code')
+    sub  = err.get('error_subcode')
+
+    # Catalogo de hints por codigo Meta. Ref:
+    # developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes
+    if code == 133010:
+        return {
+            'text': ('El phone_number_id no esta registrado en Cloud API. Tenes que darle '
+                     '"Register" en el Developer Portal → WhatsApp → API Setup e ingresar '
+                     'un PIN de 6 digitos. Si el boton "Register" no aparece, tu WABA aun no '
+                     'esta verificado por Meta.'),
+            'link': 'https://developers.facebook.com/apps',
+            'link_label': 'Abrir Developer Portal → API Setup',
+        }
+    if code == 131030:
+        return {
+            'text': ('El numero destino no esta en la lista de "test recipients" (sandbox). '
+                     'En API Setup agregalo en "To" antes de enviar, y aceptalo desde WhatsApp '
+                     'cuando llegue la primera invitacion.'),
+            'link': 'https://developers.facebook.com/apps',
+            'link_label': 'Abrir API Setup',
+        }
+    if code == 132000:
+        return {
+            'text': 'La plantilla no existe o el idioma no coincide. Verifica que "hello_world" + "en_US" esten aprobadas para este WABA.',
+            'link': 'https://business.facebook.com/wa/manage/message-templates/',
+            'link_label': 'Abrir gestor de plantillas',
+        }
+    if code == 132001:
+        return {'text': 'Plantilla no aprobada por Meta aun. Esta en estado PENDING o REJECTED.',
+                'link': 'https://business.facebook.com/wa/manage/message-templates/',
+                'link_label': 'Ver estado de plantillas'}
+    if code == 132005:
+        return {'text': 'Numero de parametros en la plantilla no coincide con los placeholders {{1}}, {{2}}, etc.',
+                'link': None, 'link_label': None}
+    if code == 131051:
+        return {'text': 'El tipo de mensaje no es soportado para este numero (seguramente no es WhatsApp Business).',
+                'link': None, 'link_label': None}
+    if code == 100 and sub == 2388072:
+        return {'text': 'Meta rechaza el formato. En header/footer no se admiten newlines, negritas, emojis ni asteriscos.',
+                'link': None, 'link_label': None}
+    if code == 190:
+        return {'text': 'Access Token invalido o expirado. Regeneralo (idealmente con System User para que sea permanente).',
+                'link': 'https://business.facebook.com/latest/settings/system_users',
+                'link_label': 'Abrir System Users'}
+    if code == 1 and 'unknown error' in (err.get('message') or '').lower():
+        return {'text': ('Probablemente falta scope en el token. Regeneralo desde Business Settings → '
+                         'System Users con los permisos whatsapp_business_management + '
+                         'whatsapp_business_messaging + business_management.'),
+                'link': 'https://business.facebook.com/latest/settings/system_users',
+                'link_label': 'Abrir System Users'}
+    if code == 10 or code == 200:
+        return {'text': 'Tu token no tiene el permiso necesario para esta operacion. Revisa los scopes asignados al System User.',
+                'link': 'https://business.facebook.com/latest/settings/system_users',
+                'link_label': 'Abrir System Users'}
+    return EMPTY
+
+
+def _hint_como_texto(hint: dict) -> str:
+    """Helper de compat: devuelve el hint como prefijo legible para concatenar
+    al `message` (retrocompat con callers que esperaban string)."""
+    if not hint or not hint.get('text'):
+        return ''
+    return ' Hint: ' + hint['text']
+
+
 def _sincronizar_meta_desde_graph(session, config, timeout=10):
     """Consulta Graph API con config.access_token + phone_number_id y persiste
     display_phone_number / quality_rating / messaging_limit_tier / ultima_sincronizacion.
@@ -187,10 +270,56 @@ def sesionesView(request):
                             'destino': destino_fmt,
                             'texto': texto,
                         })
+                    err_raw = resultado.get('error') or 'No se pudo enviar el mensaje de prueba.'
+                    hint = _hint_error_meta(err_raw) if filtro.es_meta else {}
                     return JsonResponse({
-                        'error': True,
-                        'message': resultado.get('error') or 'No se pudo enviar el mensaje de prueba.',
-                        'destino': destino_fmt,
+                        'error':          True,
+                        'message':        str(err_raw) + _hint_como_texto(hint),
+                        'hint':           (hint or {}).get('text') or None,
+                        'hint_link':      (hint or {}).get('link') or None,
+                        'hint_link_label': (hint or {}).get('link_label') or None,
+                        'raw':            err_raw,
+                        'destino':        destino_fmt,
+                    })
+                elif action == 'probar_envio_plantilla_meta':
+                    # Envía una plantilla pre-aprobada (por defecto 'hello_world' en 'en_US').
+                    # Útil cuando aún no hay ventana de 24h abierta.
+                    filtro = model.objects.get(pk=int(request.POST['id']))
+                    if not filtro.es_meta:
+                        return JsonResponse({'error': True, 'message': 'Esta acción solo aplica para sesiones Meta.'})
+                    config = getattr(filtro, 'config_meta', None)
+                    if not config or not config.access_token or not config.phone_number_id:
+                        return JsonResponse({'error': True, 'message': 'La sesión Meta no tiene credenciales completas (access_token / phone_number_id).'})
+                    numero_destino = (request.POST.get('numero_destino') or '').strip()
+                    if not numero_destino:
+                        return JsonResponse({'error': True, 'message': 'Debes ingresar un número de destino.'})
+                    plantilla_nombre = (request.POST.get('plantilla_nombre') or 'hello_world').strip()
+                    idioma = (request.POST.get('idioma') or 'en_US').strip()
+                    service = get_whatsapp_service(filtro)
+                    resultado = service.send_template(
+                        filtro.session_id, numero_destino, plantilla_nombre, idioma=idioma,
+                    )
+                    if resultado.get('success'):
+                        log(f"Plantilla '{plantilla_nombre}' ({idioma}) enviada desde sesión {filtro.id} a {numero_destino}",
+                            request, "change", obj=filtro.id)
+                        return JsonResponse({
+                            'error':      False,
+                            'message':    f"Plantilla '{plantilla_nombre}' enviada correctamente.",
+                            'message_id': resultado.get('message_id'),
+                            'destino':    numero_destino,
+                            'plantilla':  plantilla_nombre,
+                            'idioma':     idioma,
+                        })
+                    err_raw = resultado.get('error') or 'No se pudo enviar la plantilla.'
+                    hint = _hint_error_meta(err_raw)
+                    return JsonResponse({
+                        'error':          True,
+                        'message':        str(err_raw) + _hint_como_texto(hint),
+                        'hint':           hint.get('text') or None,
+                        'hint_link':      hint.get('link') or None,
+                        'hint_link_label': hint.get('link_label') or None,
+                        'raw':            err_raw,
+                        'destino':        numero_destino,
                     })
                 elif action == 'verificar_conexion':
                     filtro = model.objects.get(pk=int(request.POST['id']))
@@ -439,7 +568,16 @@ def sesionesView(request):
                         return JsonResponse({'error': True, 'message': 'Sesion sin ConfigMeta. Configura WABA ID, phone_number_id y access_token primero.'})
                     ok, info = _sincronizar_meta_desde_graph(session, config)
                     if not ok:
-                        return JsonResponse({'error': True, 'message': info.get('message') or 'No se pudo verificar con Meta.'})
+                        err_raw = info.get('message') or 'No se pudo verificar con Meta.'
+                        hint = _hint_error_meta(err_raw)
+                        return JsonResponse({
+                            'error':          True,
+                            'message':        str(err_raw) + _hint_como_texto(hint),
+                            'hint':           hint.get('text') or None,
+                            'hint_link':      hint.get('link') or None,
+                            'hint_link_label': hint.get('link_label') or None,
+                            'raw':            err_raw,
+                        })
                     session.refresh_from_db(fields=['numero', 'estado'])
                     return JsonResponse({
                         'error': False,

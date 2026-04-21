@@ -220,9 +220,30 @@ def horariosView(request):
                                 'response': meta_resp,
                             },
                         })
+                    # Hints por tipo de error para que el usuario sepa que tocar
+                    hint = ''
+                    _err = (meta_resp or {}).get('error') or {}
+                    _code = _err.get('code')
+                    _subc = _err.get('error_subcode')
+                    if meta_status == 500 and _code == 1:
+                        hint = (
+                            ' Hint: tu Access Token probablemente no tiene el scope '
+                            '"whatsapp_business_management" (solo lo tiene uno de System User, '
+                            'no el temporal de API Setup). Regeneralo desde Business Settings → '
+                            'System Users con los 3 permisos y volve a probar.'
+                        )
+                    elif meta_status == 400 and _subc == 2388072:
+                        hint = (
+                            ' Hint: Meta rechaza el "about" por formato. Evita emojis, '
+                            'negritas, saltos de linea o URLs. Max 139 chars.'
+                        )
+                    elif meta_status == 401:
+                        hint = ' Hint: Access Token invalido o expirado. Regeneralo.'
+                    elif meta_status == 403:
+                        hint = ' Hint: Access Token sin permiso sobre este phone_number_id.'
                     return JsonResponse({
                         'error': True,
-                        'message': err or f'Meta respondió {meta_status}: {meta_resp}',
+                        'message': (err or f'Meta respondió {meta_status}: {meta_resp}') + hint,
                         'meta': {
                             'endpoint': url,
                             'status': meta_status,

@@ -258,6 +258,7 @@
                                     <i class="fas fa-ellipsis-v"></i>
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                    {# ── Común: edición ── #}
                                     <li>
                                         <a href="javascript:void(0);" class="dropdown-item"
                                            onclick="formModal({{ s.id }}, 'Editar sesion: {{ s.nombre|default:s.numero|escapejs }}', 'change_modal')">
@@ -265,21 +266,18 @@
                                             Modificar
                                         </a>
                                     </li>
-                                    {% if s.es_baileys %}
-                                    <li>
-                                        <a class="dropdown-item" href="javascript:void(0);"
-                                           onclick="verificarConexion({{ s.id }})">
-                                            <i class="fa-solid fa-satellite-dish me-2 text-primary"></i>
-                                            Verificar conexión
-                                        </a>
-                                    </li>
-                                    {% endif %}
+
                                     {% if s.proveedor == 'meta' %}
+                                        {# ══════════ Sección Meta ══════════ #}
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><h6 class="dropdown-header text-uppercase small">
+                                            <i class="fa-brands fa-meta me-1 text-warning"></i> Meta Cloud API
+                                        </h6></li>
                                         <li>
                                             <a class="dropdown-item fw-bold"
                                                href="javascript:void(0);"
                                                onclick="verResumenMeta({{ s.id }}, '{{ s.nombre|default:s.numero|escapejs }}')">
-                                                <i class="fa-brands fa-meta me-2 text-warning"></i>
+                                                <i class="fa-solid fa-circle-info me-2 text-warning"></i>
                                                 Resumen Meta + Pasos a seguir
                                             </a>
                                         </li>
@@ -291,7 +289,14 @@
                                                 Validar número en Meta
                                             </a>
                                         </li>
-                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <a class="dropdown-item"
+                                               href="javascript:void(0);"
+                                               onclick="abrirModalPlantillaMeta({{ s.id }})">
+                                                <i class="fa-solid fa-paper-plane me-2 text-info"></i>
+                                                Enviar plantilla de prueba
+                                            </a>
+                                        </li>
                                         <li>
                                             <a class="dropdown-item"
                                                href="/whatsapp/plantillas/?sesion={{ s.id }}">
@@ -328,6 +333,47 @@
                                             </a>
                                         </li>
                                     {% endif %}
+
+                                    {% if s.es_baileys %}
+                                        {# ══════════ Sección Baileys ══════════ #}
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><h6 class="dropdown-header text-uppercase small">
+                                            <i class="fab fa-whatsapp me-1 text-success"></i> Baileys (Node.js)
+                                        </h6></li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="verificarConexion({{ s.id }})">
+                                                <i class="fa-solid fa-satellite-dish me-2 text-primary"></i>
+                                                Verificar conexión
+                                            </a>
+                                        </li>
+                                        {% if s.estado == 'conectado' %}
+                                            <li>
+                                                <a class="dropdown-item" href="javascript:void(0);"
+                                                   onclick="abrirModalPruebaEnvio({{ s.id }}, '{{ s.numero|default:'' }}')">
+                                                    <i class="fa-solid fa-paper-plane me-2 text-info"></i>
+                                                    Probar envío de mensaje
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a class="dropdown-item" href="javascript:void(0);"
+                                                   onclick="sincronizarContactos({{ s.id }})">
+                                                    <i class="fa fa-sync me-2 text-success"></i>
+                                                    Sincronizar contactos
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a class="dropdown-item" href="javascript:void(0);"
+                                                   onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete', '¿Desconectar esta sesión?')">
+                                                    <i class="fa-solid fa-plug-circle-minus me-2 text-danger"></i>
+                                                    Desconectar sesión
+                                                </a>
+                                            </li>
+                                        {% endif %}
+                                    {% endif %}
+
+                                    {# ══════════ Sección común (ambos proveedores) ══════════ #}
+                                    <li><hr class="dropdown-divider"></li>
                                     {% if s.departamentos.all %}
                                         <li>
                                             <a class="dropdown-item"
@@ -338,30 +384,12 @@
                                             </a>
                                         </li>
                                     {% endif %}
-                                    {% if s.estado == 'conectado' and s.es_baileys %}
-                                        <li>
-                                            <a class="dropdown-item" href="javascript:void(0);"
-                                               onclick="abrirModalPruebaEnvio({{ s.id }}, '{{ s.numero|default:'' }}')">
-                                                <i class="fa-solid fa-paper-plane me-2 text-info"></i>
-                                                Probar envío de mensaje
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a class="dropdown-item" href="javascript:void(0);"
-                                               onclick="sincronizarContactos({{ s.id }})">
-                                                <i class="fa fa-sync me-2 text-success"></i>
-                                                Sincronizar contactos
-                                            </a>
-                                        </li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li>
-                                            <a class="dropdown-item" href="javascript:void(0);"
-                                               onclick="eliminarajax({{ s.id }}, '{{ s }}', 'delete', '¿Desconectar esta sesión?')">
-                                                <i class="fa-solid fa-plug-circle-minus me-2 text-danger"></i>
-                                                Desconectar sesión
-                                            </a>
-                                        </li>
-                                    {% endif %}{# /es_baileys conectado #}
+                                    <li>
+                                        <a href="?action=historial_de_sesiones&pk={{ s.id }}" class="dropdown-item detailviewmodal">
+                                            <i class="fa-solid fa-clock-rotate-left me-2"></i>
+                                            Historial de conexiones
+                                        </a>
+                                    </li>
                                     {% if s.is_empty_session or s.estado == 'pendiente' %}
                                         <li><hr class="dropdown-divider"></li>
                                         <li>
@@ -372,12 +400,6 @@
                                             </a>
                                         </li>
                                     {% endif %}
-                                    <li>
-                                        <a href="?action=historial_de_sesiones&pk={{ s.id }}" class="dropdown-item detailviewmodal">
-                                            <i class="fa-solid fa-clock-rotate-left me-2"></i>
-                                            Historial de conexiones
-                                        </a>
-                                    </li>
                                 </ul>
                             </div>
                         </div>
@@ -510,6 +532,53 @@
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
                     <button type="button" class="btn btn-info text-white" id="btnEnviarPrueba">
                         <i class="fas fa-paper-plane me-1"></i>Enviar mensaje
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ===== MODAL: PRUEBA DE ENVÍO DE PLANTILLA META ===== #}
+    <div class="modal fade" id="modalPruebaPlantillaMeta" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-warning border-0">
+                    <h5 class="modal-title">
+                        <i class="fa-brands fa-meta me-2 text-warning"></i>Enviar plantilla de prueba (Meta)
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info small mb-3">
+                        <i class="fa fa-circle-info me-1"></i>
+                        Meta Cloud API solo permite iniciar conversaciones con <strong>plantillas pre-aprobadas</strong>
+                        (fuera de la ventana de 24h). Por defecto Meta provee <code>hello_world</code> en idioma <code>en_US</code>.
+                    </div>
+                    <input type="hidden" id="plantillaMetaSessionId">
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Número de destino</label>
+                        <input type="text" id="plantillaMetaDestino" class="form-control"
+                               placeholder="593987654321 (sin + ni @)">
+                        <div class="form-text">El número debe estar en formato internacional sin signos.</div>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-sm-8">
+                            <label class="form-label small text-muted">Nombre de la plantilla</label>
+                            <input type="text" id="plantillaMetaNombre" class="form-control"
+                                   value="hello_world" placeholder="hello_world">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small text-muted">Idioma</label>
+                            <input type="text" id="plantillaMetaIdioma" class="form-control"
+                                   value="en_US" placeholder="en_US">
+                        </div>
+                    </div>
+                    <div id="plantillaMetaResultado" class="d-none mt-3"></div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-warning text-dark" id="btnEnviarPlantillaMeta">
+                        <i class="fa-solid fa-paper-plane me-1"></i>Enviar plantilla
                     </button>
                 </div>
             </div>
@@ -886,6 +955,96 @@ ${r.texto}</div>`
             })
             .fail(function () {
                 $btn.prop('disabled', false).html('<i class="fas fa-paper-plane me-1"></i>Enviar mensaje');
+                $result.removeClass('d-none').html(
+                    '<div class="alert alert-danger mb-0">Error de comunicación con el servidor.</div>'
+                );
+            });
+        });
+
+        /* ===== PRUEBA DE ENVÍO DE PLANTILLA META ===== */
+        function abrirModalPlantillaMeta(id) {
+            $('#plantillaMetaSessionId').val(id);
+            $('#plantillaMetaDestino').val('');
+            $('#plantillaMetaNombre').val('hello_world');
+            $('#plantillaMetaIdioma').val('en_US');
+            $('#plantillaMetaResultado').addClass('d-none').html('');
+            const modal = new bootstrap.Modal(document.getElementById('modalPruebaPlantillaMeta'));
+            modal.show();
+        }
+
+        $('#btnEnviarPlantillaMeta').on('click', function () {
+            const $btn = $(this);
+            const id = $('#plantillaMetaSessionId').val();
+            const destino = $('#plantillaMetaDestino').val().trim();
+            const plantilla = $('#plantillaMetaNombre').val().trim() || 'hello_world';
+            const idioma = $('#plantillaMetaIdioma').val().trim() || 'en_US';
+            const $result = $('#plantillaMetaResultado');
+
+            if (!destino) {
+                $result.removeClass('d-none').html(
+                    '<div class="alert alert-danger mb-0">Ingresa un número de destino.</div>'
+                );
+                return;
+            }
+            $result.addClass('d-none').html('');
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Enviando...');
+
+            $.post('', {
+                action: 'probar_envio_plantilla_meta',
+                id: id,
+                numero_destino: destino,
+                plantilla_nombre: plantilla,
+                idioma: idioma,
+                csrfmiddlewaretoken: '{{ csrf_token }}'
+            })
+            .done(function (r) {
+                $btn.prop('disabled', false).html('<i class="fa-solid fa-paper-plane me-1"></i>Enviar plantilla');
+                if (r.error) {
+                    // Render estructurado: hint (solucion), raw (texto Meta), destino
+                    const msgTxt = (r.message || 'Error desconocido').toString();
+                    const hintTxt  = (r.hint || '').replace(/^ *Hint: */, '');
+                    const ctaHtml  = r.hint_link
+                        ? `<a href="${r.hint_link}" target="_blank" rel="noopener"
+                             class="btn btn-sm btn-warning mt-2">
+                             <i class="fa fa-external-link-alt me-1"></i>${r.hint_link_label || 'Abrir'}
+                          </a>`
+                        : '';
+                    const hintHtml = (hintTxt || ctaHtml)
+                        ? `<div class="alert alert-warning py-2 small mt-2 mb-0">
+                             <i class="fa fa-lightbulb me-1"></i><strong>Como resolverlo:</strong>
+                             ${hintTxt ? `<div class="mt-1">${hintTxt}</div>` : ''}
+                             ${ctaHtml}
+                           </div>`
+                        : '';
+                    const rawHtml = r.raw
+                        ? `<details class="mt-2 small"><summary class="text-muted" style="cursor:pointer;">Ver respuesta cruda de Meta</summary>
+                             <pre class="bg-light p-2 border rounded small mt-1 mb-0" style="white-space:pre-wrap;word-break:break-all;">${String(r.raw).replace(/</g,'&lt;')}</pre>
+                           </details>`
+                        : '';
+                    $result.removeClass('d-none').html(
+                        `<div class="alert alert-danger mb-0">
+                            <strong><i class="fa fa-triangle-exclamation me-1"></i>Meta rechazo el envio:</strong>
+                            <div class="mt-1">${msgTxt.split(' Hint:')[0].replace(/</g,'&lt;')}</div>
+                            ${r.destino ? `<div class="small mt-1 text-muted">Destino: <code>${r.destino}</code></div>` : ''}
+                            ${hintHtml}
+                            ${rawHtml}
+                        </div>`
+                    );
+                } else {
+                    $result.removeClass('d-none').html(
+                        `<div class="alert alert-success mb-0">
+                            <i class="fa fa-check-circle me-1"></i>${r.message}
+                            <div class="small mt-1">
+                                Destino: <code>${r.destino}</code><br>
+                                Plantilla: <code>${r.plantilla}</code> (${r.idioma})<br>
+                                Message ID: <code>${r.message_id || '(no devuelto)'}</code>
+                            </div>
+                         </div>`
+                    );
+                }
+            })
+            .fail(function () {
+                $btn.prop('disabled', false).html('<i class="fa-solid fa-paper-plane me-1"></i>Enviar plantilla');
                 $result.removeClass('d-none').html(
                     '<div class="alert alert-danger mb-0">Error de comunicación con el servidor.</div>'
                 );

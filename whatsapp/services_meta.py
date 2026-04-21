@@ -16,6 +16,55 @@ from .models import ConfigMeta, PlantillaWhatsApp, SesionWhatsApp
 
 logger = logging.getLogger(__name__)
 
+
+import re as _re
+
+# Emojis y caracteres de formato que Meta rechaza en headers/footers de plantillas.
+# Meta exige headers en texto plano 1 linea, sin negritas, sin markdown, sin emojis.
+# Ref: https://developers.facebook.com/docs/whatsapp/business-management-api/message-templates#header
+_EMOJI_RE = _re.compile(
+    "["
+    "\U0001F600-\U0001F64F"   # emoticons
+    "\U0001F300-\U0001F5FF"   # simbolos y pictogramas
+    "\U0001F680-\U0001F6FF"   # transporte y mapas
+    "\U0001F1E0-\U0001F1FF"   # banderas
+    "\U00002500-\U00002BEF"   # simbolos adicionales
+    "\U00002702-\U000027B0"   # dingbats
+    "\U000024C2-\U0001F251"
+    "\U0001f926-\U0001f937"
+    "\U00010000-\U0010ffff"
+    "\u2640-\u2642"
+    "\u2600-\u2B55"
+    "\u200d"
+    "\u23cf"
+    "\u23e9"
+    "\u231a"
+    "\ufe0f"                   # VS16 — forzador de render emoji
+    "\u3030"
+    "]+",
+    flags=_re.UNICODE,
+)
+
+_FORMATO_MARKDOWN_RE = _re.compile(r'[\*_~`]')  # negrita / cursiva / tachado / monospace
+
+
+def _sanitizar_header_meta(texto: str) -> str:
+    """Limpia un string para cumplir reglas de HEADER/FOOTER de plantillas Meta:
+    - Sin newlines (\\n, \\r, tab).
+    - Sin formato markdown (*, _, ~, `).
+    - Sin emojis.
+    - Max 60 caracteres.
+    Espacios multiples se colapsan a uno.
+    """
+    if not texto:
+        return ''
+    s = texto
+    s = s.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+    s = _EMOJI_RE.sub('', s)
+    s = _FORMATO_MARKDOWN_RE.sub('', s)
+    s = _re.sub(r'\s+', ' ', s).strip()
+    return s[:60]
+
 GRAPH_API_VERSION = 'v22.0'
 GRAPH_API_BASE = f'https://graph.facebook.com/{GRAPH_API_VERSION}'
 
@@ -306,13 +355,19 @@ class MetaWhatsAppService:
         if plantilla.header_tipo and plantilla.header_tipo != 'NONE':
             header_comp = {'type': 'HEADER', 'format': plantilla.header_tipo}
             if plantilla.header_tipo == 'TEXT' and plantilla.header_contenido:
-                header_comp['text'] = plantilla.header_contenido
+                # Meta rechaza el header con newlines, **negritas**, emojis o
+                # formato markdown. Sanitizamos antes de enviar.
+                header_comp['text'] = _sanitizar_header_meta(plantilla.header_contenido)
             components.append(header_comp)
 
-        components.append({'type': 'BODY', 'text': plantilla.cuerpo})
+        # Cuerpo: max 1024 chars segun Meta. Si hay markdown tipo *negrita*
+        # Meta lo acepta — no lo limpiamos aca.
+        cuerpo = (plantilla.cuerpo or '')[:1024]
+        components.append({'type': 'BODY', 'text': cuerpo})
 
         if plantilla.footer:
-            components.append({'type': 'FOOTER', 'text': plantilla.footer})
+            # Footer: max 60 chars, sin newlines ni emojis.
+            components.append({'type': 'FOOTER', 'text': _sanitizar_header_meta(plantilla.footer)[:60]})
 
         if plantilla.botones_json:
             components.append({'type': 'BUTTONS', 'buttons': plantilla.botones_json})

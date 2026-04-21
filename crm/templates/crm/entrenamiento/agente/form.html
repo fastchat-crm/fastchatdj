@@ -41,7 +41,7 @@
 <ul class="nav nav-tabs mb-3" id="agenteTabs" role="tablist">
     <li class="nav-item">
         <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#at-basico" type="button">
-            <i class="fas fa-id-card me-1"></i> Identidad
+            <i class="fas fa-user-astronaut me-1"></i> Persona
         </button>
     </li>
     <li class="nav-item">
@@ -49,26 +49,10 @@
             <i class="fas fa-database me-1"></i> Conocimiento
         </button>
     </li>
-    <li class="nav-item">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-prompt" type="button">
-            <i class="fas fa-terminal me-1"></i> Prompt
-        </button>
-    </li>
-    <li class="nav-item">
-        <button class="nav-link {% if regla_fin and regla_fin.activo %}text-danger fw-semibold{% endif %}"
-                data-bs-toggle="tab" data-bs-target="#at-cierre" type="button">
-            <i class="fas fa-flag-checkered me-1"></i> Cierre
-            {% if regla_fin and regla_fin.activo %}
-                <span class="badge bg-danger ms-1" style="font-size:.6rem">ON</span>
-            {% else %}
-                <span class="badge bg-secondary ms-1" style="font-size:.6rem">Plantilla</span>
-            {% endif %}
-        </button>
-    </li>
     {% if filtro %}
     <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-faqs" type="button">
-            <i class="fas fa-comments me-1"></i> Preguntas Frecuentes
+            <i class="fas fa-comments me-1"></i> FAQs
             {% if faqs_contadores.pendiente %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6rem" title="Pendientes">{{ faqs_contadores.pendiente }}</span>{% endif %}
             {% if faqs_contadores.aprobada %}<span class="badge bg-success ms-1" style="font-size:.6rem" title="Aprobadas">{{ faqs_contadores.aprobada }}</span>{% endif %}
         </button>
@@ -80,19 +64,26 @@
         </button>
     </li>
     <li class="nav-item">
+        <button class="nav-link {% if regla_fin and regla_fin.activo %}text-danger fw-semibold{% endif %}" data-bs-toggle="tab" data-bs-target="#at-cierre" type="button">
+            <i class="fas fa-flag-checkered me-1"></i> Cierre
+            {% if regla_fin and regla_fin.activo %}<span class="badge bg-danger ms-1" style="font-size:.6rem">ON</span>{% endif %}
+        </button>
+    </li>
+    <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-auditor" type="button">
             <i class="fas fa-wand-magic-sparkles me-1"></i> Asistente IA
         </button>
     </li>
     {% endif %}
     <li class="nav-item">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-humanizacion" type="button">
-            <i class="fas fa-user-astronaut me-1"></i> Humanización
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-prompt" type="button">
+            <i class="fas fa-terminal me-1"></i> Prompt
+            <span class="badge bg-warning text-dark ms-1" style="font-size:.6rem" title="Donde vive el power">★</span>
         </button>
     </li>
     <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-comportamiento" type="button">
-            <i class="fas fa-sliders-h me-1"></i> Comportamiento IA
+            <i class="fas fa-sliders-h me-1"></i> Avanzado
         </button>
     </li>
 </ul>
@@ -143,6 +134,50 @@
                     <strong>Nota:</strong> el modelo LLM ahora se configura <strong>por cada API Key</strong> (no en el agente),
                     porque cada provider (Gemini, OpenAI, Claude) tiene sus propios modelos.
                     Edita una API Key para elegir qué modelo usar con esa key.
+                </div>
+            </div>
+
+            {# ── Persona del bot (humanizacion nivel persona) ──────────── #}
+            <div class="col-12 mt-3">
+                <p class="section-header mt-2">
+                    <i class="fas fa-comment-dots me-1 text-primary"></i>Persona del bot
+                </p>
+                <p class="small text-muted mb-2">
+                    Estos campos se inyectan en el prompt del sistema como <strong>variables reemplazables</strong>
+                    (<code>{nombre_bot}</code>, <code>{personalidad}</code>, <code>{tono}</code>, <code>{estilo_escritura}</code>).
+                    El usuario final los percibe como "quien es" el bot.
+                </p>
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small fw-semibold mb-1">{{ form.nombre_bot.label }}</label>
+                {{ form.nombre_bot }}
+                <div class="form-text small">Nombre con el que se presenta. Sugerido: cortos y neutros (Cami, Mateo, Sofia).</div>
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small fw-semibold mb-1">{{ form.tono.label }}</label>
+                {{ form.tono }}
+                <div class="form-text small">Registro general al escribir.</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label small fw-semibold mb-1">{{ form.personalidad.label }}</label>
+                {{ form.personalidad }}
+                <div class="form-text small">
+                    Ej: <em>"Soy Cami, extrovertida, uso emojis con mesura, paciente con clientes nuevos, nunca prometo cosas que no puedo cumplir."</em>
+                </div>
+            </div>
+            <div class="col-12">
+                <label class="form-label small fw-semibold mb-1">{{ form.estilo_escritura.label }}</label>
+                {{ form.estilo_escritura }}
+                <div class="form-text small">
+                    Reglas de <strong>forma</strong> (no contenido). Ej: <em>"Mensajes cortos 2-3 lineas, admito muletillas, emojis 0-2 por mensaje."</em>
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small fw-semibold mb-1">{{ form.temperature.label }}</label>
+                {{ form.temperature }}
+                <div class="form-text small">
+                    <code>0.0</code> literal · <code>0.6</code> natural (default) · <code>0.9</code> creativo (riesgo de inventar).
+                    <strong>Rango recomendado 0.4–0.8.</strong>
                 </div>
             </div>
         </div>
@@ -213,22 +248,32 @@
     {# ── TAB 3: PROMPT ─────────────────────────────────────────────── #}
     <div class="tab-pane fade" id="at-prompt">
 
-        <div class="guide-callout">
-            <i class="fas fa-lightbulb me-1"></i>
-            El prompt es el conjunto de instrucciones que recibe el agente antes de responder.
-            Define su <strong>tono</strong>, sus <strong>restricciones</strong> y cómo debe usar la información
-            que tiene disponible. Las variables entre llaves se reemplazan automáticamente.
+        <div class="guide-callout" style="background:#fef3c7;border-left-color:#f59e0b">
+            <i class="fas fa-star me-1 text-warning"></i>
+            <strong>Aqui vive todo el poder.</strong> Este template es lo que efectivamente se envia al LLM.
+            Todos los campos de los demas tabs (Persona, Conocimiento, Capacidades) se <strong>inyectan aqui</strong>
+            como variables reemplazables. Si querés override total del comportamiento, reescribi este bloque — reemplaza a todo lo demas.
         </div>
 
         <div class="row g-2 mb-3">
             <div class="col-md-6">
                 <div class="card border-0 bg-light p-2 h-100">
-                    <p class="section-header mb-2">Variables disponibles</p>
+                    <p class="section-header mb-2"><i class="fas fa-code me-1"></i>Variables disponibles</p>
                     <table class="table table-sm table-borderless mb-0" style="font-size:.78rem">
-                        <tr><td class="text-primary fw-semibold">{question}</td><td>Mensaje del usuario</td></tr>
-                        <tr><td class="text-primary fw-semibold">{context}</td><td>Fragmentos relevantes de los documentos de entrenamiento</td></tr>
-                        <tr><td class="text-primary fw-semibold">{contexto_extra}</td><td>Historial reciente de la conversación (últimos 4 turnos)</td></tr>
-                        <tr><td class="text-primary fw-semibold">{descripcion_agente}</td><td>Descripción del agente (la que configuraste en Identidad)</td></tr>
+                        <tr><td colspan="2" class="text-muted small fst-italic">— Runtime (mensaje actual) —</td></tr>
+                        <tr><td class="text-primary fw-semibold"><code>{question}</code></td><td>Mensaje del usuario</td></tr>
+                        <tr><td class="text-primary fw-semibold"><code>{context}</code></td><td>Fragmentos RAG del vectorstore + FAQs aprobadas</td></tr>
+                        <tr><td class="text-primary fw-semibold"><code>{contexto_extra}</code></td><td>Historial reciente de la conversacion</td></tr>
+                        <tr><td colspan="2" class="text-muted small fst-italic pt-2">— Persona (tab Persona) —</td></tr>
+                        <tr><td class="text-primary fw-semibold"><code>{nombre_bot}</code></td><td>Nombre con el que se presenta</td></tr>
+                        <tr><td class="text-primary fw-semibold"><code>{personalidad}</code></td><td>Rasgos / caracter del bot</td></tr>
+                        <tr><td class="text-primary fw-semibold"><code>{tono}</code></td><td>Registro (cercano, formal, etc)</td></tr>
+                        <tr><td class="text-primary fw-semibold"><code>{estilo_escritura}</code></td><td>Reglas de forma (largo, emojis, muletillas)</td></tr>
+                        <tr><td class="text-primary fw-semibold"><code>{descripcion_agente}</code></td><td>Descripcion del agente (tab Persona)</td></tr>
+                        <tr><td colspan="2" class="text-muted small fst-italic pt-2">— Negocio (perfil del cliente) —</td></tr>
+                        <tr><td class="text-primary fw-semibold"><code>{nombre_empresa}</code></td><td>Empresa del cliente</td></tr>
+                        <tr><td class="text-primary fw-semibold"><code>{productos}</code></td><td>Listado de productos configurados</td></tr>
+                        <tr><td class="text-primary fw-semibold"><code>{servicios}</code></td><td>Listado de servicios configurados</td></tr>
                     </table>
                 </div>
             </div>
@@ -813,77 +858,22 @@
     </div>
     {% endif %}
 
-    {# ── TAB: HUMANIZACION ───────────────────────────────────────── #}
-    <div class="tab-pane fade" id="at-humanizacion">
-        <div class="guide-callout mb-3">
-            <i class="fas fa-user-astronaut me-1"></i>
-            <strong>¿Para qué sirve?</strong> Controla qué tan humano se siente el bot al chatear:
-            su personalidad, el estilo de escritura y el ritmo con que responde
-            (divide la respuesta en burbujas, simula "escribiendo...", espera como si leyera).
-            Un bot bien humanizado se nota mucho menos que uno que dispara 3 párrafos de un golpe.
+    {# ── TAB: AVANZADO (ex-Comportamiento + Humanizacion timing) ──── #}
+    <div class="tab-pane fade" id="at-comportamiento">
+        <div class="guide-callout">
+            <i class="fas fa-sliders-h me-1"></i>
+            Parametros finos: <strong>busqueda de informacion</strong>, <strong>memoria</strong>, y <strong>timing humano</strong> (partir en burbujas, simular tipeo).
+            Si no estas seguro, deja los valores por defecto. Aplican desde la proxima respuesta del bot.
         </div>
 
-        {# ── Sección 1: Persona ── #}
-        <h5 class="mt-2 mb-2 text-primary" style="font-size:.95rem;">
-            <i class="fas fa-id-badge me-1"></i> 1. Persona del bot
+        {# ── Humanizacion: timing y burbujas ── #}
+        <h5 class="mt-3 mb-2 text-primary" style="font-size:.95rem;">
+            <i class="fas fa-stopwatch me-1"></i> Timing y burbujas humanas
         </h5>
-        <p class="small text-muted mb-3">
-            Qué le decís al modelo sobre "quién es". Se inyecta en el prompt del sistema antes de cada respuesta.
+        <p class="small text-muted mb-2">
+            Cuando esta activo, la respuesta se parte en varias burbujas con delays simulados — como si un humano leyera tu mensaje y escribiera de a poco.
+            Si lo desactivas, el bot manda una sola burbuja instantanea (se siente robot).
         </p>
-        <div class="row g-2 mb-4">
-            <div class="col-12 col-md-6">
-                <label class="form-label small mb-1">{{ form.nombre_bot.label }}</label>
-                {{ form.nombre_bot }}
-                <div class="form-text small">
-                    Se usa si el cliente pregunta "¿con quién hablo?". <strong>Sugerido:</strong> nombres neutros cortos (Cami, Mateo, Sofía).
-                </div>
-            </div>
-            <div class="col-12 col-md-6">
-                <label class="form-label small mb-1">{{ form.tono.label }}</label>
-                {{ form.tono }}
-                <div class="form-text small">
-                    Registro general. <strong>Cercano</strong>: trato cálido. <strong>Formal</strong>: usted, frases largas. <strong>Vendedor</strong>: empuja al cierre. <strong>Profesional</strong>: información precisa sin adornos.
-                </div>
-            </div>
-            <div class="col-12">
-                <label class="form-label small mb-1">{{ form.personalidad.label }}</label>
-                {{ form.personalidad }}
-                <div class="form-text small">
-                    Describí al bot como si fuera una persona real. Ej:
-                    <em>"Soy Cami, 28, diseñadora. Me gusta dar ejemplos concretos, uso emojis con mesura (0–2 por mensaje), soy paciente con clientes nuevos y nunca prometo cosas que no puedo cumplir."</em>
-                </div>
-            </div>
-            <div class="col-12">
-                <label class="form-label small mb-1">{{ form.estilo_escritura.label }}</label>
-                {{ form.estilo_escritura }}
-                <div class="form-text small">
-                    Reglas de <strong>forma</strong>, no de contenido. Ej:
-                    <em>"Mensajes cortos de 2-3 líneas, admito muletillas (dale, mm, a ver), no abro signos de interrogación, emojis 0–2 por mensaje, no uso mayúsculas gritadas."</em>
-                </div>
-            </div>
-            <div class="col-12 col-md-6">
-                <label class="form-label small mb-1">{{ form.temperature.label }}</label>
-                {{ form.temperature }}
-                <div class="form-text small">
-                    <strong>Creatividad del modelo.</strong><br>
-                    <code>0.0</code> = siempre la misma respuesta (robot literal).<br>
-                    <code>0.3</code> = precisa con leve variación (atención 1-a-1 formal).<br>
-                    <code>0.6</code> = <strong>sweet spot</strong> (variación humana sin inventar datos). <em>Default.</em><br>
-                    <code>0.9</code> = muy creativa (riesgo de alucinaciones — evitar en prod).<br>
-                    <strong>Rango recomendado: 0.4–0.8</strong>.
-                </div>
-            </div>
-        </div>
-
-        {# ── Sección 2: Timing y burbujas ── #}
-        <h5 class="mt-2 mb-2 text-primary" style="font-size:.95rem;">
-            <i class="fas fa-stopwatch me-1"></i> 2. Timing y burbujas
-        </h5>
-        <p class="small text-muted mb-3">
-            Cuando está activo, la respuesta se parte en varias burbujas con delays — como si un humano estuviera leyendo tu mensaje y escribiendo de a poco.
-            <strong>Si lo desactivás</strong>, el bot manda una sola burbuja instantánea (se siente robot).
-        </p>
-
         <div class="row g-2 mb-3">
             <div class="col-12">
                 <div class="form-check form-switch d-flex align-items-center gap-2 p-0 ps-0">
@@ -893,86 +883,58 @@
                         <span class="text-muted">— partir respuesta en burbujas con delays humanos</span>
                     </label>
                 </div>
-                <div class="form-text small">
-                    Off = una burbuja instantánea (más barato, menos humano). On = 2–4 burbujas con pausas simuladas de lectura/escritura.
-                </div>
-            </div>
-        </div>
-
-        <div class="row g-2 mb-3" id="panel-humaniz-params">
-            <div class="col-12">
-                <p class="small text-muted mb-1"><strong>2a. Tamaño de las burbujas</strong> — qué tanto parte cada respuesta en varias "burbujas" cortas.</p>
             </div>
             <div class="col-12 col-md-4">
                 <label class="form-label small mb-1">{{ form.humaniz_chars_burbuja_ideal.label }}</label>
                 {{ form.humaniz_chars_burbuja_ideal }}
-                <div class="form-text small">Tamaño objetivo. <strong>Rango: 120–240</strong>. Default: 180.</div>
+                <div class="form-text small">Tamano objetivo. <strong>120–240</strong>. Default: 180.</div>
             </div>
             <div class="col-12 col-md-4">
                 <label class="form-label small mb-1">{{ form.humaniz_chars_burbuja_max.label }}</label>
                 {{ form.humaniz_chars_burbuja_max }}
-                <div class="form-text small">Tope duro por burbuja. <strong>Rango: 240–500</strong>. Default: 320.</div>
+                <div class="form-text small">Tope duro. <strong>240–500</strong>. Default: 320.</div>
             </div>
             <div class="col-12 col-md-4">
                 <label class="form-label small mb-1">{{ form.humaniz_max_burbujas.label }}</label>
                 {{ form.humaniz_max_burbujas }}
-                <div class="form-text small">Máximo por respuesta. <strong>Rango: 2–6</strong>. Default: 4. Más = conversación más fragmentada.</div>
-            </div>
-
-            <div class="col-12 mt-3">
-                <p class="small text-muted mb-1"><strong>2b. Velocidades simuladas</strong> — "lectura" = pausa antes de empezar a escribir; "escritura" = cuánto tarda en tipear la burbuja (ve <em>typing...</em> en WhatsApp).</p>
+                <div class="form-text small">Max por respuesta. <strong>2–6</strong>. Default: 4.</div>
             </div>
             <div class="col-12 col-md-6">
                 <label class="form-label small mb-1">{{ form.humaniz_lectura_cps.label }}</label>
                 {{ form.humaniz_lectura_cps }}
-                <div class="form-text small">
-                    Caracteres por segundo de lectura. <strong>Rango: 50–120</strong>. Default: 70.<br>
-                    <span class="text-muted">Más alto = bot "lee" el mensaje rápido y arranca a escribir casi enseguida.</span>
-                </div>
+                <div class="form-text small">CPS de "lectura" antes de responder. <strong>50–120</strong>. Default: 70.</div>
             </div>
             <div class="col-12 col-md-6">
                 <label class="form-label small mb-1">{{ form.humaniz_escritura_cps.label }}</label>
                 {{ form.humaniz_escritura_cps }}
-                <div class="form-text small">
-                    Caracteres por segundo que "tipea". <strong>Rango: 15–40</strong>. Default: 25.<br>
-                    <span class="text-muted">Más bajo = tarda más en enviar (se siente más humano — humano real ~30 CPS).</span>
-                </div>
-            </div>
-
-            <div class="col-12 mt-3">
-                <p class="small text-muted mb-1"><strong>2c. Topes de tiempo</strong> — para que textos largos no generen esperas eternas.</p>
+                <div class="form-text small">CPS de "tipeo". Bajo = mas humano. <strong>15–40</strong>. Default: 25.</div>
             </div>
             <div class="col-12 col-md-4">
                 <label class="form-label small mb-1">{{ form.humaniz_lectura_max_seg.label }}</label>
                 {{ form.humaniz_lectura_max_seg }}
-                <div class="form-text small">Pausa máxima de "lectura" entre burbujas (seg). <strong>Rango: 1.5–5.0</strong>. Default: 2.5.</div>
+                <div class="form-text small">Max seg de "lectura". <strong>1.5–5</strong>. Default: 2.5.</div>
             </div>
             <div class="col-12 col-md-4">
                 <label class="form-label small mb-1">{{ form.humaniz_escritura_min_seg.label }}</label>
                 {{ form.humaniz_escritura_min_seg }}
-                <div class="form-text small">Piso de "tipeo" por burbuja (seg). <strong>Rango: 0.3–1.5</strong>. Default: 0.6. Evita envíos instantáneos cuando la burbuja es corta.</div>
+                <div class="form-text small">Min seg de "tipeo". <strong>0.3–1.5</strong>. Default: 0.6.</div>
             </div>
             <div class="col-12 col-md-4">
                 <label class="form-label small mb-1">{{ form.humaniz_escritura_max_seg.label }}</label>
                 {{ form.humaniz_escritura_max_seg }}
-                <div class="form-text small">Tope de "tipeo" por burbuja (seg). <strong>Rango: 4–12</strong>. Default: 6.0.</div>
+                <div class="form-text small">Max seg de "tipeo". <strong>4–12</strong>. Default: 6.0.</div>
             </div>
         </div>
 
-        <div class="alert alert-info small mb-0">
-            <i class="fas fa-lightbulb me-1"></i>
-            <strong>Preset recomendado para WhatsApp estándar:</strong>
-            ideal 180 · max 320 · 4 burbujas · lectura 70 cps (máx 2.5s) · escritura 25 cps (0.6–6.0s) · temperatura 0.6. Para un bot más pausado/humano: baja escritura a 15–20 cps.
-        </div>
-    </div>
+        <hr class="my-3">
 
-    {# ── TAB: COMPORTAMIENTO IA ──────────────────────────────────── #}
-    <div class="tab-pane fade" id="at-comportamiento">
-        <div class="guide-callout">
-            <i class="fas fa-sliders-h me-1"></i>
-            Estas variables controlan <strong>cómo busca información</strong> y <strong>cuánto recuerda</strong> este agente.
-            Si no estás seguro, deja los valores por defecto. Aplican desde la próxima respuesta del bot.
-        </div>
+        {# ── Comportamiento: RAG / memoria / tokens ── #}
+        <h5 class="mt-3 mb-2 text-primary" style="font-size:.95rem;">
+            <i class="fas fa-brain me-1"></i> Busqueda y memoria (RAG)
+        </h5>
+        <p class="small text-muted mb-3">
+            Controlan como el bot busca en tu base de conocimiento y cuantos mensajes previos recuerda.
+        </p>
 
         {# ── Glosario ── #}
         <div class="accordion mb-3" id="glosarioIA">

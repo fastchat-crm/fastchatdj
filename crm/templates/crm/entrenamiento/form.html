@@ -267,6 +267,21 @@
             background:#f8fafc; border:1px solid #e2e8f0;
             border-radius:8px; padding:14px; color:#1e293b; line-height:1.65;
         }
+        /* Variables resaltadas dentro del preview del prompt */
+        .prompt-var {
+            display:inline-block; padding:0 5px; border-radius:4px;
+            font-weight:600; font-size:.74rem;
+            border:1px solid transparent;
+        }
+        .prompt-var-persona { background:#ede9fe; color:#6d28d9; border-color:#ddd6fe; }
+        .prompt-var-runtime { background:#dbeafe; color:#1d4ed8; border-color:#bfdbfe; }
+        .prompt-var-negocio { background:#fef3c7; color:#92400e; border-color:#fde68a; }
+        .prompt-var-otro    { background:#f1f5f9; color:#475569; border-color:#e2e8f0; }
+        .prompt-legend {
+            border-top:1px dashed #cbd5e1; padding-top:10px; margin-top:14px;
+            color:#64748b; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+        }
+        .prompt-legend-item { margin-right:14px; display:inline-flex; align-items:center; gap:4px; }
         .ctx-source-item {
             display:flex; align-items:flex-start; gap:10px;
             padding:10px 12px; border:1px solid #e2e8f0;
@@ -1251,15 +1266,15 @@
                 <div class="modal-body pt-2">
                     <ul class="nav nav-tabs mb-3" id="ctxTabs" role="tablist">
                         <li class="nav-item">
-                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ctxTabContexto" type="button">
-                                <i class="fas fa-database me-1"></i>Contexto extraído
-                                <span class="badge bg-secondary ms-1" id="ctxBadgeChars" style="font-size:.65rem;"></span>
+                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ctxTabPrompt" type="button">
+                                <i class="fas fa-terminal me-1"></i>Prompt completo
+                                <span class="badge ms-1" id="ctxBadgePrompt" style="font-size:.65rem;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;">★</span>
                             </button>
                         </li>
                         <li class="nav-item">
-                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#ctxTabPrompt" type="button">
-                                <i class="fas fa-terminal me-1"></i>Prompt completo
-                                <span class="badge bg-secondary ms-1" id="ctxBadgePrompt" style="font-size:.65rem;"></span>
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#ctxTabContexto" type="button">
+                                <i class="fas fa-database me-1"></i>Contexto extraído
+                                <span class="badge bg-secondary ms-1" id="ctxBadgeChars" style="font-size:.65rem;"></span>
                             </button>
                         </li>
                         <li class="nav-item">
@@ -1287,8 +1302,8 @@
                         </li>
                     </ul>
                     <div class="tab-content" id="ctxTabsContent">
-                        {# Tab 1: contexto #}
-                        <div class="tab-pane fade show active" id="ctxTabContexto">
+                        {# Tab 1 (default activo): prompt completo — el "total" que recibe el LLM #}
+                        <div class="tab-pane fade" id="ctxTabContexto">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <small class="text-muted">Texto exacto que se inyecta como <code>{context}</code> en el prompt.</small>
                                 <button class="btn btn-sm btn-secondary" onclick="copiarTab('ctxContenidoContexto')">
@@ -1297,8 +1312,8 @@
                             </div>
                             <div class="ctx-pane" id="ctxContenidoContexto">Cargando…</div>
                         </div>
-                        {# Tab 2: prompt preview #}
-                        <div class="tab-pane fade" id="ctxTabPrompt">
+                        {# Tab 2: prompt preview (default activo) #}
+                        <div class="tab-pane fade show active" id="ctxTabPrompt">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <small class="text-muted">Prompt completo tal como lo recibe el modelo LLM (con contexto y marcadores de ejemplo).</small>
                                 <button class="btn btn-sm btn-secondary" onclick="copiarTab('ctxContenidoPrompt')">
@@ -1494,9 +1509,32 @@
                 ctxEl.textContent = res.contexto || '(vacío — usa el botón Procesar para extraer el texto)';
                 document.getElementById('ctxBadgeChars').textContent = kb + ' KB';
 
-                /* Tab 2: prompt preview */
+                /* Tab 2: prompt preview con syntax highlight para variables */
                 const promptEl = document.getElementById('ctxContenidoPrompt');
-                promptEl.textContent = res.prompt_preview || '(sin template de prompt configurado)';
+                const rawPrompt = res.prompt_preview || '(sin template de prompt configurado)';
+                const escP = s => String(s || '').replace(/[&<>"']/g,
+                    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+                // Categorias de variables por color
+                const CAT_PERSONA  = ['nombre_bot','personalidad','tono','estilo_escritura','descripcion_agente'];
+                const CAT_RUNTIME  = ['question','context','contexto_extra','contacto_nombre','hora_local',
+                                      'primera_vez_hoy','estado_animo','guia_animo','historial_contacto'];
+                const CAT_NEGOCIO  = ['nombre_empresa','productos','servicios'];
+                function catColor(v) {
+                    if (CAT_PERSONA.indexOf(v) >= 0) return 'prompt-var-persona';
+                    if (CAT_RUNTIME.indexOf(v) >= 0) return 'prompt-var-runtime';
+                    if (CAT_NEGOCIO.indexOf(v) >= 0) return 'prompt-var-negocio';
+                    return 'prompt-var-otro';
+                }
+                const highlighted = escP(rawPrompt).replace(/\{([a-zA-Z_][\w]*)\}/g, (_m, name) =>
+                    '<span class="prompt-var ' + catColor(name) + '" title="Variable: ' + name + '">{' + name + '}</span>'
+                );
+                promptEl.innerHTML = highlighted +
+                    '<div class="prompt-legend mt-3 small">' +
+                        '<span class="prompt-legend-item"><span class="prompt-var prompt-var-persona">{persona}</span> Persona</span>' +
+                        '<span class="prompt-legend-item"><span class="prompt-var prompt-var-runtime">{runtime}</span> Runtime</span>' +
+                        '<span class="prompt-legend-item"><span class="prompt-var prompt-var-negocio">{negocio}</span> Negocio</span>' +
+                        '<span class="prompt-legend-item"><span class="prompt-var prompt-var-otro">{otro}</span> Otro</span>' +
+                    '</div>';
                 const pkb = (res.chars_prompt / 1024).toFixed(1);
                 document.getElementById('ctxBadgePrompt').textContent = pkb + ' KB';
 
@@ -1726,8 +1764,8 @@
         document.getElementById('ctxBadgeFaqs').textContent = '';
         document.getElementById('ctxBadgeHerramientas').textContent = '';
 
-        // Activar primer tab
-        const firstTabBtn = document.querySelector('#ctxTabs button[data-bs-target="#ctxTabContexto"]');
+        // Activar primer tab (Prompt completo — es el "total" que recibe el LLM)
+        const firstTabBtn = document.querySelector('#ctxTabs button[data-bs-target="#ctxTabPrompt"]');
         if (firstTabBtn) new bootstrap.Tab(firstTabBtn).show();
 
         // Reutilizar instancia de modal si ya existe (evita crear un segundo backdrop)
@@ -1847,43 +1885,119 @@
     });
 
     function procesarAgente(id, nombre, btn) {
-        Swal.fire({
-            title: 'Procesar "' + nombre + '"',
-            text: 'Se extraerá el texto de todos los archivos y se preparará el contexto del agente.',
-            type: 'warning',
-            showCancelButton: true,
-            allowOutsideClick: false,
-            confirmButtonColor: '#3085d6',
-            cancelButtonColor: '#d33',
-            confirmButtonText: 'Sí, procesar',
-            cancelButtonText: 'Cancelar'
-        }).then(function(result) {
-            if (!result.value) return;
-            const orig = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Procesando…';
-            btn.style.pointerEvents = 'none';
-            $.ajax({
-                type: 'POST',
-                url: '{{ request.path }}',
-                data: { csrfmiddlewaretoken: '{{ csrf_token }}', action: 'procesaragente', id: id },
-                dataType: 'json',
-                success: function(res) {
-                    const data = Array.isArray(res) ? res[0] : res;
-                    if (data.error) {
-                        Swal.fire({ type: 'error', title: 'Error', text: data.message });
-                    } else {
-                        Swal.fire({ type: 'success', title: 'Listo', text: data.message, timer: 6000, showConfirmButton: false })
-                            .then(function() { if (data.reload) location.reload(); });
-                    }
-                },
-                error: function() {
-                    Swal.fire({ type: 'error', title: 'Error', text: 'No se pudo procesar el agente.' });
-                },
-                complete: function() {
-                    btn.innerHTML = orig;
-                    btn.style.pointerEvents = '';
-                }
+        // Primero: fetch del INVENTARIO (que se va a procesar) y recien ahi
+        // mostramos el Swal con la lista concreta para que el usuario sepa
+        // EXACTAMENTE que va a suceder antes de confirmar.
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Analizando…';
+        btn.style.pointerEvents = 'none';
+        $.post('{{ request.path }}', {
+            csrfmiddlewaretoken: '{{ csrf_token }}',
+            action: 'preview_procesamiento',
+            id: id,
+        }, function(res) {
+            const d = Array.isArray(res) ? res[0] : res;
+            btn.innerHTML = orig;
+            btn.style.pointerEvents = '';
+            if (!d || d.error) {
+                Swal.fire({ type: 'error', title: 'No se pudo analizar', text: (d && d.message) || 'Error' });
+                return;
+            }
+            const esc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            const fmt = n => Number(n).toLocaleString();
+
+            // Archivos
+            let htmlArchivos = '';
+            if (d.total_archivos > 0) {
+                htmlArchivos = '<div class="mb-2"><strong>📄 Archivos (' + d.total_archivos + ')</strong> — total ' + d.total_kb + ' KB</div>' +
+                    '<ul class="list-unstyled small mb-3" style="max-height:140px;overflow:auto;">' +
+                    d.archivos.map(a => '<li><i class="far fa-file text-muted me-1"></i>' + esc(a.nombre) +
+                        ' <span class="text-muted">(' + a.size_kb + ' KB)</span></li>').join('') +
+                    '</ul>';
+            }
+            // Textos
+            let htmlTextos = '';
+            if (d.total_textos > 0) {
+                htmlTextos = '<div class="mb-2"><strong>📝 Textos libres (' + d.total_textos + ')</strong> — total ' + fmt(d.total_chars_texto) + ' chars</div>' +
+                    '<ul class="list-unstyled small mb-3" style="max-height:140px;overflow:auto;">' +
+                    d.textos.map(t => '<li class="text-muted"><i class="fas fa-align-left me-1"></i>' +
+                        fmt(t.chars) + ' chars: <em>' + esc(t.preview) + '</em></li>').join('') +
+                    '</ul>';
+            }
+            if (!d.total_archivos && !d.total_textos) {
+                Swal.fire({
+                    type: 'warning',
+                    title: 'Sin material cargado',
+                    html: '<div class="text-start">No hay archivos ni textos en este agente para procesar.<br>' +
+                          'Sube documentos (PDF, DOCX, XLSX, CSV) o agrega textos libres antes de procesar.</div>',
+                });
+                return;
+            }
+
+            const htmlResumen =
+                '<div class="text-start">' +
+                    '<div class="alert alert-info py-2 small mb-3">' +
+                        '<i class="fas fa-info-circle me-1"></i>Se extraera texto de cada archivo y se combinara con los textos libres.' +
+                        (d.se_va_a_construir_faiss
+                            ? ' El material supera 40k chars: se va a <strong>construir FAISS</strong> (embeddings + indice) — puede tardar 10-60s.'
+                            : ' Material compacto: se guardara como <strong>contexto estatico</strong> (instantaneo, sin embeddings).') +
+                    '</div>' +
+                    htmlArchivos +
+                    htmlTextos +
+                    (d.contexto_actual_chars
+                        ? '<div class="alert alert-warning py-2 small mb-0"><i class="fas fa-exclamation-triangle me-1"></i>El contexto actual (' + fmt(d.contexto_actual_chars) + ' chars) se va a <strong>sobrescribir</strong>.</div>'
+                        : '') +
+                '</div>';
+
+            Swal.fire({
+                title: 'Procesar "' + esc(d.agente_nombre) + '"',
+                html: htmlResumen,
+                type: 'question',
+                icon: 'question',
+                showCancelButton: true,
+                allowOutsideClick: false,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Procesar ahora',
+                cancelButtonText: 'Cancelar',
+                width: 640,
+            }).then(function(result) {
+                if (!result.value) return;
+                _procesarAgenteExec(id, btn);
             });
+        }, 'json').fail(function() {
+            btn.innerHTML = orig;
+            btn.style.pointerEvents = '';
+            Swal.fire({ type: 'error', title: 'Error', text: 'No se pudo obtener el inventario.' });
+        });
+    }
+
+    function _procesarAgenteExec(id, btn) {
+        // Ejecuta el procesamiento luego de que el usuario confirmo en el modal.
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Procesando…';
+        btn.style.pointerEvents = 'none';
+        $.ajax({
+            type: 'POST',
+            url: '{{ request.path }}',
+            data: { csrfmiddlewaretoken: '{{ csrf_token }}', action: 'procesaragente', id: id },
+            dataType: 'json',
+            success: function(res) {
+                const data = Array.isArray(res) ? res[0] : res;
+                if (data.error) {
+                    Swal.fire({ type: 'error', title: 'Error', text: data.message });
+                } else {
+                    Swal.fire({ type: 'success', title: 'Listo', text: data.message, timer: 6000, showConfirmButton: false })
+                        .then(function() { if (data.reload) location.reload(); });
+                }
+            },
+            error: function() {
+                Swal.fire({ type: 'error', title: 'Error', text: 'No se pudo procesar el agente.' });
+            },
+            complete: function() {
+                btn.innerHTML = orig;
+                btn.style.pointerEvents = '';
+            }
         });
     }
 

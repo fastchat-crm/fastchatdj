@@ -849,9 +849,43 @@
                     alertaSuccess(detalle);
                     setTimeout(function() { location.reload(); }, 1500);
                 } else {
-                    alertaDanger((r && r.message) || 'No se pudo verificar con Meta.');
+                    mostrarErrorMeta('Verificacion Meta fallo', r);
                 }
             });
+        }
+
+        // Modal de error Meta con hint + respuesta cruda — stick on screen para
+        // que el usuario pueda leer y copiar.
+        function mostrarErrorMeta(titulo, r) {
+            r = r || {};
+            const esc = s => String(s || '').replace(/</g, '&lt;');
+            const msg  = (r.message || 'Error desconocido').toString().split(' Hint:')[0];
+            const hint = r.hint ? r.hint.replace(/^ *Hint: */, '') : '';
+            const raw  = r.raw  ? String(r.raw) : '';
+            const cta  = r.hint_link
+                ? `<a href="${esc(r.hint_link)}" target="_blank" rel="noopener"
+                     class="btn btn-sm btn-warning mt-2">
+                     <i class="fa fa-external-link-alt me-1"></i>${esc(r.hint_link_label || 'Abrir')}
+                  </a>`
+                : '';
+            const html = `
+                <div class="text-start">
+                    <div class="alert alert-danger py-2 mb-2 small">${esc(msg)}</div>
+                    ${(hint || cta) ? `<div class="alert alert-warning py-2 mb-2 small">
+                        <i class="fa fa-lightbulb me-1"></i><strong>Como resolverlo:</strong>
+                        ${hint ? `<div class="mt-1">${esc(hint)}</div>` : ''}
+                        ${cta}
+                    </div>` : ''}
+                    ${raw ? `<details class="small"><summary class="text-muted" style="cursor:pointer">Ver respuesta cruda de Meta</summary>
+                        <pre class="bg-light border rounded p-2 small mt-1" style="white-space:pre-wrap;word-break:break-all;max-height:180px;overflow:auto;">${esc(raw)}</pre>
+                    </details>` : ''}
+                </div>`;
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({ title: titulo, html: html, type: 'error', icon: 'error',
+                            showConfirmButton: true, confirmButtonText: 'Entendido', width: 620 });
+            } else {
+                alert((titulo + '\n\n' + msg + (hint ? '\n\n' + hint : '')));
+            }
         }
 
         /* ── Toggle del panel de guia inline (reemplaza el modal) ── */

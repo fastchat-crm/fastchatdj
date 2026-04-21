@@ -173,6 +173,112 @@ def entrenamiento_ia_view(request):
                         log(f"Elimino un api key IA {filtro.__str__()}", request, "del", obj=filtro.id)
                         messages.success(request, f"Registro Eliminado")
                         res_json = {"error": False}
+                    elif action == 'preview_procesamiento':
+                        # Devuelve el INVENTARIO de lo que va a procesar, sin ejecutarlo,
+                        # para que el usuario vea en el modal de confirmacion que tiene cargado.
+                        filtro = AgentesIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
+                        detalles_archivo = list(filtro.detalleagentesai_set.filter(
+                            status=True, tipo=2, archivo__isnull=False
+                        ))
+                        detalles_texto = list(filtro.detalleagentesai_set.filter(
+                            status=True, tipo=3
+                        ).exclude(descripcion__isnull=True).exclude(descripcion=''))
+                        archivos_info = []
+                        total_bytes = 0
+                        for det in detalles_archivo:
+                            try:
+                                nombre = os.path.basename(det.archivo.name)
+                                tam = det.archivo.size if det.archivo else 0
+                            except Exception:
+                                nombre, tam = '(sin nombre)', 0
+                            total_bytes += tam
+                            archivos_info.append({
+                                'nombre': nombre,
+                                'size_kb': round(tam / 1024, 1),
+                                'detalle_id': det.id,
+                            })
+                        textos_info = []
+                        total_chars_texto = 0
+                        for det in detalles_texto:
+                            n = len(det.descripcion or '')
+                            total_chars_texto += n
+                            textos_info.append({
+                                'detalle_id': det.id,
+                                'chars': n,
+                                'preview': (det.descripcion or '')[:120] + ('…' if n > 120 else ''),
+                            })
+                        res_json = {
+                            'error': False,
+                            'agente_nombre': filtro.nombre,
+                            'archivos': archivos_info,
+                            'textos': textos_info,
+                            'total_archivos': len(archivos_info),
+                            'total_textos': len(textos_info),
+                            'total_bytes': total_bytes,
+                            'total_kb': round(total_bytes / 1024, 1),
+                            'total_chars_texto': total_chars_texto,
+                            'contexto_actual_chars': len(filtro.contexto_estatico or ''),
+                            'tiene_vectorstore': bool(filtro.vectorstore_path),
+                            'se_va_a_construir_faiss': (total_bytes + total_chars_texto) > 40_000,
+                        }
+
+                    elif action == 'preview_prompt':
+                        # Devuelve el prompt final renderizado con datos de ejemplo,
+                        # para que el usuario vea EXACTAMENTE que recibe el LLM en runtime.
+                        from langchain_core.prompts import PromptTemplate as _PT
+                        from core.constantes import PROMPT_TEMPLATES as _PTS
+                        filtro = AgentesIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
+                        _tpl_text = filtro.prompt_template or _PTS.get('es', '')
+                        try:
+                            tpl = _PT.from_template(_tpl_text + '\n')
+                            _vars_requeridas = list(tpl.input_variables or [])
+                        except Exception as _ex:
+                            res_json = {'error': True, 'message': f'Template invalido: {_ex}'}
+                        else:
+                            # Construir contexto de ejemplo a partir de lo que realmente tiene
+                            _ctx_muestra = (filtro.contexto_estatico or '')[:2000]
+                            if not _ctx_muestra:
+                                _ctx_muestra = '[Sin contexto estatico configurado — se usaria FAISS en runtime]'
+                            _pregunta_demo = (request.POST.get('pregunta_demo') or '').strip() or '¿Cuales son sus horarios?'
+                            _vars_todas = {
+                                'question':           _pregunta_demo,
+                                'context':            _ctx_muestra,
+                                'descripcion_agente': filtro.descripcion or '',
+                                'contexto_extra':     '[Historial previo de la conversacion]',
+                                'nombre_bot':         getattr(filtro, 'nombre_bot', '') or 'Asistente',
+                                'personalidad':       getattr(filtro, 'personalidad', '') or '(sin personalidad)',
+                                'tono':               getattr(filtro, 'tono', '') or 'amigable',
+                                'estilo_escritura':   getattr(filtro, 'estilo_escritura', '') or '(estilo natural, mensajes cortos)',
+                                'contacto_nombre':    'Juan Perez',
+                                'hora_local':         'martes 15:30',
+                                'primera_vez_hoy':    'false',
+                                'estado_animo':       'neutral',
+                                'guia_animo':         'tono natural',
+                                'historial_contacto': '[Sin historial previo]',
+                            }
+                            _kwargs = {k: v for k, v in _vars_todas.items() if k in _vars_requeridas}
+                            _faltantes = [v for v in _vars_requeridas if v not in _vars_todas]
+                            try:
+                                _rendered = tpl.format(**_kwargs)
+                            except Exception as _ex:
+                                res_json = {'error': True, 'message': f'Error renderizando: {_ex}'}
+                            else:
+                                # Herramientas activas (no entran al prompt, pero son parte del
+                                # contexto del LLM via bind_tools — las listamos para info).
+                                _herramientas = list(filtro.herramientas.filter(status=True, activo=True).values('nombre', 'descripcion')) if hasattr(filtro, 'herramientas') else []
+                                regla = getattr(filtro, 'regla_fin', None)
+                                res_json = {
+                                    'error': False,
+                                    'prompt_rendered': _rendered,
+                                    'vars_usadas': list(_kwargs.keys()),
+                                    'vars_no_usadas_en_template': [v for v in _vars_todas.keys() if v not in _vars_requeridas],
+                                    'vars_faltantes_template_requiere_pero_no_existe': _faltantes,
+                                    'herramientas_activas': _herramientas,
+                                    'cierre_activo': bool(regla and regla.activo),
+                                    'chars_prompt':  len(_rendered),
+                                    'pregunta_demo': _pregunta_demo,
+                                }
+
                     elif action == 'procesaragente':
                         filtro = AgentesIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
                         # Disparar el mismo proceso que DetalleAgentesAI.save()
@@ -1100,15 +1206,29 @@ def entrenamiento_ia_view(request):
                         prompt_preview = ''
                         try:
                             _ctx_for_preview = contexto_con_faq[:5000] + ('\n…[truncado]…' if len(contexto_con_faq) > 5000 else '')
-                            prompt_preview = prompt_tpl.replace(
-                                '{context}', _ctx_for_preview
-                            ).replace(
-                                '{descripcion_agente}', filtro.descripcion or ''
-                            ).replace(
-                                '{contexto_extra}', '[Historial de la conversación irá aquí]'
-                            ).replace(
-                                '{question}', '[Pregunta del usuario irá aquí]'
-                            )
+                            # Sustituimos TODAS las variables que inyecta `_formatear_prompt` del consultor,
+                            # asi el preview refleja exactamente lo que el LLM recibira en runtime —
+                            # incluyendo persona (nombre_bot, personalidad, tono, estilo) que antes quedaban
+                            # como placeholder crudo en el preview.
+                            _substituciones = {
+                                '{context}':            _ctx_for_preview,
+                                '{descripcion_agente}': filtro.descripcion or '',
+                                '{contexto_extra}':     '[Historial de la conversación irá aquí]',
+                                '{question}':           '[Pregunta del usuario irá aquí]',
+                                '{nombre_bot}':         getattr(filtro, 'nombre_bot', '') or 'Asistente',
+                                '{personalidad}':       getattr(filtro, 'personalidad', '') or '(sin personalidad definida)',
+                                '{tono}':               getattr(filtro, 'tono', '') or 'amigable',
+                                '{estilo_escritura}':   getattr(filtro, 'estilo_escritura', '') or '(estilo natural, mensajes cortos)',
+                                '{contacto_nombre}':    'Juan Perez',
+                                '{hora_local}':         'martes 15:30',
+                                '{primera_vez_hoy}':    'false',
+                                '{estado_animo}':       'neutral',
+                                '{guia_animo}':         'tono natural',
+                                '{historial_contacto}': '[Sin historial persistente]',
+                            }
+                            prompt_preview = prompt_tpl
+                            for placeholder, valor in _substituciones.items():
+                                prompt_preview = prompt_preview.replace(placeholder, valor)
                         except Exception:
                             prompt_preview = prompt_tpl
 
