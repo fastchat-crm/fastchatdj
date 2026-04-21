@@ -11,149 +11,31 @@ from django.urls import reverse
 from core.custom_forms import FormError
 from core.funciones import addData, paginador, secure_module, log, redirectAfterPostGet
 from crm.models import AgentesIA, PerfilNegocioIA, ReglaFinConversacion, AccionFinConversacion
-from .forms import SesionWhatsAppForm, ConfigMetaForm
-from .models import SesionWhatsApp, ConfigMeta
+from .forms import SesionWhatsAppForm, ConfigMetaForm, ConfigInstagramForm, ConfigMessengerForm
+from .models import SesionWhatsApp, ConfigMeta, ConfigInstagram, ConfigMessenger
 from .services import WhatsAppService, get_whatsapp_service
+from .sesiones_common import (
+    hint_error_meta as _hint_error_meta_shared,
+    hint_como_texto as _hint_como_texto_shared,
+    sincronizar_meta_desde_graph as _sincronizar_meta_desde_graph_shared,
+)
+from .sesiones_meta_view import handle_meta_action as _handle_meta_action
+from .sesiones_baileys_view import handle_baileys_action as _handle_baileys_action
 
 
-def _hint_error_meta(error_text: str) -> dict:
-    """Decodifica el error de Graph API y devuelve un dict:
-        {'text': str, 'link': str|None, 'link_label': str|None}
-    `text` es la recomendacion en prosa. `link` es una URL CTA opcional para
-    que la UI arme un boton. Si no hay match devuelve {'text': '', ...}.
-    """
-    import re as _re, json as _json
-    EMPTY = {'text': '', 'link': None, 'link_label': None}
-    if not error_text:
-        return EMPTY
-    try:
-        m = _re.search(r'\{.*\}', str(error_text), flags=_re.DOTALL)
-        if not m:
-            return EMPTY
-        err = _json.loads(m.group(0)).get('error') or {}
-    except Exception:
-        return EMPTY
-    code = err.get('code')
-    sub  = err.get('error_subcode')
-
-    # Catalogo de hints por codigo Meta. Ref:
-    # developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes
-    if code == 133010:
-        return {
-            'text': ('El phone_number_id no esta registrado en Cloud API. Tenes que darle '
-                     '"Register" en el Developer Portal → WhatsApp → API Setup e ingresar '
-                     'un PIN de 6 digitos. Si el boton "Register" no aparece, tu WABA aun no '
-                     'esta verificado por Meta.'),
-            'link': 'https://developers.facebook.com/apps',
-            'link_label': 'Abrir Developer Portal → API Setup',
-        }
-    if code == 131030:
-        return {
-            'text': ('El numero destino no esta en la lista de "test recipients" (sandbox). '
-                     'En API Setup agregalo en "To" antes de enviar, y aceptalo desde WhatsApp '
-                     'cuando llegue la primera invitacion.'),
-            'link': 'https://developers.facebook.com/apps',
-            'link_label': 'Abrir API Setup',
-        }
-    if code == 132000:
-        return {
-            'text': 'La plantilla no existe o el idioma no coincide. Verifica que "hello_world" + "en_US" esten aprobadas para este WABA.',
-            'link': 'https://business.facebook.com/wa/manage/message-templates/',
-            'link_label': 'Abrir gestor de plantillas',
-        }
-    if code == 132001:
-        return {'text': 'Plantilla no aprobada por Meta aun. Esta en estado PENDING o REJECTED.',
-                'link': 'https://business.facebook.com/wa/manage/message-templates/',
-                'link_label': 'Ver estado de plantillas'}
-    if code == 132005:
-        return {'text': 'Numero de parametros en la plantilla no coincide con los placeholders {{1}}, {{2}}, etc.',
-                'link': None, 'link_label': None}
-    if code == 131051:
-        return {'text': 'El tipo de mensaje no es soportado para este numero (seguramente no es WhatsApp Business).',
-                'link': None, 'link_label': None}
-    if code == 100 and sub == 2388072:
-        return {'text': 'Meta rechaza el formato. En header/footer no se admiten newlines, negritas, emojis ni asteriscos.',
-                'link': None, 'link_label': None}
-    if code == 190:
-        return {'text': 'Access Token invalido o expirado. Regeneralo (idealmente con System User para que sea permanente).',
-                'link': 'https://business.facebook.com/latest/settings/system_users',
-                'link_label': 'Abrir System Users'}
-    if code == 1 and 'unknown error' in (err.get('message') or '').lower():
-        return {'text': ('Probablemente falta scope en el token. Regeneralo desde Business Settings → '
-                         'System Users con los permisos whatsapp_business_management + '
-                         'whatsapp_business_messaging + business_management.'),
-                'link': 'https://business.facebook.com/latest/settings/system_users',
-                'link_label': 'Abrir System Users'}
-    if code == 10 or code == 200:
-        return {'text': 'Tu token no tiene el permiso necesario para esta operacion. Revisa los scopes asignados al System User.',
-                'link': 'https://business.facebook.com/latest/settings/system_users',
-                'link_label': 'Abrir System Users'}
-    return EMPTY
+# Wrappers locales para retrocompat con los usos internos de este archivo.
+# Cuando se terminen de mover las acciones Meta a sesiones_meta_view.py estos
+# wrappers dejan de ser necesarios; por ahora evitan tener 2 copias del codigo.
+def _hint_error_meta(error_text):
+    return _hint_error_meta_shared(error_text)
 
 
-def _hint_como_texto(hint: dict) -> str:
-    """Helper de compat: devuelve el hint como prefijo legible para concatenar
-    al `message` (retrocompat con callers que esperaban string)."""
-    if not hint or not hint.get('text'):
-        return ''
-    return ' Hint: ' + hint['text']
+def _hint_como_texto(hint):
+    return _hint_como_texto_shared(hint)
 
 
 def _sincronizar_meta_desde_graph(session, config, timeout=10):
-    """Consulta Graph API con config.access_token + phone_number_id y persiste
-    display_phone_number / quality_rating / messaging_limit_tier / ultima_sincronizacion.
-    Si obtiene display_phone_number valido, tambien actualiza session.numero y marca la sesion
-    como 'conectado'. Devuelve (ok: bool, payload: dict).
-    """
-    import requests
-    from django.utils import timezone as _tz
-    from .services_meta import GRAPH_API_BASE
-    if not (config and config.access_token and config.phone_number_id):
-        return False, {'message': 'Faltan credenciales Meta (access_token / phone_number_id).'}
-    try:
-        r = requests.get(
-            f'{GRAPH_API_BASE}/{config.phone_number_id}',
-            headers={'Authorization': f'Bearer {config.access_token}'},
-            params={'fields': 'display_phone_number,verified_name,quality_rating,messaging_limit_tier'},
-            timeout=timeout,
-        )
-    except Exception as e:
-        return False, {'message': f'Error de conexion con Meta: {str(e)}'}
-    if r.status_code != 200:
-        return False, {'message': f'Meta respondio {r.status_code}: {r.text[:400]}'}
-    data = r.json()
-    config.display_phone_number = data.get('display_phone_number') or config.display_phone_number
-    config.quality_rating = (data.get('quality_rating') or 'UNKNOWN').upper()
-    if data.get('messaging_limit_tier'):
-        config.messaging_limit_tier = data.get('messaging_limit_tier')
-    config.ultima_sincronizacion = _tz.now()
-    config.save(update_fields=[
-        'display_phone_number', 'quality_rating',
-        'messaging_limit_tier', 'ultima_sincronizacion',
-    ])
-    numero_sincronizado = None
-    if config.display_phone_number:
-        numero_limpio = ''.join(c for c in config.display_phone_number if c.isdigit())
-        updates = set()
-        if numero_limpio and session.numero != numero_limpio:
-            session.numero = numero_limpio
-            updates.add('numero')
-        if session.estado != 'conectado':
-            session.estado = 'conectado'
-            session.error_mensaje = None
-            updates.add('estado')
-            updates.add('error_mensaje')
-        if updates:
-            session.save(update_fields=list(updates))
-        numero_sincronizado = numero_limpio or None
-    return True, {
-        'message': 'Conexion con Meta verificada correctamente.',
-        'display_phone_number': config.display_phone_number,
-        'quality_rating': config.get_quality_rating_display(),
-        'messaging_limit_tier': config.get_messaging_limit_tier_display() if config.messaging_limit_tier else None,
-        'verified_name': data.get('verified_name'),
-        'numero': numero_sincronizado,
-    }
+    return _sincronizar_meta_desde_graph_shared(session, config, timeout)
 
 
 @login_required
@@ -174,64 +56,21 @@ def sesionesView(request):
     if request.method == 'POST':
         res_json = []
         action = request.POST['action']
+        # Delegacion: acciones Meta viven en sesiones_meta_view.py,
+        # acciones Baileys en sesiones_baileys_view.py.
+        # Si la accion matchea, devuelven JsonResponse; si no, None.
+        _meta_resp = _handle_meta_action(request, action, perfil)
+        if _meta_resp is not None:
+            return _meta_resp
+        _bail_resp = _handle_baileys_action(request, action)
+        if _bail_resp is not None:
+            return _bail_resp
         try:
             with transaction.atomic():
-                if action == 'add':
-                    last_session_id = request.POST.get('last_session_id') or 0
-                    last_session = SesionWhatsApp.objects.filter(id=last_session_id).first()
-
-                    session = last_session or SesionWhatsApp.objects.create(
-                        estado='pendiente', usuario=request.user, session_id=str(uuid.uuid4()), qr_code='',
-                        whatsapp_id=''
-                    )
-
-                    session.qr_code = ''
-
-                    log(f"Inicio de sesión WhatsApp pendiente (ID: {session.id})", request, "add", obj=session.id)
-                    res_json = {'error': False, 'qr': session.qr_code, 'session_id': session.id}
-                    return JsonResponse(res_json, safe=False)
-                elif action == 'create_session':
-                    import logging as _lg
-                    _logger = _lg.getLogger(__name__)
-                    webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
-                    session_id = request.POST['session_id']
-                    session = SesionWhatsApp.objects.get(id=session_id)
-                    # Si la sesión venía rota, rotar el sessionId (UUID) para que Node arranque
-                    # con auth state limpio. La PK Django (id) NO cambia → FK intactas.
-                    rotar = (request.POST.get('reset') == '1') or session.estado in ('desconectado', 'error')
-                    _logger.warning("CREATE_SESSION id=%s sessionId=%s estado=%s rotar=%s",
-                                    session.id, session.session_id, session.estado, rotar)
-                    if rotar:
-                        old_uuid = session.session_id
-                        # best-effort: cleanup del viejo en Node (no bloqueante si falla)
-                        try:
-                            close_res = whatsapp_service.close_session(old_uuid)
-                            _logger.warning("CREATE_SESSION close_session(%s) result=%s", old_uuid, close_res)
-                        except Exception as _ex:
-                            _logger.warning("CREATE_SESSION close_session(%s) excepcion=%s", old_uuid, _ex)
-                        new_uuid = str(uuid.uuid4())
-                        session.session_id = new_uuid
-                        session.qr_code = ''
-                        session.whatsapp_id = ''
-                        session.estado = 'pendiente'
-                        session.error_mensaje = None
-                        session.save(update_fields=['session_id', 'qr_code', 'whatsapp_id', 'estado', 'error_mensaje'])
-                        _logger.warning("CREATE_SESSION rotado %s → %s (Django id=%s)", old_uuid, new_uuid, session.id)
-                    result = whatsapp_service.create_session(session, webhook_url)
-                    _logger.warning("CREATE_SESSION create_session result=%s", result)
-                    if not result.get('success'):
-                        error_detalle = result.get('error') or 'No se pudo crear la sesión en el servicio Node.js'
-                        session.estado = 'error'
-                        session.error_mensaje = error_detalle[:500]
-                        session.save(update_fields=['estado', 'error_mensaje'])
-                        log(f"Fallo create_session ID={session.id}: {error_detalle}", request, "create_session", obj=session.id)
-                        return JsonResponse({'error': True, 'message': error_detalle, 'session_id': session.id}, safe=False)
-                    session.qr_code = result.get('qr_code') or ''
-                    session.save(update_fields=['qr_code'])
-                    log(f"Crear sesión WhatsApp pendiente (ID: {session.id})", request, "create_session", obj=session.id)
-                    res_json = {'error': False, 'qr': session.qr_code, 'session_id': session.id}
-                    return JsonResponse(res_json, safe=False)
-                elif action == 'probar_envio_mensaje':
+                # Las acciones Baileys (add, create_session, verificar_conexion,
+                # reconectar, delete) las maneja `_handle_baileys_action()` arriba.
+                # Las acciones Meta las maneja `_handle_meta_action()` arriba.
+                if action == 'probar_envio_mensaje':
                     from django.utils import timezone as _tz
                     filtro = model.objects.get(pk=int(request.POST['id']))
                     # Validacion de estado por proveedor
@@ -281,140 +120,8 @@ def sesionesView(request):
                         'raw':            err_raw,
                         'destino':        destino_fmt,
                     })
-                elif action == 'probar_envio_plantilla_meta':
-                    # Envía una plantilla pre-aprobada (por defecto 'hello_world' en 'en_US').
-                    # Útil cuando aún no hay ventana de 24h abierta.
-                    filtro = model.objects.get(pk=int(request.POST['id']))
-                    if not filtro.es_meta:
-                        return JsonResponse({'error': True, 'message': 'Esta acción solo aplica para sesiones Meta.'})
-                    config = getattr(filtro, 'config_meta', None)
-                    if not config or not config.access_token or not config.phone_number_id:
-                        return JsonResponse({'error': True, 'message': 'La sesión Meta no tiene credenciales completas (access_token / phone_number_id).'})
-                    numero_destino = (request.POST.get('numero_destino') or '').strip()
-                    if not numero_destino:
-                        return JsonResponse({'error': True, 'message': 'Debes ingresar un número de destino.'})
-                    plantilla_nombre = (request.POST.get('plantilla_nombre') or 'hello_world').strip()
-                    idioma = (request.POST.get('idioma') or 'en_US').strip()
-                    service = get_whatsapp_service(filtro)
-                    resultado = service.send_template(
-                        filtro.session_id, numero_destino, plantilla_nombre, idioma=idioma,
-                    )
-                    if resultado.get('success'):
-                        log(f"Plantilla '{plantilla_nombre}' ({idioma}) enviada desde sesión {filtro.id} a {numero_destino}",
-                            request, "change", obj=filtro.id)
-                        return JsonResponse({
-                            'error':      False,
-                            'message':    f"Plantilla '{plantilla_nombre}' enviada correctamente.",
-                            'message_id': resultado.get('message_id'),
-                            'destino':    numero_destino,
-                            'plantilla':  plantilla_nombre,
-                            'idioma':     idioma,
-                        })
-                    err_raw = resultado.get('error') or 'No se pudo enviar la plantilla.'
-                    hint = _hint_error_meta(err_raw)
-                    return JsonResponse({
-                        'error':          True,
-                        'message':        str(err_raw) + _hint_como_texto(hint),
-                        'hint':           hint.get('text') or None,
-                        'hint_link':      hint.get('link') or None,
-                        'hint_link_label': hint.get('link_label') or None,
-                        'raw':            err_raw,
-                        'destino':        numero_destino,
-                    })
-                elif action == 'verificar_conexion':
-                    filtro = model.objects.get(pk=int(request.POST['id']))
-                    if not filtro.es_baileys:
-                        return JsonResponse({'error': True, 'message': 'Verificar conexión solo aplica para sesiones Baileys. Para Meta usa "Verificar conexión con Meta" en el formulario.'})
-                    if not filtro.session_id:
-                        return JsonResponse({'error': True, 'message': 'La sesión no tiene session_id asignado.'})
-                    result = whatsapp_service.check_session_status(filtro.session_id)
-                    if not result.get('success'):
-                        if result.get('not_found') and filtro.estado == 'conectado':
-                            filtro.estado = 'desconectado'
-                            filtro.error_mensaje = 'Sesión no existe en el servidor de WhatsApp'
-                            filtro.save()
-                            log(f"Verificación: sesión {filtro.id} no existe en Node — marcada como desconectada", request, "change", obj=filtro.id)
-                        return JsonResponse({
-                            'error': True,
-                            'connected': False,
-                            'message': result.get('error') or 'No se pudo verificar la sesión',
-                        })
-                    connected = result.get('connected')
-                    estado_previo = filtro.estado
-                    if connected and filtro.estado != 'conectado':
-                        filtro.estado = 'conectado'
-                        filtro.error_mensaje = None
-                        filtro.save()
-                        log(f"Verificación: sesión {filtro.id} está realmente conectada — estado actualizado", request, "change", obj=filtro.id)
-                    elif not connected and filtro.estado == 'conectado':
-                        filtro.estado = 'desconectado'
-                        filtro.error_mensaje = 'Conexión con WhatsApp perdida (detectado por verificación manual)'
-                        filtro.save()
-                        log(f"Verificación: sesión {filtro.id} reportaba conectada pero el socket está caído — marcada como desconectada", request, "change", obj=filtro.id)
-                    return JsonResponse({
-                        'error': False,
-                        'connected': connected,
-                        'is_active': result.get('is_active'),
-                        'estado': filtro.estado,
-                        'estado_previo': estado_previo,
-                        'last_activity': result.get('last_activity'),
-                        'message': (
-                            'Conexión activa con WhatsApp.' if connected
-                            else 'La sesión no tiene conexión real con WhatsApp.'
-                        ),
-                    })
-                elif action == 'reconectar':
-                    import logging as _lg
-                    _logger = _lg.getLogger(__name__)
-                    filtro = model.objects.get(pk=int(request.POST['id']))
-                    if not filtro.es_baileys:
-                        return JsonResponse({'error': True, 'message': 'Reconectar solo aplica para sesiones Baileys.'})
-                    webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
-                    _logger.warning("RECONECTAR id=%s sessionId=%s estado=%s", filtro.id, filtro.session_id, filtro.estado)
-                    # Rotar UUID: cleanup del viejo + nuevo sessionId. Django id no cambia, FK intactas.
-                    old_uuid = filtro.session_id
-                    try:
-                        close_res = whatsapp_service.close_session(old_uuid)
-                        _logger.warning("RECONECTAR close_session(%s) result=%s", old_uuid, close_res)
-                    except Exception as _ex:
-                        _logger.warning("RECONECTAR close_session(%s) excepcion=%s", old_uuid, _ex)
-                    new_uuid = str(uuid.uuid4())
-                    filtro.session_id = new_uuid
-                    filtro.qr_code = ''
-                    filtro.whatsapp_id = ''
-                    filtro.estado = 'pendiente'
-                    filtro.error_mensaje = None
-                    filtro.desconectado_manualmente = False
-                    filtro.save(update_fields=['session_id', 'qr_code', 'whatsapp_id', 'estado', 'error_mensaje', 'desconectado_manualmente'])
-                    _logger.warning("RECONECTAR rotado %s → %s (Django id=%s)", old_uuid, new_uuid, filtro.id)
-                    result = whatsapp_service.create_session(filtro, webhook_url)
-                    _logger.warning("RECONECTAR create_session result=%s", result)
-                    if result.get('success'):
-                        filtro.estado = 'pendiente'
-                        filtro.error_mensaje = None
-                        filtro.desconectado_manualmente = False
-                        if result.get('qr_code'):
-                            filtro.qr_code = result['qr_code']
-                        filtro.save(update_fields=['estado', 'error_mensaje', 'desconectado_manualmente', 'qr_code'])
-                        log(f"Sesión {filtro.id} reconectada manualmente", request, "change", obj=filtro.id)
-                        return JsonResponse({'error': False, 'qr': filtro.qr_code or '', 'message': 'Reconexión iniciada. Escanea el QR si es necesario.'})
-                    else:
-                        return JsonResponse({'error': True, 'message': result.get('error') or 'No se pudo reconectar'})
-                elif action == 'delete':
-                    filtro = model.objects.get(pk=int(request.POST['id']))
-                    if not filtro.es_baileys:
-                        return JsonResponse({'error': True, 'message': 'Desconectar solo aplica para sesiones Baileys. Las sesiones Meta se gestionan desde el panel de Meta.'})
-                    result = whatsapp_service.close_session(filtro.session_id)
-                    if 'success' in result:
-                        if not result['success']:
-                            raise NameError(result['error'])
-                    filtro.estado = 'desconectado'
-                    filtro.error_mensaje = None
-                    filtro.desconectado_manualmente = True  # el cron no intentará reconectar
-                    filtro.save()
-                    log(f"Sesión de WhatsApp {filtro.numero} desconectada", request, "del", obj=filtro.id)
-                    messages.success(request, "Sesión desconectada correctamente.")
-                    return JsonResponse({"error": False})
+                # NOTA: 'probar_envio_plantilla_meta' se maneja via _handle_meta_action()
+                # al inicio del bloque POST. Ya no vive aqui — vive en sesiones_meta_view.py.
                 elif action == 'change':
                     instance = SesionWhatsApp.objects.get(id=request.POST['pk'])
                     form = SesionWhatsAppForm(request.POST, request.FILES, instance=instance)
@@ -495,115 +202,10 @@ def sesionesView(request):
                     accion.delete()
                     return JsonResponse({'error': False})
 
-                # ── Configuracion Meta Cloud API ───────────────────────────
-                elif action == 'guardar_config_meta':
-                    # Guarda SOLO a base de datos. No llama a Graph API, no obliga
-                    # campos completos. El cliente puede guardar incremental y
-                    # sincronizar cuando tenga todo, via "Verificar conexion con Meta".
-                    import secrets
-                    session = SesionWhatsApp.objects.get(id=request.POST['pk'])
-                    config, _ = ConfigMeta.objects.get_or_create(
-                        sesion=session,
-                        defaults={
-                            'waba_id': '',
-                            'phone_number_id': '',
-                            'access_token': '',
-                            'webhook_verify_token': secrets.token_urlsafe(32),
-                        },
-                    )
-                    form = ConfigMetaForm(request.POST, instance=config)
-                    if not form.is_valid():
-                        raise FormError(form)
-                    obj = form.save()
-
-                    # Garantizar que la sesion quede marcada como proveedor=meta
-                    if session.proveedor != 'meta':
-                        session.proveedor = 'meta'
-                        session.save(update_fields=['proveedor'])
-
-                    webhook_url = request.build_absolute_uri(reverse('whatsapp_meta_webhook'))
-                    # Lista campos que todavia faltan para que el cliente sepa
-                    # que es lo minimo antes de poder sincronizar con Meta.
-                    pendientes = []
-                    if not obj.waba_id:         pendientes.append('WABA ID')
-                    if not obj.phone_number_id: pendientes.append('Phone Number ID')
-                    if not obj.access_token:    pendientes.append('Access Token')
-
-                    log(f"Config Meta guardada (solo BD) para sesion {session.id}. Pendientes: {pendientes or 'ninguno'}",
-                        request, "change", obj=session.id)
-                    return JsonResponse({
-                        'error': False,
-                        'message': (
-                            'Configuracion guardada.' if not pendientes
-                            else 'Configuracion guardada. Para sincronizar con Meta falta: ' + ', '.join(pendientes) + '.'
-                        ),
-                        'webhook_url': webhook_url,
-                        'verify_token': obj.webhook_verify_token,
-                        'pendientes': pendientes,
-                        'puede_sincronizar': not pendientes,
-                    })
-
-                elif action == 'regenerar_verify_token':
-                    import secrets
-                    session = SesionWhatsApp.objects.get(id=request.POST['pk'])
-                    config = getattr(session, 'config_meta', None)
-                    if not config:
-                        return JsonResponse({'error': True, 'message': 'La sesion no tiene configuracion Meta todavia.'})
-                    config.webhook_verify_token = secrets.token_urlsafe(32)
-                    config.webhook_verificado_en = None
-                    config.save(update_fields=['webhook_verify_token', 'webhook_verificado_en'])
-                    log(f"Verify token regenerado para sesion {session.id}", request, "change", obj=session.id)
-                    return JsonResponse({
-                        'error': False,
-                        'verify_token': config.webhook_verify_token,
-                        'message': 'Nuevo verify token generado. Actualizalo en Meta Developer Portal.',
-                    })
-
-                elif action == 'verificar_meta_conexion':
-                    session = SesionWhatsApp.objects.get(id=request.POST['pk'])
-                    if session.proveedor != 'meta':
-                        return JsonResponse({'error': True, 'message': 'Esta sesion no usa el proveedor Meta Cloud API.'})
-                    config = getattr(session, 'config_meta', None)
-                    if not config:
-                        return JsonResponse({'error': True, 'message': 'Sesion sin ConfigMeta. Configura WABA ID, phone_number_id y access_token primero.'})
-                    ok, info = _sincronizar_meta_desde_graph(session, config)
-                    if not ok:
-                        err_raw = info.get('message') or 'No se pudo verificar con Meta.'
-                        hint = _hint_error_meta(err_raw)
-                        return JsonResponse({
-                            'error':          True,
-                            'message':        str(err_raw) + _hint_como_texto(hint),
-                            'hint':           hint.get('text') or None,
-                            'hint_link':      hint.get('link') or None,
-                            'hint_link_label': hint.get('link_label') or None,
-                            'raw':            err_raw,
-                        })
-                    session.refresh_from_db(fields=['numero', 'estado'])
-                    return JsonResponse({
-                        'error': False,
-                        'message': info.get('message'),
-                        'display_phone_number': info.get('display_phone_number'),
-                        'quality_rating': info.get('quality_rating'),
-                        'messaging_limit_tier': info.get('messaging_limit_tier'),
-                        'verified_name': info.get('verified_name'),
-                        'numero': session.numero,
-                        'estado': session.estado,
-                    })
-
-                elif action == 'add_meta':
-                    form = SesionWhatsAppForm(request.POST, request.FILES)
-                    if not form.is_valid():
-                        raise FormError(form)
-                    obj = form.save(commit=False)
-                    obj.usuario = request.user
-                    obj.session_id = str(uuid.uuid4())
-                    obj.proveedor = 'meta'
-                    obj.estado = 'pendiente'
-                    obj.save()
-                    form.save_m2m()
-                    log(f"Sesion Meta creada: {obj.nombre or obj.id}", request, "add", obj=obj.id)
-                    res_json.append({'error': False, 'reload': True})
-                    return JsonResponse(res_json, safe=False)
+                # Las acciones Meta (guardar_config_meta, regenerar_verify_token,
+                # verificar_meta_conexion, add_meta, probar_envio_plantilla_meta)
+                # se manejan via `_handle_meta_action()` al comienzo del POST.
+                # Si llegaron aqui es porque no matchearon — tratamos como "accion desconocida".
 
                 elif action == 'delete_force':
                     session_id = request.POST.get('id')
@@ -638,6 +240,11 @@ def sesionesView(request):
         data['tiene_plantilla_agente'] = bool(instance.agente_ia and getattr(instance.agente_ia, 'regla_fin', None))
         data['config_meta'] = config_meta = getattr(instance, 'config_meta', None)
         data['config_meta_form'] = ConfigMetaForm(instance=config_meta) if config_meta else ConfigMetaForm()
+        # IG + Messenger forms (mismo patron — null-safe si no hay config aun)
+        data['config_instagram'] = config_ig = getattr(instance, 'config_instagram', None)
+        data['config_instagram_form'] = ConfigInstagramForm(instance=config_ig) if config_ig else ConfigInstagramForm()
+        data['config_messenger'] = config_fb = getattr(instance, 'config_messenger', None)
+        data['config_messenger_form'] = ConfigMessengerForm(instance=config_fb) if config_fb else ConfigMessengerForm()
         data['meta_webhook_url'] = request.build_absolute_uri(reverse('whatsapp_meta_webhook'))
         return render(request, 'whatsapp/sesiones/form.html', data)
     if action == 'change_modal':
@@ -657,6 +264,10 @@ def sesionesView(request):
             data['tiene_plantilla_agente'] = bool(instance and instance.agente_ia and getattr(instance.agente_ia, 'regla_fin', None))
             data['config_meta'] = config_meta = getattr(instance, 'config_meta', None) if instance else None
             data['config_meta_form'] = ConfigMetaForm(instance=config_meta) if config_meta else ConfigMetaForm()
+            data['config_instagram'] = config_ig = getattr(instance, 'config_instagram', None) if instance else None
+            data['config_instagram_form'] = ConfigInstagramForm(instance=config_ig) if config_ig else ConfigInstagramForm()
+            data['config_messenger'] = config_fb = getattr(instance, 'config_messenger', None) if instance else None
+            data['config_messenger_form'] = ConfigMessengerForm(instance=config_fb) if config_fb else ConfigMessengerForm()
             data['meta_webhook_url'] = request.build_absolute_uri(reverse('whatsapp_meta_webhook'))
             template = get_template("whatsapp/sesiones/form_modal.html")
             return JsonResponse({"result": True, 'data': template.render(data)})
@@ -783,6 +394,9 @@ def sesionesView(request):
         return JsonResponse({"result": True, 'data': template.render(data)})
     criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, usuario_id=request.user.id), ''
     estado = request.GET.get('estado', '')
+    # Filtro por proveedor: lo inyectan sesionesMetaView / sesionesBaileysView
+    # para que cada URL muestre solo sus sesiones. Si no viene, muestra todas.
+    proveedor_filtro = request.GET.get('proveedor', '').strip()
     if criterio:
         filtros = filtros & (Q(numero__icontains=criterio))
         data["criterio"] = criterio
@@ -791,6 +405,10 @@ def sesionesView(request):
         filtros &= Q(estado=estado)
         data["estado"] = estado
         url_vars += '&estado=' + estado
+    if proveedor_filtro in ('baileys', 'meta', 'instagram', 'messenger'):
+        filtros &= Q(proveedor=proveedor_filtro)
+        data["proveedor_filtro"] = proveedor_filtro
+        url_vars += '&proveedor=' + proveedor_filtro
 
     listado = model.objects.filter(filtros)
     data["list_count"] = listado.count()
@@ -798,6 +416,14 @@ def sesionesView(request):
 
     base_qs = model.objects.filter(status=True, usuario_id=request.user.id)
     stats_raw = {row['estado']: row['total'] for row in base_qs.values('estado').annotate(total=Count('id'))}
+    # Conteo por proveedor para los cards de "elegir camino" arriba del listado.
+    prov_raw = {row['proveedor']: row['total'] for row in base_qs.values('proveedor').annotate(total=Count('id'))}
+    data['stats_proveedor'] = {
+        'baileys':   prov_raw.get('baileys',   0),
+        'meta':      prov_raw.get('meta',      0),
+        'instagram': prov_raw.get('instagram', 0),
+        'messenger': prov_raw.get('messenger', 0),
+    }
     data['stats'] = {
         'total': sum(stats_raw.values()),
         'conectado': stats_raw.get('conectado', 0),

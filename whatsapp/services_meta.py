@@ -11,6 +11,8 @@ Documentacion Meta:
 import logging
 
 import requests
+from django.db.models import F
+from django.utils import timezone
 
 from .models import ConfigMeta, PlantillaWhatsApp, SesionWhatsApp
 
@@ -105,6 +107,64 @@ class MetaWhatsAppService:
             return to.split('@')[0]
         return to
 
+    def _estado_cuenta_ok(self, config: ConfigMeta) -> tuple[bool, str | None]:
+        """Chequea el estado de la WABA antes de intentar un envio.
+
+        - quality_rating=RED: Meta esta a punto de suspender el numero o ya lo
+          hizo parcialmente. Bloqueamos para no acelerar la degradacion.
+        - YELLOW: pasa, pero queda registrado en la traza (el detalle lo nota).
+        - GREEN/UNKNOWN: pasa sin ruido.
+
+        Devuelve (ok, motivo). Fail-open si algun chequeo falla.
+        """
+        try:
+            rating = (config.quality_rating or 'UNKNOWN').upper()
+            if rating == 'RED':
+                return False, 'quality_rating=RED: numero degradado por Meta, revisar calidad antes de enviar'
+            return True, None
+        except Exception as ex:
+            logger.warning("Meta quality check fallo: %s", ex)
+            return True, None
+
+    def _dentro_ventana_24h(self, conversacion_id) -> tuple[bool, str | None]:
+        """Meta prohibe contenido libre (texto/media) si han pasado >24h desde
+        el ultimo mensaje entrante del cliente. Fuera de ventana hay que usar
+        plantilla pre-aprobada (send_template).
+
+        Devuelve (ok, motivo). Fail-open: si no se puede determinar, permite
+        el envio para no romper llamadas legacy sin conversacion_id.
+        """
+        if not conversacion_id:
+            return True, None
+        try:
+            from .models import MensajeWhatsApp, ConversacionWhatsApp
+            from django.utils import timezone
+            from datetime import timedelta
+            conv = (
+                ConversacionWhatsApp.objects
+                .filter(pk=conversacion_id)
+                .select_related('contacto__sesion')
+                .first()
+            )
+            if not conv:
+                return True, None
+            numero_sesion = (conv.contacto.sesion.numero or '').strip()
+            ultimo_in = (
+                MensajeWhatsApp.objects
+                .filter(conversacion=conv)
+                .exclude(remitente=numero_sesion)
+                .order_by('-fecha')
+                .first()
+            )
+            if not ultimo_in:
+                return False, 'El cliente aún no ha enviado ningún mensaje. Para iniciar la conversación, envía una plantilla aprobada desde el botón 📋.'
+            if timezone.now() - ultimo_in.fecha > timedelta(hours=24):
+                return False, 'Ya pasaron más de 24 horas desde el último mensaje del cliente. Envía una plantilla aprobada desde el botón 📋.'
+            return True, None
+        except Exception as ex:
+            logger.warning("Meta ventana24h check fallo: %s", ex)
+            return True, None
+
     # -----------------------------------------------------------------------
     # API publica (espejo de WhatsAppService)
     # -----------------------------------------------------------------------
@@ -114,6 +174,22 @@ class MetaWhatsAppService:
         if not config:
             return {'success': False, 'error': 'config_meta_no_encontrada'}
 
+        ok, motivo = self._estado_cuenta_ok(config)
+        if not ok:
+            return self._registrar_traza_bloqueo(
+                config, to, 'text',
+                {'success': False, 'error': motivo, 'cuenta_degradada': True},
+                conversacion_id,
+            )
+
+        ok, motivo = self._dentro_ventana_24h(conversacion_id)
+        if not ok:
+            return self._registrar_traza_bloqueo(
+                config, to, 'text',
+                {'success': False, 'error': motivo, 'requiere_plantilla': True},
+                conversacion_id,
+            )
+
         data = {
             'messaging_product': 'whatsapp',
             'recipient_type':    'individual',
@@ -121,9 +197,9 @@ class MetaWhatsAppService:
             'type':              'text',
             'text':              {'body': text, 'preview_url': True},
         }
-        return self._post_mensaje(config, data)
+        return self._post_mensaje(config, data, conversacion_id=conversacion_id)
 
-    def send_template(self, session_id, to, plantilla_nombre, idioma='es', parametros_cuerpo=None, parametros_header=None):
+    def send_template(self, session_id, to, plantilla_nombre, idioma='es', parametros_cuerpo=None, parametros_header=None, conversacion_id=None):
         """Envia una plantilla pre-aprobada. Esencial para iniciar conversaciones
         fuera de la ventana de 24h o para marketing/auth.
 
@@ -136,6 +212,14 @@ class MetaWhatsAppService:
         config = self._get_config(session_id)
         if not config:
             return {'success': False, 'error': 'config_meta_no_encontrada'}
+
+        ok, motivo = self._estado_cuenta_ok(config)
+        if not ok:
+            return self._registrar_traza_bloqueo(
+                config, to, 'template',
+                {'success': False, 'error': motivo, 'cuenta_degradada': True},
+                conversacion_id,
+            )
 
         components = []
         if parametros_header:
@@ -159,21 +243,25 @@ class MetaWhatsAppService:
                 'components': components,
             },
         }
-        resultado = self._post_mensaje(config, data)
+        resultado = self._post_mensaje(config, data, conversacion_id=conversacion_id)
 
         if resultado.get('success'):
-            # Actualizar metricas de uso de la plantilla
             PlantillaWhatsApp.objects.filter(
                 config_meta=config, nombre=plantilla_nombre, idioma=idioma
             ).update(
-                veces_enviada=PlantillaWhatsApp.objects.filter(
-                    config_meta=config, nombre=plantilla_nombre, idioma=idioma
-                ).values_list('veces_enviada', flat=True).first() or 0,
+                veces_enviada=F('veces_enviada') + 1,
+                ultimo_envio=timezone.now(),
             )
         return resultado
 
     def _formatear_parametros(self, params) -> list:
-        """Convierte una lista simple de strings a la forma que espera Meta."""
+        """Convierte parametros de usuario al formato que espera Meta.
+
+        Acepta:
+        - lista de strings (header TEXT o cuerpo): [{type:text, text:...}, ...]
+        - dict con image_url / video_url / document_url / filename (header media)
+        - lista de dicts ya formateados (pass-through)
+        """
         if not params:
             return []
         if isinstance(params, list) and params and isinstance(params[0], str):
@@ -181,8 +269,13 @@ class MetaWhatsAppService:
         if isinstance(params, dict):
             if params.get('image_url'):
                 return [{'type': 'image', 'image': {'link': params['image_url']}}]
+            if params.get('video_url'):
+                return [{'type': 'video', 'video': {'link': params['video_url']}}]
             if params.get('document_url'):
-                return [{'type': 'document', 'document': {'link': params['document_url']}}]
+                doc = {'link': params['document_url']}
+                if params.get('filename'):
+                    doc['filename'] = params['filename']
+                return [{'type': 'document', 'document': doc}]
         return params  # ya viene con forma correcta
 
     def send_presence_update(self, session_id, to):
@@ -193,45 +286,69 @@ class MetaWhatsAppService:
         return {'success': True, 'skipped': 'not_supported_by_meta'}
 
     def send_media_message(self, session_id, to, file_path=None, file_content=None,
-                           caption=None, filename=None, tipo='image', media_url=None,
-                           conversacion_id=None):
+                           caption=None, filename=None, media_type='image', media_url=None,
+                           conversacion_id=None, **kwargs):
         """Envia media. Preferentemente por URL (mas simple). Si se pasa file_path
         o file_content, primero se sube a Meta via /media y se usa el media_id.
+
+        `media_type` unifica la firma con WhatsAppService (Baileys). Valores
+        aceptados: 'image', 'video', 'audio', 'document', 'sticker'. Por compat,
+        tambien acepta `tipo=` como alias via kwargs.
         """
+        # Alias legacy: 'tipo' era el nombre original en Meta.
+        if 'tipo' in kwargs and kwargs['tipo']:
+            media_type = kwargs['tipo']
+
         config = self._get_config(session_id)
         if not config:
             return {'success': False, 'error': 'config_meta_no_encontrada'}
 
+        ok, motivo = self._estado_cuenta_ok(config)
+        if not ok:
+            return self._registrar_traza_bloqueo(
+                config, to, media_type,
+                {'success': False, 'error': motivo, 'cuenta_degradada': True},
+                conversacion_id,
+            )
+
+        ok, motivo = self._dentro_ventana_24h(conversacion_id)
+        if not ok:
+            return self._registrar_traza_bloqueo(
+                config, to, media_type,
+                {'success': False, 'error': motivo, 'requiere_plantilla': True},
+                conversacion_id,
+            )
+
         if media_url:
             media_payload = {'link': media_url}
-            if caption and tipo in ('image', 'video', 'document'):
+            if caption and media_type in ('image', 'video', 'document'):
                 media_payload['caption'] = caption
-            if filename and tipo == 'document':
+            if filename and media_type == 'document':
                 media_payload['filename'] = filename
             data = {
                 'messaging_product': 'whatsapp',
                 'to':                self._normalizar_destinatario(to),
-                'type':              tipo,
-                tipo:                media_payload,
+                'type':              media_type,
+                media_type:          media_payload,
             }
-            return self._post_mensaje(config, data)
+            return self._post_mensaje(config, data, conversacion_id=conversacion_id)
 
         if file_path or file_content:
-            media_id = self._subir_media(config, file_path, file_content, filename, tipo)
+            media_id = self._subir_media(config, file_path, file_content, filename, media_type)
             if not media_id:
                 return {'success': False, 'error': 'upload_media_fallo'}
             media_payload = {'id': media_id}
-            if caption and tipo in ('image', 'video', 'document'):
+            if caption and media_type in ('image', 'video', 'document'):
                 media_payload['caption'] = caption
-            if filename and tipo == 'document':
+            if filename and media_type == 'document':
                 media_payload['filename'] = filename
             data = {
                 'messaging_product': 'whatsapp',
                 'to':                self._normalizar_destinatario(to),
-                'type':              tipo,
-                tipo:                media_payload,
+                'type':              media_type,
+                media_type:          media_payload,
             }
-            return self._post_mensaje(config, data)
+            return self._post_mensaje(config, data, conversacion_id=conversacion_id)
 
         return {'success': False, 'error': 'falta_origen_media'}
 
@@ -383,21 +500,83 @@ class MetaWhatsAppService:
     # Internos
     # -----------------------------------------------------------------------
 
-    def _post_mensaje(self, config: ConfigMeta, data: dict) -> dict:
+    def _post_mensaje(self, config: ConfigMeta, data: dict, conversacion_id=None) -> dict:
+        import time as _time
         url = f'{GRAPH_API_BASE}/{config.phone_number_id}/messages'
+        t0 = _time.monotonic()
         try:
             r = requests.post(url, headers=self._headers(config), json=data, timeout=15)
         except Exception as e:
             logger.exception("Error enviando mensaje a Meta")
-            return {'success': False, 'error': str(e)}
+            resultado = {'success': False, 'error': str(e)}
+            self._registrar_traza(config, data, resultado, conversacion_id, int((_time.monotonic() - t0) * 1000))
+            return resultado
 
         if r.status_code == 200:
             body = r.json()
             msg_id = ''
             if body.get('messages'):
                 msg_id = body['messages'][0].get('id', '')
-            return {'success': True, 'message_id': msg_id}
-        return {'success': False, 'error': f"{r.status_code}: {r.text[:500]}"}
+            resultado = {'success': True, 'message_id': msg_id}
+        else:
+            resultado = {'success': False, 'error': f"{r.status_code}: {r.text[:500]}"}
+
+        self._registrar_traza(config, data, resultado, conversacion_id, int((_time.monotonic() - t0) * 1000))
+        return resultado
+
+    def _registrar_traza_bloqueo(self, config: ConfigMeta, to: str, tipo: str,
+                                  resultado: dict, conversacion_id) -> dict:
+        """Para guardas que rechazan el envio antes de contactar a Meta
+        (ventana 24h, cuenta degradada). Registra traza con latencia 0 y
+        devuelve el resultado tal cual para que el caller lo retorne."""
+        payload = {'to': self._normalizar_destinatario(to), 'type': tipo}
+        self._registrar_traza(config, payload, resultado, conversacion_id, 0)
+        return resultado
+
+    def _registrar_traza(self, config: ConfigMeta, payload: dict, resultado: dict,
+                         conversacion_id, latencia_ms: int) -> None:
+        """Escribe una fila en TrazaMensajeIA para que /whatsapp/trazas/ muestre
+        los envios Meta igual que los de Baileys (Node emite su propia traza)."""
+        try:
+            from .models import TrazaMensajeIA, ConversacionWhatsApp
+            conv = None
+            if conversacion_id:
+                conv = ConversacionWhatsApp.objects.filter(pk=conversacion_id).first()
+            ok = bool(resultado.get('success'))
+            etapa = 'mensaje_enviado' if ok else 'envio_fallido'
+            # Si la cuenta viene en YELLOW, bajamos el nivel a warning aunque
+            # el envio haya sido exitoso — asi se ve rapido en la UI.
+            rating = (config.quality_rating or 'UNKNOWN').upper()
+            if ok:
+                nivel = 'warning' if rating == 'YELLOW' else 'success'
+            else:
+                nivel = 'error'
+            detalle_parts = [
+                f"transporte=meta",
+                f"tipo={payload.get('type', '')}",
+                f"quality={rating}",
+            ]
+            if config.messaging_limit_tier:
+                detalle_parts.append(f"tier={config.messaging_limit_tier}")
+            if ok:
+                detalle_parts.append(f"message_id={resultado.get('message_id', '')}")
+            else:
+                detalle_parts.append(f"error={str(resultado.get('error', ''))[:500]}")
+                if resultado.get('requiere_plantilla'):
+                    detalle_parts.append('requiere_plantilla=True')
+                if resultado.get('cuenta_degradada'):
+                    detalle_parts.append('cuenta_degradada=True')
+            TrazaMensajeIA.objects.create(
+                sesion=config.sesion,
+                conversacion=conv,
+                numero=payload.get('to', '') or (conv.contacto.from_number if conv else ''),
+                etapa=etapa,
+                nivel=nivel,
+                detalle=' | '.join(detalle_parts)[:4000],
+                latencia_ms=latencia_ms,
+            )
+        except Exception:
+            logger.exception("Error registrando traza Meta")
 
     def _subir_media(self, config: ConfigMeta, file_path, file_content, filename, tipo) -> str | None:
         url = f'{GRAPH_API_BASE}/{config.phone_number_id}/media'

@@ -8,6 +8,47 @@
     --ws-border: #e9ecef;
 }
 
+/* ========== ELEGIR CAMINO (Baileys vs Meta) ========== */
+.elegir-camino-row {
+    margin-bottom: 1.25rem;
+}
+
+.elegir-camino-card {
+    display: block;
+    background: #fff;
+    border: 1.5px solid var(--ws-border);
+    border-radius: 14px;
+    padding: 1.1rem 1.2rem;
+    transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+    height: 100%;
+    color: inherit;
+}
+
+.elegir-camino-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.07);
+}
+
+.elegir-camino-card.camino-baileys:hover {
+    border-color: #22c55e;
+    box-shadow: 0 8px 22px rgba(34, 197, 94, 0.18);
+}
+
+.elegir-camino-card.camino-meta:hover {
+    border-color: #1d4ed8;
+    box-shadow: 0 8px 22px rgba(29, 78, 216, 0.18);
+}
+
+.elegir-camino-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
 /* ========== STATS BAR ========== */
 .stats-row {
     margin-bottom: 1.25rem;
@@ -324,8 +365,8 @@
     align-items: center;
     gap: 0.5rem;
     background: #fafbfc;
-    border-bottom-left-radius: 14px;
-    border-bottom-right-radius: 14px;
+    /*border-bottom-left-radius: 14px;*/
+    /*border-bottom-right-radius: 14px;*/
     position: relative;
     z-index: 1;
 }

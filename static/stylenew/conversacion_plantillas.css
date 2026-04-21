@@ -1,0 +1,296 @@
+/* Panel de plantillas Meta en el composer de /whatsapp/conversaciones/
+   Estilo pancake: popup que sube desde el boton al hacer click. */
+
+#plantillas-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #f0f2f5;
+    border: none;
+    color: #1877f2;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    transition: background .15s;
+    position: relative;
+}
+
+#plantillas-btn.visible {
+    display: flex;
+}
+
+#plantillas-btn:hover {
+    background: #e4e6eb;
+}
+
+#plantillas-btn .badge-count {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: #25d366;
+    color: #fff;
+    font-size: .6rem;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 10px;
+    line-height: 1.2;
+}
+
+#plantillas-panel {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    width: 380px;
+    max-width: 92vw;
+    max-height: 420px;
+    background: #fff;
+    border: 1px solid #dde1e7;
+    border-radius: 12px;
+    box-shadow: 0 4px 22px rgba(0, 0, 0, .18);
+    z-index: 999;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#plantillas-panel.open {
+    display: flex;
+}
+
+#plantillas-panel .pp-header {
+    padding: 10px 14px;
+    background: linear-gradient(135deg, #1877f2, #3b5998);
+    color: #fff;
+    font-size: .85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+#plantillas-panel .pp-header .pp-close {
+    background: transparent;
+    border: none;
+    color: #fff;
+    opacity: .8;
+    cursor: pointer;
+    font-size: .9rem;
+    padding: 0 2px;
+}
+
+#plantillas-panel .pp-header .pp-close:hover { opacity: 1; }
+
+#plantillas-panel .pp-search {
+    padding: 8px 10px;
+    border-bottom: 1px solid #eceff3;
+}
+
+#plantillas-panel .pp-search input {
+    width: 100%;
+    border: 1px solid #dde1e7;
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: .82rem;
+    outline: none;
+    background: #f7f8fa;
+}
+
+#plantillas-panel .pp-search input:focus {
+    border-color: #1877f2;
+    background: #fff;
+}
+
+#plantillas-panel .pp-list {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 6px 0;
+}
+
+#plantillas-panel .pp-empty {
+    padding: 18px 14px;
+    text-align: center;
+    color: #8a8f98;
+    font-size: .8rem;
+}
+
+#plantillas-panel .pp-item {
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0f2f5;
+    cursor: pointer;
+    transition: background .12s;
+}
+
+#plantillas-panel .pp-item:last-child { border-bottom: none; }
+
+#plantillas-panel .pp-item:hover {
+    background: #f0f7ff;
+}
+
+#plantillas-panel .pp-item-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 3px;
+}
+
+#plantillas-panel .pp-name {
+    font-weight: 600;
+    color: #1c1e21;
+    font-size: .82rem;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#plantillas-panel .pp-cat {
+    font-size: .62rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+#plantillas-panel .pp-cat.UTILITY       { background: #e3f2fd; color: #1565c0; }
+#plantillas-panel .pp-cat.MARKETING     { background: #fff3e0; color: #e65100; }
+#plantillas-panel .pp-cat.AUTHENTICATION { background: #f3e5f5; color: #6a1b9a; }
+
+#plantillas-panel .pp-lang {
+    font-size: .65rem;
+    color: #65676b;
+    background: #eceff3;
+    padding: 1px 6px;
+    border-radius: 8px;
+}
+
+#plantillas-panel .pp-preview {
+    font-size: .76rem;
+    color: #65676b;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+#plantillas-panel .pp-uses {
+    font-size: .65rem;
+    color: #8a8f98;
+    margin-top: 3px;
+}
+
+#plantillas-panel .pp-botones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+}
+
+#plantillas-panel .pp-boton-chip {
+    font-size: .66rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid #dde1e7;
+    color: #1877f2;
+    background: #f7faff;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#plantillas-panel .pp-boton-chip.URL         { color: #1877f2; background: #e7f0ff; }
+#plantillas-panel .pp-boton-chip.PHONE_NUMBER { color: #0a8043; background: #e6f4ea; }
+#plantillas-panel .pp-boton-chip.QUICK_REPLY  { color: #555; background: #f0f2f5; }
+
+/* Formulario de variables (cuando la plantilla requiere placeholders) */
+#plantillas-panel .pp-form {
+    padding: 12px 14px;
+    background: #f7f8fa;
+    border-top: 1px solid #eceff3;
+    display: none;
+}
+
+#plantillas-panel .pp-form.open { display: block; }
+
+#plantillas-panel .pp-form .pp-form-title {
+    font-size: .78rem;
+    font-weight: 600;
+    color: #1c1e21;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#plantillas-panel .pp-form .pp-form-title .pp-back {
+    cursor: pointer;
+    color: #1877f2;
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: .82rem;
+}
+
+#plantillas-panel .pp-form .pp-var-row {
+    margin-bottom: 8px;
+}
+
+#plantillas-panel .pp-form .pp-var-label {
+    font-size: .72rem;
+    color: #65676b;
+    margin-bottom: 2px;
+    display: block;
+}
+
+#plantillas-panel .pp-form .pp-var-input {
+    width: 100%;
+    border: 1px solid #dde1e7;
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: .82rem;
+    background: #fff;
+    outline: none;
+}
+
+#plantillas-panel .pp-form .pp-var-input:focus {
+    border-color: #1877f2;
+}
+
+#plantillas-panel .pp-form .pp-form-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+#plantillas-panel .pp-form .pp-btn-enviar {
+    flex: 1;
+    background: #1877f2;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: .8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+#plantillas-panel .pp-form .pp-btn-enviar:hover { background: #166fe5; }
+#plantillas-panel .pp-form .pp-btn-enviar:disabled { opacity: .6; cursor: not-allowed; }
+
+#plantillas-panel .pp-form .pp-btn-cancelar {
+    background: #fff;
+    color: #65676b;
+    border: 1px solid #dde1e7;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: .8rem;
+    cursor: pointer;
+}

@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block head %}
+<link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css">
 <style>
     /* ── Layout flexbox: anula el position:absolute del tema ── */
     .chat-box-right {
@@ -254,8 +255,52 @@
                     </div>
                 </div>
 
-                <!-- Footer vacío (finalizadas no tienen formulario de envío) -->
-                <div class="chat-footer p-3 bg-light" id="chat-footer" style="display:none;"></div>
+                <!-- Footer: solo permite enviar plantillas Meta para reactivar la conversacion -->
+                <div class="chat-footer" id="chat-footer" style="display:none;">
+                    {% csrf_token %}
+                    <input type="hidden" id="conversacion-id" value="">
+                    <div class="d-flex align-items-center gap-2" style="position:relative;">
+                        <div class="flex-grow-1 small text-muted">
+                            <i class="fa fa-lock me-1"></i>Conversación finalizada. Solo puedes reenganchar enviando una plantilla Meta aprobada.
+                        </div>
+                        <div style="position:relative;flex-shrink:0;">
+                            <button type="button" id="plantillas-btn" title="Enviar plantilla para reactivar">
+                                <i class="fa fa-layer-group"></i>
+                                <span class="badge-count" id="plantillas-badge" style="display:none;">0</span>
+                            </button>
+                            <div id="plantillas-panel">
+                                <div class="pp-header">
+                                    <span><i class="fa fa-layer-group me-1"></i>Plantillas aprobadas</span>
+                                    <span>
+                                        <button type="button" class="pp-close" id="plantillas-refresh" title="Refrescar plantillas">
+                                            <i class="fa fa-rotate"></i>
+                                        </button>
+                                        <button type="button" class="pp-close" id="plantillas-close" title="Cerrar">&times;</button>
+                                    </span>
+                                </div>
+                                <div class="pp-search">
+                                    <input type="search" id="plantillas-search" placeholder="Buscar plantilla...">
+                                </div>
+                                <div class="pp-list" id="plantillas-list">
+                                    <div class="pp-empty">Cargando...</div>
+                                </div>
+                                <div class="pp-form" id="plantillas-form">
+                                    <div class="pp-form-title">
+                                        <button type="button" class="pp-back" id="plantillas-form-back">
+                                            <i class="fa fa-arrow-left"></i>
+                                        </button>
+                                        <span id="plantillas-form-nombre"></span>
+                                    </div>
+                                    <div id="plantillas-form-vars"></div>
+                                    <div class="pp-form-actions">
+                                        <button type="button" class="pp-btn-cancelar" id="plantillas-form-cancelar">Cancelar</button>
+                                        <button type="button" class="pp-btn-enviar" id="plantillas-form-enviar">Enviar y reactivar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div><!--end chat-box-right -->
         </div>
     </div>
@@ -476,12 +521,23 @@ $(document).ready(function() {
                 $('#control-respuestas-panel, #stats-panel').addClass('d-none');
                 $('#btn-control-respuestas, #btn-estadisticas').removeClass('d-none').show();
 
+                // Footer solo aparece si la sesion es Meta (unica forma de reenganchar)
+                $('#conversacion-id').val(r.conversacion_id);
+                if (r.es_meta === true) {
+                    $('#chat-footer').removeClass('d-none').show();
+                    mostrarPlantillasSiMeta(true, r.conversacion_id);
+                } else {
+                    $('#chat-footer').addClass('d-none').hide();
+                    mostrarPlantillasSiMeta(false, null);
+                }
+
                 setTimeout(scrollToBottom, 800);
                 conectarWebSocket(r.conversacion_id);
             },
             error: function(xhr, s, err) {
                 $.unblockUI();
                 _cargandoMensajes = false;
+                console.error('[cargarMensajes finalizadas] ajax', s, err, xhr.responseText);
                 $('#mensajes-container').html(`<div class="p-3 text-center text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error: ${err}</div>`);
             }
         });
@@ -527,12 +583,12 @@ $(document).ready(function() {
         if (!id) return;
         Swal.fire({
             title: '¿Reactivar esta conversación?',
-            icon: 'question',
+            type: 'question',
             showCancelButton: true,
             confirmButtonText: 'Sí, reactivar',
             cancelButtonText: 'Cancelar',
         }).then(result => {
-            if (!result.isConfirmed) return;
+            if (!result.value) return;
             pantallaespera();
             $.post('{{ request.path }}', {action: 'marcar-reactivar', id, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()},
                 function(data) {
@@ -579,6 +635,289 @@ $(document).ready(function() {
     {% if conversacion_selected %}
     cargarMensajes('{{ conversacion_selected.id }}');
     {% endif %}
+
+    // ====================== PLANTILLAS META (finalizadas → reactivar) =========================
+    const _convPath = '{{ request.path }}';
+    {% verbatim %}
+    let _plantillasCache = {};
+    let _plantillaSeleccionada = null;
+
+    window.mostrarPlantillasSiMeta = function(esMeta, convId) {
+        const $btn = $('#plantillas-btn');
+        $('#plantillas-panel').removeClass('open');
+        $('#plantillas-badge').hide();
+        if (!esMeta) {
+            $btn.removeClass('visible');
+            return;
+        }
+        _fetchPlantillas(convId, false, function(err, plantillas) {
+            if (err) { console.error('[plantillas] pre-fetch error', err); $btn.removeClass('visible'); return; }
+            if (plantillas.length > 0) {
+                $btn.addClass('visible');
+                $('#plantillas-badge').text(plantillas.length).show();
+            } else {
+                $btn.removeClass('visible');
+            }
+        });
+    };
+
+    function _fetchPlantillas(conversacionId, forzar, callback) {
+        if (!forzar && _plantillasCache[conversacionId]) {
+            callback && callback(null, _plantillasCache[conversacionId]);
+            return;
+        }
+        $.get(_convPath, { action: 'listar_plantillas_meta', pk: conversacionId })
+            .done(function(r) {
+                if (r.error) {
+                    console.error('[plantillas] listar error', r);
+                    callback && callback(r.message || 'Error', []);
+                    return;
+                }
+                const plantillas = r.plantillas || [];
+                _plantillasCache[conversacionId] = plantillas;
+                callback && callback(null, plantillas);
+            })
+            .fail(function(xhr) {
+                console.error('[plantillas] listar fail', xhr.status, xhr.responseText);
+                callback && callback('http_' + xhr.status, []);
+            });
+    }
+
+    function _cargarListaPlantillas(conversacionId, forzar = false) {
+        const $list = $('#plantillas-list');
+        $list.html('<div class="pp-empty"><i class="fa fa-spinner fa-spin me-1"></i>Cargando plantillas...</div>');
+        _fetchPlantillas(conversacionId, forzar, function(err, plantillas) {
+            if (err) { $list.html('<div class="pp-empty text-danger">' + err + '</div>'); return; }
+            _renderListaPlantillas(plantillas);
+            if (plantillas.length > 0) {
+                $('#plantillas-badge').text(plantillas.length).show();
+            } else {
+                $('#plantillas-badge').hide();
+            }
+        });
+    }
+
+    function _renderListaPlantillas(plantillas, filtro = '') {
+        const $list = $('#plantillas-list');
+        const q = (filtro || '').toLowerCase().trim();
+        const filtradas = q ? plantillas.filter(p => (p.nombre + ' ' + (p.cuerpo || '')).toLowerCase().includes(q)) : plantillas;
+        if (!filtradas.length) { $list.html('<div class="pp-empty">No hay plantillas aprobadas disponibles.</div>'); return; }
+        const iconMap = { URL: 'fa-link', PHONE_NUMBER: 'fa-phone', QUICK_REPLY: 'fa-reply' };
+        const html = filtradas.map(p => {
+            const cat = (p.categoria || '').toUpperCase();
+            const botones = (p.botones || []).map(b => {
+                const tipo = b.type || b.tipo || '';
+                const icon = iconMap[tipo] || 'fa-square';
+                return `<span class="pp-boton-chip ${tipo}" title="${_esc(tipo)}"><i class="fa ${icon}"></i>${_esc(b.text || b.texto || '')}</span>`;
+            }).join('');
+            return `<div class="pp-item" data-id="${p.id}">
+                <div class="pp-item-head">
+                    <span class="pp-name">${_esc(p.nombre)}</span>
+                    <span class="pp-cat ${cat}">${cat}</span>
+                    <span class="pp-lang">${_esc(p.idioma)}</span>
+                </div>
+                <div class="pp-preview">${_esc(p.preview || '')}</div>
+                ${botones ? `<div class="pp-botones">${botones}</div>` : ''}
+                ${p.veces_enviada ? `<div class="pp-uses"><i class="fa fa-paper-plane me-1"></i>${p.veces_enviada} envios</div>` : ''}
+            </div>`;
+        }).join('');
+        $list.html(html);
+    }
+
+    function _esc(s) {
+        return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function _detectarVarsEnCuerpo(body) {
+        const re = /\{\{(\d+)\}\}/g;
+        const ids = new Set();
+        let m;
+        while ((m = re.exec(body || '')) !== null) ids.add(parseInt(m[1], 10));
+        return Array.from(ids).sort((a, b) => a - b);
+    }
+
+    function _plantillaNecesitaFormulario(p) {
+        if (_detectarVarsEnCuerpo(p.cuerpo).length > 0) return true;
+        if (p.header_tipo === 'TEXT' && _detectarVarsEnCuerpo(p.header_contenido).length > 0) return true;
+        if (['IMAGE', 'VIDEO', 'DOCUMENT'].indexOf(p.header_tipo) !== -1) return true;
+        return false;
+    }
+
+    function _abrirFormulario(plantilla) {
+        _plantillaSeleccionada = plantilla;
+        $('#plantillas-form-nombre').text(plantilla.nombre);
+        let headerHtml = '';
+        const ht = plantilla.header_tipo || 'NONE';
+        const abre = '{' + '{';
+        const cierra = '}' + '}';
+        if (ht === 'TEXT') {
+            const headerVars = _detectarVarsEnCuerpo(plantilla.header_contenido);
+            if (headerVars.length > 0) {
+                headerHtml += '<div class="pp-form-title" style="font-size:.72rem;color:#65676b;margin-top:4px;">Encabezado</div>';
+                headerHtml += headerVars.map(idx => `<div class="pp-var-row">
+                    <label class="pp-var-label">Header ${abre}${idx}${cierra}</label>
+                    <input type="text" class="pp-var-input" data-header-var="${idx}">
+                </div>`).join('');
+            }
+        } else if (ht === 'IMAGE' || ht === 'VIDEO' || ht === 'DOCUMENT') {
+            const label = { IMAGE: 'URL de imagen', VIDEO: 'URL de video', DOCUMENT: 'URL de documento' }[ht];
+            headerHtml += '<div class="pp-form-title" style="font-size:.72rem;color:#65676b;margin-top:4px;">Encabezado</div>';
+            headerHtml += `<div class="pp-var-row">
+                <label class="pp-var-label">${label}</label>
+                <input type="url" class="pp-var-input" id="pp-header-url" placeholder="https://...">
+            </div>`;
+            if (ht === 'DOCUMENT') {
+                headerHtml += `<div class="pp-var-row">
+                    <label class="pp-var-label">Nombre del archivo (opcional)</label>
+                    <input type="text" class="pp-var-input" id="pp-header-filename" placeholder="archivo.pdf">
+                </div>`;
+            }
+        }
+        const bodyVars = _detectarVarsEnCuerpo(plantilla.cuerpo);
+        const meta = plantilla.variables || [];
+        let bodyHtml = '';
+        if (bodyVars.length > 0) {
+            bodyHtml += '<div class="pp-form-title" style="font-size:.72rem;color:#65676b;margin-top:10px;">Cuerpo</div>';
+            bodyHtml += bodyVars.map(idx => {
+                const info = meta[idx - 1] || {};
+                const nombre = info.nombre ? ' · ' + _esc(info.nombre) : '';
+                const placeholder = info.ejemplo ? 'Ej: ' + _esc(info.ejemplo) : '';
+                return `<div class="pp-var-row">
+                    <label class="pp-var-label">${abre}${idx}${cierra}${nombre}</label>
+                    <input type="text" class="pp-var-input" data-body-var="${idx}" placeholder="${placeholder}">
+                </div>`;
+            }).join('');
+        }
+        const total = headerHtml + bodyHtml;
+        $('#plantillas-form-vars').html(total || '<div class="text-muted" style="font-size:.78rem;">Esta plantilla no requiere variables.</div>');
+        $('#plantillas-list').hide();
+        $('#plantillas-form').addClass('open');
+    }
+
+    function _cerrarFormulario() {
+        _plantillaSeleccionada = null;
+        $('#plantillas-form').removeClass('open');
+        $('#plantillas-list').show();
+    }
+
+    $('#plantillas-btn').on('click', function(e) {
+        e.stopPropagation();
+        const convId = $('#conversacion-id').val();
+        if (!convId) return;
+        const $panel = $('#plantillas-panel');
+        if ($panel.hasClass('open')) { $panel.removeClass('open'); return; }
+        $panel.addClass('open');
+        _cerrarFormulario();
+        _cargarListaPlantillas(convId);
+    });
+
+    $('#plantillas-close').on('click', function() { $('#plantillas-panel').removeClass('open'); });
+    $('#plantillas-refresh').on('click', function() {
+        const convId = $('#conversacion-id').val();
+        if (!convId) return;
+        delete _plantillasCache[convId];
+        _cerrarFormulario();
+        _cargarListaPlantillas(convId, true);
+    });
+    $('#plantillas-panel').on('click', function(e) { e.stopPropagation(); });
+
+    $(document).on('click', '#plantillas-list .pp-item', function() {
+        const id = $(this).data('id');
+        const convId = $('#conversacion-id').val();
+        const lista = _plantillasCache[convId] || [];
+        const p = lista.find(x => x.id === id);
+        if (!p) { console.error('[plantillas] no encontrada', id); return; }
+        if (_plantillaNecesitaFormulario(p)) { _abrirFormulario(p); }
+        else { _enviarPlantilla(p, [], null); }
+    });
+
+    $('#plantillas-search').on('input', function() {
+        const convId = $('#conversacion-id').val();
+        _renderListaPlantillas(_plantillasCache[convId] || [], $(this).val());
+    });
+
+    $('#plantillas-form-back, #plantillas-form-cancelar').on('click', _cerrarFormulario);
+
+    $('#plantillas-form-enviar').on('click', function() {
+        if (!_plantillaSeleccionada) return;
+        const bodyVars = _detectarVarsEnCuerpo(_plantillaSeleccionada.cuerpo);
+        const paramsCuerpo = [];
+        $('#plantillas-form-vars .pp-var-input[data-body-var]').each(function() {
+            const idx = parseInt($(this).data('body-var'), 10);
+            paramsCuerpo[idx - 1] = $(this).val().trim();
+        });
+        if (bodyVars.length && paramsCuerpo.some(v => !v)) {
+            alertaWarning('Completa todas las variables del cuerpo.'); return;
+        }
+        let paramsHeader = null;
+        const ht = _plantillaSeleccionada.header_tipo || 'NONE';
+        if (ht === 'TEXT') {
+            const headerVars = _detectarVarsEnCuerpo(_plantillaSeleccionada.header_contenido);
+            if (headerVars.length > 0) {
+                paramsHeader = [];
+                $('#plantillas-form-vars .pp-var-input[data-header-var]').each(function() {
+                    const idx = parseInt($(this).data('header-var'), 10);
+                    paramsHeader[idx - 1] = $(this).val().trim();
+                });
+                if (paramsHeader.some(v => !v)) { alertaWarning('Completa todas las variables del encabezado.'); return; }
+            }
+        } else if (ht === 'IMAGE' || ht === 'VIDEO' || ht === 'DOCUMENT') {
+            const url = ($('#pp-header-url').val() || '').trim();
+            if (!url) { alertaWarning('Agrega la URL del archivo del encabezado.'); return; }
+            if (ht === 'IMAGE')    paramsHeader = { image_url: url };
+            if (ht === 'VIDEO')    paramsHeader = { video_url: url };
+            if (ht === 'DOCUMENT') {
+                paramsHeader = { document_url: url };
+                const fname = ($('#pp-header-filename').val() || '').trim();
+                if (fname) paramsHeader.filename = fname;
+            }
+        }
+        _enviarPlantilla(_plantillaSeleccionada, paramsCuerpo, paramsHeader);
+    });
+
+    function _enviarPlantilla(plantilla, paramsCuerpo, paramsHeader) {
+        const convId = $('#conversacion-id').val();
+        if (!convId) { console.error('[plantillas] sin conversacion'); return; }
+        const $btn = $('#plantillas-form-enviar');
+        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Enviando...');
+        $.post(_convPath, {
+            action: 'enviar_plantilla_meta',
+            pk: convId,
+            plantilla_id: plantilla.id,
+            params_cuerpo_json: JSON.stringify(paramsCuerpo || []),
+            params_header_json: JSON.stringify(paramsHeader || []),
+            csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val(),
+        }).done(function(r) {
+            if (r.error) {
+                console.error('[plantillas] envio error', r);
+                alertaWarning(r.message || 'Error al enviar plantilla.');
+                return;
+            }
+            // El backend reactiva la conversacion y devuelve url destino
+            if (r.reactivada && r.url) {
+                window.location.href = r.url;
+                return;
+            }
+            $('#mensajes-container').append(r.mensaje_html);
+            $('#plantillas-panel').removeClass('open');
+            _cerrarFormulario();
+            setTimeout(scrollToBottom, 200);
+        }).fail(function(xhr) {
+            console.error('[plantillas] envio fail', xhr.status, xhr.responseText);
+            alertaWarning('Error: ' + (xhr.responseText || xhr.status));
+        }).always(function() {
+            $btn.prop('disabled', false).text('Enviar y reactivar');
+        });
+    }
+
+    document.addEventListener('click', function(e) {
+        const panel = document.getElementById('plantillas-panel');
+        const btn = document.getElementById('plantillas-btn');
+        if (!panel || !panel.classList.contains('open')) return;
+        if (panel.contains(e.target) || (btn && btn.contains(e.target))) return;
+        panel.classList.remove('open');
+    });
+    {% endverbatim %}
 });
 
 async function transcribirAudio(ctr) {

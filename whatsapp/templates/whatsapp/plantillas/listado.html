@@ -8,6 +8,16 @@
 {% block content %}
 <div class="container-fluid p-0">
 
+    {# ===== AVISO: plantillas son exclusivas de WA Cloud ===== #}
+    <div class="alert alert-secondary d-flex align-items-center gap-2 mb-2 py-2 small">
+        <i class="fa fa-circle-info text-primary"></i>
+        <div>
+            <strong>Plantillas = solo WhatsApp Cloud API.</strong>
+            Instagram DM no tiene plantillas (solo respuesta dentro de 24h).
+            Messenger usa <strong>Message Tags</strong> en su lugar (categorias <code>CONFIRMED_EVENT_UPDATE</code>, <code>POST_PURCHASE_UPDATE</code>, <code>ACCOUNT_UPDATE</code>, <code>HUMAN_AGENT</code>).
+        </div>
+    </div>
+
     {# ===== EXPLICACIÓN DEL MÓDULO ===== #}
     <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
         <i class="fa fa-file-lines fa-2x"></i>

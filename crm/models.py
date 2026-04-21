@@ -190,7 +190,7 @@ class AgentesIA(ModeloBase):
         help_text="Si se activa, el agente guardará las listas de productos/servicios en la memoria"
     )
     faqs_en_prompt = models.PositiveSmallIntegerField(
-        default=10, verbose_name='Cantidad de FAQs en prompt',
+        default=5, verbose_name='Cantidad de FAQs en prompt',
         help_text='Top N FAQs aprobadas (por prioridad) inyectadas literal en el prompt. '
                   'Las demás quedan disponibles vía RAG.'
     )
@@ -222,24 +222,24 @@ class AgentesIA(ModeloBase):
                   'Si el bot da respuestas cortadas/incompletas, subilo. Rango: 2000–8000. Default: 4000.'
     )
     cfg_max_static_chars = models.PositiveIntegerField(
-        default=2000, verbose_name='Máx caracteres del texto fijo (cuando complementa)',
+        default=1200, verbose_name='Máx caracteres del texto fijo (cuando complementa)',
         help_text='Cuando hay entrenamiento Y texto fijo (FAQ/menú), cuánto texto fijo se incluye. '
-                  'Rango: 1000–5000. Default: 2000.'
+                  'Rango: 800–5000. Default: 1200.'
     )
     cfg_history_turns = models.PositiveSmallIntegerField(
-        default=10, verbose_name='Mensajes previos que recuerda',
+        default=5, verbose_name='Mensajes previos que recuerda',
         help_text='Cuántos turnos de conversación recuerda el bot (1 turno = 1 mensaje del cliente + 1 respuesta). '
-                  'Subilo si el bot olvida pedidos en conversaciones largas. Rango: 5–20. Default: 10.'
+                  'Subilo si el bot olvida pedidos en conversaciones largas. Rango: 3–20. Default: 5.'
     )
     cfg_user_snippet = models.PositiveSmallIntegerField(
-        default=300, verbose_name='Máx caracteres por mensaje del cliente recordado',
+        default=150, verbose_name='Máx caracteres por mensaje del cliente recordado',
         help_text='Si el cliente escribe un mensaje muy largo, lo truncamos a esta cantidad para no gastar tokens. '
-                  'Rango: 200–600. Default: 300.'
+                  'Rango: 100–600. Default: 150.'
     )
     cfg_ai_snippet = models.PositiveSmallIntegerField(
-        default=800, verbose_name='Máx caracteres por respuesta del bot recordada',
+        default=400, verbose_name='Máx caracteres por respuesta del bot recordada',
         help_text='Crítico cuando el bot envía menús/listas largas. Si está muy bajo, el bot olvida lo que ya mostró '
-                  'y se contradice. Rango: 400–2000. Default: 800.'
+                  'y se contradice. Rango: 300–2000. Default: 400.'
     )
     cfg_max_output_tokens = models.PositiveIntegerField(
         default=3000, verbose_name='Máx longitud de la respuesta del bot',

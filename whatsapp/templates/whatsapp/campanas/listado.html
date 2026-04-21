@@ -12,6 +12,35 @@
 {% block content %}
 <div class="container-fluid p-0">
 
+    {# ===== TABS POR PROVEEDOR — filtra el listado de campañas + el combo del modal ===== #}
+    <ul class="nav nav-pills mb-3" role="tablist" style="font-size:.85rem;">
+        <li class="nav-item">
+            <a class="nav-link {% if not proveedor_filtro %}active{% endif %}" href="?">
+                <i class="fa fa-list me-1"></i> Todas
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if proveedor_filtro == 'baileys' %}active bg-success{% endif %}" href="?proveedor=baileys">
+                <i class="fab fa-whatsapp me-1"></i> Baileys
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if proveedor_filtro == 'meta' %}active bg-primary{% endif %}" href="?proveedor=meta">
+                <i class="fa fa-cloud me-1"></i> Meta Cloud
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if proveedor_filtro == 'instagram' %}active bg-danger{% endif %}" href="?proveedor=instagram">
+                <i class="fab fa-instagram me-1"></i> Instagram
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if proveedor_filtro == 'messenger' %}active bg-primary{% endif %}" href="?proveedor=messenger">
+                <i class="fab fa-facebook-messenger me-1"></i> Messenger
+            </a>
+        </li>
+    </ul>
+
     {# ===== EXPLICACIÓN — QUÉ ES UNA CAMPAÑA ===== #}
     <div class="card border-info mb-3" id="cardGuiaCampanas">
         <div class="card-body py-3">
@@ -401,15 +430,23 @@
                             {% for e in etiquetas %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}
                         </select>
                     </div>
+                    {% if varios_canales %}
                     <div class="col-12">
                         <label class="form-label">Canales permitidos</label>
-                        <select name="canales[]" multiple class="form-select" size="3">
-                            <option value="whatsapp">WhatsApp</option>
-                            <option value="instagram">Instagram</option>
-                            <option value="messenger">Messenger</option>
+                        <select name="canales[]" multiple class="form-select" size="{{ canales_disponibles|length }}">
+                            {% if 'whatsapp' in canales_disponibles %}<option value="whatsapp">WhatsApp</option>{% endif %}
+                            {% if 'instagram' in canales_disponibles %}<option value="instagram">Instagram</option>{% endif %}
+                            {% if 'messenger' in canales_disponibles %}<option value="messenger">Messenger</option>{% endif %}
                         </select>
-                        <small class="text-muted">Vacío = todos los canales del contacto</small>
+                        <small class="text-muted">Vacío = todos los canales del contacto (solo se muestran los que tenés conectados).</small>
                     </div>
+                    {% else %}
+                    {# Un solo canal: no tiene sentido el multi-select. Enviamos el canal como hidden
+                       para que el backend reciba el mismo dato sin friccion de UI. #}
+                    {% for canal in canales_disponibles %}
+                        <input type="hidden" name="canales[]" value="{{ canal }}">
+                    {% endfor %}
+                    {% endif %}
                 </div>
             </div>
             <div class="modal-footer">

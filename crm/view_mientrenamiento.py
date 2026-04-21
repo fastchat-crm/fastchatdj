@@ -789,6 +789,129 @@ def entrenamiento_ia_view(request):
                         filtro.save(update_fields=['activo'])
                         return JsonResponse({'error': False, 'activo': filtro.activo})
 
+                    elif action == 'optimizar_defaults_agentes':
+                        # Baja los parametros token-hungry de los agentes que todavia
+                        # usan los defaults viejos, sin tocar agentes tuneados a mano.
+                        # Filtros por valor viejo exacto → si el usuario subio o bajo
+                        # manualmente el valor, lo respetamos.
+                        _reglas = [
+                            ('cfg_history_turns',    10,   5),
+                            ('cfg_user_snippet',     300,  150),
+                            ('cfg_ai_snippet',       800,  400),
+                            ('cfg_max_static_chars', 2000, 1200),
+                            ('faqs_en_prompt',       10,   5),
+                        ]
+                        qs_base = AgentesIA.objects.filter(perfil=perfil, status=True)
+                        resumen = []
+                        total_agentes_tocados = set()
+                        for campo, viejo, nuevo in _reglas:
+                            ids_a_cambiar = list(qs_base.filter(**{campo: viejo}).values_list('id', flat=True))
+                            actualizados = qs_base.filter(id__in=ids_a_cambiar).update(**{campo: nuevo})
+                            total_agentes_tocados.update(ids_a_cambiar)
+                            resumen.append({
+                                'campo':        campo,
+                                'valor_viejo':  viejo,
+                                'valor_nuevo':  nuevo,
+                                'actualizados': actualizados,
+                            })
+                        log(f"Optimizar agentes: {len(total_agentes_tocados)} agentes ajustados a defaults nuevos",
+                            request, "change", obj=0)
+                        return JsonResponse({
+                            'error':           False,
+                            'message':         f'{len(total_agentes_tocados)} agente(s) optimizados.',
+                            'agentes_tocados': len(total_agentes_tocados),
+                            'total_agentes':   qs_base.count(),
+                            'detalle':         resumen,
+                        })
+
+                    elif action == 'ejecutar_prompt_agente':
+                        # Invoca el LLM de verdad con la pregunta del usuario usando
+                        # el mismo pipeline que runtime (consultar / consultar_con_listas).
+                        # Devuelve: prompt_real, respuesta, tokens, latencia, sin_datos.
+                        from django.utils import timezone as _tz
+                        from types import SimpleNamespace
+                        from agents_ai.agente_consultor import AgenteConsultor
+                        from crm.models import ConsumoTokenIA as _CT
+                        from core.constantes import PROMPT_TEMPLATES as _PTS_EJ
+
+                        try:
+                            agente_id = int(request.POST.get('id') or 0)
+                            agente = AgentesIA.objects.get(pk=agente_id, perfil=perfil)
+                        except AgentesIA.DoesNotExist:
+                            return JsonResponse({'error': True, 'message': 'Agente no encontrado.'})
+
+                        pregunta = (request.POST.get('pregunta') or '').strip()
+                        if not pregunta:
+                            return JsonResponse({'error': True, 'message': 'Escribe una pregunta.'})
+
+                        apikey_obj = agente.apikey.filter(estado=True).first()
+                        if not apikey_obj:
+                            return JsonResponse({'error': True, 'message': 'El agente no tiene API Key activa.'})
+
+                        vs_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path) if agente.vectorstore_path else None
+                        vs_enlaces_path = (
+                            os.path.join(settings.MEDIA_ROOT, agente.vectorstore_enlaces_path)
+                            if agente.vectorstore_enlaces_path else None
+                        )
+                        fake_conv = SimpleNamespace(id=f"sim-ejec-{agente.id}-{request.user.id}", contacto=None)
+
+                        try:
+                            consultor = AgenteConsultor(
+                                vectorstore_path=vs_path, vectorstore_enlaces_path=vs_enlaces_path,
+                                provider=apikey_obj.proveedor, apikey=apikey_obj.descripcion,
+                                model_name=(apikey_obj.modelo or None),
+                                conversacion=fake_conv,
+                                prompt_template_text=(agente.prompt_template or '').strip() or _PTS_EJ.get('es', ''),
+                                contexto_estatico=agente.contexto_estatico or None,
+                                perfil=agente.perfil, agente=agente,
+                            )
+                            # Prompt que realmente va al LLM (mismo cálculo que simular_prompt)
+                            contexto_real, _sd = consultor._construir_contexto(pregunta, "")
+                            prompt_real = consultor._formatear_prompt(pregunta, contexto_real, agente.descripcion or '', "")
+
+                            t0 = _tz.now()
+                            if agente.requiere_tools():
+                                resultado = consultor.consultar_con_listas(pregunta, agente.descripcion or '')
+                            else:
+                                resultado = consultor.consultar(pregunta, agente.descripcion or '')
+                            latencia_ms = int((_tz.now() - t0).total_seconds() * 1000)
+                        except Exception as ex:
+                            return JsonResponse({'error': True, 'message': f'Fallo invocando el agente: {ex}'})
+
+                        # Registrar consumo (igual que chat real)
+                        if resultado.tokens_total > 0:
+                            try:
+                                _CT.objects.create(
+                                    apikey=apikey_obj, agente=agente,
+                                    tokens_entrada=resultado.tokens_entrada,
+                                    tokens_salida=resultado.tokens_salida,
+                                    tokens_total=resultado.tokens_total,
+                                    modelo=consultor.model_name,
+                                    origen='simular_prompt',
+                                    prompt_preview=(pregunta or '')[:300],
+                                )
+                            except Exception:
+                                pass
+
+                        return JsonResponse({
+                            'error':           False,
+                            'prompt_real':     prompt_real,
+                            'chars_prompt':    len(prompt_real),
+                            'contexto':        contexto_real,
+                            'chars_contexto':  len(contexto_real),
+                            'respuesta':       resultado.respuesta,
+                            'sin_datos':       resultado.sin_datos,
+                            'fin_detectado':   resultado.fin_detectado,
+                            'tokens_entrada':  resultado.tokens_entrada,
+                            'tokens_salida':   resultado.tokens_salida,
+                            'tokens_total':    resultado.tokens_total,
+                            'latencia_ms':     latencia_ms,
+                            'faqs_usadas':     list(consultor._faq_ids_usadas or []),
+                            'modelo':          consultor.model_name,
+                            'provider':        apikey_obj.proveedor,
+                            'tiene_faiss':     bool(vs_path),
+                        })
+
                     elif action == 'herramienta_simular':
                         from django.utils import timezone as _tz
                         from types import SimpleNamespace
@@ -1266,6 +1389,104 @@ def entrenamiento_ia_view(request):
                         })
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})
+                if action == 'preview_optimizar_agentes':
+                    # Preview: muestra agente por agente qué cambiaría al ejecutar
+                    # la optimizacion de defaults. No modifica nada en DB.
+                    _reglas = [
+                        ('cfg_history_turns',    10,   5),
+                        ('cfg_user_snippet',     300,  150),
+                        ('cfg_ai_snippet',       800,  400),
+                        ('cfg_max_static_chars', 2000, 1200),
+                        ('faqs_en_prompt',       10,   5),
+                    ]
+                    qs_base = AgentesIA.objects.filter(perfil=perfil, status=True).order_by('nombre')
+                    filas = []
+                    total_cambios = 0
+                    for ag in qs_base:
+                        cambios_ag = []
+                        for campo, viejo, nuevo in _reglas:
+                            actual = getattr(ag, campo, None)
+                            cambiara = (actual == viejo)
+                            if cambiara:
+                                total_cambios += 1
+                            cambios_ag.append({
+                                'campo':    campo,
+                                'antes':    actual,
+                                'despues':  nuevo if cambiara else actual,
+                                'cambia':   cambiara,
+                            })
+                        filas.append({
+                            'id':       ag.id,
+                            'nombre':   ag.nombre or '(sin nombre)',
+                            'cambios':  cambios_ag,
+                            'n_cambios': sum(1 for c in cambios_ag if c['cambia']),
+                        })
+                    agentes_con_cambios = sum(1 for f in filas if f['n_cambios'] > 0)
+                    return JsonResponse({
+                        'result':               True,
+                        'filas':                filas,
+                        'total_agentes':        len(filas),
+                        'agentes_con_cambios':  agentes_con_cambios,
+                        'total_cambios':        total_cambios,
+                        'reglas':               [
+                            {'campo': c, 'viejo': v, 'nuevo': n} for c, v, n in _reglas
+                        ],
+                    })
+                if action == 'simular_prompt':
+                    # Construye el prompt REAL que se enviaría al LLM para la
+                    # pregunta dada, usando el mismo pipeline que runtime
+                    # (_construir_contexto + _formatear_prompt de AgenteConsultor).
+                    # NO invoca al LLM — solo arma el payload y lo devuelve.
+                    try:
+                        from types import SimpleNamespace
+                        from agents_ai.agente_consultor import AgenteConsultor
+                        from core.constantes import PROMPT_TEMPLATES as _PTS_SIM
+
+                        pk = int(request.GET['id'])
+                        pregunta = (request.GET.get('pregunta') or '').strip()
+                        if not pregunta:
+                            return JsonResponse({'result': False, 'message': 'Ingresa una pregunta de ejemplo.'})
+
+                        agente = AgentesIA.objects.get(pk=pk, perfil=perfil)
+                        apikey_obj = agente.apikey.filter(estado=True).first()
+                        if not apikey_obj:
+                            return JsonResponse({'result': False, 'message': 'El agente no tiene API Key activa — necesaria para cargar el vectorstore.'})
+
+                        vs_path = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path) if agente.vectorstore_path else None
+                        vs_enlaces_path = (
+                            os.path.join(settings.MEDIA_ROOT, agente.vectorstore_enlaces_path)
+                            if agente.vectorstore_enlaces_path else None
+                        )
+                        prompt_tpl = (agente.prompt_template or '').strip() or _PTS_SIM.get('es', '')
+
+                        fake_conv = SimpleNamespace(id=f"sim-prompt-{agente.id}-{request.user.id}", contacto=None)
+                        consultor = AgenteConsultor(
+                            vectorstore_path=vs_path, vectorstore_enlaces_path=vs_enlaces_path,
+                            provider=apikey_obj.proveedor, apikey=apikey_obj.descripcion,
+                            model_name=(apikey_obj.modelo or None),
+                            conversacion=fake_conv,
+                            prompt_template_text=prompt_tpl,
+                            contexto_estatico=agente.contexto_estatico or None,
+                            perfil=agente.perfil, agente=agente,
+                        )
+
+                        contexto, sin_datos = consultor._construir_contexto(pregunta, "")
+                        prompt_final = consultor._formatear_prompt(pregunta, contexto, agente.descripcion or '', "")
+
+                        return JsonResponse({
+                            'result':         True,
+                            'prompt_real':    prompt_final,
+                            'contexto':       contexto,
+                            'chars_prompt':   len(prompt_final),
+                            'chars_contexto': len(contexto),
+                            'sin_datos':      sin_datos,
+                            'faqs_usadas':    list(consultor._faq_ids_usadas or []),
+                            'modelo':         apikey_obj.modelo or consultor.model_name,
+                            'provider':       apikey_obj.proveedor,
+                            'tiene_faiss':    bool(vs_path),
+                        })
+                    except Exception as ex:
+                        return JsonResponse({'result': False, 'message': f'Error al simular: {ex}'})
                 if action == 'herramienta_form':
                     try:
                         from crm.forms import HerramientaAgenteForm

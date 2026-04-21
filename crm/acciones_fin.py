@@ -69,7 +69,13 @@ def _enviar_whatsapp(numero_destino: str, mensaje: str, contexto: dict) -> None:
     sesion = SesionWhatsApp.objects.filter(session_id=sesion_id).first()
     numero_fmt = numero_destino.strip().lstrip('+')
     to = f"{numero_fmt}@s.whatsapp.net" if '@' not in numero_fmt else numero_fmt
-    get_whatsapp_service(sesion).send_text_message(sesion_id, to, mensaje)
+    resultado = get_whatsapp_service(sesion).send_text_message(sesion_id, to, mensaje)
+    if not resultado or not resultado.get('success'):
+        logger.warning(
+            "AccionFinConversacion whatsapp FALLO a %s vía sesión %s: %s",
+            numero_destino, sesion_id, (resultado or {}).get('error', 'respuesta vacia'),
+        )
+        return
     logger.info("Mensaje WA de fin enviado a %s vía sesión %s", numero_destino, sesion_id)
 
 

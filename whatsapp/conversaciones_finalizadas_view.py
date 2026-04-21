@@ -68,6 +68,7 @@ def conversacionesFinalizadasView(request):
                     'show_date': True,
                     'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y') if conversacion.fecha_registro else '',
                     'fecha_fin': conversacion.fecha_fin_conversacion.strftime('%d/%m/%Y') if conversacion.fecha_fin_conversacion else '',
+                    'es_meta': bool(getattr(conversacion.sesion, 'es_meta', False)),
                     **_estadisticas_conversacion(conversacion),
                 })
             except Exception as ex:
@@ -99,6 +100,40 @@ def conversacionesFinalizadasView(request):
                 import traceback
                 traceback.print_exc()
                 return JsonResponse({"result": False, 'message': str(ex)})
+        elif action == 'listar_plantillas_meta':
+            try:
+                pk = int(request.GET['pk'])
+                conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+                sesion = conversacion.sesion
+                if not getattr(sesion, 'es_meta', False):
+                    return JsonResponse({'error': False, 'plantillas': [], 'motivo': 'sesion_no_meta'})
+                config = getattr(sesion, 'config_meta', None)
+                if not config:
+                    return JsonResponse({'error': False, 'plantillas': [], 'motivo': 'sin_config_meta'})
+                plantillas = (
+                    config.plantillas.filter(status=True, estado_meta='APPROVED')
+                    .order_by('nombre', 'idioma')
+                )
+                def _preview(body, max_chars=140):
+                    body = (body or '').strip()
+                    return (body[:max_chars] + '…') if len(body) > max_chars else body
+                data_plantillas = [{
+                    'id':        p.id,
+                    'nombre':    p.nombre,
+                    'idioma':    p.idioma,
+                    'categoria': p.categoria,
+                    'cuerpo':    p.cuerpo or '',
+                    'preview':   _preview(p.cuerpo),
+                    'footer':    p.footer or '',
+                    'header_tipo':     p.header_tipo,
+                    'header_contenido': p.header_contenido or '',
+                    'variables': p.variables_json or [],
+                    'botones':   p.botones_json or [],
+                    'veces_enviada': p.veces_enviada,
+                } for p in plantillas]
+                return JsonResponse({'error': False, 'plantillas': data_plantillas})
+            except Exception as ex:
+                return JsonResponse({'error': True, 'message': str(ex)})
 
 
     # ====================== ENVIAR MENSAJE =========================
@@ -117,32 +152,35 @@ def conversacionesFinalizadasView(request):
                     service = get_whatsapp_service(conversacion.sesion)
 
                     tipo_mensaje = 'texto'
+                    media_type = None
                     if archivo:
                         ct = archivo.content_type or ''
                         if 'image' in ct:
-                            tipo_mensaje = 'imagen'
+                            tipo_mensaje, media_type = 'imagen', 'image'
                         elif 'audio' in ct:
-                            tipo_mensaje = 'audio'
+                            tipo_mensaje, media_type = 'audio', 'audio'
                         elif 'video' in ct:
-                            tipo_mensaje = 'video'
+                            tipo_mensaje, media_type = 'video', 'video'
                         else:
-                            tipo_mensaje = 'documento'
+                            tipo_mensaje, media_type = 'documento', 'document'
 
                     if archivo:
                         file_bytes = archivo.read()
                         response = service.send_media_message(
                             conversacion.sesion.session_id, conversacion.from_number, caption=texto,
-                            file_content=file_bytes, filename=archivo.name
+                            file_content=file_bytes, filename=archivo.name, media_type=media_type,
+                            conversacion_id=conversacion.id,
                         )
                     else:
                         response = service.send_text_message(
-                            conversacion.sesion.session_id, conversacion.from_number, texto
+                            conversacion.sesion.session_id, conversacion.from_number, texto,
+                            conversacion_id=conversacion.id,
                         )
 
                     if not response.get('success', False):
                         return JsonResponse({
                             'error': True,
-                            'message': f"Error al enviar mensaje: {response.get('message', 'Error desconocido')}"
+                            'message': f"Error al enviar mensaje: {response.get('error', 'Error desconocido')}"
                         })
 
                     mensaje = MensajeWhatsApp(
@@ -171,6 +209,106 @@ def conversacionesFinalizadasView(request):
                         'mensaje_html': render_to_string('whatsapp/conversaciones/mensaje_enviado_partial.html',
                                                         {'mensaje': mensaje},
                                                         request=request)
+                    })
+                elif action == 'enviar_plantilla_meta':
+                    # Envia plantilla Meta desde una conversacion FINALIZADA.
+                    # Si el envio tiene exito, reactiva la conversacion para que
+                    # el agente pueda continuar el hilo en la vista activa.
+                    import json as _json
+                    from .models import PlantillaWhatsApp
+                    from dateutil.relativedelta import relativedelta
+
+                    pk = int(request.POST['pk'])
+                    plantilla_id = int(request.POST['plantilla_id'])
+                    params_cuerpo = _json.loads(request.POST.get('params_cuerpo_json') or '[]')
+                    params_header = _json.loads(request.POST.get('params_header_json') or '[]')
+
+                    conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+                    sesion = conversacion.sesion
+                    if not getattr(sesion, 'es_meta', False):
+                        return JsonResponse({'error': True, 'message': 'La sesion no es Meta.'})
+                    config = getattr(sesion, 'config_meta', None)
+                    if not config:
+                        return JsonResponse({'error': True, 'message': 'Configuracion Meta no encontrada.'})
+                    plantilla = PlantillaWhatsApp.objects.filter(
+                        pk=plantilla_id, config_meta=config, status=True, estado_meta='APPROVED'
+                    ).first()
+                    if not plantilla:
+                        return JsonResponse({'error': True, 'message': 'Plantilla no disponible o no aprobada.'})
+
+                    service = get_whatsapp_service(sesion)
+                    response = service.send_template(
+                        sesion.session_id, conversacion.from_number,
+                        plantilla_nombre=plantilla.nombre,
+                        idioma=plantilla.idioma,
+                        parametros_cuerpo=params_cuerpo if params_cuerpo else None,
+                        parametros_header=params_header if params_header else None,
+                        conversacion_id=conversacion.id,
+                    )
+                    if not response.get('success'):
+                        return JsonResponse({
+                            'error': True,
+                            'message': f"Error al enviar plantilla: {response.get('error', 'Error desconocido')}",
+                        })
+
+                    # Render del cuerpo con placeholders sustituidos (para historial)
+                    def _render_cuerpo(body, params):
+                        if not body:
+                            return ''
+                        out = body
+                        for idx, val in enumerate(params or [], start=1):
+                            out = out.replace('{{' + str(idx) + '}}', str(val))
+                        return out
+                    texto_final = _render_cuerpo(plantilla.cuerpo, params_cuerpo)
+                    if plantilla.footer:
+                        texto_final = f"{texto_final}\n\n_{plantilla.footer}_"
+
+                    # Reactivar conversacion cerrada
+                    min_sesion = int(getattr(sesion, 'min_sesion', None) or 10)
+                    conversacion.estado_conversacion = 0
+                    conversacion.conversacion_finalizada = False
+                    conversacion.despedida_enviado = False
+                    conversacion.fecha_fin_conversacion = None
+                    conversacion.duracion_conversacion = None
+                    conversacion.fecha_hora_expira = timezone.now() + relativedelta(minutes=min_sesion)
+                    conversacion.save(update_fields=[
+                        'estado_conversacion', 'conversacion_finalizada', 'despedida_enviado',
+                        'fecha_fin_conversacion', 'duracion_conversacion', 'fecha_hora_expira',
+                    ])
+
+                    mensaje = MensajeWhatsApp(
+                        mensaje_id_externo=response.get('message_id'),
+                        conversacion=conversacion,
+                        remitente=sesion.numero,
+                        mensaje=texto_final,
+                        tipo='texto',
+                        fecha=timezone.now(),
+                        leido=True,
+                        fecha_leido=timezone.now(),
+                        agente=request.user,
+                        ia_generado=False,
+                    )
+                    mensaje.save()
+
+                    if not conversacion.primer_agente:
+                        conversacion.primer_agente = request.user
+                        conversacion.save(update_fields=['primer_agente'])
+
+                    log(
+                        f"Plantilla Meta '{plantilla.nombre}' enviada y conversacion {conversacion.id} reactivada",
+                        request, "add", obj=conversacion.id,
+                    )
+
+                    # Llevar al agente a la vista de conversaciones activas
+                    request.session['contactoId'] = encrypt(conversacion.id)
+                    return JsonResponse({
+                        'error': False,
+                        'reactivada': True,
+                        'url': '/whatsapp/conversaciones/',
+                        'mensaje_html': render_to_string(
+                            'whatsapp/conversaciones/mensaje_enviado_partial.html',
+                            {'mensaje': mensaje}, request=request,
+                        ),
                     })
                 elif action == 'cambiar-clasificacion':
                     try:

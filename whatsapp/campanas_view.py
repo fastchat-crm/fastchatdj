@@ -19,12 +19,14 @@ from .models import (
 )
 
 
-def _sesiones_del_usuario(user):
-    """Todas las sesiones activas del usuario (cualquier proveedor).
-    Las campañas pueden correr sobre Baileys, Meta, IG, Messenger."""
-    return SesionWhatsApp.objects.filter(
-        usuario=user, status=True,
-    ).order_by('nombre')
+def _sesiones_del_usuario(user, proveedor_filtro=None):
+    """Sesiones activas del usuario. Si `proveedor_filtro` es uno de
+    ('baileys', 'meta', 'instagram', 'messenger'), restringe a ese canal.
+    Las campañas pueden correr sobre cualquier proveedor."""
+    qs = SesionWhatsApp.objects.filter(usuario=user, status=True)
+    if proveedor_filtro in ('baileys', 'meta', 'instagram', 'messenger'):
+        qs = qs.filter(proveedor=proveedor_filtro)
+    return qs.order_by('nombre')
 
 
 @login_required
@@ -99,16 +101,37 @@ def campanasView(request):
         data['tipo_sel'] = tipo_filtro
         url_vars += f'&tipo={tipo_filtro}'
 
+    # Filtro opcional: /whatsapp/campanas/?proveedor=meta restringe a Meta only.
+    # Aplica TANTO al listado de campañas como al combo de sesiones del modal.
+    proveedor_filtro = (request.GET.get('proveedor') or '').strip().lower()
+    if proveedor_filtro in ('baileys', 'meta', 'instagram', 'messenger'):
+        filtros &= Q(sesion__proveedor=proveedor_filtro)
+        url_vars += f'&proveedor={proveedor_filtro}'
+
     listado = Campana.objects.filter(filtros).select_related(
         'sesion', 'plantilla',
     ).order_by('-fecha_registro')
 
     data['url_vars'] = url_vars
     data['list_count'] = listado.count()
-    data['sesiones'] = _sesiones_del_usuario(request.user)
+    data['sesiones'] = _sesiones_del_usuario(request.user, proveedor_filtro=proveedor_filtro or None)
+    data['proveedor_filtro'] = proveedor_filtro if proveedor_filtro in ('baileys', 'meta', 'instagram', 'messenger') else ''
     data['etiquetas'] = EtiquetaContacto.objects.filter(
         status=True, usuario_creacion=request.user,
     )
+    # Solo exponemos proveedores que el usuario realmente tiene conectados.
+    # Mapeamos proveedor → canal del form (Baileys/Meta mandan por "whatsapp";
+    # Instagram/Messenger son sus propios canales).
+    _provs = set(data['sesiones'].values_list('proveedor', flat=True).distinct())
+    _canales = set()
+    if 'baileys' in _provs or 'meta' in _provs:
+        _canales.add('whatsapp')
+    if 'instagram' in _provs:
+        _canales.add('instagram')
+    if 'messenger' in _provs:
+        _canales.add('messenger')
+    data['canales_disponibles'] = sorted(_canales)
+    data['varios_canales'] = len(_canales) > 1
     data['plantillas'] = PlantillaWhatsApp.objects.filter(
         status=True, estado_meta='APPROVED',
         config_meta__sesion__usuario=request.user,

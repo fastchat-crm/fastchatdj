@@ -422,6 +422,14 @@ def horariosView(request):
         'usuario__perfil_ia'
     )
 
+    # Filtro opcional por proveedor — visitar /whatsapp/horarios/?proveedor=meta
+    # restringe la lista a sesiones Meta unicamente. Util cuando el cliente quiere
+    # configurar horarios solo para mandarlos al perfil "About" de WhatsApp Cloud.
+    proveedor_filtro = (request.GET.get('proveedor') or '').strip().lower()
+    if proveedor_filtro in ('baileys', 'meta', 'instagram', 'messenger'):
+        sesiones = sesiones.filter(proveedor=proveedor_filtro)
+        data['proveedor_filtro'] = proveedor_filtro
+
     q_negocio = (request.GET.get('q') or '').strip()
     if q_negocio:
         sesiones = sesiones.filter(
@@ -436,9 +444,7 @@ def horariosView(request):
     data['q_negocio'] = q_negocio
     data['sesiones'] = sesiones
     data['sesion_actual'] = sesion_actual
-    data['todas_sesiones'] = SesionWhatsApp.objects.filter(
-        status=True, usuario=request.user
-    ).exclude(pk=sesion_actual.pk if sesion_actual else 0)
+    data['todas_sesiones'] = sesiones.exclude(pk=sesion_actual.pk if sesion_actual else 0)
 
     if sesion_actual:
         data['horarios'] = sesion_actual.horarios.filter(status=True).order_by('dia_semana', 'hora_inicio')

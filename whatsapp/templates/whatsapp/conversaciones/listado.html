@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block head %}
+<link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css">
 <style>
     /* ── Layout flexbox: anula el position:absolute del tema ── */
     .chat-box-right {
@@ -443,6 +444,44 @@
                             <input type="file" id="archivo" name="archivo" style="display:none;"
                                    accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar">
 
+                            <!-- Plantillas Meta (solo visible si sesion.es_meta) -->
+                            <div style="position:relative;flex-shrink:0;">
+                                <button type="button" id="plantillas-btn" title="Enviar plantilla Meta pre-aprobada">
+                                    <i class="fa fa-layer-group"></i>
+                                    <span class="badge-count" id="plantillas-badge" style="display:none;">0</span>
+                                </button>
+                                <div id="plantillas-panel">
+                                    <div class="pp-header">
+                                        <span><i class="fa fa-layer-group me-1"></i>Plantillas aprobadas</span>
+                                        <span>
+                                            <button type="button" class="pp-close" id="plantillas-refresh" title="Refrescar plantillas">
+                                                <i class="fa fa-rotate"></i>
+                                            </button>
+                                            <button type="button" class="pp-close" id="plantillas-close" title="Cerrar">&times;</button>
+                                        </span>
+                                    </div>
+                                    <div class="pp-search">
+                                        <input type="search" id="plantillas-search" placeholder="Buscar plantilla...">
+                                    </div>
+                                    <div class="pp-list" id="plantillas-list">
+                                        <div class="pp-empty">Cargando...</div>
+                                    </div>
+                                    <div class="pp-form" id="plantillas-form">
+                                        <div class="pp-form-title">
+                                            <button type="button" class="pp-back" id="plantillas-form-back">
+                                                <i class="fa fa-arrow-left"></i>
+                                            </button>
+                                            <span id="plantillas-form-nombre"></span>
+                                        </div>
+                                        <div id="plantillas-form-vars"></div>
+                                        <div class="pp-form-actions">
+                                            <button type="button" class="pp-btn-cancelar" id="plantillas-form-cancelar">Cancelar</button>
+                                            <button type="button" class="pp-btn-enviar" id="plantillas-form-enviar">Enviar</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Texto -->
                             <input type="text" class="form-control border-0 rounded-pill" name="mensaje" id="footer-mensaje-input"
                                    placeholder="Escribe un mensaje..."
@@ -499,11 +538,13 @@
                     const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
                     modal.show();
                 } else {
+                    console.error('[formModal] backend error', data);
                     mensajeWarning(data.message);
                 }
             },
-            error: function () {
+            error: function (xhr, status, error) {
                 setTimeout($.unblockUI, 1);
+                console.error('[formModal] ajax error', status, error, xhr.responseText);
                 mensajeWarning("Error de conexión.");
             },
             dataType: "json"
@@ -532,10 +573,11 @@
         if (!id) return;
         $.post('', { action: 'toggle-bloquear-cierre', id: id, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
             .done(function(r) {
-                if (r.error) return;
+                if (r.error) { console.error('[toggleBloquearCierre] backend error', r); return; }
                 _bloquearCierreActual = r.bloquear_cierre;
                 _actualizarBloquearCierreUI(_bloquearCierreActual);
-            });
+            })
+            .fail(function(xhr) { console.error('[toggleBloquearCierre] ajax fail', xhr.status, xhr.responseText); });
     }
 
     function _actualizarBloquearCierreUI(bloqueado) {
@@ -553,9 +595,10 @@
         if (!id) return;
         $.get('', { action: 'ver_estadisticas', pk: id })
             .done(function(r) {
-                if (r.error) return;
+                if (r.error) { console.error('[refrescarEstadisticas] backend error', r); return; }
                 _renderEstadisticas(r);
-            });
+            })
+            .fail(function(xhr) { console.error('[refrescarEstadisticas] ajax fail', xhr.status, xhr.responseText); });
     }
 
     function _renderEstadisticas(r) {
@@ -704,6 +747,7 @@
             $('#contacto-numero').text('');
             $('#contacto-hashedId').text('');
             $('#conv-fecha-inicio').hide();
+            mostrarPlantillasSiMeta(false, null);
             conversacionActiva = null;
         });
 
@@ -792,10 +836,16 @@
                             scrollToBottom();
                         }, 1500);
                     } else {
+                        console.error('[enviarMensaje] backend error', response);
                         alertaWarning('Error: ' + response.message);
+                        // Si el backend senala que se requiere plantilla (ventana 24h Meta) → abrir panel
+                        if (response.requiere_plantilla && $('#plantillas-btn').hasClass('visible')) {
+                            $('#plantillas-btn').trigger('click');
+                        }
                     }
                 },
                 error: function(xhr, status, error) {
+                    console.error('[enviarMensaje] ajax error', status, error, xhr.responseText);
                     alertaWarning('Error al enviar mensaje: ' + error);
                 },
                 complete: function() {
@@ -1013,12 +1063,16 @@
                     $('#chat-footer').removeClass('d-none').show();
                     $('#conversacion-id').val(response.conversacion_id);
 
+                    // Boton de plantillas Meta — visible solo si la sesion es Meta Y hay plantillas aprobadas
+                    mostrarPlantillasSiMeta(response.es_meta === true, response.conversacion_id);
+
                     setTimeout(() => { scrollToBottom(); }, 800);
                     conectarWebSocket(response.conversacion_id);
                 },
                 error: function(xhr, status, error) {
                     $.unblockUI();
                     _cargandoMensajes = false;
+                    console.error('[cargarMensajes] ajax error', status, error, xhr.responseText);
                     $('#mensajes-container').html('<div class="p-3 text-center"><p class="text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error al cargar mensajes: ' + error + '</p></div>');
                 }
             });
@@ -1068,8 +1122,12 @@
                 if (!data.error) {
                     _convAiActivo = data.ai_activo;
                     actualizarBotUI(data.ai_activo);
+                } else {
+                    console.error('[toggleBot] backend error', data);
                 }
-            }, 'json');
+            }, 'json').fail(function(xhr) {
+                console.error('[toggleBot] ajax fail', xhr.status, xhr.responseText);
+            });
         };
 
         function actualizarBotUI(activo) {
@@ -1113,18 +1171,359 @@
                     pantallaespera();
                     $.post("{{ request.path }}", { action , id,}, function (data) {
                         $.unblockUI();
-                        const data_ = data[0]
-                            console.log(data_)
+                        const data_ = data[0];
                         if (!data_.error) {
                             window.location.href = data_.url;
                         } else {
+                            console.error('[marcar-resuelto] backend error', data_);
                             mensajeWarning(data_.message)
                         }
-                    }, "json");
+                    }, "json").fail(function(xhr) {
+                        $.unblockUI();
+                        console.error('[marcar-resuelto] ajax fail', xhr.status, xhr.responseText);
+                    });
                 }
             })
         }
         });
+
+        // ====================== PLANTILLAS META =========================
+        // Panel estilo "pancake" que sube desde el boton en el composer.
+        // Se carga la lista al primer click y se cachea por conversacion.
+        const _convPath = '{{ request.path }}';
+        {% verbatim %}
+        let _plantillasCache = {};   // { conversacionId: [plantillas] }
+        let _plantillaSeleccionada = null;
+
+        window.mostrarPlantillasSiMeta = function(esMeta, convId) {
+            const $btn = $('#plantillas-btn');
+            $('#plantillas-panel').removeClass('open');
+            $('#plantillas-badge').hide();
+            if (!esMeta) {
+                $btn.removeClass('visible');
+                return;
+            }
+            // Pre-fetch silencioso: solo muestro el boton si hay al menos una plantilla APPROVED
+            _fetchPlantillas(convId, false, function(err, plantillas) {
+                if (err) {
+                    console.error('[plantillas] pre-fetch error', err);
+                    $btn.removeClass('visible');
+                    return;
+                }
+                if (plantillas.length > 0) {
+                    $btn.addClass('visible');
+                    $('#plantillas-badge').text(plantillas.length).show();
+                } else {
+                    $btn.removeClass('visible');
+                }
+            });
+        };
+
+        // Descarga plantillas de la sesion y cachea. callback(err, plantillas).
+        function _fetchPlantillas(conversacionId, forzar, callback) {
+            if (!forzar && _plantillasCache[conversacionId]) {
+                callback && callback(null, _plantillasCache[conversacionId]);
+                return;
+            }
+            $.get(_convPath, {
+                action: 'listar_plantillas_meta', pk: conversacionId,
+            }).done(function(r) {
+                if (r.error) {
+                    console.error('[plantillas] listar error', r);
+                    callback && callback(r.message || 'Error', []);
+                    return;
+                }
+                const plantillas = r.plantillas || [];
+                _plantillasCache[conversacionId] = plantillas;
+                callback && callback(null, plantillas);
+            }).fail(function(xhr) {
+                console.error('[plantillas] listar fail', xhr.status, xhr.responseText);
+                callback && callback('http_' + xhr.status, []);
+            });
+        }
+
+        function _cargarListaPlantillas(conversacionId, forzar = false) {
+            const $list = $('#plantillas-list');
+            $list.html('<div class="pp-empty"><i class="fa fa-spinner fa-spin me-1"></i>Cargando plantillas...</div>');
+            _fetchPlantillas(conversacionId, forzar, function(err, plantillas) {
+                if (err) {
+                    $list.html('<div class="pp-empty text-danger">' + err + '</div>');
+                    return;
+                }
+                _renderListaPlantillas(plantillas);
+                if (plantillas.length > 0) {
+                    $('#plantillas-badge').text(plantillas.length).show();
+                } else {
+                    $('#plantillas-badge').hide();
+                }
+            });
+        }
+
+        function _renderListaPlantillas(plantillas, filtro = '') {
+            const $list = $('#plantillas-list');
+            const q = (filtro || '').toLowerCase().trim();
+            const filtradas = q
+                ? plantillas.filter(p => (p.nombre + ' ' + (p.cuerpo || '')).toLowerCase().includes(q))
+                : plantillas;
+            if (!filtradas.length) {
+                $list.html('<div class="pp-empty">No hay plantillas aprobadas disponibles.</div>');
+                return;
+            }
+            const html = filtradas.map(p => {
+                const cat = (p.categoria || '').toUpperCase();
+                const iconMap = { URL: 'fa-link', PHONE_NUMBER: 'fa-phone', QUICK_REPLY: 'fa-reply' };
+                const botones = (p.botones || []).map(b => {
+                    const tipo = b.type || b.tipo || '';
+                    const icon = iconMap[tipo] || 'fa-square';
+                    return `<span class="pp-boton-chip ${tipo}" title="${_esc(tipo)}"><i class="fa ${icon}"></i>${_esc(b.text || b.texto || '')}</span>`;
+                }).join('');
+                return `<div class="pp-item" data-id="${p.id}">
+                    <div class="pp-item-head">
+                        <span class="pp-name">${_esc(p.nombre)}</span>
+                        <span class="pp-cat ${cat}">${cat}</span>
+                        <span class="pp-lang">${_esc(p.idioma)}</span>
+                    </div>
+                    <div class="pp-preview">${_esc(p.preview || '')}</div>
+                    ${botones ? `<div class="pp-botones">${botones}</div>` : ''}
+                    ${p.veces_enviada ? `<div class="pp-uses"><i class="fa fa-paper-plane me-1"></i>${p.veces_enviada} envios</div>` : ''}
+                </div>`;
+            }).join('');
+            $list.html(html);
+        }
+
+        function _esc(s) {
+            return (s == null ? '' : String(s))
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function _detectarVarsEnCuerpo(body) {
+            const re = /\{\{(\d+)\}\}/g;
+            const ids = new Set();
+            let m;
+            while ((m = re.exec(body || '')) !== null) {
+                ids.add(parseInt(m[1], 10));
+            }
+            return Array.from(ids).sort((a, b) => a - b);
+        }
+
+        function _plantillaNecesitaFormulario(p) {
+            if (_detectarVarsEnCuerpo(p.cuerpo).length > 0) return true;
+            if (p.header_tipo === 'TEXT' && _detectarVarsEnCuerpo(p.header_contenido).length > 0) return true;
+            if (['IMAGE', 'VIDEO', 'DOCUMENT'].indexOf(p.header_tipo) !== -1) return true;
+            return false;
+        }
+
+        function _abrirFormulario(plantilla) {
+            _plantillaSeleccionada = plantilla;
+            $('#plantillas-form-nombre').text(plantilla.nombre);
+
+            // ── Bloque header ─────────────────────────────────────────
+            let headerHtml = '';
+            const ht = plantilla.header_tipo || 'NONE';
+            if (ht === 'TEXT') {
+                const headerVars = _detectarVarsEnCuerpo(plantilla.header_contenido);
+                if (headerVars.length > 0) {
+                    headerHtml += '<div class="pp-form-title" style="font-size:.72rem;color:#65676b;margin-top:4px;">Encabezado</div>';
+                    headerHtml += headerVars.map(idx => {
+                        const abre = '{' + '{';
+                        const cierra = '}' + '}';
+                        return `<div class="pp-var-row">
+                            <label class="pp-var-label">Header ${abre}${idx}${cierra}</label>
+                            <input type="text" class="pp-var-input" data-header-var="${idx}">
+                        </div>`;
+                    }).join('');
+                }
+            } else if (ht === 'IMAGE' || ht === 'VIDEO' || ht === 'DOCUMENT') {
+                const label = { IMAGE: 'URL de imagen', VIDEO: 'URL de video', DOCUMENT: 'URL de documento' }[ht];
+                headerHtml += '<div class="pp-form-title" style="font-size:.72rem;color:#65676b;margin-top:4px;">Encabezado</div>';
+                headerHtml += `<div class="pp-var-row">
+                    <label class="pp-var-label">${label}</label>
+                    <input type="url" class="pp-var-input" id="pp-header-url" data-header-media="${ht.toLowerCase()}" placeholder="https://...">
+                </div>`;
+                if (ht === 'DOCUMENT') {
+                    headerHtml += `<div class="pp-var-row">
+                        <label class="pp-var-label">Nombre del archivo (opcional)</label>
+                        <input type="text" class="pp-var-input" id="pp-header-filename" placeholder="cotizacion.pdf">
+                    </div>`;
+                }
+            }
+
+            // ── Bloque cuerpo ─────────────────────────────────────────
+            const bodyVars = _detectarVarsEnCuerpo(plantilla.cuerpo);
+            const meta = plantilla.variables || [];
+            const abre = '{' + '{';
+            const cierra = '}' + '}';
+            let bodyHtml = '';
+            if (bodyVars.length > 0) {
+                bodyHtml += '<div class="pp-form-title" style="font-size:.72rem;color:#65676b;margin-top:10px;">Cuerpo</div>';
+                bodyHtml += bodyVars.map(idx => {
+                    const info = meta[idx - 1] || {};
+                    const nombre = info.nombre ? ' · ' + _esc(info.nombre) : '';
+                    const placeholder = info.ejemplo ? 'Ej: ' + _esc(info.ejemplo) : '';
+                    return `<div class="pp-var-row">
+                        <label class="pp-var-label">${abre}${idx}${cierra}${nombre}</label>
+                        <input type="text" class="pp-var-input" data-body-var="${idx}" placeholder="${placeholder}">
+                    </div>`;
+                }).join('');
+            }
+
+            const total = (headerHtml + bodyHtml);
+            $('#plantillas-form-vars').html(total || '<div class="text-muted" style="font-size:.78rem;">Esta plantilla no requiere variables.</div>');
+            $('#plantillas-list').hide();
+            $('#plantillas-form').addClass('open');
+        }
+
+        function _cerrarFormulario() {
+            _plantillaSeleccionada = null;
+            $('#plantillas-form').removeClass('open');
+            $('#plantillas-list').show();
+        }
+
+        $('#plantillas-btn').on('click', function(e) {
+            e.stopPropagation();
+            const convId = $('#conversacion-id').val();
+            if (!convId) return;
+            const $panel = $('#plantillas-panel');
+            const abierto = $panel.hasClass('open');
+            if (abierto) {
+                $panel.removeClass('open');
+                return;
+            }
+            $panel.addClass('open');
+            _cerrarFormulario();
+            _cargarListaPlantillas(convId);
+        });
+
+        $('#plantillas-close').on('click', function() {
+            $('#plantillas-panel').removeClass('open');
+        });
+
+        $('#plantillas-refresh').on('click', function() {
+            const convId = $('#conversacion-id').val();
+            if (!convId) return;
+            delete _plantillasCache[convId];
+            _cerrarFormulario();
+            _cargarListaPlantillas(convId, true);
+        });
+
+        $('#plantillas-panel').on('click', function(e) {
+            e.stopPropagation();
+        });
+
+        $(document).on('click', '#plantillas-list .pp-item', function() {
+            const id = $(this).data('id');
+            const convId = $('#conversacion-id').val();
+            const lista = _plantillasCache[convId] || [];
+            const p = lista.find(x => x.id === id);
+            if (!p) {
+                console.error('[plantillas] plantilla no encontrada en cache', id);
+                return;
+            }
+            if (_plantillaNecesitaFormulario(p)) {
+                _abrirFormulario(p);
+            } else {
+                _enviarPlantilla(p, [], null);
+            }
+        });
+
+        $('#plantillas-search').on('input', function() {
+            const convId = $('#conversacion-id').val();
+            _renderListaPlantillas(_plantillasCache[convId] || [], $(this).val());
+        });
+
+        $('#plantillas-form-back, #plantillas-form-cancelar').on('click', _cerrarFormulario);
+
+        $('#plantillas-form-enviar').on('click', function() {
+            if (!_plantillaSeleccionada) return;
+
+            // ── Recolectar cuerpo ───────────────────────────────────
+            const bodyVars = _detectarVarsEnCuerpo(_plantillaSeleccionada.cuerpo);
+            const paramsCuerpo = [];
+            $('#plantillas-form-vars .pp-var-input[data-body-var]').each(function() {
+                const idx = parseInt($(this).data('body-var'), 10);
+                paramsCuerpo[idx - 1] = $(this).val().trim();
+            });
+            if (bodyVars.length && paramsCuerpo.some(v => !v)) {
+                alertaWarning('Completa todas las variables del cuerpo.');
+                return;
+            }
+
+            // ── Recolectar header ───────────────────────────────────
+            let paramsHeader = null;
+            const ht = _plantillaSeleccionada.header_tipo || 'NONE';
+            if (ht === 'TEXT') {
+                const headerVars = _detectarVarsEnCuerpo(_plantillaSeleccionada.header_contenido);
+                if (headerVars.length > 0) {
+                    paramsHeader = [];
+                    $('#plantillas-form-vars .pp-var-input[data-header-var]').each(function() {
+                        const idx = parseInt($(this).data('header-var'), 10);
+                        paramsHeader[idx - 1] = $(this).val().trim();
+                    });
+                    if (paramsHeader.some(v => !v)) {
+                        alertaWarning('Completa todas las variables del encabezado.');
+                        return;
+                    }
+                }
+            } else if (ht === 'IMAGE' || ht === 'VIDEO' || ht === 'DOCUMENT') {
+                const url = ($('#pp-header-url').val() || '').trim();
+                if (!url) {
+                    alertaWarning('Agrega la URL del archivo del encabezado.');
+                    return;
+                }
+                if (ht === 'IMAGE')    paramsHeader = { image_url: url };
+                if (ht === 'VIDEO')    paramsHeader = { video_url: url };
+                if (ht === 'DOCUMENT') {
+                    paramsHeader = { document_url: url };
+                    const fname = ($('#pp-header-filename').val() || '').trim();
+                    if (fname) paramsHeader.filename = fname;
+                }
+            }
+            _enviarPlantilla(_plantillaSeleccionada, paramsCuerpo, paramsHeader);
+        });
+
+        function _enviarPlantilla(plantilla, paramsCuerpo, paramsHeader) {
+            const convId = $('#conversacion-id').val();
+            if (!convId) {
+                console.error('[plantillas] sin conversacion activa');
+                return;
+            }
+            const $btn = $('#plantillas-form-enviar');
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Enviando...');
+            $.post(_convPath, {
+                action: 'enviar_plantilla_meta',
+                pk: convId,
+                plantilla_id: plantilla.id,
+                params_cuerpo_json: JSON.stringify(paramsCuerpo || []),
+                params_header_json: JSON.stringify(paramsHeader || []),
+                csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val(),
+            }).done(function(r) {
+                if (r.error) {
+                    console.error('[plantillas] envio error', r);
+                    alertaWarning(r.message || 'Error al enviar plantilla.');
+                    return;
+                }
+                $('#mensajes-container').append(r.mensaje_html);
+                $('#plantillas-panel').removeClass('open');
+                _cerrarFormulario();
+                setTimeout(() => { scrollToBottom(); }, 200);
+            }).fail(function(xhr) {
+                console.error('[plantillas] envio fail', xhr.status, xhr.responseText);
+                alertaWarning('Error: ' + (xhr.responseText || xhr.status));
+            }).always(function() {
+                $btn.prop('disabled', false).text('Enviar');
+            });
+        }
+
+        // Click fuera cierra el panel (igual que emoji picker)
+        document.addEventListener('click', function(e) {
+            const panel = document.getElementById('plantillas-panel');
+            const btn = document.getElementById('plantillas-btn');
+            if (!panel || !panel.classList.contains('open')) return;
+            if (panel.contains(e.target) || btn.contains(e.target)) return;
+            panel.classList.remove('open');
+        });
+        {% endverbatim %}
 
         $('#terminar-sin-despedida').on('click', function(e) {
             e.preventDefault();
@@ -1146,14 +1545,17 @@
                     pantallaespera();
                     $.post("{{ request.path }}", { action , id,}, function (data) {
                         $.unblockUI();
-                        const data_ = data[0]
-                            console.log(data_)
+                        const data_ = data[0];
                         if (!data_.error) {
                             window.location.href = data_.url;
                         } else {
+                            console.error('[terminar-sin-despedida] backend error', data_);
                             mensajeWarning(data_.message)
                         }
-                    }, "json");
+                    }, "json").fail(function(xhr) {
+                        $.unblockUI();
+                        console.error('[terminar-sin-despedida] ajax fail', xhr.status, xhr.responseText);
+                    });
                 }
             })
         }
@@ -1235,7 +1637,8 @@
         $(ctr).find('span').html('Transcribiendo');
         $(ctr).find('i.fa-ellipsis').removeClass('d-none');
         $(ctr).prop('disabled', true);
-        $.post("{{ request.path }}", { action: 'transcribe_audio' , id: ctr.dataset.id,});
+        $.post("{{ request.path }}", { action: 'transcribe_audio' , id: ctr.dataset.id,})
+            .fail(function(xhr) { console.error('[transcribirAudio] fail', xhr.status, xhr.responseText); });
     }
 
     /* ── Feedback IA (definidas a nivel global; el partial puede re-renderizarse) ── */
@@ -1276,7 +1679,7 @@
                 es_correcto: esOk ? '1' : '0', correccion, pregunta
             })
         }).then(r => r.json()).then(data => {
-            if (data.error) return;
+            if (data.error) { console.error('[feedback] backend error', data); return; }
             const bar = document.querySelector(`.feedback-bar[data-id="${msgId}"]`);
             if (!bar) return;
             if (esOk) {
@@ -1287,7 +1690,7 @@
                 const cf = document.getElementById('cf-' + msgId);
                 if (cf) cf.classList.add('d-none');
             }
-        }).catch(() => {});
+        }).catch(err => { console.error('[feedback] network error', err); });
     }
 </script>
 {% endblock %}

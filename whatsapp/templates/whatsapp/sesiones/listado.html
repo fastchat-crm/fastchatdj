@@ -5,6 +5,152 @@
 {% endblock %}
 
 {% block content %}
+    {% if not proveedor_filtro %}
+    <div class="row g-3 mb-3 elegir-camino-row">
+        <div class="col-12">
+            <h5 class="mb-2 fw-semibold text-secondary" style="font-size:.95rem; text-transform:uppercase; letter-spacing:.05em;">
+                <i class="fa fa-route me-1"></i>Elegi el camino
+            </h5>
+            <p class="small text-muted mb-3">
+                Tenes 2 formas de conectar WhatsApp. Cada una vive en su propia pantalla — no se mezclan ni interfieren.
+            </p>
+        </div>
+
+        {# Card Baileys #}
+        <div class="col-12 col-md-6">
+            <a href="/whatsapp/sesiones/baileys/" class="elegir-camino-card camino-baileys text-decoration-none">
+                <div class="d-flex align-items-start gap-3">
+                    <div class="elegir-camino-icon" style="background:#d1fadf; color:#15803d;">
+                        <i class="fab fa-whatsapp" style="font-size:1.6rem;"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <h6 class="fw-bold mb-0 text-dark">Sesiones Baileys</h6>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                {{ stats_proveedor.baileys }} conectada{{ stats_proveedor.baileys|pluralize }}
+                            </span>
+                        </div>
+                        <p class="small text-muted mt-1 mb-2">Conexion no oficial via QR (WhatsApp Web). No requiere verificacion de empresa.</p>
+                        <ul class="small text-muted ps-3 mb-2" style="font-size:.78rem;">
+                            <li>Setup en 30 segundos (escanear QR).</li>
+                            <li>Sin limites de Meta, sin plantillas pre-aprobadas.</li>
+                            <li>Riesgo: WhatsApp puede bloquear el numero si abusas.</li>
+                        </ul>
+                        <div class="text-success small fw-semibold mt-2">
+                            Ir al camino Baileys <i class="fa fa-arrow-right ms-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        {# Card Meta — full-width si NO hay IG/Messenger, mitad si los hay #}
+        <div class="col-12 {% if stats_proveedor.instagram or stats_proveedor.messenger %}col-md-6{% else %}col-md-6{% endif %}">
+            <a href="/whatsapp/sesiones/meta/" class="elegir-camino-card camino-meta text-decoration-none">
+                <div class="d-flex align-items-start gap-3">
+                    <div class="elegir-camino-icon" style="background:#dbeafe; color:#1d4ed8;">
+                        <i class="fa fa-cloud" style="font-size:1.6rem;"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <h6 class="fw-bold mb-0 text-dark">Sesiones Meta Cloud API</h6>
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                                {{ stats_proveedor.meta }} configurada{{ stats_proveedor.meta|pluralize }}
+                            </span>
+                        </div>
+                        <p class="small text-muted mt-1 mb-2">Conexion oficial Meta. Requiere App + WABA + verificacion empresarial.</p>
+                        <ul class="small text-muted ps-3 mb-2" style="font-size:.78rem;">
+                            <li>Estable, sin riesgo de bloqueo arbitrario.</li>
+                            <li>Soporta plantillas (mensajes fuera de 24h) + Instagram + Messenger en la misma sesion.</li>
+                            <li>Setup mas tecnico (System User token, webhook verify).</li>
+                        </ul>
+                        <div class="text-primary small fw-semibold mt-2">
+                            Ir al camino Meta <i class="fa fa-arrow-right ms-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        {# Card Instagram — solo si el user ya tiene sesiones IG #}
+        {% if stats_proveedor.instagram %}
+        <div class="col-12 col-md-6">
+            <a href="/whatsapp/sesiones/?proveedor=instagram" class="elegir-camino-card text-decoration-none" style="border-color:#fbcfe8;">
+                <div class="d-flex align-items-start gap-3">
+                    <div class="elegir-camino-icon" style="background:#fce7f3; color:#be185d;">
+                        <i class="fab fa-instagram" style="font-size:1.6rem;"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <h6 class="fw-bold mb-0 text-dark">Sesiones Instagram DM</h6>
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                                {{ stats_proveedor.instagram }} cuenta{{ stats_proveedor.instagram|pluralize }}
+                            </span>
+                        </div>
+                        <p class="small text-muted mt-1 mb-2">Mensajes directos de Instagram Business vinculado a una FB Page.</p>
+                        <ul class="small text-muted ps-3 mb-2" style="font-size:.78rem;">
+                            <li>Usa <strong>Page Access Token</strong> (NO el de WhatsApp).</li>
+                            <li>Sin sistema de plantillas — solo respuestas dentro de 24h.</li>
+                            <li>Identificador del cliente: IGSID (no telefono).</li>
+                        </ul>
+                        <div class="text-danger small fw-semibold mt-2">
+                            Ir al camino Instagram <i class="fa fa-arrow-right ms-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        {% endif %}
+
+        {# Card Messenger — solo si el user ya tiene sesiones Messenger #}
+        {% if stats_proveedor.messenger %}
+        <div class="col-12 col-md-6">
+            <a href="/whatsapp/sesiones/?proveedor=messenger" class="elegir-camino-card text-decoration-none" style="border-color:#bfdbfe;">
+                <div class="d-flex align-items-start gap-3">
+                    <div class="elegir-camino-icon" style="background:#dbeafe; color:#1e40af;">
+                        <i class="fab fa-facebook-messenger" style="font-size:1.6rem;"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <h6 class="fw-bold mb-0 text-dark">Sesiones Facebook Messenger</h6>
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                                {{ stats_proveedor.messenger }} pagina{{ stats_proveedor.messenger|pluralize }}
+                            </span>
+                        </div>
+                        <p class="small text-muted mt-1 mb-2">Mensajes desde una FB Page. Misma App Meta que IG/WhatsApp.</p>
+                        <ul class="small text-muted ps-3 mb-2" style="font-size:.78rem;">
+                            <li>Usa <strong>Page Access Token</strong>.</li>
+                            <li>Soporta typing indicators y postbacks.</li>
+                            <li>Identificador del cliente: PSID (Page-Scoped ID).</li>
+                        </ul>
+                        <div class="text-primary small fw-semibold mt-2">
+                            Ir al camino Messenger <i class="fa fa-arrow-right ms-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+    <hr class="my-3">
+    {% else %}
+    {# Cuando estamos en /sesiones/meta/ o /sesiones/baileys/, mostramos un breadcrumb minimo #}
+    <div class="d-flex align-items-center gap-2 mb-3 small">
+        <a href="/whatsapp/sesiones/" class="text-muted text-decoration-none">
+            <i class="fa fa-arrow-left me-1"></i>Cambiar de camino
+        </a>
+        <span class="text-muted">·</span>
+        <span class="fw-semibold text-dark">
+            {% if proveedor_filtro == 'meta' %}<i class="fa fa-cloud text-primary me-1"></i>Sesiones Meta
+            {% elif proveedor_filtro == 'baileys' %}<i class="fab fa-whatsapp text-success me-1"></i>Sesiones Baileys
+            {% elif proveedor_filtro == 'instagram' %}<i class="fab fa-instagram text-danger me-1"></i>Instagram DM
+            {% elif proveedor_filtro == 'messenger' %}<i class="fab fa-facebook-messenger text-primary me-1"></i>Messenger
+            {% else %}{{ proveedor_filtro|title }}
+            {% endif %}
+        </span>
+    </div>
+    {% endif %}
+
     {# ===== STATS ROW ===== #}
     <div class="row g-3 stats-row">
         <div class="col-6 col-md-3">
@@ -92,12 +238,41 @@
         </form>
     </div>
 
-    {# ===== HEADER / ACTIONS ===== #}
+    {# ===== HEADER / ACTIONS — adapta titulo + boton segun el camino activo ===== #}
     <div class="page-header">
         <div>
-            <h4>Sesiones de WhatsApp</h4>
+            <h4>
+                {% if proveedor_filtro == 'meta' %}<i class="fa fa-cloud text-primary me-1"></i>Sesiones Meta Cloud API
+                {% elif proveedor_filtro == 'baileys' %}<i class="fab fa-whatsapp text-success me-1"></i>Sesiones Baileys
+                {% elif proveedor_filtro == 'instagram' %}<i class="fab fa-instagram text-danger me-1"></i>Sesiones Instagram DM
+                {% elif proveedor_filtro == 'messenger' %}<i class="fab fa-facebook-messenger text-primary me-1"></i>Sesiones Messenger
+                {% else %}Sesiones de WhatsApp{% endif %}
+            </h4>
             <span class="result-count">{{ list_count }} resultado{{ list_count|pluralize }}</span>
         </div>
+
+        {% if proveedor_filtro == 'meta' %}
+        {# Single button — solo Meta. Wizard recomendado, con dropdown al modal clasico. #}
+        <div class="btn-group">
+            <a class="btn btn-primary" href="/whatsapp/sesiones/meta/wizard/">
+                <i class="fa fa-wand-magic-sparkles me-2"></i>Nueva sesion Meta (asistente)
+            </a>
+            <button type="button" class="btn btn-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown"></button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                <li>
+                    <a class="dropdown-item" href="javascript:void(0);" onclick="crearSesionMeta()">
+                        <i class="fa fa-cog me-2"></i>Crear vacia (modal clasico)
+                    </a>
+                </li>
+            </ul>
+        </div>
+        {% elif proveedor_filtro == 'baileys' %}
+        {# Single button — solo Baileys #}
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalAgregarSesion">
+            <i class="fa fa-plus-circle me-2"></i>Nueva sesion Baileys
+        </button>
+        {% else %}
+        {# Sin filtro: dropdown legacy con ambas opciones #}
         <div class="dropdown">
             <button class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown">
                 <i class="fas fa-plus-circle me-2"></i>Nueva sesión
@@ -121,6 +296,7 @@
                 </li>
             </ul>
         </div>
+        {% endif %}
     </div>
 
     {# ===== SESSION GRID ===== #}
@@ -146,7 +322,11 @@
                             <span class="proveedor-badge proveedor-{{ s.proveedor }}"
                                   title="Proveedor: {{ s.get_proveedor_display }}">
                                 {% if s.proveedor == 'meta' %}
-                                    <i class="fab fa-facebook"></i> Meta
+                                    <i class="fa fa-cloud"></i> Meta
+                                {% elif s.proveedor == 'instagram' %}
+                                    <i class="fab fa-instagram"></i> IG
+                                {% elif s.proveedor == 'messenger' %}
+                                    <i class="fab fa-facebook-messenger"></i> FB
                                 {% else %}
                                     <i class="fab fa-whatsapp"></i> Baileys
                                 {% endif %}

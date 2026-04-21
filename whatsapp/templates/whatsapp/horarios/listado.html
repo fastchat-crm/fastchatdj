@@ -21,6 +21,40 @@
         </div>
     </div>
 
+    {# ===== TABS POR PROVEEDOR — filtra el combo de sesiones ===== #}
+    <ul class="nav nav-pills mb-3" role="tablist" style="font-size:.85rem;">
+        <li class="nav-item">
+            <a class="nav-link {% if not proveedor_filtro %}active{% endif %}"
+               href="?{% if q_negocio %}q={{ q_negocio }}{% endif %}">
+                <i class="fa fa-list me-1"></i> Todas las sesiones
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if proveedor_filtro == 'baileys' %}active bg-success{% endif %}"
+               href="?proveedor=baileys{% if q_negocio %}&q={{ q_negocio }}{% endif %}">
+                <i class="fab fa-whatsapp me-1"></i> Solo Baileys
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if proveedor_filtro == 'meta' %}active bg-primary{% endif %}"
+               href="?proveedor=meta{% if q_negocio %}&q={{ q_negocio }}{% endif %}">
+                <i class="fa fa-cloud me-1"></i> Solo Meta Cloud
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if proveedor_filtro == 'instagram' %}active bg-danger{% endif %}"
+               href="?proveedor=instagram{% if q_negocio %}&q={{ q_negocio }}{% endif %}">
+                <i class="fab fa-instagram me-1"></i> Solo Instagram
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if proveedor_filtro == 'messenger' %}active bg-primary{% endif %}"
+               href="?proveedor=messenger{% if q_negocio %}&q={{ q_negocio }}{% endif %}">
+                <i class="fab fa-facebook-messenger me-1"></i> Solo Messenger
+            </a>
+        </li>
+    </ul>
+
     {# ===== SELECTOR DE SESIÓN (combo, no sidebar) ===== #}
     <div class="card mb-3">
         <div class="card-body">

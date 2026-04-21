@@ -6,7 +6,7 @@ from core.custom_models import ModelFormBase
 from crm.models import DepartamentoChatBot
 from .models import (
     SesionWhatsApp, Contacto, ConversacionWhatsApp, MensajeWhatsAppProgramado,
-    ConfigMeta, PlantillaWhatsApp,
+    ConfigMeta, PlantillaWhatsApp, ConfigInstagram, ConfigMessenger,
 )
 
 
@@ -105,6 +105,60 @@ class ConfigMetaForm(ModelFormBase):
             # no requeridos a nivel HTML/Django para evitar que bloqueen el
             # submit principal cuando la sesion esta en modo Baileys. La
             # validacion real se hace manualmente en la vista.
+            self.fields[k].required = False
+            self.fields[k].widget.attrs['class'] = 'form-control'
+            self.fields[k].widget.attrs['col'] = '6'
+            self.fields[k].widget.attrs.pop('required', None)
+            if k == 'access_token':
+                self.fields[k].widget.attrs['col'] = '12'
+                self.fields[k].widget.attrs['rows'] = '3'
+            if k == 'app_secret':
+                self.fields[k].widget.attrs['type'] = 'password'
+            if k == 'webhook_verify_token':
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+
+class ConfigInstagramForm(ModelFormBase):
+    """Form para Instagram DM (Graph API). Mismo patron que ConfigMetaForm:
+    todos los campos required=False a nivel HTML para no bloquear el submit
+    del form principal de sesion. La validacion real se hace en la accion."""
+    class Meta:
+        model = ConfigInstagram
+        fields = ('ig_user_id', 'page_id', 'username', 'access_token',
+                  'app_id', 'app_secret', 'webhook_verify_token')
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super().__init__(*args, **kwargs)
+        for k, v in self.fields.items():
+            self.fields[k].required = False
+            self.fields[k].widget.attrs['class'] = 'form-control'
+            self.fields[k].widget.attrs['col'] = '6'
+            self.fields[k].widget.attrs.pop('required', None)
+            if k == 'access_token':
+                self.fields[k].widget.attrs['col'] = '12'
+                self.fields[k].widget.attrs['rows'] = '3'
+            if k == 'app_secret':
+                self.fields[k].widget.attrs['type'] = 'password'
+            if k == 'webhook_verify_token':
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+
+class ConfigMessengerForm(ModelFormBase):
+    """Form para Facebook Messenger (Page DMs). Igual patron que IG."""
+    class Meta:
+        model = ConfigMessenger
+        fields = ('page_id', 'page_name', 'access_token',
+                  'app_id', 'app_secret', 'webhook_verify_token')
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super().__init__(*args, **kwargs)
+        for k, v in self.fields.items():
             self.fields[k].required = False
             self.fields[k].widget.attrs['class'] = 'form-control'
             self.fields[k].widget.attrs['col'] = '6'

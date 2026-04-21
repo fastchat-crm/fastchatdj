@@ -24,7 +24,7 @@ class AgenteResumidor:
         )
 
     def default_model(self):
-        return "gpt-4" if self.provider == "openai" else "gemini-2.5-flash"
+        return "gpt-4o-mini" if self.provider == "openai" else "gemini-2.5-flash"
 
     def _get_embeddings(self):
         if self.provider == "gemini":

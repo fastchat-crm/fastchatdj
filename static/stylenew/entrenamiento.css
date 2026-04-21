@@ -1,0 +1,38 @@
+/* Entrenamiento IA — estilos específicos para el modal "Ver contexto" */
+
+/* <pre> del prompt real simulado: conserva saltos y envuelve palabras largas */
+.ctx-prompt-real {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Utilidad: ocultar con clase en lugar de inline style */
+.ctx-hidden { display: none !important; }
+
+/* Panel de respuesta del LLM dentro del modal Ver contexto */
+.ctx-respuesta-panel {
+    border: 1px solid #c3e6cb;
+    background: #f6fff8;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+}
+.ctx-respuesta-panel .ctx-respuesta-texto {
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: #fff;
+    border: 1px solid #e3e8f0;
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    max-height: 400px;
+    overflow-y: auto;
+    font-size: 0.92rem;
+}
+.ctx-respuesta-metric {
+    display: inline-block;
+    padding: 2px 8px;
+    margin: 2px 4px 2px 0;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 999px;
+    font-size: 0.75rem;
+}

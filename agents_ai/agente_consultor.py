@@ -46,10 +46,10 @@ class ConsultaResultado:
 _FAISS_K           = 5      # chunks a recuperar
 _FAISS_FETCH_K     = 20     # candidatos pre-MMR
 _MAX_CONTEXT_CHARS = 4_000  # techo del contexto FAISS para consultas específicas
-_MAX_STATIC_CHARS  = 2_000  # máx chars del contexto estático en Modo B (suplemento)
-_HISTORY_TURNS     = 10     # turnos de historial (10 turnos = 20 mensajes) — necesario para continuidad de pedidos
-_USER_SNIPPET      = 300    # chars por mensaje de usuario en historial
-_AI_SNIPPET        = 800    # chars por respuesta IA en historial — antes truncaba menús con precios
+_MAX_STATIC_CHARS  = 1_200  # máx chars del contexto estático en Modo B (suplemento)
+_HISTORY_TURNS     = 5      # turnos de historial (5 turnos = 10 mensajes) — suficiente para continuidad típica
+_USER_SNIPPET      = 150    # chars por mensaje de usuario en historial
+_AI_SNIPPET        = 400    # chars por respuesta IA en historial
 _MAX_OUTPUT_TOKENS = 3000   # tokens de salida — suficiente para menús completos con pizzas/precios
 _TOPIC_ANCHOR_CHARS = 180   # chars del primer mensaje sustantivo como ancla de tema
 # Para consultas amplias en Modo A (sin FAISS) se envía el contexto_estatico completo sin cap
@@ -623,7 +623,7 @@ class AgenteConsultor:
     def _construir_bloque_faq(self) -> tuple[str, list]:
         """Devuelve (bloque_texto, ids_faqs_usadas).
 
-        Trae las top-N FAQs aprobadas del agente (según faqs_en_prompt, default 10)
+        Trae las top-N FAQs aprobadas del agente (según faqs_en_prompt, default 5)
         ordenadas por prioridad desc y las formatea como sección "## Preguntas
         frecuentes ##" que se inyecta al inicio del contexto. Devuelve "" si el
         agente no tiene agente asociado o no hay FAQs aprobadas.

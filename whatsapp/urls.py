@@ -2,6 +2,8 @@ from django.urls import re_path, path
 
 from .conversaciones_finalizadas_view import conversacionesFinalizadasView
 from .sesiones_view import sesionesView
+from .sesiones_baileys_view import sesionesBaileysView
+from .sesiones_meta_view import sesionesMetaView, sesionesMetaWizardView
 from .conversaciones_view import conversacionesView
 from .sync_contacts import sync_contacts_view
 from .update_profile_view import update_profile_view
@@ -26,6 +28,21 @@ whatsapp_urls = (
         "nombre": "Sesiones",
         "url": 'sesiones/',
         "vista": sesionesView,
+    },
+    {
+        "nombre": "Sesiones Baileys",
+        "url": 'sesiones/baileys/',
+        "vista": sesionesBaileysView,
+    },
+    {
+        "nombre": "Sesiones Meta",
+        "url": 'sesiones/meta/',
+        "vista": sesionesMetaView,
+    },
+    {
+        "nombre": "Wizard Meta",
+        "url": 'sesiones/meta/wizard/',
+        "vista": sesionesMetaWizardView,
     },
     {
         "nombre": "Conversaciones",
