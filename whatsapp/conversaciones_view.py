@@ -764,4 +764,9 @@ def conversacionesView(request):
                                     request=request)
         })
 
+    # Pipelines disponibles para el modal "Asignar a pipeline"
+    from .models import PipelineVenta as _PV
+    data['pipelines_disponibles'] = (
+        _PV.objects.filter(status=True).prefetch_related('etapas').order_by('-es_default', 'nombre')
+    )
     return render(request, 'whatsapp/conversaciones/listado.html', data)

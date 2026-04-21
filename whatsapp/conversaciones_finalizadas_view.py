@@ -402,4 +402,8 @@ def conversacionesFinalizadasView(request):
                 request=request
             )
         })
+    from .models import PipelineVenta as _PV
+    data['pipelines_disponibles'] = (
+        _PV.objects.filter(status=True).prefetch_related('etapas').order_by('-es_default', 'nombre')
+    )
     return render(request, 'whatsapp/conversaciones/listado_expirado.html', data)

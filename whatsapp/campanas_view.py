@@ -22,10 +22,13 @@ from .models import (
 def _sesiones_del_usuario(user, proveedor_filtro=None):
     """Sesiones activas del usuario. Si `proveedor_filtro` es uno de
     ('baileys', 'meta', 'instagram', 'messenger'), restringe a ese canal.
-    Las campañas pueden correr sobre cualquier proveedor."""
+    Sin filtro: excluye Baileys por default (las campañas estan pensadas para
+    Meta-family, donde existen plantillas/HSM/segmentacion avanzada)."""
     qs = SesionWhatsApp.objects.filter(usuario=user, status=True)
     if proveedor_filtro in ('baileys', 'meta', 'instagram', 'messenger'):
         qs = qs.filter(proveedor=proveedor_filtro)
+    else:
+        qs = qs.exclude(proveedor='baileys')
     return qs.order_by('nombre')
 
 
@@ -101,12 +104,18 @@ def campanasView(request):
         data['tipo_sel'] = tipo_filtro
         url_vars += f'&tipo={tipo_filtro}'
 
-    # Filtro opcional: /whatsapp/campanas/?proveedor=meta restringe a Meta only.
-    # Aplica TANTO al listado de campañas como al combo de sesiones del modal.
+    # Filtro por proveedor:
+    # - Default (sin param): excluye Baileys porque las plantillas/HSM/segmentacion
+    #   avanzada solo tienen sentido en Meta-family. El cliente Baileys-only ve solo
+    #   el tab "Solo Baileys".
+    # - Con ?proveedor=baileys: muestra solo Baileys.
+    # - Con ?proveedor=meta/instagram/messenger: muestra solo ese.
     proveedor_filtro = (request.GET.get('proveedor') or '').strip().lower()
     if proveedor_filtro in ('baileys', 'meta', 'instagram', 'messenger'):
         filtros &= Q(sesion__proveedor=proveedor_filtro)
         url_vars += f'&proveedor={proveedor_filtro}'
+    else:
+        filtros &= ~Q(sesion__proveedor='baileys')
 
     listado = Campana.objects.filter(filtros).select_related(
         'sesion', 'plantilla',

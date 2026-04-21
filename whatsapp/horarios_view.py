@@ -422,13 +422,17 @@ def horariosView(request):
         'usuario__perfil_ia'
     )
 
-    # Filtro opcional por proveedor — visitar /whatsapp/horarios/?proveedor=meta
-    # restringe la lista a sesiones Meta unicamente. Util cuando el cliente quiere
-    # configurar horarios solo para mandarlos al perfil "About" de WhatsApp Cloud.
+    # Filtro por proveedor:
+    # - Default (sin param): excluye Baileys porque los horarios push-a-Meta no
+    #   le aplican. El cliente Baileys-only ve solo el tab "Solo Baileys".
+    # - Con ?proveedor=baileys: muestra solo Baileys.
+    # - Con ?proveedor=meta/instagram/messenger: muestra solo ese.
     proveedor_filtro = (request.GET.get('proveedor') or '').strip().lower()
     if proveedor_filtro in ('baileys', 'meta', 'instagram', 'messenger'):
         sesiones = sesiones.filter(proveedor=proveedor_filtro)
         data['proveedor_filtro'] = proveedor_filtro
+    else:
+        sesiones = sesiones.exclude(proveedor='baileys')
 
     q_negocio = (request.GET.get('q') or '').strip()
     if q_negocio:

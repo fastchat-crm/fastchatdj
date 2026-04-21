@@ -307,6 +307,9 @@
                                 <a class="dropdown-item form_modal" href="javascript:void(0)" id="asignar-conversacion" title="Asignar a otro usuario">
                                     <i class="fa fa-user-plus me-2"></i> Asignar a agente
                                 </a>
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="abrirModalAsignarPipeline()" title="Asignar esta conversacion a un pipeline de ventas">
+                                    <i class="fa fa-columns me-2 text-primary"></i> Asignar a pipeline
+                                </a>
                                 <div class="dropdown-divider"></div>
                                 <a class="dropdown-item" href="javascript:void(0)"
                                    onclick="toggleEstadisticasPanel()">
@@ -514,6 +517,8 @@
             </div>
         </div>
     </div>
+    {# Modal compartido para asignar la conversacion seleccionada a un pipeline #}
+    {% include 'whatsapp/conversaciones/_modal_asignar_pipeline.html' %}
 {% endblock %}
 
 {% block jscript %}

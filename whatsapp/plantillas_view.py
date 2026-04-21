@@ -11,8 +11,14 @@ Este modulo permite al usuario del CRM:
 - Eliminar plantillas.
 - Disparar el envio a Meta ('someter para aprobacion').
 
+Incluye generador IA con preview en 2 pasos:
+1. preview_plantillas_ia → llama LLM, devuelve N plantillas SIN guardar.
+2. confirmar_plantillas_ia → recibe seleccion del usuario, persiste solo esas.
+Ambas registran ConsumoTokenIA para trazabilidad.
+
 URL: /whatsapp/plantillas/
 """
+import json
 import logging
 
 from django.contrib.auth.decorators import login_required
@@ -276,6 +282,12 @@ def _manejar_post(request, data):
                     'message': f"Error sincronizando: {result.get('error', 'desconocido')}",
                 })
 
+            elif action == 'preview_plantillas_ia':
+                return _preview_plantillas_ia(request)
+
+            elif action == 'confirmar_plantillas_ia':
+                return _confirmar_plantillas_ia(request)
+
             elif action == 'generar_con_ia':
                 sesion_id = int(request.POST.get('sesion_id') or 0)
                 descripcion_usuario = (request.POST.get('descripcion_ia') or '').strip()
@@ -371,3 +383,227 @@ Reglas:
         logger.exception('Error en plantillasView')
         res_json.append({'error': True, 'message': f'Error: {str(ex)}'})
     return JsonResponse(res_json, safe=False)
+
+
+# ===========================================================================
+# Generador IA — preview + confirmar (2 pasos)
+# ===========================================================================
+
+_VALID_CATEGORIAS = {'UTILITY', 'MARKETING', 'AUTHENTICATION'}
+_HEADER_TIPOS_OK = {'NONE', 'TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT'}
+
+
+def _get_apikey_para_ia(request, sesion):
+    """Devuelve la mejor API Key activa para llamar al LLM."""
+    from crm.models import ApiKeyIA, PerfilNegocioIA
+    # Preferimos la del agente IA de la sesion si existe
+    if sesion.agente_ia:
+        ak = sesion.agente_ia.apikey.filter(estado=True).first()
+        if ak and (ak.descripcion or '').strip():
+            return ak
+    # Fallback: cualquier ApiKeyIA activa del usuario
+    perfil = PerfilNegocioIA.objects.filter(usuario=request.user).first()
+    if perfil:
+        return ApiKeyIA.objects.filter(perfil=perfil, estado=True).exclude(descripcion='').first()
+    return None
+
+
+def _preview_plantillas_ia(request):
+    sesion_id = int(request.POST.get('sesion_id') or 0)
+    descripcion = (request.POST.get('descripcion') or '').strip()
+    n = int(request.POST.get('n_plantillas') or 3)
+    n = max(1, min(n, 10))
+    if len(descripcion) < 10:
+        return JsonResponse({'error': True, 'message': 'Describe al menos 10 caracteres.'})
+    sesion = SesionWhatsApp.objects.filter(
+        id=sesion_id, usuario=request.user, proveedor='meta'
+    ).select_related('agente_ia', 'config_meta').first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesion Meta no encontrada.'})
+    apikey = _get_apikey_para_ia(request, sesion)
+    if not apikey:
+        return JsonResponse({'error': True, 'message': 'No hay API Key IA activa. Configura una en CRM → Entrenamiento.'})
+
+    contexto_negocio = ''
+    if sesion.agente_ia and sesion.agente_ia.perfil:
+        try:
+            contexto_negocio = sesion.agente_ia.perfil.resumen_contexto_ia()[:2000]
+        except Exception:
+            contexto_negocio = ''
+
+    try:
+        if apikey.proveedor == 2:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            llm = ChatGoogleGenerativeAI(
+                model=(apikey.modelo or 'gemini-2.5-flash'),
+                google_api_key=apikey.descripcion,
+                max_output_tokens=4000, temperature=0.6,
+                model_kwargs={'response_mime_type': 'application/json'},
+            )
+        elif apikey.proveedor == 4:
+            from langchain_anthropic import ChatAnthropic
+            llm = ChatAnthropic(
+                model=(apikey.modelo or 'claude-haiku-4-5-20251001'),
+                anthropic_api_key=apikey.descripcion,
+                max_tokens=4000, temperature=0.6,
+            )
+        else:
+            from langchain_community.chat_models import ChatOpenAI
+            llm = ChatOpenAI(
+                model_name=(apikey.modelo or 'gpt-4o-mini'),
+                openai_api_key=apikey.descripcion,
+                max_tokens=4000, temperature=0.6,
+                model_kwargs={'response_format': {'type': 'json_object'}},
+            )
+    except Exception as e:
+        return JsonResponse({'error': True, 'message': f'No se pudo inicializar el LLM: {e}'})
+
+    prompt = (
+        "Eres un experto en plantillas de WhatsApp Business (Meta Cloud API). Genera "
+        f"{n} plantillas optimizadas. Devuelve SOLO un JSON valido (sin ```), con esta estructura:\n"
+        '{\n'
+        '  "plantillas": [\n'
+        '    {\n'
+        '      "nombre": "snake_case_unico_max_60_chars",\n'
+        '      "idioma": "es" o "es_MX" o "en_US" segun corresponda,\n'
+        '      "categoria": "UTILITY" | "MARKETING" | "AUTHENTICATION",\n'
+        '      "header_tipo": "NONE" | "TEXT",\n'
+        '      "header_contenido": "string sin emojis ni markdown, max 60 chars (vacio si NONE)",\n'
+        '      "cuerpo": "texto del mensaje con placeholders {{1}}, {{2}}... segun necesidad. Max 1024 chars.",\n'
+        '      "footer": "string opcional, max 60 chars, sin emojis"\n'
+        '    }\n'
+        '  ]\n'
+        '}\n\n'
+        "REGLAS DURAS de Meta:\n"
+        "- nombre: solo a-z 0-9 _ (snake_case), unico por cuenta WABA, max 60 chars.\n"
+        "- header_contenido: SIN newlines, SIN asteriscos *_~`, SIN emojis, max 60 chars.\n"
+        "- footer: mismas reglas que header.\n"
+        "- cuerpo: max 1024 chars, puede usar *negrita*, _cursiva_, ~tachado~, `monospace`. Usa {{1}} {{2}} para variables dinamicas.\n"
+        "- categoria UTILITY = transaccional (confirmaciones, recordatorios, tracking).\n"
+        "- categoria MARKETING = promocional/engagement (Meta cobra mas + restricciones de opt-in).\n"
+        "- categoria AUTHENTICATION = solo para OTP/2FA, no usar para otro caso.\n\n"
+        f"Descripcion del usuario:\n{descripcion}\n\n"
+        f"Contexto del negocio (si aplica):\n{contexto_negocio or '(sin contexto adicional)'}\n\n"
+        f"Idioma sugerido: detectalo del contexto (default es_MX si latam, es_ES si espanol generico).\n\n"
+        "Devuelve EXCLUSIVAMENTE el JSON pedido."
+    )
+
+    try:
+        msg = llm.invoke(prompt)
+    except Exception as e:
+        return JsonResponse({'error': True, 'message': f'El LLM fallo: {e}'})
+
+    raw = (getattr(msg, 'content', '') or '').strip()
+    if raw.startswith('```'):
+        raw = raw.strip('`')
+        if raw.lower().startswith('json'):
+            raw = raw[4:].strip()
+    try:
+        cfg = json.loads(raw)
+    except Exception:
+        return JsonResponse({'error': True, 'message': 'La IA devolvio un JSON invalido. Reintenta.'})
+
+    plantillas_raw = (cfg or {}).get('plantillas') or []
+    if not isinstance(plantillas_raw, list):
+        return JsonResponse({'error': True, 'message': 'Estructura JSON invalida (esperaba lista plantillas).'})
+
+    # Validacion + sanitizacion liviana antes de devolver al frontend
+    from .services_meta import _sanitizar_header_meta
+    plantillas_clean = []
+    for p in plantillas_raw[:n]:
+        if not isinstance(p, dict): continue
+        cat = str(p.get('categoria') or 'UTILITY').upper()
+        if cat not in _VALID_CATEGORIAS: cat = 'UTILITY'
+        ht = str(p.get('header_tipo') or 'NONE').upper()
+        if ht not in _HEADER_TIPOS_OK: ht = 'NONE'
+        plantillas_clean.append({
+            'nombre':           (str(p.get('nombre') or '').strip().lower().replace(' ', '_'))[:60],
+            'idioma':           (str(p.get('idioma') or 'es')).strip()[:8],
+            'categoria':        cat,
+            'header_tipo':      ht,
+            'header_contenido': _sanitizar_header_meta(p.get('header_contenido') or '') if ht == 'TEXT' else '',
+            'cuerpo':           (str(p.get('cuerpo') or '').strip())[:1024],
+            'footer':           _sanitizar_header_meta(p.get('footer') or ''),
+        })
+
+    # Trazabilidad: registrar consumo
+    try:
+        from crm.models import ConsumoTokenIA
+        _meta = getattr(msg, 'response_metadata', {}) or {}
+        _usage = (
+            getattr(msg, 'usage_metadata', None)
+            or _meta.get('usage_metadata')
+            or _meta.get('token_usage')
+            or {}
+        )
+        _te = _usage.get('input_tokens') or _usage.get('prompt_token_count') or _usage.get('prompt_tokens') or 0
+        _ts = _usage.get('output_tokens') or _usage.get('candidates_token_count') or _usage.get('completion_tokens') or 0
+        if _te or _ts:
+            ConsumoTokenIA.objects.create(
+                apikey=apikey, agente=sesion.agente_ia,
+                tokens_entrada=_te, tokens_salida=_ts,
+                tokens_total=_te + _ts,
+                modelo=getattr(llm, 'model', '') or getattr(llm, 'model_name', '') or 'plantillas-builder',
+                origen='otro',
+                prompt_preview=(descripcion or '')[:300],
+            )
+    except Exception:
+        logger.exception("No se pudo registrar ConsumoTokenIA del preview de plantillas IA")
+
+    return JsonResponse({
+        'error':      False,
+        'plantillas': plantillas_clean,
+        'count':      len(plantillas_clean),
+    })
+
+
+def _confirmar_plantillas_ia(request):
+    sesion_id = int(request.POST.get('sesion_id') or 0)
+    sesion = SesionWhatsApp.objects.filter(
+        id=sesion_id, usuario=request.user, proveedor='meta'
+    ).select_related('config_meta').first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesion Meta no encontrada.'})
+    config = getattr(sesion, 'config_meta', None)
+    if not config:
+        return JsonResponse({'error': True, 'message': 'La sesion no tiene ConfigMeta.'})
+
+    raw = request.POST.get('plantillas_json') or '[]'
+    try:
+        plantillas = json.loads(raw)
+    except Exception:
+        return JsonResponse({'error': True, 'message': 'JSON de plantillas invalido.'})
+    if not isinstance(plantillas, list) or not plantillas:
+        return JsonResponse({'error': True, 'message': 'No hay plantillas para crear.'})
+
+    creadas, dups = 0, 0
+    for p in plantillas:
+        if not isinstance(p, dict): continue
+        nombre = (p.get('nombre') or '').strip()
+        if not nombre: continue
+        # Evitar duplicado en la misma WABA
+        if PlantillaWhatsApp.objects.filter(
+            config_meta=config, nombre=nombre, idioma=p.get('idioma') or 'es'
+        ).exists():
+            dups += 1
+            continue
+        PlantillaWhatsApp.objects.create(
+            config_meta=config,
+            nombre=nombre,
+            idioma=(p.get('idioma') or 'es')[:8],
+            categoria=p.get('categoria') or 'UTILITY',
+            header_tipo=p.get('header_tipo') or 'NONE',
+            header_contenido=p.get('header_contenido') or '',
+            cuerpo=p.get('cuerpo') or '',
+            footer=p.get('footer') or '',
+            estado_meta='BORRADOR',
+            usuario_creacion=request.user,
+        )
+        creadas += 1
+
+    log(f"IA creo {creadas} plantillas (dups omitidas: {dups}) para sesion {sesion.id}",
+        request, "add", obj=sesion.id)
+    msg = f'Se crearon {creadas} plantilla(s) en estado BORRADOR.'
+    if dups:
+        msg += f' ({dups} omitidas por duplicado de nombre).'
+    return JsonResponse({'error': False, 'message': msg, 'creadas': creadas, 'duplicadas': dups})

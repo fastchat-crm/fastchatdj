@@ -25,8 +25,9 @@
     <ul class="nav nav-pills mb-3" role="tablist" style="font-size:.85rem;">
         <li class="nav-item">
             <a class="nav-link {% if not proveedor_filtro %}active{% endif %}"
-               href="?{% if q_negocio %}q={{ q_negocio }}{% endif %}">
-                <i class="fa fa-list me-1"></i> Todas las sesiones
+               href="?{% if q_negocio %}q={{ q_negocio }}{% endif %}"
+               title="Por defecto Baileys queda fuera porque los horarios push-a-Meta no aplican.">
+                <i class="fa fa-list me-1"></i> Meta + IG + Messenger
             </a>
         </li>
         <li class="nav-item">

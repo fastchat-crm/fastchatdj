@@ -124,13 +124,16 @@
 
         {# ===== BOTONES DE ACCION (patron autenticacion/usuario) ===== #}
         <div class="row align-items-center mb-3">
-            <div class="col-md-12 mb-2 mb-md-0">
+            <div class="col-md-12 mb-2 mb-md-0 d-flex flex-wrap gap-2">
                 <a href="?action=add{% if sesion_sel %}&sesion_id={{ sesion_sel }}{% endif %}"
                    class="btn btn-success">
                     <i class="fas fa-plus-circle me-2"></i> Nueva Plantilla
                 </a>
                 {% if sesiones_meta %}
-                <div class="dropdown d-inline-block ms-2">
+                <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#modalGenerarPlantillasIA">
+                    <i class="fa fa-wand-magic-sparkles me-1"></i> Generar con IA
+                </button>
+                <div class="dropdown">
                     <button class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown">
                         <i class="fa fa-sync me-1"></i> Sincronizar con Meta
                     </button>
@@ -413,5 +416,166 @@ function eliminarPlantilla(id, nombre) {
         }
     );
 }
+
+/* ───────── Generar plantillas con IA (modal con preview) ───────── */
+function _genIA_csrf() { return $('input[name=csrfmiddlewaretoken]').first().val(); }
+let _genIA_borrador = []; // plantillas sugeridas pendientes de aceptar
+
+function generarPlantillasIA_preview(ev) {
+    ev.preventDefault();
+    const form = ev.target;
+    const sesionId = form.sesion_id.value;
+    const desc = form.descripcion.value.trim();
+    const n = form.n_plantillas.value;
+    if (!sesionId) { alertaWarning('Selecciona una sesion Meta.'); return; }
+    if (desc.length < 10) { alertaWarning('Describe en al menos 10 caracteres lo que necesitas.'); return; }
+
+    const $btn = $('#btnGenIA_preview');
+    const orig = $btn.html();
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Generando...');
+    $('#genIA_preview_wrap').html('<div class="text-muted small p-3"><i class="fa fa-spinner fa-spin me-1"></i>La IA esta armando las plantillas...</div>');
+
+    $.post('', {
+        action: 'preview_plantillas_ia',
+        csrfmiddlewaretoken: _genIA_csrf(),
+        sesion_id: sesionId,
+        descripcion: desc,
+        n_plantillas: n,
+    }).done(function(r) {
+        $btn.prop('disabled', false).html(orig);
+        if (r.error) {
+            $('#genIA_preview_wrap').html('<div class="alert alert-danger small">' + (r.message || 'Error') + '</div>');
+            return;
+        }
+        _genIA_borrador = r.plantillas || [];
+        if (!_genIA_borrador.length) {
+            $('#genIA_preview_wrap').html('<div class="alert alert-warning small">La IA no genero ninguna plantilla. Refina la descripcion.</div>');
+            return;
+        }
+        // Render tabla preview con checkbox por fila
+        let html = '<div class="alert alert-success py-2 small mb-2">' +
+            '<i class="fa fa-check-circle me-1"></i><strong>' + _genIA_borrador.length + ' plantilla(s) propuestas.</strong> ' +
+            'Revisa, deselecciona las que no te gustan, y click "Aceptar y crear".' +
+        '</div>' +
+        '<div class="table-responsive">' +
+            '<table class="table table-sm table-hover align-middle">' +
+                '<thead class="table-light">' +
+                    '<tr>' +
+                        '<th style="width:40px;"><input type="checkbox" id="genIA_all" checked onchange="$(\'.genIA_chk\').prop(\'checked\',this.checked)"></th>' +
+                        '<th>Nombre</th>' +
+                        '<th>Categoria</th>' +
+                        '<th>Idioma</th>' +
+                        '<th>Cuerpo (preview)</th>' +
+                    '</tr>' +
+                '</thead><tbody>';
+        _genIA_borrador.forEach(function(p, i) {
+            const cuerpoSafe = (p.cuerpo || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            html += '<tr>' +
+                '<td><input type="checkbox" class="genIA_chk" data-idx="' + i + '" checked></td>' +
+                '<td><code>' + (p.nombre || '?') + '</code></td>' +
+                '<td><span class="badge bg-secondary">' + (p.categoria || 'UTILITY') + '</span></td>' +
+                '<td>' + (p.idioma || 'es') + '</td>' +
+                '<td class="small text-muted" style="max-width:380px;">' +
+                    (p.header_contenido ? '<strong>HEADER:</strong> ' + p.header_contenido + '<br>' : '') +
+                    cuerpoSafe.substring(0, 200) + (cuerpoSafe.length > 200 ? '…' : '') +
+                    (p.footer ? '<br><strong>FOOTER:</strong> ' + p.footer : '') +
+                '</td>' +
+            '</tr>';
+        });
+        html += '</tbody></table></div>' +
+            '<div class="d-flex justify-content-end mt-2">' +
+                '<button type="button" class="btn btn-success btn-sm" onclick="generarPlantillasIA_aceptar()">' +
+                    '<i class="fa fa-check me-1"></i> Aceptar y crear seleccionadas' +
+                '</button>' +
+            '</div>';
+        $('#genIA_preview_wrap').html(html);
+    }).fail(function() {
+        $btn.prop('disabled', false).html(orig);
+        $('#genIA_preview_wrap').html('<div class="alert alert-danger small">Error de conexion.</div>');
+    });
+}
+
+function generarPlantillasIA_aceptar() {
+    const seleccionadas = [];
+    $('.genIA_chk:checked').each(function() {
+        const idx = parseInt($(this).data('idx'), 10);
+        if (_genIA_borrador[idx]) seleccionadas.push(_genIA_borrador[idx]);
+    });
+    if (!seleccionadas.length) { alertaWarning('Selecciona al menos una plantilla.'); return; }
+
+    const sesionId = $('#genIA_form input[name=sesion_id]').val() || $('#genIA_form select[name=sesion_id]').val();
+    $.post('', {
+        action: 'confirmar_plantillas_ia',
+        csrfmiddlewaretoken: _genIA_csrf(),
+        sesion_id: sesionId,
+        plantillas_json: JSON.stringify(seleccionadas),
+    }).done(function(r) {
+        if (r.error) {
+            alertaWarning(r.message || 'Error');
+            return;
+        }
+        alertaSuccess(r.message || 'Plantillas creadas.');
+        setTimeout(function() { location.reload(); }, 1200);
+    }).fail(function() {
+        alertaWarning('Error de conexion.');
+    });
+}
 </script>
+
+{# ===== MODAL: Generar plantillas con IA ===== #}
+<div class="modal fade" id="modalGenerarPlantillasIA" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <form class="modal-content" id="genIA_form" onsubmit="generarPlantillasIA_preview(event)">
+            {% csrf_token %}
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="fa fa-wand-magic-sparkles me-2"></i>Generar plantillas con IA</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info py-2 small mb-3">
+                    <i class="fa fa-circle-info me-1"></i>
+                    La IA propone N plantillas optimizadas para tu negocio (con nombre snake_case, cuerpo, header/footer, categoria).
+                    Verás un preview en tabla — selecciona las que te sirven y luego "Aceptar y crear" las guarda en estado <code>BORRADOR</code>.
+                    <br><strong class="text-muted">Trazabilidad:</strong> el consumo de tokens queda en CRM → Consumo IA.
+                </div>
+
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Sesion Meta *</label>
+                        <select name="sesion_id" class="form-select" required>
+                            <option value="">— Elige una sesion Meta —</option>
+                            {% for s in sesiones_meta %}
+                                <option value="{{ s.id }}" {% if sesion_sel == s.id %}selected{% endif %}>
+                                    {{ s.nombre|default:s.numero }}
+                                    {% if s.config_meta.display_phone_number %} · {{ s.config_meta.display_phone_number }}{% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text small">Solo aparecen sesiones Meta con ConfigMeta. Las plantillas son exclusivas de WhatsApp Cloud.</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold">Cuantas plantillas</label>
+                        <input type="number" name="n_plantillas" class="form-control" min="1" max="10" value="3">
+                    </div>
+                </div>
+                <div class="mb-3 mt-2">
+                    <label class="form-label small fw-semibold">¿Que tipo de plantillas necesitas?</label>
+                    <textarea name="descripcion" rows="3" class="form-control" required
+                              placeholder="Ej: Confirmacion de cita medica con fecha y doctor + recordatorio 24h antes + cancelacion. Tono profesional, idioma es-MX."></textarea>
+                    <div class="form-text small">
+                        Mencion: caso de uso, variables que necesitas (<code>{{1}}</code>, <code>{{2}}</code>...), tono e idioma.
+                    </div>
+                </div>
+                <div class="d-flex gap-2 mb-3">
+                    <button type="submit" class="btn btn-warning" id="btnGenIA_preview">
+                        <i class="fa fa-bolt me-1"></i> Vista previa
+                    </button>
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                </div>
+
+                <div id="genIA_preview_wrap"></div>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
