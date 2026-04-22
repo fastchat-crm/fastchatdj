@@ -297,9 +297,18 @@ def _meta_a_evento_interno(msg_meta: dict, value: dict, sesion: SesionWhatsApp) 
         if not from_num:
             return None
 
-        # Meta entrega el numero plano "593..."; internamente lo normalizamos a
-        # "593...@s.whatsapp.net" para mantener compatibilidad con el resto del
-        # pipeline que ya asume ese formato.
+        # Contrato de normalizacion del numero (direcciones opuestas):
+        #   ENTRADA (este archivo):  Meta -> Baileys shape
+        #     Meta manda "593xxx" plano (wa_id). Lo sufijamos @s.whatsapp.net
+        #     para que process_incoming_message y Contacto.from_number casen
+        #     con los registros existentes creados por Baileys.
+        #   SALIDA (services_meta._normalizar_destinatario):
+        #     El CRM envia "593xxx@s.whatsapp.net"; services_meta hace split
+        #     y deja solo "593xxx" (lo que Meta exige en Graph API).
+        # Edge case: si Meta alguna vez manda '+' o tiene ya sufijo, lo
+        # sanitizamos aqui para evitar que el comparador
+        # `session.numero == contacto_numero` (en view_webhook_handler) falle.
+        from_num = from_num.strip().lstrip('+')
         if '@' not in from_num:
             from_num_fmt = f"{from_num}@s.whatsapp.net"
         else:
@@ -351,9 +360,44 @@ def _meta_a_evento_interno(msg_meta: dict, value: dict, sesion: SesionWhatsApp) 
             media_obj = msg_meta.get(tipo_meta) or {}
             caption = media_obj.get('caption', '')
             filename = media_obj.get('filename')
-            # Meta entrega un media_id; habra que descargarlo via Graph API.
-            # Aqui pasamos el id crudo en mediaData para que el fetcher lo resuelva.
-            media_data = {'meta_media_id': media_obj.get('id'), 'mime_type': media_obj.get('mime_type')}
+            media_id = media_obj.get('id')
+            # Descargamos los bytes de Meta (dos llamadas Graph API) y los
+            # codificamos a base64 para que save_media_file (pensado para el
+            # formato Baileys) los persista sin cambios en view_webhook_handler.
+            media_data = None
+            if media_id:
+                try:
+                    import base64 as _b64
+                    from .services_meta import MetaWhatsAppService
+                    bytes_media = MetaWhatsAppService().descargar_media(
+                        sesion.session_id, media_id
+                    )
+                    if bytes_media:
+                        media_data = _b64.b64encode(bytes_media).decode('utf-8')
+                    else:
+                        logger.warning(
+                            "Meta media %s no se pudo descargar (sesion %s)",
+                            media_id, sesion.session_id,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Error descargando media Meta %s (sesion %s)",
+                        media_id, sesion.session_id,
+                    )
+            # Meta rara vez entrega filename para fotos/audio/sticker.
+            # Generamos uno con extension acorde al MIME para que el storage lo acepte.
+            if not filename:
+                ext_por_tipo = {
+                    'image': 'jpg', 'video': 'mp4', 'audio': 'ogg',
+                    'document': 'bin', 'sticker': 'webp',
+                }
+                ext = ext_por_tipo.get(tipo_meta, 'bin')
+                mime_type = media_obj.get('mime_type') or ''
+                if '/' in mime_type:
+                    ext_mime = mime_type.split('/', 1)[1].split(';')[0].strip()
+                    if ext_mime and len(ext_mime) <= 8:
+                        ext = ext_mime
+                filename = f"{tipo_meta}_{(msg_meta.get('id') or '')[:32]}.{ext}"
             message_content = {media_type: media_obj}
 
         elif tipo_meta == 'location':
@@ -414,16 +458,104 @@ def _meta_a_evento_interno(msg_meta: dict, value: dict, sesion: SesionWhatsApp) 
 # ---------------------------------------------------------------------------
 
 def _procesar_status_meta(status: dict, sesion: SesionWhatsApp, evento: EventoMetaRecibido):
-    """Meta envia statuses con fases: sent, delivered, read, failed. Por ahora
-    solo lo logueamos — si el CRM necesita actualizar el MensajeWhatsApp
-    correspondiente (por mensaje_id_externo), se implementa aqui."""
+    """Meta manda statuses: sent → delivered → read (o failed). Mapeamos al
+    MensajeWhatsApp por mensaje_id_externo. 'read' ademas marca leido=True y
+    notifica via WebSocket para que la UI actualice el tick azul sin refresh."""
+    from asgiref.sync import async_to_sync
+    from .models import MensajeWhatsApp
+
     mid = status.get('id')
-    estado = status.get('status')
+    estado = (status.get('status') or '').lower()
     logger.info("Meta status: msg=%s estado=%s sesion=%s", mid, estado, sesion.id)
+
+    mensaje = None
+    if mid:
+        mensaje = (
+            MensajeWhatsApp.objects
+            .filter(mensaje_id_externo=mid, conversacion__contacto__sesion=sesion)
+            .select_related('conversacion')
+            .first()
+        )
+
+    # Mapeo status Meta → estado_envio interno
+    mapa_estado = {
+        'sent':      'enviado',
+        'delivered': 'entregado',
+        'read':      'leido',
+        'failed':    'fallido',
+    }
+    nuevo_estado_envio = mapa_estado.get(estado)
+
+    # Extraer detalle de error (si aplica) una sola vez — lo usan traza y modelo
+    detalle_error = ''
+    codigo_meta = None
+    if estado == 'failed':
+        errors = status.get('errors') or []
+        if errors:
+            err0 = errors[0] if isinstance(errors[0], dict) else {}
+            detalle_error = (
+                err0.get('title')
+                or err0.get('message')
+                or (err0.get('error_data') or {}).get('details')
+                or str(errors)[:500]
+            )
+            codigo_meta = err0.get('code')
+
+    # Actualizar MensajeWhatsApp con el nuevo estado_envio.
+    # Preservamos el orden monotonico: no bajamos de 'leido' a 'entregado' si
+    # Meta manda los eventos fuera de orden (caso raro pero posible).
+    ORDEN = {'': 0, 'pendiente': 1, 'enviado': 2, 'entregado': 3, 'leido': 4, 'fallido': 5}
+    if mensaje and nuevo_estado_envio:
+        actual = mensaje.estado_envio or ''
+        update_fields = []
+        # 'fallido' siempre gana — es terminal.
+        if nuevo_estado_envio == 'fallido' or ORDEN[nuevo_estado_envio] > ORDEN.get(actual, 0):
+            mensaje.estado_envio = nuevo_estado_envio
+            update_fields.append('estado_envio')
+            if nuevo_estado_envio == 'fallido' and detalle_error:
+                mensaje.error_envio = (f"[{codigo_meta}] " if codigo_meta else '') + detalle_error
+                update_fields.append('error_envio')
+            if nuevo_estado_envio == 'leido' and not mensaje.leido:
+                mensaje.leido = True
+                mensaje.fecha_leido = timezone.now()
+                update_fields += ['leido', 'fecha_leido']
+            mensaje.save(update_fields=update_fields)
+
+            # Broadcast WS para refrescar tick sin reload
+            try:
+                channel_layer = get_channel_layer()
+                if channel_layer:
+                    async_to_sync(channel_layer.group_send)(
+                        f"chat_{mensaje.conversacion.id}",
+                        {
+                            'type': 'whatsapp_message',
+                            'event': 'message_status',
+                            'conversation_id': mensaje.conversacion.id,
+                            'message_id': mensaje.id,
+                            'estado_envio': mensaje.estado_envio,
+                        },
+                    )
+            except Exception:
+                logger.exception("Broadcast ACK Meta fallo msg=%s", mensaje.id)
+
+    # Traza — etapa y nivel segun estado
+    if estado == 'sent':
+        etapa, nivel = 'mensaje_enviado', 'info'
+    elif estado == 'failed':
+        etapa, nivel = 'envio_fallido', 'error'
+    else:
+        etapa, nivel = 'webhook_recibido', 'info'
+
+    detalle = {'meta_status': estado, 'mensaje_id_externo': mid}
+    if detalle_error:
+        detalle['error'] = detalle_error
+        if codigo_meta:
+            detalle['codigo_meta'] = codigo_meta
+
     _traza(
-        etapa='mensaje_enviado' if estado == 'sent' else 'webhook_recibido',
-        sesion=sesion, nivel='info',
-        detalle={'meta_status': estado, 'mensaje_id_externo': mid},
+        etapa=etapa, sesion=sesion,
+        conversacion=mensaje.conversacion if mensaje else None,
+        mensaje=mensaje, nivel=nivel, detalle=detalle,
     )
 
 

@@ -805,6 +805,21 @@ class MensajeWhatsApp(ModeloBase):
 
     # ID externo del mensaje (para poder identificarlo cuando se elimina o edita)
     mensaje_id_externo = models.CharField(max_length=100, blank=True, null=True)
+
+    # Estado de envío (salientes). Meta lo actualiza via ACK webhook;
+    # Baileys puede hacerlo si alguna vez exponemos message_ack del Node.
+    # Vacío '' = no aplica (mensaje entrante del cliente).
+    ESTADO_ENVIO_CHOICES = (
+        ('pendiente', 'Pendiente'),
+        ('enviado',   'Enviado'),
+        ('entregado', 'Entregado'),
+        ('leido',     'Leído'),
+        ('fallido',   'Fallido'),
+    )
+    estado_envio = models.CharField(
+        max_length=15, choices=ESTADO_ENVIO_CHOICES, default='', blank=True,
+    )
+    error_envio = models.TextField(blank=True, null=True)
     #IDIOMA
     language = models.CharField('Language', max_length=255, default='')
 

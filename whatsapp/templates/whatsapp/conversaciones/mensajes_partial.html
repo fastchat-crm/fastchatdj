@@ -222,7 +222,23 @@
                 </span>
                         {% endif %}
                         <span class="msg-time">{{ mensaje.fecha|date:"H:i" }}</span>
-                        <i class="fa fa-check-double text-primary" style="font-size:.6rem;"></i>
+                        <span class="msg-ack" data-msg-id="{{ mensaje.id }}" style="font-size:.65rem;">
+                            {% if mensaje.estado_envio == 'fallido' %}
+                                <i class="fa fa-exclamation-triangle text-danger"
+                                   title="Error: {{ mensaje.error_envio|default:'Fallo de envío' }}"></i>
+                            {% elif mensaje.estado_envio == 'leido' %}
+                                <i class="fa fa-check-double text-primary" title="Leído"></i>
+                            {% elif mensaje.estado_envio == 'entregado' %}
+                                <i class="fa fa-check-double text-muted" title="Entregado"></i>
+                            {% elif mensaje.estado_envio == 'enviado' %}
+                                <i class="fa fa-check text-muted" title="Enviado"></i>
+                            {% elif mensaje.estado_envio == 'pendiente' %}
+                                <i class="fa fa-clock text-muted" title="Pendiente"></i>
+                            {% else %}
+                                {# Histórico sin ACK o Baileys aún sin soporte message_ack #}
+                                <i class="fa fa-check-double text-muted" title=""></i>
+                            {% endif %}
+                        </span>
                     </div>
                 </div>
 
