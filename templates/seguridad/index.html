@@ -1,952 +1,406 @@
 {% extends 'base.html' %}
 {% load humanize %}
+{% load static %}
+{% load templatefunctions %}
+
 {% block head %}
+  <link rel="stylesheet" href="{% static 'stylenew/panel_principal.css' %}">
 {% endblock %}
+
 {% block content %}
-    {% if PERFIL_EXISTE %}
-        {% if sesiones_desconectados %}
-            <div class="row">
-                <div class="col-lg-12">
-                    <div class="alert alert-danger">
-                        <i class="fa fa-info-circle"></i>
-                        <strong>Atención:</strong> Hay {{ sesiones_desconectados|length }} sesiones de WhatsApp
-                        desconectadas.
-                        <a href="/whatsapp/sesiones/?estado=desconectado" class="btn-link" target="_blank">Ver
-                            detalles</a>
-                    </div>
-                </div>
+  {% if PERFIL_EXISTE %}
+    <div class="pp-page">
+
+      {# ───────── Hero ───────── #}
+      <div class="pp-hero">
+        <div>
+          <h2>Hola, {{ request.user.first_name|default:request.user.username }} 👋</h2>
+          <p>Resumen del estado de tus canales y conversaciones en vivo.</p>
+        </div>
+        <div class="pp-hero-actions">
+          <a href="/whatsapp/sesiones/" class="pp-btn">
+            <i class="fa fa-plug"></i> Sesiones
+          </a>
+          <a href="/whatsapp/conversaciones/" class="pp-btn">
+            <i class="fa fa-comments"></i> Conversaciones
+          </a>
+          <a href="/whatsapp/sesiones/" class="pp-btn pp-btn-primary">
+            <i class="fa fa-plus"></i> Nueva conexión
+          </a>
+        </div>
+      </div>
+
+      {# ───────── Alertas reales ───────── #}
+      {% if stats_sesiones.desconectadas or stats_sesiones.errores or calidad_alertas or convs_no_asignadas %}
+        <div class="pp-alerts">
+          {% if stats_sesiones.desconectadas %}
+            <div class="pp-alert pp-alert-danger">
+              <i class="fa fa-plug-circle-xmark"></i>
+              <span>
+                <b>{{ stats_sesiones.desconectadas }}</b> sesión{{ stats_sesiones.desconectadas|pluralize:"es" }} desconectada{{ stats_sesiones.desconectadas|pluralize }} — sin recibir mensajes.
+              </span>
+              <a href="/whatsapp/sesiones/?estado=desconectado">Reconectar →</a>
             </div>
+          {% endif %}
+          {% if stats_sesiones.errores %}
+            <div class="pp-alert pp-alert-danger">
+              <i class="fa fa-triangle-exclamation"></i>
+              <span><b>{{ stats_sesiones.errores }}</b> sesión{{ stats_sesiones.errores|pluralize:"es" }} con error.</span>
+              <a href="/whatsapp/sesiones/">Revisar →</a>
+            </div>
+          {% endif %}
+          {% for a in calidad_alertas %}
+            <div class="pp-alert {% if a.nivel == 'RED' %}pp-alert-danger{% else %}pp-alert-warn{% endif %}">
+              <i class="fa fa-gauge-high"></i>
+              <span>
+                Calidad <b>{{ a.nivel }}</b> en
+                <b>{{ a.sesion.nombre|default:a.sesion.config_meta.display_phone_number }}</b>
+                — revisa las conversaciones recientes para bajar reportes.
+              </span>
+              <a href="/whatsapp/analytics/?sesion={{ a.sesion.id|encrypt_id }}">Analytics →</a>
+            </div>
+          {% endfor %}
+          {% if convs_no_asignadas %}
+            <div class="pp-alert pp-alert-warn">
+              <i class="fa fa-user-clock"></i>
+              <span><b>{{ convs_no_asignadas }}</b> conversación{{ convs_no_asignadas|pluralize:"es" }} abierta{{ convs_no_asignadas|pluralize }} sin agente asignado.</span>
+              <a href="/whatsapp/conversaciones/">Asignar →</a>
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if not tiene_sesiones %}
+        {# ───────── Sin sesiones ───────── #}
+        <div class="pp-cta-empty">
+          <i class="fab fa-whatsapp"></i>
+          <h3>Aún no has enlazado ningún canal</h3>
+          <p>Conecta WhatsApp Business o Baileys y empieza a recibir conversaciones en minutos.</p>
+          <a href="/whatsapp/sesiones/" class="pp-btn">
+            <i class="fa fa-plus"></i> Enlazar primera sesión
+          </a>
+        </div>
+      {% else %}
+
+        {# ───────── KPIs ───────── #}
+        <div class="pp-kpis">
+          <div class="pp-kpi">
+            <div class="pp-kpi-icon ic-green"><i class="fa fa-plug-circle-check"></i></div>
+            <div class="pp-kpi-body">
+              <p class="pp-kpi-label">Sesiones conectadas</p>
+              <p class="pp-kpi-value">{{ stats_sesiones.conectadas }}<span class="den">/{{ stats_sesiones.total }}</span></p>
+              {% if stats_sesiones.desconectadas %}
+                <p class="pp-kpi-hint bad">{{ stats_sesiones.desconectadas }} fuera de línea</p>
+              {% else %}
+                <p class="pp-kpi-hint ok">Todas operativas</p>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="pp-kpi">
+            <div class="pp-kpi-icon ic-blue"><i class="fa fa-comments"></i></div>
+            <div class="pp-kpi-body">
+              <p class="pp-kpi-label">Conversaciones abiertas</p>
+              <p class="pp-kpi-value">{{ convs_abiertas_total|intcomma }}</p>
+              <p class="pp-kpi-hint">{{ convs_no_asignadas }} sin asignar</p>
+            </div>
+          </div>
+
+          <div class="pp-kpi">
+            <div class="pp-kpi-icon ic-purple"><i class="fa fa-message"></i></div>
+            <div class="pp-kpi-body">
+              <p class="pp-kpi-label">Mensajes últimas 24h</p>
+              <p class="pp-kpi-value">{{ mensajes_24h|intcomma }}</p>
+              <p class="pp-kpi-hint">{{ mensajes_7d|intcomma }} en los últimos 7 días</p>
+            </div>
+          </div>
+
+          <div class="pp-kpi">
+            <div class="pp-kpi-icon ic-amber"><i class="fa fa-address-book"></i></div>
+            <div class="pp-kpi-body">
+              <p class="pp-kpi-label">Contactos registrados</p>
+              <p class="pp-kpi-value">{{ contactos_total|intcomma }}</p>
+              <p class="pp-kpi-hint">en todas tus sesiones</p>
+            </div>
+          </div>
+        </div>
+
+        {# ───────── Sesiones activas + Actividad 7d ───────── #}
+        <div class="pp-row">
+          <div class="pp-section">
+            <div class="pp-section-head">
+              <h3 class="pp-section-title">
+                <i class="fa fa-bolt"></i> Sesiones activas
+                <span class="pp-section-count">({{ sesiones_activas|length }})</span>
+              </h3>
+              <a href="/whatsapp/sesiones/" class="pp-section-link">Ver todas →</a>
+            </div>
+
+            {% if sesiones_activas %}
+              <div class="pp-sesiones">
+                {% for s in sesiones_activas %}
+                  <div class="pp-sesion">
+                    <div class="pp-sesion-head">
+                      <div class="pp-sesion-avatar {% if s.es_baileys %}prov-baileys{% endif %}">
+                        <i class="fab fa-whatsapp"></i>
+                        <span class="pp-sesion-dot"></span>
+                      </div>
+                      <div class="pp-sesion-headtxt">
+                        <p class="pp-sesion-title">{{ s.nombre|default:'Sesión sin nombre' }}</p>
+                        <p class="pp-sesion-sub">
+                          {% if s.es_meta and s.config_meta.display_phone_number %}
+                            {{ s.config_meta.display_phone_number }}
+                          {% elif s.numero %}
+                            +{{ s.numero }}
+                          {% else %}
+                            —
+                          {% endif %}
+                          · {% if s.es_meta %}Meta Cloud{% else %}Baileys{% endif %}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div class="pp-sesion-stats">
+                      <div class="pp-stat">
+                        <div class="pp-stat-n">{{ s.contactos_n|intcomma }}</div>
+                        <div class="pp-stat-l">Contactos</div>
+                      </div>
+                      <div class="pp-stat">
+                        <div class="pp-stat-n">{{ s.convs_abiertas|intcomma }}</div>
+                        <div class="pp-stat-l">Abiertas</div>
+                      </div>
+                      <div class="pp-stat">
+                        <div class="pp-stat-n">{{ s.msgs_24h|default:0|intcomma }}</div>
+                        <div class="pp-stat-l">Msgs 24h</div>
+                      </div>
+                    </div>
+
+                    {% if s.agente_ia %}
+                      <div class="pp-sesion-agente">
+                        <i class="fa fa-robot"></i> {{ s.agente_ia.nombre }}
+                      </div>
+                    {% else %}
+                      <div class="pp-sesion-agente muted">
+                        <i class="fa fa-robot"></i> Sin agente IA
+                      </div>
+                    {% endif %}
+
+                    <div class="pp-sesion-actions">
+                      <a href="/whatsapp/conversaciones/?sesion={{ s.id|encrypt_id }}" class="pp-act" title="Conversaciones">
+                        <i class="fa fa-comments"></i> Chats
+                      </a>
+                      {% if s.es_meta %}
+                        <a href="/whatsapp/plantillas/?sesion={{ s.id|encrypt_id }}" class="pp-act" title="Plantillas">
+                          <i class="fa fa-file-lines"></i> Plantillas
+                        </a>
+                      {% endif %}
+                      <a href="/whatsapp/analytics/?sesion={{ s.id|encrypt_id }}" class="pp-act" title="Analytics">
+                        <i class="fa fa-chart-line"></i> Analytics
+                      </a>
+                      <a href="/whatsapp/horarios/?sesion={{ s.id|encrypt_id }}" class="pp-act" title="Horarios">
+                        <i class="fa fa-clock"></i> Horarios
+                      </a>
+                      <a href="/whatsapp/sesiones/" class="pp-act" title="Configurar">
+                        <i class="fa fa-gear"></i> Config
+                      </a>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="pp-empty">
+                <i class="fa fa-plug-circle-xmark"></i>
+                <h5>Ninguna sesión conectada</h5>
+                <p>Todas tus sesiones están desconectadas o pendientes.</p>
+                <a href="/whatsapp/sesiones/" class="pp-btn">Ir a sesiones</a>
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="pp-section">
+            <div class="pp-section-head">
+              <h3 class="pp-section-title">
+                <i class="fa fa-chart-column"></i> Actividad 7 días
+              </h3>
+            </div>
+            <div class="pp-spark">
+              {% for d in serie_7d %}
+                <div class="pp-spark-bar">
+                  <div class="pp-spark-fill" data-v="{{ d.valor }}" style="height:{{ d.pct }}%"></div>
+                  <span class="pp-spark-lbl">{{ d.label }}</span>
+                </div>
+              {% endfor %}
+            </div>
+            <p class="pp-spark-total">
+              Total: <b>{{ mensajes_7d|intcomma }}</b> mensajes
+            </p>
+
+            {% if plantillas_stats.total %}
+              <div class="pp-section-head mt">
+                <h3 class="pp-section-title">
+                  <i class="fa fa-file-lines"></i> Plantillas Meta
+                </h3>
+                <a href="/whatsapp/plantillas/" class="pp-section-link">Gestionar →</a>
+              </div>
+              <div class="pp-plantillas">
+                <div class="pp-plantilla-tile ok">
+                  <div class="n">{{ plantillas_stats.aprobadas }}</div>
+                  <div class="l">Aprobadas</div>
+                </div>
+                <div class="pp-plantilla-tile wait">
+                  <div class="n">{{ plantillas_stats.pendientes }}</div>
+                  <div class="l">Pendientes</div>
+                </div>
+                <div class="pp-plantilla-tile bad">
+                  <div class="n">{{ plantillas_stats.rechazadas }}</div>
+                  <div class="l">Rechazadas</div>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        {# ───────── Sesiones que necesitan atención ───────── #}
+        {% if sesiones_atencion %}
+          <div class="pp-section">
+            <div class="pp-section-head">
+              <h3 class="pp-section-title">
+                <i class="fa fa-circle-exclamation"></i> Necesitan atención
+              </h3>
+              <a href="/whatsapp/sesiones/" class="pp-section-link">Ver todas →</a>
+            </div>
+            <div class="pp-sesiones">
+              {% for s in sesiones_atencion %}
+                <div class="pp-sesion">
+                  <div class="pp-sesion-head">
+                    <div class="pp-sesion-avatar {% if s.es_baileys %}prov-baileys{% endif %}">
+                      <i class="fab fa-whatsapp"></i>
+                      <span class="pp-sesion-dot {% if s.estado == 'desconectado' %}off{% elif s.estado == 'error' %}err{% else %}warn{% endif %}"></span>
+                    </div>
+                    <div style="min-width:0;flex:1">
+                      <p class="pp-sesion-title">{{ s.nombre|default:'Sesión sin nombre' }}</p>
+                      <p class="pp-sesion-sub">
+                        {% if s.es_meta and s.config_meta.display_phone_number %}
+                          {{ s.config_meta.display_phone_number }}
+                        {% elif s.numero %}
+                          +{{ s.numero }}
+                        {% else %}
+                          Pendiente de número
+                        {% endif %}
+                        · {{ s.get_estado_display }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="pp-sesion-actions">
+                    {% if s.es_baileys %}
+                      <a href="/whatsapp/sesiones/" class="pp-act">
+                        <i class="fa fa-qrcode"></i> Escanear QR
+                      </a>
+                    {% else %}
+                      <a href="/whatsapp/sesiones/" class="pp-act">
+                        <i class="fa fa-satellite-dish"></i> Revalidar
+                      </a>
+                    {% endif %}
+                    <a href="/whatsapp/sesiones/" class="pp-act">
+                      <i class="fa fa-gear"></i> Configurar
+                    </a>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
         {% endif %}
-        <div class="row justify-content-center">
-            <div class="col-md-6 col-lg-4">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
-                            <div class="col-9">
-                                <p class="text-dark mb-0 fw-semibold fs-14">Conversaciones</p>
-                                <h3 class="mt-2 mb-0 fw-bold">{{ total_conversaciones|default:"154" }}</h3>
-                            </div>
-                            <!--end col-->
-                            <div class="col-3 align-self-center">
-                                <div
-                                        class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                                    <i
-                                            class="iconoir-chat-bubble h1 align-self-center mb-0 text-secondary"></i>
-                                </div>
-                            </div>
-                            <!--end col-->
-                        </div>
-                        <!--end row-->
-                        <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">12.3%</span>
-                            Nuevas conversaciones hoy</p>
-                    </div>
-                    <!--end card-body-->
-                </div>
-                <!--end card-->
-            </div>
-            <!--end col-->
-            <div class="col-md-6 col-lg-4">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
-                            <div class="col-9">
-                                <p class="text-dark mb-0 fw-semibold fs-14">Tiempo respuesta</p>
-                                <h3 class="mt-2 mb-0 fw-bold">00:45</h3>
-                            </div>
-                            <!--end col-->
-                            <div class="col-3 align-self-center">
-                                <div
-                                        class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                                    <i class="iconoir-clock h1 align-self-center mb-0 text-secondary"></i>
-                                </div>
-                            </div>
-                            <!--end col-->
-                        </div>
-                        <!--end row-->
-                        <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">2.4%</span>
-                            Mejora respecto a la semana pasada</p>
-                    </div>
-                    <!--end card-body-->
-                </div>
-                <!--end card-->
-            </div>
-            <!--end col-->
-            <div class="col-md-6 col-lg-4">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
-                            <div class="col-9">
-                                <p class="text-dark mb-0 fw-semibold fs-14">Tasa de
-                                    Conversión</p>
-                                <h3 class="mt-2 mb-0 fw-bold">28.65%</h3>
-                            </div>
-                            <!--end col-->
-                            <div class="col-3 align-self-center">
-                                <div
-                                        class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                                    <i
-                                            class="iconoir-percentage-circle h1 align-self-center mb-0 text-secondary"></i>
-                                </div>
-                            </div>
-                            <!--end col-->
-                        </div>
-                        <!--end row-->
-                        <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">5.2%</span>
-                            Incremento en conversiones semanales</p>
-                    </div>
-                    <!--end card-body-->
-                </div>
-                <!--end card-->
-            </div>
-            <!--end col-->
+
+      {% endif %}
+
+    </div>
+
+  {% else %}
+    {# ───────── No administrativo ───────── #}
+    <div class="row justify-content-center">
+      <div class="col-md-8">
+        <div class="card">
+          <div class="card-body text-center">
+            <img class="mb-2" src="/media/{{ confi.imagen_landing }}" style="width: 150px">
+            <h3>{{ confi.titulo }}</h3>
+            <p class="mb-3">Para comenzar a con tus actividades, necesitas completar tu perfil.</p>
+            <a href="javascript:void(0)"
+               onclick="contactWS('{{ confi.telefono_empresa }}', '{{ nombreempresa }}')"
+               class="btn btn-success"><i class="fab fa-whatsapp"></i> Contactar un asesor</a>
+            <br><br>
+            <span class="text-muted"><i class="fa fa-info-circle"></i> No cuenta con perfil administrativo</span>
+          </div>
         </div>
-        <div class="row justify-content-center">
-            <div class="col-md-6 col-lg-8">
-                <div class="card">
-                    <div class="card-header">
-                        <div class="row align-items-center">
-                            <div class="col">
-                                <h4 class="card-title">Resumen de Interacciones</h4>
-                            </div>
-                            <!--end col-->
-                            <div class="col-auto">
-                                <div class="dropdown">
-                                    <a href="#" class="btn bt btn-light dropdown-toggle"
-                                       data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                        <i class="icofont-calendar fs-5 me-1"></i>
-                                        Este mes<i class="las la-angle-down ms-1"></i>
-                                    </a>
-                                    <div class="dropdown-menu dropdown-menu-end">
-                                        <a class="dropdown-item" href="#">Hoy</a>
-                                        <a class="dropdown-item" href="#">Última Semana</a>
-                                        <a class="dropdown-item" href="#">Último Mes</a>
-                                        <a class="dropdown-item" href="#">Este Año</a>
-                                    </div>
-                                </div>
-                            </div>
-                            <!--end col-->
-                        </div>
-                        <!--end row-->
-                    </div>
-                    <!--end card-header-->
-                    <div class="card-body pt-0">
-                        <div id="audience_overview" class="apex-charts"></div>
-                    </div>
-                    <!--end card-body-->
+      </div>
+    </div>
+  {% endif %}
+
+  {% if mostrar_modal_ia %}
+    <div class="modal fade" id="modalEntrenamientoIA" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content shadow-lg border-0 rounded-4">
+          <div class="modal-body p-5">
+            <div class="row">
+              <div class="col-lg-7 col-md-12 order-lg-1 order-md-1 order-2 pe-lg-4 border-lg-end border-md-none border-bottom pb-4 pb-lg-0">
+                <div class="px-3 px-md-0">
+                  <h3 class="fw-bold mb-3">🎯 ¡Conoce tu asistente inteligente!</h3>
+                  <p class="text-muted mb-4">Antes de empezar, cuéntanos un poco sobre tu negocio.
+                    Esto nos ayudará a entrenar la IA para que hable como tú, entienda tu industria
+                    y atienda a tus clientes como si fueras tú.</p>
+
+                  <ul class="list-unstyled mt-4">
+                    <li class="d-flex align-items-start mb-3">
+                      <i class="fas fa-robot fa-lg text-primary me-3 mt-1"></i>
+                      <div>
+                        <strong>Entrena tu IA</strong><br>
+                        <span class="text-muted">Define tu industria, tus servicios y cómo hablas.</span>
+                      </div>
+                    </li>
+                    <li class="d-flex align-items-start mb-3">
+                      <i class="fas fa-comments fa-lg text-primary me-3 mt-1"></i>
+                      <div>
+                        <strong>Conversaciones reales</strong><br>
+                        <span class="text-muted">Tu IA responderá mensajes según tu estilo y tono.</span>
+                      </div>
+                    </li>
+                    <li class="d-flex align-items-start mb-4">
+                      <i class="fas fa-chart-line fa-lg text-primary me-3 mt-1"></i>
+                      <div>
+                        <strong>Automatiza y gana tiempo</strong><br>
+                        <span class="text-muted">Deja que tu asistente trabaje mientras tú vendes.</span>
+                      </div>
+                    </li>
+                  </ul>
+
+                  <a href="/crm/entrenamiento/" class="btn btn-primary btn-lg w-100 mt-2">
+                    ¡Configurar ahora! <i class="fas fa-arrow-right ms-2"></i>
+                  </a>
                 </div>
-                <!--end card-->
-            </div>
-            <!--end col-->
-            <div class="col-md-6 col-lg-4">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row align-items-center">
-                            <div class="col">
-                                <p class="text-dark mb-0 fw-semibold fs-14">Nuevos Clientes</p>
-                                <h2 class="mt-0 mb-0 fw-bold">42</h2>
-                            </div>
-                            <!--end col-->
-                            <div class="col-auto align-self-center">
-                                <div class="img-group d-flex">
-                                    <a class="user-avatar position-relative d-inline-block" href="#">
-                                        <img src="/static/assets_riz/images/users/avatar-1.jpg" alt="avatar"
-                                             class="thumb-md shadow-sm rounded-circle">
-                                    </a>
-                                    <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
-                                        <img src="/static/assets_riz/images/users/avatar-2.jpg" alt="avatar"
-                                             class="thumb-md shadow-sm rounded-circle">
-                                    </a>
-                                    <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
-                                        <img src="/static/assets_riz/images/users/avatar-4.jpg" alt="avatar"
-                                             class="thumb-md shadow-sm rounded-circle">
-                                    </a>
-                                    <a class="user-avatar position-relative d-inline-block ms-n2" href="#">
-                                        <img src="/static/assets_riz/images/users/avatar-3.jpg" alt="avatar"
-                                             class="thumb-md shadow-sm rounded-circle">
-                                    </a>
-                                    <a href class="user-avatar position-relative d-inline-block ms-1">
-                                                    <span
-                                                            class="thumb-md shadow-sm justify-content-center d-flex align-items-center bg-info-subtle rounded-circle fw-semibold fs-6">+8</span>
-                                    </a>
-                                </div>
-                                <small class="text-muted">Nuevos
-                                    contactos</small>
-                            </div>
-                            <!--end col-->
-                        </div>
-                        <!--end row-->
-                        <div id="visitors_report" class="apex-charts mb-2"></div>
-                        <button type="button" class="btn btn-primary w-100 btn-lg fs-14">Ver
-                            Detalles <i class="fa-solid fa-arrow-right-long"></i>
-                        </button>
-                    </div>
-                    <!--end card-body-->
+              </div>
+
+              <div class="col-lg-5 col-md-12 order-lg-2 order-md-2 order-1 d-flex justify-content-center align-items-center mb-4 mb-lg-0">
+                <div class="text-center p-3">
+                  <img src="/media/{{ confi.imagenprincipal }}"
+                       class="img-fluid rounded shadow-sm"
+                       alt="Asistente IA"
+                       style="max-height: 300px; width: auto;">
                 </div>
-                <!--end card-->
+              </div>
             </div>
-            <!--end col-->
+          </div>
         </div>
-        <div class="row">
-            <div class="col-md-6 col-lg-3">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
-                            <div class="col-9">
-                                <p class="text-dark mb-0 fw-semibold fs-14">Contactos Registrados</p>
-                                <h3 class="mt-2 mb-0 fw-bold">1,247</h3>
-                            </div>
-                            <div class="col-3 align-self-center">
-                                <div class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                                    <i class="iconoir-user h1 align-self-center mb-0 text-secondary"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">+18</span>
-                            Nuevos contactos hoy</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-6 col-lg-3">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
-                            <div class="col-9">
-                                <p class="text-dark mb-0 fw-semibold fs-14">Citas Agendadas</p>
-                                <h3 class="mt-2 mb-0 fw-bold">38</h3>
-                            </div>
-                            <div class="col-3 align-self-center">
-                                <div class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                                    <i class="iconoir-calendar h1 align-self-center mb-0 text-secondary"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">+5</span>
-                            Citas confirmadas hoy</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-6 col-lg-3">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
-                            <div class="col-9">
-                                <p class="text-dark mb-0 fw-semibold fs-14">Proyectos Cerrados</p>
-                                <h3 class="mt-2 mb-0 fw-bold">26</h3>
-                            </div>
-                            <div class="col-3 align-self-center">
-                                <div class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                                    <i class="iconoir-check-circle h1 align-self-center mb-0 text-secondary"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">+3</span>
-                            Nuevos cierres esta semana</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-6 col-lg-3">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row d-flex justify-content-center border-dashed-bottom pb-3">
-                            <div class="col-9">
-                                <p class="text-dark mb-0 fw-semibold fs-14">Valor Promedio</p>
-                                <h3 class="mt-2 mb-0 fw-bold">€1,850</h3>
-                            </div>
-                            <div class="col-3 align-self-center">
-                                <div class="d-flex justify-content-center align-items-center thumb-xl bg-light rounded-circle mx-auto">
-                                    <i class="iconoir-currency-euro h1 align-self-center mb-0 text-secondary"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <p class="mb-0 text-truncate text-muted mt-3"><span class="text-success">12.4%</span>
-                            Incremento este mes</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col-lg-6">
-                <div class="card card-h-100">
-                    <div class="card-header">
-                        <div class="row align-items-center">
-                            <div class="col">
-                                <h4 class="card-title">Intenciones Detectadas</h4>
-                            </div>
-                            <!--end col-->
-                        </div>
-                        <!--end row-->
-                    </div>
-                    <!--end card-header-->
-                    <div class="card-body pt-0">
-                        <div class="table-responsive browser_users">
-                            <table class="table mb-0">
-                                <thead class="table-light">
-                                <tr>
-                                    <th class="border-top-0">Intención</th>
-                                    <th class="border-top-0">Frecuencia</th>
-                                    <th class="border-top-0">Tasa de Respuesta</th>
-                                    <th class="border-top-0">Conversiones</th>
-                                </tr>
-                                <!--end tr-->
-                                </thead>
-                                <tbody>
-                                <tr>
-                                    <td><i class="fas fa-info-circle me-2 text-primary"></i>Información de servicios
-                                    </td>
-                                    <td>457<small class="text-muted">(38%)</small></td>
-                                    <td>92.5%</td>
-                                    <td>78<small class="text-muted">(17%)</small></td>
-                                </tr>
-                                <!--end tr-->
-                                <tr>
-                                    <td><i class="fas fa-dollar-sign me-2 text-success"></i>Consulta de precios
-                                    </td>
-                                    <td>325<small class="text-muted">(27%)</small></td>
-                                    <td>89.2%</td>
-                                    <td>65<small class="text-muted">(20%)</small></td>
-                                </tr>
-                                <!--end tr-->
-                                <tr>
-                                    <td><i class="fas fa-calendar-alt me-2 text-warning"></i>Agendar cita
-                                    </td>
-                                    <td>186<small class="text-muted">(15%)</small></td>
-                                    <td>95.4%</td>
-                                    <td>124<small class="text-muted">(67%)</small></td>
-                                </tr>
-                                <!--end tr-->
-                                <tr>
-                                    <td><i class="fas fa-question-circle me-2 text-info"></i>Soporte técnico
-                                    </td>
-                                    <td>142<small class="text-muted">(12%)</small></td>
-                                    <td>87.3%</td>
-                                    <td>52<small class="text-muted">(37%)</small></td>
-                                </tr>
-                                <!--end tr-->
-                                <tr>
-                                    <td><i class="fas fa-file-invoice me-2 text-danger"></i>Facturación
-                                    </td>
-                                    <td>98<small class="text-muted">(8%)</small></td>
-                                    <td>91.8%</td>
-                                    <td>37<small class="text-muted">(38%)</small></td>
-                                </tr>
-                                <!--end tr-->
-                                </tbody>
-                            </table>
-                            <!--end table-->
-                        </div>
-                        <!--end /div-->
-                    </div>
-                    <!--end card-body-->
-                </div>
-                <!--end card-->
-            </div>
-            <!--end col-->
-            <div class="col-lg-6">
-                <div class="card card-h-100">
-                    <div class="card-header">
-                        <div class="row align-items-center">
-                            <div class="col">
-                                <h4 class="card-title">Fuentes de Contacto</h4>
-                            </div>
-                            <!--end col-->
-                        </div>
-                        <!--end row-->
-                    </div>
-                    <!--end card-header-->
-                    <div class="card-body pt-0">
-                        <div class="table-responsive">
-                            <table class="table mb-0">
-                                <thead class="table-light">
-                                <tr>
-                                    <th class="border-top-0">Canal</th>
-                                    <th class="border-top-0">Contactos</th>
-                                    <th class="border-top-0">Periodo Anterior</th>
-                                    <th class="border-top-0">% Cambio</th>
-                                </tr>
-                                <!--end tr-->
-                                </thead>
-                                <tbody>
-                                <tr>
-                                    <td><a href class="text-primary">Sitio Web</a></td>
-                                    <td>324<small class="text-muted">(42%)</small></td>
-                                    <td>287<small class="text-muted">(38%)</small></td>
-                                    <td>12.89% <i class="fas fa-caret-up text-success font-16"></i></td>
-                                </tr>
-                                <!--end tr-->
-                                <tr>
-                                    <td><a href class="text-primary">Redes Sociales</a></td>
-                                    <td>256<small class="text-muted">(33%)</small></td>
-                                    <td>231<small class="text-muted">(31%)</small></td>
-                                    <td>10.82% <i class="fas fa-caret-up text-success font-16"></i></td>
-                                </tr>
-                                <!--end tr-->
-                                <tr>
-                                    <td><a href class="text-primary">Recomendaciones</a></td>
-                                    <td>103<small class="text-muted">(13%)</small></td>
-                                    <td>117<small class="text-muted">(16%)</small></td>
-                                    <td>-11.97% <i class="fas fa-caret-down text-danger font-16"></i></td>
-
-                                </tr>
-                                <!--end tr-->
-                                <tr>
-                                    <td><a href class="text-primary">Contacto Directo</a></td>
-                                    <td>87<small class="text-muted">(11%)</small></td>
-                                    <td>92<small class="text-muted">(12%)</small></td>
-                                    <td>-5.43% <i class="fas fa-caret-down text-danger font-16"></i></td>
-                                </tr>
-                                <!--end tr-->
-                                <tr>
-                                    <td><a href class="text-primary">Campañas Email</a></td>
-                                    <td>8<small class="text-muted">(1%)</small></td>
-                                    <td>21<small class="text-muted">(3%)</small></td>
-                                    <td>-61.90% <i class="fas fa-caret-down text-danger"></i></td>
-                                </tr>
-                                <!--end tr-->
-                                </tbody>
-                            </table>
-                            <!--end table-->
-                        </div>
-                        <!--end /div-->
-                        <p class="m-0 fs-12 fst-italic ps-2 text-muted">Datos actualizados hace 5 minutos <a
-                                href="#!" class="link-danger ms-1 "><i
-                                class="align-middle iconoir-refresh"></i></a></p>
-                    </div>
-                    <!--end card-body-->
-                </div>
-                <!--end card-->
-            </div>
-            <!--end col-->
-        </div>
-        <div class="row justify-content-center">
-            <div class="col-md-6 col-lg-4">
-                <div class="card">
-                    <div class="card-header">
-                        <div class="row align-items-center">
-                            <div class="col">
-                                <h4 class="card-title">Sentimiento de Conversaciones</h4>
-                            </div>
-                            <!--end col-->
-                            <div class="col-auto">
-                                <div class="dropdown">
-                                    <a href="#" class="btn bt btn-light dropdown-toggle"
-                                       data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                        <i class="fas fa-filter fs-5 me-1"></i>
-                                        Todos<i class="las la-angle-down ms-1"></i>
-                                    </a>
-                                    <div class="dropdown-menu dropdown-menu-end">
-                                        <a class="dropdown-item" href="#">Positivo</a>
-                                        <a class="dropdown-item" href="#">Neutral</a>
-                                        <a class="dropdown-item" href="#">Negativo</a>
-                                        <a class="dropdown-item" href="#">Todos</a>
-                                    </div>
-                                </div>
-                            </div>
-                            <!--end col-->
-                        </div>
-                        <!--end row-->
-                    </div>
-                    <!--end card-header-->
-                    <div class="card-body pt-0">
-                        <div class>
-                            <div id="traffic_sources" class="apex-charts d-block w-90 mx-auto"></div>
-                            <hr class="hr-dashed border-secondary w-25 mt-0 mx-auto">
-                        </div>
-                        <div class="text-center">
-                            <h4>Análisis de Sentimiento</h4>
-                            <p class="text-muted mt-2">El 68% de las conversaciones tienen un sentimiento positivo, lo
-                                que
-                                indica una buena percepción del servicio</p>
-                            <button type="button" class="btn btn-outline-primary px-3 mt-2">Ver detalles
-                            </button>
-                        </div>
-                    </div>
-                    <!--end card-body-->
-                </div>
-                <!--end card-->
-            </div>
-            <!--end col-->
-            <div class="col-md-6 col-lg-8">
-                <div class="card">
-                    <div class="card-header">
-                        <div class="row align-items-center">
-                            <div class="col">
-                                <h4 class="card-title">Distribución Geográfica de Clientes</h4>
-                            </div>
-                            <!--end col-->
-                            <div class="col-auto">
-                                <div class="dropdown">
-                                    <a href="#" class="btn bt btn-light dropdown-toggle"
-                                       data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                        <i class="icofont-calendar fs-5 me-1"></i>
-                                        Este mes<i class="las la-angle-down ms-1"></i>
-                                    </a>
-                                    <div class="dropdown-menu dropdown-menu-end">
-                                        <a class="dropdown-item" href="#">Hoy</a>
-                                        <a class="dropdown-item" href="#">Última Semana</a>
-                                        <a class="dropdown-item" href="#">Último Mes</a>
-                                        <a class="dropdown-item" href="#">Este Año</a>
-                                    </div>
-                                </div>
-                            </div>
-                            <!--end col-->
-                        </div>
-                        <!--end row-->
-                    </div>
-                    <!--end card-header-->
-                    <div class="card-body pt-0">
-                        <div class="row">
-                            <div class="col-lg-8">
-                                <div id="map_2" class style="height:320px"></div>
-                            </div>
-                            <!--end col-->
-                            <div class="col-lg-4 align-self-center">
-                                <div class="d-flex align-items-center my-3">
-                                    <img src="/static/assets_riz/images/flags/us_flag.jpg"
-                                         class="thumb-sm align-self-center rounded-circle" alt="...">
-                                    <div class="flex-grow-1 ms-2">
-                                        <h5 class="mb-1">126</h5>
-                                        <p class="text-muted mb-0">Madrid
-                                            . Este mes
-                                            <span class="text-success">3.6%
-                                                            <i class="mdi mdi-arrow-up"></i></span>
-                                        </p>
-                                    </div>
-                                    <!--end media-body-->
-                                </div>
-                                <!--end media-->
-                                <div class="d-flex align-items-center my-3">
-                                    <img src="/static/assets_riz/images/flags/germany_flag.jpg"
-                                         class="thumb-sm align-self-center rounded-circle" alt="...">
-                                    <div class="flex-grow-1 ms-2">
-                                        <h5 class="mb-1">92</h5>
-                                        <p class="text-muted mb-0">Barcelona
-                                            . Este mes
-                                            <span class="text-success">2.8%
-                                                            <i class="mdi mdi-arrow-up"></i></span>
-                                        </p>
-                                    </div>
-                                    <!--end media-body-->
-                                </div>
-                                <!--end media-->
-                                <div class="d-flex align-items-center my-3">
-                                    <img src="/static/assets_riz/images/flags/spain_flag.jpg"
-                                         class="thumb-sm align-self-center rounded-circle" alt="...">
-                                    <div class="flex-grow-1 ms-2">
-                                        <h5 class="mb-1">75</h5>
-                                        <p class="text-muted mb-0">Valencia
-                                            . Este mes
-                                            <span class="text-success">1.7%
-                                                            <i class="mdi mdi-arrow-up"></i></span>
-                                        </p>
-                                    </div>
-                                    <!--end media-body-->
-                                </div>
-                                <!--end media-->
-                                <div class="d-flex align-items-center my-3">
-                                    <img src="/static/assets_riz/images/flags/baha_flag.jpg"
-                                         class="thumb-sm align-self-center rounded-circle" alt="...">
-                                    <div class="flex-grow-1 ms-2">
-                                        <h5 class="mb-1">52</h5>
-                                        <p class="text-muted mb-0">Sevilla
-                                            . Este mes
-                                            <span class="text-danger">-0.6%
-                                                            <i class="mdi mdi-arrow-down"></i></span>
-                                        </p>
-                                    </div>
-                                    <!--end media-body-->
-                                </div>
-                                <!--end media-->
-                            </div>
-                            <!--end col-->
-                        </div>
-                        <!--end row-->
-
-                    </div>
-                    <!--end card-body-->
-                </div>
-                <!--end card-->
-            </div>
-            <!--end col-->
-        </div>
-        <div class="row">
-            <div class="col-lg-6">
-                <div class="card">
-                    <div class="card-header">
-                        <div class="row align-items-center">
-                            <div class="col">
-                                <h4 class="card-title">Clientes Frecuentes</h4>
-                            </div>
-                            <div class="col-auto">
-                                <div class="dropdown">
-                                    <a href="#" class="btn btn-light dropdown-toggle" data-bs-toggle="dropdown"
-                                       aria-expanded="false">
-                                        <i class="fas fa-sort fs-5 me-1"></i> Frecuencia
-                                    </a>
-                                    <div class="dropdown-menu dropdown-menu-end">
-                                        <a class="dropdown-item" href="#">Mayor frecuencia</a>
-                                        <a class="dropdown-item" href="#">Mayor valor</a>
-                                        <a class="dropdown-item" href="#">Recientes</a>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-body pt-0">
-                        <div class="table-responsive">
-                            <table class="table mb-0">
-                                <thead class="table-light">
-                                <tr>
-                                    <th>Cliente</th>
-                                    <th>Teléfono</th>
-                                    <th>Interacciones</th>
-                                    <th>Última conversación</th>
-                                    <th>Estado</th>
-                                    <th>Acciones</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <img src="/static/assets_riz/images/users/avatar-1.jpg" alt="user"
-                                                 class="rounded-circle me-2" width="40">
-                                            <div>
-                                                <h6 class="mb-0">Carlos Méndez</h6>
-                                                <p class="mb-0 text-muted small">Empresa ABC</p>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>+34 612 345 678</td>
-                                    <td>32 <small class="text-success">(+5)</small></td>
-                                    <td>Hoy <small class="text-muted">10:23</small></td>
-                                    <td><span class="badge bg-success">Activo</span></td>
-                                    <td>
-                                        <div class="dropdown">
-                                            <a href="#" class="dropdown-toggle card-drop" data-bs-toggle="dropdown"
-                                               aria-expanded="false">
-                                                <i class="fas fa-ellipsis-v font-18"></i>
-                                            </a>
-                                            <div class="dropdown-menu dropdown-menu-end">
-                                                <a class="dropdown-item" href="#">Ver historial</a>
-                                                <a class="dropdown-item" href="#">Enviar mensaje</a>
-                                                <a class="dropdown-item" href="#">Agendar cita</a>
-                                            </div>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <img src="/static/assets_riz/images/users/avatar-2.jpg" alt="user"
-                                                 class="rounded-circle me-2" width="40">
-                                            <div>
-                                                <h6 class="mb-0">María García</h6>
-                                                <p class="mb-0 text-muted small">Consultora Independiente</p>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>+34 623 456 789</td>
-                                    <td>28 <small class="text-success">(+2)</small></td>
-                                    <td>Ayer <small class="text-muted">16:42</small></td>
-                                    <td><span class="badge bg-warning">Pendiente</span></td>
-                                    <td>
-                                        <div class="dropdown">
-                                            <a href="#" class="dropdown-toggle card-drop" data-bs-toggle="dropdown"
-                                               aria-expanded="false">
-                                                <i class="fas fa-ellipsis-v font-18"></i>
-                                            </a>
-                                            <div class="dropdown-menu dropdown-menu-end">
-                                                <a class="dropdown-item" href="#">Ver historial</a>
-                                                <a class="dropdown-item" href="#">Enviar mensaje</a>
-                                                <a class="dropdown-item" href="#">Agendar cita</a>
-                                            </div>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <img src="/static/assets_riz/images/users/avatar-4.jpg" alt="user"
-                                                 class="rounded-circle me-2" width="40">
-                                            <div>
-                                                <h6 class="mb-0">Javier Fernández</h6>
-                                                <p class="mb-0 text-muted small">Grupo XYZ</p>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>+34 634 567 890</td>
-                                    <td>24 <small class="text-success">(+0)</small></td>
-                                    <td>14/05 <small class="text-muted">09:15</small></td>
-                                    <td><span class="badge bg-success">Activo</span></td>
-                                    <td>
-                                        <div class="dropdown">
-                                            <a href="#" class="dropdown-toggle card-drop" data-bs-toggle="dropdown"
-                                               aria-expanded="false">
-                                                <i class="fas fa-ellipsis-v font-18"></i>
-                                            </a>
-                                            <div class="dropdown-menu dropdown-menu-end">
-                                                <a class="dropdown-item" href="#">Ver historial</a>
-                                                <a class="dropdown-item" href="#">Enviar mensaje</a>
-                                                <a class="dropdown-item" href="#">Agendar cita</a>
-                                            </div>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <img src="/static/assets_riz/images/users/avatar-3.jpg" alt="user"
-                                                 class="rounded-circle me-2" width="40">
-                                            <div>
-                                                <h6 class="mb-0">Ana Martínez</h6>
-                                                <p class="mb-0 text-muted small">Empresa DEF</p>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>+34 645 678 901</td>
-                                    <td>19 <small class="text-success">(+1)</small></td>
-                                    <td>12/05 <small class="text-muted">14:30</small></td>
-                                    <td><span class="badge bg-danger">Inactivo</span></td>
-                                    <td>
-                                        <div class="dropdown">
-                                            <a href="#" class="dropdown-toggle card-drop" data-bs-toggle="dropdown"
-                                               aria-expanded="false">
-                                                <i class="fas fa-ellipsis-v font-18"></i>
-                                            </a>
-                                            <div class="dropdown-menu dropdown-menu-end">
-                                                <a class="dropdown-item" href="#">Ver historial</a>
-                                                <a class="dropdown-item" href="#">Enviar mensaje</a>
-                                                <a class="dropdown-item" href="#">Agendar cita</a>
-                                            </div>
-                                        </div>
-                                    </td>
-                                </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="text-end mt-3">
-                            <a href="#" class="btn btn-outline-primary btn-sm">Ver todos los clientes <i
-                                    class="fas fa-arrow-right ms-1"></i></a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-6">
-                <div class="card">
-                    <div class="card-header">
-                        <div class="row align-items-center">
-                            <div class="col">
-                                <h4 class="card-title">Gestión de Agenda</h4>
-                            </div>
-                            <div class="col-auto">
-                                <button class="btn btn-sm btn-primary"><i class="fas fa-plus me-1"></i> Nueva cita
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-body pt-0">
-                        <div class="table-responsive">
-                            <table class="table mb-0">
-                                <thead class="table-light">
-                                <tr>
-                                    <th>Cliente</th>
-                                    <th>Fecha y Hora</th>
-                                    <th>Tipo</th>
-                                    <th>Estado</th>
-                                    <th>Acciones</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <img src="/static/assets_riz/images/users/avatar-1.jpg" alt="user"
-                                                 class="rounded-circle me-2" width="40">
-                                            <div>Carlos Méndez</div>
-                                        </div>
-                                    </td>
-                                    <td>Hoy, 16:30</td>
-                                    <td><span class="badge bg-info">Presentación</span></td>
-                                    <td><span class="badge bg-warning">Pendiente</span></td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-success me-1"><i class="fas fa-check"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <img src="/static/assets_riz/images/users/avatar-2.jpg" alt="user"
-                                                 class="rounded-circle me-2" width="40">
-                                            <div>María García</div>
-                                        </div>
-                                    </td>
-                                    <td>Mañana, 10:00</td>
-                                    <td><span class="badge bg-primary">Seguimiento</span></td>
-                                    <td><span class="badge bg-success">Confirmada</span></td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-success me-1"><i class="fas fa-check"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <img src="/static/assets_riz/images/users/avatar-4.jpg" alt="user"
-                                                 class="rounded-circle me-2" width="40">
-                                            <div>Javier Fernández</div>
-                                        </div>
-                                    </td>
-                                    <td>16/05, 14:15</td>
-                                    <td><span class="badge bg-warning">Propuesta</span></td>
-                                    <td><span class="badge bg-success">Confirmada</span></td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-success me-1"><i class="fas fa-check"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <img src="/static/assets_riz/images/users/avatar-3.jpg" alt="user"
-                                                 class="rounded-circle me-2" width="40">
-                                            <div>Ana Martínez</div>
-                                        </div>
-                                    </td>
-                                    <td>18/05, 11:30</td>
-                                    <td><span class="badge bg-success">Cierre</span></td>
-                                    <td><span class="badge bg-warning">Pendiente</span></td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-success me-1"><i class="fas fa-check"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-danger me-1"><i class="fas fa-times"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="text-end mt-3">
-                            <a href="#" class="btn btn-outline-primary btn-sm">Ver agenda completa <i
-                                    class="fas fa-arrow-right ms-1"></i></a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    {% else %}
-        <!-- Mensaje si el usuario no tiene perfil -->
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-body text-center">
-                        {#                        <i class="iconoir-profile-circle display-4 text-warning mb-3"></i>#}
-                        <img class="mb-2" src="/media/{{ confi.imagen_landing }}" style="width: 150px">
-                        <h3>{{ confi.titulo }}</h3>
-                        <p class="mb-3">Para comenzar a con tus actividades, necesitas completar tu
-                            perfil.</p>
-                        <a href="javascript:void(0)"
-                           onclick="contactWS('{{ confi.telefono_empresa }}', '{{ nombreempresa }}')"
-                           class="btn btn-success"><i class="fab fa-whatsapp"></i> Contactar un asesor</a>
-                        <br><br>
-                        <span class="text-muted"><i
-                                class="fa fa-info-circle"></i> No cuenta con perfil administrativo</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    {% endif %}
-
-    {% if mostrar_modal_ia %}
-        <div class="modal fade" id="modalEntrenamientoIA" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered modal-xl">
-                <div class="modal-content shadow-lg border-0 rounded-4">
-                    <div class="modal-body p-5">
-                        <div class="row">
-                            <!-- Panel izquierdo - Prioridad en móviles -->
-                            <div class="col-lg-7 col-md-12 order-lg-1 order-md-1 order-2 pe-lg-4 border-lg-end border-md-none border-bottom pb-4 pb-lg-0">
-                                <div class="px-3 px-md-0">
-                                    <h3 class="fw-bold mb-3">🎯 ¡Conoce tu asistente inteligente!</h3>
-                                    <p class="text-muted mb-4">Antes de empezar, cuéntanos un poco sobre tu negocio.
-                                        Esto nos ayudará a entrenar la IA para que hable como tú, entienda tu industria
-                                        y atienda a tus clientes como si fueras tú.</p>
-
-                                    <ul class="list-unstyled mt-4">
-                                        <li class="d-flex align-items-start mb-3">
-                                            <i class="fas fa-robot fa-lg text-primary me-3 mt-1"></i>
-                                            <div>
-                                                <strong>Entrena tu IA</strong><br>
-                                                <span class="text-muted">Define tu industria, tus servicios y cómo hablas.</span>
-                                            </div>
-                                        </li>
-                                        <li class="d-flex align-items-start mb-3">
-                                            <i class="fas fa-comments fa-lg text-primary me-3 mt-1"></i>
-                                            <div>
-                                                <strong>Conversaciones reales</strong><br>
-                                                <span class="text-muted">Tu IA responderá mensajes según tu estilo y tono.</span>
-                                            </div>
-                                        </li>
-                                        <li class="d-flex align-items-start mb-4">
-                                            <i class="fas fa-chart-line fa-lg text-primary me-3 mt-1"></i>
-                                            <div>
-                                                <strong>Automatiza y gana tiempo</strong><br>
-                                                <span class="text-muted">Deja que tu asistente trabaje mientras tú vendes.</span>
-                                            </div>
-                                        </li>
-                                    </ul>
-
-                                    <a href="/crm/entrenamiento/" class="btn btn-primary btn-lg w-100 mt-2">
-                                        ¡Configurar ahora! <i class="fas fa-arrow-right ms-2"></i>
-                                    </a>
-                                </div>
-                            </div>
-
-                            <!-- Imagen ilustrativa - Prioridad en móviles -->
-                            <div class="col-lg-5 col-md-12 order-lg-2 order-md-2 order-1 d-flex justify-content-center align-items-center mb-4 mb-lg-0">
-                                <div class="text-center p-3">
-                                    <img src="/media/{{ confi.imagenprincipal }}"
-                                         class="img-fluid rounded shadow-sm"
-                                         alt="Asistente IA"
-                                         style="max-height: 300px; width: auto;">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-    {% endif %}
-
+      </div>
+    </div>
+  {% endif %}
 
 {% endblock %}
 
 {% block jscript %}
-    <script src="/static/assets_riz/js/pages/index.init.js"></script>
-
-    {% if mostrar_modal_ia %}
-        <script>
-            document.addEventListener('DOMContentLoaded', function () {
-                new bootstrap.Modal(document.getElementById('modalEntrenamientoIA')).show();
-            });
-        </script>
-    {% endif %}
+  {% if mostrar_modal_ia %}
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        new bootstrap.Modal(document.getElementById('modalEntrenamientoIA')).show();
+      });
+    </script>
+  {% endif %}
 {% endblock %}
