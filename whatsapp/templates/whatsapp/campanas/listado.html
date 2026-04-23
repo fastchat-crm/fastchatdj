@@ -12,36 +12,6 @@
 {% block content %}
 <div class="container-fluid p-0">
 
-    {# ===== TABS POR PROVEEDOR — filtra el listado de campañas + el combo del modal ===== #}
-    <ul class="nav nav-pills mb-3" role="tablist" style="font-size:.85rem;">
-        <li class="nav-item">
-            <a class="nav-link {% if not proveedor_filtro %}active{% endif %}" href="?"
-               title="Por defecto Baileys queda fuera porque las campañas estan pensadas para Meta-family.">
-                <i class="fa fa-list me-1"></i> Meta + IG + Messenger
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link {% if proveedor_filtro == 'baileys' %}active bg-success{% endif %}" href="?proveedor=baileys">
-                <i class="fab fa-whatsapp me-1"></i> Baileys
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link {% if proveedor_filtro == 'meta' %}active bg-primary{% endif %}" href="?proveedor=meta">
-                <i class="fa fa-cloud me-1"></i> Meta Cloud
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link {% if proveedor_filtro == 'instagram' %}active bg-danger{% endif %}" href="?proveedor=instagram">
-                <i class="fab fa-instagram me-1"></i> Instagram
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link {% if proveedor_filtro == 'messenger' %}active bg-primary{% endif %}" href="?proveedor=messenger">
-                <i class="fab fa-facebook-messenger me-1"></i> Messenger
-            </a>
-        </li>
-    </ul>
-
     {# ===== EXPLICACIÓN — QUÉ ES UNA CAMPAÑA ===== #}
     <div class="card border-info mb-3" id="cardGuiaCampanas">
         <div class="card-body py-3">

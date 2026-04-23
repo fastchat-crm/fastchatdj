@@ -28,7 +28,7 @@ from django.http import JsonResponse
 from django.shortcuts import render
 
 from core.custom_forms import FormError
-from core.funciones import addData, paginador, secure_module, log, redirectAfterPostGet
+from core.funciones import addData, paginador, secure_module, log, redirectAfterPostGet, leer_sesion_id, encrypt_sesion_id
 
 from .forms import PlantillaWhatsAppForm
 from .models import (
@@ -93,7 +93,7 @@ def plantillasView(request):
     data['action'] = action
 
     if action == 'add':
-        sesion_id = request.GET.get('sesion_id')
+        sesion_id = leer_sesion_id(request)
         config_meta = None
         if sesion_id:
             sesion = SesionWhatsApp.objects.filter(
@@ -124,7 +124,7 @@ def plantillasView(request):
     filtros = Q(config_meta__sesion_id__in=sesiones_ids)
 
     criterio = (request.GET.get('criterio') or '').strip()
-    sesion_filtro = request.GET.get('sesion') or ''
+    sesion_filtro = leer_sesion_id(request)
     estado_filtro = request.GET.get('estado') or ''
     categoria_filtro = request.GET.get('categoria') or ''
 
@@ -136,7 +136,7 @@ def plantillasView(request):
     if sesion_filtro:
         filtros &= Q(config_meta__sesion_id=sesion_filtro)
         data['sesion_sel'] = int(sesion_filtro)
-        url_vars += f'&sesion={sesion_filtro}'
+        url_vars += f'&sesion={encrypt_sesion_id(sesion_filtro)}'
     if estado_filtro:
         filtros &= Q(estado_meta=estado_filtro)
         data['estado_sel'] = estado_filtro

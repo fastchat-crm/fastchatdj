@@ -19,7 +19,7 @@ from django.conf import settings
 from crm.acciones_fin import ejecutar_acciones_fin
 from crm.models import ReglaFinConversacion, ConsumoTokenIA
 from core.constantes import PROMPT_TEMPLATES
-from core.funciones import save_log_entry, notificacion
+from core.funciones import save_log_entry, notificacion, encrypt_sesion_id
 from core.funciones_adicionales import get_image_as_base64, get_numero_emoji_ws
 from .models import (
     SesionWhatsApp,
@@ -68,12 +68,20 @@ def webhook_handler(request):
         # Obtener el channel layer para notificaciones en tiempo real
         channel_layer = get_channel_layer()
 
+        # ConfigBaileys vive los campos Baileys-specific. Se crea lazy para
+        # que el webhook siga funcionando aun si una sesion vieja no tiene fila.
+        from .models import ConfigBaileys
+        def _cb():
+            cb, _ = ConfigBaileys.objects.get_or_create(sesion=session)
+            return cb
+
         # Procesar el evento según su tipo
         if event_type == 'qr_code':
-            # Actualizar el código QR en la sesión
-            session.qr_code = event_data.get('qrCode')
+            cb = _cb()
+            cb.qr_code = event_data.get('qrCode')
+            cb.save(update_fields=['qr_code'])
             session.estado = 'pendiente'
-            session.save()
+            session.save(update_fields=['estado'])
 
             save_log_entry(f'HS: SESION {session_id} QR CODE GENERADO', request, event_type, obj=session)
 
@@ -84,7 +92,7 @@ def webhook_handler(request):
                     'type': 'whatsapp_event',
                     'event': 'qr_code',
                     'session_id': session.id,
-                    'qr_code': session.qr_code
+                    'qr_code': cb.qr_code
                 }
             )
 
@@ -92,11 +100,12 @@ def webhook_handler(request):
 
         elif event_type == 'ready':
             guardar = True
+            cb = _cb()
             # Guardar información del usuario si está disponible
             if 'user' in event_data:
                 user_info = event_data.get('user', {})
                 if 'userImage' in event_data and event_data.get('userImage'):
-                    session.foto = f'data:image/jpg;base64,{get_image_as_base64(event_data.get("userImage"))}'
+                    cb.foto = f'data:image/jpg;base64,{get_image_as_base64(event_data.get("userImage"))}'
                 if 'id' in user_info:
                     numero_list = []
                     for x in user_info['id']:
@@ -110,15 +119,16 @@ def webhook_handler(request):
                         msgerror = 'No puede registrar otra cuenta de whatsapp en esta sesión'
                     if guardar:
                         session.numero = numero
-                        session.whatsapp_id = whatsapp_id
+                        cb.whatsapp_id = whatsapp_id
                         if not session.nombre:
                             session.nombre = user_info.get('pushName') or user_info.get('verifiedBizName') or user_info.get('name') or user_info.get('notify') or user_info.get('verifiedName') or ''
 
             if guardar:
                 session.estado = 'conectado'
                 session.ultima_conexion = timezone.now()
-                session.error_mensaje = None
                 session.save()
+                cb.error_mensaje = None
+                cb.save()
 
                 save_log_entry(f'HS: SESION {session_id} READY', request, event_type, obj=session)
 
@@ -149,8 +159,10 @@ def webhook_handler(request):
             # Actualizar el estado de la sesión
             session.estado = 'conectado'
             session.ultima_conexion = timezone.now()
-            session.error_mensaje = None
             session.save()
+            cb = _cb()
+            cb.error_mensaje = None
+            cb.save(update_fields=['error_mensaje'])
 
             save_log_entry(f'HS: SESION {session_id} authenticated'.upper(), request, event_type, obj=session)
 
@@ -167,7 +179,8 @@ def webhook_handler(request):
             logger.info(f"Sesión {session_id} autenticada")
 
         elif event_type == 'contacts_list':
-            contacts_list = json.loads(session.contacts_list or '[]')
+            cb = _cb()
+            contacts_list = json.loads(cb.contacts_list or '[]')
             new_contacts_list = []
             ids = [x["id"] for x in event_data.get('contacts_list') or []]
             numbers = ["".join([y for y in x["id"] if y.isdigit()]) for x in event_data.get('contacts_list') or []]
@@ -182,9 +195,9 @@ def webhook_handler(request):
                 contacts_list[i]['contacto_numero'] = contacto_numero = "".join([y for y in (c.get('id') or '') if y.isdigit()])
                 if contacto_numero:
                     new_contacts_list.append(contacts_list[i])
-            session.contacts_list = json.dumps(new_contacts_list)
-            session.contacts_length = len(new_contacts_list)
-            session.save()
+            cb.contacts_list = json.dumps(new_contacts_list)
+            cb.contacts_length = len(new_contacts_list)
+            cb.save(update_fields=['contacts_list', 'contacts_length'])
 
         elif event_type == 'auth_failure':
             detalle_auth = (
@@ -194,9 +207,11 @@ def webhook_handler(request):
                 or ''
             )
             session.estado = 'error'
-            session.error_mensaje = f"Error de autenticación: {detalle_auth}" if detalle_auth else "Error de autenticación"
             session.save()
-            msgerror = session.error_mensaje
+            cb = _cb()
+            cb.error_mensaje = f"Error de autenticación: {detalle_auth}" if detalle_auth else "Error de autenticación"
+            cb.save(update_fields=['error_mensaje'])
+            msgerror = cb.error_mensaje
 
             save_log_entry(f'HS: SESION {session_id} auth_failure {detalle_auth}'.upper(), request, event_type, obj=session)
             logger.error("AUTH_FAILURE session=%s payload=%s", session_id, event_data)
@@ -207,7 +222,7 @@ def webhook_handler(request):
                     'type': 'whatsapp_event',
                     'event': 'auth_failure',
                     'session_id': session.id,
-                    'error': session.error_mensaje,
+                    'error': cb.error_mensaje,
                     'msgerror': msgerror,
                     'payload': event_data,
                 }
@@ -217,10 +232,12 @@ def webhook_handler(request):
             reason = event_data.get('reason', 'unknown')
             detalle_disc = event_data.get('error') or event_data.get('message') or ''
             session.estado = 'desconectado'
-            session.desconectado_manualmente = False  # desconexión inesperada → reconectable
-            session.error_mensaje = f"Desconectado ({reason}){f': {detalle_disc}' if detalle_disc else ''}"
             session.save()
-            msgerror = session.error_mensaje
+            cb = _cb()
+            cb.desconectado_manualmente = False  # desconexión inesperada → reconectable
+            cb.error_mensaje = f"Desconectado ({reason}){f': {detalle_disc}' if detalle_disc else ''}"
+            cb.save(update_fields=['desconectado_manualmente', 'error_mensaje'])
+            msgerror = cb.error_mensaje
 
             save_log_entry(f'HS: SESION {session_id} disconnected reason={reason} {detalle_disc}'.upper(), request, event_type, obj=session)
             logger.warning("DISCONNECTED session=%s reason=%s payload=%s", session_id, reason, event_data)
@@ -275,7 +292,7 @@ def webhook_handler(request):
                     f'({int((event_data.get("windowMs") or 60000) / 1000)}s). '
                     f'La IA pausará envíos durante {retry_after_s}s para no saturar más.'
                 ),
-                url=f'/whatsapp/trazas/?sesion={session.id}',
+                url=f'/whatsapp/trazas/?sesion={encrypt_sesion_id(session.id)}',
                 cache_key=f'notif_rate_limited_{session.id}',
                 cooldown_segundos=600,
             )

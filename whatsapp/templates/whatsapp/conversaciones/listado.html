@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css">
 <style>
@@ -645,7 +646,7 @@
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 
         // Declarar filtroActivo aquí para evitar ReferenceError antes de su uso
-        let filtroActivo = '{{ url_vars }}'.replace('&sesion_id={{ sesion_seleccionada.id }}', '').replace(/^&/, '');
+        let filtroActivo = '{{ url_vars }}'.replace('&sesion={{ sesion_seleccionada.id|encrypt_id }}', '').replace(/^&/, '');
 
         function conectarWebSocket(conversacionId) {
             const wsUrl = `${wsProtocol}//${window.location.host}/ws/chat/${conversacionId}/`;
@@ -955,7 +956,7 @@
             $('#lista-conversaciones').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2">Cargando conversaciones...</p></div>');
 
             let url = '/whatsapp/conversaciones/?load_conversations=true';
-            if (sesionId) url += '&sesion_id=' + sesionId;
+            if (sesionId) url += '&sesion=' + sesionId;
             if (query)    url += '&criterio=' + encodeURIComponent(query);
             if (filtro)   url += '&' + filtro;
 

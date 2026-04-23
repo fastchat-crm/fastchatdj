@@ -337,6 +337,73 @@
   text-transform: uppercase;
   margin-left: auto;
 }
+.badge-deprecated {
+  font-size: .6rem;
+  padding: .05rem .45rem;
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 999px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-left: auto;
+  letter-spacing: .02em;
+}
+.ic.ic-muted {
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+.pane-hero {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1rem 1.1rem;
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+  border: 1px solid #a7f3d0;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+}
+.pane-hero-deprecated {
+  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  border-color: #e5e7eb;
+  opacity: .92;
+}
+.pane-hero-icon {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  border-radius: 12px;
+  background: #25d366;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  box-shadow: 0 4px 12px rgba(37,211,102,.22);
+}
+.pane-hero-icon-muted {
+  background: #e5e7eb;
+  color: #6b7280;
+  box-shadow: none;
+}
+.pane-hero-body { flex: 1; min-width: 0; }
+.pane-hero-text {
+  font-size: .85rem;
+  color: #374151;
+  line-height: 1.45;
+}
+.pane-badge-deprecated {
+  display: inline-flex;
+  align-items: center;
+  font-size: .7rem;
+  padding: .15rem .55rem;
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 999px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  margin-top: .25rem;
+}
 
 /* Panel derecho */
 .conex-panel {

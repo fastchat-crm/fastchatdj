@@ -363,7 +363,7 @@ $(document).ready(function() {
 
     function _buildUrl(extra) {
         let url = '/whatsapp/conversaciones-finalizadas/?load_conversations=true';
-        if (_filtros.sesion_id)     url += '&sesion_id='     + _filtros.sesion_id;
+        if (_filtros.sesion_id)     url += '&sesion='        + _filtros.sesion_id;
         if (_filtros.criterio)      url += '&criterio='      + encodeURIComponent(_filtros.criterio);
         if (_filtros.fecha_desde)   url += '&fecha_desde='   + _filtros.fecha_desde;
         if (_filtros.fecha_hasta)   url += '&fecha_hasta='   + _filtros.fecha_hasta;

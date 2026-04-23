@@ -12,7 +12,7 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 
-from core.funciones import addData, paginador, secure_module, log
+from core.funciones import addData, paginador, secure_module, log, leer_sesion_id, encrypt_sesion_id
 from .models import (
     Campana, EnvioCampana, SesionWhatsApp, EtiquetaContacto, PlantillaWhatsApp,
     TIPOS_CAMPANA, ESTADOS_CAMPANA,
@@ -21,14 +21,10 @@ from .models import (
 
 def _sesiones_del_usuario(user, proveedor_filtro=None):
     """Sesiones activas del usuario. Si `proveedor_filtro` es uno de
-    ('baileys', 'meta', 'instagram', 'messenger'), restringe a ese canal.
-    Sin filtro: excluye Baileys por default (las campañas estan pensadas para
-    Meta-family, donde existen plantillas/HSM/segmentacion avanzada)."""
+    ('baileys', 'meta', 'instagram', 'messenger'), restringe a ese canal."""
     qs = SesionWhatsApp.objects.filter(usuario=user, status=True)
     if proveedor_filtro in ('baileys', 'meta', 'instagram', 'messenger'):
         qs = qs.filter(proveedor=proveedor_filtro)
-    else:
-        qs = qs.exclude(proveedor='baileys')
     return qs.order_by('nombre')
 
 
@@ -51,7 +47,7 @@ def campanasView(request):
 
     # Deep-link desde sesiones: preseleccionar sesion y abrir modal de creación
     sesion_preseleccionada = None
-    sesion_id_param = request.GET.get('sesion_id') or request.GET.get('sesion')
+    sesion_id_param = leer_sesion_id(request)
     if sesion_id_param:
         sesion_preseleccionada = SesionWhatsApp.objects.filter(
             id=sesion_id_param, usuario=request.user, status=True,
@@ -75,7 +71,7 @@ def campanasView(request):
     filtros = Q(sesion__usuario=request.user, status=True)
 
     criterio = (request.GET.get('criterio') or '').strip()
-    sesion_filtro = request.GET.get('sesion') or ''
+    sesion_filtro = leer_sesion_id(request)
     estado_filtro = request.GET.get('estado') or ''
     tipo_filtro = request.GET.get('tipo') or ''
 
@@ -90,11 +86,8 @@ def campanasView(request):
         url_vars += f'&criterio={criterio}'
     if sesion_filtro:
         filtros &= Q(sesion_id=sesion_filtro)
-        try:
-            data['sesion_sel'] = int(sesion_filtro)
-        except (TypeError, ValueError):
-            pass
-        url_vars += f'&sesion={sesion_filtro}'
+        data['sesion_sel'] = int(sesion_filtro)
+        url_vars += f'&sesion={encrypt_sesion_id(sesion_filtro)}'
     if estado_filtro:
         filtros &= Q(estado=estado_filtro)
         data['estado_sel'] = estado_filtro
@@ -104,27 +97,13 @@ def campanasView(request):
         data['tipo_sel'] = tipo_filtro
         url_vars += f'&tipo={tipo_filtro}'
 
-    # Filtro por proveedor:
-    # - Default (sin param): excluye Baileys porque las plantillas/HSM/segmentacion
-    #   avanzada solo tienen sentido en Meta-family. El cliente Baileys-only ve solo
-    #   el tab "Solo Baileys".
-    # - Con ?proveedor=baileys: muestra solo Baileys.
-    # - Con ?proveedor=meta/instagram/messenger: muestra solo ese.
-    proveedor_filtro = (request.GET.get('proveedor') or '').strip().lower()
-    if proveedor_filtro in ('baileys', 'meta', 'instagram', 'messenger'):
-        filtros &= Q(sesion__proveedor=proveedor_filtro)
-        url_vars += f'&proveedor={proveedor_filtro}'
-    else:
-        filtros &= ~Q(sesion__proveedor='baileys')
-
     listado = Campana.objects.filter(filtros).select_related(
         'sesion', 'plantilla',
     ).order_by('-fecha_registro')
 
     data['url_vars'] = url_vars
     data['list_count'] = listado.count()
-    data['sesiones'] = _sesiones_del_usuario(request.user, proveedor_filtro=proveedor_filtro or None)
-    data['proveedor_filtro'] = proveedor_filtro if proveedor_filtro in ('baileys', 'meta', 'instagram', 'messenger') else ''
+    data['sesiones'] = _sesiones_del_usuario(request.user, proveedor_filtro=None)
     data['etiquetas'] = EtiquetaContacto.objects.filter(
         status=True, usuario_creacion=request.user,
     )

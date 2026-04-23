@@ -2,251 +2,269 @@
 {% load static %}
 
 {% block head %}
-  <link rel="stylesheet" href="{% static 'stylenew/sesiones.css' %}">
+    <link rel="stylesheet" href="{% static 'stylenew/sesiones.css' %}">
 {% endblock %}
 
 {% block content %}
-<div class="conex-page">
+    <div class="conex-page">
 
-  {# ───────── Header ───────── #}
-  <div class="conex-header">
-    <div class="conex-header-left">
-      <div>
-        <h3 class="conex-title">Canales conectados</h3>
-        <p class="conex-subtitle">Administra desde un solo lugar todas las cuentas de mensajería que atienden a tu negocio.</p>
-      </div>
+        {# ───────── Header ───────── #}
+        <div class="conex-header">
+            <div class="conex-header-left">
+                <div>
+                    <h3 class="conex-title">Canales conectados</h3>
+                    <p class="conex-subtitle">Administra desde un solo lugar todas las cuentas de mensajería que
+                        atienden a tu negocio.</p>
+                </div>
+            </div>
+            <div class="conex-header-right">
+                <div class="conex-search">
+                    <i class="fa fa-search"></i>
+                    <input type="text" id="conex-search-input" placeholder="Buscar por nombre o número..."
+                           value="{{ criterio }}">
+                </div>
+                <button type="button" class="conex-btn conex-btn-primary" id="btn-abrir-modal">
+                    <i class="fa fa-plus me-1"></i> Nueva conexión
+                </button>
+            </div>
+        </div>
+
+        {# ───────── Filtros rápidos ───────── #}
+        <div class="conex-filtros">
+            <button class="conex-chip active" data-filtro="todas">
+                <i class="fa fa-layer-group"></i> Todas <span class="n">{{ total }}</span>
+            </button>
+            <button class="conex-chip" data-filtro="conectado">
+                <span class="dot dot-ok"></span> En línea <span class="n">{{ stats.conectadas }}</span>
+            </button>
+            <button class="conex-chip" data-filtro="pendiente">
+                <span class="dot dot-warn"></span> Por configurar <span class="n">{{ stats.pendientes }}</span>
+            </button>
+            <button class="conex-chip" data-filtro="desconectado">
+                <span class="dot dot-off"></span> Fuera de línea <span class="n">{{ stats.desconectadas }}</span>
+            </button>
+            <button class="conex-chip" data-filtro="error">
+                <span class="dot dot-err"></span> Con incidencias <span class="n">{{ stats.errores }}</span>
+            </button>
+        </div>
+
+        {# ───────── Grid de cards ───────── #}
+        <div class="conex-grid" id="conex-grid">
+            {% for sesion in sesiones %}
+                {% include 'whatsapp/sesiones/_card.html' with sesion=sesion %}
+            {% empty %}
+                <div class="conex-empty">
+                    <i class="fa fa-satellite-dish"></i>
+                    <h4>Aún no has enlazado ningún canal</h4>
+                    <p>Empieza con WhatsApp Cloud y luego suma los demás. Pulsa <b>Nueva conexión</b> para arrancar.</p>
+                </div>
+            {% endfor %}
+        </div>
+
     </div>
-    <div class="conex-header-right">
-      <div class="conex-search">
-        <i class="fa fa-search"></i>
-        <input type="text" id="conex-search-input" placeholder="Buscar por nombre o número..." value="{{ criterio }}">
-      </div>
-      <button type="button" class="conex-btn conex-btn-primary" id="btn-abrir-modal">
-        <i class="fa fa-plus me-1"></i> Nueva conexión
-      </button>
-    </div>
-  </div>
 
-  {# ───────── Filtros rápidos ───────── #}
-  <div class="conex-filtros">
-    <button class="conex-chip active" data-filtro="todas">
-      <i class="fa fa-layer-group"></i> Todas <span class="n">{{ total }}</span>
-    </button>
-    <button class="conex-chip" data-filtro="conectado">
-      <span class="dot dot-ok"></span> En línea <span class="n">{{ stats.conectadas }}</span>
-    </button>
-    <button class="conex-chip" data-filtro="pendiente">
-      <span class="dot dot-warn"></span> Por configurar <span class="n">{{ stats.pendientes }}</span>
-    </button>
-    <button class="conex-chip" data-filtro="desconectado">
-      <span class="dot dot-off"></span> Fuera de línea <span class="n">{{ stats.desconectadas }}</span>
-    </button>
-    <button class="conex-chip" data-filtro="error">
-      <span class="dot dot-err"></span> Con incidencias <span class="n">{{ stats.errores }}</span>
-    </button>
-  </div>
+    {# ───────── Modal Nueva conexión ───────── #}
+    <div class="conex-modal-backdrop" id="conex-modal" aria-hidden="true">
+        <div class="conex-modal" role="dialog" aria-label="Nueva conexión">
+            <div class="conex-modal-header">
+                <h4>Enlazar un nuevo canal</h4>
+                <button type="button" class="conex-modal-close" id="btn-cerrar-modal" aria-label="Cerrar">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="conex-modal-body">
 
-  {# ───────── Grid de cards ───────── #}
-  <div class="conex-grid" id="conex-grid">
-    {% for sesion in sesiones %}
-      {% include 'whatsapp/sesiones/_card.html' with sesion=sesion %}
-    {% empty %}
-      <div class="conex-empty">
-        <i class="fa fa-satellite-dish"></i>
-        <h4>Aún no has enlazado ningún canal</h4>
-        <p>Empieza con WhatsApp Cloud y luego suma los demás. Pulsa <b>Nueva conexión</b> para arrancar.</p>
-      </div>
-    {% endfor %}
-  </div>
-
-</div>
-
-{# ───────── Modal Nueva conexión ───────── #}
-<div class="conex-modal-backdrop" id="conex-modal" aria-hidden="true">
-  <div class="conex-modal" role="dialog" aria-label="Nueva conexión">
-    <div class="conex-modal-header">
-      <h4>Enlazar un nuevo canal</h4>
-      <button type="button" class="conex-modal-close" id="btn-cerrar-modal" aria-label="Cerrar">
-        <i class="fa fa-times"></i>
-      </button>
-    </div>
-    <div class="conex-modal-body">
-
-      {# Sidebar canales #}
-      <aside class="conex-sidebar">
-        <button class="conex-canal active" data-canal="whatsapp">
+                {# Sidebar canales #}
+                <aside class="conex-sidebar">
+                    <button class="conex-canal active" data-canal="whatsapp">
           <span class="ic" style="background:#d4f5e3;color:#25d366;">
             <i class="fab fa-whatsapp"></i>
           </span>
-          WhatsApp
-        </button>
-        <button class="conex-canal" data-canal="baileys">
-          <span class="ic" style="background:#fff3d1;color:#b8860b;">
-            <i class="fab fa-whatsapp"></i>
+                        WhatsApp
+                    </button>
+                    <button class="conex-canal" data-canal="baileys">
+          <span class="ic ic-muted">
+            <i class="fa fa-qrcode"></i>
           </span>
-          Baileys <span class="badge-beta">Legacy</span>
-        </button>
-        <button class="conex-canal" data-canal="telegram">
+                        QR Code <span class="badge-deprecated">No disponible</span>
+                    </button>
+                    <button class="conex-canal" data-canal="telegram">
           <span class="ic" style="background:#e3f3ff;color:#229ED9;">
             <i class="fab fa-telegram"></i>
           </span>
-          Telegram
-        </button>
-        <button class="conex-canal" data-canal="instagram">
+                        Telegram
+                    </button>
+                    <button class="conex-canal" data-canal="instagram">
           <span class="ic ig-grad">
             <i class="fab fa-instagram"></i>
           </span>
-          Instagram
-        </button>
-        <button class="conex-canal" data-canal="facebook">
+                        Instagram
+                    </button>
+                    <button class="conex-canal" data-canal="facebook">
           <span class="ic" style="background:#e7f0ff;color:#1877f2;">
             <i class="fab fa-facebook"></i>
           </span>
-          Facebook
-        </button>
-        <button class="conex-canal" data-canal="tiktok">
+                        Facebook
+                    </button>
+                    <button class="conex-canal" data-canal="tiktok">
           <span class="ic" style="background:#000;color:#fff;">
             <i class="fab fa-tiktok"></i>
           </span>
-          TikTok
-        </button>
-      </aside>
+                        TikTok
+                    </button>
+                </aside>
 
-      {# Paneles a la derecha — JS muestra uno a la vez #}
-      <section class="conex-panel">
+                {# Paneles a la derecha — JS muestra uno a la vez #}
+                <section class="conex-panel">
 
-        {# ── Panel WhatsApp (Meta Cloud API) ── #}
-        <div class="pane" data-pane="whatsapp">
-          <h5 class="pane-title">Enlazar WhatsApp Business (API oficial)</h5>
-          <a href="https://developers.facebook.com/docs/whatsapp/cloud-api" target="_blank" class="pane-link">
-            ¿Qué es WhatsApp Cloud API? <i class="fa fa-arrow-up-right-from-square ms-1"></i>
-          </a>
-          <div class="pane-alert">
-            <i class="fa fa-shield-halved"></i>
-            Conexión <b>oficial y verificada</b> con Meta. Sin riesgo de bloqueo, con soporte de plantillas,
-            métricas reales y entrega garantizada.
-          </div>
+                    {# ── Panel WhatsApp (Meta Cloud API) ── #}
+                    <div class="pane" data-pane="whatsapp">
+                        <div class="pane-hero">
+                            <div class="pane-hero-icon">
+                                <i class="fab fa-whatsapp"></i>
+                            </div>
+                            <div class="pane-hero-body">
+                                <h5 class="pane-title mb-1">Conectar con la cuenta de WhatsApp Business API</h5>
+                                <p class="pane-hero-text mb-0">
+                                    Aprovecha las herramientas de WhatsApp Business para maximizar los
+                                    ingresos y sincronizar los eventos de compra para optimizar automáticamente
+                                    los anuncios de Facebook con CAPI.
+                                </p>
+                            </div>
+                        </div>
+                        <a href="/whatsapp/docs/conectar-whatsapp-business/" class="pane-link">
+                            <i class="fa fa-book-open me-1"></i> Aprende cómo conectar
+                        </a>
+                        <div class="pane-alert">
+                            <i class="fa fa-shield-halved"></i>
+                            Conexión <b>oficial y verificada</b> con Meta. Sin riesgo de bloqueo, con soporte de
+                            plantillas,
+                            métricas reales y entrega garantizada.
+                        </div>
 
-          <h6 class="pane-subtitle">Lo que necesitas tener listo</h6>
-          <p class="pane-intro">
-            Este checklist evita rechazos en el proceso de autorización con Meta.
-          </p>
+                        <h6 class="pane-subtitle">Lo que necesitas tener listo</h6>
+                        <p class="pane-intro">
+                            Este checklist evita rechazos en el proceso de autorización con Meta.
+                        </p>
 
-          <ul class="pane-requisitos">
-            <li>
-              <i class="fa fa-briefcase"></i>
-              <div>
-                <b>Cuenta de Meta Business Suite</b>
-                <p>Con tu empresa registrada y preferiblemente verificada. Si aún no la tienes,
-                  <a href="https://business.facebook.com" target="_blank">créala gratis aquí</a>.
-                </p>
-              </div>
-            </li>
-            <li>
-              <i class="fa fa-globe"></i>
-              <div>
-                <b>Sitio web o página oficial</b>
-                <p>Una URL activa de tu negocio (web, Facebook Page o Instagram) para que Meta valide tu identidad.</p>
-              </div>
-            </li>
-            <li>
-              <i class="fa fa-mobile-screen"></i>
-              <div>
-                <b>Un número de teléfono disponible</b>
-                <p>Sirve uno nuevo o el mismo de WhatsApp Business App.
-                  <a href="https://www.facebook.com/business/help/2087193751603668" target="_blank">Cómo elegirlo</a>.
-                </p>
-              </div>
-            </li>
-          </ul>
+                        <ul class="pane-requisitos">
+                            <li>
+                                <i class="fa fa-briefcase"></i>
+                                <div>
+                                    <b>Cuenta de Meta Business Suite</b>
+                                    <p>Con tu empresa registrada y preferiblemente verificada. Si aún no la tienes,
+                                        <a href="https://business.facebook.com" target="_blank">créala gratis aquí</a>.
+                                    </p>
+                                </div>
+                            </li>
+                            <li>
+                                <i class="fa fa-globe"></i>
+                                <div>
+                                    <b>Sitio web o página oficial</b>
+                                    <p>Una URL activa de tu negocio (web, Facebook Page o Instagram) para que Meta
+                                        valide tu identidad.</p>
+                                </div>
+                            </li>
+                            <li>
+                                <i class="fa fa-mobile-screen"></i>
+                                <div>
+                                    <b>Un número de teléfono disponible</b>
+                                    <p>Sirve uno nuevo o el mismo de WhatsApp Business App.
+                                        <a href="https://www.facebook.com/business/help/2087193751603668"
+                                           target="_blank">Cómo elegirlo</a>.
+                                    </p>
+                                </div>
+                            </li>
+                        </ul>
 
-          <label class="pane-check">
-            <input type="checkbox" id="chk-wa-requisitos">
-            Confirmo que cumplo con todos los requisitos listados arriba
-          </label>
+                        <label class="pane-check">
+                            <input type="checkbox" id="chk-wa-requisitos">
+                            Confirmo que cumplo con todos los requisitos listados arriba
+                        </label>
 
-          {% if not meta_oauth_listo %}
-            <div class="pane-alert alert-danger">
-              <i class="fa fa-xmark"></i>
-              El administrador de la plataforma aún no ha configurado las credenciales de Meta.
-              Pídele que complete <code>META_APP_ID</code>, <code>META_APP_SECRET</code> y
-              <code>META_CONFIG_ID</code> en <code>credenciales.json</code>.
+                        {% if not meta_oauth_listo %}
+                            <div class="pane-alert alert-danger">
+                                <i class="fa fa-xmark"></i>
+                                El administrador de la plataforma aún no ha configurado las credenciales de Meta.
+                                Pídele que complete <code>META_APP_ID</code>, <code>META_APP_SECRET</code> y
+                                <code>META_CONFIG_ID</code> en <code>credenciales.json</code>.
+                            </div>
+                        {% endif %}
+
+                        <div class="pane-actions">
+                            <button type="button" class="conex-btn conex-btn-light" data-cerrar>Volver</button>
+                            <button type="button" class="conex-btn conex-btn-primary" id="btn-wa-continuar"
+                                    {% if not meta_oauth_listo %}disabled{% endif %}>
+                                Iniciar enlace con Meta <i class="fa fa-arrow-right ms-1"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    {# ── Panel Baileys (legacy, QR DEPRECADO) ── #}
+                    <div class="pane pane-hidden" data-pane="baileys">
+                        <div class="pane-hero pane-hero-deprecated">
+                            <div class="pane-hero-icon pane-hero-icon-muted">
+                                <i class="fa fa-qrcode"></i>
+                            </div>
+                            <div class="pane-hero-body">
+                                <h5 class="pane-title mb-1">API de WhatsApp por código QR</h5>
+                                <span class="pane-badge-deprecated">
+                                    <i class="fa fa-ban me-1"></i> Ya no disponible
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="pane-alert alert-danger">
+                            <i class="fa fa-circle-info"></i>
+                            <div>
+                                <b>La conexión del código QR de WhatsApp ya no está disponible.</b>
+                                <p class="mb-0 mt-1">
+                                    Contáctenos para más información sobre cómo migrar a WhatsApp
+                                    Business API oficial.
+                                </p>
+                            </div>
+                        </div>
+
+                        <a href="/whatsapp/docs/conectar-whatsapp-business/" class="pane-link">
+                            <i class="fa fa-book-open me-1"></i> Aprende cómo conectar con la API oficial
+                        </a>
+
+                        <div class="pane-actions">
+                            <button type="button" class="conex-btn conex-btn-light" data-cerrar>Volver</button>
+                            <button type="button" class="conex-btn conex-btn-primary" data-canal-jump="whatsapp">
+                                <i class="fa fa-arrow-right-to-bracket me-1"></i> Usar API Business
+                            </button>
+                        </div>
+                    </div>
+
+                    {# ── Paneles "Próximamente" ── #}
+                    <div class="pane pane-hidden pane-proximamente" data-pane="telegram">
+                        {% include 'whatsapp/sesiones/_proximamente.html' with nombre='Telegram' icono='fab fa-telegram' color='#229ED9' %}
+                    </div>
+                    <div class="pane pane-hidden pane-proximamente" data-pane="instagram">
+                        {% include 'whatsapp/sesiones/_proximamente.html' with nombre='Instagram' icono='fab fa-instagram' color='#e1306c' %}
+                    </div>
+                    <div class="pane pane-hidden pane-proximamente" data-pane="facebook">
+                        {% include 'whatsapp/sesiones/_proximamente.html' with nombre='Facebook' icono='fab fa-facebook' color='#1877f2' %}
+                    </div>
+                    <div class="pane pane-hidden pane-proximamente" data-pane="tiktok">
+                        {% include 'whatsapp/sesiones/_proximamente.html' with nombre='TikTok' icono='fab fa-tiktok' color='#000' %}
+                    </div>
+
+                </section>
             </div>
-          {% endif %}
-
-          <div class="pane-actions">
-            <button type="button" class="conex-btn conex-btn-light" data-cerrar>Volver</button>
-            <button type="button" class="conex-btn conex-btn-primary" id="btn-wa-continuar"
-                    {% if not meta_oauth_listo %}disabled{% endif %}>
-              Iniciar enlace con Meta <i class="fa fa-arrow-right ms-1"></i>
-            </button>
-          </div>
         </div>
-
-        {# ── Panel Baileys (legacy, QR no oficial) ── #}
-        <div class="pane pane-hidden" data-pane="baileys">
-          <h5 class="pane-title">Enlazar por QR (modo Baileys)</h5>
-          <div class="pane-alert alert-warn">
-            <i class="fa fa-triangle-exclamation"></i>
-            <div>
-              Baileys usa el mismo método que WhatsApp Web, sin paso por Meta. Se conserva para pruebas y casos especiales
-              pero <b>no es oficial</b> y WhatsApp puede suspender el número. Para producción elegí <b>WhatsApp</b> arriba.
-            </div>
-          </div>
-
-          <p class="pane-intro">
-            Desde tu teléfono abre <b>WhatsApp → Ajustes → Dispositivos vinculados → Vincular un dispositivo</b> y apunta la cámara al código.
-          </p>
-
-          <div class="qr-wrap" id="qr-wrap">
-            <div class="qr-placeholder" id="qr-placeholder">
-              <i class="fa fa-qrcode"></i>
-              <span>El código aparecerá cuando pulses el botón</span>
-            </div>
-            <img id="qr-img" alt="Código QR" style="display:none">
-            <div class="qr-success" id="qr-success" style="display:none">
-              <i class="fa fa-circle-check"></i>
-              <b>¡Listo! Sesión vinculada</b>
-              <p id="qr-success-num"></p>
-            </div>
-          </div>
-
-          <div class="pane-actions">
-            <button type="button" class="conex-btn conex-btn-light" data-cerrar>Volver</button>
-            <button type="button" class="conex-btn conex-btn-warning" id="btn-baileys-start">
-              <i class="fa fa-qrcode me-1"></i> Generar código QR
-            </button>
-          </div>
-        </div>
-
-        {# ── Paneles "Próximamente" ── #}
-        <div class="pane pane-hidden pane-proximamente" data-pane="telegram">
-          {% include 'whatsapp/sesiones/_proximamente.html' with nombre='Telegram' icono='fab fa-telegram' color='#229ED9' %}
-        </div>
-        <div class="pane pane-hidden pane-proximamente" data-pane="instagram">
-          {% include 'whatsapp/sesiones/_proximamente.html' with nombre='Instagram' icono='fab fa-instagram' color='#e1306c' %}
-        </div>
-        <div class="pane pane-hidden pane-proximamente" data-pane="facebook">
-          {% include 'whatsapp/sesiones/_proximamente.html' with nombre='Facebook' icono='fab fa-facebook' color='#1877f2' %}
-        </div>
-        <div class="pane pane-hidden pane-proximamente" data-pane="tiktok">
-          {% include 'whatsapp/sesiones/_proximamente.html' with nombre='TikTok' icono='fab fa-tiktok' color='#000' %}
-        </div>
-
-      </section>
     </div>
-  </div>
-</div>
 
-{# ───────── Modal secundario (cargado por AJAX con los partials) ───────── #}
-<div class="detail-backdrop" id="conex-detail-modal" aria-hidden="true">
-  <div class="detail-panel" id="conex-detail-content" role="dialog"></div>
-</div>
+    {# ───────── Modal secundario (cargado por AJAX con los partials) ───────── #}
+    <div class="detail-backdrop" id="conex-detail-modal" aria-hidden="true">
+        <div class="detail-panel" id="conex-detail-content" role="dialog"></div>
+    </div>
 
-{% csrf_token %}
-<script>
-  window.CONEX_URL = "{{ request.path }}";
-  window.META_OAUTH_START_URL = "{% url 'whatsapp_meta_oauth_start' %}";
-</script>
-<script src="{% static 'stylenew/sesiones.js' %}"></script>
+    {% csrf_token %}
+    <script>
+        window.CONEX_URL = "{{ request.path }}";
+        window.META_OAUTH_START_URL = "{% url 'whatsapp_meta_oauth_start' %}";
+    </script>
+    <script src="{% static 'stylenew/sesiones.js' %}"></script>
 {% endblock %}

@@ -1,7 +1,7 @@
 import redis
 import json
 from django.conf import settings
-from whatsapp.models import SesionWhatsApp
+from whatsapp.models import SesionWhatsApp, ConfigBaileys
 from django.utils import timezone
 from django.db import transaction
 
@@ -23,10 +23,12 @@ def escuchar_eventos():
             evento = data.get('event')
 
             sesion = SesionWhatsApp.objects.get(id=session_id)
+            cb, _ = ConfigBaileys.objects.get_or_create(sesion=sesion)
 
             with transaction.atomic():
                 if evento == "QR_CODE":
-                    sesion.qr_code = data.get('qr')
+                    cb.qr_code = data.get('qr')
+                    cb.save(update_fields=['qr_code'])
                     sesion.estado = 'pendiente'
                     print(f"🔑 QR actualizado para sesión {sesion.id}")
 
@@ -38,7 +40,8 @@ def escuchar_eventos():
 
                 elif evento == "DISCONNECTED" or evento == "AUTH_FAILURE":
                     sesion.estado = 'desconectado'
-                    sesion.error_mensaje = data.get('details')
+                    cb.error_mensaje = data.get('details')
+                    cb.save(update_fields=['error_mensaje'])
                     print(f"❌ Sesión {sesion.id} desconectada o con error")
 
                 sesion.save()

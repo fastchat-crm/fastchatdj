@@ -68,7 +68,10 @@ class WhatsAppService:
 
                 # Actualizar la sesión con el código QR si está disponible
                 if 'qrCode' in result:
-                    session.qr_code = result['qrCode']
+                    from .models import ConfigBaileys
+                    cb, _ = ConfigBaileys.objects.get_or_create(sesion=session)
+                    cb.qr_code = result['qrCode']
+                    cb.save(update_fields=['qr_code'])
 
                 # Guardar los webhooks en la base de datos
                 for webhook_data in webhooks:
@@ -119,7 +122,8 @@ class WhatsAppService:
     def sync_contacts(self, session):
         from django.db import connection
         try:
-            contacts_list = json.loads(session.contacts_list or '[]')
+            cb = getattr(session, 'config_baileys', None)
+            contacts_list = json.loads((cb.contacts_list if cb else '[]') or '[]')
             for c in contacts_list:
                 print(c)
                 from_number = c.get('id') or ''

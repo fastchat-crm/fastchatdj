@@ -7,7 +7,7 @@ from django.db.models.functions import Concat
 from autenticacion.models import Usuario
 from core.custom_models import ModelFormBase, FormBase
 from core.funciones import generar_nombre
-from seguridad.models import Configuracion, Modulo, ModuloGrupo, GroupModulo, Empresa
+from seguridad.models import Configuracion, Modulo, ModuloGrupo, GroupModulo, Empresa, CredencialMetaApp
 
 
 class ConfiguracionForm(ModelFormBase):
@@ -39,6 +39,23 @@ class ConfiguracionForm(ModelFormBase):
             if k in ('valor_mensual', 'valor_anual'):
                 self.fields[k].widget.attrs['title'] = "Sólo números"
                 self.fields[k].widget.attrs['onKeyPress'] = "return soloNumeros1(event)"
+
+
+class CredencialMetaAppForm(ModelFormBase):
+    class Meta:
+        model = CredencialMetaApp
+        exclude = ('usuario_modificacion', 'fecha_modificacion', 'usuario_creacion',
+                   'fecha_registro', 'status', 'configuracion', 'ultima_sincronizacion')
+
+    def __init__(self, *args, **kwargs):
+        super(CredencialMetaAppForm, self).__init__(*args, **kwargs)
+        # app_secret y system_user_token se muestran como password (pero render_value
+        # para que al editar se vea el valor descifrado actual)
+        self.fields['app_secret'].widget = forms.PasswordInput(render_value=True)
+        self.fields['system_user_token'].widget = forms.PasswordInput(render_value=True)
+        for k in self.fields:
+            if k in ('app_id', 'app_secret', 'business_id', 'system_user_id', 'system_user_token'):
+                self.fields[k].widget.attrs['col'] = "6"
 
 
 class ConfiguracionTerminosForm(ModelFormBase):

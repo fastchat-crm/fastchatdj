@@ -125,7 +125,7 @@
         {# ===== BOTONES DE ACCION (patron autenticacion/usuario) ===== #}
         <div class="row align-items-center mb-3">
             <div class="col-md-12 mb-2 mb-md-0 d-flex flex-wrap gap-2">
-                <a href="?action=add{% if sesion_sel %}&sesion_id={{ sesion_sel }}{% endif %}"
+                <a href="?action=add{% if sesion_sel %}&sesion={{ sesion_sel|encrypt_id }}{% endif %}"
                    class="btn btn-success">
                     <i class="fas fa-plus-circle me-2"></i> Nueva Plantilla
                 </a>
@@ -240,7 +240,7 @@
                                 <td colspan="8" class="text-center text-muted py-4">
                                     <i class="fa fa-inbox fa-2x mb-2 d-block"></i>
                                     No hay plantillas todavia.
-                                    <a href="?action=add{% if sesion_sel %}&sesion_id={{ sesion_sel }}{% endif %}" class="d-block mt-2">Crea la primera</a>
+                                    <a href="?action=add{% if sesion_sel %}&sesion={{ sesion_sel|encrypt_id }}{% endif %}" class="d-block mt-2">Crea la primera</a>
                                 </td>
                             </tr>
                         {% endfor %}

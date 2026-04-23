@@ -12,7 +12,7 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 
-from core.funciones import addData, secure_module
+from core.funciones import addData, secure_module, leer_sesion_id
 from .models import (
     Campana,
     ConversacionEnPipeline,
@@ -54,14 +54,8 @@ def _rango_fechas(request):
 
 
 def _sesion_filtro(request):
-    """Devuelve el id de sesión del filtro (int) o None."""
-    sid = request.GET.get('sesion')
-    if not sid:
-        return None
-    try:
-        return int(sid)
-    except (TypeError, ValueError):
-        return None
+    """Devuelve el id de sesión del filtro (int) o None. Acepta token cifrado o crudo."""
+    return leer_sesion_id(request)
 
 
 @login_required

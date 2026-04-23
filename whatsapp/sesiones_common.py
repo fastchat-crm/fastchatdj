@@ -234,9 +234,7 @@ def sincronizar_meta_desde_graph(session, config, timeout=10):
             updates.add('numero')
         if session.estado != 'conectado':
             session.estado = 'conectado'
-            session.error_mensaje = None
             updates.add('estado')
-            updates.add('error_mensaje')
         if updates:
             session.save(update_fields=list(updates))
         numero_sincronizado = numero_limpio or None

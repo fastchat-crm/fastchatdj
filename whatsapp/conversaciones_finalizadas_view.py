@@ -7,7 +7,7 @@ from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 from django.http import JsonResponse
 
-from core.funciones import addData, paginador, secure_module, log
+from core.funciones import addData, paginador, secure_module, log, leer_sesion_id, encrypt_sesion_id
 from seguridad.templatetags.templatefunctions import encrypt
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp
 from .services import WhatsAppService, get_whatsapp_service
@@ -29,7 +29,7 @@ def conversacionesFinalizadasView(request):
     data['sesiones'] = sesiones
 
     # Sesión seleccionada (por defecto la primera)
-    sesion_id = request.GET.get('sesion_id')
+    sesion_id = leer_sesion_id(request)
     contactoId = request.session.pop('contactoId', None)
     conversacion_selected = None
     if contactoId:
@@ -359,7 +359,7 @@ def conversacionesFinalizadasView(request):
 
     if sesion_seleccionada:
         filtros &= Q(contacto__sesion=sesion_seleccionada)
-        url_vars += f'&sesion_id={sesion_seleccionada.id}'
+        url_vars += f'&sesion={encrypt_sesion_id(sesion_seleccionada.id)}'
 
     if criterio:
         filtros &= Q(contacto__contacto_numero__icontains=criterio) | Q(contacto__contacto_nombre__icontains=criterio)

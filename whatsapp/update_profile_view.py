@@ -34,15 +34,17 @@ def update_profile_view(request):
         response = service.update_profile(sesion.session_id)
 
         if response.get('success'):
+            from .models import ConfigBaileys
+            cb, _ = ConfigBaileys.objects.get_or_create(sesion=sesion)
             # Si la respuesta incluye la foto de perfil, actualizarla directamente
             if response.get('profile_picture_base64'):
-                sesion.foto = response.get('profile_picture_base64')
-                sesion.save()
+                cb.foto = response.get('profile_picture_base64')
+                cb.save(update_fields=['foto'])
 
             return JsonResponse({
                 'success': True,
                 'message': 'Perfil actualizado correctamente',
-                'foto': sesion.foto or ''
+                'foto': cb.foto or ''
             })
         else:
             return JsonResponse({'success': False, 'message': response.get('message', 'Error desconocido')})

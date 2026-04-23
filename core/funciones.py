@@ -681,6 +681,43 @@ def get_decrypt(cyphertxt):
         return False, str(ex)
 
 
+# --- Identificadores opacos para URLs (firmados, no cifrado fuerte) ---
+
+def encrypt_sesion_id(pk):
+    """Devuelve un token opaco a partir de un id entero. Uso en links /?sesion=<token>."""
+    if pk in (None, ''):
+        return ''
+    ok, token = get_encrypt(int(pk))
+    return token if ok else ''
+
+
+def decrypt_sesion_id(token, default=None):
+    """Inversa de encrypt_sesion_id. Si el token no parece firmado, intenta int() directo
+    (tolerante con tabs abiertas / links viejos en claro)."""
+    if token in (None, ''):
+        return default
+    if isinstance(token, int):
+        return token
+    ok, valor = get_decrypt(token)
+    if ok:
+        try:
+            return int(valor)
+        except (TypeError, ValueError):
+            return default
+    # Fallback: id crudo
+    try:
+        return int(token)
+    except (TypeError, ValueError):
+        return default
+
+
+def leer_sesion_id(request, default=None):
+    """Lee el id de sesión desde request.GET, probando 'sesion' y 'sesion_id'.
+    Soporta valor cifrado (nuevo) o crudo (legacy, durante rollout)."""
+    raw = request.GET.get('sesion') or request.GET.get('sesion_id') or ''
+    return decrypt_sesion_id(raw, default=default)
+
+
 def postFormJson(request, nombre_post_aud, Forms=(), link_listado='', varurl=""):
     res_json = []
     SERVER_ERROR = "Error, inténtelo nuevamente"

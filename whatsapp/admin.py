@@ -7,6 +7,7 @@ from django.utils.html import format_html
 
 from .models import (
     SesionWhatsApp,
+    ConfigBaileys,
     ConfigMeta,
     PlantillaWhatsApp,
     EventoMetaRecibido,
@@ -30,13 +31,32 @@ from .models import (
 )
 
 
+class ConfigBaileysInline(admin.StackedInline):
+    model = ConfigBaileys
+    can_delete = False
+    verbose_name = 'Configuración Baileys'
+    verbose_name_plural = 'Configuración Baileys'
+    readonly_fields = ('qr_code', 'fecha_expira_inactivo')
+    fields = ('whatsapp_id', 'desconectado_manualmente', 'error_mensaje',
+              'contacts_length', 'foto', 'fecha_expira_inactivo', 'qr_code')
+
+
 @admin.register(SesionWhatsApp)
 class SesionWhatsAppAdmin(admin.ModelAdmin):
     list_display = ('id', 'nombre', 'numero', 'proveedor', 'estado', 'usuario', 'fecha_modificacion')
     list_filter = ('proveedor', 'estado', 'modo_bot')
-    search_fields = ('id', 'nombre', 'numero', 'session_id', 'whatsapp_id')
+    search_fields = ('id', 'nombre', 'numero', 'session_id', 'config_baileys__whatsapp_id')
     readonly_fields = ('session_id', 'fecha_registro', 'fecha_modificacion', 'ultima_conexion')
     raw_id_fields = ('usuario', 'agente_ia', 'departamento_default')
+    inlines = [ConfigBaileysInline]
+
+
+@admin.register(ConfigBaileys)
+class ConfigBaileysAdmin(admin.ModelAdmin):
+    list_display = ('id', 'sesion', 'whatsapp_id', 'desconectado_manualmente', 'contacts_length')
+    search_fields = ('sesion__nombre', 'sesion__numero', 'whatsapp_id')
+    raw_id_fields = ('sesion',)
+    readonly_fields = ('fecha_expira_inactivo',)
 
 
 @admin.register(ConfigMeta)

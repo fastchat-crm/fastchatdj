@@ -1,3 +1,4 @@
+{% load templatefunctions %}
 {# Card individual de sesion en el tablero. Reusable como partial (AJAX poll). #}
 <div class="conex-card" data-sesion-id="{{ sesion.id }}"
      data-sesion-nombre="{{ sesion.nombre|default:sesion.numero|escape }}"
@@ -6,8 +7,8 @@
 
   <div class="card-top">
     <div class="card-avatar">
-      {% if sesion.foto %}
-        <img src="{{ sesion.foto }}" alt="avatar">
+      {% if sesion.es_baileys and sesion.config_baileys.foto %}
+        <img src="{{ sesion.config_baileys.foto }}" alt="avatar">
       {% else %}
         <span class="avatar-fallback">
           <i class="fab fa-whatsapp"></i>
@@ -40,11 +41,11 @@
           <button type="button" class="kebab-item" data-action="resumen"><i class="fa fa-clipboard-check"></i> Resumen y pasos siguientes</button>
           <button type="button" class="kebab-item" data-action="meta-validar"><i class="fa fa-satellite-dish"></i> Revalidar número con Meta</button>
           <button type="button" class="kebab-item" data-action="plantilla-prueba"><i class="fa fa-paper-plane"></i> Enviar plantilla de prueba</button>
-          <a href="/whatsapp/plantillas/?sesion={{ sesion.id }}" class="kebab-item"><i class="fa fa-file-lines"></i> Ver plantillas</a>
-          <a href="/whatsapp/campanas/?sesion={{ sesion.id }}" class="kebab-item"><i class="fa fa-bullhorn"></i> Ver campañas</a>
-          <a href="/whatsapp/campanas/?action=add&sesion={{ sesion.id }}" class="kebab-item"><i class="fa fa-plus-circle"></i> Nueva campaña</a>
-          <a href="/whatsapp/horarios/?sesion={{ sesion.id }}" class="kebab-item"><i class="fa fa-business-time"></i> Configurar horarios</a>
-          <a href="/whatsapp/analytics/?sesion={{ sesion.id }}" class="kebab-item"><i class="fa fa-chart-line"></i> Analytics de esta sesión</a>
+          <a href="/whatsapp/plantillas/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i class="fa fa-file-lines"></i> Ver plantillas</a>
+          <a href="/whatsapp/campanas/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i class="fa fa-bullhorn"></i> Ver campañas</a>
+          <a href="/whatsapp/campanas/?action=add&sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i class="fa fa-plus-circle"></i> Nueva campaña</a>
+          <a href="/whatsapp/horarios/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i class="fa fa-business-time"></i> Configurar horarios</a>
+          <a href="/whatsapp/analytics/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i class="fa fa-chart-line"></i> Analytics de esta sesión</a>
           <button type="button" class="kebab-item" data-action="historial"><i class="fa fa-clock-rotate-left"></i> Historial de conexiones</button>
           <div class="kebab-sep"></div>
           {% if sesion.estado == 'conectado' %}
@@ -56,7 +57,7 @@
           <button type="button" class="kebab-item" data-action="editar"><i class="fa fa-pen"></i> Modificar</button>
           <button type="button" class="kebab-item" data-action="baileys-verificar"><i class="fa fa-satellite-dish"></i> Verificar conexión</button>
           <button type="button" class="kebab-item" data-action="baileys-reconnect"><i class="fa fa-qrcode"></i> Reconectar / ver QR</button>
-          <a href="/whatsapp/horarios/?sesion={{ sesion.id }}" class="kebab-item"><i class="fa fa-business-time"></i> Horarios</a>
+          <a href="/whatsapp/horarios/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i class="fa fa-business-time"></i> Horarios</a>
           <button type="button" class="kebab-item" data-action="historial"><i class="fa fa-clock-rotate-left"></i> Historial de conexiones</button>
           <div class="kebab-sep"></div>
           {% if sesion.estado == 'conectado' %}
@@ -94,9 +95,9 @@
       {% endif %}
     </div>
 
-    {% if sesion.error_mensaje %}
-      <div class="card-error" title="{{ sesion.error_mensaje }}">
-        <i class="fa fa-triangle-exclamation"></i> {{ sesion.error_mensaje|truncatechars:80 }}
+    {% if sesion.es_baileys and sesion.config_baileys.error_mensaje %}
+      <div class="card-error" title="{{ sesion.config_baileys.error_mensaje }}">
+        <i class="fa fa-triangle-exclamation"></i> {{ sesion.config_baileys.error_mensaje|truncatechars:80 }}
       </div>
     {% endif %}
 
@@ -108,7 +109,7 @@
   </div>
 
   <div class="card-footer">
-    <a href="/whatsapp/conversaciones/?sesion={{ sesion.id }}" class="btn-quick">
+    <a href="/whatsapp/conversaciones/?sesion={{ sesion.id|encrypt_id }}" class="btn-quick">
       <i class="fa fa-comments"></i> Conversaciones
     </a>
     {% if sesion.es_baileys and sesion.estado != 'conectado' %}

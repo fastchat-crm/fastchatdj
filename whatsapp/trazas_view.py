@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.template.loader import get_template
 
-from core.funciones import addData, paginador, secure_module
+from core.funciones import addData, paginador, secure_module, leer_sesion_id, encrypt_sesion_id
 from .models import TrazaMensajeIA, SesionWhatsApp, ETAPAS_TRAZA
 
 WS_ETAPAS = ('ws_request', 'ws_respuesta', 'ws_sin_agente', 'ws_error')
@@ -61,7 +61,7 @@ def trazasView(request):
     )
 
     numero = (request.GET.get('numero') or '').strip()
-    sesion_filtro = request.GET.get('sesion') or ''
+    sesion_filtro = leer_sesion_id(request)
     etapa_filtro = request.GET.get('etapa') or ''
     nivel_filtro = request.GET.get('nivel') or ''
     apikey_filtro = request.GET.get('apikey') or ''
@@ -78,7 +78,7 @@ def trazasView(request):
     if sesion_filtro:
         filtros &= Q(sesion_id=sesion_filtro)
         data['sesion_sel'] = int(sesion_filtro)
-        url_vars += f'&sesion={sesion_filtro}'
+        url_vars += f'&sesion={encrypt_sesion_id(sesion_filtro)}'
     if etapa_filtro:
         filtros &= Q(etapa=etapa_filtro)
         data['etapa_sel'] = etapa_filtro

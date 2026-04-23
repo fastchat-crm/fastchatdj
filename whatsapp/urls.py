@@ -2,6 +2,7 @@ from django.urls import re_path, path
 
 from .conversaciones_finalizadas_view import conversacionesFinalizadasView
 from .sesiones_view import sesionesView
+from .docs_view import docs_conectar_whatsapp_business
 from .meta_oauth_view import meta_oauth_start, meta_oauth_callback
 from .conversaciones_view import conversacionesView
 from .sync_contacts import sync_contacts_view
@@ -77,6 +78,11 @@ whatsapp_urls = (
         "nombre": "Analytics",
         "url": 'analytics/',
         "vista": analyticsView,
+    },
+    {
+        "nombre": "Docs — Conectar WhatsApp Business",
+        "url": 'docs/conectar-whatsapp-business/',
+        "vista": docs_conectar_whatsapp_business,
     },
 )
 

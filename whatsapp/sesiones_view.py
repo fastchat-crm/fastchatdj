@@ -27,8 +27,14 @@ from django.urls import reverse
 
 from core.funciones import addData, log, secure_module
 
-from .models import SesionWhatsApp
+from .models import SesionWhatsApp, ConfigBaileys
 from .services import WhatsAppService
+
+
+def _get_or_create_config_baileys(sesion):
+    """Devuelve el ConfigBaileys de la sesion, creandolo si no existe."""
+    cb, _ = ConfigBaileys.objects.get_or_create(sesion=sesion)
+    return cb
 
 logger = logging.getLogger(__name__)
 
@@ -50,43 +56,42 @@ def _accion_baileys_start(request):
             usuario=request.user,
             session_id=str(uuid.uuid4()),
             proveedor='baileys',
-            qr_code='',
-            whatsapp_id='',
         )
         log(f"Sesion Baileys placeholder creada (ID: {sesion.id})", request, "add", obj=sesion.id)
-    else:
+
+    cb = _get_or_create_config_baileys(sesion)
+
+    if sesion.estado in ('desconectado', 'error'):
         # Rotar UUID si la sesion ya existia pero estaba muerta
-        if sesion.estado in ('desconectado', 'error'):
-            try:
-                svc.close_session(sesion.session_id)
-            except Exception:
-                pass
-            sesion.session_id = str(uuid.uuid4())
-            sesion.qr_code = ''
-            sesion.whatsapp_id = ''
-            sesion.estado = 'pendiente'
-            sesion.error_mensaje = None
-            sesion.desconectado_manualmente = False
-            sesion.save(update_fields=[
-                'session_id', 'qr_code', 'whatsapp_id', 'estado',
-                'error_mensaje', 'desconectado_manualmente',
-            ])
+        try:
+            svc.close_session(sesion.session_id)
+        except Exception:
+            pass
+        sesion.session_id = str(uuid.uuid4())
+        sesion.estado = 'pendiente'
+        sesion.save(update_fields=['session_id', 'estado'])
+        cb.qr_code = ''
+        cb.whatsapp_id = ''
+        cb.error_mensaje = None
+        cb.desconectado_manualmente = False
+        cb.save(update_fields=['qr_code', 'whatsapp_id', 'error_mensaje', 'desconectado_manualmente'])
 
     webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
     result = svc.create_session(sesion, webhook_url)
     if not result.get('success'):
         err = (result.get('error') or 'No se pudo crear la sesion en el servicio Node.js')[:500]
         sesion.estado = 'error'
-        sesion.error_mensaje = err
-        sesion.save(update_fields=['estado', 'error_mensaje'])
+        sesion.save(update_fields=['estado'])
+        cb.error_mensaje = err
+        cb.save(update_fields=['error_mensaje'])
         return JsonResponse({'error': True, 'sesion_id': sesion.id, 'message': err})
 
-    sesion.qr_code = result.get('qr_code') or ''
-    sesion.save(update_fields=['qr_code'])
+    cb.qr_code = result.get('qr_code') or ''
+    cb.save(update_fields=['qr_code'])
     return JsonResponse({
         'error':     False,
         'sesion_id': sesion.id,
-        'qr':        sesion.qr_code,
+        'qr':        cb.qr_code,
         'estado':    sesion.estado,
     })
 
@@ -96,11 +101,12 @@ def _accion_baileys_status(request):
     sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id'), usuario=request.user).first()
     if not sesion:
         return JsonResponse({'error': True, 'message': 'Sesion no encontrada.'})
+    cb = getattr(sesion, 'config_baileys', None)
     return JsonResponse({
         'error':     False,
         'estado':    sesion.estado,
         'numero':    sesion.numero or '',
-        'qr':        sesion.qr_code or '',
+        'qr':        (cb.qr_code if cb else '') or '',
     })
 
 
@@ -113,10 +119,12 @@ def _accion_disconnect(request):
             WhatsAppService().close_session(sesion.session_id)
         except Exception as ex:
             logger.warning("close_session fallo (id=%s): %s", sesion.id, ex)
+        cb = _get_or_create_config_baileys(sesion)
+        cb.desconectado_manualmente = True
+        cb.error_mensaje = None
+        cb.save(update_fields=['desconectado_manualmente', 'error_mensaje'])
     sesion.estado = 'desconectado'
-    sesion.desconectado_manualmente = True
-    sesion.error_mensaje = None
-    sesion.save(update_fields=['estado', 'desconectado_manualmente', 'error_mensaje'])
+    sesion.save(update_fields=['estado'])
     log(f"Sesion {sesion.id} desconectada", request, "change", obj=sesion.id)
     return JsonResponse({'error': False, 'message': 'Sesion desconectada.'})
 
@@ -148,20 +156,25 @@ def _accion_baileys_verificar(request):
         return JsonResponse({'error': True, 'message': 'Solo aplica a sesiones Baileys.'})
     svc = WhatsAppService()
     r = svc.check_session_status(sesion.session_id)
+    cb = _get_or_create_config_baileys(sesion)
     if not r.get('success'):
         if r.get('not_found') and sesion.estado == 'conectado':
             sesion.estado = 'desconectado'
-            sesion.error_mensaje = 'Socket no existe en Node.'
-            sesion.save(update_fields=['estado', 'error_mensaje'])
+            sesion.save(update_fields=['estado'])
+            cb.error_mensaje = 'Socket no existe en Node.'
+            cb.save(update_fields=['error_mensaje'])
         return JsonResponse({'error': True, 'message': r.get('error') or 'No se pudo verificar.'})
     conectado = r.get('connected')
     if conectado and sesion.estado != 'conectado':
-        sesion.estado = 'conectado'; sesion.error_mensaje = None
-        sesion.save(update_fields=['estado', 'error_mensaje'])
+        sesion.estado = 'conectado'
+        sesion.save(update_fields=['estado'])
+        cb.error_mensaje = None
+        cb.save(update_fields=['error_mensaje'])
     elif not conectado and sesion.estado == 'conectado':
         sesion.estado = 'desconectado'
-        sesion.error_mensaje = 'Socket caido (detectado al verificar).'
-        sesion.save(update_fields=['estado', 'error_mensaje'])
+        sesion.save(update_fields=['estado'])
+        cb.error_mensaje = 'Socket caido (detectado al verificar).'
+        cb.save(update_fields=['error_mensaje'])
     return JsonResponse({
         'error': False, 'connected': conectado, 'estado': sesion.estado,
         'message': 'Socket activo.' if conectado else 'Socket no responde.',

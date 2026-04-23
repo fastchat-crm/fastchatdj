@@ -16,6 +16,14 @@ from seguridad.models import ModuloGrupo, Modulo, GroupModulo
 register = template.Library()
 
 @register.filter
+def encrypt_id(value):
+    """Envuelve un id entero en un token firmado, apto para query strings.
+    Uso: ?sesion={{ sesion.id|encrypt_id }}"""
+    from core.funciones import encrypt_sesion_id
+    return encrypt_sesion_id(value)
+
+
+@register.filter
 def currency(value):
     """
     Convierte un valor en formato monetario con separadores de miles y dos decimales.

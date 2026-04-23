@@ -12,6 +12,7 @@ from django.utils.safestring import mark_safe
 
 from area_geografica.models import Ciudad
 from autenticacion.models import Usuario
+from core.crypto import EncryptedTextField
 from core.custom_models import ModeloBase, NormalModel
 from core.models_utils import FileNameUploadToPath
 from core.validadores import solo_numeros
@@ -217,6 +218,53 @@ class Configuracion(ModeloBase):
         permissions = (
             ("can_view_auditoria", "Puede ver auditorías"),
         )
+
+
+class CredencialMetaApp(ModeloBase):
+    """Credenciales de la Meta App (nivel organizacion).
+
+    Una misma Meta App puede administrar varias WABAs / IG Business / Pages.
+    Por eso `app_id` y `app_secret` viven aca (singleton via OneToOne con
+    Configuracion) y NO duplicados en cada ConfigMeta/ConfigInstagram/ConfigMessenger.
+    """
+    configuracion = models.OneToOneField(
+        Configuracion, on_delete=models.CASCADE,
+        related_name='credencial_meta', verbose_name='Configuración'
+    )
+    app_id = models.CharField(
+        max_length=50, verbose_name='Meta App ID',
+        help_text='ID de la aplicacion creada en Meta for Developers.'
+    )
+    app_secret = EncryptedTextField(
+        verbose_name='Meta App Secret',
+        help_text='Secret de la App. Se guarda cifrado.'
+    )
+    business_id = models.CharField(
+        max_length=50, blank=True, default='',
+        verbose_name='Business Manager ID',
+        help_text='ID del Business Manager dueño de la App (opcional).'
+    )
+    system_user_id = models.CharField(
+        max_length=50, blank=True, default='',
+        verbose_name='System User ID',
+        help_text='ID del System User usado para emitir tokens long-lived.'
+    )
+    system_user_token = EncryptedTextField(
+        blank=True, null=True,
+        verbose_name='System User Token',
+        help_text='Token long-lived del System User. Se guarda cifrado.'
+    )
+    ultima_sincronizacion = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Última sincronización'
+    )
+
+    class Meta:
+        verbose_name = 'Credencial Meta App'
+        verbose_name_plural = 'Credenciales Meta App'
+
+    def __str__(self):
+        return f"Meta App {self.app_id}"
 
 
 class Modulo(ModeloBase):

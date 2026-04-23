@@ -10,7 +10,7 @@ from django.shortcuts import render, redirect
 from django.template.loader import get_template
 
 from core.custom_models import FormError
-from core.funciones import addData, paginador, secure_module, log, remover_caracteres_especiales_unicode, generar_nombre
+from core.funciones import addData, paginador, secure_module, log, remover_caracteres_especiales_unicode, generar_nombre, leer_sesion_id, encrypt_sesion_id
 from core.funciones_adicionales import convertir_archivo_a_base64
 from core.funciones_excel_panda import export_query_to_excel
 from seguridad.templatetags.templatefunctions import encrypt
@@ -273,7 +273,10 @@ def contactoView(request):
         id = request.GET.get('id', '')
         solo_duplicados = request.GET.get('solo_duplicados', '')
         mis_sesiones = SesionWhatsApp.objects.filter(status=True, usuario=request.user).distinct()
-        sesion_id = request.GET.get('sesion_id', str(mis_sesiones.first().id) if mis_sesiones.exists() else '')
+        sesion_id = leer_sesion_id(request)
+        if not sesion_id and mis_sesiones.exists():
+            sesion_id = mis_sesiones.first().id
+        sesion_id = str(sesion_id) if sesion_id else ''
 
         # Números que aparecen en más de una sesión del usuario
         numeros_duplicados = set(

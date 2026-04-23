@@ -26,7 +26,7 @@ from django.utils import timezone
 from datetime import timedelta
 
 from core.funciones import logCron
-from whatsapp.models import SesionWhatsApp
+from whatsapp.models import SesionWhatsApp, ConfigBaileys
 from whatsapp.services import WhatsAppService
 
 PROCESO = 'Reconexión Automática de Sesiones'
@@ -48,8 +48,8 @@ def run():
         status=True,
         proveedor='baileys',
         estado__in=['desconectado', 'error'],
-        desconectado_manualmente=False,
-    ).select_related('usuario')
+        config_baileys__desconectado_manualmente=False,
+    ).select_related('usuario', 'config_baileys')
 
     if not sesiones.exists():
         logCron(PROCESO, 'Sin sesiones desconectadas inesperadamente', exito=True)
@@ -70,10 +70,12 @@ def run():
                 # cuando el webhook 'ready' o 'authenticated' llegue.
                 # Por ahora la marcamos 'pendiente' para evitar reconexiones repetidas.
                 sesion.estado = 'pendiente'
-                sesion.error_mensaje = None
+                sesion.save(update_fields=['estado'])
+                cb, _ = ConfigBaileys.objects.get_or_create(sesion=sesion)
+                cb.error_mensaje = None
                 if result.get('qr_code'):
-                    sesion.qr_code = result['qr_code']
-                sesion.save(update_fields=['estado', 'error_mensaje', 'qr_code'])
+                    cb.qr_code = result['qr_code']
+                cb.save(update_fields=['error_mensaje', 'qr_code'])
                 reconectadas += 1
                 logCron(PROCESO, f'Sesión {sesion.id} ({nombre}) enviada al servidor Node — esperando QR/ready', exito=True)
 

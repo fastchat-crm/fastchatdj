@@ -51,8 +51,10 @@ class Command(BaseCommand):
                             qr_img.save(buffer, format="PNG")
                             qr_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
-                            sesion.qr_code = qr_base64
-                            sesion.save()
+                            from whatsapp.models import ConfigBaileys
+                            cb, _ = ConfigBaileys.objects.get_or_create(sesion=sesion)
+                            cb.qr_code = qr_base64
+                            cb.save(update_fields=['qr_code'])
                             self.stdout.write(self.style.SUCCESS(f"🔑 QR actualizado para sesión {session_id}"))
 
                         elif data.get('event') == 'SESSION_CONNECTED':

@@ -12,7 +12,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import render
 
-from core.funciones import addData, secure_module, log
+from core.funciones import addData, secure_module, log, leer_sesion_id
 from .models import (
     SesionWhatsApp, HorarioAtencion, ExcepcionHorario, DIAS_SEMANA,
 )
@@ -143,8 +143,10 @@ def horariosView(request):
                     return JsonResponse({'error': False})
 
                 if action == 'duplicar':
+                    from core.funciones import decrypt_sesion_id
                     origen = SesionWhatsApp.objects.get(pk=int(request.POST['origen_id']))
-                    destino = SesionWhatsApp.objects.get(pk=int(request.POST['destino_id']))
+                    destino_pk = decrypt_sesion_id(request.POST['destino_id'])
+                    destino = SesionWhatsApp.objects.get(pk=destino_pk)
                     if origen.pk == destino.pk:
                         return JsonResponse({'error': True, 'message': 'Origen y destino son la misma sesión.'})
                     HorarioAtencion.objects.filter(sesion=destino).delete()
@@ -422,18 +424,6 @@ def horariosView(request):
         'usuario__perfil_ia'
     )
 
-    # Filtro por proveedor:
-    # - Default (sin param): excluye Baileys porque los horarios push-a-Meta no
-    #   le aplican. El cliente Baileys-only ve solo el tab "Solo Baileys".
-    # - Con ?proveedor=baileys: muestra solo Baileys.
-    # - Con ?proveedor=meta/instagram/messenger: muestra solo ese.
-    proveedor_filtro = (request.GET.get('proveedor') or '').strip().lower()
-    if proveedor_filtro in ('baileys', 'meta', 'instagram', 'messenger'):
-        sesiones = sesiones.filter(proveedor=proveedor_filtro)
-        data['proveedor_filtro'] = proveedor_filtro
-    else:
-        sesiones = sesiones.exclude(proveedor='baileys')
-
     q_negocio = (request.GET.get('q') or '').strip()
     if q_negocio:
         sesiones = sesiones.filter(
@@ -442,7 +432,7 @@ def horariosView(request):
             Q(numero__icontains=q_negocio)
         )
 
-    sesion_id = request.GET.get('sesion')
+    sesion_id = leer_sesion_id(request)
     sesion_actual = sesiones.filter(pk=sesion_id).first() if sesion_id else sesiones.first()
 
     data['q_negocio'] = q_negocio

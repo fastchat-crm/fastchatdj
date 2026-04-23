@@ -145,8 +145,8 @@
     {% if mensaje.remitente == conversacion.sesion.numero %}
         {# ─── Mensaje saliente (bot / agente) ─── #}
         <div class="msg-row msg-out d-flex flex-row-reverse align-items-end gap-2 mb-2">
-            {% if conversacion.sesion.foto %}
-                <img src="{{ conversacion.sesion.foto }}" alt="" class="msg-avatar rounded-circle">
+            {% if conversacion.sesion.es_baileys and conversacion.sesion.config_baileys.foto %}
+                <img src="{{ conversacion.sesion.config_baileys.foto }}" alt="" class="msg-avatar rounded-circle">
             {% else %}
                 <img src="{{ mensaje.conversacion.sesion.usuario.get_foto_url|default:'/static/assets/img/avatar.png' }}"
                      alt="" class="msg-avatar rounded-circle">
