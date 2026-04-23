@@ -461,7 +461,8 @@ class AgenteConsultor:
         except Exception:
             pass
 
-        ahora = _tz.localtime()
+        _now = _tz.now()
+        ahora = _tz.localtime(_now) if _tz.is_aware(_now) else _now
         hora = ahora.hour
         if hora < 12:
             franja = 'mañana'
