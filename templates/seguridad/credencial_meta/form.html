@@ -1,44 +1,177 @@
 {% extends 'base.html' %}
-{% load templatefunctions %}
+{% load static templatefunctions %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/credencial_meta.css' %}">
+{% endblock %}
 
 {% block atras %}{{ request.path }}{% endblock %}
 
 {% block content %}
-    <div class="row justify-content-center">
-        <div class="col-12">
+    <div class="row g-3">
+
+        {# ───────── Columna izquierda: guía de dónde sacar cada dato ───────── #}
+        <div class="col-lg-5 order-lg-2">
+            <div class="card cm-guide">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fa fa-circle-info text-primary"></i>
+                    <h6 class="mb-0">¿De dónde saco cada dato?</h6>
+                </div>
+                <div class="card-body py-3">
+
+                    <p class="small text-muted mb-3">
+                        Todos estos datos se obtienen en
+                        <a href="https://developers.facebook.com" target="_blank" rel="noopener">
+                            Meta for Developers
+                        </a>
+                        (con la cuenta Facebook del administrador del negocio).
+                    </p>
+
+                    <ol class="cm-steps">
+                        <li>
+                            <div class="cm-step-num">1</div>
+                            <div>
+                                <b>Meta App ID</b>
+                                <p>
+                                    Entra a
+                                    <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener">
+                                        developers.facebook.com/apps
+                                    </a>
+                                    → elige tu App → arriba a la izquierda, debajo del nombre,
+                                    aparece el <code>ID de la aplicación</code> (un número de ~16 dígitos).
+                                </p>
+                            </div>
+                        </li>
+
+                        <li>
+                            <div class="cm-step-num">2</div>
+                            <div>
+                                <b>Meta App Secret</b>
+                                <p>
+                                    Dentro de la App → menú izquierdo
+                                    <code>App settings → Basic</code> → campo
+                                    <code>App secret</code> → pulsa <b>Show</b> (te pedirá tu
+                                    password de Facebook).
+                                </p>
+                                <div class="cm-warn">
+                                    <i class="fa fa-shield-halved"></i>
+                                    Nunca lo pegues en Slack, email ni chats. Al guardarlo aquí
+                                    se cifra con Fernet automáticamente.
+                                </div>
+                            </div>
+                        </li>
+
+                        <li>
+                            <div class="cm-step-num">3</div>
+                            <div>
+                                <b>Business Manager ID</b>
+                                <span class="cm-opt">opcional</span>
+                                <p>
+                                    Entra a
+                                    <a href="https://business.facebook.com/settings" target="_blank" rel="noopener">
+                                        business.facebook.com/settings
+                                    </a>
+                                    → arriba a la izquierda, debajo del nombre del negocio,
+                                    aparece el <code>Business ID</code>.
+                                </p>
+                            </div>
+                        </li>
+
+                        <li>
+                            <div class="cm-step-num">4</div>
+                            <div>
+                                <b>System User ID</b>
+                                <span class="cm-opt">opcional</span>
+                                <p>
+                                    En
+                                    <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noopener">
+                                        Business Settings → Users → System Users
+                                    </a>
+                                    → crea uno tipo <b>Admin</b> (si no existe) → su ID aparece
+                                    al lado del nombre.
+                                </p>
+                            </div>
+                        </li>
+
+                        <li>
+                            <div class="cm-step-num">5</div>
+                            <div>
+                                <b>System User Token</b>
+                                <span class="cm-opt">opcional</span>
+                                <p>
+                                    En la misma pantalla del System User →
+                                    <b>Generate new token</b> → selecciona la App del paso 1 →
+                                    marca los scopes:
+                                </p>
+                                <ul class="cm-scopes">
+                                    <li><code>whatsapp_business_management</code></li>
+                                    <li><code>whatsapp_business_messaging</code></li>
+                                    <li><code>business_management</code></li>
+                                    <li><code>pages_messaging</code> (si usas Messenger)</li>
+                                    <li><code>instagram_manage_messages</code> (si usas IG)</li>
+                                </ul>
+                                <p class="mb-0">
+                                    Elige <b>Never expires</b> y copia el token <b>una sola vez</b>
+                                    (Meta no lo vuelve a mostrar).
+                                </p>
+                            </div>
+                        </li>
+                    </ol>
+
+                    <div class="cm-divider"></div>
+
+                    <h6 class="small fw-bold mb-2">
+                        <i class="fa fa-triangle-exclamation text-warning me-1"></i>
+                        Requisitos en Meta antes de conectar
+                    </h6>
+                    <ul class="small text-muted mb-0 ps-3">
+                        <li>Business Manager verificado (o en proceso).</li>
+                        <li>App en modo <b>Live</b> (no <b>Development</b>) para producción.</li>
+                        <li>Producto <b>WhatsApp → Cloud API</b> agregado a la App.</li>
+                        <li>System User con permiso <b>Admin</b> sobre la WABA.</li>
+                    </ul>
+
+                    <a href="/whatsapp/docs/conectar-whatsapp-business/" class="cm-link-docs mt-3">
+                        <i class="fa fa-book-open me-1"></i>
+                        Ver guía completa de conexión paso a paso
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        {# ───────── Columna derecha: formulario ───────── #}
+        <div class="col-lg-7 order-lg-1">
             <div class="card">
                 <div class="card-header py-2">
-                    <div class="row align-items-center">
-                        <div class="col">
-                            <h5 class="card-title mb-0">Credenciales de la Meta App</h5>
-                            <small class="text-muted">
-                                Una única Meta App puede administrar múltiples WhatsApp Business Accounts,
-                                cuentas de Instagram Business y Páginas de Facebook. Estas credenciales
-                                aplican a toda la organización.
-                            </small>
-                        </div>
-                    </div>
+                    <h5 class="card-title mb-1">Credenciales de la Meta App</h5>
+                    <small class="text-muted">
+                        Una única Meta App administra múltiples WhatsApp Business Accounts,
+                        cuentas de Instagram Business y Páginas de Facebook. Estas
+                        credenciales aplican a toda la organización.
+                    </small>
                 </div>
 
-                <div class="card-body py-2">
+                <div class="card-body py-3">
                     {% if form %}
                         <form method="post" action="{{ ruta }}" class="form">
                             {% csrf_token %}
                             <input type="hidden" name="action" value="change"/>
 
-                            <div class="row g-1">
+                            <div class="row g-2">
                                 {% for field in form %}
                                     {% if field.is_hidden %}
                                         {{ field }}
                                     {% else %}
-                                        <div class="col-lg-{{ field.field.widget.attrs.col }}">
+                                        <div class="col-lg-{{ field.field.widget.attrs.col|default:'12' }}">
                                             <div class="mb-2">
                                                 <label class="form-label small mb-1" for="id_{{ field.name }}">
                                                     {{ field.label }}
-                                                </label><br>
+                                                </label>
                                                 {{ field }}
                                                 {% if field.help_text %}
-                                                    <small class="form-text text-muted">{{ field.help_text }}</small>
+                                                    <small class="form-text text-muted d-block mt-1">
+                                                        {{ field.help_text }}
+                                                    </small>
                                                 {% endif %}
                                                 <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
                                             </div>
@@ -47,13 +180,13 @@
                                 {% endfor %}
                             </div>
 
-                            <div class="row mt-2">
-                                <div class="col-12">
-                                    <a class="btn btn-danger btn-sm me-1" href="{{ ruta }}">
+                            <div class="row mt-3">
+                                <div class="col-12 d-flex gap-2">
+                                    <a class="btn btn-outline-secondary btn-sm" href="{{ ruta }}">
                                         <i class="fa fa-window-close me-1"></i> Cancelar
                                     </a>
                                     <button type="submit" id="submit" class="btn btn-success btn-sm">
-                                        <i class="fa fa-save me-1"></i> Guardar
+                                        <i class="fa fa-save me-1"></i> Guardar credenciales
                                     </button>
                                 </div>
                             </div>
@@ -66,6 +199,7 @@
                 </div>
             </div>
         </div>
+
     </div>
 {% endblock %}
 
