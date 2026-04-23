@@ -1,0 +1,127 @@
+/* Guía de credenciales Meta App — panel lateral con steps. */
+
+.cm-guide {
+  position: sticky;
+  top: 80px;
+  border: 1px solid #e5e7eb;
+  background: #fbfcfe;
+}
+
+.cm-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cm-steps > li {
+  display: flex;
+  gap: .75rem;
+  align-items: flex-start;
+  font-size: .85rem;
+  color: #374151;
+}
+
+.cm-step-num {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 700;
+  font-size: .78rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(37,99,235,.2);
+  margin-top: 2px;
+}
+
+.cm-steps b {
+  display: inline-block;
+  margin-right: .35rem;
+  color: #111827;
+  font-size: .9rem;
+}
+
+.cm-steps p {
+  font-size: .82rem;
+  color: #4b5563;
+  line-height: 1.5;
+  margin: .3rem 0;
+}
+
+.cm-steps a {
+  color: #2563eb;
+  text-decoration: none;
+  word-break: break-word;
+}
+.cm-steps a:hover { text-decoration: underline; }
+
+.cm-steps code {
+  font-size: .78rem;
+  background: #eef2f7;
+  color: #1f2937;
+  padding: .08rem .35rem;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.cm-opt {
+  font-size: .65rem;
+  background: #e5e7eb;
+  color: #6b7280;
+  padding: .08rem .4rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: .03em;
+  margin-left: .25rem;
+}
+
+.cm-warn {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: .4rem .55rem;
+  font-size: .78rem;
+  display: flex;
+  gap: .4rem;
+  align-items: flex-start;
+  margin-top: .4rem;
+}
+.cm-warn i { margin-top: .15rem; }
+
+.cm-scopes {
+  margin: .4rem 0;
+  padding-left: 1.1rem;
+  font-size: .78rem;
+  color: #4b5563;
+}
+.cm-scopes li { margin-bottom: .15rem; }
+
+.cm-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 1.2rem 0 .9rem;
+}
+
+.cm-link-docs {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  font-size: .82rem;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+}
+.cm-link-docs:hover { text-decoration: underline; }
+
+/* Al scrollear en pantallas chicas, la guía va debajo del form. */
+@media (max-width: 991px) {
+  .cm-guide { position: static; }
+}

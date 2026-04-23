@@ -74,51 +74,56 @@
             </div>
             <div class="conex-modal-body">
 
-                {# Sidebar canales #}
+                {# Sidebar canales — visibilidad controlada por flags de Configuracion #}
                 <aside class="conex-sidebar">
+                    {% if canales_activos.whatsapp_api %}
                     <button class="conex-canal active" data-canal="whatsapp">
           <span class="ic" style="background:#d4f5e3;color:#25d366;">
             <i class="fab fa-whatsapp"></i>
           </span>
-                        WhatsApp
+                        WhatsApp Business
                     </button>
-                    <button class="conex-canal" data-canal="baileys">
-          <span class="ic ic-muted">
+                    {% endif %}
+                    {% if canales_activos.whatsapp_qr %}
+                    <button class="conex-canal {% if not canales_activos.whatsapp_api %}active{% endif %}" data-canal="baileys">
+          <span class="ic" style="background:#fff3d1;color:#b8860b;">
             <i class="fa fa-qrcode"></i>
           </span>
-                        QR Code <span class="badge-deprecated">No disponible</span>
+                        QR Code <span class="badge-beta">Legacy</span>
                     </button>
-                    <button class="conex-canal" data-canal="telegram">
-          <span class="ic" style="background:#e3f3ff;color:#229ED9;">
-            <i class="fab fa-telegram"></i>
-          </span>
-                        Telegram
-                    </button>
+                    {% endif %}
+                    {% if canales_activos.instagram %}
                     <button class="conex-canal" data-canal="instagram">
           <span class="ic ig-grad">
             <i class="fab fa-instagram"></i>
           </span>
                         Instagram
                     </button>
+                    {% endif %}
+                    {% if canales_activos.messenger %}
                     <button class="conex-canal" data-canal="facebook">
           <span class="ic" style="background:#e7f0ff;color:#1877f2;">
             <i class="fab fa-facebook"></i>
           </span>
-                        Facebook
+                        Messenger
                     </button>
+                    {% endif %}
+                    {% if canales_activos.tiktok %}
                     <button class="conex-canal" data-canal="tiktok">
           <span class="ic" style="background:#000;color:#fff;">
             <i class="fab fa-tiktok"></i>
           </span>
                         TikTok
                     </button>
+                    {% endif %}
                 </aside>
 
                 {# Paneles a la derecha — JS muestra uno a la vez #}
                 <section class="conex-panel">
 
+                    {% if canales_activos.whatsapp_api %}
                     {# ── Panel WhatsApp (Meta Cloud API) ── #}
-                    <div class="pane" data-pane="whatsapp">
+                    <div class="pane {% if not canales_activos.whatsapp_api %}pane-hidden{% endif %}" data-pane="whatsapp">
                         <div class="pane-hero">
                             <div class="pane-hero-icon">
                                 <i class="fab fa-whatsapp"></i>
@@ -200,55 +205,63 @@
                         </div>
                     </div>
 
-                    {# ── Panel Baileys (legacy, QR DEPRECADO) ── #}
-                    <div class="pane pane-hidden" data-pane="baileys">
-                        <div class="pane-hero pane-hero-deprecated">
-                            <div class="pane-hero-icon pane-hero-icon-muted">
-                                <i class="fa fa-qrcode"></i>
-                            </div>
-                            <div class="pane-hero-body">
-                                <h5 class="pane-title mb-1">API de WhatsApp por código QR</h5>
-                                <span class="pane-badge-deprecated">
-                                    <i class="fa fa-ban me-1"></i> Ya no disponible
-                                </span>
-                            </div>
-                        </div>
+                    {% endif %}
 
-                        <div class="pane-alert alert-danger">
-                            <i class="fa fa-circle-info"></i>
+                    {% if canales_activos.whatsapp_qr %}
+                    {# ── Panel Baileys (QR legacy, WhatsApp Web) ── #}
+                    <div class="pane {% if canales_activos.whatsapp_api %}pane-hidden{% endif %}" data-pane="baileys">
+                        <h5 class="pane-title">Enlazar por QR (modo Baileys)</h5>
+                        <div class="pane-alert alert-warn">
+                            <i class="fa fa-triangle-exclamation"></i>
                             <div>
-                                <b>La conexión del código QR de WhatsApp ya no está disponible.</b>
-                                <p class="mb-0 mt-1">
-                                    Contáctenos para más información sobre cómo migrar a WhatsApp
-                                    Business API oficial.
-                                </p>
+                                Baileys usa el mismo método que WhatsApp Web, sin paso por Meta. Se conserva para
+                                pruebas y casos especiales pero <b>no es oficial</b> y WhatsApp puede suspender el
+                                número. Para producción elegí <b>WhatsApp Business API</b>.
                             </div>
                         </div>
 
-                        <a href="/whatsapp/docs/conectar-whatsapp-business/" class="pane-link">
-                            <i class="fa fa-book-open me-1"></i> Aprende cómo conectar con la API oficial
-                        </a>
+                        <p class="pane-intro">
+                            Desde tu teléfono abre <b>WhatsApp → Ajustes → Dispositivos vinculados → Vincular un
+                            dispositivo</b> y apunta la cámara al código.
+                        </p>
+
+                        <div class="qr-wrap" id="qr-wrap">
+                            <div class="qr-placeholder" id="qr-placeholder">
+                                <i class="fa fa-qrcode"></i>
+                                <span>El código aparecerá cuando pulses el botón</span>
+                            </div>
+                            <img id="qr-img" alt="Código QR" style="display:none">
+                            <div class="qr-success" id="qr-success" style="display:none">
+                                <i class="fa fa-circle-check"></i>
+                                <b>¡Listo! Sesión vinculada</b>
+                                <p id="qr-success-num"></p>
+                            </div>
+                        </div>
 
                         <div class="pane-actions">
                             <button type="button" class="conex-btn conex-btn-light" data-cerrar>Volver</button>
-                            <button type="button" class="conex-btn conex-btn-primary" data-canal-jump="whatsapp">
-                                <i class="fa fa-arrow-right-to-bracket me-1"></i> Usar API Business
+                            <button type="button" class="conex-btn conex-btn-warning" id="btn-baileys-start">
+                                <i class="fa fa-qrcode me-1"></i> Generar código QR
                             </button>
                         </div>
                     </div>
+                    {% endif %}
 
-                    {# ── Paneles "Próximamente" ── #}
-                    <div class="pane pane-hidden pane-proximamente" data-pane="telegram">
-                        {% include 'whatsapp/sesiones/_proximamente.html' with nombre='Telegram' icono='fab fa-telegram' color='#229ED9' %}
-                    </div>
+                    {% if canales_activos.instagram %}
                     <div class="pane pane-hidden pane-proximamente" data-pane="instagram">
                         {% include 'whatsapp/sesiones/_proximamente.html' with nombre='Instagram' icono='fab fa-instagram' color='#e1306c' %}
                     </div>
+                    {% endif %}
+                    {% if canales_activos.messenger %}
                     <div class="pane pane-hidden pane-proximamente" data-pane="facebook">
                         {% include 'whatsapp/sesiones/_proximamente.html' with nombre='Facebook' icono='fab fa-facebook' color='#1877f2' %}
                     </div>
+                    {% endif %}
+                    {% if canales_activos.tiktok %}
                     <div class="pane pane-hidden pane-proximamente" data-pane="tiktok">
                         {% include 'whatsapp/sesiones/_proximamente.html' with nombre='TikTok' icono='fab fa-tiktok' color='#000' %}
+                    </div>
+                    {% endif %}
                     </div>
 
                 </section>

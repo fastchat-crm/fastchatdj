@@ -201,6 +201,25 @@ class Configuracion(ModeloBase):
     imagenprincipal = models.FileField(upload_to='configuracion/', validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])], blank=True, null=True, verbose_name='Imagen Sobre Nosotros')
     imagen_landing = models.FileField(upload_to='configuracion/', validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])], blank=True, null=True, verbose_name='Imagen Landing')
 
+    # CANALES DE MENSAJERIA — activar/desactivar cada transporte desde la UI.
+    canal_whatsapp_qr_activo = models.BooleanField(
+        default=True, verbose_name='Canal WhatsApp (QR / Baileys) activo',
+        help_text='Si está OFF, la opción "QR Code" no aparece al agregar una nueva conexión.'
+    )
+    canal_whatsapp_api_activo = models.BooleanField(
+        default=True, verbose_name='Canal WhatsApp Business API (Meta) activo',
+        help_text='Requiere credenciales Meta App registradas.'
+    )
+    canal_instagram_activo = models.BooleanField(
+        default=False, verbose_name='Canal Instagram Direct activo'
+    )
+    canal_messenger_activo = models.BooleanField(
+        default=False, verbose_name='Canal Facebook Messenger activo'
+    )
+    canal_tiktok_activo = models.BooleanField(
+        default=False, verbose_name='Canal TikTok activo'
+    )
+
     @staticmethod
     def get_instancia():
         from core.funciones import db_table_exists

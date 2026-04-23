@@ -399,6 +399,18 @@ def sesionesView(request):
     _app_id, _app_secret = get_meta_app_credentials()
     data['meta_oauth_listo'] = bool(_app_id and _app_secret and settings.META_CONFIG_ID)
 
+    # Canales activos: controlan visibilidad del sidebar + paneles del modal
+    # "Agregar conexion". Se administran en /seguridad/configuracion/.
+    from seguridad.models import Configuracion
+    confi = Configuracion.get_instancia()
+    data['canales_activos'] = {
+        'whatsapp_qr':  bool(getattr(confi, 'canal_whatsapp_qr_activo', True)),
+        'whatsapp_api': bool(getattr(confi, 'canal_whatsapp_api_activo', True)),
+        'instagram':    bool(getattr(confi, 'canal_instagram_activo', False)),
+        'messenger':    bool(getattr(confi, 'canal_messenger_activo', False)),
+        'tiktok':       bool(getattr(confi, 'canal_tiktok_activo', False)),
+    }
+
     # Partial card refresh (AJAX poll desde el tablero)
     if request.GET.get('partial') == 'card':
         sesion_id = request.GET.get('id')

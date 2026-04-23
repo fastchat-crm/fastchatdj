@@ -28,6 +28,9 @@ class ConfiguracionForm(ModelFormBase):
         # self.fields['imagenprincipal'].widget.attrs['data-allowed-file-extensions'] = "jpg jpeg png tiff svg jfif"
         self.fields['fondoprincipal'].widget.attrs['data-allowed-file-extensions'] = "jpg jpeg png tiff svg jfif"
 
+        canales = ('canal_whatsapp_qr_activo', 'canal_whatsapp_api_activo',
+                   'canal_instagram_activo', 'canal_messenger_activo',
+                   'canal_tiktok_activo')
         for k, v in self.fields.items():
             if k in ('ico', 'imagenprincipal', 'imagen_landing', 'logo_sistema', 'logo_sistema_white', 'direccion', 'fondoprincipal', 'nombre_empresa', 'alias', 'descripcion', 'telefono', 'email',  'email_notificacion', 'textoprincipal', 'textosecundario', 'web','titulo','dias_nuevo',):
                 self.fields[k].widget.attrs['col'] = "6"
@@ -39,6 +42,10 @@ class ConfiguracionForm(ModelFormBase):
             if k in ('valor_mensual', 'valor_anual'):
                 self.fields[k].widget.attrs['title'] = "Sólo números"
                 self.fields[k].widget.attrs['onKeyPress'] = "return soloNumeros1(event)"
+            if k in canales:
+                self.fields[k].widget.attrs['col'] = "3"
+                self.fields[k].widget.attrs['class'] = 'form-check-input canal-switch'
+                self.fields[k].required = False
 
 
 class CredencialMetaAppForm(ModelFormBase):
