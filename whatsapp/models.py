@@ -60,18 +60,12 @@ MODOS_BOT = (
 class SesionWhatsApp(ModeloBase):
     nombre = models.CharField(max_length=150, blank=True, null=True, verbose_name='Nombre')
     numero = models.CharField(max_length=50, verbose_name='Número WhatsApp', default='')
-    whatsapp_id = models.CharField(max_length=250, verbose_name='WhatsApp ID', default='', blank=True)
     estado = models.CharField(max_length=20, choices=ESTADOS_SESION, default='pendiente')
-    qr_code = models.TextField(blank=True, null=True, verbose_name='Código QR actual (Base64)')
     usuario = models.ForeignKey(Usuario, on_delete=models.PROTECT, null=True, blank=True, verbose_name='Asesor asignado')
     ultima_conexion = models.DateTimeField(blank=True, null=True, verbose_name='Última conexión')
     observacion = models.TextField(blank=True, null=True, verbose_name='Observaciones')
-    error_mensaje = models.TextField(blank=True, null=True, verbose_name='Último error')
-    fecha_expira_inactivo = models.DateTimeField(default=default_expira_10_min, verbose_name='Fecha de expiración por inactividad')
-    session_id = models.CharField(max_length=255, unique=True, verbose_name='ID de sesión')
-    foto = models.TextField(blank=True, null=True, verbose_name='Foto')
-    contacts_list = models.TextField(default='[]', verbose_name='Lista de Contactos')
-    contacts_length = models.PositiveIntegerField(default=0, verbose_name='Cantidad de contactos')
+    session_id = models.CharField(max_length=255, unique=True, verbose_name='ID externo del proveedor',
+                                  help_text='ID externo de la sesión: UUID del proceso Node (Baileys) o sinónimo del phone_number_id (Meta).')
     # Campos para la gestión de mensajes
     mensaje_bienvenida = models.TextField(blank=True, null=True, verbose_name='Mensaje de bienvenida')
     mensaje_despedida = models.TextField(blank=True, null=True, verbose_name='Mensaje de despedida')
@@ -93,10 +87,6 @@ class SesionWhatsApp(ModeloBase):
     #IDIOMA
     language = models.CharField('Idioma', max_length=50, choices=LANGUAGES, default='es')
     agente_ia = models.ForeignKey('crm.AgentesIA', on_delete=models.PROTECT, null=True, blank=True)
-    desconectado_manualmente = models.BooleanField(
-        default=False, verbose_name='Desconectado manualmente',
-        help_text='True cuando el usuario desconectó la sesión a propósito. El cron no intentará reconectarla.'
-    )
     proveedor = models.CharField(
         max_length=20, choices=PROVEEDORES_SESION, default='baileys',
         verbose_name='Proveedor WhatsApp',
@@ -149,7 +139,9 @@ class SesionWhatsApp(ModeloBase):
 
     def is_empty_session(self):
         from django.utils import timezone
-        if not self.numero and self.contacts_length == 0:
+        cb = getattr(self, 'config_baileys', None)
+        contacts_length = cb.contacts_length if cb else 0
+        if not self.numero and contacts_length == 0:
             tiempo_transcurrido = timezone.now() - self.fecha_registro
             return tiempo_transcurrido.total_seconds() > 900  # 15 minutos
         return False
@@ -159,11 +151,6 @@ class SesionWhatsApp(ModeloBase):
             self.ultima_conexion = timezone.now()
         else:
             self.ultima_conexion = None
-        if self.estado == 'pendiente':
-            self.qr_code = None if not self.qr_code else self.qr_code
-            self.session_id = None if not self.session_id else self.session_id
-            self.foto = None if not self.foto else self.foto
-            self.contacts_list = '[]' if not self.contacts_list else self.contacts_list
         # Validar que min_sesion no supere 180 minutos (3 horas)
         if self.min_sesion > 180:
             raise ValueError("El tiempo de sesión no puede superar las 3 horas (180 minutos).")
@@ -1028,6 +1015,55 @@ class TrazaMensajeIA(models.Model):
 
 
 # ============================================================================
+# Modelos especificos de Baileys (WhatsApp Web)
+# ============================================================================
+
+
+class ConfigBaileys(ModeloBase):
+    """Configuracion y estado runtime de una sesion Baileys (via Node.js).
+
+    Existe solo cuando la sesion tiene proveedor='baileys'. Contiene los
+    campos que antes vivian en SesionWhatsApp pero solo aplicaban al
+    transporte Baileys."""
+    sesion = models.OneToOneField(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='config_baileys', verbose_name='Sesión'
+    )
+    qr_code = models.TextField(
+        blank=True, null=True, verbose_name='Código QR actual (Base64)'
+    )
+    whatsapp_id = models.CharField(
+        max_length=250, default='', blank=True, verbose_name='WhatsApp ID'
+    )
+    desconectado_manualmente = models.BooleanField(
+        default=False, verbose_name='Desconectado manualmente',
+        help_text='True cuando el usuario desconectó la sesión a propósito. El cron no intentará reconectarla.'
+    )
+    contacts_list = models.TextField(
+        default='[]', verbose_name='Lista de Contactos'
+    )
+    contacts_length = models.PositiveIntegerField(
+        default=0, verbose_name='Cantidad de contactos'
+    )
+    foto = models.TextField(
+        blank=True, null=True, verbose_name='Foto'
+    )
+    fecha_expira_inactivo = models.DateTimeField(
+        default=default_expira_10_min, verbose_name='Fecha de expiración por inactividad'
+    )
+    error_mensaje = models.TextField(
+        blank=True, null=True, verbose_name='Último error'
+    )
+
+    class Meta:
+        verbose_name = 'Configuración Baileys'
+        verbose_name_plural = 'Configuraciones Baileys'
+
+    def __str__(self):
+        return f"Baileys · {self.sesion.numero or self.sesion.session_id}"
+
+
+# ============================================================================
 # Modelos especificos de Meta Cloud API
 # ============================================================================
 
@@ -1079,13 +1115,13 @@ class ConfigMeta(ModeloBase):
         help_text='Numero formateado tal como Meta lo muestra (+593 99 999 9999).'
     )
 
-    # Credenciales (cifradas en BD via Fernet — transparente en Python)
+    # Credenciales (cifradas en BD via Fernet — transparente en Python).
+    # Las credenciales App-level (app_id, app_secret) viven en
+    # seguridad.CredencialMetaApp (singleton por organizacion).
     access_token = EncryptedTextField(
         verbose_name='System User Access Token',
         help_text='Token long-lived emitido por Meta. Se guarda cifrado.'
     )
-    app_id = models.CharField(max_length=50, blank=True, null=True)
-    app_secret = models.CharField(max_length=100, blank=True, null=True)
 
     # Webhook
     webhook_verify_token = models.CharField(
@@ -1727,8 +1763,6 @@ class ConfigInstagram(ModeloBase):
     username = models.CharField('@username', max_length=120, blank=True, default='')
     access_token = models.TextField('Access Token (Page)',
                                     help_text='Page access token con instagram_manage_messages.')
-    app_id = models.CharField(max_length=50, blank=True, null=True)
-    app_secret = models.CharField(max_length=100, blank=True, null=True)
     webhook_verify_token = models.CharField(max_length=60)
     webhook_verificado_en = models.DateTimeField(null=True, blank=True)
     ultima_sincronizacion = models.DateTimeField(null=True, blank=True)
@@ -1751,8 +1785,6 @@ class ConfigMessenger(ModeloBase):
     page_name = models.CharField('Page Name', max_length=200, blank=True, default='')
     access_token = models.TextField('Page access token',
                                     help_text='Token con pages_messaging.')
-    app_id = models.CharField(max_length=50, blank=True, null=True)
-    app_secret = models.CharField(max_length=100, blank=True, null=True)
     webhook_verify_token = models.CharField(max_length=60)
     webhook_verificado_en = models.DateTimeField(null=True, blank=True)
     ultima_sincronizacion = models.DateTimeField(null=True, blank=True)

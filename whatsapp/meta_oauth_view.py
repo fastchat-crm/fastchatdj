@@ -45,7 +45,15 @@ def _fb(path: str) -> str:
 
 
 def _creds_listas() -> bool:
-    return bool(settings.META_APP_ID and settings.META_APP_SECRET and settings.META_CONFIG_ID)
+    from .common_meta import get_meta_app_credentials
+    app_id, app_secret = get_meta_app_credentials()
+    return bool(app_id and app_secret and settings.META_CONFIG_ID)
+
+
+def _creds_meta():
+    """Devuelve (app_id, app_secret) de CredencialMetaApp o fallback settings."""
+    from .common_meta import get_meta_app_credentials
+    return get_meta_app_credentials()
 
 
 def _popup_html(payload: dict) -> HttpResponse:
@@ -76,7 +84,7 @@ def meta_oauth_start(request):
     if not _creds_listas():
         return _popup_html({
             'ok': False,
-            'error': 'Faltan credenciales META en el servidor (META_APP_ID / META_APP_SECRET / META_CONFIG_ID).',
+            'error': 'Faltan credenciales META (registra en Configuración → Credenciales Meta App, o setea META_APP_ID / META_APP_SECRET / META_CONFIG_ID).',
         })
 
     state = secrets.token_urlsafe(24)
@@ -95,9 +103,10 @@ def meta_oauth_start(request):
         'featureType': 'whatsapp_business_app_onboarding',
     }
 
+    app_id, _app_secret = _creds_meta()
     params = {
-        'app_id':        settings.META_APP_ID,
-        'client_id':     settings.META_APP_ID,
+        'app_id':        app_id,
+        'client_id':     app_id,
         'config_id':     settings.META_CONFIG_ID,
         'display':       'popup',
         'response_type': 'code',
@@ -136,13 +145,15 @@ def meta_oauth_callback(request):
 
     redirect_uri = request.build_absolute_uri(reverse('whatsapp_meta_oauth_callback'))
 
+    app_id, app_secret = _creds_meta()
+
     # 1) code -> access_token (token de usuario de FB)
     try:
         r = requests.get(
             _graph('/oauth/access_token'),
             params={
-                'client_id':     settings.META_APP_ID,
-                'client_secret': settings.META_APP_SECRET,
+                'client_id':     app_id,
+                'client_secret': app_secret,
                 'redirect_uri':  redirect_uri,
                 'code':          code,
             }, timeout=15,
@@ -161,8 +172,8 @@ def meta_oauth_callback(request):
             _graph('/oauth/access_token'),
             params={
                 'grant_type':        'fb_exchange_token',
-                'client_id':         settings.META_APP_ID,
-                'client_secret':     settings.META_APP_SECRET,
+                'client_id':         app_id,
+                'client_secret':     app_secret,
                 'fb_exchange_token': user_token,
             }, timeout=15,
         )
@@ -181,7 +192,7 @@ def meta_oauth_callback(request):
             _graph('/debug_token'),
             params={
                 'input_token':  user_token,
-                'access_token': f'{settings.META_APP_ID}|{settings.META_APP_SECRET}',
+                'access_token': f'{app_id}|{app_secret}',
             }, timeout=15,
         )
         if d.status_code == 200:
@@ -231,8 +242,6 @@ def meta_oauth_callback(request):
         estado='pendiente',
         usuario=usuario,
         session_id=str(uuid.uuid4()),
-        qr_code='',
-        whatsapp_id='',
     )
     config = ConfigMeta.objects.create(
         sesion=sesion,
@@ -240,8 +249,6 @@ def meta_oauth_callback(request):
         phone_number_id=phone_number_id,
         display_phone_number=display_phone,
         access_token=user_token,
-        app_id=settings.META_APP_ID,
-        app_secret=settings.META_APP_SECRET,
         webhook_verify_token=secrets.token_urlsafe(32),
     )
 

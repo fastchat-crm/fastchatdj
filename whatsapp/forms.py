@@ -93,7 +93,7 @@ class ConfigMetaForm(ModelFormBase):
     class Meta:
         model = ConfigMeta
         fields = ('waba_id', 'phone_number_id', 'business_account_id',
-                  'display_phone_number', 'access_token', 'app_id', 'app_secret',
+                  'display_phone_number', 'access_token',
                   'webhook_verify_token')
 
     def __init__(self, *args, **kwargs):
@@ -112,8 +112,6 @@ class ConfigMetaForm(ModelFormBase):
             if k == 'access_token':
                 self.fields[k].widget.attrs['col'] = '12'
                 self.fields[k].widget.attrs['rows'] = '3'
-            if k == 'app_secret':
-                self.fields[k].widget.attrs['type'] = 'password'
             if k == 'webhook_verify_token':
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
             if ver:
@@ -127,7 +125,7 @@ class ConfigInstagramForm(ModelFormBase):
     class Meta:
         model = ConfigInstagram
         fields = ('ig_user_id', 'page_id', 'username', 'access_token',
-                  'app_id', 'app_secret', 'webhook_verify_token')
+                  'webhook_verify_token')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
@@ -140,8 +138,6 @@ class ConfigInstagramForm(ModelFormBase):
             if k == 'access_token':
                 self.fields[k].widget.attrs['col'] = '12'
                 self.fields[k].widget.attrs['rows'] = '3'
-            if k == 'app_secret':
-                self.fields[k].widget.attrs['type'] = 'password'
             if k == 'webhook_verify_token':
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
             if ver:
@@ -153,7 +149,7 @@ class ConfigMessengerForm(ModelFormBase):
     class Meta:
         model = ConfigMessenger
         fields = ('page_id', 'page_name', 'access_token',
-                  'app_id', 'app_secret', 'webhook_verify_token')
+                  'webhook_verify_token')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
@@ -166,8 +162,6 @@ class ConfigMessengerForm(ModelFormBase):
             if k == 'access_token':
                 self.fields[k].widget.attrs['col'] = '12'
                 self.fields[k].widget.attrs['rows'] = '3'
-            if k == 'app_secret':
-                self.fields[k].widget.attrs['type'] = 'password'
             if k == 'webhook_verify_token':
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
             if ver:

@@ -111,9 +111,10 @@ def _render_info(request, estado='landing', status_code=200, mensaje_error=None)
     Muestra metricas agregadas (nunca tokens/access_tokens) y ayuda al dev.
     """
     try:
+        from .common_meta import get_meta_app_secret
         total_configs    = ConfigMeta.objects.count()
         verificados      = ConfigMeta.objects.exclude(webhook_verificado_en__isnull=True).count()
-        with_app_secret  = ConfigMeta.objects.exclude(app_secret='').count()
+        with_app_secret  = total_configs if get_meta_app_secret() else 0
         eventos_total    = EventoMetaRecibido.objects.count()
         eventos_procesados = EventoMetaRecibido.objects.filter(procesado=True).count()
         eventos_con_error  = EventoMetaRecibido.objects.exclude(error_procesamiento__isnull=True).exclude(error_procesamiento='').count()
@@ -162,7 +163,9 @@ def _procesar_evento(request):
     phone_number_id = _extraer_phone_number_id(payload)
     config = ConfigMeta.objects.filter(phone_number_id=phone_number_id).first() if phone_number_id else None
 
-    firma_valida = _validar_firma_hmac(raw_body, signature, config)
+    from .common_meta import get_meta_app_secret
+    app_secret_org = get_meta_app_secret()
+    firma_valida = _validar_firma_hmac(raw_body, signature, app_secret_org)
 
     evento = EventoMetaRecibido.objects.create(
         config_meta=config,
@@ -172,7 +175,7 @@ def _procesar_evento(request):
         procesado=False,
     )
 
-    if not firma_valida and config and config.app_secret:
+    if not firma_valida and app_secret_org:
         evento.error_procesamiento = 'firma_hmac_invalida'
         evento.save(update_fields=['error_procesamiento'])
         logger.warning("Meta webhook: firma HMAC invalida para phone_number_id=%s", phone_number_id)
@@ -202,16 +205,16 @@ def _procesar_evento(request):
 # Validacion HMAC
 # ---------------------------------------------------------------------------
 
-def _validar_firma_hmac(raw_body: bytes, signature_header: str, config: ConfigMeta) -> bool:
-    """Compara X-Hub-Signature-256 contra HMAC(app_secret, body).
-    Si no hay config.app_secret devuelve True (modo permisivo para setup inicial)."""
-    if not config or not config.app_secret:
+def _validar_firma_hmac(raw_body: bytes, signature_header: str, app_secret: str) -> bool:
+    """Compara X-Hub-Signature-256 contra HMAC(app_secret_org, body).
+    Si no hay app_secret devuelve True (modo permisivo para setup inicial)."""
+    if not app_secret:
         return True  # sin app_secret no podemos validar, dejamos pasar con warning
     if not signature_header:
         return False
     try:
         expected = 'sha256=' + hmac.new(
-            config.app_secret.encode('utf-8'),
+            app_secret.encode('utf-8'),
             raw_body,
             hashlib.sha256,
         ).hexdigest()

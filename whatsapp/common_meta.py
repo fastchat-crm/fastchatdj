@@ -17,6 +17,34 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def get_meta_app_credentials():
+    """Devuelve (app_id, app_secret) de la Meta App de la organizacion.
+
+    Lee desde CredencialMetaApp (singleton via OneToOne con Configuracion).
+    Fallback a settings.META_APP_ID / META_APP_SECRET si no hay registro aun
+    (permite bootstrap antes de que el admin llene el form).
+    """
+    from django.conf import settings
+    try:
+        from seguridad.models import Configuracion, CredencialMetaApp
+        confi = Configuracion.get_instancia()
+        if confi and confi.pk:
+            cred = CredencialMetaApp.objects.filter(configuracion=confi).first()
+            if cred and cred.app_id:
+                return cred.app_id, (cred.app_secret or '')
+    except Exception as ex:
+        logger.debug("CredencialMetaApp no disponible: %s", ex)
+    return (
+        getattr(settings, 'META_APP_ID', '') or '',
+        getattr(settings, 'META_APP_SECRET', '') or '',
+    )
+
+
+def get_meta_app_secret() -> str:
+    """Shortcut: solo el app_secret, para firmar/validar HMAC."""
+    return get_meta_app_credentials()[1]
+
+
 def validar_firma_hmac(raw_body: bytes, signature_header: str, app_secret: str | None) -> bool:
     """Compara `X-Hub-Signature-256` contra HMAC(app_secret, body).
 

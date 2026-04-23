@@ -395,9 +395,9 @@ def sesionesView(request):
 
     # Flag para mostrar/esconder el boton "Continuar" del panel WhatsApp
     from django.conf import settings
-    data['meta_oauth_listo'] = bool(
-        settings.META_APP_ID and settings.META_APP_SECRET and settings.META_CONFIG_ID
-    )
+    from .common_meta import get_meta_app_credentials
+    _app_id, _app_secret = get_meta_app_credentials()
+    data['meta_oauth_listo'] = bool(_app_id and _app_secret and settings.META_CONFIG_ID)
 
     # Partial card refresh (AJAX poll desde el tablero)
     if request.GET.get('partial') == 'card':

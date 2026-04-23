@@ -49,13 +49,26 @@ class CredencialMetaAppForm(ModelFormBase):
 
     def __init__(self, *args, **kwargs):
         super(CredencialMetaAppForm, self).__init__(*args, **kwargs)
-        # app_secret y system_user_token se muestran como password (pero render_value
-        # para que al editar se vea el valor descifrado actual)
-        self.fields['app_secret'].widget = forms.PasswordInput(render_value=True)
-        self.fields['system_user_token'].widget = forms.PasswordInput(render_value=True)
+        # app_secret y system_user_token se muestran como password (render_value
+        # para que al editar se vea el valor descifrado actual). Reusamos los
+        # attrs que ya seteo el ModelFormBase (form-control, placeholder, etc.)
+        # para que el estilo sea identico a los demas inputs.
+        for campo in ('app_secret', 'system_user_token'):
+            attrs_prev = dict(self.fields[campo].widget.attrs)
+            # Quitar attrs de textarea (el campo viene de TextField) que no
+            # aplican a un <input type=password>.
+            attrs_prev.pop('cols', None)
+            attrs_prev.pop('rows', None)
+            self.fields[campo].widget = forms.PasswordInput(
+                render_value=True, attrs=attrs_prev,
+            )
         for k in self.fields:
-            if k in ('app_id', 'app_secret', 'business_id', 'system_user_id', 'system_user_token'):
+            self.fields[k].widget.attrs.setdefault('class', 'form-control')
+            if k in ('app_id', 'app_secret', 'business_id', 'system_user_id'):
                 self.fields[k].widget.attrs['col'] = "6"
+            if k == 'system_user_token':
+                self.fields[k].widget.attrs['col'] = "12"
+            self.fields[k].widget.attrs.setdefault('autocomplete', 'off')
 
 
 class ConfiguracionTerminosForm(ModelFormBase):

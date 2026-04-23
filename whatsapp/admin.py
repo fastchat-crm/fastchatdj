@@ -75,8 +75,9 @@ class ConfigMetaAdmin(admin.ModelAdmin):
             'fields': ('sesion', 'waba_id', 'phone_number_id', 'business_account_id', 'display_phone_number')
         }),
         ('Credenciales', {
-            'fields': ('access_token', 'app_id', 'app_secret'),
+            'fields': ('access_token',),
             'classes': ('collapse',),
+            'description': 'Las credenciales de la Meta App (app_id / app_secret) viven en seguridad.CredencialMetaApp (singleton).',
         }),
         ('Webhook', {
             'fields': ('webhook_verify_token', 'webhook_verificado_en'),

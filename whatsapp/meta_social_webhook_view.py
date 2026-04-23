@@ -50,9 +50,10 @@ def _cliente_espera_html(request) -> bool:
 def _render_info(request, proveedor: str, emoji: str, ConfigCls,
                  estado: str = 'landing', status_code: int = 200):
     try:
+        from .common_meta import get_meta_app_secret
         total = ConfigCls.objects.count()
         verificados = ConfigCls.objects.exclude(webhook_verificado_en__isnull=True).count()
-        with_app_secret = ConfigCls.objects.exclude(app_secret='').exclude(app_secret__isnull=True).count()
+        with_app_secret = total if get_meta_app_secret() else 0
     except Exception:
         total = verificados = with_app_secret = 0
     ctx = {
@@ -174,7 +175,8 @@ def _procesar_post_social(request, ConfigCls, canal):
 
     config = _resolver_config_por_payload(payload, ConfigCls, canal)
     sig = request.headers.get('X-Hub-Signature-256', '')
-    secret = (config.app_secret if config else '') or ''
+    from .common_meta import get_meta_app_secret
+    secret = get_meta_app_secret()
     firma_valida = _validar_hmac(raw_body, sig, secret)
 
     EventoMetaRecibido.objects.create(
