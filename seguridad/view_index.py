@@ -142,13 +142,22 @@ def index(request):
     for d in serie_7d:
         d['pct'] = int(100 * d['valor'] / pico_serie)
 
-    meta_sesiones = [s for s in sesiones_qs if s.es_meta and s.config_meta_id]
-    meta_ids = [s.config_meta_id for s in meta_sesiones]
+    meta_sesiones = []
+    meta_config_ids = []
+    for s in sesiones_qs:
+        if not s.es_meta:
+            continue
+        cfg = getattr(s, 'config_meta', None)
+        if not cfg:
+            continue
+        meta_sesiones.append(s)
+        meta_config_ids.append(cfg.id)
+
     plantillas_stats = {}
     calidad_alertas = []
-    if meta_ids:
+    if meta_config_ids:
         plantillas_stats = PlantillaWhatsApp.objects.filter(
-            config_meta_id__in=meta_ids, status=True,
+            config_meta_id__in=meta_config_ids, status=True,
         ).aggregate(
             total=Count('id'),
             aprobadas=Count('id', filter=Q(estado_meta='APPROVED')),
