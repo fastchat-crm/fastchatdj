@@ -941,7 +941,7 @@ def entrenamiento_ia_view(request):
                             pass
 
                         session_id = f"sim-herr-{agente.id}-{request.user.id}"
-                        fake_conv = SimpleNamespace(id=session_id, contacto=None)
+                        fake_conv = SimpleNamespace(id=session_id, contacto=None, contacto_id=None)
 
                         before = _tz.now()
                         try:

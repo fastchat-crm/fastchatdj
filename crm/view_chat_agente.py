@@ -120,7 +120,7 @@ def chat_agente_view(request, agente_enc_id):
             )
 
             # SimpleNamespace provee el .id que AgenteConsultor usa para memoria
-            fake_conv = SimpleNamespace(id=session_id, contacto=None)
+            fake_conv = SimpleNamespace(id=session_id, contacto=None, contacto_id=None)
 
             _t0 = time.time()
             traza_etapas = [{
@@ -511,7 +511,7 @@ def _procesar_audio(tmp_path, filename, texto_adicional, apikey_obj, provider, a
     except Exception:
         pass
 
-    fake_conv = SimpleNamespace(id=session_id, contacto=None)
+    fake_conv = SimpleNamespace(id=session_id, contacto=None, contacto_id=None)
     consultor = AgenteConsultor(
         vectorstore_path=vs_path,
         vectorstore_enlaces_path=vectorstore_enlaces_path,
