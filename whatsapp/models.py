@@ -11,6 +11,7 @@ from django.db import models
 from django.utils import timezone
 
 from agents_ai.agente_resumidor import AgenteResumidor
+from core.crypto import EncryptedTextField
 from core.custom_models import ModeloBase
 from autenticacion.models import Usuario
 from core.funciones import default_expira_10_min, get_encrypt
@@ -1078,10 +1079,10 @@ class ConfigMeta(ModeloBase):
         help_text='Numero formateado tal como Meta lo muestra (+593 99 999 9999).'
     )
 
-    # Credenciales (TODO: cifrar con Fernet cuando core/encryption este listo)
-    access_token = models.TextField(
+    # Credenciales (cifradas en BD via Fernet — transparente en Python)
+    access_token = EncryptedTextField(
         verbose_name='System User Access Token',
-        help_text='Token permanente generado en Meta Business Manager.'
+        help_text='Token long-lived emitido por Meta. Se guarda cifrado.'
     )
     app_id = models.CharField(max_length=50, blank=True, null=True)
     app_secret = models.CharField(max_length=100, blank=True, null=True)

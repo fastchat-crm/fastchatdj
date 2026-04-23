@@ -1,0 +1,63 @@
+{# Modal: envia una plantilla Meta como prueba a un numero. #}
+<div class="detail-wrap">
+  <div class="detail-head">
+    <div>
+      <h5>Enviar plantilla de prueba</h5>
+      <p class="muted">Prueba rápida para verificar que Meta está entregando mensajes desde esta sesión.</p>
+    </div>
+    <button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>
+  </div>
+
+  <form id="form-plantilla-prueba" class="detail-body">
+    <input type="hidden" name="action" value="meta_plantilla_prueba">
+    <input type="hidden" name="id" value="{{ sesion.id }}">
+
+    <div class="form-row">
+      <label>Número destino (con código de país, sin +)</label>
+      <input type="tel" name="destino" required placeholder="593999999999"
+             pattern="[0-9]{7,15}">
+    </div>
+
+    <div class="form-row form-row-two">
+      <div>
+        <label>Plantilla</label>
+        {% if plantillas %}
+          <select name="plantilla" id="sel-plantilla">
+            {% for p in plantillas %}
+              <option value="{{ p.nombre }}" data-idioma="{{ p.idioma }}">{{ p.nombre }} ({{ p.idioma }})</option>
+            {% endfor %}
+          </select>
+        {% else %}
+          <input type="text" name="plantilla" value="hello_world" required>
+          <small class="muted">No tienes plantillas aprobadas — usamos la de demo de Meta.</small>
+        {% endif %}
+      </div>
+      <div>
+        <label>Idioma</label>
+        <input type="text" name="idioma" value="en_US" id="inp-idioma">
+      </div>
+    </div>
+
+    <div class="detail-actions">
+      <button type="button" class="conex-btn conex-btn-light" data-cerrar-detail>Cancelar</button>
+      <button type="submit" class="conex-btn conex-btn-primary">
+        <i class="fa fa-paper-plane me-1"></i> Enviar prueba
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+  (function(){
+    var sel = document.getElementById('sel-plantilla');
+    var idm = document.getElementById('inp-idioma');
+    if (sel && idm) {
+      function sync() {
+        var opt = sel.options[sel.selectedIndex];
+        if (opt && opt.dataset.idioma) idm.value = opt.dataset.idioma;
+      }
+      sel.addEventListener('change', sync);
+      sync();
+    }
+  })();
+</script>

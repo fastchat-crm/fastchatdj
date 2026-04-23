@@ -1,436 +1,398 @@
+"""Modulo Conexiones (tablero de sesiones WhatsApp).
+
+Diseño estilo Pancake:
+- Tablero con cards de sesiones existentes.
+- Boton "Conectar" abre modal unico "Agregar conexion" con sidebar de canales:
+  * Desactivado  -> Baileys (legacy, QR).
+  * WhatsApp     -> Meta Cloud API via OAuth Embedded Signup.
+  * Resto        -> "Proximamente" (placeholder).
+
+Las acciones POST viven aca y son minimas:
+- baileys_start      -> crea placeholder + socket Node + devuelve QR.
+- baileys_status     -> poll del estado del socket (por si QR expiro).
+- disconnect         -> cierra Baileys en Node o marca desconectada Meta.
+- delete             -> soft delete (status=False) si esta pendiente o vacia.
+"""
+from __future__ import annotations
+
+import logging
 import uuid
+
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
-from django.db.models import Q, Count
+from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import render
-from django.contrib import messages
 from django.template.loader import get_template
 from django.urls import reverse
 
-from core.custom_forms import FormError
-from core.funciones import addData, paginador, secure_module, log, redirectAfterPostGet
-from crm.models import AgentesIA, PerfilNegocioIA, ReglaFinConversacion, AccionFinConversacion
-from .forms import SesionWhatsAppForm, ConfigMetaForm, ConfigInstagramForm, ConfigMessengerForm
-from .models import SesionWhatsApp, ConfigMeta, ConfigInstagram, ConfigMessenger
-from .services import WhatsAppService, get_whatsapp_service
-from .sesiones_common import (
-    hint_error_meta as _hint_error_meta_shared,
-    hint_como_texto as _hint_como_texto_shared,
-    sincronizar_meta_desde_graph as _sincronizar_meta_desde_graph_shared,
-)
-from .sesiones_meta_view import handle_meta_action as _handle_meta_action
-from .sesiones_baileys_view import handle_baileys_action as _handle_baileys_action
+from core.funciones import addData, log, secure_module
+
+from .models import SesionWhatsApp
+from .services import WhatsAppService
+
+logger = logging.getLogger(__name__)
 
 
-# Wrappers locales para retrocompat con los usos internos de este archivo.
-# Cuando se terminen de mover las acciones Meta a sesiones_meta_view.py estos
-# wrappers dejan de ser necesarios; por ahora evitan tener 2 copias del codigo.
-def _hint_error_meta(error_text):
-    return _hint_error_meta_shared(error_text)
+# ============================================================================
+# Acciones POST
+# ============================================================================
+
+def _accion_baileys_start(request):
+    """Crea (o reusa) una sesion Baileys pendiente, abre socket en Node y
+    devuelve el QR base64 para renderizar en el modal.
+    """
+    svc = WhatsAppService()
+    session_id = request.POST.get('session_id') or 0
+    sesion = SesionWhatsApp.objects.filter(id=session_id, usuario=request.user).first()
+    if not sesion:
+        sesion = SesionWhatsApp.objects.create(
+            estado='pendiente',
+            usuario=request.user,
+            session_id=str(uuid.uuid4()),
+            proveedor='baileys',
+            qr_code='',
+            whatsapp_id='',
+        )
+        log(f"Sesion Baileys placeholder creada (ID: {sesion.id})", request, "add", obj=sesion.id)
+    else:
+        # Rotar UUID si la sesion ya existia pero estaba muerta
+        if sesion.estado in ('desconectado', 'error'):
+            try:
+                svc.close_session(sesion.session_id)
+            except Exception:
+                pass
+            sesion.session_id = str(uuid.uuid4())
+            sesion.qr_code = ''
+            sesion.whatsapp_id = ''
+            sesion.estado = 'pendiente'
+            sesion.error_mensaje = None
+            sesion.desconectado_manualmente = False
+            sesion.save(update_fields=[
+                'session_id', 'qr_code', 'whatsapp_id', 'estado',
+                'error_mensaje', 'desconectado_manualmente',
+            ])
+
+    webhook_url = request.build_absolute_uri(reverse('whatsapp_webhook_handler'))
+    result = svc.create_session(sesion, webhook_url)
+    if not result.get('success'):
+        err = (result.get('error') or 'No se pudo crear la sesion en el servicio Node.js')[:500]
+        sesion.estado = 'error'
+        sesion.error_mensaje = err
+        sesion.save(update_fields=['estado', 'error_mensaje'])
+        return JsonResponse({'error': True, 'sesion_id': sesion.id, 'message': err})
+
+    sesion.qr_code = result.get('qr_code') or ''
+    sesion.save(update_fields=['qr_code'])
+    return JsonResponse({
+        'error':     False,
+        'sesion_id': sesion.id,
+        'qr':        sesion.qr_code,
+        'estado':    sesion.estado,
+    })
 
 
-def _hint_como_texto(hint):
-    return _hint_como_texto_shared(hint)
+def _accion_baileys_status(request):
+    """Poll del estado de una sesion Baileys (por si el QR expiro o ya se escaneo)."""
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesion no encontrada.'})
+    return JsonResponse({
+        'error':     False,
+        'estado':    sesion.estado,
+        'numero':    sesion.numero or '',
+        'qr':        sesion.qr_code or '',
+    })
 
 
-def _sincronizar_meta_desde_graph(session, config, timeout=10):
-    return _sincronizar_meta_desde_graph_shared(session, config, timeout)
+def _accion_disconnect(request):
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesion no encontrada.'})
+    if sesion.es_baileys:
+        try:
+            WhatsAppService().close_session(sesion.session_id)
+        except Exception as ex:
+            logger.warning("close_session fallo (id=%s): %s", sesion.id, ex)
+    sesion.estado = 'desconectado'
+    sesion.desconectado_manualmente = True
+    sesion.error_mensaje = None
+    sesion.save(update_fields=['estado', 'desconectado_manualmente', 'error_mensaje'])
+    log(f"Sesion {sesion.id} desconectada", request, "change", obj=sesion.id)
+    return JsonResponse({'error': False, 'message': 'Sesion desconectada.'})
 
+
+def _accion_delete(request):
+    """Consumido por `eliminarajax` de base.html. En exito devuelve
+    `{error:false}`; en error devuelve `[{error:true, message:...}]` (array)
+    porque eliminarajax lee `data[0].message` en el path de error.
+    """
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse([{'error': True, 'message': 'Sesión no encontrada.'}], safe=False)
+    if sesion.es_baileys:
+        try:
+            WhatsAppService().close_session(sesion.session_id)
+        except Exception:
+            pass
+    sesion.status = False
+    sesion.estado = 'desconectado'
+    sesion.save(update_fields=['status', 'estado'])
+    log(f"Sesion {sesion.id} eliminada", request, "del", obj=sesion.id)
+    return JsonResponse({'error': False, 'message': 'Sesión eliminada.'})
+
+
+def _accion_baileys_verificar(request):
+    """Pinguea Node para confirmar que el socket Baileys sigue vivo."""
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
+    if not sesion or not sesion.es_baileys:
+        return JsonResponse({'error': True, 'message': 'Solo aplica a sesiones Baileys.'})
+    svc = WhatsAppService()
+    r = svc.check_session_status(sesion.session_id)
+    if not r.get('success'):
+        if r.get('not_found') and sesion.estado == 'conectado':
+            sesion.estado = 'desconectado'
+            sesion.error_mensaje = 'Socket no existe en Node.'
+            sesion.save(update_fields=['estado', 'error_mensaje'])
+        return JsonResponse({'error': True, 'message': r.get('error') or 'No se pudo verificar.'})
+    conectado = r.get('connected')
+    if conectado and sesion.estado != 'conectado':
+        sesion.estado = 'conectado'; sesion.error_mensaje = None
+        sesion.save(update_fields=['estado', 'error_mensaje'])
+    elif not conectado and sesion.estado == 'conectado':
+        sesion.estado = 'desconectado'
+        sesion.error_mensaje = 'Socket caido (detectado al verificar).'
+        sesion.save(update_fields=['estado', 'error_mensaje'])
+    return JsonResponse({
+        'error': False, 'connected': conectado, 'estado': sesion.estado,
+        'message': 'Socket activo.' if conectado else 'Socket no responde.',
+    })
+
+
+def _accion_meta_validar(request):
+    """Sincroniza credenciales Meta contra Graph API y popula numero/quality."""
+    from .sesiones_common import sincronizar_meta_desde_graph
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
+    if not sesion or not sesion.es_meta:
+        return JsonResponse({'error': True, 'message': 'Solo aplica a sesiones Meta.'})
+    cfg = getattr(sesion, 'config_meta', None)
+    if not cfg:
+        return JsonResponse({'error': True, 'message': 'Sesion sin ConfigMeta.'})
+    ok, info = sincronizar_meta_desde_graph(sesion, cfg)
+    if not ok:
+        return JsonResponse({'error': True, 'message': info.get('message') or 'Fallo la validacion.'})
+    sesion.refresh_from_db()
+    return JsonResponse({
+        'error': False,
+        'message': info.get('message'),
+        'numero': sesion.numero,
+        'estado': sesion.estado,
+    })
+
+
+def _accion_meta_plantilla_prueba(request):
+    """Envia una plantilla Meta a un numero como test."""
+    from .services import get_whatsapp_service
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
+    if not sesion or not sesion.es_meta:
+        return JsonResponse({'error': True, 'message': 'Solo aplica a sesiones Meta.'})
+    destino = (request.POST.get('destino') or '').strip()
+    plantilla = (request.POST.get('plantilla') or 'hello_world').strip()
+    idioma = (request.POST.get('idioma') or 'en_US').strip()
+    if not destino:
+        return JsonResponse({'error': True, 'message': 'Ingresa un numero de destino.'})
+    svc = get_whatsapp_service(sesion)
+    r = svc.send_template(sesion.session_id, destino, plantilla, idioma=idioma)
+    if not r.get('success'):
+        return JsonResponse({'error': True, 'message': r.get('error') or 'No se pudo enviar la plantilla.'})
+    log(f"Plantilla de prueba '{plantilla}' ({idioma}) enviada desde sesion {sesion.id} a {destino}",
+        request, "change", obj=sesion.id)
+    return JsonResponse({
+        'error': False,
+        'message': f'Plantilla "{plantilla}" enviada a +{destino}.',
+        'message_id': r.get('message_id'),
+    })
+
+
+def _accion_editar(request):
+    """Guarda cambios del modal "Modificar": campos basicos de la sesion."""
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesion no encontrada.'})
+    nombre = (request.POST.get('nombre') or '').strip()
+    if not nombre:
+        return JsonResponse({'error': True, 'message': 'El nombre es obligatorio.'})
+    sesion.nombre = nombre
+    sesion.modo_bot = request.POST.get('modo_bot') or sesion.modo_bot
+    sesion.language = request.POST.get('language') or sesion.language
+    sesion.zona_horaria = (request.POST.get('zona_horaria') or sesion.zona_horaria).strip()
+    sesion.mensaje_bienvenida = (request.POST.get('mensaje_bienvenida') or '').strip() or None
+    sesion.mensaje_despedida   = (request.POST.get('mensaje_despedida')   or '').strip() or None
+    sesion.mensaje_handoff     = (request.POST.get('mensaje_handoff')     or '').strip() or None
+    # Agente IA (opcional — llega como id o vacio)
+    agente_id = request.POST.get('agente_ia') or ''
+    if agente_id.isdigit():
+        from crm.models import AgentesIA
+        agente = AgentesIA.objects.filter(id=int(agente_id), status=True).first()
+        sesion.agente_ia = agente
+    elif agente_id == '':
+        sesion.agente_ia = None
+    sesion.save()
+    log(f"Sesion {sesion.id} editada", request, "change", obj=sesion.id)
+    return JsonResponse({'error': False, 'message': 'Cambios guardados.', 'reload': True})
+
+
+_ACCIONES = {
+    'baileys_start':               _accion_baileys_start,
+    'baileys_status':              _accion_baileys_status,
+    'baileys_verificar':           _accion_baileys_verificar,
+    'disconnect':                  _accion_disconnect,
+    'delete':                      _accion_delete,
+    'meta_validar':                _accion_meta_validar,
+    'meta_plantilla_prueba':       _accion_meta_plantilla_prueba,
+    'editar':                      _accion_editar,
+}
+
+
+def _get_partial(request, accion):
+    """Renderiza un modal secundario (editar / historial / resumen / plantilla)
+    y devuelve JSON con el HTML. Lo consume JS via fetch para inyectar el
+    contenido al contenedor #conex-detail-modal.
+    """
+    sesion = SesionWhatsApp.objects.filter(id=request.GET.get('pk'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'ok': False, 'message': 'Sesion no encontrada.'})
+
+    ctx = {'sesion': sesion, 'request': request}
+
+    if accion == 'editar_modal':
+        from crm.models import AgentesIA, PerfilNegocioIA
+        perfil, _ = PerfilNegocioIA.objects.get_or_create(usuario=request.user)
+        ctx['agentes_disponibles'] = AgentesIA.objects.filter(perfil=perfil, status=True).order_by('nombre')
+        tpl = 'whatsapp/sesiones/_modal_editar.html'
+
+    elif accion == 'historial_modal':
+        from django.contrib.admin.models import LogEntry
+        from django.contrib.contenttypes.models import ContentType
+        ct = ContentType.objects.get_for_model(SesionWhatsApp)
+        ctx['entries'] = LogEntry.objects.filter(
+            content_type=ct, object_id=str(sesion.id),
+        ).order_by('-action_time')[:80]
+        tpl = 'whatsapp/sesiones/_modal_historial.html'
+
+    elif accion == 'resumen_modal':
+        cfg = getattr(sesion, 'config_meta', None)
+        checks = []
+        if sesion.es_meta:
+            checks.append({'nombre': 'Credenciales Cloud API',
+                           'ok': bool(cfg and cfg.waba_id and cfg.phone_number_id and cfg.access_token),
+                           'detalle': f'WABA {cfg.waba_id} · {cfg.display_phone_number or cfg.phone_number_id}' if cfg and cfg.waba_id else 'Sin credenciales Meta.'})
+            checks.append({'nombre': 'Webhook verificado',
+                           'ok': bool(cfg and cfg.webhook_verificado_en),
+                           'detalle': f'Verificado {cfg.webhook_verificado_en:%Y-%m-%d %H:%M}' if cfg and cfg.webhook_verificado_en else 'Meta aun no valido el verify_token.'})
+            checks.append({'nombre': 'Quality rating',
+                           'ok': bool(cfg and cfg.quality_rating in ('GREEN', 'YELLOW')),
+                           'detalle': cfg.get_quality_rating_display() if cfg else 'Desconocida'})
+            from .models import PlantillaWhatsApp
+            n_pl = PlantillaWhatsApp.objects.filter(config_meta=cfg, estado_meta='APPROVED', status=True).count() if cfg else 0
+            checks.append({'nombre': 'Plantillas aprobadas',
+                           'ok': n_pl > 0,
+                           'detalle': f'{n_pl} aprobada(s).' if n_pl else 'Sin plantillas aprobadas.'})
+        else:
+            checks.append({'nombre': 'Socket Baileys',
+                           'ok': sesion.estado == 'conectado',
+                           'detalle': f'Estado actual: {sesion.get_estado_display()}.'})
+        checks.append({'nombre': 'Agente IA',
+                       'ok': bool(sesion.agente_ia),
+                       'detalle': f'Agente: {sesion.agente_ia.nombre}' if sesion.agente_ia else 'Sin agente — no responde automatico.'})
+        checks.append({'nombre': 'Horarios',
+                       'ok': sesion.horarios.filter(status=True, activo=True).exists(),
+                       'detalle': f'{sesion.horarios.filter(status=True, activo=True).count()} franja(s) activa(s).'})
+        checks.append({'nombre': 'Campañas',
+                       'ok': sesion.campanas.filter(status=True).exists(),
+                       'detalle': f'{sesion.campanas.filter(status=True).count()} creada(s).'})
+        total_ok = sum(1 for c in checks if c['ok'])
+        ctx['checks'] = checks
+        ctx['total_ok'] = total_ok
+        ctx['total'] = len(checks)
+        ctx['pct'] = int(100 * total_ok / len(checks)) if checks else 0
+        tpl = 'whatsapp/sesiones/_modal_resumen.html'
+
+    elif accion == 'plantilla_modal':
+        from .models import PlantillaWhatsApp
+        cfg = getattr(sesion, 'config_meta', None)
+        ctx['plantillas'] = PlantillaWhatsApp.objects.filter(
+            config_meta=cfg, estado_meta='APPROVED', status=True,
+        ).order_by('nombre') if cfg else []
+        tpl = 'whatsapp/sesiones/_modal_plantilla_prueba.html'
+
+    else:
+        return JsonResponse({'ok': False, 'message': 'Partial desconocido.'})
+
+    html = get_template(tpl).render(ctx, request)
+    return JsonResponse({'ok': True, 'html': html})
+
+
+# ============================================================================
+# View top-level
+# ============================================================================
 
 @login_required
 @secure_module
 def sesionesView(request):
-    # WhatsAppService() es Baileys-only: create/reconnect/check/close de sesion
-    # solo aplican al transporte Node. Las acciones que SI funcionan para ambos
-    # proveedores (ej. probar_envio_mensaje) usan get_whatsapp_service(filtro).
-    whatsapp_service = WhatsAppService()
+    if request.method == 'POST':
+        fn = _ACCIONES.get(request.POST.get('action', ''))
+        if not fn:
+            return JsonResponse({'error': True, 'message': 'Accion desconocida.'})
+        try:
+            return fn(request)
+        except Exception as ex:
+            logger.exception("Error en accion sesiones %s: %s", request.POST.get('action'), ex)
+            return JsonResponse({'error': True, 'message': f'Error: {ex}'})
+
+    # GET partials (modales que se cargan bajo demanda)
+    accion_get = request.GET.get('action') or ''
+    if accion_get.endswith('_modal'):
+        return _get_partial(request, accion_get)
+
+    # GET: tablero
     data = {
-        'titulo': 'Sesiones WhatsApp',
-        'descripcion': 'Control de números de teléfono para sesiones de WhatsApp',
-        'ruta': request.path
+        'titulo':      'Canales conectados',
+        'descripcion': 'Gestiona todas tus integraciones de mensajeria en un solo tablero.',
+        'ruta':        request.path,
     }
     addData(request, data)
-    model = SesionWhatsApp
-    perfil, creado = PerfilNegocioIA.objects.get_or_create(usuario=request.user)
-    if request.method == 'POST':
-        res_json = []
-        action = request.POST['action']
-        # Delegacion: acciones Meta viven en sesiones_meta_view.py,
-        # acciones Baileys en sesiones_baileys_view.py.
-        # Si la accion matchea, devuelven JsonResponse; si no, None.
-        _meta_resp = _handle_meta_action(request, action, perfil)
-        if _meta_resp is not None:
-            return _meta_resp
-        _bail_resp = _handle_baileys_action(request, action)
-        if _bail_resp is not None:
-            return _bail_resp
-        try:
-            with transaction.atomic():
-                # Las acciones Baileys (add, create_session, verificar_conexion,
-                # reconectar, delete) las maneja `_handle_baileys_action()` arriba.
-                # Las acciones Meta las maneja `_handle_meta_action()` arriba.
-                if action == 'probar_envio_mensaje':
-                    from django.utils import timezone as _tz
-                    filtro = model.objects.get(pk=int(request.POST['id']))
-                    # Validacion de estado por proveedor
-                    if filtro.es_baileys:
-                        if filtro.estado != 'conectado':
-                            return JsonResponse({'error': True, 'message': 'La sesión no está conectada.'})
-                    elif filtro.es_meta:
-                        config = getattr(filtro, 'config_meta', None)
-                        if not config or not config.access_token or not config.phone_number_id:
-                            return JsonResponse({'error': True, 'message': 'La sesión Meta no tiene credenciales completas (access_token / phone_number_id).'})
-                    numero_destino = (request.POST.get('numero_destino') or '').strip()
-                    if not numero_destino:
-                        numero_destino = filtro.numero
-                    if not numero_destino:
-                        return JsonResponse({'error': True, 'message': 'No se proporcionó un número de destino y la sesión no tiene número.'})
-                    texto = (request.POST.get('texto') or '').strip() or (
-                        f"🔧 Mensaje de prueba desde FastChat\n"
-                        f"Sesión: {filtro.numero or filtro.session_id}\n"
-                        f"Fecha: {_tz.now().strftime('%d/%m/%Y %H:%M:%S')}"
-                    )
-                    service = get_whatsapp_service(filtro)
-                    # Baileys quiere formato '<num>@s.whatsapp.net'; Meta lo normaliza solo
-                    destino_fmt = (
-                        service.format_phone_number(numero_destino)
-                        if filtro.es_baileys else numero_destino
-                    )
-                    resultado = service.send_text_message(
-                        filtro.session_id, destino_fmt, texto, simularEscritura=True,
-                    )
-                    if resultado.get('success'):
-                        log(f"Prueba de envío enviada desde sesión {filtro.id} a {destino_fmt}", request, "change", obj=filtro.id)
-                        return JsonResponse({
-                            'error': False,
-                            'message': 'Mensaje de prueba enviado correctamente.',
-                            'message_id': resultado.get('message_id'),
-                            'destino': destino_fmt,
-                            'texto': texto,
-                        })
-                    err_raw = resultado.get('error') or 'No se pudo enviar el mensaje de prueba.'
-                    hint = _hint_error_meta(err_raw) if filtro.es_meta else {}
-                    return JsonResponse({
-                        'error':          True,
-                        'message':        str(err_raw) + _hint_como_texto(hint),
-                        'hint':           (hint or {}).get('text') or None,
-                        'hint_link':      (hint or {}).get('link') or None,
-                        'hint_link_label': (hint or {}).get('link_label') or None,
-                        'raw':            err_raw,
-                        'destino':        destino_fmt,
-                    })
-                # NOTA: 'probar_envio_plantilla_meta' se maneja via _handle_meta_action()
-                # al inicio del bloque POST. Ya no vive aqui — vive en sesiones_meta_view.py.
-                elif action == 'change':
-                    instance = SesionWhatsApp.objects.get(id=request.POST['pk'])
-                    form = SesionWhatsAppForm(request.POST, request.FILES, instance=instance)
 
-                    if not form.is_valid():
-                        raise FormError(form)
-
-                    obj = form.save()
-
-                    res_json.append({'error': False, 'to': redirectAfterPostGet(request)})
-                    return JsonResponse(res_json, safe=False)
-                elif action == 'change_modal':
-                    instance = SesionWhatsApp.objects.get(id=request.POST['pk'])
-                    form = SesionWhatsAppForm(request.POST, request.FILES, instance=instance)
-
-                    if not form.is_valid():
-                        raise FormError(form)
-
-                    obj = form.save()
-                    res_json.append({'error': False, 'reload': True})
-                    return JsonResponse(res_json, safe=False)
-
-                # ── Regla de Fin de Conversación ─────────────────────────────
-                elif action == 'regla_fin_cargar_plantilla':
-                    # Carga la plantilla del agente asociado a la sesión
-                    session = SesionWhatsApp.objects.get(id=request.POST['pk'])
-                    agente = session.agente_ia
-                    if not agente:
-                        return JsonResponse({'error': True, 'message': 'Esta sesión no tiene un agente asignado.'})
-                    plantilla = getattr(agente, 'regla_fin', None)
-                    if not plantilla:
-                        return JsonResponse({'error': True, 'message': 'El agente no tiene una plantilla de cierre configurada.'})
-                    regla, _ = ReglaFinConversacion.objects.get_or_create(sesion=session)
-                    regla.activo = plantilla.activo
-                    regla.usar_senal_llm = plantilla.usar_senal_llm
-                    regla.frases_cierre = plantilla.frases_cierre
-                    regla.save()
-                    # Copiar acciones
-                    regla.acciones.all().delete()
-                    for accion in plantilla.acciones.filter(status=True):
-                        AccionFinConversacion.objects.create(
-                            regla=regla, tipo=accion.tipo,
-                            destino=accion.destino,
-                            plantilla_mensaje=accion.plantilla_mensaje,
-                        )
-                    return JsonResponse({'error': False, 'message': 'Plantilla cargada correctamente.'})
-
-                elif action == 'regla_fin_guardar':
-                    session = SesionWhatsApp.objects.get(id=request.POST['pk'])
-                    regla, _ = ReglaFinConversacion.objects.get_or_create(sesion=session)
-                    regla.activo = request.POST.get('activo') == 'true'
-                    regla.usar_senal_llm = request.POST.get('usar_senal_llm') == 'true'
-                    regla.frases_cierre = request.POST.get('frases_cierre', '').strip() or None
-                    regla.save()
-                    return JsonResponse({'error': False})
-
-                elif action == 'regla_fin_accion_add':
-                    session = SesionWhatsApp.objects.get(id=request.POST['pk'])
-                    regla, _ = ReglaFinConversacion.objects.get_or_create(sesion=session)
-                    tipo = request.POST.get('tipo', 'ninguna')
-                    destino = request.POST.get('destino', '').strip() or None
-                    plantilla_mensaje = request.POST.get('plantilla_mensaje', '').strip() or None
-                    accion = AccionFinConversacion.objects.create(
-                        regla=regla, tipo=tipo,
-                        destino=destino, plantilla_mensaje=plantilla_mensaje,
-                    )
-                    return JsonResponse({
-                        'error': False,
-                        'accion': {
-                            'id': accion.id,
-                            'tipo': accion.get_tipo_display(),
-                            'destino': accion.destino or '',
-                        }
-                    })
-
-                elif action == 'regla_fin_accion_delete':
-                    accion = AccionFinConversacion.objects.get(id=request.POST['accion_id'])
-                    accion.delete()
-                    return JsonResponse({'error': False})
-
-                # Las acciones Meta (guardar_config_meta, regenerar_verify_token,
-                # verificar_meta_conexion, add_meta, probar_envio_plantilla_meta)
-                # se manejan via `_handle_meta_action()` al comienzo del POST.
-                # Si llegaron aqui es porque no matchearon — tratamos como "accion desconocida".
-
-                elif action == 'delete_force':
-                    session_id = request.POST.get('id')
-                    session = SesionWhatsApp.objects.filter(id=session_id).first()
-                    if not session:
-                        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
-                    # Permitir eliminar si: esta pendiente, o es vacia (sin numero + >10 min)
-                    if session.estado == 'pendiente':
-                        session.delete()
-                        log(f"Sesión pendiente eliminada (ID: {session_id})", request, "delete_force", obj=session_id)
-                        return JsonResponse({'error': False, 'message': 'Sesión eliminada.'})
-                    from django.utils import timezone
-                    tiempo_sin_numero = timezone.now() - session.fecha_registro
-                    if not session.numero and tiempo_sin_numero.total_seconds() > 600:
-                        session.delete()
-                        log(f"Sesión vacía eliminada por inactividad (ID: {session_id})", request, "delete_force", obj=session_id)
-                        return JsonResponse({'error': False, 'message': 'Sesión eliminada.'})
-                    return JsonResponse({'error': True, 'message': 'Solo se pueden eliminar sesiones en estado pendiente o vacías sin número.'})
-        except FormError as ex:
-            res_json.append(ex.dict_error)
-        except Exception as ex:
-            res_json.append({'error': True, 'message': f"Error, intente nuevamente. {str(ex)}"})
-            return JsonResponse(res_json, safe=False)
-    # ====================== LISTADO SESIONES =========================
-    data['action'] = action = request.GET.get('action')
-    if action == 'change':
-        data['instance'] = instance = SesionWhatsApp.objects.get(id=request.GET['pk'])
-        data['form'] = form = SesionWhatsAppForm(instance=instance)
-        form.fields['agente_ia'].queryset = AgentesIA.objects.filter(perfil=perfil, status=True)
-        data['regla_fin'] = getattr(instance, 'regla_fin', None)
-        data['acciones_fin'] = data['regla_fin'].acciones.filter(status=True) if data['regla_fin'] else []
-        data['tiene_plantilla_agente'] = bool(instance.agente_ia and getattr(instance.agente_ia, 'regla_fin', None))
-        data['config_meta'] = config_meta = getattr(instance, 'config_meta', None)
-        data['config_meta_form'] = ConfigMetaForm(instance=config_meta) if config_meta else ConfigMetaForm()
-        # IG + Messenger forms (mismo patron — null-safe si no hay config aun)
-        data['config_instagram'] = config_ig = getattr(instance, 'config_instagram', None)
-        data['config_instagram_form'] = ConfigInstagramForm(instance=config_ig) if config_ig else ConfigInstagramForm()
-        data['config_messenger'] = config_fb = getattr(instance, 'config_messenger', None)
-        data['config_messenger_form'] = ConfigMessengerForm(instance=config_fb) if config_fb else ConfigMessengerForm()
-        data['meta_webhook_url'] = request.build_absolute_uri(reverse('whatsapp_meta_webhook'))
-        return render(request, 'whatsapp/sesiones/form.html', data)
-    if action == 'change_modal':
-        try:
-            pk = request.GET.get('pk', '')
-            if pk == 'new_meta':
-                data['instance'] = None
-                data['action'] = 'add_meta'
-                data['form'] = form = SesionWhatsAppForm(initial={'proveedor': 'meta'})
-            else:
-                data['instance'] = instance = SesionWhatsApp.objects.get(id=pk)
-                data['form'] = form = SesionWhatsAppForm(instance=instance)
-            form.fields['agente_ia'].queryset = AgentesIA.objects.filter(perfil=perfil, status=True)
-            instance = data.get('instance')
-            data['regla_fin'] = getattr(instance, 'regla_fin', None) if instance else None
-            data['acciones_fin'] = data['regla_fin'].acciones.filter(status=True) if data['regla_fin'] else []
-            data['tiene_plantilla_agente'] = bool(instance and instance.agente_ia and getattr(instance.agente_ia, 'regla_fin', None))
-            data['config_meta'] = config_meta = getattr(instance, 'config_meta', None) if instance else None
-            data['config_meta_form'] = ConfigMetaForm(instance=config_meta) if config_meta else ConfigMetaForm()
-            data['config_instagram'] = config_ig = getattr(instance, 'config_instagram', None) if instance else None
-            data['config_instagram_form'] = ConfigInstagramForm(instance=config_ig) if config_ig else ConfigInstagramForm()
-            data['config_messenger'] = config_fb = getattr(instance, 'config_messenger', None) if instance else None
-            data['config_messenger_form'] = ConfigMessengerForm(instance=config_fb) if config_fb else ConfigMessengerForm()
-            data['meta_webhook_url'] = request.build_absolute_uri(reverse('whatsapp_meta_webhook'))
-            template = get_template("whatsapp/sesiones/form_modal.html")
-            return JsonResponse({"result": True, 'data': template.render(data)})
-        except Exception as ex:
-            return JsonResponse({"result": False, 'message': str(ex)})
-    if action == 'historial_de_sesiones':
-        data['instance'] = instance = SesionWhatsApp.objects.get(id=request.GET['pk'])
-        data['listado'] = instance.get_log_entries().filter(change_message__istartswith='HS: ')
-        return render(request, 'whatsapp/sesiones/historial_de_sesiones.html', data)
-    if action == 'resumen_meta':
-        # Modal-resumen de configuración Meta: qué está configurado y qué falta
-        try:
-            instance = SesionWhatsApp.objects.get(id=request.GET['pk'], usuario=request.user)
-        except SesionWhatsApp.DoesNotExist:
-            return JsonResponse({'result': False, 'message': 'Sesión no encontrada'})
-        if instance.proveedor != 'meta':
-            return JsonResponse({'result': False, 'message': 'Esta vista solo aplica a sesiones Meta.'})
-
-        cfg = getattr(instance, 'config_meta', None)
-        checks = []
-        # 1. Credenciales Meta
-        checks.append({
-            'nombre': 'Credenciales Meta Cloud API',
-            'ok':     bool(cfg and cfg.waba_id and cfg.phone_number_id and cfg.access_token),
-            'detalle': (
-                f'WABA: {cfg.waba_id} · Phone: {cfg.display_phone_number or cfg.phone_number_id}'
-                if cfg and cfg.waba_id else 'Sin WABA/Phone Number ID/Access Token configurados.'
-            ),
-            'accion_url': f'/whatsapp/sesiones/?action=change_modal&pk={instance.id}',
-            'accion_label': 'Configurar credenciales',
-        })
-        # 2. Webhook verificado
-        checks.append({
-            'nombre': 'Webhook Meta verificado',
-            'ok':     bool(cfg and cfg.webhook_verificado_en),
-            'detalle': (
-                f'Verificado el {cfg.webhook_verificado_en:%Y-%m-%d %H:%M}'
-                if cfg and cfg.webhook_verificado_en
-                else 'El callback en Meta Developer Portal aún no validó el verify_token.'
-            ),
-            'accion_url': 'https://developers.facebook.com/apps',
-            'accion_label': 'Abrir Meta Developer',
-        })
-        # 3. App secret (firma HMAC)
-        checks.append({
-            'nombre': 'App Secret configurado (firma HMAC)',
-            'ok':     bool(cfg and cfg.app_secret),
-            'detalle': 'Valida la autenticidad de cada webhook entrante.' if cfg and cfg.app_secret else 'Sin app_secret: los webhooks se aceptan sin validación HMAC.',
-            'accion_url': f'/whatsapp/sesiones/?action=change_modal&pk={instance.id}',
-            'accion_label': 'Editar sesión',
-        })
-        # 4. Quality rating
-        checks.append({
-            'nombre': 'Quality rating',
-            'ok':     bool(cfg and cfg.quality_rating in ('GREEN', 'YELLOW')),
-            'detalle': f'Meta reporta: {cfg.get_quality_rating_display() if cfg else "Desconocida"}',
-            'accion_url': None,
-            'accion_label': None,
-        })
-        # 5. Agente IA
-        checks.append({
-            'nombre': 'Agente IA asignado',
-            'ok':     bool(instance.agente_ia),
-            'detalle': f'Agente: {instance.agente_ia.nombre}' if instance.agente_ia else 'Sin agente IA: las conversaciones no se responden automáticamente.',
-            'accion_url': f'/whatsapp/sesiones/?action=change_modal&pk={instance.id}',
-            'accion_label': 'Asignar agente',
-        })
-        # 6. Plantillas aprobadas
-        from .models import PlantillaWhatsApp
-        plantillas_ok = PlantillaWhatsApp.objects.filter(
-            config_meta=cfg, estado_meta='APPROVED', status=True,
-        ).count() if cfg else 0
-        checks.append({
-            'nombre': 'Plantillas aprobadas por Meta',
-            'ok':     plantillas_ok > 0,
-            'detalle': f'{plantillas_ok} plantilla(s) aprobadas.' if plantillas_ok else 'Sin plantillas aprobadas: no podrás iniciar conversaciones fuera de la ventana de 24h.',
-            'accion_url': f'/whatsapp/plantillas/?sesion={instance.id}',
-            'accion_label': 'Gestionar plantillas',
-        })
-        # 7. Horarios de atención
-        horarios_n = instance.horarios.filter(status=True, activo=True).count()
-        checks.append({
-            'nombre': 'Horarios de atención',
-            'ok':     horarios_n > 0,
-            'detalle': f'{horarios_n} franja(s) horaria(s) activa(s).' if horarios_n else 'Sin horarios: la sesión responde 24/7.',
-            'accion_url': f'/whatsapp/horarios/?sesion={instance.id}',
-            'accion_label': 'Configurar horarios',
-        })
-        # 8. Pixel Meta / CAPI
-        checks.append({
-            'nombre': 'Pixel Meta (CAPI) para atribución Ads',
-            'ok':     bool(instance.pixel_meta_id),
-            'detalle': f'Pixel: {instance.pixel_meta.nombre}' if instance.pixel_meta_id else 'Sin pixel vinculado: no se reportarán conversiones a Meta Ads.',
-            'accion_url': '/admin/whatsapp/pixelmeta/',
-            'accion_label': 'Crear/vincular pixel',
-        })
-        # 9. Campañas
-        campanas_n = instance.campanas.filter(status=True).count()
-        checks.append({
-            'nombre': 'Campañas creadas',
-            'ok':     campanas_n > 0,
-            'detalle': f'{campanas_n} campaña(s) creada(s) en esta sesión.' if campanas_n else 'Aún no has creado campañas para esta sesión.',
-            'accion_url': f'/whatsapp/campanas/?sesion={instance.id}',
-            'accion_label': 'Ver campañas',
-        })
-        # 10. Round-robin
-        checks.append({
-            'nombre': 'Asignación automática (round-robin)',
-            'ok':     bool(instance.auto_asignar_round_robin),
-            'detalle': 'Activado: nuevas conversaciones se asignan a agentes disponibles.' if instance.auto_asignar_round_robin else 'Desactivado: las conversaciones requieren asignación manual.',
-            'accion_url': f'/whatsapp/sesiones/?action=change_modal&pk={instance.id}',
-            'accion_label': 'Activar',
-        })
-
-        total_ok = sum(1 for c in checks if c['ok'])
-        data['sesion'] = instance
-        data['config_meta'] = cfg
-        data['checks'] = checks
-        data['total_ok'] = total_ok
-        data['total_checks'] = len(checks)
-        data['completitud_pct'] = int(100 * total_ok / len(checks))
-        data['webhook_url'] = request.build_absolute_uri(reverse('whatsapp_meta_webhook'))
-        template = get_template("whatsapp/sesiones/resumen_meta.html")
-        return JsonResponse({"result": True, 'data': template.render(data)})
-    criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, usuario_id=request.user.id), ''
-    estado = request.GET.get('estado', '')
-    # Filtro por proveedor: lo inyectan sesionesMetaView / sesionesBaileysView
-    # para que cada URL muestre solo sus sesiones. Si no viene, muestra todas.
-    proveedor_filtro = request.GET.get('proveedor', '').strip()
+    criterio = (request.GET.get('criterio') or '').strip()
+    filtros = Q(status=True, usuario=request.user)
     if criterio:
-        filtros = filtros & (Q(numero__icontains=criterio))
-        data["criterio"] = criterio
-        url_vars += '&criterio=' + criterio
-    if estado:
-        filtros &= Q(estado=estado)
-        data["estado"] = estado
-        url_vars += '&estado=' + estado
-    if proveedor_filtro in ('baileys', 'meta', 'instagram', 'messenger'):
-        filtros &= Q(proveedor=proveedor_filtro)
-        data["proveedor_filtro"] = proveedor_filtro
-        url_vars += '&proveedor=' + proveedor_filtro
+        filtros &= (Q(nombre__icontains=criterio) | Q(numero__icontains=criterio))
 
-    listado = model.objects.filter(filtros)
-    data["list_count"] = listado.count()
-    data["url_vars"] = url_vars
+    sesiones = SesionWhatsApp.objects.filter(filtros).select_related('config_meta').order_by('-fecha_registro')
+    data['sesiones'] = sesiones
+    data['total']    = sesiones.count()
 
-    base_qs = model.objects.filter(status=True, usuario_id=request.user.id)
-    stats_raw = {row['estado']: row['total'] for row in base_qs.values('estado').annotate(total=Count('id'))}
-    # Conteo por proveedor para los cards de "elegir camino" arriba del listado.
-    prov_raw = {row['proveedor']: row['total'] for row in base_qs.values('proveedor').annotate(total=Count('id'))}
-    data['stats_proveedor'] = {
-        'baileys':   prov_raw.get('baileys',   0),
-        'meta':      prov_raw.get('meta',      0),
-        'instagram': prov_raw.get('instagram', 0),
-        'messenger': prov_raw.get('messenger', 0),
-    }
-    data['stats'] = {
-        'total': sum(stats_raw.values()),
-        'conectado': stats_raw.get('conectado', 0),
-        'pendiente': stats_raw.get('pendiente', 0),
-        'desconectado': stats_raw.get('desconectado', 0),
-        'error': stats_raw.get('error', 0),
-    }
+    stats = sesiones.aggregate(
+        conectadas=Count('id', filter=Q(estado='conectado')),
+        pendientes=Count('id', filter=Q(estado='pendiente')),
+        desconectadas=Count('id', filter=Q(estado='desconectado')),
+        errores=Count('id', filter=Q(estado='error')),
+    )
+    data['stats'] = stats
+    data['criterio'] = criterio
 
-    paginador(request, listado.order_by('numero'), 12, data, url_vars)
-    return render(request, 'whatsapp/sesiones/listado.html', data)
+    # Flag para mostrar/esconder el boton "Continuar" del panel WhatsApp
+    from django.conf import settings
+    data['meta_oauth_listo'] = bool(
+        settings.META_APP_ID and settings.META_APP_SECRET and settings.META_CONFIG_ID
+    )
+
+    # Partial card refresh (AJAX poll desde el tablero)
+    if request.GET.get('partial') == 'card':
+        sesion_id = request.GET.get('id')
+        sesion = sesiones.filter(id=sesion_id).first()
+        if not sesion:
+            return JsonResponse({'error': True})
+        html = get_template('whatsapp/sesiones/_card.html').render({'sesion': sesion}, request)
+        return JsonResponse({'error': False, 'estado': sesion.estado, 'html': html})
+
+    return render(request, 'whatsapp/sesiones/tablero.html', data)

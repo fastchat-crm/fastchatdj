@@ -2,8 +2,7 @@ from django.urls import re_path, path
 
 from .conversaciones_finalizadas_view import conversacionesFinalizadasView
 from .sesiones_view import sesionesView
-from .sesiones_baileys_view import sesionesBaileysView
-from .sesiones_meta_view import sesionesMetaView, sesionesMetaWizardView
+from .meta_oauth_view import meta_oauth_start, meta_oauth_callback
 from .conversaciones_view import conversacionesView
 from .sync_contacts import sync_contacts_view
 from .update_profile_view import update_profile_view
@@ -28,21 +27,6 @@ whatsapp_urls = (
         "nombre": "Sesiones",
         "url": 'sesiones/',
         "vista": sesionesView,
-    },
-    {
-        "nombre": "Sesiones Baileys",
-        "url": 'sesiones/baileys/',
-        "vista": sesionesBaileysView,
-    },
-    {
-        "nombre": "Sesiones Meta",
-        "url": 'sesiones/meta/',
-        "vista": sesionesMetaView,
-    },
-    {
-        "nombre": "Wizard Meta",
-        "url": 'sesiones/meta/wizard/',
-        "vista": sesionesMetaWizardView,
     },
     {
         "nombre": "Conversaciones",
@@ -102,6 +86,8 @@ urlpatterns = [
     path('heartbeat/', heartbeat_receiver, name='whatsapp_heartbeat'),
     path('trace/', trace_receiver, name='whatsapp_trace_receiver'),
     path('meta_webhook/', meta_webhook, name='whatsapp_meta_webhook'),
+    path('meta/oauth/start/', meta_oauth_start, name='whatsapp_meta_oauth_start'),
+    path('meta/oauth/callback/', meta_oauth_callback, name='whatsapp_meta_oauth_callback'),
     path('instagram_webhook/', instagram_webhook, name='whatsapp_instagram_webhook'),
     path('messenger_webhook/', messenger_webhook, name='whatsapp_messenger_webhook'),
     path('sync-contacts/', sync_contacts_view, name='sync_contacts'),

@@ -1,0 +1,78 @@
+{# Modal "Modificar sesion" — campos basicos. #}
+<div class="detail-wrap">
+  <div class="detail-head">
+    <div>
+      <h5>Modificar sesión</h5>
+      <p class="muted">Ajusta los datos generales de <b>{{ sesion.nombre|default:sesion.numero }}</b></p>
+    </div>
+    <button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>
+  </div>
+
+  <form id="form-editar-sesion" class="detail-body">
+    <input type="hidden" name="action" value="editar">
+    <input type="hidden" name="id" value="{{ sesion.id }}">
+
+    <div class="form-row">
+      <label>Nombre interno</label>
+      <input type="text" name="nombre" value="{{ sesion.nombre|default:'' }}" required
+             placeholder="ej. Soporte tienda">
+    </div>
+
+    <div class="form-row">
+      <label>Modo del bot</label>
+      <select name="modo_bot">
+        <option value="ninguno"    {% if sesion.modo_bot == 'ninguno' %}selected{% endif %}>Sin bot (solo humanos)</option>
+        <option value="tradicional" {% if sesion.modo_bot == 'tradicional' %}selected{% endif %}>Chatbot tradicional</option>
+        <option value="ia"          {% if sesion.modo_bot == 'ia' %}selected{% endif %}>Agente IA</option>
+        <option value="hibrido"     {% if sesion.modo_bot == 'hibrido' %}selected{% endif %}>Híbrido tradicional → IA</option>
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label>Agente IA</label>
+      <select name="agente_ia">
+        <option value="">— Sin agente —</option>
+        {% for a in agentes_disponibles %}
+          <option value="{{ a.id }}" {% if sesion.agente_ia_id == a.id %}selected{% endif %}>{{ a.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-row form-row-two">
+      <div>
+        <label>Idioma</label>
+        <select name="language">
+          <option value="es" {% if sesion.language == 'es' %}selected{% endif %}>Español</option>
+          <option value="en" {% if sesion.language == 'en' %}selected{% endif %}>English</option>
+          <option value="pt" {% if sesion.language == 'pt' %}selected{% endif %}>Português</option>
+        </select>
+      </div>
+      <div>
+        <label>Zona horaria</label>
+        <input type="text" name="zona_horaria" value="{{ sesion.zona_horaria }}" placeholder="America/Guayaquil">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label>Mensaje de bienvenida</label>
+      <textarea name="mensaje_bienvenida" rows="2" placeholder="Hola 👋, gracias por escribirnos...">{{ sesion.mensaje_bienvenida|default:'' }}</textarea>
+    </div>
+
+    <div class="form-row">
+      <label>Mensaje de despedida</label>
+      <textarea name="mensaje_despedida" rows="2" placeholder="Cerramos esta conversación. ¡Vuelve pronto!">{{ sesion.mensaje_despedida|default:'' }}</textarea>
+    </div>
+
+    <div class="form-row">
+      <label>Mensaje al transferir a humano</label>
+      <textarea name="mensaje_handoff" rows="2" placeholder="Te conectamos con un asesor...">{{ sesion.mensaje_handoff|default:'' }}</textarea>
+    </div>
+
+    <div class="detail-actions">
+      <button type="button" class="conex-btn conex-btn-light" data-cerrar-detail>Cancelar</button>
+      <button type="submit" class="conex-btn conex-btn-primary">
+        <i class="fa fa-save me-1"></i> Guardar cambios
+      </button>
+    </div>
+  </form>
+</div>

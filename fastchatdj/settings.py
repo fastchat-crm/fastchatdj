@@ -55,6 +55,11 @@ with open(os.path.join(BASE_DIR, 'credenciales.json')) as json_file:
     #WHATSAPP_API_URL
     WHATSAPP_API_URL = data['WHATSAPP_API_URL']
     NODE_SECRET_KEY = data['NODE_SECRET_KEY']
+    # Meta Embedded Signup (WhatsApp Cloud API) — opcional hasta que el cliente registre App en Meta.
+    META_APP_ID         = data.get('META_APP_ID', '')
+    META_APP_SECRET     = data.get('META_APP_SECRET', '')
+    META_CONFIG_ID      = data.get('META_CONFIG_ID', '')
+    META_API_VERSION    = data.get('META_API_VERSION', 'v22.0')
 
 WKHTMLTOPDF_CMD_OPTIONS = {'encoding': 'utf8', 'quiet': True, 'enable-local-file-access': True}
 

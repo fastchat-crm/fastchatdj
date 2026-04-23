@@ -1,0 +1,124 @@
+{# Card individual de sesion en el tablero. Reusable como partial (AJAX poll). #}
+<div class="conex-card" data-sesion-id="{{ sesion.id }}"
+     data-sesion-nombre="{{ sesion.nombre|default:sesion.numero|escape }}"
+     data-estado="{{ sesion.estado }}"
+     data-proveedor="{{ sesion.proveedor }}">
+
+  <div class="card-top">
+    <div class="card-avatar">
+      {% if sesion.foto %}
+        <img src="{{ sesion.foto }}" alt="avatar">
+      {% else %}
+        <span class="avatar-fallback">
+          <i class="fab fa-whatsapp"></i>
+        </span>
+      {% endif %}
+      <span class="avatar-status status-{{ sesion.estado }}" title="{{ sesion.get_estado_display|default:sesion.estado }}"></span>
+    </div>
+
+    <div class="card-head">
+      <div class="card-nombre">{{ sesion.nombre|default:'Sesión sin nombre' }}</div>
+      <div class="card-num">
+        {% if sesion.es_meta and sesion.config_meta and sesion.config_meta.display_phone_number %}
+          {{ sesion.config_meta.display_phone_number }}
+        {% elif sesion.numero %}
+          +{{ sesion.numero }}
+        {% else %}
+          <span class="muted">Pendiente de número</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card-kebab-wrap">
+      <button type="button" class="btn-kebab" aria-label="Opciones" data-kebab-toggle>
+        <i class="fa fa-ellipsis-vertical"></i>
+      </button>
+      <div class="kebab-menu" data-kebab-menu>
+        {% if sesion.es_meta %}
+          <div class="kebab-heading">Meta Cloud API</div>
+          <button type="button" class="kebab-item" data-action="editar"><i class="fa fa-pen"></i> Modificar</button>
+          <button type="button" class="kebab-item" data-action="resumen"><i class="fa fa-clipboard-check"></i> Resumen y pasos siguientes</button>
+          <button type="button" class="kebab-item" data-action="meta-validar"><i class="fa fa-satellite-dish"></i> Revalidar número con Meta</button>
+          <button type="button" class="kebab-item" data-action="plantilla-prueba"><i class="fa fa-paper-plane"></i> Enviar plantilla de prueba</button>
+          <a href="/whatsapp/plantillas/?sesion={{ sesion.id }}" class="kebab-item"><i class="fa fa-file-lines"></i> Ver plantillas</a>
+          <a href="/whatsapp/campanas/?sesion={{ sesion.id }}" class="kebab-item"><i class="fa fa-bullhorn"></i> Ver campañas</a>
+          <a href="/whatsapp/campanas/?action=add&sesion={{ sesion.id }}" class="kebab-item"><i class="fa fa-plus-circle"></i> Nueva campaña</a>
+          <a href="/whatsapp/horarios/?sesion={{ sesion.id }}" class="kebab-item"><i class="fa fa-business-time"></i> Configurar horarios</a>
+          <a href="/whatsapp/analytics/?sesion={{ sesion.id }}" class="kebab-item"><i class="fa fa-chart-line"></i> Analytics de esta sesión</a>
+          <button type="button" class="kebab-item" data-action="historial"><i class="fa fa-clock-rotate-left"></i> Historial de conexiones</button>
+          <div class="kebab-sep"></div>
+          {% if sesion.estado == 'conectado' %}
+            <button type="button" class="kebab-item kebab-warn" data-action="disconnect"><i class="fa fa-power-off"></i> Desconectar</button>
+          {% endif %}
+          <button type="button" class="kebab-item kebab-danger" data-action="eliminar"><i class="fa fa-trash"></i> Eliminar sesión</button>
+        {% else %}
+          <div class="kebab-heading">Baileys (Node.js)</div>
+          <button type="button" class="kebab-item" data-action="editar"><i class="fa fa-pen"></i> Modificar</button>
+          <button type="button" class="kebab-item" data-action="baileys-verificar"><i class="fa fa-satellite-dish"></i> Verificar conexión</button>
+          <button type="button" class="kebab-item" data-action="baileys-reconnect"><i class="fa fa-qrcode"></i> Reconectar / ver QR</button>
+          <a href="/whatsapp/horarios/?sesion={{ sesion.id }}" class="kebab-item"><i class="fa fa-business-time"></i> Horarios</a>
+          <button type="button" class="kebab-item" data-action="historial"><i class="fa fa-clock-rotate-left"></i> Historial de conexiones</button>
+          <div class="kebab-sep"></div>
+          {% if sesion.estado == 'conectado' %}
+            <button type="button" class="kebab-item kebab-warn" data-action="disconnect"><i class="fa fa-power-off"></i> Desconectar</button>
+          {% endif %}
+          <button type="button" class="kebab-item kebab-danger" data-action="eliminar"><i class="fa fa-trash"></i> Eliminar sesión</button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card-body">
+    <div class="card-tags">
+      {% if sesion.es_meta %}
+        <span class="canal-badge canal-wa-oficial"><i class="fab fa-whatsapp"></i> WhatsApp Cloud</span>
+      {% elif sesion.es_baileys %}
+        <span class="canal-badge canal-baileys"><i class="fab fa-whatsapp"></i> Baileys</span>
+      {% else %}
+        <span class="canal-badge">{{ sesion.proveedor }}</span>
+      {% endif %}
+
+      <span class="estado-badge estado-{{ sesion.estado }}">
+        <span class="dot"></span> {{ sesion.get_estado_display|default:sesion.estado }}
+      </span>
+
+      {% if sesion.es_meta and sesion.config_meta %}
+        {% if sesion.config_meta.quality_rating and sesion.config_meta.quality_rating != 'UNKNOWN' %}
+          <span class="tag tag-quality-{{ sesion.config_meta.quality_rating|lower }}">
+            Calidad: {{ sesion.config_meta.get_quality_rating_display }}
+          </span>
+        {% endif %}
+        {% if sesion.config_meta.messaging_limit_tier %}
+          <span class="tag">{{ sesion.config_meta.get_messaging_limit_tier_display }}</span>
+        {% endif %}
+      {% endif %}
+    </div>
+
+    {% if sesion.error_mensaje %}
+      <div class="card-error" title="{{ sesion.error_mensaje }}">
+        <i class="fa fa-triangle-exclamation"></i> {{ sesion.error_mensaje|truncatechars:80 }}
+      </div>
+    {% endif %}
+
+    {% if sesion.agente_ia %}
+      <div class="card-subinfo">
+        <i class="fa fa-robot"></i> Agente: <b>{{ sesion.agente_ia.nombre }}</b>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card-footer">
+    <a href="/whatsapp/conversaciones/?sesion={{ sesion.id }}" class="btn-quick">
+      <i class="fa fa-comments"></i> Conversaciones
+    </a>
+    {% if sesion.es_baileys and sesion.estado != 'conectado' %}
+      <button type="button" class="btn-quick btn-quick-warn" data-action="baileys-reconnect">
+        <i class="fa fa-qrcode"></i> Escanear QR
+      </button>
+    {% elif sesion.es_meta and sesion.estado != 'conectado' %}
+      <button type="button" class="btn-quick btn-quick-warn" data-action="meta-validar">
+        <i class="fa fa-satellite-dish"></i> Revalidar
+      </button>
+    {% endif %}
+  </div>
+</div>
