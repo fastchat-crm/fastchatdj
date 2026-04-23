@@ -240,6 +240,39 @@ class ContactoForm(ModelFormBase):
 5. Asteriscos en requeridos
 6. `toArray()` para extraer `cleaned_data`
 
+### Regla: BooleanField siempre como Switchery
+
+**Todos los `BooleanField` / `CheckboxInput` en forms del sistema se renderizan como
+switches Switchery, no como checkboxes Bootstrap.** Esto lo aplica `ModelFormBase`
+automáticamente seteando `class="js-switch"` + `data-render="switchery"`.
+
+**NO pisar la clase del widget para booleans** — si lo hacés, Switchery deja de
+inicializarlos y aparecen como checkbox HTML plano:
+
+```python
+# MAL: override pisa el auto-class y rompe Switchery
+self.fields['activo'].widget.attrs['class'] = 'form-check-input'
+
+# BIEN: dejar que ModelFormBase lo maneje solo
+# (si necesitás col: solo setear col, no class)
+self.fields['activo'].widget.attrs['col'] = '3'
+```
+
+Opt-out puntual: `kwargs['no_switchery'] = ['campo1', 'campo2']` en `__init__`
+del form — útil cuando un booleano específico debe ir como checkbox normal
+(ej. "Acepto términos" dentro de un modal chico).
+
+Para forms de creación manual (no `ModelFormBase`) copiar el patrón:
+
+```python
+self.fields['flag'].widget.attrs['class'] = 'js-switch'
+self.fields['flag'].widget.attrs['data-render'] = 'switchery'
+self.fields['flag'].widget.attrs['data-theme'] = 'default'
+```
+
+Los assets Switchery (`switchery.min.css/js`) los inyecta `ModelFormBase.Media`
+— no hace falta importarlos en el template.
+
 ---
 
 ## Transacciones

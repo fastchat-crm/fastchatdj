@@ -43,8 +43,9 @@ class ConfiguracionForm(ModelFormBase):
                 self.fields[k].widget.attrs['title'] = "Sólo números"
                 self.fields[k].widget.attrs['onKeyPress'] = "return soloNumeros1(event)"
             if k in canales:
+                # NO overridear 'class' — ModelFormBase auto-aplica js-switch +
+                # data-render=switchery para que se renderice como Switchery.
                 self.fields[k].widget.attrs['col'] = "3"
-                self.fields[k].widget.attrs['class'] = 'form-check-input canal-switch'
                 self.fields[k].required = False
 
 

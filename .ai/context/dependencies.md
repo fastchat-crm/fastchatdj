@@ -134,7 +134,13 @@ Auto-aplicado por `ModelFormBase` a ChoiceFields (clase `.jselect2`).
 Loading overlay: `pantallaespera()` / `$.unblockUI()`.
 
 ### Switchery
-Toggle switches para `BooleanField` (auto-aplicado por `ModelFormBase`).
+Toggle switches para **todos** los `BooleanField` / `CheckboxInput`. Auto-aplicado
+por `ModelFormBase` vía `class="js-switch"` + `data-render="switchery"`.
+
+**Convención obligatoria:** booleanos en forms se muestran siempre como
+Switchery, nunca como checkbox Bootstrap plano. No pisar el `class` del widget;
+para opt-out usar `no_switchery=['campo']` en `__init__`. Detalle y ejemplos en
+`agents/backend.md` sección "Regla: BooleanField siempre como Switchery".
 
 ---
 
