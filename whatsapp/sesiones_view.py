@@ -281,6 +281,12 @@ def _get_partial(request, accion):
         from crm.models import AgentesIA, PerfilNegocioIA
         perfil, _ = PerfilNegocioIA.objects.get_or_create(usuario=request.user)
         ctx['agentes_disponibles'] = AgentesIA.objects.filter(perfil=perfil, status=True).order_by('nombre')
+        # Datos específicos del proveedor — los renderiza el modal en una
+        # sección "Datos de la conexión" (read-only, lo que trajo la API).
+        if sesion.es_meta:
+            ctx['config_meta'] = getattr(sesion, 'config_meta', None)
+        ctx['config_instagram'] = getattr(sesion, 'config_instagram', None)
+        ctx['config_messenger'] = getattr(sesion, 'config_messenger', None)
         tpl = 'whatsapp/sesiones/_modal_editar.html'
 
     elif accion == 'historial_modal':

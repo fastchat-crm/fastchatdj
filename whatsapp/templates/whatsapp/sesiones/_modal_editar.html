@@ -1,9 +1,19 @@
-{# Modal "Modificar sesion" — campos basicos. #}
+{# Modal "Modificar sesion" — datos del transporte (read-only) + ajustes editables. #}
 <div class="detail-wrap">
   <div class="detail-head">
     <div>
-      <h5>Modificar sesión</h5>
-      <p class="muted">Ajusta los datos generales de <b>{{ sesion.nombre|default:sesion.numero }}</b></p>
+      {% if sesion.es_meta %}
+        <h5><i class="fa fa-cloud me-1 text-primary"></i> Editar Meta WS Conexión</h5>
+      {% elif sesion.es_baileys %}
+        <h5><i class="fa fa-mobile me-1 text-success"></i> Editar Baileys WS Conexión</h5>
+      {% elif sesion.es_instagram %}
+        <h5><i class="fa-brands fa-instagram me-1" style="color:#e1306c"></i> Editar Instagram</h5>
+      {% elif sesion.es_messenger %}
+        <h5><i class="fa-brands fa-facebook-messenger me-1 text-primary"></i> Editar Messenger</h5>
+      {% else %}
+        <h5>Modificar sesión</h5>
+      {% endif %}
+      <p class="muted">Sesión <b>{{ sesion.nombre|default:sesion.numero|default:sesion.id }}</b></p>
     </div>
     <button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>
   </div>
@@ -12,60 +22,235 @@
     <input type="hidden" name="action" value="editar">
     <input type="hidden" name="id" value="{{ sesion.id }}">
 
-    <div class="form-row">
-      <label>Nombre interno</label>
-      <input type="text" name="nombre" value="{{ sesion.nombre|default:'' }}" required
-             placeholder="ej. Soporte tienda">
-    </div>
+    {# ════════════════════════════════════════════════════════════════
+       SECCIÓN 1: Datos de la conexión (read-only — vienen de la API)
+       ═══════════════════════════════════════════════════════════════ #}
 
-    <div class="form-row">
-      <label>Modo del bot</label>
-      <select name="modo_bot">
-        <option value="ninguno"    {% if sesion.modo_bot == 'ninguno' %}selected{% endif %}>Sin bot (solo humanos)</option>
-        <option value="tradicional" {% if sesion.modo_bot == 'tradicional' %}selected{% endif %}>Chatbot tradicional</option>
-        <option value="ia"          {% if sesion.modo_bot == 'ia' %}selected{% endif %}>Agente IA</option>
-        <option value="hibrido"     {% if sesion.modo_bot == 'hibrido' %}selected{% endif %}>Híbrido tradicional → IA</option>
-      </select>
-    </div>
+    {% if sesion.es_meta and config_meta %}
+      <div class="conex-data-block">
+        <div class="conex-data-head">
+          <i class="fa fa-circle-check text-success me-1"></i>
+          <span>Datos de Meta Cloud API</span>
+          <span class="conex-data-pill conex-data-pill-readonly">solo lectura</span>
+        </div>
 
-    <div class="form-row">
-      <label>Agente IA</label>
-      <select name="agente_ia">
-        <option value="">— Sin agente —</option>
-        {% for a in agentes_disponibles %}
-          <option value="{{ a.id }}" {% if sesion.agente_ia_id == a.id %}selected{% endif %}>{{ a.nombre }}</option>
-        {% endfor %}
-      </select>
-    </div>
+        <div class="form-row form-row-two">
+          <div>
+            <label>WABA ID</label>
+            <input type="text" value="{{ config_meta.waba_id|default:'—' }}" readonly>
+          </div>
+          <div>
+            <label>Phone Number ID</label>
+            <input type="text" value="{{ config_meta.phone_number_id|default:'—' }}" readonly>
+          </div>
+        </div>
 
-    <div class="form-row form-row-two">
-      <div>
-        <label>Idioma</label>
-        <select name="language">
-          <option value="es" {% if sesion.language == 'es' %}selected{% endif %}>Español</option>
-          <option value="en" {% if sesion.language == 'en' %}selected{% endif %}>English</option>
-          <option value="pt" {% if sesion.language == 'pt' %}selected{% endif %}>Português</option>
+        <div class="form-row form-row-two">
+          <div>
+            <label>Número visible</label>
+            <input type="text" value="{{ config_meta.display_phone_number|default:'—' }}" readonly>
+          </div>
+          <div>
+            <label>Nombre verificado</label>
+            <input type="text" value="{{ config_meta.verified_name|default:'—' }}" readonly>
+          </div>
+        </div>
+
+        <div class="form-row form-row-two">
+          <div>
+            <label>Quality rating</label>
+            <input type="text" value="{{ config_meta.get_quality_rating_display }}" readonly
+                   class="conex-rating-{{ config_meta.quality_rating|lower }}">
+          </div>
+          <div>
+            <label>Tier mensajería</label>
+            <input type="text" value="{% if config_meta.messaging_limit_tier %}{{ config_meta.get_messaging_limit_tier_display }}{% else %}—{% endif %}" readonly>
+          </div>
+        </div>
+
+        <div class="form-row form-row-two">
+          <div>
+            <label>Webhook verificado</label>
+            <input type="text" value="{% if config_meta.webhook_verificado_en %}{{ config_meta.webhook_verificado_en|date:'d/m/Y H:i' }}{% else %}— pendiente —{% endif %}" readonly>
+          </div>
+          <div>
+            <label>Última sincronización</label>
+            <input type="text" value="{% if config_meta.ultima_sincronizacion %}{{ config_meta.ultima_sincronizacion|date:'d/m/Y H:i' }}{% else %}—{% endif %}" readonly>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Verify token <small class="muted">(se usa para validar el webhook con Meta)</small></label>
+          <input type="text" name="webhook_verify_token" value="{{ config_meta.webhook_verify_token|default:'' }}"
+                 placeholder="(autogenerado al crear la sesión)" readonly>
+        </div>
+
+        <div class="conex-data-actions">
+          <button type="button" class="conex-btn conex-btn-light btn-sm" id="btn-resync-meta"
+                  data-pk="{{ sesion.id }}" title="Vuelve a consultar Graph API y refresca display_phone, quality y tier.">
+            <i class="fa fa-rotate me-1"></i> Resincronizar con Meta
+          </button>
+          <a href="https://business.facebook.com/wa/manage/phone-numbers/?business_id={{ config_meta.waba_id }}"
+             target="_blank" rel="noopener" class="conex-btn conex-btn-light btn-sm">
+            <i class="fa fa-external-link me-1"></i> Abrir en Meta Business
+          </a>
+        </div>
+      </div>
+
+    {% elif sesion.es_baileys %}
+      <div class="conex-data-block">
+        <div class="conex-data-head">
+          <i class="fa fa-mobile text-success me-1"></i>
+          <span>Datos de WhatsApp Web (Baileys)</span>
+          <span class="conex-data-pill conex-data-pill-readonly">solo lectura</span>
+        </div>
+
+        <div class="form-row form-row-two">
+          <div>
+            <label>Número</label>
+            <input type="text" value="{{ sesion.numero|default:'—' }}" readonly>
+          </div>
+          <div>
+            <label>WhatsApp ID</label>
+            <input type="text" value="{{ sesion.whatsapp_id|default:'—' }}" readonly>
+          </div>
+        </div>
+
+        <div class="form-row form-row-two">
+          <div>
+            <label>Estado</label>
+            <input type="text" value="{{ sesion.get_estado_display }}" readonly>
+          </div>
+          <div>
+            <label>Contactos sincronizados</label>
+            <input type="text" value="{{ sesion.contacts_length|default:0 }}" readonly>
+          </div>
+        </div>
+
+        {% if sesion.desconectado_manualmente %}
+          <div class="conex-data-warn">
+            <i class="fa fa-triangle-exclamation me-1"></i>
+            Esta sesión fue desconectada manualmente. Reconectá desde el botón "Reconectar" del listado.
+          </div>
+        {% endif %}
+      </div>
+
+    {% elif sesion.es_instagram and config_instagram %}
+      <div class="conex-data-block">
+        <div class="conex-data-head">
+          <i class="fa-brands fa-instagram me-1" style="color:#e1306c"></i>
+          <span>Datos de Instagram Graph API</span>
+          <span class="conex-data-pill conex-data-pill-readonly">solo lectura</span>
+        </div>
+
+        <div class="form-row form-row-two">
+          <div>
+            <label>IG User ID</label>
+            <input type="text" value="{{ config_instagram.ig_user_id|default:'—' }}" readonly>
+          </div>
+          <div>
+            <label>Username</label>
+            <input type="text" value="@{{ config_instagram.username|default:'?' }}" readonly>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Última sincronización</label>
+          <input type="text" value="{% if config_instagram.ultima_sincronizacion %}{{ config_instagram.ultima_sincronizacion|date:'d/m/Y H:i' }}{% else %}—{% endif %}" readonly>
+        </div>
+      </div>
+
+    {% elif sesion.es_messenger and config_messenger %}
+      <div class="conex-data-block">
+        <div class="conex-data-head">
+          <i class="fa-brands fa-facebook-messenger me-1 text-primary"></i>
+          <span>Datos de Facebook Messenger</span>
+          <span class="conex-data-pill conex-data-pill-readonly">solo lectura</span>
+        </div>
+
+        <div class="form-row form-row-two">
+          <div>
+            <label>Page ID</label>
+            <input type="text" value="{{ config_messenger.page_id|default:'—' }}" readonly>
+          </div>
+          <div>
+            <label>Nombre de página</label>
+            <input type="text" value="{{ config_messenger.page_name|default:'—' }}" readonly>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Última sincronización</label>
+          <input type="text" value="{% if config_messenger.ultima_sincronizacion %}{{ config_messenger.ultima_sincronizacion|date:'d/m/Y H:i' }}{% else %}—{% endif %}" readonly>
+        </div>
+      </div>
+    {% endif %}
+
+    {# ════════════════════════════════════════════════════════════════
+       SECCIÓN 2: Configuración editable de la sesión
+       ═══════════════════════════════════════════════════════════════ #}
+    <div class="conex-data-block">
+      <div class="conex-data-head">
+        <i class="fa fa-pen text-primary me-1"></i>
+        <span>Configuración de la sesión</span>
+        <span class="conex-data-pill conex-data-pill-edit">editable</span>
+      </div>
+
+      <div class="form-row">
+        <label>Nombre interno</label>
+        <input type="text" name="nombre" value="{{ sesion.nombre|default:'' }}" required
+               placeholder="ej. Soporte tienda">
+      </div>
+
+      <div class="form-row">
+        <label>Modo del bot</label>
+        <select name="modo_bot">
+          <option value="ninguno"     {% if sesion.modo_bot == 'ninguno' %}selected{% endif %}>Sin bot (solo humanos)</option>
+          <option value="tradicional" {% if sesion.modo_bot == 'tradicional' %}selected{% endif %}>Chatbot tradicional</option>
+          <option value="ia"          {% if sesion.modo_bot == 'ia' %}selected{% endif %}>Agente IA</option>
+          <option value="hibrido"     {% if sesion.modo_bot == 'hibrido' %}selected{% endif %}>Híbrido tradicional → IA</option>
         </select>
       </div>
-      <div>
-        <label>Zona horaria</label>
-        <input type="text" name="zona_horaria" value="{{ sesion.zona_horaria }}" placeholder="America/Guayaquil">
+
+      <div class="form-row">
+        <label>Agente IA</label>
+        <select name="agente_ia">
+          <option value="">— Sin agente —</option>
+          {% for a in agentes_disponibles %}
+            <option value="{{ a.id }}" {% if sesion.agente_ia_id == a.id %}selected{% endif %}>{{ a.nombre }}</option>
+          {% endfor %}
+        </select>
       </div>
-    </div>
 
-    <div class="form-row">
-      <label>Mensaje de bienvenida</label>
-      <textarea name="mensaje_bienvenida" rows="2" placeholder="Hola 👋, gracias por escribirnos...">{{ sesion.mensaje_bienvenida|default:'' }}</textarea>
-    </div>
+      <div class="form-row form-row-two">
+        <div>
+          <label>Idioma</label>
+          <select name="language">
+            <option value="es" {% if sesion.language == 'es' %}selected{% endif %}>Español</option>
+            <option value="en" {% if sesion.language == 'en' %}selected{% endif %}>English</option>
+            <option value="pt" {% if sesion.language == 'pt' %}selected{% endif %}>Português</option>
+          </select>
+        </div>
+        <div>
+          <label>Zona horaria</label>
+          <input type="text" name="zona_horaria" value="{{ sesion.zona_horaria }}" placeholder="America/Guayaquil">
+        </div>
+      </div>
 
-    <div class="form-row">
-      <label>Mensaje de despedida</label>
-      <textarea name="mensaje_despedida" rows="2" placeholder="Cerramos esta conversación. ¡Vuelve pronto!">{{ sesion.mensaje_despedida|default:'' }}</textarea>
-    </div>
+      <div class="form-row">
+        <label>Mensaje de bienvenida</label>
+        <textarea name="mensaje_bienvenida" rows="2" placeholder="Hola 👋, gracias por escribirnos...">{{ sesion.mensaje_bienvenida|default:'' }}</textarea>
+      </div>
 
-    <div class="form-row">
-      <label>Mensaje al transferir a humano</label>
-      <textarea name="mensaje_handoff" rows="2" placeholder="Te conectamos con un asesor...">{{ sesion.mensaje_handoff|default:'' }}</textarea>
+      <div class="form-row">
+        <label>Mensaje de despedida</label>
+        <textarea name="mensaje_despedida" rows="2" placeholder="Cerramos esta conversación. ¡Vuelve pronto!">{{ sesion.mensaje_despedida|default:'' }}</textarea>
+      </div>
+
+      <div class="form-row">
+        <label>Mensaje al transferir a humano</label>
+        <textarea name="mensaje_handoff" rows="2" placeholder="Te conectamos con un asesor...">{{ sesion.mensaje_handoff|default:'' }}</textarea>
+      </div>
     </div>
 
     <div class="detail-actions">
@@ -76,3 +261,43 @@
     </div>
   </form>
 </div>
+
+<script>
+(function() {
+  // Resincronizar con Meta — ataca la accion `meta_validar` que ya existe.
+  const $btn = document.getElementById('btn-resync-meta');
+  if (!$btn) return;
+  $btn.addEventListener('click', function() {
+    const pk = $btn.dataset.pk;
+    if (!pk) return;
+    const orig = $btn.innerHTML;
+    $btn.disabled = true;
+    $btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Sincronizando...';
+    const fd = new FormData();
+    fd.append('action', 'meta_validar');
+    fd.append('id', pk);
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+    fetch(window.location.pathname, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => r.json())
+      .then(data => {
+        $btn.disabled = false;
+        $btn.innerHTML = orig;
+        if (data && (data.error === false || data.ok)) {
+          if (window.Swal) {
+            Swal.fire({ icon: 'success', title: 'Sincronizado', text: data.message || 'Datos actualizados desde Meta.', timer: 1800, showConfirmButton: false });
+          }
+          // Recargamos el modal para mostrar los nuevos valores.
+          setTimeout(() => location.reload(), 800);
+        } else {
+          alert((data && data.message) || 'No se pudo sincronizar.');
+        }
+      })
+      .catch(() => {
+        $btn.disabled = false;
+        $btn.innerHTML = orig;
+        alert('Error de red al sincronizar.');
+      });
+  });
+})();
+</script>
