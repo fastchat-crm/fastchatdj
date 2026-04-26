@@ -8,7 +8,7 @@ from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.utils import timezone
 
-from core.constantes import PROMPT_TEMPLATES
+from core.constantes import PROMPT_TEMPLATES, PERSONALIDAD_PRESETS, PERSONALIDAD_PRESET_CHOICES
 from core.custom_models import ModeloBase
 from autenticacion.models import Usuario
 from core.validadores import FileMaxSizeInMbValidator
@@ -180,7 +180,11 @@ class AgentesIA(ModeloBase):
     perfil = models.ForeignKey(PerfilNegocioIA, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Perfil Negocio IA')
     apikey = models.ManyToManyField('ApiKeyIA', blank=True, verbose_name='Api Keys IA')
     nombre = models.CharField(max_length=255, verbose_name="Nombre de agente")
-    descripcion = models.TextField(verbose_name="Descripcion del agente")
+    # `descripcion` quedó deprecado al introducir `personalidad_preset`: la
+    # personalidad cubre cómo escribe y el contexto_estatico cubre qué sabe.
+    # Se conserva null/blank para no romper registros viejos; el agente lo
+    # autocompleta a partir del nombre cuando hace falta (ver agente_consultor).
+    descripcion = models.TextField(blank=True, null=True, verbose_name="Descripcion del agente (deprecado)")
     vectorstore_path = models.CharField(
         max_length=1000, blank=True, null=True, verbose_name="Ruta del vector store generado"
     )
@@ -253,6 +257,14 @@ class AgentesIA(ModeloBase):
     )
 
     # ── Persona del bot (humanización) ─────────────────────────────────────
+    # Preset que rellena de un click los 5 campos siguientes. Si el usuario
+    # quiere control total elige 'personalizado' y los edita a mano.
+    personalidad_preset = models.CharField(
+        max_length=30, choices=PERSONALIDAD_PRESET_CHOICES, default='amable',
+        verbose_name='Personalidad del bot',
+        help_text='Elegí un preset y se autocompletan nombre, personalidad, tono, '
+                  'estilo y creatividad. Para control total elegí "Personalizado".'
+    )
     nombre_bot = models.CharField(
         max_length=80, default='Asistente', verbose_name='Nombre del bot',
         help_text='Nombre con el que se presenta el bot. Ej: "Cami", "Mateo", "Sofía".'
@@ -336,6 +348,70 @@ class AgentesIA(ModeloBase):
     class Meta:
         verbose_name = 'Respuesta Entrenada IA'
         verbose_name_plural = 'Respuestas Entrenadas IA'
+
+    def aplicar_preset_personalidad(self, forzar: bool = False) -> bool:
+        """Si `personalidad_preset` no es 'personalizado', autocompleta los
+        5 campos de persona desde `PERSONALIDAD_PRESETS`.
+
+        - `forzar=False` (default): sólo rellena lo que esté vacío. Así un
+          usuario que ya tipeó algo manualmente no pierde su trabajo.
+        - `forzar=True`: pisa los 5 campos con los del preset (útil cuando
+          el usuario cambia explícitamente de preset y quiere reset).
+
+        Retorna True si modificó algo, False si no.
+        """
+        preset_key = self.personalidad_preset or 'personalizado'
+        if preset_key == 'personalizado':
+            return False
+        preset = PERSONALIDAD_PRESETS.get(preset_key)
+        if not preset:
+            return False
+        cambio = False
+        mapeo = (
+            ('nombre_bot', preset.get('nombre_bot')),
+            ('personalidad', preset.get('personalidad')),
+            ('tono', preset.get('tono')),
+            ('estilo_escritura', preset.get('estilo_escritura')),
+        )
+        for campo, valor_preset in mapeo:
+            if valor_preset is None:
+                continue
+            actual = getattr(self, campo, None)
+            if forzar or not actual or (isinstance(actual, str) and not actual.strip()):
+                setattr(self, campo, valor_preset)
+                cambio = True
+        # temperature es DecimalField — convertir desde string del preset
+        temp_preset = preset.get('temperature')
+        if temp_preset is not None:
+            try:
+                nuevo = Decimal(str(temp_preset))
+                if forzar or self.temperature in (None, Decimal('0'), Decimal('0.00')):
+                    if self.temperature != nuevo:
+                        self.temperature = nuevo
+                        cambio = True
+            except Exception:
+                pass
+        return cambio
+
+    def save(self, *args, **kwargs):
+        # Detectar cambio de preset para forzar reset de los 5 campos.
+        forzar_reset = False
+        if self.pk:
+            try:
+                anterior = AgentesIA.objects.only('personalidad_preset').get(pk=self.pk)
+                if anterior.personalidad_preset != self.personalidad_preset:
+                    forzar_reset = True
+            except AgentesIA.DoesNotExist:
+                forzar_reset = True
+        else:
+            forzar_reset = True
+        self.aplicar_preset_personalidad(forzar=forzar_reset)
+        # `descripcion` quedó deprecado (UI lo sacó), pero el prompt aún la
+        # referencia como `{descripcion_agente}`. Si quedó vacía, autorrelleno
+        # desde el nombre para que el LLM tenga algo coherente que decir.
+        if not (self.descripcion or '').strip():
+            self.descripcion = f'Agente {self.nombre or ""} listo para atender clientes por WhatsApp.'.strip()
+        super().save(*args, **kwargs)
 
     def requiere_tools(self) -> bool:
         """True si el agente necesita el loop tool-calling del consultor.

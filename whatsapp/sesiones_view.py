@@ -394,10 +394,9 @@ def sesionesView(request):
     data['criterio'] = criterio
 
     # Flag para mostrar/esconder el boton "Continuar" del panel WhatsApp
-    from django.conf import settings
-    from .common_meta import get_meta_app_credentials
+    from .common_meta import get_meta_app_credentials, get_meta_config_id
     _app_id, _app_secret = get_meta_app_credentials()
-    data['meta_oauth_listo'] = bool(_app_id and _app_secret and settings.META_CONFIG_ID)
+    data['meta_oauth_listo'] = bool(_app_id and _app_secret and get_meta_config_id())
 
     # Canales activos: controlan visibilidad del sidebar + paneles del modal
     # "Agregar conexion". Se administran en /seguridad/configuracion/.

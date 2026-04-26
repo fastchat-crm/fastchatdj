@@ -520,6 +520,27 @@
     </div>
     {# Modal compartido para asignar la conversacion seleccionada a un pipeline #}
     {% include 'whatsapp/conversaciones/_modal_asignar_pipeline.html' %}
+
+    {# Modal: no hay sesiones de WhatsApp configuradas #}
+    <div class="modal fade" id="modalSinSesiones" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center py-4 px-4">
+                    <div class="mb-3">
+                        <i class="fa fa-satellite-dish fa-3x text-primary"></i>
+                    </div>
+                    <h5 class="mb-2">Aún no hay sesiones de WhatsApp</h5>
+                    <p class="text-muted mb-4">
+                        Para ver conversaciones primero necesitás conectar al menos
+                        un canal (WhatsApp, Instagram o Messenger).
+                    </p>
+                    <a href="/whatsapp/sesiones/" class="btn btn-primary">
+                        <i class="fa fa-plus me-1"></i> Crear o conectar una sesión
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block jscript %}
@@ -684,10 +705,15 @@
         }
 
         function sessionWebSocket(sessionId, filtro = '') {
-            const wsUrl = `${wsProtocol}//${window.location.host}/ws/sessionroom/${sessionId}/`;
             if (sessionSocket){
                 sessionSocket.close();
+                sessionSocket = null;
             }
+            if (!sessionId || isNaN(parseInt(sessionId, 10))) {
+                console.warn('sessionWebSocket: sin sessionId válido — no abro WS.');
+                return;
+            }
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/sessionroom/${sessionId}/`;
             sessionSocket = new ReconnectingWebSocket(wsUrl, null, {reconnectInterval: 1500});
 
             sessionSocket.onopen = function(e) {
@@ -723,7 +749,16 @@
             cargarConversaciones(sessionId, '', filtro);
         }
 
-        sessionWebSocket($('#sesion-selector').val(), filtroActivo);
+        // Mostrar modal si no hay sesiones disponibles.
+        const _sesionInicialId = $('#sesion-selector').val();
+        if (!_sesionInicialId || isNaN(parseInt(_sesionInicialId, 10))) {
+            const modalSinSesionesEl = document.getElementById('modalSinSesiones');
+            if (modalSinSesionesEl) {
+                new bootstrap.Modal(modalSinSesionesEl, {backdrop: 'static', keyboard: false}).show();
+            }
+        } else {
+            sessionWebSocket(_sesionInicialId, filtroActivo);
+        }
 
         function scrollToBottom(smooth = false) {
             const cw = document.getElementById('chat-messages')?.querySelector('.simplebar-content-wrapper');

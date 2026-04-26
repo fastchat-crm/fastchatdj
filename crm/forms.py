@@ -188,11 +188,12 @@ class AgentesIAForm(ModelFormBase):
         # NOTA: `modelo` ya NO está aquí — ahora vive en ApiKeyIA (diferentes
         # providers por key, cada uno con sus propios modelos).
         fields = (
-            'nombre', 'descripcion', 'apikey', 'prompt_template', 'anotar_listas',
+            'nombre', 'apikey', 'prompt_template', 'anotar_listas',
             'cfg_faiss_k', 'cfg_faiss_fetch_k', 'cfg_max_context_chars', 'cfg_max_static_chars',
             'cfg_history_turns', 'cfg_user_snippet', 'cfg_ai_snippet',
             'cfg_max_output_tokens', 'cfg_topic_anchor_chars',
-            # Humanizacion (persona + estilo + timing)
+            # Humanizacion (preset + persona + estilo + timing)
+            'personalidad_preset',
             'nombre_bot', 'personalidad', 'tono', 'estilo_escritura', 'temperature',
             'humanizar_timing',
             'humaniz_chars_burbuja_ideal', 'humaniz_chars_burbuja_max', 'humaniz_max_burbujas',
@@ -228,8 +229,6 @@ class AgentesIAForm(ModelFormBase):
         for k, v in self.fields.items():
             self.fields[k].widget.attrs['class'] = 'form-control'
             self.fields[k].widget.attrs['col'] = '12'
-            if k in ('descripcion',):
-                self.fields[k].widget.attrs['col'] = '12'
             if k in ('apikey', 'tono'):
                 self.fields[k].widget.attrs['class'] = 'select2'
             if k in _SWITCH_FIELDS:
@@ -257,6 +256,11 @@ class AgentesIAForm(ModelFormBase):
                 self.fields[k].widget.attrs['col']  = '12'
             if k in ('nombre_bot',):
                 self.fields[k].widget.attrs['col'] = '6'
+            if k == 'personalidad_preset':
+                # El preset se elige clickeando una card visual; el <select>
+                # lo dejamos visible como fallback accesible y para form post.
+                self.fields[k].widget.attrs['class'] = 'form-select form-select-sm personalidad-preset-select'
+                self.fields[k].widget.attrs['col'] = '12'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 

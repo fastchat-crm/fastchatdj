@@ -258,6 +258,13 @@ class CredencialMetaApp(ModeloBase):
         verbose_name='Meta App Secret',
         help_text='Secret de la App. Se guarda cifrado.'
     )
+    config_id = models.CharField(
+        max_length=50, blank=True, default='',
+        verbose_name='Embedded Signup Config ID',
+        help_text='Configuration ID del Embedded Signup de WhatsApp Business '
+                  '(Meta for Developers → Whatsapp → Configuration). Necesario '
+                  'para el flow de conexion guiada.'
+    )
     business_id = models.CharField(
         max_length=50, blank=True, default='',
         verbose_name='Business Manager ID',

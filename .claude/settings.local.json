@@ -51,7 +51,12 @@
       "Bash(git add *)",
       "Bash(git status *)",
       "Bash(git check-ignore *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(pdftotext -layout docs/kommo/KOMMO.pdf docs/kommo/KOMMO.txt)",
+      "Bash(pdftotext -layout docs/kommo/ROTS.pdf docs/kommo/ROTS.txt)",
+      "Bash(pdfinfo docs/kommo/KOMMO.pdf)",
+      "Bash(pdfinfo docs/kommo/ROTS.pdf)",
+      "Bash(awk 'NR==206,NR==410' seguridad/view_credencial_meta.py)"
     ]
   },
   "hooks": {

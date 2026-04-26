@@ -1215,19 +1215,23 @@ def entrenamiento_ia_view(request):
                 data["action"] = action = request.GET['action']
                 if action == 'addagente':
                     try:
+                        from core.constantes import PERSONALIDAD_PRESETS
                         form = AgentesIAForm()
                         form.fields['apikey'].queryset = ApiKeyIA.objects.filter(perfil=perfil, status=True)
                         data["form"] = form
+                        data["personalidad_presets"] = PERSONALIDAD_PRESETS
                         template = get_template("crm/entrenamiento/agente/form.html")
                         return JsonResponse({"result": True, 'data': template.render(data)})
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})
                 elif action == 'changeagente':
                     try:
+                        from core.constantes import PERSONALIDAD_PRESETS
                         pk = int(request.GET['id'])
                         filtro = AgentesIA.objects.get(pk=pk)
                         data["filtro"] = filtro
                         data["form"] = form = AgentesIAForm(instance=filtro)
+                        data["personalidad_presets"] = PERSONALIDAD_PRESETS
                         form.fields['apikey'].queryset = ApiKeyIA.objects.filter(perfil=perfil, status=True)
                         data['detalles_existentes'] = filtro.obtener_detalles_agente()
                         data['regla_fin'] = getattr(filtro, 'regla_fin', None)

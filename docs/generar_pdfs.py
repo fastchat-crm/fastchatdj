@@ -93,7 +93,7 @@ URLS_POR_MODULO = [
             ('Panel principal',          '/panel/',           'Dashboard de inicio'),
             ('Notificaciones',           '/notificaciones/',  'Centro de notificaciones del usuario'),
             ('Mi perfil',                '/perfilpanel/',     'Editar datos del usuario actual'),
-            ('Documentación',            '/docs/',            'Visor interno de documentación MD'),
+            ('Documentación',            '/seguridad/documentacion/', 'Visor interno de documentación'),
         ],
     },
     {

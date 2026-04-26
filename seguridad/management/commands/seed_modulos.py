@@ -66,9 +66,10 @@ SECCIONES = [
         'icono':     'fa fa-robot',
         'prioridad': 40,
         'modulos': [
-            ('/crm/entrenamiento/',          'Entrenamiento IA',   10),
-            ('/crm/departamentos_chatbots/', 'Flujos chatbot',     20),
-            ('/whatsapp/trazas/',            'Trazas IA',          30),
+            ('/crm/entrenamiento/',          'Entrenamiento IA',          10),
+            ('/crm/entrenamiento/wizard/',   'Crear agente (rapido)',     15),
+            ('/crm/departamentos_chatbots/', 'Flujos chatbot',            20),
+            ('/whatsapp/trazas/',            'Trazas IA',                 30),
         ],
     },
     {
@@ -117,6 +118,14 @@ SECCIONES = [
             ('/seguridad/configuracion/',        'Configuracion del sitio', 10),
             ('/seguridad/credencial-meta/',      'Credenciales Meta',       20),
             ('/seguridad/terminosycondiciones/', 'Terminos y condiciones',  30),
+        ],
+    },
+    {
+        'nombre':    'Documentacion',
+        'icono':     'fa fa-book',
+        'prioridad': 95,
+        'modulos': [
+            ('/seguridad/documentacion/', 'Documentacion general', 10),
         ],
     },
     {

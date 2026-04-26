@@ -108,16 +108,6 @@
                 <div class="invalid-feedback" id="errorMessagenombre"></div>
             </div>
             <div class="col-12 mt-2">
-                <label class="form-label small fw-semibold mb-1">{{ form.descripcion.label }}</label>
-                {{ form.descripcion }}
-                <div class="form-text">
-                    Describe en 1-2 oraciones qué puede hacer este agente. El agente usará esta descripción
-                    cuando alguien le pregunte "¿en qué me puedes ayudar?".
-                    Ej: <em>Soy el asistente virtual de la empresa X. Puedo responder preguntas sobre nuestros productos, precios y horarios de atención.</em>
-                </div>
-                <div class="invalid-feedback" id="errorMessagedescripcion"></div>
-            </div>
-            <div class="col-12 mt-2">
                 <p class="section-header mt-2">API Key</p>
                 <div class="guide-callout">
                     <i class="fas fa-key me-1"></i>
@@ -137,47 +127,82 @@
                 </div>
             </div>
 
-            {# ── Persona del bot (humanizacion nivel persona) ──────────── #}
+            {# ── Persona del bot — preset visual + manual avanzado ──────── #}
             <div class="col-12 mt-3">
                 <p class="section-header mt-2">
-                    <i class="fas fa-comment-dots me-1 text-primary"></i>Persona del bot
+                    <i class="fas fa-comment-dots me-1 text-primary"></i>Personalidad del bot
                 </p>
                 <p class="small text-muted mb-2">
-                    Estos campos se inyectan en el prompt del sistema como <strong>variables reemplazables</strong>
-                    (<code>{nombre_bot}</code>, <code>{personalidad}</code>, <code>{tono}</code>, <code>{estilo_escritura}</code>).
-                    El usuario final los percibe como "quien es" el bot.
+                    Elegí cómo querés que escriba tu agente. Cada preset llena de un click el nombre,
+                    personalidad, tono, estilo y creatividad. ¿Querés ajustar algo a mano? Elegí
+                    <em>Personalizado</em>.
                 </p>
             </div>
-            <div class="col-12 col-md-6">
-                <label class="form-label small fw-semibold mb-1">{{ form.nombre_bot.label }}</label>
-                {{ form.nombre_bot }}
-                <div class="form-text small">Nombre con el que se presenta. Sugerido: cortos y neutros (Cami, Mateo, Sofia).</div>
-            </div>
-            <div class="col-12 col-md-6">
-                <label class="form-label small fw-semibold mb-1">{{ form.tono.label }}</label>
-                {{ form.tono }}
-                <div class="form-text small">Registro general al escribir.</div>
-            </div>
+
+            {# ── Cards de presets ─────────────────────────────────────── #}
             <div class="col-12">
-                <label class="form-label small fw-semibold mb-1">{{ form.personalidad.label }}</label>
-                {{ form.personalidad }}
-                <div class="form-text small">
-                    Ej: <em>"Soy Cami, extrovertida, uso emojis con mesura, paciente con clientes nuevos, nunca prometo cosas que no puedo cumplir."</em>
+                <div class="row g-2 personalidad-presets-grid">
+                    {% for key, p in personalidad_presets.items %}
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <div class="personalidad-preset-card h-100"
+                             data-preset="{{ key }}"
+                             data-nombre-bot="{{ p.nombre_bot|default:'' }}"
+                             data-personalidad="{{ p.personalidad|default:''|escape }}"
+                             data-tono="{{ p.tono|default:'' }}"
+                             data-estilo="{{ p.estilo_escritura|default:''|escape }}"
+                             data-temp="{{ p.temperature|default:'' }}"
+                             style="--preset-color: {{ p.color|default:'#667eea' }}">
+                            <div class="ppc-icon"><i class="fas {{ p.icono|default:'fa-robot' }}"></i></div>
+                            <div class="ppc-name">{{ p.label }}</div>
+                            <div class="ppc-desc">{{ p.descripcion_corta }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div style="display:none">
+                    {{ form.personalidad_preset }}
                 </div>
             </div>
-            <div class="col-12">
-                <label class="form-label small fw-semibold mb-1">{{ form.estilo_escritura.label }}</label>
-                {{ form.estilo_escritura }}
-                <div class="form-text small">
-                    Reglas de <strong>forma</strong> (no contenido). Ej: <em>"Mensajes cortos 2-3 lineas, admito muletillas, emojis 0-2 por mensaje."</em>
+
+            {# ── Campos manuales — sólo visibles si preset == personalizado ── #}
+            <div class="col-12 mt-2 personalidad-manual-wrap" id="personalidadManualWrap">
+                <div class="guide-callout" style="background:#fff9db;border-left-color:#f59e0b">
+                    <i class="fas fa-sliders-h me-1"></i>
+                    Modo personalizado: configurás cada campo a mano. Estos valores reemplazan al preset.
                 </div>
-            </div>
-            <div class="col-12 col-md-6">
-                <label class="form-label small fw-semibold mb-1">{{ form.temperature.label }}</label>
-                {{ form.temperature }}
-                <div class="form-text small">
-                    <code>0.0</code> literal · <code>0.6</code> natural (default) · <code>0.9</code> creativo (riesgo de inventar).
-                    <strong>Rango recomendado 0.4–0.8.</strong>
+                <div class="row g-2">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small fw-semibold mb-1">{{ form.nombre_bot.label }}</label>
+                        {{ form.nombre_bot }}
+                        <div class="form-text small">Nombre con el que se presenta. Sugerido: cortos y neutros (Cami, Mateo, Sofia).</div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small fw-semibold mb-1">{{ form.tono.label }}</label>
+                        {{ form.tono }}
+                        <div class="form-text small">Registro general al escribir.</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-semibold mb-1">{{ form.personalidad.label }}</label>
+                        {{ form.personalidad }}
+                        <div class="form-text small">
+                            Ej: <em>"Soy Cami, extrovertida, uso emojis con mesura, paciente con clientes nuevos, nunca prometo cosas que no puedo cumplir."</em>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-semibold mb-1">{{ form.estilo_escritura.label }}</label>
+                        {{ form.estilo_escritura }}
+                        <div class="form-text small">
+                            Reglas de <strong>forma</strong> (no contenido). Ej: <em>"Mensajes cortos 2-3 lineas, admito muletillas, emojis 0-2 por mensaje."</em>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small fw-semibold mb-1">{{ form.temperature.label }}</label>
+                        {{ form.temperature }}
+                        <div class="form-text small">
+                            <code>0.0</code> literal · <code>0.75</code> natural (default) · <code>0.9</code> creativo (riesgo de inventar).
+                            <strong>Rango recomendado 0.4–0.9.</strong>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -269,7 +294,6 @@
                         <tr><td class="text-primary fw-semibold"><code>{personalidad}</code></td><td>Rasgos / caracter del bot</td></tr>
                         <tr><td class="text-primary fw-semibold"><code>{tono}</code></td><td>Registro (cercano, formal, etc)</td></tr>
                         <tr><td class="text-primary fw-semibold"><code>{estilo_escritura}</code></td><td>Reglas de forma (largo, emojis, muletillas)</td></tr>
-                        <tr><td class="text-primary fw-semibold"><code>{descripcion_agente}</code></td><td>Descripcion del agente (tab Persona)</td></tr>
                         <tr><td colspan="2" class="text-muted small fst-italic pt-2">— Negocio (perfil del cliente) —</td></tr>
                         <tr><td class="text-primary fw-semibold"><code>{nombre_empresa}</code></td><td>Empresa del cliente</td></tr>
                         <tr><td class="text-primary fw-semibold"><code>{productos}</code></td><td>Listado de productos configurados</td></tr>
@@ -1298,7 +1322,7 @@
        campo inválido y muestra un toast con los nombres de los campos. */
     (function() {
         const TAB_POR_CAMPO = {
-            nombre: '#at-basico', descripcion: '#at-basico', apikey: '#at-basico',
+            nombre: '#at-basico', apikey: '#at-basico',
             prompt_template: '#at-prompt',
             anotar_listas: '#at-conocimiento',
             cfg_faiss_k: '#at-comportamiento', cfg_faiss_fetch_k: '#at-comportamiento',
@@ -1756,3 +1780,62 @@
 })();
 </script>
 {% endif %}
+
+{# ── Presets de personalidad — cards clickeables + sync con select oculto ── #}
+<script>
+(function() {
+    const $select = $('select.personalidad-preset-select, [name="personalidad_preset"]').first();
+    const $cards = $('.personalidad-preset-card');
+    const $manualWrap = $('#personalidadManualWrap');
+
+    if (!$select.length || !$cards.length) return;
+
+    function actualizarVisibilidadManual(preset) {
+        const esPersonalizado = (preset === 'personalizado');
+        $manualWrap.toggleClass('is-hidden', !esPersonalizado);
+    }
+
+    function marcarSeleccionada(preset) {
+        $cards.removeClass('is-selected');
+        $cards.filter(`[data-preset="${preset}"]`).addClass('is-selected');
+    }
+
+    function aplicarPresetEnUI($card) {
+        // Llena los campos manuales con los valores del preset (preview vivo).
+        // Si después el usuario cambia a "personalizado" mantiene lo que ya copió.
+        const nb  = $card.data('nombre-bot') || '';
+        const per = $card.data('personalidad') || '';
+        const ton = $card.data('tono') || '';
+        const est = $card.data('estilo') || '';
+        const tmp = $card.data('temp') || '';
+        if (nb)  $('#id_nombre_bot').val(nb);
+        if (per) $('#id_personalidad').val(per);
+        if (ton) $('#id_tono').val(ton).trigger('change');
+        if (est) $('#id_estilo_escritura').val(est);
+        if (tmp) $('#id_temperature').val(tmp);
+    }
+
+    $cards.on('click', function() {
+        const $card = $(this);
+        const preset = $card.data('preset');
+        $select.val(preset).trigger('change');
+        marcarSeleccionada(preset);
+        if (preset !== 'personalizado') {
+            aplicarPresetEnUI($card);
+        }
+        actualizarVisibilidadManual(preset);
+    });
+
+    $select.on('change', function() {
+        const preset = $(this).val();
+        marcarSeleccionada(preset);
+        actualizarVisibilidadManual(preset);
+    });
+
+    // Estado inicial al renderizar el form (edición de agente existente o
+    // creación con default 'amable').
+    const presetActual = $select.val() || 'amable';
+    marcarSeleccionada(presetActual);
+    actualizarVisibilidadManual(presetActual);
+})();
+</script>

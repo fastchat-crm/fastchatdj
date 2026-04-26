@@ -322,17 +322,38 @@ class AgenteConsultor:
         self.cfg_max_output_tokens = _cfg('cfg_max_output_tokens', _MAX_OUTPUT_TOKENS)
         self.cfg_topic_anchor_chars = _cfg('cfg_topic_anchor_chars', _TOPIC_ANCHOR_CHARS)
 
-        # Persona del bot — si el agente no tiene los campos (agentes viejos), defaults neutros
-        self.cfg_nombre_bot       = _cfg('nombre_bot', 'Asistente')
-        self.cfg_personalidad     = _cfg('personalidad', '')
-        self.cfg_tono             = _cfg('tono', 'amigable')
-        self.cfg_estilo_escritura = _cfg('estilo_escritura', '')
-        # temperature — DecimalField, convertir a float para el provider
-        _temp_raw = _cfg('temperature', None)
+        # Persona del bot — si el agente no tiene los campos (agentes viejos), defaults neutros.
+        # Si el agente tiene un `personalidad_preset` distinto de 'personalizado',
+        # los valores del preset mandan sobre los campos manuales (red de seguridad
+        # en runtime para agentes guardados antes del preset o que se editaron por admin).
+        _preset_key = _cfg('personalidad_preset', 'personalizado')
+        _preset = None
+        if _preset_key and _preset_key != 'personalizado':
+            try:
+                from core.constantes import PERSONALIDAD_PRESETS
+                _preset = PERSONALIDAD_PRESETS.get(_preset_key)
+            except Exception:
+                _preset = None
+
+        def _persona(campo, default):
+            if _preset and _preset.get(campo):
+                return _preset[campo]
+            return _cfg(campo, default)
+
+        self.cfg_nombre_bot       = _persona('nombre_bot', 'Asistente')
+        self.cfg_personalidad     = _persona('personalidad', '')
+        self.cfg_tono             = _persona('tono', 'amigable')
+        self.cfg_estilo_escritura = _persona('estilo_escritura', '')
+        # temperature — DecimalField, convertir a float para el provider.
+        # Default subido a 0.75 para variabilidad humana sin alucinaciones.
+        if _preset and _preset.get('temperature') is not None:
+            _temp_raw = _preset['temperature']
+        else:
+            _temp_raw = _cfg('temperature', None)
         try:
-            self.cfg_temperature = float(_temp_raw) if _temp_raw is not None else 0.6
+            self.cfg_temperature = float(_temp_raw) if _temp_raw is not None else 0.75
         except (TypeError, ValueError):
-            self.cfg_temperature = 0.6
+            self.cfg_temperature = 0.75
 
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
@@ -390,7 +411,8 @@ class AgenteConsultor:
         return self._provider_obj.get_embeddings(self.apikey)
 
     def _get_llm(self):
-        # Temperature configurable por agente. 0.6 default = variación humana sin inventar datos.
+        # Temperature configurable por agente. Default 0.75 = humano natural.
+        # Cada preset puede pisar este valor (ej: formal=0.50, vendedor=0.90).
         return self._provider_obj.get_llm(
             apikey=self.apikey,
             model_name=self.model_name,

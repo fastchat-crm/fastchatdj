@@ -125,3 +125,63 @@
 @media (max-width: 991px) {
   .cm-guide { position: static; }
 }
+
+/* Resultado de auto-detección desde Meta. */
+.cm-detect-result {
+  font-size: .85rem;
+  line-height: 1.5;
+  border-radius: 6px;
+}
+.cm-detect-result code {
+  background: rgba(0, 0, 0, .06);
+  padding: .05em .35em;
+  border-radius: 3px;
+  font-size: .82em;
+}
+
+/* Toggle ojo en password inputs. */
+.cm-pwd-wrap input {
+  padding-right: 2.4rem;
+}
+.cm-pwd-toggle {
+  position: absolute;
+  right: .35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 4px;
+}
+.cm-pwd-toggle:hover { color: #2563eb; background: rgba(37, 99, 235, .08); }
+.cm-pwd-toggle:focus { outline: 1px solid #2563eb; outline-offset: 1px; }
+
+/* Modal validador. */
+.cm-val-list { display: flex; flex-direction: column; gap: .5rem; }
+.cm-val-item {
+  display: flex;
+  gap: .75rem;
+  padding: .65rem .8rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  align-items: flex-start;
+}
+.cm-val-item.is-ok      { border-left: 3px solid #16a34a; }
+.cm-val-item.is-warning { border-left: 3px solid #f59e0b; background: #fffbeb; }
+.cm-val-item.is-error   { border-left: 3px solid #dc2626; background: #fef2f2; }
+.cm-val-icon { font-size: 1.1rem; flex-shrink: 0; padding-top: 1px; }
+.cm-val-label { font-weight: 600; font-size: .9rem; color: #1f2937; }
+.cm-val-detail {
+  font-size: .8rem;
+  color: #4b5563;
+  margin-top: .15rem;
+  word-break: break-word;
+}

@@ -36,18 +36,15 @@ logger = logging.getLogger(__name__)
 
 # ---------- Helpers ----------
 
-def _graph(path: str) -> str:
-    return f'https://graph.facebook.com/{settings.META_API_VERSION}{path}'
-
-
-def _fb(path: str) -> str:
-    return f'https://www.facebook.com/{settings.META_API_VERSION}{path}'
+# Helpers de URL ahora viven en `meta.urls`. Mantenemos los nombres viejos
+# como aliases finos para minimizar el diff en este archivo grande.
+from meta.urls import build_graph_url as _graph, build_fb_url as _fb
 
 
 def _creds_listas() -> bool:
-    from .common_meta import get_meta_app_credentials
+    from .common_meta import get_meta_app_credentials, get_meta_config_id
     app_id, app_secret = get_meta_app_credentials()
-    return bool(app_id and app_secret and settings.META_CONFIG_ID)
+    return bool(app_id and app_secret and get_meta_config_id())
 
 
 def _creds_meta():
@@ -84,7 +81,7 @@ def meta_oauth_start(request):
     if not _creds_listas():
         return _popup_html({
             'ok': False,
-            'error': 'Faltan credenciales META (registra en Configuración → Credenciales Meta App, o setea META_APP_ID / META_APP_SECRET / META_CONFIG_ID).',
+            'error': 'Faltan credenciales Meta. Registralas en Configuración → Credenciales Meta App (App ID, App Secret y Embedded Signup Config ID).',
         })
 
     state = secrets.token_urlsafe(24)
@@ -103,11 +100,12 @@ def meta_oauth_start(request):
         'featureType': 'whatsapp_business_app_onboarding',
     }
 
+    from .common_meta import get_meta_config_id
     app_id, _app_secret = _creds_meta()
     params = {
         'app_id':        app_id,
         'client_id':     app_id,
-        'config_id':     settings.META_CONFIG_ID,
+        'config_id':     get_meta_config_id(),
         'display':       'popup',
         'response_type': 'code',
         'redirect_uri':  redirect_uri,

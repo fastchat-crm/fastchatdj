@@ -131,7 +131,7 @@
                         <li>System User con permiso <b>Admin</b> sobre la WABA.</li>
                     </ul>
 
-                    <a href="/whatsapp/docs/conectar-whatsapp-business/" class="cm-link-docs mt-3">
+                    <a href="/seguridad/documentacion/?pagina=conectar-whatsapp-business" class="cm-link-docs mt-3">
                         <i class="fa fa-book-open me-1"></i>
                         Ver guía completa de conexión paso a paso
                     </a>
@@ -180,10 +180,31 @@
                                 {% endfor %}
                             </div>
 
+                            <div class="cm-detect-result alert d-none mt-3 mb-0" id="cmDetectResult"></div>
+
                             <div class="row mt-3">
-                                <div class="col-12 d-flex gap-2">
+                                <div class="col-12 d-flex gap-2 flex-wrap">
                                     <a class="btn btn-outline-secondary btn-sm" href="{{ ruta }}">
                                         <i class="fa fa-window-close me-1"></i> Cancelar
+                                    </a>
+                                    <button type="button" id="cmAutoDetect" class="btn btn-outline-primary btn-sm">
+                                        <i class="fa fa-magic me-1"></i> Auto-detectar desde Meta
+                                    </button>
+                                    <button type="button" id="cmValidar" class="btn btn-outline-success btn-sm">
+                                        <i class="fa fa-circle-check me-1"></i> Validar credenciales
+                                    </button>
+                                    <a href="https://business.facebook.com/settings/system-users"
+                                       target="_blank" rel="noopener"
+                                       class="btn btn-outline-warning btn-sm">
+                                        <i class="fa fa-key me-1"></i> Generar System User Token
+                                    </a>
+                                    <a id="cmVerProyecto" target="_blank" rel="noopener"
+                                       class="btn btn-outline-info btn-sm d-none" href="#">
+                                        <i class="fa fa-up-right-from-square me-1"></i> Ver proyecto en Meta
+                                    </a>
+                                    <a id="cmVerBusiness" target="_blank" rel="noopener"
+                                       class="btn btn-outline-info btn-sm d-none" href="#">
+                                        <i class="fa fa-building me-1"></i> Ver Business
                                     </a>
                                     <button type="submit" id="submit" class="btn btn-success btn-sm">
                                         <i class="fa fa-save me-1"></i> Guardar credenciales
@@ -201,9 +222,232 @@
         </div>
 
     </div>
+
+    {# Modal del validador #}
+    <div class="modal fade" id="cmModalValidar" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title">
+                        <i class="fa fa-circle-check text-success me-2"></i>
+                        Validación de credenciales Meta
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body py-3" id="cmValidarBody">
+                    <div class="text-center text-muted py-4">
+                        <i class="fa fa-spinner fa-spin fa-2x mb-2"></i><br>
+                        Consultando Meta...
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block jscript %}
     <script src="/static/js/forms.js?version=1"></script>
     {% if form %}{{ form.media }}{% endif %}
+    {% if form %}
+    <script>
+        $(function () {
+            // Toggle ojo en campos secret.
+            ['id_app_secret', 'id_system_user_token'].forEach(function (id) {
+                const $input = $('#' + id);
+                if (!$input.length || $input.parent('.cm-pwd-wrap').length) return;
+                $input.wrap('<div class="cm-pwd-wrap position-relative"></div>');
+                const $eye = $('<button type="button" class="cm-pwd-toggle" tabindex="-1" aria-label="Mostrar/ocultar"><i class="fa fa-eye"></i></button>');
+                $input.after($eye);
+                $eye.on('click', function () {
+                    const isPwd = $input.attr('type') === 'password';
+                    $input.attr('type', isPwd ? 'text' : 'password');
+                    $eye.find('i').toggleClass('fa-eye fa-eye-slash');
+                });
+            });
+
+            const $btn = $('#cmAutoDetect');
+            const $result = $('#cmDetectResult');
+            const csrf = $('input[name=csrfmiddlewaretoken]').val();
+
+            function showResult(html, type) {
+                $result.removeClass('d-none alert-success alert-danger alert-info')
+                       .addClass('alert-' + type).html(html);
+            }
+
+            $btn.on('click', function () {
+                const appId = ($('#id_app_id').val() || '').trim();
+                const appSecret = ($('#id_app_secret').val() || '').trim();
+                const sysToken = ($('#id_system_user_token').val() || '').trim();
+
+                if (!appId) {
+                    Swal.fire('Falta App ID', 'Ingresa el Meta App ID antes de detectar.', 'warning');
+                    return;
+                }
+
+                const htmlOri = $btn.html();
+                $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Consultando Meta...');
+                $result.addClass('d-none');
+
+                $.post('{{ ruta }}', {
+                    csrfmiddlewaretoken: csrf,
+                    action: 'auto_detect',
+                    app_id: appId,
+                    app_secret: appSecret,
+                    system_user_token: sysToken
+                }).done(function (data) {
+                    $btn.prop('disabled', false).html(htmlOri);
+                    if (!Array.isArray(data)) data = [data];
+                    const v = data[0] || {};
+                    if (v.error) {
+                        showResult('<i class="fa fa-circle-xmark me-2"></i>' + (v.message || 'Error consultando Meta'), 'danger');
+                        return;
+                    }
+
+                    // Botones de "ver" abren la consola de Meta.
+                    const $verApp = $('#cmVerProyecto');
+                    if (appId) {
+                        $verApp.attr('href', 'https://developers.facebook.com/apps/' + appId + '/dashboard/').removeClass('d-none');
+                    } else {
+                        $verApp.addClass('d-none');
+                    }
+                    const $verBiz = $('#cmVerBusiness');
+                    if (v.business_id) {
+                        $verBiz.attr('href', 'https://business.facebook.com/settings/info?business_id=' + v.business_id).removeClass('d-none');
+                    } else {
+                        $verBiz.addClass('d-none');
+                    }
+
+                    let lineas = [];
+                    if (v.app_name) lineas.push('<b>App:</b> ' + v.app_name);
+                    if (v.business_id) {
+                        $('#id_business_id').val(v.business_id);
+                        lineas.push('<b>Business:</b> ' + (v.business_name || '') + ' <code>' + v.business_id + '</code>');
+                    }
+                    if (v.system_user_id) {
+                        $('#id_system_user_id').val(v.system_user_id);
+                        lineas.push('<b>System User:</b> <code>' + v.system_user_id + '</code>');
+                    }
+                    if (v.scopes && v.scopes.length) {
+                        lineas.push('<b>Scopes:</b> ' + v.scopes.map(function (s) {
+                            return '<code>' + s + '</code>';
+                        }).join(' '));
+                    }
+                    if (v.expires_at) {
+                        const fecha = v.expires_at > 0 ? new Date(v.expires_at * 1000).toLocaleDateString() : 'sin expiración';
+                        lineas.push('<b>Token expira:</b> ' + fecha);
+                    }
+                    // Embedded Signup config_id
+                    if (v.config_id) {
+                        $('#id_config_id').val(v.config_id);
+                        lineas.push('<b>Embedded Signup Config:</b> <code>' + v.config_id + '</code> (autoseleccionado)');
+                    } else if (v.config_options && v.config_options.length > 1) {
+                        const opts = v.config_options.map(function (o) {
+                            return '<option value="' + o.id + '">' + o.name + ' — ' + o.id + '</option>';
+                        }).join('');
+                        lineas.push(
+                            '<b>Embedded Signup Configs encontrados:</b> elegí uno: ' +
+                            '<select id="cmConfigPicker" class="form-select form-select-sm d-inline-block w-auto ms-2">' +
+                            '<option value="">-- elegir --</option>' + opts + '</select>'
+                        );
+                        // Bind para llenar #id_config_id al elegir
+                        setTimeout(function () {
+                            $('#cmConfigPicker').on('change', function () {
+                                $('#id_config_id').val($(this).val());
+                            });
+                        }, 50);
+                    }
+                    let extra = '';
+                    if (v.hint) {
+                        extra = '<br><i class="fa fa-lightbulb text-warning me-1"></i><small>' + v.hint + '</small>';
+                    }
+                    if (!lineas.length) {
+                        showResult('<i class="fa fa-info-circle me-2"></i>Meta validó las credenciales pero no devolvió campos detectables.' + extra, 'info');
+                        return;
+                    }
+                    showResult('<i class="fa fa-circle-check me-2"></i>Detectado:<br>' + lineas.join('<br>') + extra +
+                               '<br><small class="text-muted mt-1 d-block">Revisa los valores y pulsa "Guardar credenciales" para persistirlos.</small>', 'success');
+                }).fail(function () {
+                    $btn.prop('disabled', false).html(htmlOri);
+                    showResult('<i class="fa fa-circle-xmark me-2"></i>Error de conexión con el servidor.', 'danger');
+                });
+            });
+
+            // ───────── Validador con modal ─────────
+            const $btnVal = $('#cmValidar');
+            const modalEl = document.getElementById('cmModalValidar');
+            const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
+
+            function pintarChecks(payload) {
+                const $body = $('#cmValidarBody');
+                if (!payload || !payload.checks) {
+                    $body.html('<div class="alert alert-danger mb-0">' +
+                               '<i class="fa fa-circle-xmark me-2"></i>' +
+                               (payload && payload.message ? payload.message : 'Error desconocido') +
+                               '</div>');
+                    return;
+                }
+                const ok = payload.total_ok || 0;
+                const total = payload.total || payload.checks.length;
+                const pct = total ? Math.round((ok / total) * 100) : 0;
+                let html = '<div class="cm-val-resumen mb-3">' +
+                    '<div class="d-flex justify-content-between align-items-center mb-1">' +
+                    '<b>' + ok + ' de ' + total + ' verificaciones pasaron</b>' +
+                    '<span class="badge ' + (pct === 100 ? 'bg-success' : pct >= 50 ? 'bg-warning' : 'bg-danger') + '">' + pct + '%</span>' +
+                    '</div>' +
+                    '<div class="progress" style="height:6px;">' +
+                    '<div class="progress-bar ' + (pct === 100 ? 'bg-success' : pct >= 50 ? 'bg-warning' : 'bg-danger') +
+                    '" style="width:' + pct + '%"></div>' +
+                    '</div></div>';
+                html += '<ul class="cm-val-list list-unstyled mb-0">';
+                payload.checks.forEach(function (c) {
+                    const icon = c.ok
+                        ? '<i class="fa fa-circle-check text-success"></i>'
+                        : (c.severidad === 'warning'
+                            ? '<i class="fa fa-triangle-exclamation text-warning"></i>'
+                            : '<i class="fa fa-circle-xmark text-danger"></i>');
+                    html += '<li class="cm-val-item ' + (c.ok ? 'is-ok' : 'is-' + (c.severidad || 'error')) + '">' +
+                        '<div class="cm-val-icon">' + icon + '</div>' +
+                        '<div class="cm-val-text">' +
+                        '<div class="cm-val-label">' + c.label + '</div>' +
+                        (c.detalle ? '<div class="cm-val-detail">' + c.detalle + '</div>' : '') +
+                        '</div></li>';
+                });
+                html += '</ul>';
+                $body.html(html);
+            }
+
+            $btnVal.on('click', function () {
+                if (!modal) return;
+                $('#cmValidarBody').html(
+                    '<div class="text-center text-muted py-4">' +
+                    '<i class="fa fa-spinner fa-spin fa-2x mb-2"></i><br>Consultando Meta...</div>'
+                );
+                modal.show();
+                $.post('{{ ruta }}', {
+                    csrfmiddlewaretoken: csrf,
+                    action: 'validar',
+                    app_id: ($('#id_app_id').val() || '').trim(),
+                    app_secret: ($('#id_app_secret').val() || '').trim(),
+                    business_id: ($('#id_business_id').val() || '').trim(),
+                    system_user_id: ($('#id_system_user_id').val() || '').trim(),
+                    system_user_token: ($('#id_system_user_token').val() || '').trim(),
+                    config_id: ($('#id_config_id').val() || '').trim()
+                }).done(function (data) {
+                    if (!Array.isArray(data)) data = [data];
+                    const v = data[0] || {};
+                    if (v.error) {
+                        pintarChecks({checks: null, message: v.message || 'Error'});
+                    } else {
+                        pintarChecks(v);
+                    }
+                }).fail(function () {
+                    pintarChecks({checks: null, message: 'Error de conexión con el servidor.'});
+                });
+            });
+        });
+    </script>
+    {% endif %}
 {% endblock %}

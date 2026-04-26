@@ -22,7 +22,7 @@
                         <ul class="docs-sb-list">
                             {% for item in seccion.items %}
                                 <li>
-                                    <a href="/whatsapp/docs/{{ item.slug }}/"
+                                    <a href="/seguridad/documentacion/?pagina={{ item.slug }}"
                                        class="docs-sb-item {% if item.slug == slug_actual %}active{% endif %}">
                                         {{ item.nombre }}
                                     </a>

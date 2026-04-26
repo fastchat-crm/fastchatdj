@@ -13,6 +13,7 @@ from .view_grupourls import grupoUrlsView
 from .view_modulo import modulo
 from .view_modulogrupo import modulo_grupo
 from .view_modulos_sistema import modulossistemaView
+from .docs.documentacion import documentacionView
 
 seguridad_urls = (
     {
@@ -69,6 +70,11 @@ seguridad_urls = (
         "nombre": "Database Backup",
         "url": 'databasebackup/',
         "vista": databaseBackupView,
+    },
+    {
+        "nombre": "Documentación",
+        "url": 'documentacion/',
+        "vista": documentacionView,
     },
 )
 
