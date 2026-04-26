@@ -116,6 +116,43 @@
                                 </p>
                             </div>
                         </li>
+
+                        <li>
+                            <div class="cm-step-num">6</div>
+                            <div>
+                                <b>Embedded Signup Config ID</b>
+                                <span class="cm-opt">opcional</span>
+                                <p>
+                                    Es el ID de la <b>configuración de Facebook Login for Business</b>
+                                    que se abre cuando el cliente conecta su WhatsApp con un solo clic
+                                    (flujo Embedded Signup). Dentro de la App →
+                                    <code>Facebook Login for Business → Configurations</code>:
+                                </p>
+                                <p class="mb-2">
+                                    URL directa:
+                                    <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener">
+                                        developers.facebook.com/apps
+                                    </a>
+                                    → tu App → menú izquierdo
+                                    <code>Facebook Login for Business</code> →
+                                    pestaña <code>Configurations</code> → copia el
+                                    <code>Configuration ID</code> (~16 dígitos).
+                                </p>
+                                <p class="mb-2">
+                                    Si no existe, créala con <b>Create configuration</b>:
+                                </p>
+                                <ul class="cm-scopes">
+                                    <li>Login type: <code>Business login</code></li>
+                                    <li>Asset: <code>WhatsApp Business Account</code> + <code>Phone Number</code></li>
+                                    <li>Permisos: <code>whatsapp_business_management</code>, <code>whatsapp_business_messaging</code></li>
+                                </ul>
+                                <div class="cm-warn">
+                                    <i class="fa fa-wand-magic-sparkles"></i>
+                                    Si dejas este campo vacío y pulsas <b>Auto-detectar desde Meta</b>,
+                                    el sistema lo busca solo. Si hay varias configs, te deja elegir.
+                                </div>
+                            </div>
+                        </li>
                     </ol>
 
                     <div class="cm-divider"></div>
