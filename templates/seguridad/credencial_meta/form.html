@@ -121,36 +121,43 @@
                             <div class="cm-step-num">6</div>
                             <div>
                                 <b>Embedded Signup Config ID</b>
-                                <span class="cm-opt">opcional</span>
+                                <span class="cm-opt">manual</span>
                                 <p>
-                                    Es el ID de la <b>configuración de Facebook Login for Business</b>
-                                    que se abre cuando el cliente conecta su WhatsApp con un solo clic
-                                    (flujo Embedded Signup). Dentro de la App →
-                                    <code>Facebook Login for Business → Configurations</code>:
+                                    Es el ID de la configuración de <b>Embedded Signup de WhatsApp</b>:
+                                    el flujo que abre el popup de Meta para que el cliente conecte
+                                    su WABA con un solo clic.
                                 </p>
-                                <p class="mb-2">
-                                    URL directa:
-                                    <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener">
-                                        developers.facebook.com/apps
-                                    </a>
-                                    → tu App → menú izquierdo
-                                    <code>Facebook Login for Business</code> →
-                                    pestaña <code>Configurations</code> → copia el
-                                    <code>Configuration ID</code> (~16 dígitos).
-                                </p>
-                                <p class="mb-2">
-                                    Si no existe, créala con <b>Create configuration</b>:
-                                </p>
-                                <ul class="cm-scopes">
-                                    <li>Login type: <code>Business login</code></li>
-                                    <li>Asset: <code>WhatsApp Business Account</code> + <code>Phone Number</code></li>
-                                    <li>Permisos: <code>whatsapp_business_management</code>, <code>whatsapp_business_messaging</code></li>
-                                </ul>
                                 <div class="cm-warn">
-                                    <i class="fa fa-wand-magic-sparkles"></i>
-                                    Si dejas este campo vacío y pulsas <b>Auto-detectar desde Meta</b>,
-                                    el sistema lo busca solo. Si hay varias configs, te deja elegir.
+                                    <i class="fa fa-triangle-exclamation"></i>
+                                    Meta gatea este dato vía API: sólo lo expone a cuentas
+                                    <b>Tech Provider</b>. El botón <i>Auto-detectar</i> lo intenta,
+                                    pero casi siempre toca pegarlo a mano.
                                 </div>
+                                <p class="mt-2 mb-1"><b>Cómo sacarlo:</b></p>
+                                <ol class="cm-scopes ps-3">
+                                    <li>
+                                        Abrí
+                                        <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener">
+                                            developers.facebook.com/apps
+                                        </a>
+                                        → tu App → menú izquierdo
+                                        <code>WhatsApp → Embedded Signup</code>
+                                        <i>(en algunas cuentas aparece como <code>WhatsApp → Configuration</code>)</i>.
+                                    </li>
+                                    <li>
+                                        Si no hay ninguna, pulsá <b>Create configuration</b>:
+                                        <ul class="mt-1">
+                                            <li>Setup type: <code>WhatsApp Business App Onboarding</code></li>
+                                            <li>Features: <code>cloud_api</code> + <code>marketing_messages_lite</code> + <code>conversions_api</code></li>
+                                            <li>Permissions: <code>whatsapp_business_management</code>, <code>whatsapp_business_messaging</code>, <code>business_management</code></li>
+                                            <li>Guardar.</li>
+                                        </ul>
+                                    </li>
+                                    <li>
+                                        Copiá el <code>Configuration ID</code> (~16 dígitos) y pegalo
+                                        en el campo del formulario.
+                                    </li>
+                                </ol>
                             </div>
                         </li>
                     </ol>
