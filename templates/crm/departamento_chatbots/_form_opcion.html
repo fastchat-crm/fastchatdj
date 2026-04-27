@@ -1,0 +1,108 @@
+{# Form de UNA opcion del flujo. Se inyecta en el modal del editor.
+   Variables: opcion (instancia o None), es_nuevo, departamento_id,
+   parent_id, config_json_str, tipos_nodo_choices, validaciones_choices,
+   endpoints_disponibles. #}
+<input type="hidden" name="opcion_id" value="{{ opcion.id|default:0 }}">
+<input type="hidden" name="departamento_id" value="{{ departamento_id }}">
+<input type="hidden" name="parent_id" value="{{ parent_id|default:0 }}">
+
+<div class="row g-2">
+    <div class="col-md-4">
+        <label class="form-label small fw-bold mb-1">Tipo de nodo</label>
+        <select name="tipo_nodo" class="form-select form-select-sm">
+            {% for v, lbl in tipos_nodo_choices %}
+                <option value="{{ v }}" {% if opcion.tipo_nodo == v %}selected{% endif %}>{{ lbl }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-8">
+        <label class="form-label small fw-bold mb-1">Nombre</label>
+        <input type="text" name="nombre" class="form-control form-control-sm"
+               value="{{ opcion.nombre|default:'' }}"
+               placeholder="Ej: Ver menú · Hablar con asesor" maxlength="100" required>
+    </div>
+
+    <div class="col-12">
+        <label class="form-label small fw-bold mb-1">Respuesta / mensaje al cliente</label>
+        <textarea name="respuesta" class="form-control form-control-sm" rows="3"
+                  placeholder="Texto que envía el bot al activar este nodo.">{{ opcion.respuesta|default:'' }}</textarea>
+        <small class="text-muted">
+            Variables: {% verbatim %}<code>{{contacto.nombre}}</code>
+            <code>{{variables.X}}</code>{% endverbatim %} (donde X es una variable_destino capturada antes).
+        </small>
+    </div>
+
+    <div class="col-12 mt-2">
+        <button type="button" class="btn btn-link btn-sm p-0" data-bs-toggle="collapse" data-bs-target="#opcAvanzado-{{ opcion.id|default:'new' }}">
+            <i class="fa fa-caret-right me-1"></i> Configuración avanzada
+        </button>
+        <div class="collapse" id="opcAvanzado-{{ opcion.id|default:'new' }}">
+            <div class="row g-2 mt-1 p-2" style="background:#f8f9fa;border-radius:6px;">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold mb-1">Variable destino</label>
+                    <input type="text" name="variable_destino" class="form-control form-control-sm"
+                           value="{{ opcion.variable_destino|default:'' }}"
+                           placeholder="Ej: cedula · saldo" maxlength="80">
+                    <small class="text-muted">Para tipo Pregunta o HTTP.</small>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold mb-1">Endpoint API</label>
+                    <select name="endpoint_id" class="form-select form-select-sm">
+                        <option value="0">— ninguno —</option>
+                        {% for ep in endpoints_disponibles %}
+                            <option value="{{ ep.id }}" {% if opcion.endpoint_id == ep.id %}selected{% endif %}>
+                                {{ ep.nombre }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Solo para tipo HTTP.</small>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold mb-1">Validación</label>
+                    <select name="validacion_tipo" class="form-select form-select-sm">
+                        {% for v, lbl in validaciones_choices %}
+                            <option value="{{ v }}" {% if opcion.validacion_tipo == v %}selected{% endif %}>{{ lbl }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label small fw-bold mb-1">Regex (si validación = regex)</label>
+                    <input type="text" name="validacion_expresion" class="form-control form-control-sm"
+                           value="{{ opcion.validacion_expresion|default:'' }}" maxlength="250">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold mb-1">Reintentos</label>
+                    <input type="number" name="reintentos_max" min="0" max="10"
+                           class="form-control form-control-sm"
+                           value="{{ opcion.reintentos_max|default:3 }}">
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-bold mb-1">Mensaje si validación falla</label>
+                    <input type="text" name="mensaje_error" class="form-control form-control-sm"
+                           value="{{ opcion.mensaje_error|default:'' }}">
+                </div>
+
+                <div class="col-12">
+                    <div class="form-check form-switch">
+                        <input type="checkbox" name="es_inicio" class="form-check-input" id="esInicio-{{ opcion.id|default:'new' }}"
+                               value="1" {% if opcion.es_inicio %}checked{% endif %}>
+                        <label class="form-check-label small" for="esInicio-{{ opcion.id|default:'new' }}">
+                            Es nodo de inicio del flujo
+                        </label>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small fw-bold mb-1">Config JSON (parámetros del tipo de nodo)</label>
+                    <textarea name="config_json" class="form-control form-control-sm" rows="4"
+                              style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.78rem;">{{ config_json_str }}</textarea>
+                    <small class="text-muted">
+                        Ejemplo HTTP: <code>{"metodo":"GET","path":"/clientes/{cedula}"}</code>.
+                        JSON inválido = no se guarda config.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -6,10 +6,12 @@
 {% endblock %}
 
 {% block content %}
-{# jQuery anticipado: scripts inline corren durante render del content block #}
 <script src="/static/jquery-3.7.1.min.js"></script>
 
-<div class="dpchat-editor" data-departamento-id="{{ filtro.pk|default:0 }}">
+<div class="dpchat-editor"
+     data-departamento-id="{{ filtro.pk|default:0 }}"
+     data-post-url="{{ ruta_post }}"
+     data-csrf="{{ csrf_token }}">
 
     <div class="dp-toolbar">
         <a href="/crm/departamentos_chatbots/" class="btn btn-light btn-sm">
@@ -23,15 +25,15 @@
         <i class="fa fa-circle-info me-1"></i>
         <strong>Departamento = unidad ejecutable del chatbot.</strong>
         Contiene el flujo de nodos (menú, pregunta, respuesta, HTTP, handoff…) que corre
-        cuando el cliente entra. El mensaje de saludo de abajo es lo primero que se le
-        envía y admite variables. Cada cambio se guarda automáticamente — no hay botón final.
+        cuando el cliente entra. Cabecera con autosave; los nodos se editan uno por uno
+        en su modal y se guardan al confirmar.
     </div>
 
-    {# Cabecera del departamento #}
+    {# Cabecera del departamento — autosave #}
     <div class="card dp-card-meta">
         <div class="card-header py-2">
             <strong><i class="fa fa-building me-1"></i> Cabecera del departamento</strong>
-            <small class="text-muted ms-2">Los cambios se guardan automáticamente.</small>
+            <small class="text-muted ms-2">Cambios guardan automáticamente.</small>
         </div>
         <div class="card-body">
             <div class="row g-2">
@@ -47,7 +49,7 @@
                            value="{{ filtro.color|default:'#6c757d' }}">
                 </div>
                 <div class="col-lg-3 d-flex align-items-end">
-                    <small class="text-muted">El primer save crea el departamento; siguientes lo actualizan.</small>
+                    <small class="text-muted">El primer save crea el departamento.</small>
                 </div>
                 <div class="col-12">
                     <label class="form-label small mb-1">Mensaje de saludo</label>
@@ -62,19 +64,31 @@
         </div>
     </div>
 
-    {# Arbol de opciones #}
+    {# Arbol de nodos — RENDER SERVER-SIDE para que la data siempre se vea #}
     <div class="card dp-card-tree" id="dp-tree-card" {% if not filtro %}style="display:none"{% endif %}>
-        <div class="card-header py-2 d-flex justify-content-between align-items-center">
-            <strong><i class="fa fa-sitemap me-1"></i> Opciones del flujo</strong>
-            <button type="button" class="btn btn-sm btn-primary" id="btn-add-root">
-                <i class="fa fa-plus me-1"></i> Agregar opción raíz
-            </button>
+        <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <strong><i class="fa fa-sitemap me-1"></i> Flujo de opciones</strong>
+            <div class="d-flex gap-2">
+                <small class="text-muted align-self-center">
+                    <span id="dp-count">{{ arbol_plano|length }}</span> nodos
+                </small>
+                <button type="button" class="btn btn-sm btn-primary"
+                        data-act="add-root">
+                    <i class="fa fa-plus me-1"></i> Agregar opción raíz
+                </button>
+            </div>
         </div>
         <div class="card-body">
-            <div id="dp-init-error" class="alert alert-danger small" style="display:none"></div>
-            <div id="dp-tree" class="dp-tree-root"></div>
-            <div id="dp-tree-empty" class="text-muted small text-center py-4" style="display:none">
-                Aún no hay opciones. Toca <b>Agregar opción raíz</b> para empezar.
+            <div id="dp-tree" class="dp-tree-flat">
+                {% for nodo in arbol_plano %}
+                    {% include "crm/departamento_chatbots/_node_card.html" with op=nodo.opcion nivel=nodo.nivel %}
+                {% empty %}
+                    <div class="dp-empty text-muted small text-center py-4" id="dp-tree-empty">
+                        <i class="fa fa-diagram-project fa-2x mb-2 d-block"></i>
+                        Aún no hay opciones.
+                        <a href="javascript:void(0)" data-act="add-root">Agregar la primera</a>.
+                    </div>
+                {% endfor %}
             </div>
         </div>
     </div>
@@ -88,42 +102,36 @@
 
 </div>
 
-{# Datos iniciales para hidratar el editor #}
-<script id="dp-initial-data" type="application/json">
-{
-  "departamento_id": {{ filtro.pk|default:0 }},
-  "opciones": {{ opciones_json|default:"[]"|safe }},
-  "endpoints": {{ endpoints_json|default:"[]"|safe }},
-  "csrf": "{{ csrf_token }}",
-  "post_url": "{{ ruta_post }}",
-  "tipos_nodo": [
-    ["respuesta",   "Respuesta"],
-    ["menu",        "Menú"],
-    ["pregunta",    "Pregunta"],
-    ["http",        "HTTP"],
-    ["condicional", "Condicional"],
-    ["switch",      "Switch"],
-    ["set_variable","Set variable"],
-    ["esperar",     "Esperar"],
-    ["handoff",     "Handoff a humano"],
-    ["fin",         "Fin"]
-  ],
-  "validaciones": [
-    ["none","Sin validación"],
-    ["regex","Regex"],
-    ["email","Email"],
-    ["numero","Número"],
-    ["cedula","Cédula EC"],
-    ["ruc","RUC EC"],
-    ["fecha","Fecha"],
-    ["telefono","Teléfono"]
-  ]
-}
-</script>
+{# Modal editor de un nodo #}
+<div class="modal fade" id="dpModalNodo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <form id="dpFormNodo" method="post" novalidate>
+                {% csrf_token %}
+                <input type="hidden" name="action" value="guardar_opcion">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title" id="dpModalNodoTitulo">Nodo</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body" id="dpModalNodoBody">
+                    <div class="text-center text-muted py-4">
+                        <i class="fa fa-spinner fa-spin"></i> Cargando…
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm" id="dpBtnGuardarNodo">
+                        <i class="fa fa-save me-1"></i> Guardar nodo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 {% endblock %}
 
 {% block jscript %}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="{% static 'js/dpchat_editor.js' %}?v=3"></script>
+    <script src="{% static 'js/dpchat_editor.js' %}?v=4"></script>
 {% endblock %}

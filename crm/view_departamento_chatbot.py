@@ -43,7 +43,6 @@ def departamentoChatbotsView(request):
                     if redirect_to else
                     {'error': False, 'reload': True}
                 )
-
                 if action == 'add':
                     form = Formulario(request.POST, request=request)
                     if form.is_valid():
@@ -127,8 +126,6 @@ def departamentoChatbotsView(request):
                     return _eliminar_opcion(request)
                 elif action == 'mover_opcion':
                     return _mover_opcion(request)
-
-
         except ValueError as ex:
             res_json.append({'error': True, "message": str(ex)})
         except FormError as ex:
@@ -181,12 +178,51 @@ def departamentoChatbotsView(request):
                             'pagina_completa': True,
                             'titulo_pagina': f'Editar {filtro}',
                             'ruta_post': request.path,
+                            'arbol_plano': _serializar_arbol_opciones(filtro),
+                            'tipos_nodo_choices': OpcionDepartamentoChatBot.TIPOS_NODO,
+                            'validaciones_choices': OpcionDepartamentoChatBot.VALIDACIONES,
+                            'endpoints_disponibles': EndpointApiChatbot.objects.filter(status=True).order_by('nombre'),
                         })
                         return render(request, 'crm/departamento_chatbots/form_pagina.html', data)
                     template = get_template("crm/departamento_chatbots/form.html")
                     return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:
                     return JsonResponse({"result": False, 'message': str(ex)})
+
+            elif action == 'editar_opcion':
+                # Devuelve HTML del form de un nodo (modal en form_pagina).
+                try:
+                    op_id = int(request.GET.get('id') or 0)
+                    parent_id = int(request.GET.get('parent_id') or 0)
+                    dep_id = int(request.GET.get('departamento_id') or 0)
+                    contexto = {
+                        'tipos_nodo_choices': OpcionDepartamentoChatBot.TIPOS_NODO,
+                        'validaciones_choices': OpcionDepartamentoChatBot.VALIDACIONES,
+                        'endpoints_disponibles': EndpointApiChatbot.objects.filter(status=True).order_by('nombre'),
+                    }
+                    if op_id:
+                        opcion = OpcionDepartamentoChatBot.objects.filter(pk=op_id, status=True).first()
+                        if not opcion:
+                            return JsonResponse({'result': False, 'message': 'Nodo no encontrado'})
+                        contexto.update({
+                            'opcion': opcion,
+                            'es_nuevo': False,
+                            'departamento_id': opcion.departamento_id,
+                            'parent_id': opcion.opcion_padre_id or 0,
+                            'config_json_str': json.dumps(opcion.config or {}, indent=2, ensure_ascii=False),
+                        })
+                    else:
+                        contexto.update({
+                            'opcion': None,
+                            'es_nuevo': True,
+                            'departamento_id': dep_id,
+                            'parent_id': parent_id,
+                            'config_json_str': '{}',
+                        })
+                    template = get_template('crm/departamento_chatbots/_form_opcion.html')
+                    return JsonResponse({'result': True, 'data': template.render(contexto)})
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
 
             elif action == 'ver':
                 pk = int(request.GET['id'])
@@ -393,6 +429,22 @@ def _generar_departamento_con_ia(request):
 
 
 # ============================================================================
+# Serialización plana del árbol de opciones para render server-side. Cada item
+# trae el objeto opción y su nivel de profundidad (0 = raíz). El template
+# muestra cada uno con margin-left = nivel * indent.
+# ============================================================================
+def _serializar_arbol_opciones(departamento, padre=None, nivel=0):
+    items = []
+    qs = OpcionDepartamentoChatBot.objects.filter(
+        departamento=departamento, opcion_padre=padre, status=True,
+    ).order_by('orden', 'id')
+    for op in qs:
+        items.append({'opcion': op, 'nivel': nivel})
+        items.extend(_serializar_arbol_opciones(departamento, padre=op, nivel=nivel + 1))
+    return items
+
+
+# ============================================================================
 # Autosave granular — endpoints para la nueva UI sin wizard. Cada uno persiste
 # *solo* su pieza (header del depto / un nodo / mover / eliminar) para que el
 # usuario no pierda cambios al cerrar la pagina.
@@ -444,8 +496,10 @@ def _guardar_opcion(request):
         opcion = OpcionDepartamentoChatBot.objects.filter(pk=op_id, departamento=dep).first()
         if not opcion:
             return JsonResponse({'ok': False, 'error': 'Nodo no encontrado'})
+        es_nuevo = False
     else:
         opcion = OpcionDepartamentoChatBot(departamento=dep)
+        es_nuevo = True
 
     parent_id = request.POST.get('parent_id') or ''
     if parent_id and parent_id not in ('0', 'null', 'none'):
@@ -463,10 +517,19 @@ def _guardar_opcion(request):
     tipo = (request.POST.get('tipo_nodo') or 'respuesta').strip()
     opcion.tipo_nodo = tipo if tipo in TIPOS_NODO_VALIDOS else 'respuesta'
     opcion.es_inicio = request.POST.get('es_inicio') in ('1', 'true', 'on') and opcion.opcion_padre is None
-    try:
-        opcion.orden = int(request.POST.get('orden') or 0)
-    except (TypeError, ValueError):
-        opcion.orden = 0
+    orden_raw = request.POST.get('orden')
+    if orden_raw:
+        try:
+            opcion.orden = int(orden_raw)
+        except (TypeError, ValueError):
+            opcion.orden = 0
+    elif es_nuevo:
+        # auto-incrementar: max(orden) entre hermanos + 1
+        from django.db.models import Max
+        max_orden = OpcionDepartamentoChatBot.objects.filter(
+            departamento=dep, opcion_padre=opcion.opcion_padre, status=True,
+        ).aggregate(m=Max('orden'))['m'] or 0
+        opcion.orden = max_orden + 1
 
     opcion.variable_destino = (request.POST.get('variable_destino') or '').strip()[:80]
     val_tipo = (request.POST.get('validacion_tipo') or 'none').strip()
