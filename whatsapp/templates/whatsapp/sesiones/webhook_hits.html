@@ -1,0 +1,241 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/sesiones.css' %}">
+    <link rel="stylesheet" href="{% static 'stylenew/diagnostico.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="diag-page">
+
+    <div class="diag-header">
+        <div class="diag-header-left">
+            <a href="/whatsapp/sesiones/" class="diag-back" title="Volver"><i class="fa fa-arrow-left"></i></a>
+            <div>
+                <div class="diag-eyebrow">Auditoría raw HTTP</div>
+                <h2 class="diag-title">Hits HTTP webhook Meta</h2>
+                <div class="diag-sub">
+                    <span><i class="fa fa-globe"></i> Endpoint: <code>/whatsapp/meta_webhook/</code></span>
+                </div>
+            </div>
+        </div>
+        <div class="diag-header-right">
+            <a href="{{ request.path }}" class="conex-btn conex-btn-secondary">
+                <i class="fa fa-rotate"></i> Refrescar
+            </a>
+            <button type="button" class="conex-btn conex-btn-primary" id="btn-live-toggle">
+                <i class="fa fa-bolt"></i> En vivo
+            </button>
+        </div>
+    </div>
+
+    {# Stats #}
+    <div class="diag-stats" style="margin-bottom:1rem">
+        <div class="diag-stat">
+            <div class="diag-stat-num">{{ stats.total }}</div>
+            <div class="diag-stat-lbl">Hits totales</div>
+        </div>
+        <div class="diag-stat">
+            <div class="diag-stat-num">{{ stats.ult_24h }}</div>
+            <div class="diag-stat-lbl">Últimas 24h</div>
+        </div>
+        <div class="diag-stat">
+            <div class="diag-stat-num">{{ stats.posts }}</div>
+            <div class="diag-stat-lbl">POST (eventos Meta)</div>
+        </div>
+        <div class="diag-stat">
+            <div class="diag-stat-num">{{ stats.gets }}</div>
+            <div class="diag-stat-lbl">GET (handshake/landing)</div>
+        </div>
+        <div class="diag-stat">
+            <div class="diag-stat-num">{{ stats.errores }}</div>
+            <div class="diag-stat-lbl">Errores 4xx/5xx</div>
+        </div>
+    </div>
+
+    {# Filtros simples #}
+    <div class="diag-card" style="padding:.65rem 1rem;margin-bottom:1rem">
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+            <span class="muted" style="font-size:.85rem;color:#6b7280">Filtros:</span>
+            <a class="conex-chip {% if not filtro_metodo %}active{% endif %}" href="?">Todos</a>
+            <a class="conex-chip {% if filtro_metodo == 'POST' %}active{% endif %}" href="?metodo=POST">POST</a>
+            <a class="conex-chip {% if filtro_metodo == 'GET' %}active{% endif %}" href="?metodo=GET">GET</a>
+            <a class="conex-chip {% if filtro_status == '200' %}active{% endif %}" href="?status=200">200 OK</a>
+            <a class="conex-chip {% if filtro_status == '403' %}active{% endif %}" href="?status=403">403</a>
+            <a class="conex-chip {% if filtro_status == '401' %}active{% endif %}" href="?status=401">401</a>
+            <a class="conex-chip {% if filtro_status == '400' %}active{% endif %}" href="?status=400">400</a>
+        </div>
+    </div>
+
+    {# Tabla #}
+    <div class="diag-card">
+        <h5 class="diag-card-title">
+            <i class="fa fa-list-ul"></i> Últimos hits
+            <small>(máx 200 mostrados)</small>
+        </h5>
+        {% if hits %}
+            <table class="diag-table" id="hits-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Método</th>
+                        <th>Status</th>
+                        <th>IP</th>
+                        <th>Firma</th>
+                        <th>Body</th>
+                        <th>Nota</th>
+                        <th>UA</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for h in hits %}
+                        <tr data-hit-id="{{ h.id }}" class="hit-row {% if h.status_code >= 400 %}diag-row-error{% endif %}">
+                            <td><span class="diag-mono">{{ h.fecha|date:"m-d H:i:s" }}</span></td>
+                            <td>
+                                <span class="diag-tag" style="background:{% if h.method == 'POST' %}#dbeafe;color:#1e40af{% elif h.method == 'GET' %}#dcfce7;color:#15803d{% else %}#fef3c7;color:#92400e{% endif %}">
+                                    {{ h.method }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="diag-pill diag-pill-{% if h.status_code == 200 %}green{% elif h.status_code >= 400 %}red{% else %}yellow{% endif %}">
+                                    {{ h.status_code }}
+                                </span>
+                            </td>
+                            <td><span class="diag-mono">{{ h.ip|default:'—' }}</span></td>
+                            <td>
+                                {% if h.signature_presente %}
+                                    <i class="fa fa-shield-halved" style="color:#10b981" title="X-Hub-Signature-256 presente"></i>
+                                {% else %}
+                                    <i class="fa fa-shield-halved" style="color:#9ca3af" title="Sin firma"></i>
+                                {% endif %}
+                            </td>
+                            <td><span class="diag-mono">{{ h.body_length }}b</span></td>
+                            <td class="diag-detail-cell">{{ h.nota|default:'—' }}</td>
+                            <td class="diag-detail-cell" title="{{ h.user_agent }}">
+                                {% if 'facebook' in h.user_agent|lower %}
+                                    <i class="fab fa-facebook" style="color:#1877f2" title="Facebook UA"></i>
+                                    Meta
+                                {% else %}
+                                    {{ h.user_agent|truncatechars:30 }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="diag-empty">
+                <i class="fa fa-satellite-dish"></i>
+                <p>No hay hits registrados todavía.</p>
+                <small>Cuando alguien (Meta o un curl externo) toque <code>/whatsapp/meta_webhook/</code> aparecerá acá.</small>
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+
+{# Modal detalle hit #}
+<div class="man-val-backdrop" id="hit-detail-modal" aria-hidden="true">
+    <div class="man-val-panel" role="dialog" style="max-width:680px">
+        <div class="man-val-header">
+            <div class="man-val-header-title">
+                <i class="fa fa-code" style="color:#2563eb"></i>
+                <h5>Detalle del hit</h5>
+            </div>
+            <button type="button" class="man-val-close" data-hit-close><i class="fa fa-times"></i></button>
+        </div>
+        <div class="man-val-body" id="hit-detail-body">
+            <div class="man-val-loader"><i class="fa fa-spinner fa-spin"></i><p>Cargando...</p></div>
+        </div>
+        <div class="man-val-footer">
+            <button type="button" class="conex-btn conex-btn-ghost" data-hit-close>Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    // Click row → detalle modal
+    document.querySelectorAll('.hit-row').forEach(function(row){
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', function(){
+            var id = row.getAttribute('data-hit-id');
+            var modal = document.getElementById('hit-detail-modal');
+            var body  = document.getElementById('hit-detail-body');
+            body.innerHTML = '<div class="man-val-loader"><i class="fa fa-spinner fa-spin"></i><p>Cargando...</p></div>';
+            modal.classList.add('open');
+            fetch('/whatsapp/meta/webhook-hits/' + id + '/', {credentials:'same-origin'})
+                .then(function(r){return r.json();})
+                .then(function(d){
+                    if(!d.ok){ body.innerHTML = '<div class="man-val-msg is-error">'+d.error+'</div>'; return; }
+                    body.innerHTML =
+                        '<table class="diag-kv">'+
+                        '<tr><td>Fecha</td><td><code>'+d.fecha+'</code></td></tr>'+
+                        '<tr><td>Método</td><td>'+d.method+'</td></tr>'+
+                        '<tr><td>Status</td><td>'+d.status_code+'</td></tr>'+
+                        '<tr><td>IP</td><td><code>'+(d.ip||'—')+'</code></td></tr>'+
+                        '<tr><td>User Agent</td><td style="word-break:break-all">'+(d.user_agent||'—')+'</td></tr>'+
+                        '<tr><td>Query string</td><td><code>'+(d.query_string||'—')+'</code></td></tr>'+
+                        '<tr><td>Firma presente</td><td>'+(d.signature_presente?'Sí':'No')+'</td></tr>'+
+                        '<tr><td>Body length</td><td>'+d.body_length+' bytes</td></tr>'+
+                        '<tr><td>Nota</td><td>'+(d.nota||'—')+'</td></tr>'+
+                        '</table>'+
+                        '<h6 style="margin:1rem 0 .35rem;font-size:.85rem">Body preview</h6>'+
+                        '<pre style="background:#1f2937;color:#d1d5db;padding:.75rem;border-radius:6px;font-size:.78rem;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-all">'+(d.body_preview||'(vacío)').replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];})+'</pre>';
+                });
+        });
+    });
+    document.querySelectorAll('[data-hit-close]').forEach(function(b){
+        b.addEventListener('click', function(){ document.getElementById('hit-detail-modal').classList.remove('open'); });
+    });
+
+    // Live polling toggle
+    var btn = document.getElementById('btn-live-toggle');
+    var liveInterval = null;
+    var maxId = (function(){
+        var first = document.querySelector('.hit-row');
+        return first ? parseInt(first.getAttribute('data-hit-id')) : 0;
+    })();
+    btn.addEventListener('click', function(){
+        if (liveInterval) {
+            clearInterval(liveInterval);
+            liveInterval = null;
+            btn.innerHTML = '<i class="fa fa-bolt"></i> En vivo';
+            btn.classList.remove('conex-btn-warning');
+            btn.classList.add('conex-btn-primary');
+            return;
+        }
+        btn.innerHTML = '<i class="fa fa-circle-stop"></i> Detener';
+        btn.classList.remove('conex-btn-primary');
+        btn.classList.add('conex-btn-warning');
+        liveInterval = setInterval(function(){
+            fetch('/whatsapp/meta/webhook-hits/poll/?since_id='+maxId, {credentials:'same-origin'})
+                .then(function(r){return r.json();})
+                .then(function(d){
+                    if (!d.ok || !d.data || !d.data.length) return;
+                    var tbody = document.querySelector('#hits-table tbody');
+                    if (!tbody) return;
+                    d.data.reverse().forEach(function(h){
+                        if (h.id <= maxId) return;
+                        maxId = Math.max(maxId, h.id);
+                        var tr = document.createElement('tr');
+                        tr.style.background = '#fffbeb';
+                        tr.innerHTML =
+                            '<td><span class="diag-mono">'+h.fecha+'</span></td>'+
+                            '<td><span class="diag-tag">'+h.method+'</span></td>'+
+                            '<td><span class="diag-pill diag-pill-'+(h.status_code===200?'green':h.status_code>=400?'red':'yellow')+'">'+h.status_code+'</span></td>'+
+                            '<td><span class="diag-mono">'+(h.ip||'—')+'</span></td>'+
+                            '<td>'+(h.signature_presente?'🛡️':'—')+'</td>'+
+                            '<td>'+h.body_length+'b</td>'+
+                            '<td>'+(h.nota||'—')+'</td>'+
+                            '<td>'+(h.user_agent.toLowerCase().indexOf('facebook')>=0?'Meta':h.user_agent.substring(0,30))+'</td>';
+                        tbody.insertBefore(tr, tbody.firstChild);
+                        setTimeout(function(){ tr.style.background = ''; }, 3000);
+                    });
+                });
+        }, 3000);
+    });
+})();
+</script>
+{% endblock %}
