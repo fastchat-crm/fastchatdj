@@ -732,7 +732,29 @@
         wireSortable();
         wireFiltros();
         setupBeforeUnload();
+        manejarHashNodo();
         console.log('[dpchat_editor] init OK · dep_id=' + STATE.departamentoId);
+    }
+
+    // Si la URL tiene #nodo-<id> (ej. desde el botón "Editar" del diagrama),
+    // scrollea al card, lo destaca y abre el modal de edición.
+    function manejarHashNodo() {
+        var hash = (window.location.hash || '').trim();
+        var m = hash.match(/^#nodo-(\d+)$/);
+        if (!m) return;
+        var nodoId = parseInt(m[1], 10);
+        if (!nodoId) return;
+
+        var card = document.querySelector('.dp-node-card[data-id="' + nodoId + '"]');
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            card.classList.add('dp-highlight');
+            setTimeout(function () { card.classList.remove('dp-highlight'); }, 4500);
+        }
+        // Abre el modal de edición tras un breve delay (espera scroll).
+        setTimeout(function () {
+            openNodeModal({ id: nodoId });
+        }, 350);
     }
 
     if (document.readyState === 'loading') {

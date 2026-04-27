@@ -434,8 +434,69 @@
     border-radius: 3px;
 }
 
-/* Modo VERTICAL — apila los nodos hijos uno arriba del otro en vez de
-   desplegarlos a la derecha. Mucho mejor en pantallas chicas. */
+/* Container con tamaño acotado y scroll en ambos ejes — evita que el
+   diagrama empuje el layout horizontalmente. n8n-style. */
+.dp-tree-decision-wrap {
+    max-height: 75vh;
+    overflow: auto;
+    resize: vertical;
+}
+
+/* ─── Modo n8n: parent IZQUIERDA, children apilados a la DERECHA ─── */
+.dp-tree-n8n .dp-tree-decision,
+.dp-tree-n8n .dp-tree-decision ul {
+    display: flex !important;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 0 0 0 2rem;
+    margin: 0;
+    list-style: none;
+}
+.dp-tree-n8n .dp-tree-decision > li {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 1.5rem;
+    padding: .35rem 0;
+    margin: 0;
+    position: relative;
+    text-align: left;
+}
+/* Una columna de hijos a la derecha */
+.dp-tree-n8n .dp-tree-decision li > ul {
+    flex-direction: column !important;
+    padding: 0;
+    align-items: flex-start;
+}
+/* Reset líneas viejas y dibuja conectores L-shape */
+.dp-tree-n8n .dp-tree-decision li::before,
+.dp-tree-n8n .dp-tree-decision li::after { display: none !important; }
+.dp-tree-n8n .dp-tree-decision li > ul::before { display: none !important; }
+.dp-tree-n8n .dp-tree-decision li > ul > li {
+    flex-direction: row;
+    align-items: center;
+}
+/* Conector horizontal del parent al child */
+.dp-tree-n8n .dp-tree-decision li > ul > li::before {
+    content: ''; display: block !important;
+    position: relative;
+    width: 2rem;
+    height: 0;
+    border-top: 2px solid #94a3b8;
+    margin-right: -.5rem;
+    flex: 0 0 2rem;
+}
+.dp-tree-n8n .dp-tree-card {
+    margin: 0;
+    flex: 0 0 auto;
+}
+.dp-tree-n8n .dp-tree-edge-label {
+    text-align: left;
+    margin: 0 0 .15rem 0;
+}
+
+/* ─── Modo VERTICAL — apila columnar (móvil/tablet) ─── */
 .dp-tree-vertical .dp-tree-decision,
 .dp-tree-vertical .dp-tree-decision ul {
     display: flex !important;
@@ -458,20 +519,15 @@
     max-width: 480px;
     margin: 0;
 }
-.dp-tree-vertical .dp-tree-edge-label {
-    margin: 0 0 .15rem 0;
-    text-align: left;
-}
 
-/* Auto-vertical en pantallas <992px (sin que el user toque el toggle) */
-@media (max-width: 991.98px) {
-    .dp-tree-decision-wrap:not(.dp-tree-horizontal) .dp-tree-decision,
-    .dp-tree-decision-wrap:not(.dp-tree-horizontal) .dp-tree-decision ul {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        padding-left: 1.5rem;
-        border-left: 2px solid #cbd5e1;
-    }
-    .dp-tree-decision-wrap .dp-tree-card { max-width: 100%; }
+/* ─── Highlight del nodo enfocado por anchor (#nodo-X) ─── */
+.dp-node-card.dp-highlight {
+    box-shadow: 0 0 0 3px #fcd34d, 0 0 24px rgba(251, 191, 36, 0.4);
+    transition: box-shadow .25s ease;
+    animation: dp-pulse 1.6s ease-out 2;
+}
+@keyframes dp-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7); }
+    70%  { box-shadow: 0 0 0 12px rgba(251, 191, 36, 0); }
+    100% { box-shadow: 0 0 0 3px #fcd34d, 0 0 24px rgba(251, 191, 36, 0.4); }
 }

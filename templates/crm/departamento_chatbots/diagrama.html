@@ -31,16 +31,22 @@
 {% if arbol_anidado %}
     <div class="dp-diag-toolbar mb-2">
         <div class="btn-group btn-group-sm" role="group" id="dp-diag-orientacion">
-            <button type="button" class="btn btn-outline-secondary active" data-orient="horizontal">
-                <i class="fa fa-arrows-left-right me-1"></i> Horizontal
+            <button type="button" class="btn btn-outline-secondary active" data-orient="n8n"
+                    title="Padre a la izquierda, hijos a la derecha — estilo n8n">
+                <i class="fa fa-diagram-project me-1"></i> n8n (←→)
             </button>
-            <button type="button" class="btn btn-outline-secondary" data-orient="vertical">
-                <i class="fa fa-arrows-up-down me-1"></i> Vertical
+            <button type="button" class="btn btn-outline-secondary" data-orient="horizontal"
+                    title="Padre arriba, hijos abajo en árbol clásico">
+                <i class="fa fa-sitemap me-1"></i> Árbol (↓)
+            </button>
+            <button type="button" class="btn btn-outline-secondary" data-orient="vertical"
+                    title="Lista columnar — recomendado en móvil">
+                <i class="fa fa-list me-1"></i> Lista
             </button>
         </div>
         <small class="text-muted ms-2">
             <i class="fa fa-info-circle"></i>
-            Vertical es más cómodo en pantallas pequeñas.
+            El contenedor es scrolleable. Tirá del borde inferior para ajustar la altura.
         </small>
     </div>
     <div class="card">
@@ -94,22 +100,30 @@
     'use strict';
     var DEP_ID = {{ filtro.pk }};
 
+    function aplicarOrient(orient) {
+        var wrap = document.getElementById('dp-tree-wrap');
+        wrap.classList.remove('dp-tree-vertical', 'dp-tree-n8n');
+        if (orient === 'vertical') wrap.classList.add('dp-tree-vertical');
+        else if (orient === 'n8n') wrap.classList.add('dp-tree-n8n');
+        // 'horizontal' = sin clase = árbol clásico top-down
+        try { localStorage.setItem('dp_diag_orient_' + DEP_ID, orient); } catch (e) {}
+    }
     document.querySelectorAll('#dp-diag-orientacion button').forEach(function (b) {
         b.addEventListener('click', function () {
             document.querySelectorAll('#dp-diag-orientacion button').forEach(function (x) {
                 x.classList.remove('active');
             });
             b.classList.add('active');
-            var wrap = document.getElementById('dp-tree-wrap');
-            if (b.getAttribute('data-orient') === 'vertical') wrap.classList.add('dp-tree-vertical');
-            else wrap.classList.remove('dp-tree-vertical');
+            aplicarOrient(b.getAttribute('data-orient'));
         });
     });
 
-    if (window.innerWidth < 992) {
-        var btnV = document.querySelector('#dp-diag-orientacion button[data-orient="vertical"]');
-        if (btnV) btnV.click();
-    }
+    // Restaurar orientación guardada (default: n8n; en móvil: vertical)
+    var saved = null;
+    try { saved = localStorage.getItem('dp_diag_orient_' + DEP_ID); } catch (e) {}
+    if (!saved) saved = (window.innerWidth < 992) ? 'vertical' : 'n8n';
+    var savedBtn = document.querySelector('#dp-diag-orientacion button[data-orient="' + saved + '"]');
+    if (savedBtn) savedBtn.click();
 
     document.body.addEventListener('click', function (ev) {
         var btn = ev.target.closest('[data-act="ver-ficha-nodo"]');
