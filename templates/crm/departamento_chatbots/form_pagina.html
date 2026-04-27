@@ -1,61 +1,125 @@
-{# Render full-page del formulario de departamento + chatbot.
-   Reusa templates/crm/departamento_chatbots/form.html que originalmente
-   se inyecta en modal — la flag `pagina_completa` desactiva los botones
-   modal-only. #}
+{# Editor full-page de Departamento + ChatBot con autosave granular.
+   No reusa form.html (que es el wizard del modal legacy). Cada cambio
+   en cabecera o nodo dispara un POST debounced al endpoint correspondiente:
+   action=guardar_meta / guardar_opcion / mover_opcion / eliminar_opcion. #}
 {% extends 'base.html' %}
 {% load static %}
 
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/dpchat_editor.css' %}">
+{% endblock %}
+
 {% block content %}
-{# form.html tiene <script> inline que usa $ apenas se parsea. En el flujo
-   modal eso corre tras jQuery (porque el partial entra via AJAX); en page-mode
-   el <script> ejecuta durante el render del content block, ANTES del jQuery
-   global de base.html (cargado linea 411). Adelantamos jQuery aca. #}
+{# jQuery anticipado: scripts inline corren durante el render del content,
+   y el jQuery global de base.html se carga despues. #}
 <script src="/static/jquery-3.7.1.min.js"></script>
-<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-    <div class="d-flex align-items-center gap-2">
+
+<div class="dpchat-editor" data-departamento-id="{{ filtro.pk|default:0 }}">
+
+    <div class="dp-toolbar">
         <a href="/crm/departamentos_chatbots/" class="btn btn-light btn-sm">
             <i class="fa fa-arrow-left me-1"></i> Volver al listado
         </a>
         <h5 class="mb-0">{{ titulo_pagina|default:'Departamento & Chatbot' }}</h5>
+        <span class="dp-meta-status" id="dp-meta-status" data-state="idle">Sin cambios</span>
     </div>
+
+    {# ── Cabecera del departamento ── #}
+    <div class="card dp-card-meta">
+        <div class="card-header py-2">
+            <strong><i class="fa fa-building me-1"></i> Cabecera del departamento</strong>
+            <small class="text-muted ms-2">Los cambios se guardan automáticamente.</small>
+        </div>
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-lg-7">
+                    <label class="form-label small mb-1">Nombre</label>
+                    <input type="text" class="form-control" id="dp-nombre"
+                           value="{{ filtro.nombre|default:'' }}"
+                           placeholder="Ej: Atención al cliente · Matrículas · Soporte" maxlength="120">
+                </div>
+                <div class="col-lg-2">
+                    <label class="form-label small mb-1">Color</label>
+                    <input type="color" class="form-control form-control-color w-100" id="dp-color"
+                           value="{{ filtro.color|default:'#6c757d' }}">
+                </div>
+                <div class="col-lg-3 d-flex align-items-end">
+                    <small class="text-muted">El primer save crea el departamento; siguientes lo actualizan.</small>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small mb-1">Mensaje de saludo</label>
+                    <textarea class="form-control" id="dp-saludo" rows="2"
+                              placeholder="Se envía al cliente al entrar al depto.">{{ filtro.mensaje_saludo|default:'' }}</textarea>
+                    <div class="form-text">
+                        Variables: {% verbatim %}<code>{{contacto.nombre}}</code>
+                        <code>{{contacto.numero}}</code> <code>{{sesion.nombre}}</code>{% endverbatim %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Árbol de opciones ── #}
+    <div class="card dp-card-tree" id="dp-tree-card" {% if not filtro %}style="display:none"{% endif %}>
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <strong><i class="fa fa-sitemap me-1"></i> Opciones del flujo</strong>
+            <button type="button" class="btn btn-sm btn-primary" id="btn-add-root">
+                <i class="fa fa-plus me-1"></i> Agregar opción raíz
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="dp-tree" class="dp-tree-root"></div>
+            <div id="dp-tree-empty" class="text-muted small text-center py-4" style="display:none">
+                Aún no hay opciones. Toca <b>Agregar opción raíz</b> para empezar.
+            </div>
+        </div>
+    </div>
+
+    <div class="card dp-card-tree" id="dp-needs-meta" {% if filtro %}style="display:none"{% endif %}>
+        <div class="card-body text-center text-muted py-4">
+            <i class="fa fa-circle-info me-1"></i>
+            Escribí el nombre del departamento arriba para empezar a agregar opciones.
+        </div>
+    </div>
+
 </div>
 
-<div class="card">
-    <div class="card-body">
-        <form id="frmDepartamento" method="post" enctype="multipart/form-data"
-              class="form" action="{{ ruta_post }}">
-            {% csrf_token %}
-            <input type="hidden" name="redirect_to" value="/crm/departamentos_chatbots/">
-            {# form.html ya incluye <input name="pk"> y <input name="action"> #}
-            {% include "crm/departamento_chatbots/form.html" %}
-        </form>
-    </div>
-</div>
+{# Datos iniciales para hidratar el editor #}
+<script id="dp-initial-data" type="application/json">
+{
+  "departamento_id": {{ filtro.pk|default:0 }},
+  "opciones": {{ opciones_json|default:"[]"|safe }},
+  "endpoints": {{ endpoints_json|default:"[]"|safe }},
+  "csrf": "{{ csrf_token }}",
+  "post_url": "{{ ruta_post }}",
+  "tipos_nodo": [
+    ["respuesta",   "Respuesta"],
+    ["menu",        "Menú"],
+    ["pregunta",    "Pregunta"],
+    ["http",        "HTTP"],
+    ["condicional", "Condicional"],
+    ["switch",      "Switch"],
+    ["set_variable","Set variable"],
+    ["esperar",     "Esperar"],
+    ["handoff",     "Handoff a humano"],
+    ["fin",         "Fin"]
+  ],
+  "validaciones": [
+    ["none","Sin validación"],
+    ["regex","Regex"],
+    ["email","Email"],
+    ["numero","Número"],
+    ["cedula","Cédula EC"],
+    ["ruc","RUC EC"],
+    ["fecha","Fecha"],
+    ["telefono","Teléfono"]
+  ]
+}
+</script>
+
 {% endblock %}
 
 {% block jscript %}
-    <script src="/static/js/forms.js?version=1"></script>
-    <script>
-        // Init Select2/Dropify en page-mode — base_formulario_modal.html
-        // solo dispara con `shown.bs.modal`, que aca no ocurre.
-        $(function () {
-            $('.select2').each(function () {
-                const $sel = $(this);
-                if ($sel.hasClass('select2-hidden-accessible')) $sel.select2('destroy');
-                $sel.select2({width: '100%'});
-            });
-            if ($.fn.dropify) {
-                $('.dropify:not(.dropify-initialized)').each(function () {
-                    $(this).dropify({
-                        messages: {
-                            default: 'Arrastre y suelte un archivo o haga clic aquí.',
-                            replace: 'Arrastre y suelte un archivo o haga clic aquí.',
-                            remove:  'Eliminar',
-                        },
-                        imgFileExtensions: ["jpg", "jpeg", "png", "tiff", "jfif", "svg"],
-                    }).addClass('dropify-initialized');
-                });
-            }
-        });
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="{% static 'js/dpchat_editor.js' %}?v=1"></script>
 {% endblock %}

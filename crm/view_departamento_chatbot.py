@@ -119,6 +119,14 @@ def departamentoChatbotsView(request):
                     res_json={"error":False}
                 elif action == 'generar_con_ia':
                     return _generar_departamento_con_ia(request)
+                elif action == 'guardar_meta':
+                    return _guardar_meta(request)
+                elif action == 'guardar_opcion':
+                    return _guardar_opcion(request)
+                elif action == 'eliminar_opcion':
+                    return _eliminar_opcion(request)
+                elif action == 'mover_opcion':
+                    return _mover_opcion(request)
 
 
         except ValueError as ex:
@@ -382,4 +390,192 @@ def _generar_departamento_con_ia(request):
         'departamento_id': resultado['departamento_id'],
         'opciones_count': resultado['opciones_count'],
     })
+
+
+# ============================================================================
+# Autosave granular — endpoints para la nueva UI sin wizard. Cada uno persiste
+# *solo* su pieza (header del depto / un nodo / mover / eliminar) para que el
+# usuario no pierda cambios al cerrar la pagina.
+# ============================================================================
+def _guardar_meta(request):
+    """action=guardar_meta. Crea o actualiza cabecera del departamento.
+    pk=0 → crea uno nuevo y devuelve el id. Subsiguientes saves usan ese id."""
+    pk = int(request.POST.get('pk') or 0)
+    nombre = (request.POST.get('nombre') or '').strip()[:120]
+    color = (request.POST.get('color') or '#6c757d').strip()[:20]
+    mensaje = (request.POST.get('mensaje_saludo') or '').strip()
+
+    if pk == 0:
+        if len(nombre) < 2:
+            return JsonResponse({
+                'ok': False,
+                'error': 'El nombre necesita al menos 2 caracteres para crear el departamento.',
+            })
+        dep = DepartamentoChatBot(nombre=nombre, color=color, mensaje_saludo=mensaje)
+        dep.save(request)
+        log(f"Creó (autosave) departamento {dep}", request, "add", obj=dep.id)
+        return JsonResponse({'ok': True, 'departamento_id': dep.id, 'created': True})
+
+    dep = DepartamentoChatBot.objects.filter(pk=pk, status=True).first()
+    if not dep:
+        return JsonResponse({'ok': False, 'error': 'Departamento no encontrado.'})
+    if nombre:
+        dep.nombre = nombre
+    dep.color = color
+    dep.mensaje_saludo = mensaje
+    dep.save(request)
+    return JsonResponse({'ok': True, 'departamento_id': dep.id, 'created': False})
+
+
+def _guardar_opcion(request):
+    """action=guardar_opcion. Crea o actualiza UN nodo del flujo.
+    opcion_id=0 → crea; >0 → update. Devuelve el id real para que el frontend
+    deje de mandar 0 en saves siguientes."""
+    try:
+        dep_pk = int(request.POST['departamento_id'])
+    except (KeyError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'departamento_id requerido'})
+    dep = DepartamentoChatBot.objects.filter(pk=dep_pk, status=True).first()
+    if not dep:
+        return JsonResponse({'ok': False, 'error': 'Departamento no encontrado'})
+
+    op_id = int(request.POST.get('opcion_id') or 0)
+    if op_id:
+        opcion = OpcionDepartamentoChatBot.objects.filter(pk=op_id, departamento=dep).first()
+        if not opcion:
+            return JsonResponse({'ok': False, 'error': 'Nodo no encontrado'})
+    else:
+        opcion = OpcionDepartamentoChatBot(departamento=dep)
+
+    parent_id = request.POST.get('parent_id') or ''
+    if parent_id and parent_id not in ('0', 'null', 'none'):
+        try:
+            opcion.opcion_padre = OpcionDepartamentoChatBot.objects.filter(
+                pk=int(parent_id), departamento=dep, status=True,
+            ).first()
+        except (TypeError, ValueError):
+            opcion.opcion_padre = None
+    else:
+        opcion.opcion_padre = None
+
+    opcion.nombre = (request.POST.get('nombre') or '').strip()[:100]
+    opcion.respuesta = (request.POST.get('respuesta') or '').strip()
+    tipo = (request.POST.get('tipo_nodo') or 'respuesta').strip()
+    opcion.tipo_nodo = tipo if tipo in TIPOS_NODO_VALIDOS else 'respuesta'
+    opcion.es_inicio = request.POST.get('es_inicio') in ('1', 'true', 'on') and opcion.opcion_padre is None
+    try:
+        opcion.orden = int(request.POST.get('orden') or 0)
+    except (TypeError, ValueError):
+        opcion.orden = 0
+
+    opcion.variable_destino = (request.POST.get('variable_destino') or '').strip()[:80]
+    val_tipo = (request.POST.get('validacion_tipo') or 'none').strip()
+    opcion.validacion_tipo = val_tipo if val_tipo in VALIDACIONES_VALIDAS else 'none'
+    opcion.validacion_expresion = (request.POST.get('validacion_expresion') or '').strip()[:250]
+    opcion.mensaje_error = (request.POST.get('mensaje_error') or '').strip()
+    try:
+        opcion.reintentos_max = max(0, int(request.POST.get('reintentos_max') or 3))
+    except (TypeError, ValueError):
+        opcion.reintentos_max = 3
+
+    cfg_raw = request.POST.get('config_json')
+    if cfg_raw is not None and cfg_raw != '':
+        try:
+            parsed = json.loads(cfg_raw)
+            if isinstance(parsed, dict):
+                opcion.config = parsed
+            else:
+                return JsonResponse({'ok': False, 'error': 'config_json debe ser objeto'})
+        except json.JSONDecodeError as ex:
+            return JsonResponse({'ok': False, 'error': f'config_json invalido: {ex}'})
+    elif not opcion.config:
+        opcion.config = {}
+
+    end_id = request.POST.get('endpoint_id') or ''
+    if end_id and end_id not in ('0', 'null', 'none'):
+        try:
+            opcion.endpoint = EndpointApiChatbot.objects.filter(pk=int(end_id), status=True).first()
+        except (TypeError, ValueError):
+            opcion.endpoint = None
+    else:
+        opcion.endpoint = None
+
+    opcion.save(request)
+
+    # Si no hay otro nodo raiz con es_inicio=True y este es raiz, marcalo.
+    if opcion.opcion_padre is None:
+        hay_inicio = OpcionDepartamentoChatBot.objects.filter(
+            departamento=dep, opcion_padre__isnull=True,
+            es_inicio=True, status=True,
+        ).exclude(pk=opcion.pk).exists()
+        if not hay_inicio and not opcion.es_inicio:
+            opcion.es_inicio = True
+            opcion.save(request)
+
+    return JsonResponse({
+        'ok': True,
+        'opcion_id': opcion.id,
+        'created': not bool(op_id),
+    })
+
+
+def _eliminar_opcion(request):
+    """action=eliminar_opcion. Soft-delete del nodo y todos sus descendientes."""
+    try:
+        op_id = int(request.POST['opcion_id'])
+    except (KeyError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'opcion_id requerido'})
+
+    opcion = OpcionDepartamentoChatBot.objects.filter(pk=op_id, status=True).first()
+    if not opcion:
+        return JsonResponse({'ok': False, 'error': 'Nodo no encontrado'})
+
+    eliminados = [opcion.id]
+
+    def _cascade(nodo):
+        for hijo in nodo.subopciones.filter(status=True):
+            eliminados.append(hijo.id)
+            _cascade(hijo)
+            hijo.status = False
+            hijo.save(request)
+
+    _cascade(opcion)
+    opcion.status = False
+    opcion.save(request)
+    return JsonResponse({'ok': True, 'eliminados': eliminados})
+
+
+def _mover_opcion(request):
+    """action=mover_opcion. Reordena un nodo y/o cambia su padre.
+    parent_id puede venir vacio para nodo raiz."""
+    try:
+        op_id = int(request.POST['opcion_id'])
+    except (KeyError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'opcion_id requerido'})
+
+    opcion = OpcionDepartamentoChatBot.objects.filter(pk=op_id, status=True).first()
+    if not opcion:
+        return JsonResponse({'ok': False, 'error': 'Nodo no encontrado'})
+
+    parent_id = request.POST.get('parent_id') or ''
+    if parent_id and parent_id not in ('0', 'null', 'none'):
+        try:
+            padre = OpcionDepartamentoChatBot.objects.filter(
+                pk=int(parent_id), departamento=opcion.departamento, status=True,
+            ).first()
+            if padre and padre.pk == opcion.pk:
+                return JsonResponse({'ok': False, 'error': 'Un nodo no puede ser su propio padre'})
+            opcion.opcion_padre = padre
+        except (TypeError, ValueError):
+            opcion.opcion_padre = None
+    else:
+        opcion.opcion_padre = None
+
+    try:
+        opcion.orden = int(request.POST.get('orden') or 0)
+    except (TypeError, ValueError):
+        opcion.orden = 0
+
+    opcion.save(request)
+    return JsonResponse({'ok': True, 'opcion_id': opcion.id})
 

@@ -58,7 +58,8 @@
       "Bash(pdfinfo docs/kommo/ROTS.pdf)",
       "Bash(awk 'NR==206,NR==410' seguridad/view_credencial_meta.py)",
       "Bash(awk *)",
-      "Bash(git update-index *)"
+      "Bash(git update-index *)",
+      "Bash(node -c \"/e/DESARROLLO/FREELANCER/fastchat/fastchatdj/static/js/dpchat_editor.js\")"
     ]
   },
   "hooks": {

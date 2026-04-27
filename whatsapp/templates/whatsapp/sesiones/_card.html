@@ -38,28 +38,25 @@
                 <i class="fa fa-ellipsis-vertical"></i>
             </button>
             <div class="kebab-menu" data-kebab-menu>
+                <div class="kebab-heading">Acciones de Sesión</div>
+                <button type="button" class="kebab-item" data-action="editar"><i class="fa fa-pen"></i> Modificar
+                </button>
+                <button type="button" class="kebab-item" data-action="cambiar-foto"><i class="fa fa-image"></i>
+                    Cambiar foto de perfil
+                </button>
+                <a href="/whatsapp/horarios/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
+                        class="fa fa-business-time"></i> Horarios</a>
                 {% if sesion.es_meta %}
+                    <div class="kebab-sep"></div>
                     <div class="kebab-heading">Meta Cloud API</div>
-                    <button type="button" class="kebab-item" data-action="editar"><i class="fa fa-pen"></i> Modificar
-                    </button>
-                    <button type="button" class="kebab-item" data-action="cambiar-foto"><i class="fa fa-image"></i>
-                        Cambiar foto de perfil
-                    </button>
                     <button type="button" class="kebab-item" data-action="resumen"><i class="fa fa-clipboard-check"></i>
                         Resumen y pasos siguientes
                     </button>
                     <button type="button" class="kebab-item" data-action="meta-validar"><i
-                            class="fa fa-satellite-dish"></i> Revalidar número con Meta
+                            class="fa fa-satellite-dish text-success"></i> Revalidar número con Meta
                     </button>
                     <button type="button" class="kebab-item" data-action="datos-transporte"><i
                             class="fa fa-id-card"></i> Datos del transporte (Meta)
-                    </button>
-                    <a href="/whatsapp/sesiones/{{ sesion.id }}/diagnostico/" class="kebab-item"><i
-                            class="fa fa-stethoscope"></i> Diagnóstico de la sesión</a>
-                    <a href="/whatsapp/sesiones/{{ sesion.id }}/webhook-log/" class="kebab-item"><i
-                            class="fa fa-list-check"></i> Auditoría webhook (en vivo)</a>
-                    <button type="button" class="kebab-item" data-action="webhook-info"><i class="fa fa-link"></i> Datos
-                        del webhook (Meta)
                     </button>
                     {% if sesion.config_meta and sesion.config_meta.waba_id %}
                         <a href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers?asset_id={{ sesion.config_meta.waba_id }}{% if sesion.config_meta.business_account_id %}&business_id={{ sesion.config_meta.business_account_id }}{% endif %}&ir_qe_exposed=1"
@@ -67,8 +64,17 @@
                             <i class="fa-brands fa-meta"></i> Editar número en Meta Business
                         </a>
                     {% endif %}
+                    <a href="/whatsapp/sesiones/{{ sesion.id }}/diagnostico/" class="kebab-item"><i
+                            class="fa fa-stethoscope text-primary"></i> Diagnóstico de la sesión</a>
+                    <a href="/whatsapp/sesiones/{{ sesion.id }}/webhook-log/" class="kebab-item"><i
+                            class="fa fa-list-check"></i> Auditoría webhook (en vivo)</a>
                     <button type="button" class="kebab-item" data-action="test-eco"><i class="fa fa-paper-plane"></i>
                         Probar envío de mensaje
+                    </button>
+                    <div class="kebab-sep"></div>
+                    <div class="kebab-heading">Meta Administración</div>
+                    <button type="button" class="kebab-item" data-action="webhook-info"><i class="fa fa-link"></i> Datos
+                        del webhook (Meta)
                     </button>
                     <button type="button" class="kebab-item" data-action="plantilla-prueba"><i
                             class="fa fa-file-lines"></i> Enviar plantilla de prueba
@@ -79,47 +85,31 @@
                             class="fa fa-bullhorn"></i> Ver campañas</a>
                     <a href="/whatsapp/campanas/?action=add&sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
                             class="fa fa-plus-circle"></i> Nueva campaña</a>
-                    <a href="/whatsapp/horarios/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
-                            class="fa fa-business-time"></i> Configurar horarios</a>
                     <a href="/whatsapp/analytics/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
                             class="fa fa-chart-line"></i> Analytics de esta sesión</a>
-                    <button type="button" class="kebab-item" data-action="historial"><i
-                            class="fa fa-clock-rotate-left"></i> Historial de conexiones
-                    </button>
-                    <div class="kebab-sep"></div>
-                    {% if sesion.estado == 'conectado' %}
-                        <button type="button" class="kebab-item kebab-warn" data-action="disconnect"><i
-                                class="fa fa-power-off"></i> Desconectar
-                        </button>
-                    {% endif %}
-                    <button type="button" class="kebab-item kebab-danger" data-action="eliminar"><i
-                            class="fa fa-trash"></i> Eliminar sesión
-                    </button>
                 {% else %}
+                    <div class="kebab-sep"></div>
                     <div class="kebab-heading">Baileys (Node.js)</div>
-                    <button type="button" class="kebab-item" data-action="editar"><i class="fa fa-pen"></i> Modificar
-                    </button>
                     <button type="button" class="kebab-item" data-action="baileys-verificar"><i
                             class="fa fa-satellite-dish"></i> Verificar conexión
                     </button>
                     <button type="button" class="kebab-item" data-action="baileys-reconnect"><i
                             class="fa fa-qrcode"></i> Reconectar / ver QR
                     </button>
-                    <a href="/whatsapp/horarios/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
-                            class="fa fa-business-time"></i> Horarios</a>
-                    <button type="button" class="kebab-item" data-action="historial"><i
-                            class="fa fa-clock-rotate-left"></i> Historial de conexiones
-                    </button>
-                    <div class="kebab-sep"></div>
-                    {% if sesion.estado == 'conectado' %}
-                        <button type="button" class="kebab-item kebab-warn" data-action="disconnect"><i
-                                class="fa fa-power-off"></i> Desconectar
-                        </button>
-                    {% endif %}
-                    <button type="button" class="kebab-item kebab-danger" data-action="eliminar"><i
-                            class="fa fa-trash"></i> Eliminar sesión
+                {% endif %}
+                <div class="kebab-sep"></div>
+                <div class="kebab-heading">Acciones de Criticas</div>
+                {% if sesion.estado == 'conectado' %}
+                    <button type="button" class="kebab-item kebab-warn" data-action="disconnect"><i
+                            class="fa fa-power-off"></i> Desconectar
                     </button>
                 {% endif %}
+                <button type="button" class="kebab-item kebab-danger" data-action="eliminar"><i
+                        class="fa fa-trash"></i> Eliminar sesión
+                </button>
+                <button type="button" class="kebab-item" data-action="historial"><i
+                        class="fa fa-clock-rotate-left"></i> Historial de conexiones
+                </button>
             </div>
         </div>
     </div>
@@ -160,13 +150,11 @@
                 <span class="tag tag-modo-ninguno"><i class="fa fa-user"></i> Solo humanos</span>
             {% endif %}
         </div>
-
         {% if sesion.es_baileys and sesion.config_baileys.error_mensaje %}
             <div class="card-error" title="{{ sesion.config_baileys.error_mensaje }}">
                 <i class="fa fa-triangle-exclamation"></i> {{ sesion.config_baileys.error_mensaje|truncatechars:80 }}
             </div>
         {% endif %}
-
         {# Mostrar agente IA si modo usa IA (ia o hibrido) #}
         {% if sesion.agente_ia and sesion.modo_bot == 'ia' or sesion.modo_bot == 'hibrido' %}
             {% if sesion.agente_ia %}

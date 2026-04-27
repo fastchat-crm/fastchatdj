@@ -560,7 +560,8 @@
         }
     </script>
 
-    {# ───────── Modal: Configurar perfil Meta ───────── #}
+    {# ───────── Modal: Configurar perfil Meta — solo si la sesión es Meta ───────── #}
+    {% if sesion_actual.es_meta %}
     <div class="modal fade" id="modalMetaProfile" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
@@ -701,4 +702,5 @@
             _modalMetaInstance.hide();
         });
     </script>
+    {% endif %}
 {% endblock %}

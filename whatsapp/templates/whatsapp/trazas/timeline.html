@@ -19,10 +19,6 @@
                         <small class="text-muted">{{ t.fecha|date:"d/m/Y H:i:s" }}</small>
                     </div>
                     {% if t.detalle %}
-                        {# data-trace-detalle: lo agarra el script post-load
-                           para reemplazarlo por JsonPretty.format() si parsea
-                           como JSON; si es texto plano (key=val | …) queda
-                           como pre raw. #}
                         <div class="trace-detalle-wrap" data-trace-detalle>{{ t.detalle }}</div>
                     {% endif %}
                     <small class="text-muted">
