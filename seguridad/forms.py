@@ -71,11 +71,15 @@ class CredencialMetaAppForm(ModelFormBase):
                 render_value=True, attrs=attrs_prev,
             )
         for k in self.fields:
-            self.fields[k].widget.attrs.setdefault('class', 'form-control')
+            if k != 'es_tech_provider':
+                self.fields[k].widget.attrs.setdefault('class', 'form-control')
             if k in ('app_id', 'app_secret', 'business_id', 'system_user_id'):
                 self.fields[k].widget.attrs['col'] = "6"
             if k == 'system_user_token':
                 self.fields[k].widget.attrs['col'] = "12"
+            if k == 'es_tech_provider':
+                self.fields[k].widget.attrs['col'] = "12"
+                self.fields[k].required = False
             self.fields[k].widget.attrs.setdefault('autocomplete', 'off')
 
 

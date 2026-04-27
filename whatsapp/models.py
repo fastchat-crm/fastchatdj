@@ -1150,6 +1150,12 @@ class ConfigMeta(ModeloBase):
 
     # Auditoria
     ultima_sincronizacion = models.DateTimeField(null=True, blank=True)
+    alta_manual = models.BooleanField(
+        default=False,
+        verbose_name='¿Alta manual (sin Embedded Signup)?',
+        help_text='True si la sesión se conectó cargando los IDs a mano '
+                  '(modo previo a Tech Provider). False si pasó por el popup OAuth.'
+    )
 
     class Meta:
         verbose_name = 'Configuracion Meta'

@@ -93,18 +93,34 @@
     b.addEventListener('click', function () { cambiarPanel(b.getAttribute('data-canal')); });
   });
 
-  // ---------- Checkbox WhatsApp / botón Continuar ----------
+  // ---------- Checkbox WhatsApp / botón Continuar (modo OAuth) ----------
   var chkWa = document.getElementById('chk-wa-requisitos');
   var btnCont = document.getElementById('btn-wa-continuar');
-  var continuarYaHabilitado = btnCont && !btnCont.hasAttribute('disabled');
-  if (chkWa && btnCont) {
-    if (!continuarYaHabilitado) {
-      btnCont.disabled = true; chkWa.disabled = true;
-    } else {
-      btnCont.disabled = true;
+  var formManual = document.getElementById('form-wa-manual');
+  var btnValManual = document.getElementById('btn-wa-validar-manual');
+  var btnSaveManual = document.getElementById('btn-wa-guardar-manual');
+
+  function setManualEnabled(enabled) {
+    if (btnValManual) btnValManual.disabled = !enabled;
+    if (btnSaveManual) btnSaveManual.disabled = !enabled;
+    if (formManual) {
+      formManual.querySelectorAll('input').forEach(function (i) { i.disabled = !enabled; });
     }
+  }
+
+  if (chkWa) {
+    if (btnCont) {
+      var continuarYaHabilitado = !btnCont.hasAttribute('disabled');
+      if (!continuarYaHabilitado) {
+        btnCont.disabled = true; chkWa.disabled = true;
+      } else {
+        btnCont.disabled = true;
+      }
+    }
+    if (formManual) setManualEnabled(false);
     chkWa.addEventListener('change', function () {
-      if (continuarYaHabilitado) btnCont.disabled = !chkWa.checked;
+      if (btnCont && !btnCont.hasAttribute('data-locked-out')) btnCont.disabled = !chkWa.checked;
+      if (formManual) setManualEnabled(chkWa.checked);
     });
   }
   if (btnCont) {
@@ -116,6 +132,133 @@
       var popup = window.open(window.META_OAUTH_START_URL, 'meta_oauth',
         'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top);
       if (!popup) mostrarToast('Tu navegador bloqueó el popup. Permite ventanas emergentes.', 'err');
+    });
+  }
+
+  // ---------- Panel guía colapsable (modo manual) ----------
+  var manHelpToggle = document.getElementById('man-help-toggle');
+  var manHelpPanel  = document.getElementById('man-help-panel');
+  if (manHelpToggle && manHelpPanel) {
+    manHelpToggle.addEventListener('click', function () {
+      var open = manHelpPanel.hasAttribute('hidden') === false;
+      if (open) {
+        manHelpPanel.setAttribute('hidden', '');
+        manHelpToggle.setAttribute('aria-expanded', 'false');
+      } else {
+        manHelpPanel.removeAttribute('hidden');
+        manHelpToggle.setAttribute('aria-expanded', 'true');
+      }
+    });
+  }
+  // Links "¿de dónde?" → abre panel y resalta el paso correspondiente
+  document.querySelectorAll('.man-help-link').forEach(function (link) {
+    link.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      if (!manHelpPanel || !manHelpToggle) return;
+      if (manHelpPanel.hasAttribute('hidden')) {
+        manHelpPanel.removeAttribute('hidden');
+        manHelpToggle.setAttribute('aria-expanded', 'true');
+      }
+      var target = link.getAttribute('data-help-jump');
+      var item = manHelpPanel.querySelector('li[data-target="' + target + '"]');
+      if (!item) return;
+      manHelpPanel.querySelectorAll('li.is-highlight').forEach(function (el) { el.classList.remove('is-highlight'); });
+      item.classList.add('is-highlight');
+      item.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+      setTimeout(function () { item.classList.remove('is-highlight'); }, 2200);
+    });
+  });
+
+  // ---------- Toggle ojo password (modo manual) ----------
+  var manTokenEye = document.getElementById('man-token-eye');
+  var manTokenInp = document.getElementById('man-token');
+  if (manTokenEye && manTokenInp) {
+    manTokenEye.addEventListener('click', function () {
+      var isPwd = manTokenInp.type === 'password';
+      manTokenInp.type = isPwd ? 'text' : 'password';
+      var icon = manTokenEye.querySelector('i');
+      if (icon) icon.className = isPwd ? 'fa fa-eye-slash' : 'fa fa-eye';
+    });
+  }
+
+  // ---------- Modo manual: validar + conectar ----------
+  function fmGetCsrf() {
+    var i = formManual && formManual.querySelector('input[name=csrfmiddlewaretoken]');
+    return i ? i.value : '';
+  }
+  function fmGetData() {
+    var d = new FormData(formManual);
+    return d;
+  }
+  function fmShowResult(html, type) {
+    var box = document.getElementById('man-resultado');
+    if (!box) return;
+    box.classList.remove('d-none', 'alert-success', 'alert-danger', 'alert-info', 'alert-warning');
+    box.classList.add('alert-' + type);
+    box.innerHTML = html;
+  }
+  function fmPost(url, formData, onDone) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.setRequestHeader('X-CSRFToken', fmGetCsrf());
+    xhr.onload = function () {
+      var data = {};
+      try { data = JSON.parse(xhr.responseText) || {}; } catch (e) {}
+      onDone(data, xhr.status);
+    };
+    xhr.onerror = function () { onDone({ok: false, error: 'Error de red.'}, 0); };
+    xhr.send(formData);
+  }
+  if (btnValManual && formManual) {
+    btnValManual.addEventListener('click', function () {
+      if (btnValManual.disabled) return;
+      var orig = btnValManual.innerHTML;
+      btnValManual.disabled = true;
+      btnValManual.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Validando con Meta...';
+      fmPost(window.META_MANUAL_VALIDAR_URL || '/whatsapp/meta/manual/validar/', fmGetData(), function (data) {
+        btnValManual.disabled = false;
+        btnValManual.innerHTML = orig;
+        if (!data.ok) {
+          fmShowResult('<i class="fa fa-circle-xmark me-2"></i>' + (data.error || 'Meta rechazó las credenciales.'), 'danger');
+          return;
+        }
+        var lineas = [];
+        if (data.waba_name) lineas.push('<b>WABA:</b> ' + data.waba_name);
+        if (data.display_phone_number) {
+          lineas.push('<b>Número:</b> <code>' + data.display_phone_number + '</code>');
+          var disp = document.getElementById('man-display');
+          if (disp && !disp.value) disp.value = data.display_phone_number;
+        }
+        if (data.verified_name) lineas.push('<b>Nombre verificado:</b> ' + data.verified_name);
+        if (data.quality_rating) lineas.push('<b>Calidad:</b> <code>' + data.quality_rating + '</code>');
+        fmShowResult('<i class="fa fa-circle-check me-2"></i>Meta validó las credenciales:<br>' + lineas.join('<br>'), 'success');
+      });
+    });
+  }
+  if (formManual) {
+    formManual.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      if (btnSaveManual && btnSaveManual.disabled) return;
+      var orig = btnSaveManual ? btnSaveManual.innerHTML : '';
+      if (btnSaveManual) {
+        btnSaveManual.disabled = true;
+        btnSaveManual.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Conectando...';
+      }
+      fmPost(window.META_MANUAL_CONECTAR_URL || '/whatsapp/meta/manual/conectar/', fmGetData(), function (data) {
+        if (btnSaveManual) {
+          btnSaveManual.disabled = false;
+          btnSaveManual.innerHTML = orig;
+        }
+        if (!data.ok) {
+          fmShowResult('<i class="fa fa-circle-xmark me-2"></i>' + (data.error || 'No se pudo conectar la sesión.'), 'danger');
+          return;
+        }
+        fmShowResult('<i class="fa fa-circle-check me-2"></i>Sesión <b>' + (data.nombre || '') + '</b> conectada. Recargando...', 'success');
+        cerrarModal();
+        mostrarToast('WhatsApp conectado manualmente: ' + (data.display_phone_number || data.nombre || ''), 'ok');
+        setTimeout(function () { window.location.reload(); }, 900);
+      });
     });
   }
 

@@ -3,6 +3,7 @@ from django.urls import re_path, path
 from .conversaciones_finalizadas_view import conversacionesFinalizadasView
 from .sesiones_view import sesionesView
 from .meta_oauth_view import meta_oauth_start, meta_oauth_callback
+from .meta_manual_view import meta_manual_validar, meta_manual_conectar
 from .conversaciones_view import conversacionesView
 from .sync_contacts import sync_contacts_view
 from .update_profile_view import update_profile_view
@@ -88,6 +89,8 @@ urlpatterns = [
     path('meta_webhook/', meta_webhook, name='whatsapp_meta_webhook'),
     path('meta/oauth/start/', meta_oauth_start, name='whatsapp_meta_oauth_start'),
     path('meta/oauth/callback/', meta_oauth_callback, name='whatsapp_meta_oauth_callback'),
+    path('meta/manual/validar/', meta_manual_validar, name='whatsapp_meta_manual_validar'),
+    path('meta/manual/conectar/', meta_manual_conectar, name='whatsapp_meta_manual_conectar'),
     path('instagram_webhook/', instagram_webhook, name='whatsapp_instagram_webhook'),
     path('messenger_webhook/', messenger_webhook, name='whatsapp_messenger_webhook'),
     path('sync-contacts/', sync_contacts_view, name='sync_contacts'),

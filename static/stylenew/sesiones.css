@@ -1081,3 +1081,339 @@
 .conex-rating-green  { background: #dcfce7 !important; color: #15803d !important; }
 .conex-rating-yellow { background: #fef9c3 !important; color: #a16207 !important; }
 .conex-rating-red    { background: #fee2e2 !important; color: #b91c1c !important; }
+
+/* ─────── Modo manual (sin Tech Provider) ─────── */
+.pane-modo-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: .6rem;
+    padding: .65rem .85rem;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #1e3a8a;
+    border: 1px solid #bfdbfe;
+    margin: .75rem 0 0;
+    font-size: .85rem;
+    line-height: 1.4;
+}
+.pane-modo-banner .fa { margin-top: 2px; flex: 0 0 auto; }
+.pane-modo-banner a.alert-link { color: #1d4ed8; text-decoration: underline; }
+
+.pane-form-manual { margin-top: .75rem; }
+.pane-form-manual .form-control {
+    border-radius: 8px;
+    font-size: .875rem;
+    padding: .5rem .75rem;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    transition: border-color .15s, box-shadow .15s;
+}
+.pane-form-manual .form-control:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+    outline: 0;
+}
+.pane-form-manual .form-control:disabled {
+    background: #f9fafb;
+    color: #9ca3af;
+    cursor: not-allowed;
+}
+
+/* Encabezado del form: título + botón ayuda */
+.man-form-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .85rem 1rem;
+    background: linear-gradient(135deg, #f0f9ff 0%, #eff6ff 100%);
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    margin: .5rem 0 1rem;
+}
+.man-form-header-text { flex: 1; min-width: 0; }
+.man-form-title {
+    margin: 0 0 .2rem;
+    font-size: .95rem;
+    font-weight: 600;
+    color: #1e3a8a;
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+}
+.man-form-title .fa { color: #2563eb; }
+.man-form-sub {
+    margin: 0;
+    font-size: .8rem;
+    color: #475569;
+    line-height: 1.4;
+}
+.man-help-btn {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .45rem .7rem;
+    background: #fff;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+    border-radius: 8px;
+    font-size: .8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+.man-help-btn:hover { background: #eff6ff; border-color: #93c5fd; }
+.man-help-btn[aria-expanded="true"] {
+    background: #1d4ed8;
+    color: #fff;
+    border-color: #1d4ed8;
+}
+.man-help-btn[aria-expanded="true"] .man-help-chev { transform: rotate(180deg); }
+.man-help-chev { transition: transform .2s; font-size: .7rem; }
+
+/* Panel guía colapsable */
+.man-help-panel {
+    background: #fafbfc;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    margin: 0 0 1rem;
+    animation: manFadeIn .25s ease;
+}
+.man-help-panel[hidden] { display: none; }
+@keyframes manFadeIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.man-help-intro {
+    margin: 0 0 .75rem;
+    font-size: .82rem;
+    color: #4b5563;
+}
+.man-help-intro a { color: #2563eb; font-weight: 500; }
+.man-help-steps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    counter-reset: man-help;
+}
+.man-help-steps > li {
+    display: flex;
+    gap: .7rem;
+    padding: .65rem 0;
+    border-top: 1px dashed #e5e7eb;
+}
+.man-help-steps > li:first-child { border-top: 0; }
+.man-help-steps > li.is-highlight {
+    background: #fffbeb;
+    border-radius: 6px;
+    padding: .65rem .75rem;
+    border-color: transparent;
+}
+.man-help-num {
+    flex: 0 0 26px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #1d4ed8;
+    color: #fff;
+    font-size: .8rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.man-help-steps b { color: #111827; font-size: .88rem; }
+.man-help-steps p {
+    margin: .25rem 0 0;
+    font-size: .8rem;
+    color: #4b5563;
+    line-height: 1.5;
+}
+.man-help-steps p code,
+.man-help-steps b + p code,
+.man-help-steps a {
+    color: #1d4ed8;
+}
+.man-help-steps a { font-weight: 500; }
+.man-help-opt {
+    display: inline-block;
+    margin-left: .35rem;
+    padding: 1px 7px;
+    background: #f3f4f6;
+    color: #6b7280;
+    font-size: .7rem;
+    border-radius: 999px;
+    font-weight: 500;
+    vertical-align: middle;
+}
+.man-help-scopes {
+    list-style: none;
+    padding: 0;
+    margin: .35rem 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+}
+.man-help-scopes li {
+    background: #eff6ff;
+    color: #1d4ed8;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: .75rem;
+    font-family: monospace;
+}
+.man-help-tip {
+    margin-top: .75rem;
+    padding: .55rem .8rem;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    border-radius: 6px;
+    font-size: .8rem;
+    color: #78350f;
+    /*display: flex;*/
+    align-items: flex-start;
+    gap: .5rem;
+}
+.man-help-tip .fa { color: #d97706; margin-top: 2px; }
+
+/* Secciones del form */
+.man-form-section {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: .9rem 1rem 1rem;
+    margin: 0 0 .85rem;
+}
+.man-section-head {
+    display: flex;
+    gap: .65rem;
+    align-items: flex-start;
+    margin-bottom: .85rem;
+}
+.man-section-num {
+    flex: 0 0 24px;
+    width: 24px;
+    height: 24px;
+    background: #1f2937;
+    color: #fff;
+    border-radius: 6px;
+    font-size: .75rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.man-section-title {
+    margin: 0;
+    font-size: .88rem;
+    font-weight: 600;
+    color: #111827;
+}
+.man-section-sub {
+    margin: 2px 0 0;
+    font-size: .76rem;
+    color: #6b7280;
+    line-height: 1.4;
+}
+
+/* Labels y hints */
+.man-label {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    flex-wrap: wrap;
+    font-size: .82rem;
+    font-weight: 500;
+    color: #374151;
+    margin: 0 0 .3rem;
+}
+.man-label-icon { color: #6b7280; font-size: .8rem; }
+.man-req { color: #dc2626; font-weight: 700; }
+.man-help-link {
+    margin-left: auto;
+    font-size: .72rem;
+    color: #2563eb;
+    cursor: pointer;
+    text-decoration: none;
+    border-bottom: 1px dotted #93c5fd;
+    padding-bottom: 1px;
+}
+.man-help-link:hover {
+    color: #1d4ed8;
+    border-bottom-style: solid;
+}
+.man-hint {
+    display: block;
+    margin-top: .25rem;
+    font-size: .73rem;
+    color: #6b7280;
+    line-height: 1.4;
+}
+.man-hint code,
+.man-hint a { color: #1d4ed8; }
+
+/* Botón outline (Validar con Meta) — acción secundaria */
+.conex-btn-secondary {
+    background: #fff;
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+}
+.conex-btn-secondary:hover:not([disabled]) {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1e40af;
+}
+.conex-btn-secondary[disabled] { opacity: .5; cursor: not-allowed; }
+
+/* Botón ghost (Volver) — terciario */
+.conex-btn-ghost {
+    background: transparent;
+    color: #6b7280;
+    border-color: transparent;
+}
+.conex-btn-ghost:hover:not([disabled]) { background: #f3f4f6; color: #374151; }
+
+/* Pane actions del modo manual: barra inferior con fondo sutil */
+.pane-form-manual .pane-actions {
+    margin-top: 1rem;
+    padding: .85rem 1rem;
+    background: #fafbfc;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+.pane-form-manual .pane-actions .conex-btn-light,
+.pane-form-manual .pane-actions .conex-btn-ghost { margin-right: auto; }
+
+/* Sombra sutil en primary del modo manual */
+.pane-form-manual .conex-btn-primary {
+    box-shadow: 0 1px 2px rgba(37, 99, 235, .25), 0 0 0 1px rgba(37, 99, 235, .15);
+}
+.pane-form-manual .conex-btn-primary:hover:not([disabled]) {
+    box-shadow: 0 2px 6px rgba(37, 99, 235, .35), 0 0 0 1px rgba(29, 78, 216, .25);
+}
+
+/* Iconos en botones del modo manual */
+.pane-form-manual .conex-btn .fa { font-size: .8rem; }
+
+/* Toggle ojo password (compartido con form de credencial-meta) */
+.cm-pwd-wrap { position: relative; }
+.cm-pwd-wrap .form-control { padding-right: 2.4rem; }
+.cm-pwd-toggle {
+    position: absolute;
+    right: .35rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: 0;
+    color: #6b7280;
+    padding: .25rem .4rem;
+    cursor: pointer;
+    line-height: 1;
+}
+.cm-pwd-toggle:hover { color: #1f2937; }

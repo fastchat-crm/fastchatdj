@@ -280,6 +280,14 @@ class CredencialMetaApp(ModeloBase):
         verbose_name='System User Token',
         help_text='Token long-lived del System User. Se guarda cifrado.'
     )
+    es_tech_provider = models.BooleanField(
+        default=False,
+        verbose_name='¿Aprobado como Tech Provider por Meta?',
+        help_text='Mientras esté en NO, las sesiones se conectan cargando '
+                  'WABA ID + Phone Number ID + access token a mano (modo manual). '
+                  'Activá esta opción cuando Meta apruebe tu acceso avanzado: '
+                  'recién ahí se habilita el popup Embedded Signup de un solo clic.'
+    )
     ultima_sincronizacion = models.DateTimeField(
         null=True, blank=True,
         verbose_name='Última sincronización'

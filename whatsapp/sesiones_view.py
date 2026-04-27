@@ -399,10 +399,26 @@ def sesionesView(request):
     data['stats'] = stats
     data['criterio'] = criterio
 
-    # Flag para mostrar/esconder el boton "Continuar" del panel WhatsApp
+    # Flag para mostrar/esconder el boton "Continuar" del panel WhatsApp.
+    # Tres modos posibles:
+    #   - 'oauth'   → Tech Provider activo + config_id cargado → popup Embedded Signup
+    #   - 'manual'  → sin Tech Provider → form de carga manual de WABA + Phone + token
+    #   - 'sin_credenciales' → falta app_id/app_secret → mostrar alert para ir al form
     from .common_meta import get_meta_app_credentials, get_meta_config_id
+    from seguridad.models import Configuracion as _Conf, CredencialMetaApp as _Cred
     _app_id, _app_secret = get_meta_app_credentials()
-    data['meta_oauth_listo'] = bool(_app_id and _app_secret and get_meta_config_id())
+    _confi = _Conf.get_instancia()
+    _cred = _Cred.objects.filter(configuracion=_confi).first() if _confi and _confi.pk else None
+    _es_tp = bool(_cred and _cred.es_tech_provider)
+    _config_id_ok = bool(get_meta_config_id())
+    if not (_app_id and _app_secret):
+        data['meta_modo'] = 'sin_credenciales'
+    elif _es_tp and _config_id_ok:
+        data['meta_modo'] = 'oauth'
+    else:
+        data['meta_modo'] = 'manual'
+    data['meta_oauth_listo'] = (data['meta_modo'] == 'oauth')
+    data['meta_manual_listo'] = (data['meta_modo'] == 'manual')
 
     # Canales activos: controlan visibilidad del sidebar + paneles del modal
     # "Agregar conexion". Se administran en /seguridad/configuracion/.
