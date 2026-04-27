@@ -2,8 +2,9 @@
 
 Recibe un archivo de imagen del operador, lo manda a Meta vía Resumable
 Upload + business_profile, y cachea el data URL base64 en
-`ConfigMeta.foto_perfil` para que el avatar del card lo muestre sin
-volver a pegarle a Meta.
+`ConfigMeta.foto` (mismo nombre que `ConfigBaileys.foto` para mantener
+convención cross-transporte) para que el avatar del card lo muestre
+sin volver a pegarle a Meta.
 
 URL: POST /whatsapp/sesiones/<sesion_id>/profile-picture/
 """
@@ -80,14 +81,14 @@ def meta_actualizar_foto_perfil(request, sesion_id: int):
     try:
         b64 = base64.b64encode(file_bytes).decode('ascii')
         data_url = f'data:{mime};base64,{b64}'
-        config.foto_perfil = data_url
+        config.foto = data_url
         config.ultima_sincronizacion = timezone.now()
-        config.save(update_fields=['foto_perfil', 'ultima_sincronizacion'])
+        config.save(update_fields=['foto', 'ultima_sincronizacion'])
     except Exception:
-        logger.exception("Error cacheando foto_perfil para ConfigMeta %s", config.id)
+        logger.exception("Error cacheando foto para ConfigMeta %s", config.id)
 
     return JsonResponse({
         'success': True,
         'message': 'Foto actualizada en Meta y guardada localmente.',
-        'foto_perfil': config.foto_perfil or '',
+        'foto': config.foto or '',
     })

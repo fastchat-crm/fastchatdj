@@ -9,8 +9,8 @@
         <div class="card-avatar">
             {% if sesion.es_baileys and sesion.config_baileys.foto %}
                 <img src="{{ sesion.config_baileys.foto }}" alt="avatar">
-            {% elif sesion.es_meta and sesion.config_meta.foto_perfil %}
-                <img src="{{ sesion.config_meta.foto_perfil }}" alt="avatar">
+            {% elif sesion.es_meta and sesion.config_meta.foto %}
+                <img src="{{ sesion.config_meta.foto }}" alt="avatar">
             {% else %}
                 <span class="avatar-fallback">
           <i class="fab fa-whatsapp"></i>

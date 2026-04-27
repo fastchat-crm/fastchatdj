@@ -1156,10 +1156,11 @@ class ConfigMeta(ModeloBase):
     # Foto de perfil (cache local). Meta no devuelve la foto en consultas
     # normales — la obtenemos solo cuando el operador la sube desde el panel.
     # Guardamos data: URL base64 para mostrarla en el avatar del card sin
-    # depender de URLs de Meta (que pueden expirar).
-    foto_perfil = models.TextField(
-        blank=True, null=True, verbose_name='Foto de perfil (data URL base64)',
-        help_text='Cache local de la última foto subida. Vacío hasta que el operador suba una.'
+    # depender de URLs de Meta (que pueden expirar). Mismo nombre `foto` que
+    # ConfigBaileys.foto para mantener convención cross-transporte.
+    foto = models.TextField(
+        blank=True, null=True, verbose_name='Foto de perfil',
+        help_text='Cache local (data URL base64) de la última foto subida. Vacío hasta que el operador suba una.'
     )
 
     # Auditoria
@@ -1300,6 +1301,45 @@ class PlantillaWhatsApp(ModeloBase):
             'PAUSED':   'info',
             'DISABLED': 'dark',
         }.get(self.estado_meta, 'secondary')
+
+
+class MetaWebhookHit(models.Model):
+    """Auditoria de bajo nivel: cada request HTTP que toca /whatsapp/meta_webhook/.
+
+    Diferencia con `EventoMetaRecibido`: este modelo guarda TODO hit (GET
+    handshake, POST con JSON invalido, 401/403/404, etc.) ANTES de cualquier
+    validacion. Sirve para diagnosticar por que Meta dice "Recent Activity OK"
+    pero `EventoMetaRecibido` esta vacio (firma invalida, JSON malformado,
+    etc.) o el inverso (Django nunca recibio porque proxy bloqueo).
+    """
+    fecha = models.DateTimeField(auto_now_add=True, db_index=True)
+    method = models.CharField(max_length=10, db_index=True)
+    status_code = models.PositiveSmallIntegerField(default=0, db_index=True)
+    ip = models.CharField(max_length=64, blank=True, default='')
+    user_agent = models.CharField(max_length=256, blank=True, default='')
+    query_string = models.CharField(max_length=512, blank=True, default='')
+    signature_presente = models.BooleanField(default=False)
+    body_length = models.PositiveIntegerField(default=0)
+    body_preview = models.CharField(
+        max_length=600, blank=True, default='',
+        help_text='Primeros ~600 chars del body para diagnostico.'
+    )
+    nota = models.CharField(
+        max_length=200, blank=True, default='',
+        help_text='Por que el response fue ese (ej: "verify_token_no_match").'
+    )
+
+    class Meta:
+        verbose_name = 'Hit HTTP webhook Meta'
+        verbose_name_plural = 'Hits HTTP webhook Meta'
+        ordering = ['-fecha', '-id']
+        indexes = [
+            models.Index(fields=['method', '-fecha']),
+            models.Index(fields=['status_code', '-fecha']),
+        ]
+
+    def __str__(self):
+        return f"[{self.fecha:%Y-%m-%d %H:%M:%S}] {self.method} {self.status_code} {self.ip}"
 
 
 class EventoMetaRecibido(ModeloBase):

@@ -891,9 +891,9 @@
 
     // ---------- Cambiar foto de perfil (Meta) ----------
     // Reutiliza el detail modal (#conex-detail-content) inyectando un panel
-    // con file input + preview + botón de subida. Submit vía fetch al
-    // endpoint /whatsapp/sesiones/<id>/profile-picture/. En éxito refresca
-    // la card del tablero (avatar nuevo) y cierra el modal.
+    // con un input.dropify (preview/drag-drop nativo de dropify, ya cargado
+    // globalmente vía form-controls-init.js). Submit vía fetch al endpoint
+    // /whatsapp/sesiones/<id>/profile-picture/. En éxito refresca la card.
     function abrirCambiarFoto(sesionId, nombre) {
         var safeNombre = (nombre || ('sesión #' + sesionId)).replace(/[<>&"]/g, function (c) {
             return {'<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;'}[c];
@@ -908,15 +908,12 @@
                 '<button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>' +
               '</div>' +
               '<div class="detail-body">' +
-                '<div class="foto-upload-zone" id="foto-upload-zone">' +
-                  '<input type="file" id="foto-upload-input" accept="image/jpeg,image/png" hidden>' +
-                  '<div class="foto-upload-preview" id="foto-upload-preview">' +
-                    '<i class="fa fa-cloud-arrow-up"></i>' +
-                    '<p>Click para elegir imagen o arrastrá una acá</p>' +
-                  '</div>' +
-                '</div>' +
-                '<div id="foto-upload-result" class="conex-data-warn d-none" style="margin-top:.75rem"></div>' +
-                '<div class="detail-actions" style="margin-top:1rem;display:flex;gap:.5rem;justify-content:flex-end">' +
+                '<input type="file" id="foto-upload-input" class="dropify" ' +
+                       'accept="image/jpeg,image/png" ' +
+                       'data-allowed-file-extensions="jpg jpeg png" ' +
+                       'data-max-file-size="5M">' +
+                '<div id="foto-upload-result" class="conex-data-warn d-none foto-upload-result"></div>' +
+                '<div class="detail-actions foto-upload-actions">' +
                   '<button type="button" class="conex-btn conex-btn-secondary" data-cerrar-detail>Cancelar</button>' +
                   '<button type="button" class="conex-btn conex-btn-primary" id="foto-upload-submit" disabled>' +
                     '<i class="fa fa-upload me-1"></i> Subir a Meta' +
@@ -926,66 +923,55 @@
             '</div>';
         abrirDetail(html);
 
-        var zona    = document.getElementById('foto-upload-zone');
-        var input   = document.getElementById('foto-upload-input');
-        var preview = document.getElementById('foto-upload-preview');
-        var submit  = document.getElementById('foto-upload-submit');
-        var result  = document.getElementById('foto-upload-result');
-        var fileSeleccionado = null;
+        var input  = document.getElementById('foto-upload-input');
+        var submit = document.getElementById('foto-upload-submit');
+        var result = document.getElementById('foto-upload-result');
+
+        // Inicializar Dropify manualmente — el detail modal no es un
+        // Bootstrap modal, así que no lo agarra el listener global.
+        var $input = window.jQuery && jQuery(input);
+        if ($input && $input.dropify) {
+            $input.dropify({
+                messages: {
+                    default: 'Arrastrá una imagen acá o hacé click',
+                    replace: 'Arrastrá o hacé click para reemplazar',
+                    remove:  'Quitar',
+                    error:   'Algo salió mal',
+                },
+                error: {
+                    fileSize: 'Demasiado grande (máx. 5 MB).',
+                    fileExtension: 'Solo JPG o PNG.',
+                },
+            });
+        }
 
         function showResult(msg, tipo) {
             if (!result) return;
             result.classList.remove('d-none');
             result.textContent = msg;
-            result.style.background = tipo === 'err' ? '#fee2e2' : '#ecfdf5';
-            result.style.color      = tipo === 'err' ? '#991b1b' : '#065f46';
+            result.classList.toggle('is-err', tipo === 'err');
+            result.classList.toggle('is-ok',  tipo !== 'err');
         }
 
-        function setFile(file) {
-            if (!file) return;
-            if (!/^image\/(jpeg|png)$/.test(file.type)) {
-                showResult('Formato no soportado. Usá JPG o PNG.', 'err');
-                return;
-            }
-            if (file.size > 5 * 1024 * 1024) {
-                showResult('La imagen pesa más de 5 MB. Reducila antes de subir.', 'err');
-                return;
-            }
-            fileSeleccionado = file;
-            if (result) result.classList.add('d-none');
-            var reader = new FileReader();
-            reader.onload = function (ev) {
-                preview.innerHTML = '<img src="' + ev.target.result + '" alt="preview">';
-            };
-            reader.readAsDataURL(file);
-            submit.disabled = false;
-        }
-
-        if (zona) {
-            zona.addEventListener('click', function () { input && input.click(); });
-            zona.addEventListener('dragover', function (e) { e.preventDefault(); zona.classList.add('drag-over'); });
-            zona.addEventListener('dragleave', function () { zona.classList.remove('drag-over'); });
-            zona.addEventListener('drop', function (e) {
-                e.preventDefault();
-                zona.classList.remove('drag-over');
-                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
-                    setFile(e.dataTransfer.files[0]);
-                }
-            });
-        }
         if (input) {
             input.addEventListener('change', function () {
-                if (input.files && input.files[0]) setFile(input.files[0]);
+                var ok = input.files && input.files[0]
+                         && /^image\/(jpeg|png)$/.test(input.files[0].type)
+                         && input.files[0].size <= 5 * 1024 * 1024;
+                submit.disabled = !ok;
+                if (ok && result) result.classList.add('d-none');
             });
         }
+
         if (submit) {
             submit.addEventListener('click', function () {
-                if (!fileSeleccionado) return;
+                var file = input && input.files && input.files[0];
+                if (!file) return;
                 submit.disabled = true;
                 var orig = submit.innerHTML;
                 submit.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Subiendo...';
                 var fd = new FormData();
-                fd.append('foto', fileSeleccionado);
+                fd.append('foto', file);
                 fd.append('csrfmiddlewaretoken', csrfToken());
                 fetch('/whatsapp/sesiones/' + sesionId + '/profile-picture/', {
                     method: 'POST',

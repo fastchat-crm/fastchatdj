@@ -32,9 +32,42 @@ from django.views.decorators.csrf import csrf_exempt
 
 from channels.layers import get_channel_layer
 
-from .models import ConfigMeta, EventoMetaRecibido, SesionWhatsApp
+from .models import ConfigMeta, EventoMetaRecibido, MetaWebhookHit, SesionWhatsApp
 from .view_webhook_handler import process_incoming_message
 from .trazas import registrar as _traza
+
+
+def _log_hit(request, status_code: int, nota: str = ''):
+    """Registra el hit HTTP en MetaWebhookHit. Best-effort — nunca rompe el
+    flujo del webhook si la BD esta caida."""
+    try:
+        body = request.body or b''
+        try:
+            body_preview = body.decode('utf-8', errors='replace')[:600]
+        except Exception:
+            body_preview = repr(body[:300])
+        ip = (
+            request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+            or request.META.get('REMOTE_ADDR', '')
+            or ''
+        )
+        sig = (
+            request.META.get('HTTP_X_HUB_SIGNATURE_256')
+            or request.headers.get('X-Hub-Signature-256', '')
+        )
+        MetaWebhookHit.objects.create(
+            method=(request.method or '')[:10],
+            status_code=status_code,
+            ip=ip[:64],
+            user_agent=(request.META.get('HTTP_USER_AGENT') or '')[:256],
+            query_string=(request.META.get('QUERY_STRING') or '')[:512],
+            signature_presente=bool(sig),
+            body_length=len(body),
+            body_preview=body_preview,
+            nota=(nota or '')[:200],
+        )
+    except Exception:
+        logger.exception("MetaWebhookHit: fallo registrando hit (ignorando)")
 
 logger = logging.getLogger(__name__)
 
@@ -45,15 +78,22 @@ logger = logging.getLogger(__name__)
 
 @csrf_exempt
 def meta_webhook(request):
+    response = None
+    nota = ''
     if request.method == 'GET':
-        return _verificar_webhook(request)
-    if request.method == 'POST':
-        return _procesar_evento(request)
-    # Metodo no permitido — si viene del navegador, renderizamos HTML; si es
-    # un cliente programatico respondemos JSON.
-    if _cliente_espera_html(request):
-        return _render_info(request, estado='metodo_no_permitido', status_code=405)
-    return JsonResponse({'error': 'method_not_allowed'}, status=405)
+        response = _verificar_webhook(request)
+        nota = 'handshake' if request.GET.get('hub.challenge') else 'browser_landing'
+    elif request.method == 'POST':
+        response = _procesar_evento(request)
+        nota = 'evento_post'
+    else:
+        if _cliente_espera_html(request):
+            response = _render_info(request, estado='metodo_no_permitido', status_code=405)
+        else:
+            response = JsonResponse({'error': 'method_not_allowed'}, status=405)
+        nota = 'metodo_no_permitido'
+    _log_hit(request, response.status_code if response else 0, nota=nota)
+    return response
 
 
 # ---------------------------------------------------------------------------

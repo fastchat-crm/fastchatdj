@@ -382,6 +382,26 @@
                     probá enviar un mensaje al número desde tu celular.
                 </div>
             {% endif %}
+
+            {# ── Herramientas de diagnóstico de webhook ── #}
+            <div class="diag-webhook-tools">
+                <a href="/whatsapp/meta/webhook-hits/"
+                   class="conex-btn conex-btn-secondary"
+                   title="Lista raw de cada hit HTTP al endpoint (incluye GETs, errores, body preview)">
+                    <i class="fa fa-network-wired"></i> Hits HTTP raw
+                </a>
+                <a href="https://developers.facebook.com/apps/{{ config.waba_id|default:'' }}/webhooks/"
+                   target="_blank" rel="noopener"
+                   class="conex-btn conex-btn-secondary"
+                   title="Recent Activity / Subscriptions del webhook en Meta for Developers">
+                    <i class="fa-brands fa-meta"></i> Webhooks en Meta
+                </a>
+                <span class="diag-tools-hint">
+                    <i class="fa fa-circle-info"></i>
+                    Si <b>Hits HTTP raw</b> está vacío y Meta dice que pegó →
+                    revisá Cloudflare/WAF. Si tiene 4xx → arreglá la respuesta.
+                </span>
+            </div>
         </div>
 
         {# ───────── Trazas IA ───────── #}

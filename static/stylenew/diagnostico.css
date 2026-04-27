@@ -588,6 +588,28 @@
 }
 .diag-link-ver-todas:hover { color: #1d4ed8; text-decoration: underline; }
 
+/* Tools de diagnóstico webhook (raw hits + Meta) */
+.diag-webhook-tools {
+    margin-top: 1rem;
+    padding: .75rem 1rem;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    align-items: center;
+}
+.diag-tools-hint {
+    flex: 1 1 240px;
+    font-size: .76rem;
+    color: #6b7280;
+    line-height: 1.4;
+    padding-left: .35rem;
+}
+.diag-tools-hint .fa { color: #9ca3af; margin-right: 3px; }
+.diag-tools-hint b { color: #374151; }
+
 /* Botón de acción inline (suscribir WABA, etc) */
 .diag-action-btn {
     margin-top: .75rem;
