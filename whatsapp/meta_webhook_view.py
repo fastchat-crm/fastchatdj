@@ -381,14 +381,22 @@ def _meta_a_evento_interno(msg_meta: dict, value: dict, sesion: SesionWhatsApp) 
             message_content = {'conversation': texto}
 
         elif tipo_meta == 'interactive':
-            # Respuesta a botones o listas — la guardamos como texto plano
+            # Respuesta a botones o listas. Capturamos `id` (clave para matchear
+            # contra OpcionDepartamentoChatBot.boton_id en el motor) y `title`
+            # (texto visible). Lo expongo como `_boton_id` y `_boton_title` para
+            # que process_incoming_message + motor_flujo lo lean.
             interactive = msg_meta.get('interactive') or {}
             kind = interactive.get('type')
             texto_boton = ''
+            boton_id = ''
             if kind == 'button_reply':
-                texto_boton = (interactive.get('button_reply') or {}).get('title', '')
+                br = interactive.get('button_reply') or {}
+                texto_boton = br.get('title', '') or ''
+                boton_id    = br.get('id', '') or ''
             elif kind == 'list_reply':
-                texto_boton = (interactive.get('list_reply') or {}).get('title', '')
+                lr = interactive.get('list_reply') or {}
+                texto_boton = lr.get('title', '') or ''
+                boton_id    = lr.get('id', '') or ''
             message_content = {'conversation': texto_boton}
 
         elif tipo_meta in ('image', 'video', 'audio', 'document', 'sticker'):
@@ -472,6 +480,17 @@ def _meta_a_evento_interno(msg_meta: dict, value: dict, sesion: SesionWhatsApp) 
             evento_interno['fileName'] = filename
         if media_data:
             evento_interno['mediaData'] = media_data
+        # Botón / list reply — clave para que el motor del flujo
+        # tradicional matchee contra OpcionDepartamentoChatBot.boton_id
+        # sin depender de adivinar por texto.
+        if tipo_meta == 'interactive':
+            try:
+                if boton_id:
+                    evento_interno['_boton_id'] = boton_id
+                if texto_boton:
+                    evento_interno['_boton_title'] = texto_boton
+            except NameError:
+                pass
 
         # Bloque referral: presente cuando el contacto entra desde un anuncio
         # Click-to-WhatsApp (CTWA). Meta lo entrega tanto en el mensaje

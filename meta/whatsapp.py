@@ -311,6 +311,222 @@ class MetaWhatsAppService:
             )
         return resultado
 
+    # ─────────────────────────────────────────────────────────────────
+    # Mensajes interactivos (button / list / cta_url)
+    # Solo Meta Cloud API. Baileys no soporta — el motor del flujo
+    # detecta el proveedor y degrada a texto plano si es Baileys.
+    # ─────────────────────────────────────────────────────────────────
+
+    def send_interactive_buttons(self, session_id, to, body_text, buttons,
+                                 header_text=None, footer_text=None,
+                                 conversacion_id=None) -> dict:
+        """Envía mensaje con 1-3 botones de respuesta rápida.
+
+        Args:
+            buttons: lista de dicts [{'id': 'opt_1', 'title': '💪 Ver Precios'}, ...]
+                     - id: máx 256 chars (volverá en webhook como button_reply.id)
+                     - title: máx 20 chars (se trunca silencioso si más)
+            header_text: opcional, máx 60 chars.
+            footer_text: opcional, máx 60 chars.
+            body_text: obligatorio, máx 1024 chars.
+        """
+        config = self._get_config(session_id)
+        if not config:
+            return {'success': False, 'error': 'config_meta_no_encontrada'}
+
+        ok, motivo = self._estado_cuenta_ok(config)
+        if not ok:
+            return self._registrar_traza_bloqueo(
+                config, to, 'interactive',
+                {'success': False, 'error': motivo, 'cuenta_degradada': True},
+                conversacion_id,
+            )
+
+        ok24, motivo24 = self._dentro_ventana_24h(conversacion_id)
+        if not ok24:
+            return self._registrar_traza_bloqueo(
+                config, to, 'interactive',
+                {'success': False, 'error': motivo24, 'requiere_plantilla': True},
+                conversacion_id,
+            )
+
+        # Sanitizar / truncar
+        if not buttons or len(buttons) > 3:
+            return {'success': False, 'error': 'interactive button requiere 1-3 botones.'}
+        botones_meta = []
+        for b in buttons[:3]:
+            bid = str(b.get('id') or '')[:256]
+            title = str(b.get('title') or '')[:20]
+            if not bid or not title:
+                continue
+            botones_meta.append({'type': 'reply', 'reply': {'id': bid, 'title': title}})
+        if not botones_meta:
+            return {'success': False, 'error': 'No hay botones válidos (id+title obligatorios).'}
+
+        interactive = {
+            'type':   'button',
+            'body':   {'text': (body_text or '')[:1024]},
+            'action': {'buttons': botones_meta},
+        }
+        if header_text:
+            interactive['header'] = {'type': 'text', 'text': str(header_text)[:60]}
+        if footer_text:
+            interactive['footer'] = {'text': str(footer_text)[:60]}
+
+        data = {
+            'messaging_product': 'whatsapp',
+            'recipient_type':    'individual',
+            'to':                self._normalizar_destinatario(to),
+            'type':              'interactive',
+            'interactive':       interactive,
+        }
+        return self._post_mensaje(config, data, conversacion_id=conversacion_id)
+
+    def send_interactive_list(self, session_id, to, body_text, sections,
+                              button_text='Ver opciones',
+                              header_text=None, footer_text=None,
+                              conversacion_id=None) -> dict:
+        """Envía mensaje con lista desplegable. Hasta 10 ítems totales.
+
+        Args:
+            sections: lista de secciones, cada una:
+                {
+                  'title': 'Título sección (≤24 chars)',
+                  'rows': [
+                      {'id': 'opt_1', 'title': '≤24 chars', 'description': '≤72 chars opt'},
+                      ...
+                  ]
+                }
+            button_text: texto del botón que abre la lista (≤20 chars).
+        """
+        config = self._get_config(session_id)
+        if not config:
+            return {'success': False, 'error': 'config_meta_no_encontrada'}
+
+        ok, motivo = self._estado_cuenta_ok(config)
+        if not ok:
+            return self._registrar_traza_bloqueo(
+                config, to, 'interactive',
+                {'success': False, 'error': motivo, 'cuenta_degradada': True},
+                conversacion_id,
+            )
+
+        ok24, motivo24 = self._dentro_ventana_24h(conversacion_id)
+        if not ok24:
+            return self._registrar_traza_bloqueo(
+                config, to, 'interactive',
+                {'success': False, 'error': motivo24, 'requiere_plantilla': True},
+                conversacion_id,
+            )
+
+        # Sanitizar secciones
+        if not sections:
+            return {'success': False, 'error': 'sections vacío.'}
+        sec_meta = []
+        total_rows = 0
+        for s in sections:
+            rows_meta = []
+            for r in s.get('rows', []):
+                rid = str(r.get('id') or '')[:200]
+                title = str(r.get('title') or '')[:24]
+                if not rid or not title:
+                    continue
+                row = {'id': rid, 'title': title}
+                if r.get('description'):
+                    row['description'] = str(r['description'])[:72]
+                rows_meta.append(row)
+                total_rows += 1
+                if total_rows >= 10:
+                    break
+            if rows_meta:
+                sec_meta.append({
+                    'title': str(s.get('title') or 'Opciones')[:24],
+                    'rows':  rows_meta,
+                })
+            if total_rows >= 10:
+                break
+        if not sec_meta:
+            return {'success': False, 'error': 'No hay rows válidos (id+title obligatorios).'}
+
+        interactive = {
+            'type':   'list',
+            'body':   {'text': (body_text or '')[:1024]},
+            'action': {
+                'button':   str(button_text)[:20] or 'Ver opciones',
+                'sections': sec_meta,
+            },
+        }
+        if header_text:
+            interactive['header'] = {'type': 'text', 'text': str(header_text)[:60]}
+        if footer_text:
+            interactive['footer'] = {'text': str(footer_text)[:60]}
+
+        data = {
+            'messaging_product': 'whatsapp',
+            'recipient_type':    'individual',
+            'to':                self._normalizar_destinatario(to),
+            'type':              'interactive',
+            'interactive':       interactive,
+        }
+        return self._post_mensaje(config, data, conversacion_id=conversacion_id)
+
+    def send_interactive_cta_url(self, session_id, to, body_text, url, display_text,
+                                  header_text=None, footer_text=None,
+                                  conversacion_id=None) -> dict:
+        """Envía un único botón que abre URL externa (CTA). Util para PayPhone, calendly, etc.
+
+        Args:
+            url: URL completa con https://.
+            display_text: texto del botón (≤20 chars).
+        """
+        config = self._get_config(session_id)
+        if not config:
+            return {'success': False, 'error': 'config_meta_no_encontrada'}
+
+        ok, motivo = self._estado_cuenta_ok(config)
+        if not ok:
+            return self._registrar_traza_bloqueo(
+                config, to, 'interactive',
+                {'success': False, 'error': motivo, 'cuenta_degradada': True},
+                conversacion_id,
+            )
+
+        ok24, motivo24 = self._dentro_ventana_24h(conversacion_id)
+        if not ok24:
+            return self._registrar_traza_bloqueo(
+                config, to, 'interactive',
+                {'success': False, 'error': motivo24, 'requiere_plantilla': True},
+                conversacion_id,
+            )
+
+        if not url or not str(url).startswith(('http://', 'https://')):
+            return {'success': False, 'error': 'URL inválida (debe empezar con http(s)://).'}
+
+        interactive = {
+            'type':   'cta_url',
+            'body':   {'text': (body_text or '')[:1024]},
+            'action': {
+                'name': 'cta_url',
+                'parameters': {
+                    'display_text': str(display_text)[:20] or 'Abrir',
+                    'url':          str(url)[:2000],
+                },
+            },
+        }
+        if header_text:
+            interactive['header'] = {'type': 'text', 'text': str(header_text)[:60]}
+        if footer_text:
+            interactive['footer'] = {'text': str(footer_text)[:60]}
+
+        data = {
+            'messaging_product': 'whatsapp',
+            'recipient_type':    'individual',
+            'to':                self._normalizar_destinatario(to),
+            'type':              'interactive',
+            'interactive':       interactive,
+        }
+        return self._post_mensaje(config, data, conversacion_id=conversacion_id)
+
     def _formatear_parametros(self, params) -> list:
         """Convierte parametros de usuario al formato que espera Meta.
 

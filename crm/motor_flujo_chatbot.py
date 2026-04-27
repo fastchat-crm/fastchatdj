@@ -340,6 +340,61 @@ class MotorFlujo:
             logger.exception('Error enviando mensaje tradicional: %s', e)
             self._trace('envio', 'Error al enviar', False, {'error': str(e)[:200]})
 
+    def enviar_menu_interactivo(self, body_text: str, opciones: list,
+                                 header: str = None, footer: str = None) -> bool:
+        """Envía un menú con botones (≤3) o lista (≤10) si la sesión es Meta.
+        Devuelve True si pudo mandar interactivo, False si tuvo que caer a texto.
+
+        opciones: lista de dicts [{'id': 'opt_id', 'title': 'Texto botón'}, ...]
+        """
+        if not opciones:
+            return False
+        if not getattr(self.session, 'es_meta', False):
+            # Baileys no soporta interactivos → fallback texto numerado.
+            lineas = [body_text or 'Elige una opción:']
+            for i, op in enumerate(opciones, start=1):
+                lineas.append(f"{i}. {op.get('title', '')}")
+            self.enviar('\n'.join(lineas))
+            return False
+        # Meta: button (≤3) o list (≤10)
+        body_resuelto = resolver_expresion(body_text or 'Elige una opción:', self.contexto())
+        try:
+            if len(opciones) <= 3:
+                resp = self.ws.send_interactive_buttons(
+                    self.session.session_id, self.contacto.from_number,
+                    body_resuelto, opciones,
+                    header_text=header, footer_text=footer,
+                    conversacion_id=self.conversation.id,
+                )
+            else:
+                # Limitar a 10 ítems (regla Meta).
+                rows = [{'id': o['id'], 'title': o.get('title', '')[:24],
+                         'description': (o.get('description') or '')[:72]}
+                        for o in opciones[:10] if o.get('id')]
+                resp = self.ws.send_interactive_list(
+                    self.session.session_id, self.contacto.from_number,
+                    body_resuelto,
+                    sections=[{'title': 'Opciones', 'rows': rows}],
+                    button_text='Ver opciones',
+                    header_text=header, footer_text=footer,
+                    conversacion_id=self.conversation.id,
+                )
+            ok = bool((resp or {}).get('success'))
+            self.respuestas.append(body_resuelto)
+            self._trace('envio_interactivo', 'Menú interactivo enviado', ok, {
+                'tipo': 'button' if len(opciones) <= 3 else 'list',
+                'opciones': len(opciones),
+                'error': (resp or {}).get('error', '') if not ok else '',
+            })
+            return ok
+        except Exception as e:
+            logger.exception('Error enviando menú interactivo: %s', e)
+            self._trace('envio_interactivo', 'Error', False, {'error': str(e)[:200]})
+            # Fallback a texto si falla
+            self.enviar(body_resuelto + '\n\n' +
+                        '\n'.join(f"{i+1}. {o.get('title','')}" for i, o in enumerate(opciones)))
+            return False
+
     # ── Routing ──────────────────────────────────────────────────────
 
     def _departamentos_activos(self) -> list:
@@ -591,12 +646,29 @@ class MotorFlujo:
         if nodo.tipo_nodo == 'menu':
             mensaje = cfg.get('mensaje') or nodo.respuesta or 'Elige una opción:'
             opciones = self._opciones_menu(nodo)
-            lineas = [mensaje]
-            for i, op in enumerate(opciones, start=1):
-                lineas.append(f"{i}. {op.get('etiqueta', op.get('valor', ''))}")
             if not opciones:
-                lineas.append('_(este menú no tiene opciones configuradas — contacta al administrador)_')
-            self.enviar('\n'.join(lineas))
+                self.enviar(mensaje + '\n_(este menú no tiene opciones configuradas — contacta al administrador)_')
+                return
+            # Para Meta: arma payload interactive (button≤3 / list≤10).
+            # Para Baileys: cae a texto numerado dentro de enviar_menu_interactivo.
+            opciones_meta = []
+            for op in opciones:
+                hijo_id = op.get('_hijo_id')
+                titulo = op.get('etiqueta') or op.get('valor') or ''
+                # Resolver boton_id: prefiere el persistido en BD, sino genera uno determinístico.
+                bid = ''
+                if hijo_id:
+                    try:
+                        from .models import OpcionDepartamentoChatBot as _Op
+                        hijo_obj = _Op.objects.filter(id=hijo_id).only('boton_id').first()
+                        if hijo_obj:
+                            bid = (hijo_obj.boton_id or '').strip()
+                    except Exception:
+                        pass
+                if not bid:
+                    bid = f'op_{hijo_id}' if hijo_id else f'op_{titulo[:30]}'
+                opciones_meta.append({'id': bid[:256], 'title': titulo[:24]})
+            self.enviar_menu_interactivo(mensaje, opciones_meta)
         elif nodo.tipo_nodo == 'pregunta':
             self.enviar(cfg.get('pregunta') or nodo.respuesta or '¿Puedes indicarme el dato?')
 

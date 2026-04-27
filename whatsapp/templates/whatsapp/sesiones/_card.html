@@ -148,6 +148,17 @@
                     <span class="tag">{{ sesion.config_meta.get_messaging_limit_tier_display }}</span>
                 {% endif %}
             {% endif %}
+
+            {# Modo bot — siempre visible para que se vea de qué tipo es la sesión #}
+            {% if sesion.modo_bot == 'ia' %}
+                <span class="tag tag-modo-ia"><i class="fa fa-robot"></i> Agente IA</span>
+            {% elif sesion.modo_bot == 'tradicional' %}
+                <span class="tag tag-modo-tradicional"><i class="fa fa-list-tree"></i> Chatbot tradicional</span>
+            {% elif sesion.modo_bot == 'hibrido' %}
+                <span class="tag tag-modo-hibrido"><i class="fa fa-arrows-split-up-and-left"></i> Híbrido</span>
+            {% else %}
+                <span class="tag tag-modo-ninguno"><i class="fa fa-user"></i> Solo humanos</span>
+            {% endif %}
         </div>
 
         {% if sesion.es_baileys and sesion.config_baileys.error_mensaje %}
@@ -156,10 +167,22 @@
             </div>
         {% endif %}
 
-        {% if sesion.agente_ia %}
-            <div class="card-subinfo">
-                <i class="fa fa-robot"></i> Agente: <b>{{ sesion.agente_ia.nombre }}</b>
-            </div>
+        {# Mostrar agente IA si modo usa IA (ia o hibrido) #}
+        {% if sesion.agente_ia and sesion.modo_bot == 'ia' or sesion.modo_bot == 'hibrido' %}
+            {% if sesion.agente_ia %}
+                <div class="card-subinfo">
+                    <i class="fa fa-robot"></i> Agente IA: <b>{{ sesion.agente_ia.nombre }}</b>
+                </div>
+            {% endif %}
+        {% endif %}
+
+        {# Mostrar departamento si modo usa flujo (tradicional o hibrido) #}
+        {% if sesion.departamento_default and sesion.modo_bot == 'tradicional' or sesion.modo_bot == 'hibrido' %}
+            {% if sesion.departamento_default %}
+                <div class="card-subinfo">
+                    <i class="fa fa-list-tree"></i> Flujo: <b>{{ sesion.departamento_default.nombre }}</b>
+                </div>
+            {% endif %}
         {% endif %}
     </div>
 

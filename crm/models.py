@@ -1170,6 +1170,11 @@ class OpcionDepartamentoChatBot(ModeloBase):
     nombre = models.CharField(max_length=100, verbose_name="Nombre")
     respuesta = models.TextField(verbose_name="Respuesta", default='', blank=True)
     opcion_padre = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subopciones', verbose_name="Opción padre")
+    boton_id = models.CharField(
+        max_length=64, blank=True, default='',
+        verbose_name='ID del botón Meta',
+        help_text='Identificador único enviado al webhook cuando el cliente toca este botón en Meta Cloud API. Auto-generado si queda vacío. Máx 256 chars Meta.'
+    )
 
     tipo_nodo = models.CharField(max_length=20, choices=TIPOS_NODO, default='respuesta', verbose_name='Tipo de nodo')
     es_inicio = models.BooleanField(default=False, verbose_name='Nodo de inicio del flujo')

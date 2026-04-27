@@ -148,9 +148,8 @@
     <div class="col-12">
         <div class="wiz-steps">
             <div class="wiz-step active" data-step="1"><span class="num">1</span>Identidad</div>
-            <div class="wiz-step"        data-step="2"><span class="num">2</span>Enrutamiento</div>
-            <div class="wiz-step"        data-step="3"><span class="num">3</span>Flujo de opciones</div>
-            <div class="wiz-step"        data-step="4"><span class="num">4</span>Revisión</div>
+            <div class="wiz-step"        data-step="3"><span class="num">2</span>Flujo de opciones</div>
+            <div class="wiz-step"        data-step="4"><span class="num">3</span>Revisión</div>
         </div>
     </div>
 </div>
@@ -198,62 +197,16 @@
     </div>
 </div>
 
-{# ═══════════════════════════════════════════════════════════════════ #}
-{# PASO 2 — Enrutamiento                                              #}
-{# ═══════════════════════════════════════════════════════════════════ #}
-<div class="wiz-pane" data-pane="2">
-    <div class="hint-card">
-        <strong>¿Cómo llegan los mensajes a este departamento?</strong><br>
-        El bot decide el depto correcto en este orden:<br>
-        1️⃣ Coincidencia de <strong>palabras clave</strong> en el mensaje.<br>
-        2️⃣ Número de menú (cuando el cliente elige "1", "2", "3"…).<br>
-        3️⃣ Departamento de entrada de la sesión (configurado en <em>Sesiones</em>).<br>
-        4️⃣ Departamento marcado como <strong>por defecto</strong>.
-    </div>
-
-    <div class="row g-2">
-        <div class="col-12">
-            <label class="form-label small mb-1">{{ form.palabras_clave.label }}</label>
-            {{ form.palabras_clave }}
-            <div class="form-text">
-                Una palabra o frase por línea. Si el mensaje del cliente contiene alguna,
-                se enruta a este depto sin mostrar menú.<br>
-                <em>Ejemplo para "Matrículas":</em>
-                <span class="example-chip">matricula</span>
-                <span class="example-chip">matrícula</span>
-                <span class="example-chip">inscripción</span>
-                <span class="example-chip">pago</span>
-                <span class="example-chip">saldo</span>
-            </div>
-        </div>
-
-        <div class="col-md-6 mt-3">
-            <div class="form-check form-switch">
-                {{ form.es_default }}
-                <label class="form-check-label small fw-semibold" for="id_es_default">
-                    {{ form.es_default.label }}
-                </label>
-            </div>
-            <div class="form-text">
-                Si ningún otro depto matchea, el bot cae aquí. Solo un depto debería
-                estar marcado como default por sesión.
-            </div>
-        </div>
-
-        <div class="col-md-6 mt-3">
-            <div class="form-check form-switch">
-                {{ form.activo_tradicional }}
-                <label class="form-check-label small fw-semibold" for="id_activo_tradicional">
-                    {{ form.activo_tradicional.label }}
-                </label>
-            </div>
-            <div class="form-text">
-                Si lo apagas, el depto NO responde con flujo tradicional — queda
-                solo para handoff/asignación humana.
-            </div>
-        </div>
-    </div>
-</div>
+{# Paso 2 (Enrutamiento) — REMOVIDO. El depto se asocia directamente
+   a la sesión vía SesionWhatsApp.departamento_default y los clics de
+   botón llegan por el webhook como interactive.button_reply.id. Ya no
+   hace falta enrutamiento por palabras clave ni menús de números.
+   Los campos `palabras_clave`, `es_default` y `activo_tradicional`
+   siguen existiendo en el modelo (compat) pero se editan desde
+   Django Admin si hace falta. #}
+<input type="hidden" name="es_default" value="{{ form.es_default.value|yesno:'on,' }}">
+<input type="hidden" name="activo_tradicional" value="{{ form.activo_tradicional.value|yesno:'on,' }}">
+<input type="hidden" name="palabras_clave" value="{{ form.palabras_clave.value|default:'' }}">
 
 {# ═══════════════════════════════════════════════════════════════════ #}
 {# PASO 3 — Flujo de opciones (árbol)                                 #}

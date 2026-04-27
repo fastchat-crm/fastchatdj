@@ -798,7 +798,6 @@ def conversacionesView(request):
         # hacía 1 query por conv para traer el último mensaje (N+1 enorme).
         # Ahora usamos Subquery para resolverlo en un solo SQL.
         if filtro_sin_responder:
-            from .models import MensajeWhatsApp, SesionWhatsApp
             ultimo_remitente = (
                 MensajeWhatsApp.objects
                 .filter(conversacion=OuterRef('pk'))
