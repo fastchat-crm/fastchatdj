@@ -18,7 +18,8 @@
         <button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>
     </div>
 
-    <form id="form-editar-sesion" class="detail-body">
+    <form id="form-editar-sesion" class="detail-body" method="post" action="/whatsapp/sesiones/">
+        {% csrf_token %}
         <input type="hidden" name="action" value="editar">
         <input type="hidden" name="id" value="{{ sesion.id }}">
 
@@ -86,7 +87,7 @@
 
                 <div class="form-row">
                     <label>Verify token <small class="muted">(se usa para validar el webhook con Meta)</small></label>
-                    <input type="text" name="webhook_verify_token"
+                    <input type="text"
                            value="{{ config_meta.webhook_verify_token|default:'' }}"
                            placeholder="(autogenerado al crear la sesión)" readonly>
                 </div>

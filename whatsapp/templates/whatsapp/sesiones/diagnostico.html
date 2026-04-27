@@ -265,7 +265,45 @@
 
         {# ───────── Métricas tráfico ───────── #}
         <div class="diag-card">
-            <h5 class="diag-card-title"><i class="fa fa-chart-line"></i> Tráfico de mensajes</h5>
+            <h5 class="diag-card-title">
+                <i class="fa fa-chart-line"></i> Tráfico de mensajes
+                <small>· {{ now|date:"F Y" }}</small>
+            </h5>
+
+            {# Banner mes actual — destacado para control de costos #}
+            <div class="diag-mes-banner">
+                <div class="diag-mes-icon"><i class="fa fa-calendar"></i></div>
+                <div class="diag-mes-body">
+                    <div class="diag-mes-num">{{ counts.conversaciones_mes }}</div>
+                    <div class="diag-mes-lbl">Conversaciones este mes</div>
+                </div>
+                <div class="diag-mes-meta">
+                    {% if counts.conversaciones_mes_delta is not None %}
+                        {% if counts.conversaciones_mes_delta > 0 %}
+                            <span class="diag-mes-delta is-up">
+                                <i class="fa fa-arrow-trend-up"></i> +{{ counts.conversaciones_mes_delta }}%
+                            </span>
+                        {% elif counts.conversaciones_mes_delta < 0 %}
+                            <span class="diag-mes-delta is-down">
+                                <i class="fa fa-arrow-trend-down"></i> {{ counts.conversaciones_mes_delta }}%
+                            </span>
+                        {% else %}
+                            <span class="diag-mes-delta is-flat">
+                                <i class="fa fa-minus"></i> sin cambio
+                            </span>
+                        {% endif %}
+                        <small>vs mes anterior ({{ counts.conversaciones_mes_ant }})</small>
+                    {% else %}
+                        <small class="text-muted">Sin base de comparación</small>
+                    {% endif %}
+                </div>
+                <a href="https://business.facebook.com/latest/whatsapp_manager/insights{% if meta_business_id %}?business_id={{ meta_business_id }}{% if config.waba_id %}&waba_id={{ config.waba_id }}{% endif %}{% endif %}"
+                   target="_blank" rel="noopener" class="diag-mes-link"
+                   title="Ver costos detallados por categoría en Meta">
+                    <i class="fa fa-external-link"></i> Ver costos en Meta
+                </a>
+            </div>
+
             <div class="diag-stats">
                 <div class="diag-stat">
                     <div class="diag-stat-num">{{ counts.conversaciones_total }}</div>
@@ -274,6 +312,10 @@
                 <div class="diag-stat">
                     <div class="diag-stat-num">{{ counts.conversaciones_24h }}</div>
                     <div class="diag-stat-lbl">Conversaciones · 24h</div>
+                </div>
+                <div class="diag-stat">
+                    <div class="diag-stat-num">{{ counts.mensajes_mes }}</div>
+                    <div class="diag-stat-lbl">Mensajes · mes</div>
                 </div>
                 <div class="diag-stat">
                     <div class="diag-stat-num">{{ counts.mensajes_total }}</div>

@@ -363,6 +363,89 @@
 .diag-error-box b, .diag-warn-box b { display: block; margin-bottom: .15rem; }
 .diag-error-box p, .diag-warn-box p { margin: 0; }
 
+/* ─────── Banner mes actual (control de costos) ─────── */
+.diag-mes-banner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.15rem;
+    background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #2563eb 100%);
+    border-radius: 12px;
+    color: #fff;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 12px rgba(29, 78, 216, .2);
+}
+.diag-mes-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex: 0 0 auto;
+}
+.diag-mes-body { flex: 0 0 auto; }
+.diag-mes-num {
+    font-size: 2.2rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.diag-mes-lbl {
+    font-size: .82rem;
+    opacity: .85;
+    margin-top: 2px;
+}
+.diag-mes-meta {
+    flex: 1;
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-end;
+}
+.diag-mes-delta {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 600;
+}
+.diag-mes-delta.is-up   { background: #fee2e2; color: #b91c1c; }
+.diag-mes-delta.is-down { background: #d4f5e3; color: #15803d; }
+.diag-mes-delta.is-flat { background: rgba(255, 255, 255, .2); color: #fff; }
+.diag-mes-meta small {
+    font-size: .72rem;
+    opacity: .8;
+}
+.diag-mes-link {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .5rem .85rem;
+    background: rgba(255, 255, 255, .15);
+    color: #fff;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: .8rem;
+    font-weight: 500;
+    transition: background .15s;
+    border: 1px solid rgba(255, 255, 255, .25);
+}
+.diag-mes-link:hover {
+    background: rgba(255, 255, 255, .25);
+    color: #fff;
+}
+
+@media (max-width: 768px) {
+    .diag-mes-banner { flex-wrap: wrap; }
+    .diag-mes-meta { text-align: left; align-items: flex-start; flex-basis: 100%; }
+}
+
 /* ─────── Stats ─────── */
 .diag-stats {
     display: grid;

@@ -91,6 +91,8 @@ def meta_diagnostico(request, sesion_id: int):
     ahora = timezone.now()
     hace_24h = ahora - timedelta(hours=24)
     hace_7d = ahora - timedelta(days=7)
+    inicio_mes = ahora.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    inicio_mes_anterior = (inicio_mes - timedelta(days=1)).replace(day=1)
 
     # ── Métricas de eventos Meta (resumen) ──
     # El detalle por evento (tabla, payload, polling en vivo) vive en
@@ -125,11 +127,24 @@ def meta_diagnostico(request, sesion_id: int):
     conv_qs = ConversacionWhatsApp.objects.filter(contacto__sesion=sesion)
     msj_qs = MensajeWhatsApp.objects.filter(conversacion__contacto__sesion=sesion)
     es_saliente = Q(ia_generado=True) | Q(es_automatico=True) | Q(agente__isnull=False)
+    conv_mes_actual = conv_qs.filter(fecha_registro__gte=inicio_mes).count()
+    conv_mes_anterior = conv_qs.filter(
+        fecha_registro__gte=inicio_mes_anterior,
+        fecha_registro__lt=inicio_mes,
+    ).count()
+    if conv_mes_anterior > 0:
+        delta_mes_pct = int(round(((conv_mes_actual - conv_mes_anterior) / conv_mes_anterior) * 100))
+    else:
+        delta_mes_pct = None  # sin base de comparación
     counts = {
         'conversaciones_total':       conv_qs.count(),
         'conversaciones_24h':         conv_qs.filter(fecha_registro__gte=hace_24h).count(),
+        'conversaciones_mes':         conv_mes_actual,
+        'conversaciones_mes_ant':     conv_mes_anterior,
+        'conversaciones_mes_delta':   delta_mes_pct,
         'mensajes_total':             msj_qs.count(),
         'mensajes_24h':               msj_qs.filter(fecha__gte=hace_24h).count(),
+        'mensajes_mes':               msj_qs.filter(fecha__gte=inicio_mes).count(),
         'mensajes_entrantes_24h':     msj_qs.filter(fecha__gte=hace_24h).exclude(es_saliente).count(),
         'mensajes_salientes_24h':     msj_qs.filter(fecha__gte=hace_24h).filter(es_saliente).count(),
     }
