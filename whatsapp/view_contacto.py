@@ -269,7 +269,10 @@ def contactoView(request):
                     return JsonResponse({"result": False, 'message': str(ex)})
 
         from django.db.models import Count as DbCount
-        criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, sesion__usuario=request.user), ''
+        # Excluimos contactos cuya sesión esté soft-deleted (sesion.status=False).
+        # Sin esto, un contacto que vivía en 2 sesiones aparecía como "duplicado"
+        # incluso después de borrar lógicamente una de las sesiones.
+        criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, sesion__status=True, sesion__usuario=request.user), ''
         id = request.GET.get('id', '')
         solo_duplicados = request.GET.get('solo_duplicados', '')
         mis_sesiones = SesionWhatsApp.objects.filter(status=True, usuario=request.user).distinct()
@@ -278,19 +281,21 @@ def contactoView(request):
             sesion_id = mis_sesiones.first().id
         sesion_id = str(sesion_id) if sesion_id else ''
 
-        # Números que aparecen en más de una sesión del usuario
+        # Números que aparecen en más de una sesión ACTIVA del usuario.
+        # Filtramos sesion__status=True para no contar sesiones soft-deleted.
         numeros_duplicados = set(
-            model.objects.filter(status=True, sesion__usuario=request.user)
+            model.objects.filter(status=True, sesion__status=True, sesion__usuario=request.user)
             .values('contacto_numero')
             .annotate(_n=DbCount('sesion', distinct=True))
             .filter(_n__gt=1)
             .values_list('contacto_numero', flat=True)
         )
-        # Dict {numero: [nombre_sesion, ...]} para mostrar en qué sesiones duplica
+        # Dict {numero: [nombre_sesion, ...]} para mostrar en qué sesiones duplica.
+        # Mismo filtro: solo sesiones activas.
         dup_sesiones = {}
         if numeros_duplicados:
             for row in (
-                model.objects.filter(status=True, sesion__usuario=request.user, contacto_numero__in=numeros_duplicados)
+                model.objects.filter(status=True, sesion__status=True, sesion__usuario=request.user, contacto_numero__in=numeros_duplicados)
                 .values('contacto_numero', 'sesion__nombre', 'sesion__numero')
                 .order_by('contacto_numero', 'sesion__nombre')
             ):
