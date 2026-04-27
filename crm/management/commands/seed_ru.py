@@ -391,66 +391,23 @@ class Command(BaseCommand):
         """
         return {'cedula': '{{variables.cedula}}'}
 
-    def _crear_rama_privada(self, depto, ep_ru, menu_raiz, salida_ok, no_encontrado,
-                            fin_error, set_var_reset_buscar, proc, base_orden):
-        """
-        Crea la mini-rama privada de un procedimiento que requiere cédula:
+    def _crear_rama_privada(self, depto, ep_ru, menu_raiz, salida_ok,
+                            fin_error, proc, base_orden):
+        """Crea solo el nodo http_X del procedimiento privado.
 
-            menu_raiz --[salida=codigo]--> cond_skip
-                cond_skip --[true]--> http_X
-                cond_skip --[false]--> preg_cedula --> http_buscar
-                                                       --[ok]--> http_X
-                                                       --[error]--> set_var_reset --> no_encontrado
-            http_X --[ok]--> salida_ok
-            http_X --[error]--> fin_error
+        En este modelo cédula+buscar son nodos GLOBALES al inicio del flujo
+        (antes del menu_raiz), así que cuando llegamos acá ya tenemos
+        `variables.cedula` y `variables.matricula_id` seteadas. La rama
+        privada se reduce a una sola llamada API:
 
-        Tras buscar(error) limpiamos `variables.cedula`/`matricula_id` con
-        `set_var_reset_buscar` para que la próxima consulta vuelva a pedir
-        cédula (sin esto el cond_skip vería la cédula sticky y entraría
-        directo al API → fallo silencioso).
-
-        Retorna http_X (útil cuando hay sub-menú post-handler).
+            menu_raiz --[salida=codigo]--> http_X
+                http_X --[ok]--> salida_ok
+                http_X --[error]--> fin_error
         """
         codigo = proc['codigo']
-        cond = self._nodo(
-            depto, f'¿Tengo cédula? ({codigo})', 'condicional', orden=base_orden,
-            config={
-                'operador': 'and',
-                'condiciones': [
-                    {'izq': '{{variables.cedula}}', 'op': 'no_vacio', 'der': ''},
-                ],
-            },
-        )
-        preg = self._nodo(
-            depto, f'Pedir cédula ({codigo})', 'pregunta', orden=base_orden + 1,
-            config={'pregunta': '🪪 Por favor ingresa tu *número de cédula* (10 dígitos):'},
-            variable='cedula', validacion='cedula', reintentos=3,
-            mensaje_error='Cédula inválida. Vuelve a intentarlo (10 dígitos, sólo números).',
-        )
-        buscar = self._nodo(
-            depto, f'Buscar estudiante ({codigo})', 'http', orden=base_orden + 2,
-            endpoint=ep_ru,
-            config={
-                'metodo': 'POST', 'path': '/buscar-estudiante/',
-                'body': {'cedula': '{{variables.cedula}}'},
-                'extraer': [
-                    {'variable': 'nombre',           'jsonpath': 'data.nombre'},
-                    {'variable': 'matricula_id',     'jsonpath': 'data.matricula_actual.id'},
-                    {'variable': 'matricula_label',  'jsonpath': 'data.matricula_actual.label'},
-                    {'variable': 'carrera',          'jsonpath': 'data.matricula_actual.carrera'},
-                    {'variable': 'nivel',            'jsonpath': 'data.matricula_actual.nivel'},
-                    {'variable': 'periodo',          'jsonpath': 'data.matricula_actual.periodo'},
-                ],
-                'plantilla_respuesta': (
-                    '¡Qué gusto, *{{variables.nombre}}*! 🎓\n'
-                    'Estoy revisando tu matrícula activa:\n'
-                    '*{{variables.matricula_label}}*'
-                ),
-            },
-        )
         http_x = self._nodo(
             depto, f'API {proc["metodo"]} {proc["path"]} ({codigo})', 'http',
-            orden=base_orden + 3, endpoint=ep_ru,
+            orden=base_orden, endpoint=ep_ru,
             config={
                 'metodo': proc['metodo'],
                 'path':   proc['path'],
@@ -459,17 +416,7 @@ class Command(BaseCommand):
                 'plantilla_respuesta': proc.get('plantilla') or '',
             },
         )
-
-        # Conexiones
-        self._conectar(menu_raiz, cond, codigo, 1)
-        self._conectar(cond, http_x, 'true', 1, 'Cédula ya está set')
-        self._conectar(cond, preg, 'false', 2, 'Cédula vacía → pedirla')
-        self._conectar(preg, buscar, '', 1)
-        self._conectar(preg, fin_error, 'timeout', 2)
-        self._conectar(buscar, http_x, 'ok', 1)
-        # Buscar fallido → reset variables → no_encontrado.
-        self._conectar(buscar, set_var_reset_buscar, 'error', 2,
-                       'Reset cédula/matricula tras fallo del buscar')
+        self._conectar(menu_raiz, http_x, codigo, 1)
         self._conectar(http_x, salida_ok, 'ok', 1)
         self._conectar(http_x, fin_error, 'error', 2)
         return http_x
@@ -575,11 +522,48 @@ class Command(BaseCommand):
             descripcion='Endpoint base del bot RU del ISTER.',
         )
 
-        # ── Menú raíz ────────────────────────────────────────────
-        menu_raiz = self._nodo(
-            depto, 'Menú principal', 'menu', es_inicio=True, orden=0,
+        # ─────────────────────────────────────────────────────────
+        # FLUJO UPFRONT: cédula → buscar estudiante → menú
+        # ─────────────────────────────────────────────────────────
+        # 1) Pregunta cédula (es_inicio=True). Es el primer nodo del flujo
+        #    después del saludo del depto. Replica el UX del bot RU real.
+        preg_cedula = self._nodo(
+            depto, 'Pedir cédula', 'pregunta', es_inicio=True, orden=0,
+            config={'pregunta': (
+                '🪪 Para atenderte necesito tu *número de cédula*. '
+                'Por favor ingrésalo para continuar. 🙂'
+            )},
+            variable='cedula', validacion='cedula', reintentos=3,
+            mensaje_error='Cédula inválida. Vuelve a intentarlo (10 dígitos).',
+        )
+        # 2) Buscar estudiante: extrae datos + matrícula activa.
+        http_buscar = self._nodo(
+            depto, 'Buscar estudiante', 'http', orden=1, endpoint=ep_ru,
             config={
-                'mensaje': '¿Qué te gustaría consultar?',
+                'metodo': 'POST', 'path': '/buscar-estudiante/',
+                'body': {'cedula': '{{variables.cedula}}'},
+                'extraer': [
+                    {'variable': 'nombre',          'jsonpath': 'data.nombre'},
+                    {'variable': 'matricula_id',    'jsonpath': 'data.matricula_actual.id'},
+                    {'variable': 'matricula_label', 'jsonpath': 'data.matricula_actual.label'},
+                    {'variable': 'carrera',         'jsonpath': 'data.matricula_actual.carrera'},
+                    {'variable': 'nivel',           'jsonpath': 'data.matricula_actual.nivel'},
+                    {'variable': 'periodo',         'jsonpath': 'data.matricula_actual.periodo'},
+                ],
+                'plantilla_respuesta': (
+                    '¡Qué gusto, *{{variables.nombre}}*! 🎓\n'
+                    'Estoy revisando tu matrícula activa:\n'
+                    '*{{variables.matricula_label}}*'
+                ),
+            },
+        )
+
+        # 3) Menú raíz (después del buscar). Las opciones privadas asumen
+        # que `variables.cedula` y `variables.matricula_id` ya están seteadas.
+        menu_raiz = self._nodo(
+            depto, 'Menú principal', 'menu', orden=2,
+            config={
+                'mensaje': '¿En qué te puedo ayudar hoy?',
                 'opciones': [
                     {'etiqueta': p['etiqueta'], 'valor': p['codigo'], 'salida': p['codigo']}
                     for p in PROCEDIMIENTOS
@@ -595,7 +579,7 @@ class Command(BaseCommand):
             config={'mensaje': (
                 '🔎 No encontré información registrada con esa cédula.\n'
                 'Si crees que es un error, comunícate con tu coordinación.\n\n'
-                'Te llevo de vuelta al menú…'
+                'Probemos de nuevo…'
             )},
         )
         fin_error = self._nodo(
@@ -615,23 +599,25 @@ class Command(BaseCommand):
             depto, 'Reset cédula/matrícula tras buscar(error)', 'set_variable',
             orden=903,
             config={'asignaciones': [
-                {'variable': 'cedula',       'expresion': ''},
-                {'variable': 'matricula_id', 'expresion': ''},
-                {'variable': 'nombre',       'expresion': ''},
+                {'variable': 'cedula',          'expresion': ''},
+                {'variable': 'matricula_id',    'expresion': ''},
+                {'variable': 'matricula_label', 'expresion': ''},
+                {'variable': 'nombre',          'expresion': ''},
             ]},
         )
-        # Reset cuando el usuario pide "consultar otra matrícula".
+        # Reset cuando el usuario pide "consultar otra matrícula" (vuelve a
+        # pedir cédula desde cero).
         set_var_reset_otra = self._nodo(
             depto, 'Reset para otra matrícula', 'set_variable', orden=904,
             config={'asignaciones': [
-                {'variable': 'cedula',       'expresion': ''},
-                {'variable': 'matricula_id', 'expresion': ''},
-                {'variable': 'nombre',       'expresion': ''},
-                {'variable': 'carrera',      'expresion': ''},
+                {'variable': 'cedula',          'expresion': ''},
+                {'variable': 'matricula_id',    'expresion': ''},
+                {'variable': 'matricula_label', 'expresion': ''},
+                {'variable': 'nombre',          'expresion': ''},
+                {'variable': 'carrera',         'expresion': ''},
             ]},
         )
         # Sub-menú reusable después de cada handler exitoso.
-        # Replica el UX del bot real: "Volver al menú / Consultar otra matrícula".
         menu_post = self._nodo(
             depto, 'Sub-menú post-handler', 'menu', orden=905,
             config={
@@ -653,14 +639,21 @@ class Command(BaseCommand):
             )},
         )
 
-        # Loop de cierre: respuesta-fallback / set_var → vuelven al menú.
-        self._conectar(set_var_reset_buscar, no_encontrado, '', 1, 'Tras reset → mensaje')
-        self._conectar(no_encontrado, menu_raiz, '', 1, 'Tras error → vuelve al menú')
-        self._conectar(fin_error,     menu_raiz, '', 1, 'Tras error → vuelve al menú')
-        self._conectar(set_var_reset_otra, menu_raiz, '', 1, 'Tras reset → menú (próxima opción privada pedirá cédula)')
-        self._conectar(menu_post, menu_raiz,           'volver', 1, 'Volver al menú raíz')
-        self._conectar(menu_post, set_var_reset_otra,  'otra',   2, 'Cambiar de matrícula')
-        self._conectar(menu_post, fin_despedida,       'fin',    3, 'Terminar conversación')
+        # ── Conexiones de cabecera (cédula → buscar → menú) ──────
+        self._conectar(preg_cedula, http_buscar, '', 1)
+        self._conectar(preg_cedula, fin_error,   'timeout', 2, '3 cédulas inválidas')
+        self._conectar(http_buscar, menu_raiz,   'ok', 1, 'Cédula válida → menú')
+        self._conectar(http_buscar, set_var_reset_buscar, 'error', 2,
+                       'Cédula sin matrícula → reset y reintentar')
+
+        # Loops de cierre.
+        self._conectar(set_var_reset_buscar, no_encontrado, '', 1)
+        self._conectar(no_encontrado,        preg_cedula,   '', 1, 'Reintentar cédula')
+        self._conectar(fin_error,            menu_raiz,     '', 1, 'Tras error → menú')
+        self._conectar(set_var_reset_otra,   preg_cedula,   '', 1, 'Otra matrícula → pide cédula nueva')
+        self._conectar(menu_post, menu_raiz,           'volver',  1)
+        self._conectar(menu_post, set_var_reset_otra,  'otra',    2)
+        self._conectar(menu_post, fin_despedida,       'fin',     3)
         self._conectar(menu_post, menu_raiz,           'timeout', 4)
 
         # ── Generar mini-ramas por procedimiento ─────────────────
@@ -682,17 +675,13 @@ class Command(BaseCommand):
             if proc['tipo'] == 'http':
                 self._crear_rama_privada(
                     depto, ep_ru, menu_raiz,
-                    salida_ok=menu_post,           # tras handler → sub-menú post-handler
-                    no_encontrado=no_encontrado,
+                    salida_ok=menu_post,
                     fin_error=fin_error,
-                    set_var_reset_buscar=set_var_reset_buscar,
                     proc=proc, base_orden=base,
                 )
                 continue
 
             if proc['tipo'] == 'http_con_submenu':
-                # Construir primero el sub-menú y sus mini-ramas (necesarios para
-                # apuntar `salida_ok` del handler padre al sub-menú).
                 sub_cfg = proc['submenu']
                 sub_menu = self._nodo(
                     depto, f'Sub-menú ({proc["codigo"]})', 'menu',
@@ -708,20 +697,17 @@ class Command(BaseCommand):
                     variable=f'sub_{proc["codigo"]}',
                     mensaje_error='Elige una opción.',
                 )
-                # Conexión "volver" al menú raíz.
                 self._conectar(sub_menu, menu_raiz, 'volver', 99, 'Volver al menú principal')
 
-                # Mini-rama del handler padre → sub_menu (no menu_post).
+                # Handler padre → tras la API, presenta el sub-menú.
                 self._crear_rama_privada(
                     depto, ep_ru, menu_raiz,
                     salida_ok=sub_menu,
-                    no_encontrado=no_encontrado,
                     fin_error=fin_error,
-                    set_var_reset_buscar=set_var_reset_buscar,
                     proc=proc, base_orden=base,
                 )
 
-                # Mini-ramas de cada sub-opción (también privadas).
+                # Sub-opciones también son llamadas API (cédula ya seteada).
                 for j, sub_opt in enumerate(sub_cfg['opciones'], start=1):
                     sub_proc = {
                         'codigo': sub_opt['codigo'],
@@ -733,10 +719,8 @@ class Command(BaseCommand):
                     }
                     self._crear_rama_privada(
                         depto, ep_ru, sub_menu,
-                        salida_ok=menu_post,           # tras sub-handler → sub-menú post
-                        no_encontrado=no_encontrado,
+                        salida_ok=menu_post,
                         fin_error=fin_error,
-                        set_var_reset_buscar=set_var_reset_buscar,
                         proc=sub_proc,
                         base_orden=base + 50 + j * 10,
                     )
