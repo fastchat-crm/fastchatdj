@@ -636,7 +636,7 @@
                     <label class="form-label small fw-bold">Description <small class="text-muted">(máx 512 chars · pestaña "Info de la empresa")</small></label>
                     <textarea class="form-control form-control-sm" id="meta_description" rows="3" maxlength="512" placeholder="Descripción extendida del negocio. Aquí van bien los horarios.">${escHtml(p.description)}</textarea>
                     ${horariosTxt ? `
-                        <button type="button" class="btn btn-sm btn-outline-warning mt-1" onclick="document.getElementById('meta_description').value = ${JSON.stringify(sugerido)}">
+                        <button type="button" class="btn btn-sm btn-outline-warning mt-1" id="btnLlenarHorarios">
                             <i class="fa fa-clock me-1"></i> Llenar con horarios actuales
                         </button>
                         <small class="text-muted ms-2">Sugerencia: <code>${escHtml(sugerido)}</code></small>
@@ -669,6 +669,15 @@
 
                 ${p.profile_picture_url ? `<div class="mb-2 small text-muted"><strong>Profile picture:</strong> <a href="${p.profile_picture_url}" target="_blank">ver imagen</a> <em>(se actualiza por separado)</em></div>` : ''}
             `;
+
+            // Bind del botón "Llenar con horarios" — fuera del innerHTML para evitar
+            // problemas de escape con onclick="..." cuando sugerido tiene comillas.
+            const btnLlenar = document.getElementById('btnLlenarHorarios');
+            if (btnLlenar && sugerido) {
+                btnLlenar.addEventListener('click', () => {
+                    document.getElementById('meta_description').value = sugerido;
+                });
+            }
         }
 
         document.getElementById('btnSaveMetaProfile').addEventListener('click', async () => {

@@ -58,6 +58,12 @@
                     <button type="button" class="kebab-item" data-action="webhook-info"><i class="fa fa-link"></i> Datos
                         del webhook (Meta)
                     </button>
+                    {% if sesion.config_meta and sesion.config_meta.waba_id %}
+                        <a href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers?asset_id={{ sesion.config_meta.waba_id }}{% if sesion.config_meta.business_account_id %}&business_id={{ sesion.config_meta.business_account_id }}{% endif %}&ir_qe_exposed=1"
+                           target="_blank" rel="noopener" class="kebab-item">
+                            <i class="fa-brands fa-meta"></i> Editar número en Meta Business
+                        </a>
+                    {% endif %}
                     <button type="button" class="kebab-item" data-action="test-eco"><i class="fa fa-paper-plane"></i>
                         Probar envío de mensaje
                     </button>
