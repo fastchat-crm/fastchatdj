@@ -18,7 +18,7 @@ from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from django.utils import timezone
 
-from core.funciones import secure_module
+from core.funciones import secure_module, addData
 from meta.urls import build_graph_url
 
 from .models import (
@@ -113,11 +113,12 @@ def meta_diagnostico(request, sesion_id: int):
     ).count()
 
     # ── Conteos de mensajes ──
+    # ConversacionWhatsApp → Contacto → SesionWhatsApp (no FK directo).
     # Entrantes: sin agente humano y no IA y no automático → escribió el cliente.
     # Salientes: cualquier mensaje con agente, IA o sistema.
     from django.db.models import Q
-    conv_qs = ConversacionWhatsApp.objects.filter(sesion=sesion)
-    msj_qs = MensajeWhatsApp.objects.filter(conversacion__sesion=sesion)
+    conv_qs = ConversacionWhatsApp.objects.filter(contacto__sesion=sesion)
+    msj_qs = MensajeWhatsApp.objects.filter(conversacion__contacto__sesion=sesion)
     es_saliente = Q(ia_generado=True) | Q(es_automatico=True) | Q(agente__isnull=False)
     counts = {
         'conversaciones_total':       conv_qs.count(),
@@ -185,23 +186,54 @@ def meta_diagnostico(request, sesion_id: int):
     salud_total = len(salud)
 
     contexto = {
-        'sesion': sesion,
-        'config': config,
-        'phone_info': phone_info,
-        'subscribed': subscribed,
+        'titulo':       f'Diagnóstico · {sesion.nombre or sesion.numero or "sesión"}',
+        'descripcion':  'Estado completo de la conexión Meta Cloud API.',
+        'ruta':         request.path,
+        'sesion':       sesion,
+        'config':       config,
+        'phone_info':   phone_info,
+        'subscribed':   subscribed,
         'eventos_recientes': eventos_recientes,
-        'eventos_24h': eventos_24h,
+        'eventos_24h':       eventos_24h,
         'eventos_firma_invalida': eventos_firma_invalida,
-        'trazas_recientes': trazas_recientes,
-        'trazas_error_24h': trazas_error_24h,
-        'counts': counts,
-        'ultimo_entrante': ultimo_entrante,
-        'ultimo_saliente': ultimo_saliente,
-        'salud': salud,
-        'salud_total_ok': salud_total_ok,
-        'salud_total': salud_total,
-        'salud_pct': int((salud_total_ok / salud_total) * 100) if salud_total else 0,
-        'now': ahora,
+        'trazas_recientes':  trazas_recientes,
+        'trazas_error_24h':  trazas_error_24h,
+        'counts':            counts,
+        'ultimo_entrante':   ultimo_entrante,
+        'ultimo_saliente':   ultimo_saliente,
+        'salud':             salud,
+        'salud_total_ok':    salud_total_ok,
+        'salud_total':       salud_total,
+        'salud_pct':         int((salud_total_ok / salud_total) * 100) if salud_total else 0,
+        'now':               ahora,
     }
-
+    addData(request, contexto)
     return render(request, 'whatsapp/sesiones/diagnostico.html', contexto)
+
+
+@login_required
+def meta_suscribir_waba_action(request, sesion_id: int):
+    """Endpoint AJAX: suscribe la WABA a la Meta App (POST /{waba_id}/subscribed_apps).
+
+    Reemplaza el curl manual del modal de webhook. Ideal cuando el operador
+    cargó la sesión manual y olvidó la auto-suscripción, o cuando Meta perdió
+    el binding por algún motivo (re-emisión de token, etc).
+    """
+    from django.http import JsonResponse
+    from django.views.decorators.http import require_POST
+    from .meta_manual_view import _suscribir_waba_a_app
+
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Solo POST.'})
+
+    sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
+    if not sesion:
+        return JsonResponse({'ok': False, 'error': 'Sesión no encontrada o no es Meta.'})
+    config = getattr(sesion, 'config_meta', None)
+    if not config:
+        return JsonResponse({'ok': False, 'error': 'La sesión no tiene ConfigMeta.'})
+
+    res = _suscribir_waba_a_app(config.waba_id, config.access_token)
+    if res.get('ok'):
+        return JsonResponse({'ok': True, 'message': 'WABA suscrita correctamente.'})
+    return JsonResponse({'ok': False, 'error': res.get('error') or 'Meta rechazó la suscripción.'})

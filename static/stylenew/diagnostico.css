@@ -481,3 +481,35 @@
     font-weight: 500;
 }
 .diag-link-ver-todas:hover { color: #1d4ed8; text-decoration: underline; }
+
+/* Botón de acción inline (suscribir WABA, etc) */
+.diag-action-btn {
+    margin-top: .75rem;
+}
+.diag-action-result {
+    margin-top: .65rem;
+    padding: .55rem .75rem;
+    border-radius: 8px;
+    font-size: .82rem;
+    line-height: 1.4;
+    display: flex;
+    align-items: flex-start;
+    gap: .5rem;
+}
+.diag-action-result.is-ok {
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    color: #065f46;
+}
+.diag-action-result.is-ok .fa { color: #10b981; }
+.diag-action-result.is-error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #7f1d1d;
+}
+.diag-action-result.is-error .fa { color: #dc2626; }
+.diag-action-result small {
+    margin-left: .35rem;
+    color: inherit;
+    opacity: .8;
+}
