@@ -257,6 +257,30 @@
     color: #fff !important;
 }
 
+/* ─── Tag de atribución (vino de un Meta ad) ─── */
+.cont-attrib-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #1877f2, #166fe5);
+    color: #fff;
+    font-size: .68rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: filter .15s;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cont-attrib-tag:hover {
+    color: #fff;
+    filter: brightness(1.1);
+}
+.cont-attrib-tag i { font-size: .65rem; }
+
 /* ─── Estado badge (en card foot, por estado del contacto) ─── */
 .cont-pill {
     display: inline-flex;

@@ -220,6 +220,20 @@ class Configuracion(ModeloBase):
         default=False, verbose_name='Canal TikTok activo'
     )
 
+    # ── IA del sistema (sirve para features tipo "Crear con IA" globales) ──
+    token_ia = models.ForeignKey(
+        'crm.ApiKeyIA', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='configuraciones_que_usan',
+        verbose_name='API Key IA del sistema',
+        help_text='Key que usan las features globales de IA del CRM (ej: "Crear con IA" '
+                  'en Departamentos Chatbot). Si está vacío, esas opciones quedan deshabilitadas.'
+    )
+    ia_features_activas = models.BooleanField(
+        default=False, verbose_name='Features de IA del sistema activas',
+        help_text='Switch maestro. Aunque haya token cargado, si esto está OFF las '
+                  'opciones "Crear con IA" no aparecen.'
+    )
+
     @staticmethod
     def get_instancia():
         from core.funciones import db_table_exists

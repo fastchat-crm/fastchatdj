@@ -36,6 +36,23 @@
         overflow-y: auto;
     }
 
+    /* Badge de atribución (CTWA ad) en chat header */
+    .attrib-badge {
+        background: linear-gradient(135deg, #1877f2, #166fe5);
+        color: #fff !important;
+        border: none;
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .35em .65em;
+        text-decoration: none !important;
+        cursor: pointer;
+    }
+    .attrib-badge:hover {
+        background: linear-gradient(135deg, #166fe5, #0d5dcb);
+        color: #fff !important;
+    }
+    .attrib-badge .fa-bullhorn { font-size: .7rem; }
+
     .conversacion-item {
         cursor: pointer;
         transition: all 0.3s;
@@ -263,7 +280,18 @@
                             </div>
                         </div><!-- end media-body -->
                     </a><!--end media-->
-                    <div class="d-sm-inline-block align-self-center d-flex align-items-center gap-2">
+                    <div class="d-sm-inline-block align-self-center d-flex align-items-center gap-2 flex-wrap">
+                        <!-- Atribución (referral CTWA / IG ad) -->
+                        <div class="d-none" id="referral-container">
+                            <a id="referral-badge"
+                               href="#" target="_blank" rel="noopener"
+                               class="badge d-inline-flex align-items-center gap-1 attrib-badge"
+                               data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                               title="Vino de un anuncio de Meta">
+                                <i class="fa-solid fa-bullhorn"></i>
+                                <span id="referral-label">Anuncio</span>
+                            </a>
+                        </div>
                         <!-- Tokens IA -->
                         <div class="d-none" id="tokens-container">
                             <span class="badge border d-flex align-items-center gap-1"
@@ -1038,7 +1066,7 @@
             if (chatSocket) { chatSocket.close(); chatSocket = null; }
 
             // Ocultar controles mientras carga
-            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #chat-footer').addClass('d-none').hide();
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #chat-footer').addClass('d-none').hide();
             $('#stats-panel, #control-respuestas-panel').addClass('d-none');
             $('#mensajes-container').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted small">Cargando mensajes...</p></div>');
 
@@ -1057,11 +1085,9 @@
                     $('#contacto-numero').text(response.contacto_numero);
                     $('#contacto-hashedId').text(response.hashed_id && `#${response.hashed_id}` || '');
 
-                    if (response.contacto_foto) {
-                        $('#contacto-foto').attr('src', response.contacto_foto);
-                    } else {
-                        $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
-                    }
+                    // Backend siempre devuelve una URL válida via get_foto_gris():
+                    // foto real → PNG inicial del nombre → default.
+                    $('#contacto-foto').attr('src', response.contacto_foto || '/static/foto_defaultd.png');
 
                     $btnsAction.forEach(btn => $(`${btn}`).attr('data-id', conversacionId));
 
@@ -1094,6 +1120,44 @@
                         $('#conv-fecha-inicio').text('Inicio: ' + response.fecha_inicio).show();
                     } else {
                         $('#conv-fecha-inicio').hide();
+                    }
+
+                    // Atribución (referral CTWA / IG ad)
+                    var $refContainer = $('#referral-container');
+                    var $refBadge = $('#referral-badge');
+                    var ref = response.referral;
+                    if (ref) {
+                        // Label corto: usa headline si hay, sino "Anuncio"
+                        var label = ref.headline ? ref.headline.slice(0, 40) : 'Anuncio';
+                        if (ref.headline && ref.headline.length > 40) label += '…';
+                        $('#referral-label').text(label);
+
+                        // Link al post/ad source si Meta lo entrega
+                        if (ref.source_url) {
+                            $refBadge.attr('href', ref.source_url).attr('target', '_blank');
+                        } else {
+                            $refBadge.attr('href', 'javascript:void(0)').removeAttr('target');
+                        }
+
+                        // Tooltip rico con la info completa
+                        var tooltipHtml = '';
+                        if (ref.headline) tooltipHtml += '<b>' + $('<div>').text(ref.headline).html() + '</b><br>';
+                        if (ref.body)     tooltipHtml += '<small>' + $('<div>').text(ref.body).html() + '</small><br>';
+                        if (ref.source_type)   tooltipHtml += '<i>Fuente:</i> ' + ref.source_type + '<br>';
+                        if (ref.media_type)    tooltipHtml += '<i>Media:</i> ' + ref.media_type + '<br>';
+                        if (ref.campaign_id)   tooltipHtml += '<i>Campaign:</i> <code>' + ref.campaign_id + '</code><br>';
+                        if (ref.ad_id)         tooltipHtml += '<i>Ad:</i> <code>' + ref.ad_id + '</code><br>';
+                        if (!tooltipHtml) tooltipHtml = 'Vino de un anuncio de Meta';
+
+                        // Recrear tooltip de Bootstrap (destruye el viejo si existe)
+                        var oldTip = bootstrap.Tooltip.getInstance($refBadge[0]);
+                        if (oldTip) oldTip.dispose();
+                        $refBadge.attr('title', tooltipHtml);
+                        new bootstrap.Tooltip($refBadge[0], {html: true});
+
+                        $refContainer.removeClass('d-none').show();
+                    } else {
+                        $refContainer.addClass('d-none').hide();
                     }
 
                     // Render estadísticas completas (tokens, mensajes, CR, panel)

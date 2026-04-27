@@ -215,6 +215,16 @@ def departamentoChatbotsView(request):
         data["list_count"] = listado.count()
         data["url_vars"] = url_vars
         paginador(request, listado.order_by('nombre'), 20, data, url_vars)
+
+        # Flag para mostrar/esconder el botón "Crear con IA". Solo activo si
+        # Configuracion tiene token_ia cargado Y el switch ia_features_activas=True.
+        from seguridad.models import Configuracion
+        _confi = Configuracion.get_instancia()
+        data["ia_disponible"] = bool(
+            _confi and _confi.pk
+            and getattr(_confi, 'ia_features_activas', False)
+            and getattr(_confi, 'token_ia_id', None)
+        )
         return render(request, 'crm/departamento_chatbots/view.html', data)
 
 

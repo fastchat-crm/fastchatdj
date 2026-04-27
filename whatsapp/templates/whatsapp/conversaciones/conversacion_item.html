@@ -91,13 +91,12 @@
        data-id="{{ conversacion.id }}">
         <div class="d-flex align-items-start">
 
-            <!-- Imagen del contacto -->
+            <!-- Imagen del contacto: get_foto_gris() devuelve foto real si
+                 existe; si no, PNG con la inicial del nombre del contacto;
+                 si tampoco hay nombre, fallback default. Evita avatar
+                 genérico cuando tenemos al menos el nombre. -->
             <div class="position-relative flex-shrink-0">
-                {% if conversacion.contacto_foto %}
-                    <img src="{{ conversacion.contacto_foto }}" alt="" class="thumb-lg rounded-circle">
-                {% else %}
-                    <img src="/static/assets/img/avatar.png" alt="" class="thumb-lg rounded-circle">
-                {% endif %}
+                <img src="{{ conversacion.contacto.get_foto_gris }}" alt="" class="thumb-lg rounded-circle">
 
                 <!-- Estado visual estilo WhatsApp -->
                 <span class="estado-contacto rounded-circle border border-white bg-{% if conversacion.estado_conversacion == 0 %}success{% else %}secondary{% endif %}"></span>

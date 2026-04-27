@@ -178,12 +178,32 @@ def conversacionesView(request):
             mensajes = MensajeWhatsApp.objects.filter(conversacion=conversacion).order_by('fecha')
             data['conversacion'] = conversacion
             data['mensajes'] = mensajes
+            # Atribución: si la conv tiene referral (Click-to-WhatsApp ad),
+            # mandamos un payload compacto al frontend para mostrar un badge
+            # en el chat header. El operador ve de qué anuncio vino el lead.
+            referral_data = None
+            if conversacion.referral_payload_json or conversacion.ad_id or conversacion.campaign_id:
+                referral_data = {
+                    'headline': conversacion.referral_headline or '',
+                    'body':     (conversacion.referral_body or '')[:300],
+                    'source_url': conversacion.referral_source_url or '',
+                    'source_type': conversacion.referral_source_type or '',
+                    'media_type': conversacion.referral_medium or '',
+                    'ad_id':       conversacion.ad_id or '',
+                    'adset_id':    conversacion.adset_id or '',
+                    'campaign_id': conversacion.campaign_id or '',
+                    'ctwa_clid':   conversacion.ctwa_clid or '',
+                }
             return JsonResponse({
                 'html': render_to_string('whatsapp/conversaciones/mensajes_partial.html', data, request=request),
                 'conversacion_id': conversacion.id,
                 'contacto_nombre': conversacion.contacto_nombre or '',
                 'contacto_numero': conversacion.contacto_numero,
-                'contacto_foto': conversacion.contacto_foto or '',
+                # get_foto_gris() devuelve: la foto real si existe; si no,
+                # el PNG con la inicial del nombre; si no hay nombre, el
+                # default. Así nunca usamos el avatar genérico cuando hay
+                # información mínima del contacto.
+                'contacto_foto': conversacion.contacto.get_foto_gris(),
                 'hashed_id': conversacion.hashed_id or '',
                 'estado_active': conversacion.estado_conversacion == 0,
                 'ai_activo': conversacion.ai_activo,
@@ -194,6 +214,7 @@ def conversacionesView(request):
                 'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_registro else '',
                 'bloquear_cierre': conversacion.bloquear_cierre,
                 'es_meta': bool(getattr(conversacion.sesion, 'es_meta', False)),
+                'referral': referral_data,
                 **_estadisticas_conversacion(conversacion),
             })
         elif action == 'ver_estadisticas':

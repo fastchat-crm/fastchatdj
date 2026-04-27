@@ -34,11 +34,24 @@
     </div>
 
     <div class="row align-items-center mb-3">
-        <div class="col-md-12 mb-2 mb-md-0">
+        <div class="col-md-12 mb-2 mb-md-0 d-flex gap-2 flex-wrap">
             <a href="javascript:void(0);" class="btn btn-success btn-sm"
                onclick="formModal(0, 'Agregar {{ titulo }}', 'add')">
                 <i class="fas fa-plus-circle me-2"></i> Nuevo {{ titulo }}
             </a>
+            {% if ia_disponible %}
+                <a href="javascript:void(0);" class="btn btn-warning btn-sm"
+                   onclick="abrirModalCrearConIA()"
+                   title="Generar un departamento + opciones automáticamente describiendo tu negocio">
+                    <i class="fa fa-wand-magic-sparkles me-1"></i> Crear con IA
+                </a>
+            {% else %}
+                <button type="button" class="btn btn-outline-secondary btn-sm" disabled
+                        title="Para habilitar 'Crear con IA' configurá una API Key IA del sistema en /seguridad/configuracion/ y activá el switch 'Features de IA del sistema'">
+                    <i class="fa fa-wand-magic-sparkles me-1"></i> Crear con IA
+                    <small class="text-muted">(deshabilitado)</small>
+                </button>
+            {% endif %}
         </div>
     </div>
 
@@ -119,6 +132,62 @@
             </div>
         </div>
     </div>
+
+    {# ───────── Modal: Crear con IA ───────── #}
+    {% if ia_disponible %}
+    <div class="modal fade" id="modalCrearConIA" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title">
+                        <i class="fa fa-wand-magic-sparkles me-2 text-warning"></i>
+                        Crear departamento con IA
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="fa fa-circle-info me-1"></i>
+                        Describí tu negocio y la IA te generará un <b>departamento completo</b> con
+                        nombre, descripción y opciones de menú jerárquicas. Después podés editarlo a mano.
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">¿Qué tipo de negocio es?</label>
+                        <input type="text" class="form-control form-control-sm" id="ia_negocio_tipo"
+                               placeholder="Ej: Pizzería · Gimnasio · Estudio jurídico · Pet shop">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Describí qué querés que el bot haga <span class="text-danger">*</span></label>
+                        <textarea class="form-control form-control-sm" id="ia_descripcion" rows="5"
+                                  placeholder="Ej: Tenemos 4 sucursales (Centro, Norte, Sur, Oeste). Vendemos pizzas, bebidas y postres. El bot debe permitir al cliente ver el menú por sucursal, hacer pedido para retiro/delivery, consultar promociones del día, y derivar al humano si es queja. Horario lunes a domingo 11am-11pm."
+                                  maxlength="2000"></textarea>
+                        <small class="text-muted">Sé específico con: sucursales, productos/servicios, métodos de pago, casos derivar a humano. <span id="ia_charcount">0</span>/2000</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Tono</label>
+                        <select class="form-select form-select-sm" id="ia_tono">
+                            <option value="amable">Amable y cercano</option>
+                            <option value="formal">Formal y profesional</option>
+                            <option value="casual">Casual y juvenil</option>
+                            <option value="directo">Directo y conciso</option>
+                        </select>
+                    </div>
+
+                    <div id="ia_resultado" class="alert d-none mb-0"></div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning btn-sm" id="btnGenerarIA">
+                        <i class="fa fa-wand-magic-sparkles me-1"></i> Generar con IA
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 {% endblock %}
 
 {% block jscript %}

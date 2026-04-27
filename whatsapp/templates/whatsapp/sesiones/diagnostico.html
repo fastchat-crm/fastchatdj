@@ -510,11 +510,33 @@
                 if (e.key === 'Escape' && modal.classList.contains('open')) cerrar();
             });
 
-            // Reemplazado por el helper global JsonPretty (json-pretty.js).
-            // Mantenemos escapeHtml/pretty como wrappers finos para no romper
-            // el resto del JS de este modal.
-            function escapeHtml(s) { return window.JsonPretty.escapeHtml(s); }
-            function pretty(detalle) { return window.JsonPretty.format(detalle); }
+            // Helpers con fallback inline si json-pretty.js no carga (404 en prod
+            // por collectstatic, o caché viejo). Garantiza que el modal nunca
+            // quede roto por un static missing.
+            function escapeHtml(s) {
+                if (window.JsonPretty && window.JsonPretty.escapeHtml) {
+                    return window.JsonPretty.escapeHtml(s);
+                }
+                return String(s == null ? '' : s)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+            }
+            function pretty(detalle) {
+                if (window.JsonPretty && window.JsonPretty.format) {
+                    return window.JsonPretty.format(detalle);
+                }
+                if (!detalle) return '<i class="text-muted">(vacío)</i>';
+                var t = String(detalle).trim();
+                if (t.startsWith('{') || t.startsWith('[')) {
+                    try {
+                        return '<pre class="traza-json">' +
+                            escapeHtml(JSON.stringify(JSON.parse(t), null, 2)) +
+                            '</pre>';
+                    } catch (e) {}
+                }
+                return '<pre class="traza-raw">' + escapeHtml(detalle) + '</pre>';
+            }
 
             document.querySelectorAll('.traza-row').forEach(function (row) {
                 row.addEventListener('click', function () {

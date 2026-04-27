@@ -657,21 +657,40 @@ def process_incoming_message(session, event_data, channel_layer):
             from .services_horarios import dentro_de_horario, mensaje_fuera_horario_configurado
             _en_horario = dentro_de_horario(session)
             if not _en_horario:
-                _msg_fuera = mensaje_fuera_horario_configurado(session)
-                # Throttle: 1 vez por conversación cada 6h
+                # Mensaje custom de la sesión, o default amigable si no hay.
+                # Silencio = mala UX: siempre respondemos algo.
+                _msg_personalizado = mensaje_fuera_horario_configurado(session)
+                _msg_fuera = _msg_personalizado or (
+                    "👋 ¡Gracias por escribirnos! En este momento estamos fuera "
+                    "de nuestro horario de atención. Te responderemos en cuanto "
+                    "volvamos a estar disponibles. 🕐"
+                )
+                # Throttle: 1 aviso por conversación cada 6h.
                 _key_fuera = f'fuera_horario_aviso_{conversation.id}'
-                if _msg_fuera and not cache.get(_key_fuera):
+                _ya_avisado = bool(cache.get(_key_fuera))
+                _envio_ok = None
+                if not _ya_avisado:
                     cache.set(_key_fuera, True, 6 * 3600)
-                    whatsapp_service.send_text_message(
-                        session.session_id, contacto.from_number, _msg_fuera, simularEscritura=True
-                    )
+                    try:
+                        _r = whatsapp_service.send_text_message(
+                            session.session_id, contacto.from_number, _msg_fuera, simularEscritura=True
+                        )
+                        _envio_ok = bool((_r or {}).get('success'))
+                    except Exception as _send_ex:
+                        logger.exception("Fuera_horario: error enviando aviso: %s", _send_ex)
+                        _envio_ok = False
                 _traza(
                     etapa='webhook_recibido', sesion=session, conversacion=conversation, mensaje=message,
                     numero=from_number, nivel='info',
-                    detalle='fuera_de_horario: skip IA/flujo' + (' + aviso enviado' if _msg_fuera else ''),
+                    detalle={
+                        'fuera_horario': True,
+                        'aviso_throttled': _ya_avisado,
+                        'envio_ok': _envio_ok,
+                        'mensaje_personalizado': bool(_msg_personalizado),
+                        'mensaje_preview': _msg_fuera[:140],
+                    },
                 )
-                # No bloqueamos guardado del mensaje entrante — solo evitamos IA.
-                return JsonResponse({'status': 'ok', 'fuera_horario': True})
+                return JsonResponse({'status': 'ok', 'fuera_horario': True, 'envio_ok': _envio_ok})
         except Exception as _h_ex:
             logger.warning("Guard horario falló (continúa flujo normal): %s", _h_ex)
         # ─────────────────────────────────────────────────────────────────

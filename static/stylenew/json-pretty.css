@@ -1,0 +1,49 @@
+/* ============================================================
+   JsonPretty — estilos de los <pre> generados por
+   window.JsonPretty.format(). Se usa en webhook hits, trazas,
+   diagnóstico de sesión.
+   ============================================================ */
+
+.json-pretty,
+.json-raw {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: .78rem;
+    line-height: 1.45;
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: .85rem 1rem;
+    border-radius: 8px;
+    margin: 0;
+    max-height: 360px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.json-raw {
+    background: #1f2937;
+    color: #d1d5db;
+}
+.json-empty {
+    color: #6b7280;
+    font-style: italic;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+}
+
+.json-key   { color: #fbbf24; font-weight: 600; }
+.json-str   { color: #6ee7b7; }
+.json-num   { color: #93c5fd; }
+.json-bool  { color: #f0abfc; font-weight: 600; }
+.json-null  { color: #94a3b8; font-style: italic; }
+.json-punct { color: #94a3b8; }
+
+/* Helper: título antes de un bloque JsonPretty */
+.hit-section-title,
+.json-section-title {
+    margin: 1rem 0 .35rem;
+    font-size: .85rem;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}

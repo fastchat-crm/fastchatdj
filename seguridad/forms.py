@@ -30,7 +30,7 @@ class ConfiguracionForm(ModelFormBase):
 
         canales = ('canal_whatsapp_qr_activo', 'canal_whatsapp_api_activo',
                    'canal_instagram_activo', 'canal_messenger_activo',
-                   'canal_tiktok_activo')
+                   'canal_tiktok_activo', 'ia_features_activas')
         for k, v in self.fields.items():
             if k in ('ico', 'imagenprincipal', 'imagen_landing', 'logo_sistema', 'logo_sistema_white', 'direccion', 'fondoprincipal', 'nombre_empresa', 'alias', 'descripcion', 'telefono', 'email',  'email_notificacion', 'textoprincipal', 'textosecundario', 'web','titulo','dias_nuevo',):
                 self.fields[k].widget.attrs['col'] = "6"
@@ -47,6 +47,13 @@ class ConfiguracionForm(ModelFormBase):
                 # data-render=switchery para que se renderice como Switchery.
                 self.fields[k].widget.attrs['col'] = "3"
                 self.fields[k].required = False
+            if k == 'token_ia':
+                self.fields[k].widget.attrs['col'] = "6"
+                self.fields[k].required = False
+                # Mostrar solo keys activas, en formato amigable
+                from crm.models import ApiKeyIA
+                self.fields[k].queryset = ApiKeyIA.objects.filter(estado=True, status=True).order_by('-id')
+                self.fields[k].empty_label = '— Sin API Key (features IA del sistema deshabilitadas) —'
 
 
 class CredencialMetaAppForm(ModelFormBase):
