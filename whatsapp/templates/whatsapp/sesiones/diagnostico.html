@@ -1,0 +1,372 @@
+{% extends 'base.html' %}
+{% load static templatefunctions %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/sesiones.css' %}">
+    <link rel="stylesheet" href="{% static 'stylenew/diagnostico.css' %}">
+{% endblock %}
+
+{% block atras %}/whatsapp/sesiones/{% endblock %}
+
+{% block content %}
+<div class="diag-page">
+
+    {# ───────── Header ───────── #}
+    <div class="diag-header">
+        <div class="diag-header-left">
+            <a href="/whatsapp/sesiones/" class="diag-back" title="Volver">
+                <i class="fa fa-arrow-left"></i>
+            </a>
+            <div>
+                <div class="diag-eyebrow">Diagnóstico de sesión Meta</div>
+                <h2 class="diag-title">{{ sesion.nombre|default:'Sesión sin nombre' }}</h2>
+                <div class="diag-sub">
+                    {% if config.display_phone_number %}
+                        <span><i class="fa fa-phone"></i> {{ config.display_phone_number }}</span>
+                    {% endif %}
+                    {% if config.waba_id %}
+                        <span><i class="fa fa-id-card"></i> WABA <code>{{ config.waba_id }}</code></span>
+                    {% endif %}
+                    {% if config.phone_number_id %}
+                        <span><i class="fa fa-microchip"></i> Phone ID <code>{{ config.phone_number_id }}</code></span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="diag-header-right">
+            <a href="/whatsapp/sesiones/{{ sesion.id }}/diagnostico/" class="conex-btn conex-btn-secondary">
+                <i class="fa fa-rotate"></i> Refrescar
+            </a>
+            <a href="/whatsapp/conversaciones/?sesion={{ sesion.id|encrypt_id }}" class="conex-btn conex-btn-primary">
+                <i class="fa fa-comments"></i> Ver conversaciones
+            </a>
+        </div>
+    </div>
+
+    {# ───────── Score de salud ───────── #}
+    <div class="diag-score">
+        <div class="diag-score-circle"
+             data-pct="{{ salud_pct }}"
+             style="background:conic-gradient(
+                {% if salud_pct == 100 %}#10b981{% elif salud_pct >= 60 %}#f59e0b{% else %}#ef4444{% endif %} {{ salud_pct }}%,
+                #e5e7eb {{ salud_pct }}%);">
+            <div class="diag-score-inner">
+                <div class="diag-score-num">{{ salud_pct }}<small>%</small></div>
+                <div class="diag-score-label">{{ salud_total_ok }}/{{ salud_total }}</div>
+            </div>
+        </div>
+        <div class="diag-score-text">
+            <h4>
+                {% if salud_pct == 100 %}
+                    Todo en verde
+                {% elif salud_pct >= 60 %}
+                    Funciona con observaciones
+                {% else %}
+                    Hay problemas que requieren atención
+                {% endif %}
+            </h4>
+            <p>
+                Verificamos {{ salud_total }} aspectos clave: conexión, suscripción WABA, webhook,
+                firma HMAC, calidad del número y errores recientes.
+            </p>
+        </div>
+    </div>
+
+    {# ───────── Health checklist ───────── #}
+    <div class="diag-card">
+        <h5 class="diag-card-title"><i class="fa fa-list-check"></i> Estado de salud</h5>
+        <ul class="diag-checklist">
+            {% for item in salud %}
+                <li class="diag-check {% if item.ok %}is-ok{% else %}is-warn{% endif %}">
+                    <div class="diag-check-icon">
+                        {% if item.ok %}
+                            <i class="fa fa-circle-check"></i>
+                        {% else %}
+                            <i class="fa fa-circle-exclamation"></i>
+                        {% endif %}
+                    </div>
+                    <div class="diag-check-body">
+                        <div class="diag-check-label">{{ item.label }}</div>
+                        <div class="diag-check-detail">{{ item.detalle }}</div>
+                        {% if not item.ok and item.fix %}
+                            <div class="diag-check-fix"><i class="fa fa-wrench"></i> {{ item.fix }}</div>
+                        {% endif %}
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    {# ───────── Grid 2 columnas ───────── #}
+    <div class="diag-grid">
+
+        {# Columna izquierda: Estado del número en Meta #}
+        <div class="diag-card">
+            <h5 class="diag-card-title">
+                <i class="fa fa-mobile-screen"></i> Estado del número en Meta
+                <small>(Graph API · live)</small>
+            </h5>
+            {% if phone_info.ok %}
+                <table class="diag-kv">
+                    <tr><td>Display</td><td><code>{{ phone_info.data.display_phone_number|default:'—' }}</code></td></tr>
+                    <tr><td>Nombre verificado</td><td>{{ phone_info.data.verified_name|default:'—' }}</td></tr>
+                    <tr><td>Status</td>
+                        <td>
+                            <span class="diag-pill diag-pill-{{ phone_info.data.status|default:'unknown'|lower }}">
+                                {{ phone_info.data.status|default:'—' }}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr><td>Calidad</td>
+                        <td>
+                            <span class="diag-pill diag-pill-{{ phone_info.data.quality_rating|default:'unknown'|lower }}">
+                                {{ phone_info.data.quality_rating|default:'—' }}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr><td>Tier mensajería</td><td>{{ phone_info.data.messaging_limit_tier|default:'—' }}</td></tr>
+                    <tr><td>Throughput</td>
+                        <td>
+                            {% if phone_info.data.throughput %}
+                                {{ phone_info.data.throughput.level|default:'—' }}
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    <tr><td>Name status</td><td>{{ phone_info.data.name_status|default:'—' }}</td></tr>
+                </table>
+            {% else %}
+                <div class="diag-error-box">
+                    <i class="fa fa-circle-xmark"></i>
+                    <div>
+                        <b>No pude consultar Graph.</b>
+                        <p>{{ phone_info.error }}</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        {# Columna derecha: Suscripción WABA + Webhook #}
+        <div class="diag-card">
+            <h5 class="diag-card-title">
+                <i class="fa fa-link"></i> Suscripción WABA + Webhook
+            </h5>
+            {% if subscribed.ok %}
+                <p class="diag-text">
+                    <b>{{ subscribed.count }}</b> aplicación(es) suscrita(s) a esta WABA:
+                </p>
+                {% if subscribed.apps %}
+                    <ul class="diag-apps">
+                        {% for app in subscribed.apps %}
+                            <li>
+                                <i class="fa fa-cube"></i>
+                                <span><b>{{ app.whatsapp_business_api_data.name|default:'(sin nombre)' }}</b></span>
+                                <code>{{ app.whatsapp_business_api_data.id|default:'—' }}</code>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="diag-warn-box">
+                        <i class="fa fa-triangle-exclamation"></i>
+                        <div>
+                            <b>WABA sin apps suscritas.</b>
+                            <p>Sin esto, los mensajes no llegan a tu CRM. Ejecutá el curl del modal "Datos del webhook".</p>
+                        </div>
+                    </div>
+                {% endif %}
+            {% else %}
+                <div class="diag-error-box">
+                    <i class="fa fa-circle-xmark"></i>
+                    <div>
+                        <b>No pude consultar suscripciones.</b>
+                        <p>{{ subscribed.error }}</p>
+                    </div>
+                </div>
+            {% endif %}
+
+            <hr class="diag-sep">
+            <table class="diag-kv">
+                <tr>
+                    <td>Verify token</td>
+                    <td>
+                        {% if config.webhook_verify_token %}
+                            <code class="diag-truncate" title="{{ config.webhook_verify_token }}">{{ config.webhook_verify_token|slice:":12" }}…</code>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td>Verificado en</td>
+                    <td>
+                        {% if config.webhook_verificado_en %}
+                            <span class="diag-pill diag-pill-green">{{ config.webhook_verificado_en|date:"Y-m-d H:i" }}</span>
+                        {% else %}
+                            <span class="diag-pill diag-pill-yellow">Pendiente</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td>Última sync Graph</td>
+                    <td>
+                        {% if config.ultima_sincronizacion %}
+                            {{ config.ultima_sincronizacion|date:"Y-m-d H:i" }}
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    {# ───────── Métricas tráfico ───────── #}
+    <div class="diag-card">
+        <h5 class="diag-card-title"><i class="fa fa-chart-line"></i> Tráfico de mensajes</h5>
+        <div class="diag-stats">
+            <div class="diag-stat">
+                <div class="diag-stat-num">{{ counts.conversaciones_total }}</div>
+                <div class="diag-stat-lbl">Conversaciones · total</div>
+            </div>
+            <div class="diag-stat">
+                <div class="diag-stat-num">{{ counts.conversaciones_24h }}</div>
+                <div class="diag-stat-lbl">Conversaciones · 24h</div>
+            </div>
+            <div class="diag-stat">
+                <div class="diag-stat-num">{{ counts.mensajes_total }}</div>
+                <div class="diag-stat-lbl">Mensajes · total</div>
+            </div>
+            <div class="diag-stat">
+                <div class="diag-stat-num">{{ counts.mensajes_entrantes_24h }}</div>
+                <div class="diag-stat-lbl"><i class="fa fa-arrow-down"></i> Entrantes · 24h</div>
+            </div>
+            <div class="diag-stat">
+                <div class="diag-stat-num">{{ counts.mensajes_salientes_24h }}</div>
+                <div class="diag-stat-lbl"><i class="fa fa-arrow-up"></i> Salientes · 24h</div>
+            </div>
+        </div>
+        <div class="diag-last-msgs">
+            <div>
+                <span class="diag-last-lbl"><i class="fa fa-arrow-down"></i> Último entrante:</span>
+                {% if ultimo_entrante %}
+                    <b>{{ ultimo_entrante.fecha|date:"Y-m-d H:i:s" }}</b>
+                    <span class="diag-last-from">de <code>{{ ultimo_entrante.remitente }}</code></span>
+                {% else %}
+                    <i>nunca</i>
+                {% endif %}
+            </div>
+            <div>
+                <span class="diag-last-lbl"><i class="fa fa-arrow-up"></i> Último saliente:</span>
+                {% if ultimo_saliente %}
+                    <b>{{ ultimo_saliente.fecha|date:"Y-m-d H:i:s" }}</b>
+                {% else %}
+                    <i>nunca</i>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# ───────── Eventos Meta recibidos ───────── #}
+    <div class="diag-card">
+        <h5 class="diag-card-title">
+            <i class="fa fa-inbox"></i> Eventos recibidos del webhook
+            <small>({{ eventos_24h }} en últimas 24h · últimos 20 abajo)</small>
+        </h5>
+        {% if eventos_recientes %}
+            <table class="diag-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Firma</th>
+                        <th>Procesado</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ev in eventos_recientes %}
+                        <tr class="{% if not ev.firma_valida or ev.error_procesamiento %}diag-row-warn{% endif %}">
+                            <td><span class="diag-mono">{{ ev.recibido_en|date:"m-d H:i:s" }}</span></td>
+                            <td><span class="diag-tag">{{ ev.tipo_evento }}</span></td>
+                            <td>
+                                {% if ev.firma_valida %}
+                                    <span class="diag-pill diag-pill-green"><i class="fa fa-shield-halved"></i> OK</span>
+                                {% else %}
+                                    <span class="diag-pill diag-pill-red"><i class="fa fa-shield"></i> Inválida</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if ev.procesado %}
+                                    <i class="fa fa-circle-check text-success"></i>
+                                {% else %}
+                                    <i class="fa fa-circle-xmark text-danger"></i>
+                                {% endif %}
+                            </td>
+                            <td class="diag-detail-cell">
+                                {% if ev.error_procesamiento %}
+                                    <span class="diag-err">{{ ev.error_procesamiento|truncatechars:90 }}</span>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="diag-empty">
+                <i class="fa fa-inbox"></i>
+                <p>Aún no llegó ningún evento de Meta a este webhook.</p>
+                <small>Si configuraste el webhook hace rato, probá enviar un mensaje al número desde tu celular.</small>
+            </div>
+        {% endif %}
+    </div>
+
+    {# ───────── Trazas IA ───────── #}
+    <div class="diag-card">
+        <h5 class="diag-card-title">
+            <i class="fa fa-clock-rotate-left"></i> Pipeline IA — últimas 30 trazas
+            <small>({{ trazas_error_24h }} error(es) en últimas 24h)</small>
+        </h5>
+        {% if trazas_recientes %}
+            <table class="diag-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Etapa</th>
+                        <th>Nivel</th>
+                        <th>Latencia</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tz in trazas_recientes %}
+                        <tr class="diag-row-{{ tz.nivel }}">
+                            <td><span class="diag-mono">{{ tz.fecha|date:"m-d H:i:s" }}</span></td>
+                            <td><span class="diag-tag">{{ tz.etapa }}</span></td>
+                            <td>
+                                <span class="diag-pill diag-pill-{{ tz.nivel }}">{{ tz.nivel }}</span>
+                            </td>
+                            <td>
+                                {% if tz.latencia_ms %}
+                                    <span class="diag-mono">{{ tz.latencia_ms }} ms</span>
+                                {% else %}—{% endif %}
+                            </td>
+                            <td class="diag-detail-cell">
+                                {% if tz.detalle %}
+                                    {{ tz.detalle|truncatechars:120 }}
+                                {% else %}—{% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <a href="/whatsapp/trazas/?sesion={{ sesion.id|encrypt_id }}" class="diag-link-ver-todas">
+                <i class="fa fa-arrow-right"></i> Ver todas las trazas de esta sesión
+            </a>
+        {% else %}
+            <div class="diag-empty">
+                <i class="fa fa-clock-rotate-left"></i>
+                <p>No hay trazas IA registradas.</p>
+                <small>Las trazas aparecen cuando hay actividad: mensajes entrantes, llamadas a LLM, envíos.</small>
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

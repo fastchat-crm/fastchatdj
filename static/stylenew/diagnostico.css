@@ -1,0 +1,483 @@
+/* ============================================================
+   Diagnóstico de sesión Meta
+   /whatsapp/sesiones/<id>/diagnostico/
+   ============================================================ */
+
+.diag-page {
+    padding: 1.25rem 1.5rem;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* ─────── Header ─────── */
+.diag-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+.diag-header-left {
+    display: flex;
+    gap: .75rem;
+    align-items: flex-start;
+    flex: 1 1 auto;
+    min-width: 320px;
+}
+.diag-back {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: #f3f4f6;
+    color: #4b5563;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    flex: 0 0 auto;
+    border: 1px solid #e5e7eb;
+    transition: all .15s;
+}
+.diag-back:hover { background: #e5e7eb; color: #1f2937; }
+.diag-eyebrow {
+    font-size: .72rem;
+    font-weight: 600;
+    color: #2563eb;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin-bottom: .15rem;
+}
+.diag-title {
+    margin: 0 0 .35rem;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #111827;
+}
+.diag-sub {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    color: #6b7280;
+    font-size: .85rem;
+}
+.diag-sub span { display: inline-flex; align-items: center; gap: .35rem; }
+.diag-sub .fa { color: #9ca3af; font-size: .8rem; }
+.diag-sub code {
+    background: #f3f4f6;
+    color: #1f2937;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: .8rem;
+}
+.diag-header-right {
+    display: flex;
+    gap: .5rem;
+    flex-wrap: wrap;
+}
+
+/* ─────── Score ─────── */
+.diag-score {
+    display: flex;
+    gap: 1.25rem;
+    align-items: center;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 1.1rem 1.25rem;
+    margin-bottom: 1rem;
+}
+.diag-score-circle {
+    flex: 0 0 110px;
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 1s ease;
+}
+.diag-score-inner {
+    background: #fff;
+    width: 86px;
+    height: 86px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 0 0 1px #e5e7eb;
+}
+.diag-score-num {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #111827;
+    line-height: 1;
+}
+.diag-score-num small {
+    font-size: .7rem;
+    color: #6b7280;
+    font-weight: 500;
+    margin-left: 1px;
+}
+.diag-score-label {
+    font-size: .72rem;
+    color: #6b7280;
+    margin-top: 2px;
+}
+.diag-score-text { flex: 1; }
+.diag-score-text h4 {
+    margin: 0 0 .25rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #111827;
+}
+.diag-score-text p {
+    margin: 0;
+    color: #6b7280;
+    font-size: .85rem;
+    line-height: 1.5;
+}
+
+/* ─────── Card ─────── */
+.diag-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 1rem 1.15rem;
+    margin-bottom: 1rem;
+}
+.diag-card-title {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: .95rem;
+    font-weight: 600;
+    color: #111827;
+    margin: 0 0 .85rem;
+    padding-bottom: .65rem;
+    border-bottom: 1px solid #f3f4f6;
+}
+.diag-card-title .fa { color: #2563eb; }
+.diag-card-title small {
+    margin-left: auto;
+    font-weight: 400;
+    color: #9ca3af;
+    font-size: .76rem;
+}
+
+/* ─────── Checklist ─────── */
+.diag-checklist {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: .75rem;
+}
+.diag-check {
+    display: flex;
+    gap: .65rem;
+    padding: .75rem;
+    border-radius: 10px;
+    border: 1px solid;
+}
+.diag-check.is-ok    { background: #ecfdf5; border-color: #a7f3d0; }
+.diag-check.is-warn  { background: #fef2f2; border-color: #fecaca; }
+.diag-check-icon {
+    font-size: 1.4rem;
+    flex: 0 0 auto;
+}
+.diag-check.is-ok   .diag-check-icon { color: #10b981; }
+.diag-check.is-warn .diag-check-icon { color: #ef4444; }
+.diag-check-body { flex: 1; min-width: 0; }
+.diag-check-label {
+    font-weight: 600;
+    color: #111827;
+    font-size: .85rem;
+    margin-bottom: .15rem;
+}
+.diag-check-detail {
+    font-size: .78rem;
+    color: #4b5563;
+    line-height: 1.4;
+}
+.diag-check-fix {
+    margin-top: .35rem;
+    padding: .35rem .55rem;
+    background: rgba(255, 255, 255, .6);
+    border-radius: 6px;
+    font-size: .75rem;
+    color: #7f1d1d;
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+}
+.diag-check-fix .fa { color: #b45309; }
+
+/* ─────── Grid 2 columnas ─────── */
+.diag-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.diag-grid > .diag-card { margin-bottom: 0; }
+
+/* ─────── Tabla key-value ─────── */
+.diag-kv {
+    width: 100%;
+    border-collapse: collapse;
+}
+.diag-kv td {
+    padding: .45rem .25rem;
+    border-bottom: 1px dashed #f3f4f6;
+    font-size: .85rem;
+}
+.diag-kv tr:last-child td { border-bottom: 0; }
+.diag-kv td:first-child {
+    color: #6b7280;
+    width: 40%;
+}
+.diag-kv td:last-child {
+    color: #111827;
+    font-weight: 500;
+}
+.diag-kv code {
+    background: #f3f4f6;
+    color: #1f2937;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: .8rem;
+}
+.diag-truncate {
+    display: inline-block;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+}
+
+/* ─────── Pills ─────── */
+.diag-pill {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .02em;
+}
+.diag-pill-green   { background: #d4f5e3; color: #15803d; }
+.diag-pill-yellow  { background: #fff3d1; color: #b8860b; }
+.diag-pill-red     { background: #fee2e2; color: #b91c1c; }
+.diag-pill-unknown,
+.diag-pill-gray    { background: #f3f4f6; color: #6b7280; }
+.diag-pill-connected { background: #d4f5e3; color: #15803d; }
+.diag-pill-pending   { background: #fff3d1; color: #b8860b; }
+.diag-pill-info,
+.diag-pill-success { background: #d4f5e3; color: #15803d; }
+.diag-pill-warning { background: #fff3d1; color: #b8860b; }
+.diag-pill-error   { background: #fee2e2; color: #b91c1c; }
+
+/* ─────── Apps suscritas ─────── */
+.diag-text { color: #4b5563; font-size: .85rem; margin: 0 0 .5rem; }
+.diag-apps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.diag-apps li {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .65rem;
+    background: #f9fafb;
+    border-radius: 6px;
+    margin-bottom: .35rem;
+    font-size: .82rem;
+}
+.diag-apps li:last-child { margin-bottom: 0; }
+.diag-apps li .fa { color: #2563eb; }
+.diag-apps li code {
+    margin-left: auto;
+    background: #fff;
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: #6b7280;
+    font-size: .75rem;
+    border: 1px solid #e5e7eb;
+}
+
+.diag-sep {
+    border: 0;
+    border-top: 1px solid #f3f4f6;
+    margin: 1rem 0;
+}
+
+/* ─────── Boxes error / warn ─────── */
+.diag-error-box,
+.diag-warn-box {
+    display: flex;
+    gap: .65rem;
+    padding: .75rem .9rem;
+    border-radius: 8px;
+    font-size: .82rem;
+    line-height: 1.5;
+}
+.diag-error-box {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #7f1d1d;
+}
+.diag-error-box .fa { color: #dc2626; font-size: 1.1rem; flex: 0 0 auto; margin-top: 1px; }
+.diag-warn-box {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #78350f;
+}
+.diag-warn-box .fa { color: #d97706; font-size: 1.1rem; flex: 0 0 auto; margin-top: 1px; }
+.diag-error-box b, .diag-warn-box b { display: block; margin-bottom: .15rem; }
+.diag-error-box p, .diag-warn-box p { margin: 0; }
+
+/* ─────── Stats ─────── */
+.diag-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: .75rem;
+    margin-bottom: 1rem;
+}
+.diag-stat {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: .85rem;
+    text-align: center;
+}
+.diag-stat-num {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #111827;
+    line-height: 1;
+    margin-bottom: .25rem;
+}
+.diag-stat-lbl {
+    font-size: .72rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+.diag-stat-lbl .fa { font-size: .68rem; margin-right: 2px; }
+.diag-last-msgs {
+    background: #f9fafb;
+    border-radius: 8px;
+    padding: .65rem .85rem;
+    font-size: .82rem;
+    color: #4b5563;
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+}
+.diag-last-lbl {
+    display: inline-block;
+    color: #6b7280;
+    margin-right: .35rem;
+}
+.diag-last-lbl .fa { color: #9ca3af; font-size: .75rem; }
+.diag-last-from {
+    color: #6b7280;
+    font-size: .78rem;
+    margin-left: .35rem;
+}
+.diag-last-from code {
+    background: #fff;
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid #e5e7eb;
+}
+
+/* ─────── Tabla ─────── */
+.diag-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .82rem;
+}
+.diag-table thead th {
+    text-align: left;
+    padding: .5rem .65rem;
+    background: #f9fafb;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    font-size: .7rem;
+    letter-spacing: .03em;
+    border-bottom: 1px solid #e5e7eb;
+}
+.diag-table tbody td {
+    padding: .5rem .65rem;
+    border-bottom: 1px solid #f3f4f6;
+    color: #1f2937;
+}
+.diag-table tbody tr:last-child td { border-bottom: 0; }
+.diag-table tbody tr:hover { background: #f9fafb; }
+.diag-table tbody tr.diag-row-warn { background: #fffbeb; }
+.diag-table tbody tr.diag-row-error { background: #fef2f2; }
+.diag-table tbody tr.diag-row-warning { background: #fffbeb; }
+.diag-table tbody tr.diag-row-success { background: #f0fdf4; }
+.diag-mono {
+    font-family: 'Consolas', monospace;
+    font-size: .78rem;
+    color: #4b5563;
+}
+.diag-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border-radius: 4px;
+    font-size: .72rem;
+    font-family: monospace;
+}
+.diag-detail-cell {
+    color: #6b7280;
+    font-size: .78rem;
+    max-width: 320px;
+}
+.diag-err {
+    color: #b91c1c;
+    font-family: monospace;
+    font-size: .76rem;
+}
+.text-success { color: #10b981; }
+.text-danger { color: #ef4444; }
+
+/* ─────── Empty state ─────── */
+.diag-empty {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: #6b7280;
+}
+.diag-empty .fa {
+    font-size: 2.5rem;
+    color: #cbd5e1;
+    margin-bottom: .65rem;
+    display: block;
+}
+.diag-empty p {
+    margin: 0 0 .25rem;
+    color: #374151;
+    font-weight: 500;
+}
+.diag-empty small { color: #9ca3af; font-size: .78rem; }
+
+.diag-link-ver-todas {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    margin-top: .85rem;
+    color: #2563eb;
+    text-decoration: none;
+    font-size: .85rem;
+    font-weight: 500;
+}
+.diag-link-ver-todas:hover { color: #1d4ed8; text-decoration: underline; }

@@ -4,6 +4,7 @@ from .conversaciones_finalizadas_view import conversacionesFinalizadasView
 from .sesiones_view import sesionesView
 from .meta_oauth_view import meta_oauth_start, meta_oauth_callback
 from .meta_manual_view import meta_manual_validar, meta_manual_conectar, meta_webhook_info, meta_test_message
+from .meta_diagnostico_view import meta_diagnostico
 from .conversaciones_view import conversacionesView
 from .sync_contacts import sync_contacts_view
 from .update_profile_view import update_profile_view
@@ -93,6 +94,7 @@ urlpatterns = [
     path('meta/manual/conectar/', meta_manual_conectar, name='whatsapp_meta_manual_conectar'),
     path('meta/webhook-info/<int:sesion_id>/', meta_webhook_info, name='whatsapp_meta_webhook_info'),
     path('meta/test-message/<int:sesion_id>/', meta_test_message, name='whatsapp_meta_test_message'),
+    path('sesiones/<int:sesion_id>/diagnostico/', meta_diagnostico, name='whatsapp_meta_diagnostico'),
     path('instagram_webhook/', instagram_webhook, name='whatsapp_instagram_webhook'),
     path('messenger_webhook/', messenger_webhook, name='whatsapp_messenger_webhook'),
     path('sync-contacts/', sync_contacts_view, name='sync_contacts'),
