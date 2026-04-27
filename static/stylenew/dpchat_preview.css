@@ -282,3 +282,11 @@
 .dpprev-extraer-table code {
     font-size: .72rem;
 }
+
+/* ─── Burbuja system-memo (memoria recuperada) ─── */
+.dpprev-msg.system-memo {
+    color: #1e40af;
+    background: #dbeafe;
+    border: 1px dashed #93c5fd;
+    font-style: italic;
+}

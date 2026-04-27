@@ -64,16 +64,28 @@
         </ul>
         <div class="tab-content p-2">
             <div class="tab-pane active" data-pane="vars">
-                <div class="text-muted small mb-1">
-                    Estado actual de variables capturadas durante el flujo.
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="text-muted small">
+                        Variables capturadas (memoria persistente).
+                    </span>
+                    <button type="button" class="btn btn-sm btn-link p-0 small text-danger"
+                            id="dpprev-clear-mem" title="Borra cédula, matrícula y demás de localStorage">
+                        <i class="fa fa-eraser"></i> Limpiar memoria
+                    </button>
                 </div>
                 <pre id="dpprev-vars" class="dpprev-vars-pre">{}</pre>
                 <details class="small mt-2">
                     <summary class="text-muted">Ayuda</summary>
                     <ul class="ps-3 mb-0">
-                        <li><b>Modo mock</b>: simula APIs, te deja navegar todas las ramas.</li>
-                        <li><b>Modo real</b>: ejecuta los nodos <code>http</code> contra el endpoint configurado y guarda las variables del response.</li>
-                        <li>Los <code>condicional</code> se evalúan localmente con las variables actuales.</li>
+                        <li><b>Memoria persistente</b>: la cédula y demás vars se guardan en
+                            <code>localStorage</code> — se mantienen al recargar la página, igual
+                            que WhatsApp recuerda el contexto entre mensajes.</li>
+                        <li><b>Reiniciar</b> (toolbar): vuelve al inicio del flujo pero conserva la memoria.</li>
+                        <li><b>Limpiar memoria</b>: borra todas las vars y reinicia. Útil para simular
+                            otro usuario.</li>
+                        <li><b>Modo mock</b>: simula APIs, deja navegar todas las ramas.</li>
+                        <li><b>Modo real</b>: ejecuta los nodos <code>http</code> contra el endpoint
+                            configurado, guarda las variables del response.</li>
                     </ul>
                 </details>
             </div>

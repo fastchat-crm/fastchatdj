@@ -21,13 +21,33 @@
     try { DATA = JSON.parse(dataEl.textContent); }
     catch (e) { console.error('preview JSON invalido', e); return; }
 
-    // ── Estado runtime ──────────────────────────────────────────
+    // ── Estado runtime + memoria persistente ────────────────────
+    var DEPTO_ID = (DATA.departamento && DATA.departamento.id) || 0;
+    var STORAGE_KEY = 'dpprev_vars_' + DEPTO_ID;
+    var MODE_KEY = 'dpprev_mode_' + DEPTO_ID;
+
+    function cargarVarsPersistentes() {
+        try {
+            var raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return {};
+            var parsed = JSON.parse(raw);
+            return (parsed && typeof parsed === 'object') ? parsed : {};
+        } catch (e) { return {}; }
+    }
+    function guardarVarsPersistentes() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE.vars)); }
+        catch (e) { /* localStorage lleno o deshabilitado — ignorar */ }
+    }
+    function limpiarMemoriaPersistente() {
+        try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    }
+
     var STATE = {
-        vars: {},
+        vars: cargarVarsPersistentes(),
         currentId: null,
-        mode: 'mock',          // 'mock' | 'real'
+        mode: localStorage.getItem(MODE_KEY) || 'mock',
         ended: false,
-        awaitingInput: false,  // true cuando espera texto del usuario (pregunta)
+        awaitingInput: false,
         currentPreguntaNode: null,
     };
 
@@ -83,9 +103,11 @@
 
     // ── Variables panel + log ───────────────────────────────────
     function refreshVars() {
-        if (!varsPre) return;
-        try { varsPre.textContent = JSON.stringify(STATE.vars, null, 2); }
-        catch (e) { varsPre.textContent = String(STATE.vars); }
+        if (varsPre) {
+            try { varsPre.textContent = JSON.stringify(STATE.vars, null, 2); }
+            catch (e) { varsPre.textContent = String(STATE.vars); }
+        }
+        guardarVarsPersistentes();
     }
     function logEvt(level, msg, detail) {
         if (!logBox) return;
@@ -609,8 +631,14 @@
     }
 
     // ── Inicio / Reset ──────────────────────────────────────────
-    function start() {
-        STATE.vars = {};
+    // Inicio "blando" — preserva variables capturadas (cédula, matricula_id…)
+    // como hace WhatsApp entre mensajes de la misma conversación.
+    function start(opts) {
+        opts = opts || {};
+        if (opts.limpiarMemoria) {
+            STATE.vars = {};
+            limpiarMemoriaPersistente();
+        }
         STATE.currentId = null;
         STATE.ended = false;
         STATE.awaitingInput = false;
@@ -621,7 +649,14 @@
 
         var dep = DATA.departamento || {};
         if (dep.mensaje_saludo) botBubble(dep.mensaje_saludo);
-        logEvt('info', 'Inicio del simulador (modo: ' + STATE.mode + ')');
+        var memCount = Object.keys(STATE.vars).length;
+        if (memCount > 0) {
+            systemBubble('💾 Memoria recuperada: ' + memCount
+                       + ' variable(s) (cédula, matrícula, etc.)', 'memo');
+            logEvt('info', 'Vars cargadas de localStorage', STATE.vars);
+        }
+        logEvt('info', 'Inicio del simulador (modo: ' + STATE.mode
+                       + (memCount ? ', con memoria' : ', sin memoria') + ')');
 
         var inicioId = DATA.inicio_id;
         if (!inicioId) {
@@ -631,10 +666,24 @@
         setTimeout(function () { avanzarA(inicioId); }, 300);
     }
 
-    if (btnReset) btnReset.addEventListener('click', start);
-    if (modeToggle) modeToggle.addEventListener('change', function () {
-        STATE.mode = modeToggle.checked ? 'real' : 'mock';
-        logEvt('info', 'Modo cambiado a: ' + STATE.mode);
+    // Reset suave (mantiene memoria, solo reinicia conversación)
+    if (btnReset) btnReset.addEventListener('click', function () { start(); });
+
+    // Botón "limpiar memoria" en panel derecho
+    var btnLimpiar = document.getElementById('dpprev-clear-mem');
+    if (btnLimpiar) btnLimpiar.addEventListener('click', function () {
+        if (confirm('¿Borrar todas las variables guardadas (cédula, matrícula, etc.)?')) {
+            start({ limpiarMemoria: true });
+        }
     });
+
+    if (modeToggle) {
+        modeToggle.checked = (STATE.mode === 'real');
+        modeToggle.addEventListener('change', function () {
+            STATE.mode = modeToggle.checked ? 'real' : 'mock';
+            try { localStorage.setItem(MODE_KEY, STATE.mode); } catch (e) {}
+            logEvt('info', 'Modo cambiado a: ' + STATE.mode);
+        });
+    }
     start();
 })();
