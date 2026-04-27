@@ -423,12 +423,25 @@ def process_incoming_message(session, event_data, channel_layer):
         )
         contacto.estado = 'activo'
 
-        # Actualizar nombre del contacto si está disponible
+        # Actualizar nombre del contacto si está disponible.
+        # contacts_list vive en ConfigBaileys (no en SesionWhatsApp) — solo
+        # las sesiones Baileys lo tienen. Para Meta no existe config_baileys
+        # y usamos directamente push_name (que Meta ya provee en cada evento).
         if not contacto.contacto_nombre:
-            contacts_list = [c.get('name') or c.get('notify') or '' for c in json.loads(session.contacts_list or '[]') if c["id"] == from_number]
             contacto.contacto_nombre = push_name
-            if contacts_list and contacts_list[0]:
-                contacto.contacto_nombre = contacts_list[0]
+            cfg_baileys = getattr(session, 'config_baileys', None)
+            if cfg_baileys and cfg_baileys.contacts_list:
+                try:
+                    contacts_list = [
+                        c.get('name') or c.get('notify') or ''
+                        for c in json.loads(cfg_baileys.contacts_list or '[]')
+                        if c.get('id') == from_number
+                    ]
+                    if contacts_list and contacts_list[0]:
+                        contacto.contacto_nombre = contacts_list[0]
+                except (ValueError, TypeError):
+                    # contacts_list mal formado — nos quedamos con push_name
+                    pass
         if not contacto.contacto_numero:
             contacto.contacto_numero = contacto_numero
 
