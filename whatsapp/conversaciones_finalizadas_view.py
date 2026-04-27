@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -13,6 +15,16 @@ from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp
 from .services import WhatsAppService, get_whatsapp_service
 from .forms import CambiarClasificacionForm
 from .conversaciones_view import _control_respuestas, _tokens_conversacion, _estadisticas_conversacion
+
+HORAS_BLOQUEO_REACTIVAR_FINALIZADA = 20
+
+
+def _bloqueo_reactivar(conversacion):
+    """Bloquea reactivar/enviar mientras la conversacion tenga menos de 20h desde fecha_registro."""
+    if not conversacion.fecha_registro:
+        return False, None
+    disponible = conversacion.fecha_registro + timedelta(hours=HORAS_BLOQUEO_REACTIVAR_FINALIZADA)
+    return timezone.now() < disponible, disponible
 
 @login_required
 @secure_module
@@ -57,6 +69,7 @@ def conversacionesFinalizadasView(request):
                 mensajes = MensajeWhatsApp.objects.filter(conversacion=conversacion).order_by('fecha')
                 data['conversacion'] = conversacion
                 data['mensajes'] = mensajes
+                bloqueada, disponible_en = _bloqueo_reactivar(conversacion)
                 return JsonResponse({
                     'html': render_to_string('whatsapp/conversaciones/mensajes_partial.html', data, request=request),
                     'conversacion_id': conversacion.id,
@@ -69,6 +82,9 @@ def conversacionesFinalizadasView(request):
                     'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y') if conversacion.fecha_registro else '',
                     'fecha_fin': conversacion.fecha_fin_conversacion.strftime('%d/%m/%Y') if conversacion.fecha_fin_conversacion else '',
                     'es_meta': bool(getattr(conversacion.sesion, 'es_meta', False)),
+                    'reactivar_bloqueada': bloqueada,
+                    'reactivar_disponible_en': disponible_en.isoformat() if disponible_en else None,
+                    'reactivar_horas_bloqueo': HORAS_BLOQUEO_REACTIVAR_FINALIZADA,
                     **_estadisticas_conversacion(conversacion),
                 })
             except Exception as ex:
@@ -148,6 +164,13 @@ def conversacionesFinalizadasView(request):
                     archivo = request.FILES.get('archivo')  # Obtener archivo si existe
                     conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
 
+                    bloqueada, disponible_en = _bloqueo_reactivar(conversacion)
+                    if bloqueada:
+                        return JsonResponse({
+                            'error': True,
+                            'message': f'No se puede enviar mensajes hasta que la conversacion tenga {HORAS_BLOQUEO_REACTIVAR_FINALIZADA}h de creada. Disponible: {disponible_en.strftime("%d/%m/%Y %H:%M")}.',
+                        })
+
                     # Crear instancia del servicio segun proveedor de la sesion
                     service = get_whatsapp_service(conversacion.sesion)
 
@@ -224,6 +247,14 @@ def conversacionesFinalizadasView(request):
                     params_header = _json.loads(request.POST.get('params_header_json') or '[]')
 
                     conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+
+                    bloqueada, disponible_en = _bloqueo_reactivar(conversacion)
+                    if bloqueada:
+                        return JsonResponse({
+                            'error': True,
+                            'message': f'No se puede reactivar hasta que la conversacion tenga {HORAS_BLOQUEO_REACTIVAR_FINALIZADA}h de creada. Disponible: {disponible_en.strftime("%d/%m/%Y %H:%M")}.',
+                        })
+
                     sesion = conversacion.sesion
                     if not getattr(sesion, 'es_meta', False):
                         return JsonResponse({'error': True, 'message': 'La sesion no es Meta.'})
@@ -329,6 +360,13 @@ def conversacionesFinalizadasView(request):
                         filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))
                     except Exception as ex:
                         raise NameError(f'No se encontró la conversación: {ex}')
+                    bloqueada, disponible_en = _bloqueo_reactivar(filtro)
+                    if bloqueada:
+                        res_json.append({
+                            'error': True,
+                            'message': f'No se puede reactivar hasta que la conversacion tenga {HORAS_BLOQUEO_REACTIVAR_FINALIZADA}h de creada. Disponible: {disponible_en.strftime("%d/%m/%Y %H:%M")}.',
+                        })
+                        return JsonResponse(res_json, safe=False)
                     filtro.estado_conversacion = 0
                     filtro.fecha_fin_conversacion = None
                     filtro.despedida_enviado = False

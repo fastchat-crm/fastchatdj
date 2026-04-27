@@ -262,7 +262,10 @@
                 <div class="chat-footer" id="chat-footer" style="display:none;">
                     {% csrf_token %}
                     <input type="hidden" id="conversacion-id" value="">
-                    <div class="d-flex align-items-center gap-2" style="position:relative;">
+                    <div id="bloqueo-reactivar-aviso" class="small text-warning mb-2" style="display:none;">
+                        <i class="fa fa-hourglass-half me-1"></i><span id="bloqueo-reactivar-msg"></span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2" id="footer-plantillas-row" style="position:relative;">
                         <div class="flex-grow-1 small text-muted">
                             <i class="fa fa-lock me-1"></i>Conversación finalizada. Solo puedes reenganchar enviando una plantilla Meta aprobada.
                         </div>
@@ -552,8 +555,14 @@ $(document).ready(function() {
                 }
 
                 $('#marcar-reactivar, #ver-resumen, #cambiar-clasificacion').attr('data-id', id);
-                r.estado_active ? $('#reactivar-btn').addClass('d-none').hide()
-                                : $('#reactivar-btn').removeClass('d-none').show();
+                const _bloqueada = r.reactivar_bloqueada === true;
+                window._reactivarBloqueada = _bloqueada;
+                window._reactivarDisponibleEn = r.reactivar_disponible_en || null;
+                if (r.estado_active || _bloqueada) {
+                    $('#reactivar-btn').addClass('d-none').hide();
+                } else {
+                    $('#reactivar-btn').removeClass('d-none').show();
+                }
                 $('#ver-resumen-btn').removeClass('d-none').show();
                 $('#dropdowns-btn').removeClass('d-none').show();
 
@@ -567,7 +576,22 @@ $(document).ready(function() {
                 $('#conversacion-id').val(r.conversacion_id);
                 if (r.es_meta === true) {
                     $('#chat-footer').removeClass('d-none').show();
-                    mostrarPlantillasSiMeta(true, r.conversacion_id);
+                    if (_bloqueada) {
+                        const disp = r.reactivar_disponible_en ? new Date(r.reactivar_disponible_en) : null;
+                        const dispTxt = disp ? disp.toLocaleString() : '';
+                        $('#bloqueo-reactivar-msg').text(
+                            'Reactivar y plantillas disponibles cuando la conversación tenga ' +
+                            (r.reactivar_horas_bloqueo || 20) + 'h de creada' +
+                            (dispTxt ? ' (a partir de ' + dispTxt + ')' : '') + '.'
+                        );
+                        $('#bloqueo-reactivar-aviso').show();
+                        $('#footer-plantillas-row').hide();
+                        mostrarPlantillasSiMeta(false, null);
+                    } else {
+                        $('#bloqueo-reactivar-aviso').hide();
+                        $('#footer-plantillas-row').show();
+                        mostrarPlantillasSiMeta(true, r.conversacion_id);
+                    }
                 } else {
                     $('#chat-footer').addClass('d-none').hide();
                     mostrarPlantillasSiMeta(false, null);

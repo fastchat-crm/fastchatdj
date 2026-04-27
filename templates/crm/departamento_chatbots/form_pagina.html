@@ -68,10 +68,18 @@
     <div class="card dp-card-tree" id="dp-tree-card" {% if not filtro %}style="display:none"{% endif %}>
         <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
             <strong><i class="fa fa-sitemap me-1"></i> Flujo de opciones</strong>
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 flex-wrap">
                 <small class="text-muted align-self-center">
                     <span id="dp-count">{{ arbol_plano|length }}</span> nodos
                 </small>
+                <button type="button" class="btn btn-sm btn-outline-info"
+                        data-act="ver-diagrama" title="Visualizar como diagrama">
+                    <i class="fa fa-diagram-project me-1"></i> Diagrama
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-success"
+                        data-act="ver-meta-json" title="Exportar como payload Meta Cloud API">
+                    <i class="fab fa-whatsapp me-1"></i> Meta JSON
+                </button>
                 <button type="button" class="btn btn-sm btn-primary"
                         data-act="add-root">
                     <i class="fa fa-plus me-1"></i> Agregar opción raíz
@@ -100,6 +108,86 @@
         </div>
     </div>
 
+</div>
+
+{# Modal: Diagrama del flujo (read-only, server-rendered) #}
+<div class="modal fade" id="dpModalDiagrama" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title">
+                    <i class="fa fa-diagram-project me-1 text-info"></i>
+                    Diagrama del flujo · {{ filtro.nombre|default:'' }}
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {% if filtro.mensaje_saludo %}
+                    <div class="dp-diag-saludo">
+                        <i class="fa fa-comment-dots me-1"></i>
+                        <strong>Saludo inicial:</strong> {{ filtro.mensaje_saludo|truncatechars:200 }}
+                    </div>
+                {% endif %}
+                {% if arbol_plano %}
+                    <div class="dp-diag-tree">
+                        {% for nodo in arbol_plano %}
+                            <div class="dp-diag-node" style="margin-left: {{ nodo.nivel|add:nodo.nivel|add:nodo.nivel }}0px;">
+                                <span class="dp-diag-conn">{% if nodo.nivel %}└─{% else %}▶{% endif %}</span>
+                                <span class="dp-tipo-pill tipo-{{ nodo.opcion.tipo_nodo }}">
+                                    {{ nodo.opcion.get_tipo_nodo_display }}
+                                </span>
+                                <strong>{{ nodo.opcion.nombre|default:'(sin nombre)' }}</strong>
+                                {% if nodo.opcion.es_inicio %}
+                                    <i class="fa fa-play text-success ms-1" title="Nodo de inicio"></i>
+                                {% endif %}
+                                {% if nodo.opcion.respuesta %}
+                                    <div class="dp-diag-resp">→ {{ nodo.opcion.respuesta|truncatechars:120 }}</div>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-muted text-center py-4">
+                        <i class="fa fa-circle-info"></i> Aún no hay nodos en el flujo.
+                    </div>
+                {% endif %}
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal: Meta Cloud API JSON payload (read-only, copy) #}
+<div class="modal fade" id="dpModalMetaJson" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title">
+                    <i class="fab fa-whatsapp me-1 text-success"></i>
+                    Payload Meta Cloud API
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border py-2 small mb-2">
+                    <i class="fa fa-circle-info me-1"></i>
+                    Este JSON es lo que el bot enviaría al usuario al entrar al departamento.
+                    Si tenés ≤3 opciones se arma como <code>interactive button</code>; con 4+
+                    se usa <code>interactive list</code>. <code>to</code> es placeholder —
+                    reemplazá con el número del cliente.
+                </div>
+                <pre id="dp-meta-json-pre" class="dp-json-pre">Cargando…</pre>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-success btn-sm" id="dp-copy-json">
+                    <i class="fa fa-copy me-1"></i> Copiar
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 {# Modal editor de un nodo #}
@@ -133,5 +221,5 @@
 
 {% block jscript %}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="{% static 'js/dpchat_editor.js' %}?v=4"></script>
+    <script src="{% static 'js/dpchat_editor.js' %}?v=5"></script>
 {% endblock %}

@@ -235,7 +235,66 @@
                 });
                 return;
             }
+            if (act === 'ver-diagrama') {
+                if (STATE.departamentoId === 0) {
+                    alert('Primero guardá el departamento (cabecera) para ver el diagrama.');
+                    return;
+                }
+                var modalDiag = bootstrap.Modal.getOrCreateInstance($('#dpModalDiagrama'));
+                modalDiag.show();
+                return;
+            }
+            if (act === 'ver-meta-json') {
+                if (STATE.departamentoId === 0) {
+                    alert('Primero guardá el departamento (cabecera) para generar el payload.');
+                    return;
+                }
+                var modalJson = bootstrap.Modal.getOrCreateInstance($('#dpModalMetaJson'));
+                $('#dp-meta-json-pre').textContent = 'Cargando…';
+                modalJson.show();
+                getJson({
+                    action: 'exportar_meta_payload',
+                    id: STATE.departamentoId,
+                }).then(function (resp) {
+                    if (!resp.result) {
+                        $('#dp-meta-json-pre').textContent = 'Error: ' + (resp.message || 'desconocido');
+                        return;
+                    }
+                    $('#dp-meta-json-pre').textContent = JSON.stringify(resp.payload, null, 2);
+                }).catch(function (err) {
+                    $('#dp-meta-json-pre').textContent = 'Error de conexión: ' + err.message;
+                });
+                return;
+            }
         });
+
+        // Boton copiar JSON Meta
+        var btnCopy = $('#dp-copy-json');
+        if (btnCopy) {
+            btnCopy.addEventListener('click', function () {
+                var text = $('#dp-meta-json-pre').textContent || '';
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(function () {
+                        btnCopy.innerHTML = '<i class="fa fa-check me-1"></i> Copiado';
+                        setTimeout(function () {
+                            btnCopy.innerHTML = '<i class="fa fa-copy me-1"></i> Copiar';
+                        }, 1500);
+                    });
+                } else {
+                    // fallback
+                    var ta = document.createElement('textarea');
+                    ta.value = text;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    try { document.execCommand('copy'); } catch (e) {}
+                    document.body.removeChild(ta);
+                    btnCopy.innerHTML = '<i class="fa fa-check me-1"></i> Copiado';
+                    setTimeout(function () {
+                        btnCopy.innerHTML = '<i class="fa fa-copy me-1"></i> Copiar';
+                    }, 1500);
+                }
+            });
+        }
     }
 
     /* ────────────── Sortable (reordenar nodos del mismo padre) ────────────── */

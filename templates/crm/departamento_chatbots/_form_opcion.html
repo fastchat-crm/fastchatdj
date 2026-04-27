@@ -1,10 +1,36 @@
-{# Form de UNA opcion del flujo. Se inyecta en el modal del editor.
-   Variables: opcion (instancia o None), es_nuevo, departamento_id,
-   parent_id, config_json_str, tipos_nodo_choices, validaciones_choices,
-   endpoints_disponibles. #}
+
 <input type="hidden" name="opcion_id" value="{{ opcion.id|default:0 }}">
 <input type="hidden" name="departamento_id" value="{{ departamento_id }}">
 <input type="hidden" name="parent_id" value="{{ parent_id|default:0 }}">
+
+{% if es_nuevo %}
+    {% if parent_id and parent_id != 0 %}
+        <div class="alert alert-info py-2 small mb-2">
+            <i class="fa fa-info-circle me-1"></i>
+            <strong>Nueva sub-opción.</strong> Este nodo va a colgar de otro como hijo.
+            Si el padre es de tipo <span class="badge bg-primary">Menú</span>, esta opción
+            aparecerá listada al usuario. Si el padre es <span class="badge bg-warning text-dark">Pregunta</span>,
+            este nodo se ejecuta cuando el usuario responde.
+        </div>
+    {% else %}
+        <div class="alert alert-info py-2 small mb-2">
+            <i class="fa fa-info-circle me-1"></i>
+            <strong>Nueva opción raíz.</strong> Una opción raíz es el punto de entrada o una
+            rama principal del flujo. Marcala como <em>"nodo de inicio"</em> en
+            <em>Configuración avanzada</em> para que el bot la ejecute al entrar el cliente.
+        </div>
+    {% endif %}
+{% endif %}
+
+<div class="alert alert-light border py-2 small mb-2">
+    <strong>Guía rápida de tipos:</strong>
+    <span class="badge bg-success">Respuesta</span> envía un texto fijo ·
+    <span class="badge bg-primary">Menú</span> lista opciones a elegir ·
+    <span class="badge bg-warning text-dark">Pregunta</span> captura input del usuario (con validación) ·
+    <span class="badge bg-danger">HTTP</span> llama a una API ·
+    <span class="badge bg-info text-dark">Handoff</span> pasa la conversación a humano ·
+    <span class="badge bg-secondary">Fin</span> cierra el flujo.
+</div>
 
 <div class="row g-2">
     <div class="col-md-4">

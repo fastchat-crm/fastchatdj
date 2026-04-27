@@ -189,6 +189,19 @@ def departamentoChatbotsView(request):
                 except Exception as ex:
                     return JsonResponse({"result": False, 'message': str(ex)})
 
+            elif action == 'exportar_meta_payload':
+                # Devuelve el JSON Meta Cloud API (interactive button/list) construido
+                # desde el saludo del depto + sus opciones raíz/primeras hijas.
+                try:
+                    dep_id = int(request.GET.get('id') or 0)
+                    filtro = model.objects.filter(pk=dep_id, status=True).first()
+                    if not filtro:
+                        return JsonResponse({'result': False, 'message': 'Departamento no encontrado'})
+                    payload = _build_meta_payload(filtro)
+                    return JsonResponse({'result': True, 'payload': payload})
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
+
             elif action == 'editar_opcion':
                 # Devuelve HTML del form de un nodo (modal en form_pagina).
                 try:
@@ -433,6 +446,81 @@ def _generar_departamento_con_ia(request):
 # trae el objeto opción y su nivel de profundidad (0 = raíz). El template
 # muestra cada uno con margin-left = nivel * indent.
 # ============================================================================
+def _build_meta_payload(departamento):
+    """Construye un payload Meta Cloud API (interactive button/list) a partir
+    del saludo + opciones del departamento. Útil para previsualizar como
+    quedaría el primer mensaje del bot. Reglas:
+    - Si el depto tiene un nodo raíz `es_inicio` con respuesta, usa esa respuesta como body.
+      Si no, usa `mensaje_saludo` del depto.
+    - Hijos directos del root inicial = botones (max 3) o list rows (>3).
+    - Si no hay un root inicial, los nodos raíz mismos se vuelven los botones.
+    - title de botón: 20 chars max, description list: 72.
+    """
+    raices = OpcionDepartamentoChatBot.objects.filter(
+        departamento=departamento, opcion_padre__isnull=True, status=True,
+    ).order_by('-es_inicio', 'orden', 'id')
+    root = raices.first()
+
+    body_text = (departamento.mensaje_saludo or '').strip()
+    if root and (root.respuesta or '').strip():
+        body_text = (root.respuesta or body_text).strip()
+    if not body_text:
+        body_text = departamento.nombre or '—'
+
+    # Hijos directos del root, o las raices mismas si no hay root claro.
+    if root:
+        hijos_qs = OpcionDepartamentoChatBot.objects.filter(
+            opcion_padre=root, status=True,
+        ).order_by('orden', 'id')
+        opciones_lista = list(hijos_qs)
+        if not opciones_lista:
+            # No hay hijos del root → usar las otras raices
+            opciones_lista = list(raices.exclude(pk=root.pk))
+    else:
+        opciones_lista = list(raices)
+
+    def _btn_id(op):
+        return op.boton_id or f'opcion_{op.id}'
+
+    def _btn_title(op):
+        return ((op.nombre or '').strip() or f'Opción {op.id}')[:20]
+
+    if len(opciones_lista) <= 3:
+        botones = [{
+            'type': 'reply',
+            'reply': {'id': _btn_id(op), 'title': _btn_title(op)},
+        } for op in opciones_lista]
+        return {
+            'messaging_product': 'whatsapp',
+            'to': '593XXXXXXXXX',
+            'type': 'interactive',
+            'interactive': {
+                'type': 'button',
+                'body': {'text': body_text[:1024]},
+                'action': {'buttons': botones},
+            },
+        }
+    # >3 → list type
+    rows = [{
+        'id': _btn_id(op),
+        'title': _btn_title(op)[:24],
+        'description': ((op.respuesta or '').strip()[:72]) or '',
+    } for op in opciones_lista[:10]]
+    return {
+        'messaging_product': 'whatsapp',
+        'to': '593XXXXXXXXX',
+        'type': 'interactive',
+        'interactive': {
+            'type': 'list',
+            'body': {'text': body_text[:1024]},
+            'action': {
+                'button': 'Ver opciones',
+                'sections': [{'title': 'Opciones', 'rows': rows}],
+            },
+        },
+    }
+
+
 def _serializar_arbol_opciones(departamento, padre=None, nivel=0):
     items = []
     qs = OpcionDepartamentoChatBot.objects.filter(
