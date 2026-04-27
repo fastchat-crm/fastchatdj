@@ -9,6 +9,8 @@
         <div class="card-avatar">
             {% if sesion.es_baileys and sesion.config_baileys.foto %}
                 <img src="{{ sesion.config_baileys.foto }}" alt="avatar">
+            {% elif sesion.es_meta and sesion.config_meta.foto_perfil %}
+                <img src="{{ sesion.config_meta.foto_perfil }}" alt="avatar">
             {% else %}
                 <span class="avatar-fallback">
           <i class="fab fa-whatsapp"></i>
@@ -39,6 +41,9 @@
                 {% if sesion.es_meta %}
                     <div class="kebab-heading">Meta Cloud API</div>
                     <button type="button" class="kebab-item" data-action="editar"><i class="fa fa-pen"></i> Modificar
+                    </button>
+                    <button type="button" class="kebab-item" data-action="cambiar-foto"><i class="fa fa-image"></i>
+                        Cambiar foto de perfil
                     </button>
                     <button type="button" class="kebab-item" data-action="resumen"><i class="fa fa-clipboard-check"></i>
                         Resumen y pasos siguientes

@@ -121,7 +121,7 @@
                     </div>
                     <div>
                         <label>WhatsApp ID</label>
-                        <input type="text" value="{{ sesion.whatsapp_id|default:'—' }}" readonly>
+                        <input type="text" value="{{ sesion.config_baileys.whatsapp_id|default:'—' }}" readonly>
                     </div>
                 </div>
 
@@ -132,11 +132,11 @@
                     </div>
                     <div>
                         <label>Contactos sincronizados</label>
-                        <input type="text" value="{{ sesion.contacts_length|default:0 }}" readonly>
+                        <input type="text" value="{{ sesion.config_baileys.contacts_length|default:0 }}" readonly>
                     </div>
                 </div>
 
-                {% if sesion.desconectado_manualmente %}
+                {% if sesion.config_baileys.desconectado_manualmente %}
                     <div class="conex-data-warn">
                         <i class="fa fa-triangle-exclamation me-1"></i>
                         Esta sesión fue desconectada manualmente. Reconectá desde el botón "Reconectar" del listado.

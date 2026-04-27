@@ -1153,6 +1153,15 @@ class ConfigMeta(ModeloBase):
         verbose_name='Estado de verificacion del negocio'
     )
 
+    # Foto de perfil (cache local). Meta no devuelve la foto en consultas
+    # normales — la obtenemos solo cuando el operador la sube desde el panel.
+    # Guardamos data: URL base64 para mostrarla en el avatar del card sin
+    # depender de URLs de Meta (que pueden expirar).
+    foto_perfil = models.TextField(
+        blank=True, null=True, verbose_name='Foto de perfil (data URL base64)',
+        help_text='Cache local de la última foto subida. Vacío hasta que el operador suba una.'
+    )
+
     # Auditoria
     ultima_sincronizacion = models.DateTimeField(null=True, blank=True)
     alta_manual = models.BooleanField(
