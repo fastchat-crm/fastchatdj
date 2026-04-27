@@ -1,46 +1,12 @@
 {% extends 'base.html' %}
-{% load templatefunctions %}
+{% load templatefunctions static %}
 {% block head %}
-    <style>
-        .select2-container {
-            width: 87% !important;
-        }
-        .input-group-text {
-            width: 45px;
-        }
-        .badge-dup {
-            background: linear-gradient(135deg, #fd7e14, #dc3545);
-            color: #fff;
-            font-size: .7rem;
-            font-weight: 700;
-            padding: .25em .55em;
-            border-radius: 20px;
-            letter-spacing: .03em;
-            display: inline-flex;
-            align-items: center;
-            gap: .25em;
-        }
-        .sesion-chip {
-            display: inline-block;
-            background: #f0f4ff;
-            border: 1px solid #c5d0e8;
-            border-radius: 20px;
-            padding: .15em .55em;
-            font-size: .75rem;
-            color: #3a5a90;
-            margin: .1em;
-            white-space: nowrap;
-        }
-        .filter-dup-btn.active {
-            background-color: #dc3545 !important;
-            border-color: #dc3545 !important;
-            color: #fff !important;
-        }
-    </style>
+    <link rel="stylesheet" href="{% static 'stylenew/contacto.css' %}">
 {% endblock %}
 {% block content %}
 
-    <div class="card mb-3">
+    {# ───────── Filtros ───────── #}
+    <div class="card mb-3 cont-filtros">
         <div class="card-body">
             <form method="GET" class="mb-0">
                 <div class="row g-3">
@@ -101,146 +67,130 @@
         </div>
     </div>
 
-        <div class="row align-items-center mb-3">
-            <div class="col-md-12 mb-2 mb-md-0">
-                <a href="javascript:void(0);" class="btn btn-success btn-sm" onclick="formModal(0, 'Agregar {{ titulo }}', 'add')">
-                    <i class="fas fa-plus-circle me-2"></i> Nuevo {{ titulo }}
-                </a>
-            </div>
-        </div>
-
-    <div class="card">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table id="tabla" class="table table-hover table-striped">
-                    <thead>
-                    <tr>
-                        <th class="text-left">Nombre</th>
-                        <th class="text-center">Sesión</th>
-                        <th class="text-center">Whatsapp</th>
-                        <th class="text-center">Último mensaje</th>
-                        <th class="text-center">Prog.</th>
-                        <th class="text-center">Estado</th>
-                        <th class="text-center">Duplicado en</th>
-                        <th class="text-center">Acción</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {% for l in listado %}
-                        <tr>
-                            <td class="text-left">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div class="d-flex align-items-center">
-                                        <a href="{{ l.get_foto_gris }}"
-                                           data-fancybox="image"
-                                           data-width="2048"
-                                           data-height="1365"
-                                           title="{{ l.contacto_nombre }}">
-                                            <img id="presentaimg2" class="img-circle"
-                                                 src="{{ l.get_foto_gris }}"
-                                                 style="border-radius: 2.375rem;" width="55px"
-                                                 height="55px">
-                                        </a>
-                                        <div class="info-top ml-4"><span>
-                                                    {{ l.contacto_nombre }} <small class="text-muted">Cod. {{ l.pk }}</small>
-                                                </span><br>
-                                            <span>
-                                                    {{ l.contacto_numero }}
-                                                </span>
-                                            <br>
-                                        </div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="text-left">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div class="d-flex align-items-center">
-                                        <a href="{{ l.sesion.config_baileys.foto }}"
-                                           data-fancybox="image"
-                                           data-width="2048"
-                                           data-height="1365"
-                                           title="{{ l.contacto_nombre }}">
-                                            <img id="presentaimg2" class="img-circle"
-                                                 src="{{ l.sesion.config_baileys.foto }}"
-                                                 style="border-radius: 2.375rem;" width="55px"
-                                                 height="55px">
-                                        </a>
-                                        <div class="info-top ml-4">
-                                               <span>
-                                                    {{ l.sesion.nombre }}
-                                                </span><br>
-                                            <span>
-                                                    {{ l.sesion.numero }}
-                                                </span>
-                                            <br>
-                                        </div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="text-center">{{ l.from_number|default:'' }}</td>
-                            <td class="text-center">{{ l.fecha_ultimo_mensaje|date:'d/m/Y H:i' }}</td>
-                            <td class="text-center">
-                                {{ l.get_mensajes_programados.count }}
-                            </td>
-                            <td class="text-center">
-                                <span class="badge bg-{{ l.get_estado_color }} fs-6">
-                                    {{ l.get_estado_display }}
-                                </span>
-                            </td>
-                            <td class="text-center">
-                                {% if l.contacto_numero in numeros_duplicados %}
-                                    <div class="dup-cell" data-numero="{{ l.contacto_numero }}">
-                                        <span class="badge-dup">
-                                            <i class="fas fa-copy"></i> Duplicado
-                                        </span>
-                                        <div class="dup-chips mt-1"></div>
-                                    </div>
-                                {% else %}
-                                    <span class="text-muted" style="font-size:.8rem;">—</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
-                                <div class="dropdown">
-                                    <button class="btn btn-icon" type="button" id="dropdownMenuButton-{{ l.pk }}"
-                                            data-bs-toggle="dropdown" aria-expanded="false"
-                                            style="background: none; border: none;">
-                                        <i class="fas fa-ellipsis-v"></i>
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end"
-                                        aria-labelledby="dropdownMenuButton-{{ l.pk }}">
-                                        {% if l.sesion.es_baileys %}
-                                        <li>
-                                            <a class="dropdown-item"
-                                               href="?action=mensajes_programados&id={{ l.pk }}">
-                                                <i class="fas fa-clock me-2 text-default"></i>Mensajes Programados
-                                            </a>
-                                        </li>
-                                        {% endif %}
-                                        <li>
-                                            <a class="dropdown-item"
-                                               href="javascript:void(0);"
-                                               onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'change')">
-                                                <i class="fas fa-edit me-2 text-primary"></i>Editar
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a class="dropdown-item" href="javascript:void(0);"
-                                               onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'delete')">
-                                                <i class="fas fa-trash me-2 text-danger"></i>Eliminar
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-                {% include "paginacion.html" %}
-            </div>
+    {# ───────── Toolbar ───────── #}
+    <div class="cont-toolbar">
+        <a href="javascript:void(0);" class="btn btn-success btn-sm" onclick="formModal(0, 'Agregar {{ titulo }}', 'add')">
+            <i class="fas fa-plus-circle me-2"></i> Nuevo {{ titulo }}
+        </a>
+        <div class="cont-count">
+            <b>{{ list_count }}</b> contacto{{ list_count|pluralize }}
+            {% if solo_duplicados %} · solo duplicados{% endif %}
         </div>
     </div>
 
+    {# ───────── Grid de cards ───────── #}
+    <div class="cont-grid">
+        {% for l in listado %}
+            <div class="cont-card">
+                {% if l.contacto_numero in numeros_duplicados %}
+                    <span class="cont-dup-badge" data-numero="{{ l.contacto_numero }}">
+                        <i class="fas fa-copy"></i> Duplicado
+                    </span>
+                    <div class="cont-dup-tooltip" data-tip-numero="{{ l.contacto_numero }}">
+                        Este número también está en otras sesiones del usuario.
+                    </div>
+                {% endif %}
+
+                {# ── Header con identificación de la sesión ── #}
+                <div class="cont-card-header">
+                    <a href="/whatsapp/conversaciones/?sesion={{ l.sesion.id|encrypt_id }}"
+                       class="cont-sesion-badge"
+                       title="Sesión: {{ l.sesion.nombre|default:l.sesion.numero }}">
+                        {% if l.sesion.es_meta and l.sesion.config_meta.foto %}
+                            <img class="cont-sesion-avatar" src="{{ l.sesion.config_meta.foto }}" alt="">
+                        {% elif l.sesion.es_baileys and l.sesion.config_baileys.foto %}
+                            <img class="cont-sesion-avatar" src="{{ l.sesion.config_baileys.foto }}" alt="">
+                        {% else %}
+                            <span class="cont-sesion-avatar is-icon {% if l.sesion.es_meta %}is-meta{% else %}is-baileys{% endif %}">
+                                <i class="fab fa-whatsapp"></i>
+                            </span>
+                        {% endif %}
+                        <span class="cont-sesion-name">{{ l.sesion.nombre|default:l.sesion.numero|default:'Sesión' }}</span>
+                        <span class="cont-sesion-canal {% if l.sesion.es_meta %}is-meta{% else %}is-baileys{% endif %}">
+                            {% if l.sesion.es_meta %}Cloud{% else %}Web{% endif %}
+                        </span>
+                    </a>
+                    <div class="dropdown">
+                        <button class="cont-kebab" type="button" id="dropdownMenuButton-{{ l.pk }}"
+                                data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                            {% if l.sesion.es_baileys %}
+                                <li>
+                                    <a class="dropdown-item" href="?action=mensajes_programados&id={{ l.pk }}">
+                                        <i class="fas fa-clock me-2 text-default"></i>Mensajes Programados
+                                    </a>
+                                </li>
+                            {% endif %}
+                            <li>
+                                <a class="dropdown-item" href="javascript:void(0);"
+                                   onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'change')">
+                                    <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="javascript:void(0);"
+                                   onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'delete')">
+                                    <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                {# ── Body: contacto principal ── #}
+                <div class="cont-card-body">
+                    <div class="cont-foto-wrap">
+                        <a href="{{ l.get_foto_gris }}" data-fancybox="image" title="{{ l.contacto_nombre }}">
+                            <img class="cont-foto" src="{{ l.get_foto_gris }}" alt="">
+                        </a>
+                        <span class="cont-foto-estado is-{{ l.get_estado_color }}"
+                              title="{{ l.get_estado_display }}"></span>
+                    </div>
+                    <div class="cont-info">
+                        <p class="cont-nombre">
+                            {{ l.contacto_nombre|default:'Sin nombre' }}
+                            <span class="cont-cod">#{{ l.pk }}</span>
+                        </p>
+                        <p class="cont-numero">{{ l.contacto_numero }}</p>
+                        <span class="cont-pill is-{{ l.get_estado_color }}">{{ l.get_estado_display }}</span>
+                    </div>
+                </div>
+
+                {# ── Footer: meta-datos ── #}
+                <div class="cont-card-foot">
+                    {% if l.fecha_ultimo_mensaje %}
+                        <span class="cont-meta" title="Último mensaje">
+                            <i class="far fa-clock"></i> {{ l.fecha_ultimo_mensaje|date:'d/m H:i' }}
+                        </span>
+                    {% endif %}
+                    {% with prog=l.get_mensajes_programados.count %}
+                        {% if prog %}
+                            <span class="cont-meta" title="Mensajes programados">
+                                <i class="far fa-paper-plane"></i> <b>{{ prog }}</b> prog.
+                            </span>
+                        {% endif %}
+                    {% endwith %}
+                    {% if l.from_number %}
+                        <span class="cont-meta" title="WhatsApp ID">
+                            <i class="fab fa-whatsapp"></i> {{ l.from_number|truncatechars:18 }}
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+        {% empty %}
+            <div class="cont-empty">
+                <i class="fas fa-address-book"></i>
+                <h5>No hay contactos para mostrar</h5>
+                <p class="mb-0">Probá ajustar los filtros o creá uno nuevo.</p>
+            </div>
+        {% endfor %}
+    </div>
+
+    {% include "paginacion.html" %}
+
+    {# ───────── Modal Detalle (form) ───────── #}
     <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
@@ -261,18 +211,17 @@
 {% block jscript %}
     <script src="/js/forms.js?version=1"></script>
     <script>
-        // Renderizar chips de sesiones duplicadas
+        // Inyectar tooltip dinámico con la lista de sesiones donde duplica.
+        // Reusamos dup_sesiones_json del contexto (mismo dato que la vista anterior).
         const DUP_SESIONES = {{ dup_sesiones_json|safe }};
-        document.querySelectorAll('.dup-cell').forEach(cell => {
-            const num = cell.dataset.numero;
+        document.querySelectorAll('.cont-dup-tooltip').forEach(tip => {
+            const num = tip.dataset.tipNumero;
             const sesiones = DUP_SESIONES[num] || [];
-            const container = cell.querySelector('.dup-chips');
-            sesiones.forEach(s => {
-                const chip = document.createElement('span');
-                chip.className = 'sesion-chip';
-                chip.textContent = s;
-                container.appendChild(chip);
-            });
+            if (sesiones.length) {
+                tip.innerHTML = '<b>También en:</b><br>' + sesiones.map(s =>
+                    s.replace(/[<>&"]/g, c => ({'<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;'})[c])
+                ).join(' · ');
+            }
         });
 
         function formModal(id, text, action) {
@@ -280,22 +229,15 @@
             $.ajax({
                 type: "GET",
                 url: `{{ request.path }}`,
-                data: {
-                    'action': action,
-                    'id': id,
-                },
+                data: {'action': action, 'id': id},
                 success: function (data) {
                     setTimeout($.unblockUI, 1);
                     if (data.result === true) {
                         $('#modalNombre').html(text);
                         $('.detalleProd').html(data.data);
-
-                        // Usar Bootstrap 5 modal
                         const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
                         modal.show();
                     } else {
-                        console.log('asdasd');
-                        console.log(data.message);
                         mensajeWarning(data.message);
                     }
                 },

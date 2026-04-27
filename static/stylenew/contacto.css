@@ -1,0 +1,279 @@
+/* ============================================================
+   Listado de contactos — vista cards con identificación de sesión
+   /whatsapp/contacto/
+   ============================================================ */
+
+/* ─────── Filtros (reusa Bootstrap card pero con espaciado propio) ─────── */
+.cont-filtros .select2-container { width: 100% !important; }
+.cont-filtros .input-group-text { width: 45px; }
+
+/* ─────── Toolbar arriba del grid ─────── */
+.cont-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-bottom: 1rem;
+}
+.cont-count {
+    color: #64748b;
+    font-size: .9rem;
+}
+.cont-count b { color: #0f172a; font-weight: 600; }
+
+/* ─────── Grid de cards ─────── */
+.cont-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 1rem;
+}
+
+/* ─────── Card individual ─────── */
+.cont-card {
+    position: relative;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow .15s, transform .15s;
+}
+.cont-card:hover {
+    box-shadow: 0 4px 14px rgba(15, 23, 42, .08);
+    transform: translateY(-1px);
+}
+
+/* ─── Encabezado: identifica la sesión + kebab ─── */
+.cont-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: .55rem .75rem;
+    background: linear-gradient(135deg, #f1f5f9 0%, #f8fafc 100%);
+    border-bottom: 1px solid #e2e8f0;
+    gap: .5rem;
+}
+.cont-sesion-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    padding: 2px 8px 2px 2px;
+    font-size: .72rem;
+    font-weight: 600;
+    color: #1e293b;
+    max-width: calc(100% - 36px);
+    overflow: hidden;
+    text-decoration: none;
+}
+.cont-sesion-badge:hover { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
+.cont-sesion-avatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: 0 0 auto;
+    background: #cbd5e1;
+}
+.cont-sesion-avatar.is-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: .7rem;
+}
+.cont-sesion-avatar.is-meta    { background: linear-gradient(135deg, #25d366, #128c7e); }
+.cont-sesion-avatar.is-baileys { background: linear-gradient(135deg, #4ade80, #16a34a); }
+.cont-sesion-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 140px;
+}
+.cont-sesion-canal {
+    margin-left: .25rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: .65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+.cont-sesion-canal.is-meta    { background: #dcfce7; color: #166534; }
+.cont-sesion-canal.is-baileys { background: #e0e7ff; color: #3730a3; }
+
+/* ─── Body: contacto principal ─── */
+.cont-card-body {
+    padding: .9rem;
+    display: flex;
+    gap: .75rem;
+    flex: 1;
+}
+.cont-foto-wrap {
+    position: relative;
+    flex: 0 0 auto;
+}
+.cont-foto {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #f1f5f9;
+}
+.cont-foto-estado {
+    position: absolute;
+    bottom: 1px;
+    right: 1px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+}
+.cont-foto-estado.is-success { background: #10b981; }
+.cont-foto-estado.is-danger  { background: #ef4444; }
+.cont-foto-estado.is-default { background: #94a3b8; }
+
+.cont-info {
+    flex: 1;
+    min-width: 0;
+}
+.cont-nombre {
+    font-weight: 600;
+    color: #0f172a;
+    font-size: .95rem;
+    line-height: 1.25;
+    margin: 0 0 2px 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cont-cod {
+    font-size: .7rem;
+    color: #94a3b8;
+    font-weight: 400;
+    margin-left: .25rem;
+}
+.cont-numero {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+    font-size: .8rem;
+    color: #475569;
+    margin: 0;
+}
+
+/* ─── Footer: meta-datos ─── */
+.cont-card-foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem .75rem;
+    padding: .55rem .9rem .75rem .9rem;
+    border-top: 1px solid #f1f5f9;
+    font-size: .76rem;
+    color: #64748b;
+}
+.cont-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+}
+.cont-meta i { color: #94a3b8; font-size: .75rem; }
+.cont-meta b { color: #0f172a; font-weight: 600; }
+
+/* ─── Badge duplicado (overlay arriba a la derecha) ─── */
+.cont-dup-badge {
+    position: absolute;
+    top: .5rem;
+    right: 2.5rem;
+    background: linear-gradient(135deg, #fd7e14, #dc3545);
+    color: #fff;
+    font-size: .65rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+    letter-spacing: .03em;
+    display: inline-flex;
+    align-items: center;
+    gap: .25em;
+    cursor: help;
+    z-index: 2;
+}
+.cont-dup-tooltip {
+    display: none;
+    position: absolute;
+    top: 1.85rem;
+    right: .5rem;
+    background: #1f2937;
+    color: #fff;
+    padding: .4rem .6rem;
+    border-radius: 6px;
+    font-size: .7rem;
+    z-index: 10;
+    max-width: 220px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .25);
+}
+.cont-dup-badge:hover + .cont-dup-tooltip { display: block; }
+
+/* ─── Kebab menu ─── */
+.cont-kebab {
+    background: transparent;
+    border: none;
+    color: #475569;
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background .15s;
+    flex: 0 0 auto;
+}
+.cont-kebab:hover { background: #e2e8f0; color: #0f172a; }
+
+/* ─── Estado vacío ─── */
+.cont-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #94a3b8;
+    background: #fff;
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
+}
+.cont-empty i {
+    display: block;
+    font-size: 2.5rem;
+    margin-bottom: .75rem;
+    color: #cbd5e1;
+}
+
+/* ─── Filtro duplicados activo (botón) ─── */
+.filter-dup-btn.active {
+    background-color: #dc3545 !important;
+    border-color: #dc3545 !important;
+    color: #fff !important;
+}
+
+/* ─── Estado badge (en card foot, por estado del contacto) ─── */
+.cont-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: .68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+.cont-pill.is-success { background: #ecfdf5; color: #065f46; }
+.cont-pill.is-danger  { background: #fef2f2; color: #991b1b; }
+.cont-pill.is-default { background: #f1f5f9; color: #475569; }
+
+/* ─── Responsive ─── */
+@media (max-width: 540px) {
+    .cont-grid { grid-template-columns: 1fr; }
+}
