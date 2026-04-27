@@ -1,6 +1,3 @@
-{# Recursivo. Renderiza un nodo del arbol de decision como <li> con sus hijos
-   en un <ul> nested para que el CSS .dp-tree-decision pueda dibujar conectores.
-   Vars esperadas: nodo (dict {opcion, hijos}). #}
 <li>
     <div class="dp-tree-card tipo-{{ nodo.opcion.tipo_nodo }}">
         <div class="dp-tree-card-pill dp-tipo-pill tipo-{{ nodo.opcion.tipo_nodo }}">
