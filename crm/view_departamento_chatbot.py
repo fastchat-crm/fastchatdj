@@ -381,14 +381,16 @@ REGLAS:
 Devolvé SOLO el JSON.
 """
 
-    # Construir LLM según proveedor
+    # Construir LLM según proveedor.
+    # max_tokens alto: 16000 da espacio cómodo para flows complejos con
+    # 2-3 niveles de hijos. Gemini 2.5 Flash y Claude Haiku 4.5 ambos lo soportan.
     try:
         if apikey.proveedor == 2:
             from langchain_google_genai import ChatGoogleGenerativeAI
             llm = ChatGoogleGenerativeAI(
                 model=(apikey.modelo or 'gemini-2.5-flash'),
                 google_api_key=apikey.descripcion,
-                max_output_tokens=4000, temperature=0.5,
+                max_output_tokens=16000, temperature=0.4,
                 model_kwargs={'response_mime_type': 'application/json'},
             )
         elif apikey.proveedor == 4:
@@ -396,14 +398,14 @@ Devolvé SOLO el JSON.
             llm = ChatAnthropic(
                 model=(apikey.modelo or 'claude-haiku-4-5-20251001'),
                 anthropic_api_key=apikey.descripcion,
-                max_tokens=4000, temperature=0.5,
+                max_tokens=16000, temperature=0.4,
             )
         else:
             from langchain_community.chat_models import ChatOpenAI
             llm = ChatOpenAI(
                 model_name=(apikey.modelo or 'gpt-4o-mini'),
                 openai_api_key=apikey.descripcion,
-                max_tokens=4000, temperature=0.5,
+                max_tokens=16000, temperature=0.4,
                 model_kwargs={'response_format': {'type': 'json_object'}},
             )
         respuesta = llm.invoke(prompt)

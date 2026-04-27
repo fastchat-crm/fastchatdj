@@ -266,6 +266,15 @@ def _accion_editar(request):
         sesion.agente_ia = agente
     elif agente_id == '':
         sesion.agente_ia = None
+    # Departamento default (solo aplica a modos tradicional / hibrido).
+    # Si llega vacío, deja el FK en None.
+    depto_id = request.POST.get('departamento_default') or ''
+    if depto_id.isdigit():
+        from crm.models import DepartamentoChatBot
+        depto = DepartamentoChatBot.objects.filter(id=int(depto_id), status=True).first()
+        sesion.departamento_default = depto
+    elif depto_id == '':
+        sesion.departamento_default = None
     sesion.save()
     log(f"Sesion {sesion.id} editada", request, "change", obj=sesion.id)
     return JsonResponse([{
@@ -299,16 +308,23 @@ def _get_partial(request, accion):
     ctx = {'sesion': sesion, 'request': request}
 
     if accion == 'editar_modal':
-        from crm.models import AgentesIA, PerfilNegocioIA
+        from crm.models import AgentesIA, PerfilNegocioIA, DepartamentoChatBot
         perfil, _ = PerfilNegocioIA.objects.get_or_create(usuario=request.user)
         ctx['agentes_disponibles'] = AgentesIA.objects.filter(perfil=perfil, status=True).order_by('nombre')
-        # Datos específicos del proveedor — los renderiza el modal en una
-        # sección "Datos de la conexión" (read-only, lo que trajo la API).
+        # Departamentos disponibles para modos 'tradicional' y 'hibrido'.
+        # Activos primero, luego por nombre.
+        ctx['departamentos_disponibles'] = DepartamentoChatBot.objects.filter(
+            status=True
+        ).order_by('-es_default', 'nombre')
+        tpl = 'whatsapp/sesiones/_modal_editar.html'
+
+    elif accion == 'datos_transporte_modal':
+        # Read-only: datos técnicos de la conexión separados del editor.
         if sesion.es_meta:
             ctx['config_meta'] = getattr(sesion, 'config_meta', None)
         ctx['config_instagram'] = getattr(sesion, 'config_instagram', None)
         ctx['config_messenger'] = getattr(sesion, 'config_messenger', None)
-        tpl = 'whatsapp/sesiones/_modal_editar.html'
+        tpl = 'whatsapp/sesiones/_modal_datos_transporte.html'
 
     elif accion == 'historial_modal':
         from django.contrib.admin.models import LogEntry

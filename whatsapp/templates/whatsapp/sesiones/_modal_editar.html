@@ -24,182 +24,8 @@
         <input type="hidden" name="action" value="editar">
         <input type="hidden" name="id" value="{{ sesion.id }}">
 
-        {% if sesion.es_meta and config_meta %}
-            <div class="conex-data-block">
-                <div class="conex-data-head">
-                    <i class="fa fa-circle-check text-success me-1"></i>
-                    <span>Datos de Meta Cloud API</span>
-                    <span class="conex-data-pill conex-data-pill-readonly">solo lectura</span>
-                </div>
-
-                <div class="form-row form-row-two">
-                    <div>
-                        <label>WABA ID</label>
-                        <input type="text" value="{{ config_meta.waba_id|default:'—' }}" readonly>
-                    </div>
-                    <div>
-                        <label>Phone Number ID</label>
-                        <input type="text" value="{{ config_meta.phone_number_id|default:'—' }}" readonly>
-                    </div>
-                </div>
-
-                <div class="form-row form-row-two">
-                    <div>
-                        <label>Número visible</label>
-                        <input type="text" value="{{ config_meta.display_phone_number|default:'—' }}" readonly>
-                    </div>
-                    <div>
-                        <label>Nombre verificado</label>
-                        <input type="text" value="{{ config_meta.verified_name|default:'—' }}" readonly>
-                    </div>
-                </div>
-
-                <div class="form-row form-row-two">
-                    <div>
-                        <label>Quality rating</label>
-                        <input type="text" value="{{ config_meta.get_quality_rating_display }}" readonly
-                               class="conex-rating-{{ config_meta.quality_rating|lower }}">
-                    </div>
-                    <div>
-                        <label>Tier mensajería</label>
-                        <input type="text" value="
-
-                                {% if config_meta.messaging_limit_tier %}{{ config_meta.get_messaging_limit_tier_display }}{% else %}—{% endif %}"
-                               readonly>
-                    </div>
-                </div>
-
-                <div class="form-row form-row-two">
-                    <div>
-                        <label>Webhook verificado</label>
-                        <input type="text" value="
-
-                                {% if config_meta.webhook_verificado_en %}{{ config_meta.webhook_verificado_en|date:'d/m/Y H:i' }}{% else %}— pendiente —{% endif %}"
-                               readonly>
-                    </div>
-                    <div>
-                        <label>Última sincronización</label>
-                        <input type="text" value="
-
-                                {% if config_meta.ultima_sincronizacion %}{{ config_meta.ultima_sincronizacion|date:'d/m/Y H:i' }}{% else %}—{% endif %}"
-                               readonly>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <label>Verify token <small class="muted">(se usa para validar el webhook con Meta)</small></label>
-                    <input type="text"
-                           value="{{ config_meta.webhook_verify_token|default:'' }}"
-                           placeholder="(autogenerado al crear la sesión)" readonly>
-                </div>
-
-                <div class="conex-data-actions">
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" id="btn-resync-meta"
-                            data-pk="{{ sesion.id }}"
-                            title="Vuelve a consultar Graph API y refresca display_phone, quality y tier.">
-                        <i class="fa fa-rotate me-1"></i> Resincronizar con Meta
-                    </button>
-                    <a href="https://business.facebook.com/wa/manage/phone-numbers/?business_id={{ config_meta.waba_id }}"
-                       target="_blank" rel="noopener" class="conex-btn conex-btn-light btn-sm">
-                        <i class="fa fa-external-link me-1"></i> Abrir en Meta Business
-                    </a>
-                </div>
-            </div>
-
-        {% elif sesion.es_baileys %}
-            <div class="conex-data-block">
-                <div class="conex-data-head">
-                    <i class="fa fa-mobile text-success me-1"></i>
-                    <span>Datos de WhatsApp Web (Baileys)</span>
-                    <span class="conex-data-pill conex-data-pill-readonly">solo lectura</span>
-                </div>
-
-                <div class="form-row form-row-two">
-                    <div>
-                        <label>Número</label>
-                        <input type="text" value="{{ sesion.numero|default:'—' }}" readonly>
-                    </div>
-                    <div>
-                        <label>WhatsApp ID</label>
-                        <input type="text" value="{{ sesion.config_baileys.whatsapp_id|default:'—' }}" readonly>
-                    </div>
-                </div>
-
-                <div class="form-row form-row-two">
-                    <div>
-                        <label>Estado</label>
-                        <input type="text" value="{{ sesion.get_estado_display }}" readonly>
-                    </div>
-                    <div>
-                        <label>Contactos sincronizados</label>
-                        <input type="text" value="{{ sesion.config_baileys.contacts_length|default:0 }}" readonly>
-                    </div>
-                </div>
-
-                {% if sesion.config_baileys.desconectado_manualmente %}
-                    <div class="conex-data-warn">
-                        <i class="fa fa-triangle-exclamation me-1"></i>
-                        Esta sesión fue desconectada manualmente. Reconectá desde el botón "Reconectar" del listado.
-                    </div>
-                {% endif %}
-            </div>
-
-        {% elif sesion.es_instagram and config_instagram %}
-            <div class="conex-data-block">
-                <div class="conex-data-head">
-                    <i class="fa-brands fa-instagram me-1" style="color:#e1306c"></i>
-                    <span>Datos de Instagram Graph API</span>
-                    <span class="conex-data-pill conex-data-pill-readonly">solo lectura</span>
-                </div>
-
-                <div class="form-row form-row-two">
-                    <div>
-                        <label>IG User ID</label>
-                        <input type="text" value="{{ config_instagram.ig_user_id|default:'—' }}" readonly>
-                    </div>
-                    <div>
-                        <label>Username</label>
-                        <input type="text" value="@{{ config_instagram.username|default:'?' }}" readonly>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <label>Última sincronización</label>
-                    <input type="text" value="
-
-                            {% if config_instagram.ultima_sincronizacion %}{{ config_instagram.ultima_sincronizacion|date:'d/m/Y H:i' }}{% else %}—{% endif %}"
-                           readonly>
-                </div>
-            </div>
-
-        {% elif sesion.es_messenger and config_messenger %}
-            <div class="conex-data-block">
-                <div class="conex-data-head">
-                    <i class="fa-brands fa-facebook-messenger me-1 text-primary"></i>
-                    <span>Datos de Facebook Messenger</span>
-                    <span class="conex-data-pill conex-data-pill-readonly">solo lectura</span>
-                </div>
-
-                <div class="form-row form-row-two">
-                    <div>
-                        <label>Page ID</label>
-                        <input type="text" value="{{ config_messenger.page_id|default:'—' }}" readonly>
-                    </div>
-                    <div>
-                        <label>Nombre de página</label>
-                        <input type="text" value="{{ config_messenger.page_name|default:'—' }}" readonly>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <label>Última sincronización</label>
-                    <input type="text" value="
-
-                            {% if config_messenger.ultima_sincronizacion %}{{ config_messenger.ultima_sincronizacion|date:'d/m/Y H:i' }}{% else %}—{% endif %}"
-                           readonly>
-                </div>
-            </div>
-        {% endif %}
+        {# Datos del transporte (read-only) están separados en otro modal:
+           ver `_modal_datos_transporte.html` accesible desde el kebab. #}
 
         <div class="conex-data-block">
             <div class="conex-data-head">
@@ -216,7 +42,7 @@
 
             <div class="form-row">
                 <label>Modo del bot</label>
-                <select name="modo_bot">
+                <select name="modo_bot" id="sel-modo-bot">
                     <option value="ninguno" {% if sesion.modo_bot == 'ninguno' %}selected{% endif %}>Sin bot (solo
                         humanos)
                     </option>
@@ -228,10 +54,34 @@
                         → IA
                     </option>
                 </select>
+                <small class="muted d-block mt-1" id="hint-modo-bot"></small>
             </div>
 
-            <div class="form-row">
-                <label>Agente IA</label>
+            {# Departamento (solo visible si modo = tradicional o hibrido) #}
+            <div class="form-row" id="row-departamento">
+                <label>Departamento del flujo tradicional <span class="text-danger">*</span></label>
+                <select name="departamento_default">
+                    <option value="">— Sin departamento (no responde al flujo) —</option>
+                    {% for d in departamentos_disponibles %}
+                        <option value="{{ d.id }}"
+                                {% if sesion.departamento_default_id == d.id %}selected{% endif %}>
+                            {{ d.nombre }}{% if d.es_default %} · default{% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+                <small class="muted d-block mt-1">
+                    El flujo del departamento se ejecuta apenas el cliente escribe.
+                    {% if not departamentos_disponibles %}
+                        <a href="/crm/departamentos_chatbots/" target="_blank" class="text-warning">
+                            <i class="fa fa-plus-circle"></i> Crear un departamento primero
+                        </a>
+                    {% endif %}
+                </small>
+            </div>
+
+            {# Agente IA (solo visible si modo = ia o hibrido) #}
+            <div class="form-row" id="row-agente-ia">
+                <label>Agente IA {% if sesion.modo_bot == 'ia' %}<span class="text-danger">*</span>{% endif %}</label>
                 <select name="agente_ia">
                     <option value="">— Sin agente —</option>
                     {% for a in agentes_disponibles %}
@@ -240,6 +90,31 @@
                     {% endfor %}
                 </select>
             </div>
+
+            <script>
+                (function () {
+                    const sel = document.getElementById('sel-modo-bot');
+                    const rowDepto = document.getElementById('row-departamento');
+                    const rowAgente = document.getElementById('row-agente-ia');
+                    const hint = document.getElementById('hint-modo-bot');
+                    const HINTS = {
+                        'ninguno':     'No se invoca ningún bot. El operador humano contesta todo.',
+                        'tradicional': 'Solo se ejecuta el flujo del departamento (botones, opciones).',
+                        'ia':          'Solo IA libre. Cada respuesta la genera el LLM del agente.',
+                        'hibrido':     'Primero matchea con el flujo del departamento; si no encuentra, cae a IA.',
+                    };
+                    function actualizar() {
+                        const m = sel.value;
+                        const usaDepto = (m === 'tradicional' || m === 'hibrido');
+                        const usaIA    = (m === 'ia' || m === 'hibrido');
+                        rowDepto.style.display  = usaDepto ? '' : 'none';
+                        rowAgente.style.display = usaIA    ? '' : 'none';
+                        if (hint) hint.textContent = HINTS[m] || '';
+                    }
+                    sel.addEventListener('change', actualizar);
+                    actualizar();
+                })();
+            </script>
 
             <div class="form-row form-row-two">
                 <div>
