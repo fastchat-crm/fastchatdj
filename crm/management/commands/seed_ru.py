@@ -36,7 +36,8 @@ from crm.models import (
 
 
 NOMBRE_DEPTO = 'Asistente RU - Lucía'
-BASE_URL_DEFAULT = 'https://ruedge.ister.edu.ec/service/v1/bot/lucia'
+# El bot tiene codigo "ru" en la API (no "lucia"). La URL incluye codigo_bot.
+BASE_URL_DEFAULT = 'https://ruedge.ister.edu.ec/service/v1/bot/ru'
 
 
 # Descriptor de los 14 procedimientos del JSON original.
@@ -66,27 +67,25 @@ PROCEDIMIENTOS = [
         'tipo': 'http', 'requiere_cedula': True,
         'metodo': 'GET', 'path': '/actividades-semana/',
         'extraer': [
-            {'variable': 'titulo',     'jsonpath': 'data.titulo'},
-            {'variable': 'rango',      'jsonpath': 'data.rango_label'},
-            {'variable': 'tot',        'jsonpath': 'data.totales.total'},
-            {'variable': 'tot_tar',    'jsonpath': 'data.totales.tareas'},
-            {'variable': 'tot_for',    'jsonpath': 'data.totales.foros'},
-            {'variable': 'tot_test',   'jsonpath': 'data.totales.tests'},
-            # Top-3 ítems pendientes (primeros 3 días con items).
-            {'variable': 'a1_dia',     'jsonpath': 'data.dias[0].dia_label'},
-            {'variable': 'a1_titulo',  'jsonpath': 'data.dias[0].items[0].titulo'},
-            {'variable': 'a1_tipo',    'jsonpath': 'data.dias[0].items[0].tipo_label'},
-            {'variable': 'a1_asig',    'jsonpath': 'data.dias[0].items[0].asignatura'},
-            {'variable': 'a1_hora',    'jsonpath': 'data.dias[0].items[0].hora'},
+            {'variable': 'a_titulo',  'jsonpath': 'data.titulo'},
+            {'variable': 'a_rango',   'jsonpath': 'data.rango_label'},
+            {'variable': 'a_totales', 'jsonpath': 'data.totales'},
+            {'variable': 'a_dias',    'jsonpath': 'data.dias'},
         ],
         'plantilla': (
-            '📝 *{{variables.titulo}}*\n'
-            '🗓️ {{variables.rango}}\n\n'
-            'Total: *{{variables.tot}}* ítems\n'
-            '• Tareas: {{variables.tot_tar}}  • Foros: {{variables.tot_for}}  • Tests: {{variables.tot_test}}\n\n'
-            'Próximo pendiente:\n'
-            '📌 {{variables.a1_dia}} — {{variables.a1_tipo}}: *{{variables.a1_titulo}}*\n'
-            '   _{{variables.a1_asig}} · {{variables.a1_hora}}_'
+            '📝 *{{variables.a_titulo}}*\n'
+            '🗓️ {{variables.a_rango}}\n\n'
+            'Resumen: *{{variables.a_totales.total}}* ítems · '
+            'Tareas {{variables.a_totales.tareas}} · '
+            'Foros {{variables.a_totales.foros}} · '
+            'Tests {{variables.a_totales.tests}}\n\n'
+            '*Pendientes por día:*\n'
+            '{% for d in variables.a_dias %}'
+            '_{{d.dia_label}}_ — {{d.total}} ítems\n'
+            '{% for it in d.items %}'
+            '  • {{it.tipo_label}}: *{{it.titulo}}* ({{it.asignatura}}) · {{it.hora}}\n'
+            '{% endfor %}'
+            '{% endfor %}'
         ),
     },
     {
@@ -98,23 +97,16 @@ PROCEDIMIENTOS = [
             {'variable': 'm_titulo',   'jsonpath': 'data.titulo'},
             {'variable': 'm_total',    'jsonpath': 'data.total'},
             {'variable': 'm_url',      'jsonpath': 'data.url_materias'},
-            # Top-3 materias con docente
-            {'variable': 'm1_asig',    'jsonpath': 'data.materias[0].asignatura'},
-            {'variable': 'm1_doc',     'jsonpath': 'data.materias[0].docente'},
-            {'variable': 'm1_email',   'jsonpath': 'data.materias[0].docente_email'},
-            {'variable': 'm2_asig',    'jsonpath': 'data.materias[1].asignatura'},
-            {'variable': 'm2_doc',     'jsonpath': 'data.materias[1].docente'},
-            {'variable': 'm3_asig',    'jsonpath': 'data.materias[2].asignatura'},
-            {'variable': 'm3_doc',     'jsonpath': 'data.materias[2].docente'},
+            {'variable': 'm_lista',    'jsonpath': 'data.materias'},
         ],
         'plantilla': (
             '📚 *{{variables.m_titulo}}*\n'
             'Tienes *{{variables.m_total}}* materias activas:\n\n'
-            '• *{{variables.m1_asig}}* — {{variables.m1_doc}}\n'
-            '  ✉️ {{variables.m1_email}}\n'
-            '• *{{variables.m2_asig}}* — {{variables.m2_doc}}\n'
-            '• *{{variables.m3_asig}}* — {{variables.m3_doc}}\n\n'
-            'Ver TODAS con Meet/Moodle/Teams 👉 {{variables.m_url}}'
+            '{% for m in variables.m_lista %}'
+            '• *{{m.asignatura}}* — _{{m.docente}}_\n'
+            '  ✉️ {{m.docente_email}}\n'
+            '{% endfor %}'
+            '\n🔗 Ver con Meet/Moodle/Teams: {{variables.m_url}}'
         ),
     },
     {
@@ -123,28 +115,21 @@ PROCEDIMIENTOS = [
         'tipo': 'http_con_submenu', 'requiere_cedula': True,
         'metodo': 'GET', 'path': '/horarios/',
         'extraer': [
-            {'variable': 'h_url',  'jsonpath': 'data.url_horarios'},
-            # Top-3 materias con primer horario
-            {'variable': 'h1_asig', 'jsonpath': 'data.materias[0].asignatura'},
-            {'variable': 'h1_dia',  'jsonpath': 'data.materias[0].horarios[0].dia'},
-            {'variable': 'h1_hora', 'jsonpath': 'data.materias[0].horarios[0].hora'},
-            {'variable': 'h1_prof', 'jsonpath': 'data.materias[0].horarios[0].profesor'},
-            {'variable': 'h2_asig', 'jsonpath': 'data.materias[1].asignatura'},
-            {'variable': 'h2_dia',  'jsonpath': 'data.materias[1].horarios[0].dia'},
-            {'variable': 'h2_hora', 'jsonpath': 'data.materias[1].horarios[0].hora'},
-            {'variable': 'h3_asig', 'jsonpath': 'data.materias[2].asignatura'},
-            {'variable': 'h3_dia',  'jsonpath': 'data.materias[2].horarios[0].dia'},
-            {'variable': 'h3_hora', 'jsonpath': 'data.materias[2].horarios[0].hora'},
+            {'variable': 'h_url',     'jsonpath': 'data.url_horarios'},
+            {'variable': 'h_url_mat', 'jsonpath': 'data.url_materias'},
+            {'variable': 'h_lista',   'jsonpath': 'data.materias'},
         ],
         'plantilla': (
             '📅 *Estas son las materias que estás cursando:*\n\n'
-            '*{{variables.h1_asig}}*\n'
-            '{{variables.h1_dia}} · {{variables.h1_hora}} · _{{variables.h1_prof}}_\n\n'
-            '*{{variables.h2_asig}}*\n'
-            '{{variables.h2_dia}} · {{variables.h2_hora}}\n\n'
-            '*{{variables.h3_asig}}*\n'
-            '{{variables.h3_dia}} · {{variables.h3_hora}}\n\n'
-            '🔗 Ver horario completo en Ruedge: {{variables.h_url}}'
+            '{% for m in variables.h_lista %}'
+            '*{{m.asignatura}}*\n'
+            '{% for h in m.horarios %}'
+            '  {{h.dia}} · {{h.hora}} · _{{h.profesor}}_\n'
+            '{% endfor %}'
+            '\n'
+            '{% endfor %}'
+            '🔗 Ver horario: {{variables.h_url}}\n'
+            '🔗 Ver materias: {{variables.h_url_mat}}'
         ),
         'submenu': {
             'mensaje': '¿Quieres ver algo más específico?',
@@ -154,19 +139,15 @@ PROCEDIMIENTOS = [
                     'etiqueta': 'Clases de hoy',
                     'metodo': 'GET', 'path': '/horarios-hoy/',
                     'extraer': [
-                        {'variable': 'titulo',     'jsonpath': 'data.titulo'},
-                        {'variable': 'cl1_asig',   'jsonpath': 'data.clases[0].asignatura'},
-                        {'variable': 'cl1_hora',   'jsonpath': 'data.clases[0].hora'},
-                        {'variable': 'cl1_prof',   'jsonpath': 'data.clases[0].profesor'},
-                        {'variable': 'cl2_asig',   'jsonpath': 'data.clases[1].asignatura'},
-                        {'variable': 'cl2_hora',   'jsonpath': 'data.clases[1].hora'},
+                        {'variable': 'h_titulo',  'jsonpath': 'data.titulo'},
+                        {'variable': 'h_clases',  'jsonpath': 'data.clases'},
                     ],
                     'plantilla': (
-                        '📅 *{{variables.titulo}}*\n\n'
-                        '*{{variables.cl1_asig}}*\n'
-                        '🕐 {{variables.cl1_hora}} · _{{variables.cl1_prof}}_\n\n'
-                        '*{{variables.cl2_asig}}*\n'
-                        '🕐 {{variables.cl2_hora}}'
+                        '📅 *{{variables.h_titulo}}*\n\n'
+                        '{% for c in variables.h_clases %}'
+                        '*{{c.asignatura}}*\n'
+                        '🕐 {{c.hora}} · _{{c.profesor}}_\n\n'
+                        '{% endfor %}'
                     ),
                 },
                 {
@@ -200,30 +181,18 @@ PROCEDIMIENTOS = [
             {'variable': 'd_saldo',   'jsonpath': 'data.total_saldo'},
             {'variable': 'd_vencido', 'jsonpath': 'data.total_vencido'},
             {'variable': 'd_rubros',  'jsonpath': 'data.total_rubros'},
-            # Top-3 rubros pendientes/vencidos
-            {'variable': 'd1_nom',    'jsonpath': 'data.detalle[0].nombre'},
-            {'variable': 'd1_vence',  'jsonpath': 'data.detalle[0].vence'},
-            {'variable': 'd1_saldo',  'jsonpath': 'data.detalle[0].saldo'},
-            {'variable': 'd1_estado', 'jsonpath': 'data.detalle[0].estado'},
-            {'variable': 'd2_nom',    'jsonpath': 'data.detalle[1].nombre'},
-            {'variable': 'd2_saldo',  'jsonpath': 'data.detalle[1].saldo'},
-            {'variable': 'd2_estado', 'jsonpath': 'data.detalle[1].estado'},
-            {'variable': 'd3_nom',    'jsonpath': 'data.detalle[2].nombre'},
-            {'variable': 'd3_saldo',  'jsonpath': 'data.detalle[2].saldo'},
-            {'variable': 'd3_estado', 'jsonpath': 'data.detalle[2].estado'},
+            {'variable': 'd_lista',   'jsonpath': 'data.detalle'},
         ],
         'plantilla': (
             '💲 *Resumen de tus rubros:*\n\n'
             'Total emitido: *${{variables.d_rubros}}*\n'
             'Saldo pendiente: *${{variables.d_saldo}}*\n'
             'Vencido: *${{variables.d_vencido}}*\n\n'
-            '*Detalle (últimos 3):*\n'
-            '• {{variables.d1_nom}}\n'
-            '  Vence {{variables.d1_vence}} · saldo ${{variables.d1_saldo}} · _{{variables.d1_estado}}_\n'
-            '• {{variables.d2_nom}}\n'
-            '  saldo ${{variables.d2_saldo}} · _{{variables.d2_estado}}_\n'
-            '• {{variables.d3_nom}}\n'
-            '  saldo ${{variables.d3_saldo}} · _{{variables.d3_estado}}_'
+            '*Detalle:*\n'
+            '{% for r in variables.d_lista %}'
+            '• {{r.nombre}}\n'
+            '  Vence {{r.vence}} · saldo ${{r.saldo}} · _{{r.estado}}_\n'
+            '{% endfor %}'
         ),
     },
     {
@@ -264,19 +233,17 @@ PROCEDIMIENTOS = [
         'tipo': 'http', 'requiere_cedula': True,
         'metodo': 'GET', 'path': '/contactos/',
         'extraer': [
-            {'variable': 'c_men_nom', 'jsonpath': 'data.contactos[0].nombre'},
-            {'variable': 'c_men_em',  'jsonpath': 'data.contactos[0].email'},
-            {'variable': 'c_ase_nom', 'jsonpath': 'data.contactos[1].nombre'},
-            {'variable': 'c_ase_em',  'jsonpath': 'data.contactos[1].email'},
-            {'variable': 'c_proc',    'jsonpath': 'data.url_procesos'},
+            {'variable': 'c_lista', 'jsonpath': 'data.contactos'},
+            {'variable': 'c_proc',  'jsonpath': 'data.url_procesos'},
         ],
         'plantilla': (
             '💬 *Tus contactos académicos*\n\n'
-            '👤 *Mentor:* {{variables.c_men_nom}}\n'
-            '✉️ {{variables.c_men_em}}\n\n'
-            '👤 *Asesor:* {{variables.c_ase_nom}}\n'
-            '✉️ {{variables.c_ase_em}}\n\n'
-            'Portal de procesos 👉 {{variables.c_proc}}'
+            '{% for c in variables.c_lista %}'
+            '👤 *{{c.rol}}:* {{c.nombre}}\n'
+            '✉️ {{c.email}}\n'
+            '📱 {{c.celular}}\n\n'
+            '{% endfor %}'
+            '🌐 Portal de procesos: {{variables.c_proc}}'
         ),
     },
     {

@@ -69,6 +69,12 @@ class ResultadoFlujo:
 
 _EXPR_RE = re.compile(r'\{\{\s*([^{}]+?)\s*\}\}')
 _PATH_TOKEN_RE = re.compile(r'[^.\[\]]+|\[\d+\]')
+# {% for var in path %} body {% endfor %} — soporta loops simples sobre listas.
+# DOTALL para que el body pueda incluir saltos de línea.
+_FOR_RE = re.compile(
+    r'\{%\s*for\s+(\w+)\s+in\s+([^%]+?)\s*%\}(.*?)\{%\s*endfor\s*%\}',
+    re.DOTALL,
+)
 
 
 def _get_path(raiz: Any, path: str) -> Any:
@@ -92,12 +98,39 @@ def _get_path(raiz: Any, path: str) -> Any:
 
 def resolver_expresion(valor: Any, contexto: dict) -> Any:
     """
-    Reemplaza `{{ruta.a.campo}}` en strings. Recurre sobre dict/list.
-    - Si la expresión es toda la cadena (`{{x}}`), retorna el valor con su tipo
-      original (útil para pasar números/bool a JSON body).
-    - Si está embebida en texto, hace substitución a string.
+    Reemplaza `{{ruta.a.campo}}` y procesa `{% for x in lista %}...{% endfor %}`
+    sobre strings. Recurre sobre dict/list.
+
+    Loops:
+      `{% for m in variables.materias %}• {{m.asignatura}} ({{m.docente}})
+      {% endfor %}`
+      Itera la lista resuelta del path; si la lista no existe o no es lista,
+      el loop se expande a string vacío.
+
+    Substitución estándar:
+      Si toda la cadena es `{{x}}`, retorna el valor con su tipo original
+      (útil para pasar números/bool a JSON body). Si está embebida en texto,
+      sustituye a string.
     """
     if isinstance(valor, str):
+        # 1) Expandir loops {% for %} ANTES de la substitución {{ }}.
+        def _expand_for(mo):
+            var_name = mo.group(1)
+            path = mo.group(2).strip()
+            body = mo.group(3)
+            lista = _get_path(contexto, path)
+            if not isinstance(lista, (list, tuple)):
+                return ''
+            partes = []
+            for item in lista:
+                sub_ctx = dict(contexto)
+                sub_ctx[var_name] = item
+                partes.append(resolver_expresion(body, sub_ctx))
+            return ''.join(partes)
+
+        valor = _FOR_RE.sub(_expand_for, valor)
+
+        # 2) Substitución {{ }} normal.
         m = _EXPR_RE.fullmatch(valor.strip())
         if m:
             return _get_path(contexto, m.group(1).strip())
@@ -284,7 +317,8 @@ def ejecutar_http(nodo, contexto: dict, _traza_extra: Optional[dict] = None):
         if isinstance(parsed, dict):
             biz_ok = parsed.get('success', parsed.get('result', True))
             if biz_ok is False:
-                msg = parsed.get('message') or parsed.get('error') or 'Respuesta de negocio negativa'
+                msg = (parsed.get('message') or parsed.get('msg')
+                       or parsed.get('error') or 'Respuesta de negocio negativa')
                 return ('error', parsed, resp.status_code, str(msg)[:200])
         return ('ok', parsed, resp.status_code, '')
     return ('error', parsed, resp.status_code, f'HTTP {resp.status_code}')

@@ -118,40 +118,59 @@
         });
     });
 
-    // ── Resolver `{{variables.x}}` y `{{contacto.x}}` ───────────
+    // ── Resolver `{{variables.x}}` + `{% for %}` ───────────────
     var EXPR_RE = /\{\{\s*([^{}]+?)\s*\}\}/g;
-    function resolverExpr(valor) {
-        var ctx = { variables: STATE.vars, contacto: { numero: 'preview', nombre: 'Preview' } };
-        function getPath(obj, path) {
-            var parts = path.match(/[^.\[\]]+|\[\d+\]/g) || [];
-            var cur = obj;
-            for (var i = 0; i < parts.length; i++) {
-                if (cur == null) return null;
-                var p = parts[i];
-                if (p.charAt(0) === '[') {
-                    var idx = parseInt(p.slice(1, -1), 10);
-                    cur = (Array.isArray(cur) && idx >= 0 && idx < cur.length) ? cur[idx] : null;
-                } else if (typeof cur === 'object') {
-                    cur = cur[p];
-                } else { return null; }
-            }
-            return cur;
+    var FOR_RE = /\{%\s*for\s+(\w+)\s+in\s+([^%]+?)\s*%\}([\s\S]*?)\{%\s*endfor\s*%\}/g;
+
+    function pathGet(obj, path) {
+        var parts = path.match(/[^.\[\]]+|\[\d+\]/g) || [];
+        var cur = obj;
+        for (var i = 0; i < parts.length; i++) {
+            if (cur == null) return null;
+            var p = parts[i];
+            if (p.charAt(0) === '[') {
+                var idx = parseInt(p.slice(1, -1), 10);
+                cur = (Array.isArray(cur) && idx >= 0 && idx < cur.length) ? cur[idx] : null;
+            } else if (typeof cur === 'object') {
+                cur = cur[p];
+            } else { return null; }
         }
+        return cur;
+    }
+
+    function resolverExprCtx(valor, ctx) {
         if (typeof valor === 'string') {
+            // Expandir loops {% for %} antes de sustitución {{ }}
+            valor = valor.replace(FOR_RE, function (_, varName, path, body) {
+                var lista = pathGet(ctx, path.trim());
+                if (!Array.isArray(lista)) return '';
+                return lista.map(function (item) {
+                    var sub = Object.assign({}, ctx);
+                    sub[varName] = item;
+                    return resolverExprCtx(body, sub);
+                }).join('');
+            });
+            // {{ ... }} fullMatch: retorna valor con tipo original
             var fullMatch = valor.match(/^\s*\{\{\s*([^{}]+?)\s*\}\}\s*$/);
-            if (fullMatch) return getPath(ctx, fullMatch[1].trim());
+            if (fullMatch) return pathGet(ctx, fullMatch[1].trim());
+            // Substitución embebida
             return valor.replace(EXPR_RE, function (_, p) {
-                var r = getPath(ctx, p.trim());
+                var r = pathGet(ctx, p.trim());
                 return (r == null) ? '' : String(r);
             });
         }
-        if (Array.isArray(valor)) return valor.map(resolverExpr);
+        if (Array.isArray(valor)) return valor.map(function (v) { return resolverExprCtx(v, ctx); });
         if (valor && typeof valor === 'object') {
             var out = {};
-            Object.keys(valor).forEach(function (k) { out[k] = resolverExpr(valor[k]); });
+            Object.keys(valor).forEach(function (k) { out[k] = resolverExprCtx(valor[k], ctx); });
             return out;
         }
         return valor;
+    }
+
+    function resolverExpr(valor) {
+        var ctx = { variables: STATE.vars, contacto: { numero: 'preview', nombre: 'Preview' } };
+        return resolverExprCtx(valor, ctx);
     }
 
     // ── Navegación: encontrar destino por etiqueta ──────────────
