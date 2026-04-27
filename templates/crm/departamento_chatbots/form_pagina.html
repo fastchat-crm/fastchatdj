@@ -1,0 +1,56 @@
+{# Render full-page del formulario de departamento + chatbot.
+   Reusa templates/crm/departamento_chatbots/form.html que originalmente
+   se inyecta en modal — la flag `pagina_completa` desactiva los botones
+   modal-only. #}
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="d-flex align-items-center gap-2">
+        <a href="/crm/departamentos_chatbots/" class="btn btn-light btn-sm">
+            <i class="fa fa-arrow-left me-1"></i> Volver al listado
+        </a>
+        <h5 class="mb-0">{{ titulo_pagina|default:'Departamento & Chatbot' }}</h5>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form id="frmDepartamento" method="post" enctype="multipart/form-data"
+              class="form" action="{{ ruta_post }}">
+            {% csrf_token %}
+            <input type="hidden" name="redirect_to" value="/crm/departamentos_chatbots/">
+            {# form.html ya incluye <input name="pk"> y <input name="action"> #}
+            {% include "crm/departamento_chatbots/form.html" %}
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/forms.js?version=1"></script>
+    <script>
+        // Init Select2/Dropify en page-mode — base_formulario_modal.html
+        // solo dispara con `shown.bs.modal`, que aca no ocurre.
+        $(function () {
+            $('.select2').each(function () {
+                const $sel = $(this);
+                if ($sel.hasClass('select2-hidden-accessible')) $sel.select2('destroy');
+                $sel.select2({width: '100%'});
+            });
+            if ($.fn.dropify) {
+                $('.dropify:not(.dropify-initialized)').each(function () {
+                    $(this).dropify({
+                        messages: {
+                            default: 'Arrastre y suelte un archivo o haga clic aquí.',
+                            replace: 'Arrastre y suelte un archivo o haga clic aquí.',
+                            remove:  'Eliminar',
+                        },
+                        imgFileExtensions: ["jpg", "jpeg", "png", "tiff", "jfif", "svg"],
+                    }).addClass('dropify-initialized');
+                });
+            }
+        });
+    </script>
+{% endblock %}
