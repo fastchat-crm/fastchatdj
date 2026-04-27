@@ -504,7 +504,7 @@
         if (res.estado === 'conectado') {
           clearInterval(baileysPoll); baileysPoll = null;
           mostrarConectado(res.numero);
-          setTimeout(function () { window.location.reload(); }, 1500);
+          refrescarCard(baileysSesionId);
         } else if (res.qr) {
           var img = document.getElementById('qr-img');
           if (img && img.src !== res.qr) mostrarQR(res.qr);
@@ -866,7 +866,7 @@
       postAccion({ action: 'baileys_verificar', id: sesionId }).then(function (r) {
         if (r.error) return mostrarToast(r.message || 'No respondió.', 'err');
         mostrarToast(r.message, r.connected ? 'ok' : 'err');
-        setTimeout(function () { window.location.reload(); }, 900);
+        refrescarCard(sesionId);
       });
     } else if (action === 'baileys-reconnect') {
       baileysSesionId = sesionId;
@@ -885,7 +885,7 @@
           postAccion({ action: 'disconnect', id: sesionId }).then(function (r) {
             if (r.error) return mostrarToast(r.message, 'err');
             mostrarToast('Sesión desconectada.', 'ok');
-            setTimeout(function () { window.location.reload(); }, 600);
+            refrescarCard(sesionId);
           });
         });
       }
