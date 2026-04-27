@@ -513,3 +513,45 @@
     color: inherit;
     opacity: .8;
 }
+
+/* ─── Resumen de eventos webhook (delegado a /webhook-log/) ─── */
+.diag-evt-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    padding: .25rem 0 .35rem 0;
+}
+.diag-evt-stat {
+    flex: 0 0 auto;
+    min-width: 110px;
+    padding: .55rem .9rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #94a3b8;
+    border-radius: 8px;
+}
+.diag-evt-stat-warn { border-left-color: #f59e0b; background: #fffbeb; }
+.diag-evt-stat-err  { border-left-color: #ef4444; background: #fef2f2; }
+.diag-evt-num {
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+.diag-evt-lbl {
+    margin-top: .2rem;
+    font-size: .72rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+.diag-evt-cta { margin-left: auto; }
+.diag-empty-inline {
+    margin-top: .65rem;
+    padding: .65rem .85rem;
+    text-align: left;
+    font-size: .82rem;
+}
+.diag-empty-inline i { margin-right: .4rem; color: #cbd5e1; }

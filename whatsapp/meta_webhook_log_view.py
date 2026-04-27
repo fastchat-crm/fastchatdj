@@ -27,9 +27,46 @@ from .models import EventoMetaRecibido, SesionWhatsApp
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _hoy_local():
+    """Fecha local de hoy. Tolera USE_TZ True/False (en este proyecto está
+    comentado, default False, así que `timezone.now()` devuelve naive y
+    `timezone.localdate()` revienta)."""
+    ahora = timezone.now()
+    if timezone.is_aware(ahora):
+        try:
+            ahora = timezone.localtime(ahora)
+        except Exception:
+            pass
+    return ahora.date()
+
+
+def _ahora_local_str(fmt='%H:%M:%S'):
+    ahora = timezone.now()
+    if timezone.is_aware(ahora):
+        try:
+            ahora = timezone.localtime(ahora)
+        except Exception:
+            pass
+    return ahora.strftime(fmt)
+
+
+def _fmt_dt(dt, fmt):
+    """Formatea un datetime (naive o aware) en hora local. Si es aware, lo
+    convierte a TIME_ZONE; si es naive, lo asume ya en hora local (caso típico
+    cuando USE_TZ=False)."""
+    if dt is None:
+        return ''
+    if timezone.is_aware(dt):
+        try:
+            dt = timezone.localtime(dt)
+        except Exception:
+            pass
+    return dt.strftime(fmt)
+
+
 def _parse_fecha(raw: str | None):
-    """Parsea YYYY-MM-DD; cae a hoy (TZ Django) si viene vacío o inválido."""
-    hoy = timezone.localdate()
+    """Parsea YYYY-MM-DD; cae a hoy si viene vacío o inválido."""
+    hoy = _hoy_local()
     if not raw:
         return hoy
     try:
@@ -47,8 +84,8 @@ def _serializar_evento(ev: EventoMetaRecibido) -> dict:
         'firma_valida':        ev.firma_valida,
         'procesado':           ev.procesado,
         'error_procesamiento': (ev.error_procesamiento or '')[:200],
-        'recibido_en':         timezone.localtime(ev.recibido_en).strftime('%H:%M:%S'),
-        'recibido_en_full':    timezone.localtime(ev.recibido_en).strftime('%Y-%m-%d %H:%M:%S'),
+        'recibido_en':         _fmt_dt(ev.recibido_en, '%H:%M:%S'),
+        'recibido_en_full':    _fmt_dt(ev.recibido_en, '%Y-%m-%d %H:%M:%S'),
         'payload_preview':     json.dumps(ev.payload_json, ensure_ascii=False)[:120],
     }
 
@@ -87,7 +124,7 @@ def meta_webhook_log(request, sesion_id: int):
 
     config = getattr(sesion, 'config_meta', None)
     fecha = _parse_fecha(request.GET.get('fecha'))
-    hoy = timezone.localdate()
+    hoy = _hoy_local()
 
     if config:
         qs = EventoMetaRecibido.objects.filter(
@@ -182,7 +219,7 @@ def meta_webhook_log_poll(request, sesion_id: int):
         'eventos':    eventos,
         'ultimo_id':  ultimo_id,
         'totales':    totales,
-        'now':        timezone.localtime(timezone.now()).strftime('%H:%M:%S'),
+        'now':        _ahora_local_str('%H:%M:%S'),
     })
 
 
@@ -214,7 +251,7 @@ def meta_webhook_log_detalle(request, sesion_id: int, evento_id: int):
             'firma_valida':        ev.firma_valida,
             'procesado':           ev.procesado,
             'error_procesamiento': ev.error_procesamiento or '',
-            'recibido_en':         timezone.localtime(ev.recibido_en).strftime('%Y-%m-%d %H:%M:%S'),
+            'recibido_en':         _fmt_dt(ev.recibido_en, '%Y-%m-%d %H:%M:%S'),
             'payload_json':        ev.payload_json,
         },
     })

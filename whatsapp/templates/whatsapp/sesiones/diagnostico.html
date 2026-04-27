@@ -286,60 +286,35 @@
             </div>
         </div>
 
-        {# ───────── Eventos Meta recibidos ───────── #}
+        {# ───────── Eventos Meta recibidos (resumen) ───────── #}
+        {# Detalle completo (tabla, payload, polling en vivo) en el botón →. #}
         <div class="diag-card">
             <h5 class="diag-card-title">
-                <i class="fa fa-inbox"></i> Eventos recibidos del webhook
-                <small>({{ eventos_24h }} en últimas 24h · últimos 20 abajo)</small>
+                <i class="fa fa-inbox"></i> Eventos webhook (resumen)
             </h5>
-            {% if eventos_recientes %}
-                <table class="diag-table">
-                    <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Tipo</th>
-                        <th>Firma</th>
-                        <th>Procesado</th>
-                        <th>Detalle</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {% for ev in eventos_recientes %}
-                        <tr class="{% if not ev.firma_valida or ev.error_procesamiento %}diag-row-warn{% endif %}">
-                            <td><span class="diag-mono">{{ ev.recibido_en|date:"m-d H:i:s" }}</span></td>
-                            <td><span class="diag-tag">{{ ev.tipo_evento }}</span></td>
-                            <td>
-                                {% if ev.firma_valida %}
-                                    <span class="diag-pill diag-pill-green"><i
-                                            class="fa fa-shield-halved"></i> OK</span>
-                                {% else %}
-                                    <span class="diag-pill diag-pill-red"><i class="fa fa-shield"></i> Inválida</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if ev.procesado %}
-                                    <i class="fa fa-circle-check text-success"></i>
-                                {% else %}
-                                    <i class="fa fa-circle-xmark text-danger"></i>
-                                {% endif %}
-                            </td>
-                            <td class="diag-detail-cell">
-                                {% if ev.error_procesamiento %}
-                                    <span class="diag-err">{{ ev.error_procesamiento|truncatechars:90 }}</span>
-                                {% else %}
-                                    —
-                                {% endif %}
-                            </td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            {% else %}
-                <div class="diag-empty">
+            <div class="diag-evt-summary">
+                <div class="diag-evt-stat">
+                    <div class="diag-evt-num">{{ eventos_24h }}</div>
+                    <div class="diag-evt-lbl">en 24h</div>
+                </div>
+                <div class="diag-evt-stat {% if eventos_firma_invalida %}diag-evt-stat-warn{% endif %}">
+                    <div class="diag-evt-num">{{ eventos_firma_invalida }}</div>
+                    <div class="diag-evt-lbl">firma inválida (7d)</div>
+                </div>
+                <div class="diag-evt-stat {% if eventos_con_error_24h %}diag-evt-stat-err{% endif %}">
+                    <div class="diag-evt-num">{{ eventos_con_error_24h }}</div>
+                    <div class="diag-evt-lbl">con error (24h)</div>
+                </div>
+                <a href="/whatsapp/sesiones/{{ sesion.id }}/webhook-log/"
+                   class="conex-btn conex-btn-primary diag-evt-cta">
+                    <i class="fa fa-list-check"></i> Ver auditoría en vivo
+                </a>
+            </div>
+            {% if eventos_24h == 0 %}
+                <div class="diag-empty diag-empty-inline">
                     <i class="fa fa-inbox"></i>
-                    <p>Aún no llegó ningún evento de Meta a este webhook.</p>
-                    <small>Si configuraste el webhook hace rato, probá enviar un mensaje al número desde tu
-                        celular.</small>
+                    Aún no llegó ningún evento en 24h. Si configuraste el webhook hace rato,
+                    probá enviar un mensaje al número desde tu celular.
                 </div>
             {% endif %}
         </div>

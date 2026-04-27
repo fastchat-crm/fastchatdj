@@ -92,17 +92,22 @@ def meta_diagnostico(request, sesion_id: int):
     hace_24h = ahora - timedelta(hours=24)
     hace_7d = ahora - timedelta(days=7)
 
-    # ── Eventos Meta recibidos (últimos 20) ──
-    eventos_recientes = []
+    # ── Métricas de eventos Meta (resumen) ──
+    # El detalle por evento (tabla, payload, polling en vivo) vive en
+    # /whatsapp/sesiones/<id>/webhook-log/. Acá guardamos solo los conteos
+    # que alimentan el score de salud para evitar duplicar la auditoría.
     eventos_24h = 0
     eventos_firma_invalida = 0
+    eventos_con_error_24h = 0
     if config:
         eventos_qs = EventoMetaRecibido.objects.filter(config_meta=config)
-        eventos_recientes = list(eventos_qs.order_by('-recibido_en')[:20])
         eventos_24h = eventos_qs.filter(recibido_en__gte=hace_24h).count()
         eventos_firma_invalida = eventos_qs.filter(
             recibido_en__gte=hace_7d, firma_valida=False,
         ).count()
+        eventos_con_error_24h = eventos_qs.filter(
+            recibido_en__gte=hace_24h,
+        ).exclude(error_procesamiento__isnull=True).exclude(error_procesamiento='').count()
 
     # ── Trazas IA (últimas 30) ──
     trazas_recientes = list(
@@ -193,9 +198,9 @@ def meta_diagnostico(request, sesion_id: int):
         'config':       config,
         'phone_info':   phone_info,
         'subscribed':   subscribed,
-        'eventos_recientes': eventos_recientes,
-        'eventos_24h':       eventos_24h,
+        'eventos_24h':            eventos_24h,
         'eventos_firma_invalida': eventos_firma_invalida,
+        'eventos_con_error_24h':  eventos_con_error_24h,
         'trazas_recientes':  trazas_recientes,
         'trazas_error_24h':  trazas_error_24h,
         'counts':            counts,
