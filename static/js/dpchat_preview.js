@@ -142,7 +142,9 @@
 
     // ── Resolver `{{variables.x}}` + `{% for %}` ───────────────
     var EXPR_RE = /\{\{\s*([^{}]+?)\s*\}\}/g;
-    var FOR_RE = /\{%\s*for\s+(\w+)\s+in\s+([^%]+?)\s*%\}([\s\S]*?)\{%\s*endfor\s*%\}/g;
+    // Tokens individuales del parser de loops anidados.
+    var FOR_OPEN_RE = /\{%\s*for\s+(\w+)\s+in\s+([^%]+?)\s*%\}/;
+    var FOR_END_RE = /\{%\s*endfor\s*%\}/;
 
     function pathGet(obj, path) {
         var parts = path.match(/[^.\[\]]+|\[\d+\]/g) || [];
@@ -160,22 +162,65 @@
         return cur;
     }
 
-    function resolverExprCtx(valor, ctx) {
-        if (typeof valor === 'string') {
-            // Expandir loops {% for %} antes de sustitución {{ }}
-            valor = valor.replace(FOR_RE, function (_, varName, path, body) {
-                var lista = pathGet(ctx, path.trim());
-                if (!Array.isArray(lista)) return '';
-                return lista.map(function (item) {
+    // Expande loops {% for %}...{% endfor %} balanceados (anidados).
+    // Encuentra el bloque MÁS EXTERNO con un parser stack-based, itera la
+    // lista del path inyectando `var` en sub-context, y resuelve el cuerpo
+    // recursivamente vía resolverExprCtx para que tanto los loops internos
+    // como las {{ }} del body usen el contexto del item actual.
+    function expandirFors(texto, ctx) {
+        while (true) {
+            var openSearch = texto.search(FOR_OPEN_RE);
+            if (openSearch < 0) return texto;
+            var openMatch = texto.slice(openSearch).match(FOR_OPEN_RE);
+            var openStart = openSearch;
+            var openEnd = openSearch + openMatch[0].length;
+            var varName = openMatch[1];
+            var path = openMatch[2].trim();
+
+            var depth = 1;
+            var pos = openEnd;
+            var endStart = -1, endEnd = -1;
+            while (pos < texto.length) {
+                var rest = texto.slice(pos);
+                var nextOpenIdx = rest.search(FOR_OPEN_RE);
+                var nextEndIdx = rest.search(FOR_END_RE);
+                if (nextEndIdx < 0) return texto;  // sin cierre — abortar
+                if (nextOpenIdx >= 0 && nextOpenIdx < nextEndIdx) {
+                    var nm = rest.match(FOR_OPEN_RE);
+                    depth++;
+                    pos = pos + nextOpenIdx + nm[0].length;
+                } else {
+                    var em = rest.match(FOR_END_RE);
+                    depth--;
+                    if (depth === 0) {
+                        endStart = pos + nextEndIdx;
+                        endEnd = endStart + em[0].length;
+                        break;
+                    }
+                    pos = pos + nextEndIdx + em[0].length;
+                }
+            }
+            if (endStart < 0) return texto;
+
+            var body = texto.slice(openEnd, endStart);
+            var lista = pathGet(ctx, path);
+            var reemplazo = '';
+            if (Array.isArray(lista)) {
+                reemplazo = lista.map(function (item) {
                     var sub = Object.assign({}, ctx);
                     sub[varName] = item;
                     return resolverExprCtx(body, sub);
                 }).join('');
-            });
-            // {{ ... }} fullMatch: retorna valor con tipo original
+            }
+            texto = texto.slice(0, openStart) + reemplazo + texto.slice(endEnd);
+        }
+    }
+
+    function resolverExprCtx(valor, ctx) {
+        if (typeof valor === 'string') {
+            valor = expandirFors(valor, ctx);
             var fullMatch = valor.match(/^\s*\{\{\s*([^{}]+?)\s*\}\}\s*$/);
             if (fullMatch) return pathGet(ctx, fullMatch[1].trim());
-            // Substitución embebida
             return valor.replace(EXPR_RE, function (_, p) {
                 var r = pathGet(ctx, p.trim());
                 return (r == null) ? '' : String(r);

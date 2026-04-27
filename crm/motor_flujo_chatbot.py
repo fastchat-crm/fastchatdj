@@ -69,12 +69,65 @@ class ResultadoFlujo:
 
 _EXPR_RE = re.compile(r'\{\{\s*([^{}]+?)\s*\}\}')
 _PATH_TOKEN_RE = re.compile(r'[^.\[\]]+|\[\d+\]')
-# {% for var in path %} body {% endfor %} — soporta loops simples sobre listas.
-# DOTALL para que el body pueda incluir saltos de línea.
-_FOR_RE = re.compile(
-    r'\{%\s*for\s+(\w+)\s+in\s+([^%]+?)\s*%\}(.*?)\{%\s*endfor\s*%\}',
-    re.DOTALL,
-)
+# Tokens del parser de loops {% for %} ... {% endfor %}. Los matcheamos
+# por separado para poder llevar la cuenta del nivel de anidamiento y
+# emparejar correctamente cada `for` con su `endfor`.
+_FOR_OPEN_RE = re.compile(r'\{%\s*for\s+(\w+)\s+in\s+([^%]+?)\s*%\}')
+_FOR_END_RE = re.compile(r'\{%\s*endfor\s*%\}')
+
+
+def _expandir_fors(texto: str, contexto: dict) -> str:
+    """Expande loops `{% for var in path %}...{% endfor %}` en el orden
+    correcto: detecta el bloque MÁS EXTERNO, itera sobre la lista del path
+    inyectando la variable en un contexto derivado, y resuelve el cuerpo
+    recursivamente (los loops internos heredan así la variable del padre).
+
+    Implementación con parser balanceado — la regex sola no puede emparejar
+    `for/endfor` anidados.
+    """
+    while True:
+        m_open = _FOR_OPEN_RE.search(texto)
+        if not m_open:
+            return texto
+        depth = 1
+        pos = m_open.end()
+        end_match = None
+        while pos < len(texto):
+            next_open = _FOR_OPEN_RE.search(texto, pos)
+            next_end = _FOR_END_RE.search(texto, pos)
+            if not next_end:
+                # Loop sin cierre — abortamos la expansión para no romper.
+                return texto
+            if next_open and next_open.start() < next_end.start():
+                depth += 1
+                pos = next_open.end()
+            else:
+                depth -= 1
+                if depth == 0:
+                    end_match = next_end
+                    break
+                pos = next_end.end()
+        if end_match is None:
+            return texto
+        var_name = m_open.group(1)
+        path = m_open.group(2).strip()
+        body = texto[m_open.end():end_match.start()]
+        lista = _get_path(contexto, path)
+        if not isinstance(lista, (list, tuple)):
+            reemplazo = ''
+        else:
+            partes = []
+            for item in lista:
+                sub_ctx = dict(contexto)
+                sub_ctx[var_name] = item
+                # Recurre vía resolver_expresion: expande loops internos
+                # Y sustituye `{{ }}` del body con el contexto actual del
+                # item. Sin esto, las variables `{{d.x}}` quedarían sin
+                # resolver porque el outer `resolver_expresion` solo ve el
+                # contexto sin la var del loop.
+                partes.append(resolver_expresion(body, sub_ctx))
+            reemplazo = ''.join(partes)
+        texto = texto[:m_open.start()] + reemplazo + texto[end_match.end():]
 
 
 def _get_path(raiz: Any, path: str) -> Any:
@@ -114,21 +167,7 @@ def resolver_expresion(valor: Any, contexto: dict) -> Any:
     """
     if isinstance(valor, str):
         # 1) Expandir loops {% for %} ANTES de la substitución {{ }}.
-        def _expand_for(mo):
-            var_name = mo.group(1)
-            path = mo.group(2).strip()
-            body = mo.group(3)
-            lista = _get_path(contexto, path)
-            if not isinstance(lista, (list, tuple)):
-                return ''
-            partes = []
-            for item in lista:
-                sub_ctx = dict(contexto)
-                sub_ctx[var_name] = item
-                partes.append(resolver_expresion(body, sub_ctx))
-            return ''.join(partes)
-
-        valor = _FOR_RE.sub(_expand_for, valor)
+        valor = _expandir_fors(valor, contexto)
 
         # 2) Substitución {{ }} normal.
         m = _EXPR_RE.fullmatch(valor.strip())
