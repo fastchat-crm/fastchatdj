@@ -194,11 +194,20 @@ def _accion_meta_validar(request):
     if not ok:
         return JsonResponse({'error': True, 'message': info.get('message') or 'Fallo la validacion.'})
     sesion.refresh_from_db()
+    cfg.refresh_from_db()
     return JsonResponse({
         'error': False,
         'message': info.get('message'),
         'numero': sesion.numero,
         'estado': sesion.estado,
+        # Datos ricos para el modal de revalidación
+        'display_phone_number': cfg.display_phone_number or '',
+        'verified_name': info.get('verified_name') or '',
+        'quality_rating': cfg.quality_rating or 'UNKNOWN',
+        'messaging_limit_tier': cfg.get_messaging_limit_tier_display() if cfg.messaging_limit_tier else '',
+        'waba_id': cfg.waba_id,
+        'phone_number_id': cfg.phone_number_id,
+        'ultima_sincronizacion': cfg.ultima_sincronizacion.isoformat() if cfg.ultima_sincronizacion else None,
     })
 
 
@@ -419,6 +428,10 @@ def sesionesView(request):
         data['meta_modo'] = 'manual'
     data['meta_oauth_listo'] = (data['meta_modo'] == 'oauth')
     data['meta_manual_listo'] = (data['meta_modo'] == 'manual')
+    # Deep-links a Meta Business: si tenemos business_id cargado, lo
+    # inyectamos como query param para que Meta abra directo el contexto
+    # correcto (sin pasar por el selector de Business).
+    data['meta_business_id'] = (_cred.business_id if _cred else '') or ''
 
     # Canales activos: controlan visibilidad del sidebar + paneles del modal
     # "Agregar conexion". Se administran en /seguridad/configuracion/.

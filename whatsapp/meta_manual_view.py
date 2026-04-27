@@ -31,6 +31,33 @@ from .sesiones_common import sincronizar_meta_desde_graph
 logger = logging.getLogger(__name__)
 
 
+def _suscribir_waba_a_app(waba_id: str, access_token: str, timeout: int = 10) -> dict:
+    """POST /{waba_id}/subscribed_apps — autoriza la WABA a recibir webhooks
+    de la Meta App (la que emitió el access_token).
+
+    Devuelve `{ok: bool, error?: str}`. No lanza excepciones — pensado para
+    correrse al final del alta manual sin romper si Meta rechaza.
+    """
+    if not (waba_id and access_token):
+        return {'ok': False, 'error': 'Faltan waba_id o access_token.'}
+    try:
+        r = requests.post(
+            build_graph_url(f'/{waba_id}/subscribed_apps'),
+            headers={'Authorization': f'Bearer {access_token}'},
+            timeout=timeout,
+        )
+    except Exception as ex:
+        return {'ok': False, 'error': f'No pude llamar Graph: {ex}'}
+    if r.status_code != 200:
+        try:
+            err = r.json().get('error', {}).get('message', r.text[:200])
+        except Exception:
+            err = r.text[:200]
+        return {'ok': False, 'error': err}
+    payload = r.json() or {}
+    return {'ok': bool(payload.get('success', True)), 'raw': payload}
+
+
 def _validar_con_graph(waba_id: str, phone_number_id: str, access_token: str,
                        timeout: int = 12) -> dict:
     """Pega Graph con los datos cargados a mano y devuelve metadata o error.
@@ -81,6 +108,43 @@ def _validar_con_graph(waba_id: str, phone_number_id: str, access_token: str,
 
     out['ok'] = True
     return out
+
+
+@login_required
+def meta_webhook_info(request, sesion_id):
+    """Devuelve datos para configurar el webhook en Meta para esta sesión.
+
+    GET /whatsapp/meta/webhook-info/<sesion_id>/
+    → {
+        ok: bool,
+        webhook_url: 'https://dominio/whatsapp/meta_webhook/',
+        verify_token: '<random>',
+        app_id: '...',
+        waba_id: '...',
+        phone_number_id: '...',
+        meta_webhook_url: 'https://developers.facebook.com/apps/<app_id>/webhooks/',
+      }
+    """
+    from django.conf import settings
+    from .common_meta import get_meta_app_credentials
+    sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
+    if not sesion:
+        return JsonResponse({'ok': False, 'error': 'Sesión no encontrada o no es Meta.'})
+    config = getattr(sesion, 'config_meta', None)
+    if not config:
+        return JsonResponse({'ok': False, 'error': 'La sesión no tiene ConfigMeta cargada.'})
+    app_id, _ = get_meta_app_credentials()
+    return JsonResponse({
+        'ok': True,
+        'webhook_url': getattr(settings, 'URL_GENERAL', '') + '/whatsapp/meta_webhook/',
+        'verify_token': config.webhook_verify_token,
+        'app_id': app_id,
+        'waba_id': config.waba_id,
+        'phone_number_id': config.phone_number_id,
+        'display_phone_number': config.display_phone_number or '',
+        'meta_webhooks_url': f'https://developers.facebook.com/apps/{app_id}/webhooks/' if app_id else '',
+        'webhook_verificado_en': config.webhook_verificado_en.isoformat() if config.webhook_verificado_en else None,
+    })
 
 
 @login_required
@@ -172,6 +236,13 @@ def meta_manual_conectar(request):
     except Exception as ex:
         logger.warning("sincronizar_meta_desde_graph fallo en alta manual: %s", ex)
 
+    # Auto-suscribir la WABA a la app: sin esto, el webhook a nivel app no
+    # recibe eventos de esta WABA específica. Si falla, devolvemos hint para
+    # que el operador corra el curl manualmente desde el modal de webhook.
+    sub_res = _suscribir_waba_a_app(waba_id, access_token)
+    if sub_res.get('ok'):
+        logger.info("WABA %s auto-suscrita a la Meta App.", waba_id)
+
     return JsonResponse({
         'ok': True,
         'sesion_id': sesion.id,
@@ -179,4 +250,49 @@ def meta_manual_conectar(request):
         'display_phone_number': display,
         'verified_name': verified_name,
         'webhook_verify_token': config.webhook_verify_token,
+        'waba_suscrita': sub_res.get('ok'),
+        'waba_suscrita_error': sub_res.get('error') if not sub_res.get('ok') else None,
+    })
+
+
+@login_required
+@require_POST
+@csrf_protect
+def meta_test_message(request, sesion_id):
+    """Envía un mensaje de eco/prueba desde una sesión Meta a un número destino.
+
+    POST /whatsapp/meta/test-message/<sesion_id>/
+    Body: numero=<E164 sin +>, mensaje=<texto>
+
+    Restricción WhatsApp: si el destinatario no escribió en las últimas 24h,
+    Meta solo acepta plantillas pre-aprobadas. Para texto plano, el destinatario
+    debe haber iniciado conversación dentro de la ventana de 24h.
+    """
+    sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
+    if not sesion:
+        return JsonResponse({'ok': False, 'error': 'Sesión no encontrada o no es Meta.'})
+
+    numero = (request.POST.get('numero') or '').strip()
+    mensaje = (request.POST.get('mensaje') or '').strip()
+    if not numero or not mensaje:
+        return JsonResponse({'ok': False, 'error': 'Faltan número destino o mensaje.'})
+    # Limpiar el numero: solo dígitos
+    numero_limpio = ''.join(ch for ch in numero if ch.isdigit())
+    if len(numero_limpio) < 7:
+        return JsonResponse({'ok': False, 'error': 'Número inválido.'})
+
+    from .services import get_whatsapp_service
+    service = get_whatsapp_service(sesion)
+    res = service.send_text_message(sesion.session_id, numero_limpio, mensaje)
+
+    if res.get('success'):
+        return JsonResponse({
+            'ok': True,
+            'message_id': res.get('message_id') or res.get('messages', [{}])[0].get('id', ''),
+            'numero': numero_limpio,
+        })
+    return JsonResponse({
+        'ok': False,
+        'error': res.get('error') or res.get('message') or 'Meta rechazó el envío.',
+        'detalle': res,
     })

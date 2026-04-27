@@ -40,7 +40,9 @@
           <button type="button" class="kebab-item" data-action="editar"><i class="fa fa-pen"></i> Modificar</button>
           <button type="button" class="kebab-item" data-action="resumen"><i class="fa fa-clipboard-check"></i> Resumen y pasos siguientes</button>
           <button type="button" class="kebab-item" data-action="meta-validar"><i class="fa fa-satellite-dish"></i> Revalidar número con Meta</button>
-          <button type="button" class="kebab-item" data-action="plantilla-prueba"><i class="fa fa-paper-plane"></i> Enviar plantilla de prueba</button>
+          <button type="button" class="kebab-item" data-action="webhook-info"><i class="fa fa-link"></i> Datos del webhook (Meta)</button>
+          <button type="button" class="kebab-item" data-action="test-eco"><i class="fa fa-paper-plane"></i> Probar envío de mensaje</button>
+          <button type="button" class="kebab-item" data-action="plantilla-prueba"><i class="fa fa-file-lines"></i> Enviar plantilla de prueba</button>
           <a href="/whatsapp/plantillas/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i class="fa fa-file-lines"></i> Ver plantillas</a>
           <a href="/whatsapp/campanas/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i class="fa fa-bullhorn"></i> Ver campañas</a>
           <a href="/whatsapp/campanas/?action=add&sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i class="fa fa-plus-circle"></i> Nueva campaña</a>
@@ -112,6 +114,11 @@
     <a href="/whatsapp/conversaciones/?sesion={{ sesion.id|encrypt_id }}" class="btn-quick">
       <i class="fa fa-comments"></i> Conversaciones
     </a>
+    {% if sesion.es_meta %}
+      <button type="button" class="btn-quick btn-quick-info" data-action="webhook-info" title="Ver URL del webhook + verify token para configurar en Meta">
+        <i class="fa fa-link"></i> Webhook
+      </button>
+    {% endif %}
     {% if sesion.es_baileys and sesion.estado != 'conectado' %}
       <button type="button" class="btn-quick btn-quick-warn" data-action="baileys-reconnect">
         <i class="fa fa-qrcode"></i> Escanear QR

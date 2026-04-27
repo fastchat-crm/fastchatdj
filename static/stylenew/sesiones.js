@@ -210,29 +210,123 @@
     xhr.onerror = function () { onDone({ok: false, error: 'Error de red.'}, 0); };
     xhr.send(formData);
   }
+  // Modal de validación
+  var valModal     = document.getElementById('man-val-modal');
+  var valBody      = document.getElementById('man-val-body');
+  var valTitle     = document.getElementById('man-val-title');
+  var valStatusDot = document.getElementById('man-val-status-dot');
+  var valConectar  = document.getElementById('man-val-conectar');
+  var valClose     = document.getElementById('man-val-close');
+  var valCerrar2   = document.getElementById('man-val-cerrar2');
+
+  function valOpen() {
+    if (!valModal) return;
+    valModal.classList.add('open');
+    valModal.setAttribute('aria-hidden', 'false');
+    if (valBody) {
+      valBody.innerHTML = '<div class="man-val-loader"><i class="fa fa-spinner fa-spin"></i><p>Consultando Graph API...</p></div>';
+    }
+    if (valStatusDot) valStatusDot.className = 'man-val-status-dot is-loading';
+    if (valTitle) valTitle.textContent = 'Validando credenciales en Meta...';
+    if (valConectar) {
+      valConectar.disabled = true;
+      valConectar.style.display = '';  // Reset al estado por defecto del modo manual
+    }
+  }
+  function valClose_() {
+    if (!valModal) return;
+    valModal.classList.remove('open');
+    valModal.setAttribute('aria-hidden', 'true');
+  }
+  if (valClose) valClose.addEventListener('click', valClose_);
+  if (valCerrar2) valCerrar2.addEventListener('click', valClose_);
+  if (valModal) {
+    valModal.addEventListener('click', function (e) {
+      if (e.target === valModal) valClose_();
+    });
+  }
+  if (valConectar) {
+    valConectar.addEventListener('click', function () {
+      valClose_();
+      // Disparar submit del form (mismo flujo que el botón Conectar de abajo)
+      if (formManual) formManual.dispatchEvent(new Event('submit', {cancelable: true}));
+    });
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && valModal && valModal.classList.contains('open')) valClose_();
+  });
+
+  function valRenderError(msg) {
+    if (valStatusDot) valStatusDot.className = 'man-val-status-dot is-error';
+    if (valTitle) valTitle.textContent = 'Meta rechazó las credenciales';
+    if (valBody) {
+      valBody.innerHTML =
+        '<div class="man-val-msg is-error">' +
+        '<i class="fa fa-circle-xmark"></i>' +
+        '<div><b>No pudimos validar.</b><p>' + (msg || 'Error desconocido.') + '</p></div>' +
+        '</div>' +
+        '<div class="man-val-hint"><i class="fa fa-lightbulb"></i> Verificá: el Phone Number ID NO es el número telefónico, el token tiene los scopes correctos, y la WABA está asignada al System User.</div>';
+    }
+    if (valConectar) valConectar.disabled = true;
+  }
+
+  function valRenderOk(data) {
+    if (valStatusDot) valStatusDot.className = 'man-val-status-dot is-ok';
+    if (valTitle) valTitle.textContent = 'Credenciales válidas';
+
+    var qrColor = (data.quality_rating || 'UNKNOWN').toLowerCase();
+    var qrBadge = qrColor === 'green'  ? 'is-green'
+                : qrColor === 'yellow' ? 'is-yellow'
+                : qrColor === 'red'    ? 'is-red'
+                : 'is-gray';
+
+    var rows = '';
+    if (data.waba_name) {
+      rows += '<div class="man-val-row"><span class="man-val-key"><i class="fa fa-id-card"></i> WABA</span><span class="man-val-val">' + data.waba_name + '</span></div>';
+    }
+    if (data.verified_name) {
+      rows += '<div class="man-val-row"><span class="man-val-key"><i class="fa fa-circle-check"></i> Nombre verificado</span><span class="man-val-val">' + data.verified_name + '</span></div>';
+    }
+    if (data.display_phone_number) {
+      rows += '<div class="man-val-row"><span class="man-val-key"><i class="fa fa-phone"></i> Número</span><span class="man-val-val"><code>' + data.display_phone_number + '</code></span></div>';
+    }
+    if (data.quality_rating) {
+      rows += '<div class="man-val-row"><span class="man-val-key"><i class="fa fa-star"></i> Quality rating</span><span class="man-val-val"><span class="man-val-pill ' + qrBadge + '">' + data.quality_rating + '</span></span></div>';
+    }
+
+    if (valBody) {
+      valBody.innerHTML =
+        '<div class="man-val-msg is-ok">' +
+        '<i class="fa fa-circle-check"></i>' +
+        '<div><b>Meta confirmó los IDs y el token.</b><p>Lo que detectamos:</p></div>' +
+        '</div>' +
+        '<div class="man-val-grid">' + rows + '</div>' +
+        '<div class="man-val-hint"><i class="fa fa-lightbulb"></i> Pulsá <b>Conectar sesión</b> para guardar y empezar a recibir mensajes.</div>';
+    }
+    if (valConectar) valConectar.disabled = false;
+
+    // Autocompletar el "Número visible" del form si el campo está vacío.
+    if (data.display_phone_number) {
+      var disp = document.getElementById('man-display');
+      if (disp && !disp.value) disp.value = data.display_phone_number;
+    }
+  }
+
   if (btnValManual && formManual) {
     btnValManual.addEventListener('click', function () {
       if (btnValManual.disabled) return;
+      valOpen();
       var orig = btnValManual.innerHTML;
       btnValManual.disabled = true;
-      btnValManual.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Validando con Meta...';
+      btnValManual.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Validando...';
       fmPost(window.META_MANUAL_VALIDAR_URL || '/whatsapp/meta/manual/validar/', fmGetData(), function (data) {
         btnValManual.disabled = false;
         btnValManual.innerHTML = orig;
         if (!data.ok) {
-          fmShowResult('<i class="fa fa-circle-xmark me-2"></i>' + (data.error || 'Meta rechazó las credenciales.'), 'danger');
-          return;
+          valRenderError(data.error || 'Meta rechazó las credenciales.');
+        } else {
+          valRenderOk(data);
         }
-        var lineas = [];
-        if (data.waba_name) lineas.push('<b>WABA:</b> ' + data.waba_name);
-        if (data.display_phone_number) {
-          lineas.push('<b>Número:</b> <code>' + data.display_phone_number + '</code>');
-          var disp = document.getElementById('man-display');
-          if (disp && !disp.value) disp.value = data.display_phone_number;
-        }
-        if (data.verified_name) lineas.push('<b>Nombre verificado:</b> ' + data.verified_name);
-        if (data.quality_rating) lineas.push('<b>Calidad:</b> <code>' + data.quality_rating + '</code>');
-        fmShowResult('<i class="fa fa-circle-check me-2"></i>Meta validó las credenciales:<br>' + lineas.join('<br>'), 'success');
       });
     });
   }
@@ -412,6 +506,252 @@
     });
   });
 
+  // ---------- Modal: Datos del webhook (Meta) ----------
+  var webhookModal = document.getElementById('webhook-info-modal');
+  var webhookBody  = document.getElementById('webhook-info-body');
+  var webhookLink  = document.getElementById('webhook-info-meta-link');
+
+  function copyToClipboard(text, btn) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { copyFlash(btn); });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); copyFlash(btn); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+  }
+  function copyFlash(btn) {
+    if (!btn) return;
+    var icon = btn.querySelector('i');
+    var orig = icon ? icon.className : '';
+    if (icon) icon.className = 'fa fa-check';
+    btn.classList.add('is-copied');
+    setTimeout(function () {
+      if (icon) icon.className = orig || 'fa fa-copy';
+      btn.classList.remove('is-copied');
+    }, 1400);
+  }
+
+  function cerrarWebhookModal() {
+    if (!webhookModal) return;
+    webhookModal.classList.remove('open');
+    webhookModal.setAttribute('aria-hidden', 'true');
+  }
+  document.querySelectorAll('[data-webhook-close]').forEach(function (b) {
+    b.addEventListener('click', cerrarWebhookModal);
+  });
+  if (webhookModal) {
+    webhookModal.addEventListener('click', function (e) {
+      if (e.target === webhookModal) cerrarWebhookModal();
+    });
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && webhookModal && webhookModal.classList.contains('open')) cerrarWebhookModal();
+  });
+
+  function abrirWebhookInfo(sesionId) {
+    if (!webhookModal) return;
+    webhookModal.classList.add('open');
+    webhookModal.setAttribute('aria-hidden', 'false');
+    if (webhookBody) {
+      webhookBody.innerHTML = '<div class="man-val-loader"><i class="fa fa-spinner fa-spin"></i><p>Cargando datos del webhook...</p></div>';
+    }
+    if (webhookLink) webhookLink.style.display = 'none';
+
+    fetch('/whatsapp/meta/webhook-info/' + sesionId + '/', {credentials: 'same-origin'})
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) {
+          webhookBody.innerHTML =
+            '<div class="man-val-msg is-error">' +
+            '<i class="fa fa-circle-xmark"></i>' +
+            '<div><b>No pude cargar.</b><p>' + (data.error || 'Error desconocido') + '</p></div></div>';
+          return;
+        }
+
+        var verificadoBadge = data.webhook_verificado_en
+          ? '<span class="webhook-badge is-ok"><i class="fa fa-circle-check"></i> Verificado en Meta</span>'
+          : '<span class="webhook-badge is-warn"><i class="fa fa-clock"></i> Pendiente de verificación</span>';
+
+        webhookBody.innerHTML =
+          '<div class="webhook-status">' + verificadoBadge +
+          '<small>Sesión: <b>' + (data.display_phone_number || data.phone_number_id) + '</b></small>' +
+          '</div>' +
+
+          '<div class="webhook-step">' +
+            '<div class="webhook-step-num">1</div>' +
+            '<div class="webhook-step-body">' +
+              '<div class="webhook-step-title">Callback URL <small>(pega esto en Meta)</small></div>' +
+              '<div class="webhook-copy-row">' +
+                '<input type="text" class="webhook-copy-input" id="wh-url" value="' + data.webhook_url + '" readonly>' +
+                '<button type="button" class="webhook-copy-btn" data-copy-target="wh-url"><i class="fa fa-copy"></i></button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+
+          '<div class="webhook-step">' +
+            '<div class="webhook-step-num">2</div>' +
+            '<div class="webhook-step-body">' +
+              '<div class="webhook-step-title">Verify Token <small>(token único de esta sesión)</small></div>' +
+              '<div class="webhook-copy-row">' +
+                '<input type="password" class="webhook-copy-input" id="wh-token" value="' + data.verify_token + '" readonly>' +
+                '<button type="button" class="webhook-copy-btn" id="wh-token-eye" title="Mostrar/ocultar"><i class="fa fa-eye"></i></button>' +
+                '<button type="button" class="webhook-copy-btn" data-copy-target="wh-token"><i class="fa fa-copy"></i></button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+
+          '<div class="webhook-step">' +
+            '<div class="webhook-step-num">3</div>' +
+            '<div class="webhook-step-body">' +
+              '<div class="webhook-step-title">Suscribir la WABA <small>(comando curl)</small></div>' +
+              '<div class="webhook-curl">' +
+                '<code id="wh-curl">curl -X POST "https://graph.facebook.com/v19.0/' + data.waba_id + '/subscribed_apps" \\\n  -H "Authorization: Bearer &lt;ACCESS_TOKEN&gt;"</code>' +
+                '<button type="button" class="webhook-copy-btn webhook-copy-btn-inline" data-copy-target="wh-curl"><i class="fa fa-copy"></i> Copiar</button>' +
+              '</div>' +
+              '<small class="webhook-hint">Reemplazá <code>&lt;ACCESS_TOKEN&gt;</code> por el token de esta sesión. Una vez por WABA.</small>' +
+            '</div>' +
+          '</div>' +
+
+          '<div class="webhook-instructions">' +
+            '<b><i class="fa fa-list-check"></i> Pasos en Meta for Developers:</b>' +
+            '<ol>' +
+              '<li>Abrí la app → menú <b>Webhooks</b> → seleccioná <b>WhatsApp Business Account</b>.</li>' +
+              '<li>Pulsá <b>Subscribe to this object</b> (o <b>Edit</b> si ya hay uno).</li>' +
+              '<li>Pegá la <b>Callback URL</b> (paso 1) y el <b>Verify Token</b> (paso 2).</li>' +
+              '<li>Click <b>Verify and Save</b> → Meta hace handshake con tu app.</li>' +
+              '<li>Activá los campos: <code>messages</code>, <code>message_template_status_update</code>, <code>account_review_update</code>, <code>phone_number_quality_update</code>.</li>' +
+              '<li>Corré el curl del paso 3 para suscribir la WABA específica.</li>' +
+            '</ol>' +
+          '</div>';
+
+        // Bindings de los botones copy del modal
+        webhookBody.querySelectorAll('[data-copy-target]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var t = btn.getAttribute('data-copy-target');
+            var el = document.getElementById(t);
+            if (!el) return;
+            var txt = el.value !== undefined ? el.value : el.textContent;
+            copyToClipboard(txt, btn);
+          });
+        });
+        var tokenEye = document.getElementById('wh-token-eye');
+        var tokenInp = document.getElementById('wh-token');
+        if (tokenEye && tokenInp) {
+          tokenEye.addEventListener('click', function () {
+            var isPwd = tokenInp.type === 'password';
+            tokenInp.type = isPwd ? 'text' : 'password';
+          });
+        }
+        if (webhookLink && data.meta_webhooks_url) {
+          webhookLink.href = data.meta_webhooks_url;
+          webhookLink.style.display = 'inline-flex';
+        }
+      })
+      .catch(function () {
+        webhookBody.innerHTML =
+          '<div class="man-val-msg is-error">' +
+          '<i class="fa fa-circle-xmark"></i>' +
+          '<div><b>Error de red.</b><p>No pude conectar al backend.</p></div></div>';
+      });
+  }
+
+  // ---------- Modal: Eco / Test envío (Meta) ----------
+  var ecoModal     = document.getElementById('eco-modal');
+  var ecoFromLabel = document.getElementById('eco-from-label');
+  var ecoNumero    = document.getElementById('eco-numero');
+  var ecoMensaje   = document.getElementById('eco-mensaje');
+  var ecoResultado = document.getElementById('eco-resultado');
+  var ecoEnviar    = document.getElementById('eco-enviar');
+  var ecoSesionId  = null;
+
+  function cerrarEcoModal() {
+    if (!ecoModal) return;
+    ecoModal.classList.remove('open');
+    ecoModal.setAttribute('aria-hidden', 'true');
+  }
+  document.querySelectorAll('[data-eco-close]').forEach(function (b) {
+    b.addEventListener('click', cerrarEcoModal);
+  });
+  if (ecoModal) {
+    ecoModal.addEventListener('click', function (e) {
+      if (e.target === ecoModal) cerrarEcoModal();
+    });
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && ecoModal && ecoModal.classList.contains('open')) cerrarEcoModal();
+  });
+
+  function ecoShowResult(html, type) {
+    if (!ecoResultado) return;
+    ecoResultado.classList.remove('d-none', 'alert-success', 'alert-danger', 'alert-info');
+    ecoResultado.classList.add('alert-' + type);
+    ecoResultado.innerHTML = html;
+  }
+
+  function abrirEco(sesionId, nombre) {
+    ecoSesionId = sesionId;
+    if (ecoFromLabel) ecoFromLabel.textContent = nombre || ('sesión #' + sesionId);
+    if (ecoNumero) ecoNumero.value = '';
+    if (ecoMensaje) ecoMensaje.value = 'Hola! Este es un mensaje de prueba desde el CRM. Si lo recibís, la conexión funciona.';
+    if (ecoResultado) ecoResultado.classList.add('d-none');
+    if (ecoModal) {
+      ecoModal.classList.add('open');
+      ecoModal.setAttribute('aria-hidden', 'false');
+    }
+    setTimeout(function () { if (ecoNumero) ecoNumero.focus(); }, 100);
+  }
+
+  if (ecoEnviar) {
+    ecoEnviar.addEventListener('click', function () {
+      if (!ecoSesionId) return;
+      var num = (ecoNumero && ecoNumero.value || '').trim();
+      var msg = (ecoMensaje && ecoMensaje.value || '').trim();
+      if (!num || !msg) {
+        ecoShowResult('<i class="fa fa-circle-xmark"></i> Completá número y mensaje.', 'danger');
+        return;
+      }
+      var orig = ecoEnviar.innerHTML;
+      ecoEnviar.disabled = true;
+      ecoEnviar.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Enviando...';
+
+      var fd = new FormData();
+      fd.append('numero', num);
+      fd.append('mensaje', msg);
+      var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+      fd.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+
+      fetch('/whatsapp/meta/test-message/' + ecoSesionId + '/', {
+        method: 'POST',
+        body: fd,
+        headers: {'X-CSRFToken': csrf ? csrf.value : '', 'X-Requested-With': 'XMLHttpRequest'},
+        credentials: 'same-origin',
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          ecoEnviar.disabled = false;
+          ecoEnviar.innerHTML = orig;
+          if (!data.ok) {
+            ecoShowResult('<i class="fa fa-circle-xmark"></i> <b>Meta rechazó:</b> ' + (data.error || 'Error desconocido'), 'danger');
+            return;
+          }
+          ecoShowResult(
+            '<i class="fa fa-circle-check"></i> <b>Mensaje enviado.</b> ' +
+            'Meta devolvió ID <code>' + (data.message_id || '—') + '</code>. ' +
+            'Revisá el WhatsApp del número <code>' + (data.numero || '') + '</code>.',
+            'success'
+          );
+        })
+        .catch(function () {
+          ecoEnviar.disabled = false;
+          ecoEnviar.innerHTML = orig;
+          ecoShowResult('<i class="fa fa-circle-xmark"></i> Error de red.', 'danger');
+        });
+    });
+  }
+
   // ---------- Acciones del kebab y botones rápidos ----------
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-action]');
@@ -446,11 +786,49 @@
         abrirDetail(r.html);
       });
     } else if (action === 'meta-validar') {
+      // Abrir modal de validación con loader; conectar oculto, sólo info
+      valOpen();
+      // Override título para revalidación
+      var valTitleEl = document.getElementById('man-val-title');
+      if (valTitleEl) valTitleEl.textContent = 'Revalidando con Meta...';
+      var valConectarBtn = document.getElementById('man-val-conectar');
+      if (valConectarBtn) valConectarBtn.style.display = 'none';
       postAccion({ action: 'meta_validar', id: sesionId }).then(function (r) {
-        if (r.error) return mostrarToast(r.message, 'err');
-        mostrarToast(r.message || 'Número revalidado con Meta.', 'ok');
-        setTimeout(function () { window.location.reload(); }, 900);
+        if (r.error) {
+          valRenderError(r.message || 'Meta rechazó la validación.');
+        } else {
+          // Modal "OK" reutilizado — además agregamos extras (limit tier, última sync)
+          valRenderOk({
+            waba_name: nombre,
+            verified_name: r.verified_name,
+            display_phone_number: r.display_phone_number,
+            quality_rating: r.quality_rating,
+          });
+          // Inyectar info extra abajo
+          var body = document.getElementById('man-val-body');
+          if (body && (r.messaging_limit_tier || r.ultima_sincronizacion)) {
+            var extras = [];
+            if (r.messaging_limit_tier) extras.push('<b>Tier mensajería:</b> ' + r.messaging_limit_tier);
+            if (r.ultima_sincronizacion) {
+              var fecha = new Date(r.ultima_sincronizacion).toLocaleString();
+              extras.push('<b>Última sync:</b> ' + fecha);
+            }
+            if (extras.length) {
+              var div = document.createElement('div');
+              div.className = 'man-val-hint';
+              div.style.background = '#eff6ff';
+              div.style.borderColor = '#bfdbfe';
+              div.style.color = '#1e3a8a';
+              div.innerHTML = '<i class="fa fa-info-circle" style="color:#2563eb"></i> ' + extras.join(' · ');
+              body.appendChild(div);
+            }
+          }
+        }
       });
+    } else if (action === 'webhook-info') {
+      abrirWebhookInfo(sesionId);
+    } else if (action === 'test-eco') {
+      abrirEco(sesionId, nombre);
     } else if (action === 'baileys-verificar') {
       postAccion({ action: 'baileys_verificar', id: sesionId }).then(function (r) {
         if (r.error) return mostrarToast(r.message || 'No respondió.', 'err');
