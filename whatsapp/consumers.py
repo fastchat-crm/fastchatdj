@@ -148,7 +148,7 @@ class SessionRoomConsumer(AsyncWebsocketConsumer):
                 contacto__sesion__usuario__id=self.user.id, id=conversacion_id
             ).select_related('contacto').first()
             if not conversacion:
-                return {'html': '', 'nombre': ''}
+                return {'html': '', 'nombre': '', 'preview': ''}
             html = render_to_string('whatsapp/conversaciones/conversacion_item.html', {
                 'conversacion': conversacion
             })
@@ -157,9 +157,20 @@ class SessionRoomConsumer(AsyncWebsocketConsumer):
                 or conversacion.contacto.from_number
                 or 'Contacto'
             )
-            return {'html': html, 'nombre': nombre}
+            # Preview del último mensaje entrante (para notif nativa).
+            # Solo lo necesitamos para mostrar en el body de la Notification,
+            # así que truncamos ya acá para no mandar payload grande por WS.
+            ultimo = (
+                conversacion.mensajes
+                .exclude(remitente=conversacion.sesion.numero)
+                .order_by('-fecha')
+                .values_list('mensaje', flat=True)
+                .first()
+            )
+            preview = (ultimo or '')[:140]
+            return {'html': html, 'nombre': nombre, 'preview': preview}
         except Exception:
-            return {'html': '', 'nombre': ''}
+            return {'html': '', 'nombre': '', 'preview': ''}
 
     async def whatsapp_event(self, event):
         conversacion_id = event['conversation_id']
@@ -173,4 +184,5 @@ class SessionRoomConsumer(AsyncWebsocketConsumer):
             'conversacion_id': conversacion_id,
             'from_me': from_me,
             'contacto_nombre': data['nombre'],
+            'preview': data['preview'],
         }))

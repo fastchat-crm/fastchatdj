@@ -777,16 +777,43 @@ def conversacionesView(request):
     # Si es una solicitud AJAX para cargar conversaciones
     if request.GET.get('load_conversations'):
         from django.db import models as django_models
-        qs = ConversacionWhatsApp.objects.sin_expirar.filter(filtros).distinct()
+        from django.db.models import OuterRef, Subquery
+        # select_related sobre los FK que el partial usa (foto, nombre,
+        # numero de la sesión, foto del contacto). Sin esto, el render del
+        # partial dispara N+1 queries por cada item del listado.
+        qs = (
+            ConversacionWhatsApp.objects.sin_expirar
+            .filter(filtros)
+            .select_related(
+                'contacto',
+                'contacto__sesion',
+                'contacto__sesion__config_meta',
+                'contacto__sesion__config_baileys',
+                'asignado_a',
+            )
+            .distinct()
+        )
 
-        # Filtro sin responder via Python post-query (más seguro)
+        # Filtro "sin responder": antes iteraba toda la lista en Python y
+        # hacía 1 query por conv para traer el último mensaje (N+1 enorme).
+        # Ahora usamos Subquery para resolverlo en un solo SQL.
         if filtro_sin_responder:
-            ids_sin_resp = []
-            for conv in qs:
-                ultimo = conv.mensajes.order_by('-fecha').first()
-                if ultimo and ultimo.remitente != conv.sesion.numero:
-                    ids_sin_resp.append(conv.id)
-            qs = qs.filter(id__in=ids_sin_resp)
+            from .models import MensajeWhatsApp, SesionWhatsApp
+            ultimo_remitente = (
+                MensajeWhatsApp.objects
+                .filter(conversacion=OuterRef('pk'))
+                .order_by('-fecha')
+                .values('remitente')[:1]
+            )
+            numero_sesion = SesionWhatsApp.objects.filter(
+                pk=OuterRef('contacto__sesion_id')
+            ).values('numero')[:1]
+            qs = qs.annotate(
+                _ultimo_remitente=Subquery(ultimo_remitente),
+                _numero_sesion=Subquery(numero_sesion),
+            ).exclude(_ultimo_remitente__isnull=True).exclude(
+                _ultimo_remitente=django_models.F('_numero_sesion')
+            )
 
         return JsonResponse({
             'html': render_to_string('whatsapp/conversaciones/conversaciones_partial.html',

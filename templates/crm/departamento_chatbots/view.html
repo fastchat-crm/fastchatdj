@@ -160,10 +160,11 @@
 
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Describí qué querés que el bot haga <span class="text-danger">*</span></label>
-                        <textarea class="form-control form-control-sm" id="ia_descripcion" rows="5"
+                        <textarea class="form-control form-control-sm" id="ia_descripcion" rows="14"
+                                  style="min-height:320px;font-family:'Consolas',monospace;font-size:.82rem;line-height:1.5"
                                   placeholder="Ej: Tenemos 4 sucursales (Centro, Norte, Sur, Oeste). Vendemos pizzas, bebidas y postres. El bot debe permitir al cliente ver el menú por sucursal, hacer pedido para retiro/delivery, consultar promociones del día, y derivar al humano si es queja. Horario lunes a domingo 11am-11pm."
-                                  maxlength="2000"></textarea>
-                        <small class="text-muted">Sé específico con: sucursales, productos/servicios, métodos de pago, casos derivar a humano. <span id="ia_charcount">0</span>/2000</small>
+                                  maxlength="8000"></textarea>
+                        <small class="text-muted">Sé específico: sucursales, productos/servicios con precios, métodos de pago, casos para derivar a humano. <span id="ia_charcount">0</span>/8000</small>
                     </div>
 
                     <div class="mb-3">
@@ -412,7 +413,15 @@
                 if (data.error) {
                     res.classList.remove('alert-info', 'alert-success');
                     res.classList.add('alert-danger');
-                    res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> ' + (data.message || 'Error generando con IA.');
+                    let html = '<i class="fa fa-circle-xmark me-1"></i> ' + (data.message || 'Error generando con IA.');
+                    if (data.raw_preview) {
+                        const escapado = data.raw_preview.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+                        html += '<details class="mt-2"><summary class="small">Ver respuesta cruda del LLM</summary>' +
+                                '<pre style="background:#1f2937;color:#d1d5db;padding:.5rem;border-radius:6px;font-size:.7rem;max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:.35rem 0 0">' +
+                                escapado +
+                                '</pre></details>';
+                    }
+                    res.innerHTML = html;
                     return;
                 }
 

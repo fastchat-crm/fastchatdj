@@ -2,6 +2,7 @@
 {% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css">
+<link rel="stylesheet" href="/static/stylenew/conversaciones.css">
 <style>
     /* ── Layout flexbox: anula el position:absolute del tema ── */
     .chat-box-right {
@@ -759,9 +760,17 @@
                         // Nueva conversación: insertar al principio de la lista
                         $(`#lista-conversaciones`).prepend(data.html);
                     }
-                    // Sonido + toast solo para mensajes entrantes del cliente
+                    // Re-marcar la conv activa (replaceWith pierde la clase)
+                    if (conversacionActiva) {
+                        $(`.conversacion-item[data-id="${conversacionActiva}"]`).addClass('active');
+                    }
+                    // Sonido + toast + notif nativa solo para entrantes del cliente
                     if (!data.from_me) {
-                        notificarNuevoMensaje(data.contacto_nombre || 'Nuevo mensaje');
+                        notificarNuevoMensaje(data.contacto_nombre || 'Nuevo mensaje', {
+                            conversacionId: data.conversacion_id,
+                            preview:        data.preview || '',
+                            esConvActiva:   String(conversacionActiva || '') === String(data.conversacion_id),
+                        });
                     }
                 }
             };
@@ -1666,26 +1675,76 @@
         }
         });
     });
-    /* ── Sonido + Toast de nuevo mensaje ─────────────────────────────── */
+    /* ── Sonido + Toast + Notificación nativa ─────────────────────────── */
     const _toastEl = document.getElementById('toast-nuevo-mensaje');
-    const _bsToast = _toastEl ? new bootstrap.Toast(_toastEl, {delay: 4000}) : null;
+    const _bsToast = _toastEl ? new bootstrap.Toast(_toastEl, {delay: 7000}) : null;
 
-    // AudioContext creado lazily tras primer gesto del usuario (política autoplay de Chrome)
+    // AudioContext creado lazily tras primer gesto del usuario (política autoplay de Chrome/Opera).
     let _audioCtx = null;
     function _getAudioCtx() {
         if (!_audioCtx) {
             try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
         }
         if (_audioCtx && _audioCtx.state === 'suspended') {
-            _audioCtx.resume();
+            _audioCtx.resume().catch(function () {});
         }
         return _audioCtx;
     }
-    // Inicializar el contexto en el primer clic del usuario para que esté listo
+    // Inicializar el contexto en el primer gesto del usuario.
     document.addEventListener('click', function _initAudio() {
         _getAudioCtx();
         document.removeEventListener('click', _initAudio);
     }, { once: true });
+    // Cuando la pestaña vuelve a estar visible, asegurar que el AudioContext
+    // no quede suspended (Chrome/Opera lo congelan en background).
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden && _audioCtx && _audioCtx.state === 'suspended') {
+            _audioCtx.resume().catch(function () {});
+        }
+    });
+
+    // Notificación nativa: pedimos permiso al primer gesto del usuario para
+    // no disparar el prompt al instante de cargar (mejor UX). Si ya está
+    // concedido, no pide nada.
+    let _notifPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'unsupported';
+    function _pedirPermisoNotif() {
+        if (_notifPerm === 'default' && typeof Notification !== 'undefined') {
+            Notification.requestPermission().then(function (p) {
+                _notifPerm = p;
+                console.log('[notif] permiso:', p);
+            });
+        }
+    }
+    document.addEventListener('click', function _initNotif() {
+        _pedirPermisoNotif();
+        document.removeEventListener('click', _initNotif);
+    }, { once: true });
+
+    // Notificación nativa solo cuando la pestaña no está visible — si el
+    // operador está mirando el panel, el toast in-page basta.
+    function _notificacionNativa(nombre, body, conversacionId) {
+        if (_notifPerm !== 'granted' || typeof Notification === 'undefined') return;
+        if (!document.hidden) return;
+        try {
+            // tag por conversación: si llega otro mensaje de la misma conv,
+            // reemplaza la notif anterior en lugar de apilar.
+            var n = new Notification(nombre || 'Nuevo mensaje', {
+                body: (body || 'Mensaje entrante de WhatsApp').slice(0, 140),
+                icon: '/static/assets/img/avatar.png',
+                tag:  'wa-conv-' + (conversacionId || 'x'),
+                renotify: true,
+            });
+            n.onclick = function () {
+                window.focus();
+                if (conversacionId) {
+                    // Llevar al chat correspondiente
+                    var $item = $(`.conversacion-item[data-id="${conversacionId}"]`);
+                    if ($item.length) $item.trigger('click');
+                }
+                n.close();
+            };
+        } catch (e) { console.warn('[notif] falló', e); }
+    }
 
     function _beep() {
         try {
@@ -1719,22 +1778,51 @@
         _bsToast.show();
     }
 
-    function notificarNuevoMensaje(nombre) {
-        _beep();
-        _mostrarToast(nombre);
-        // Título de la pestaña parpadeante
+    // Acumula el conteo de no-leídos para mostrarlo en el title cuando hidden.
+    let _noLeidosTab = 0;
+    let _origTitle = null;
+    let _blinkIv = null;
+    function _restaurarTitleAlVolver() {
+        if (_origTitle) document.title = _origTitle;
+        _noLeidosTab = 0;
+        if (_blinkIv) { clearInterval(_blinkIv); _blinkIv = null; }
+    }
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) _restaurarTitleAlVolver();
+    });
+
+    /**
+     * Notifica un mensaje entrante.
+     * @param {string} nombre - nombre del contacto
+     * @param {object} opts - {conversacionId, preview, esConvActiva}
+     */
+    function notificarNuevoMensaje(nombre, opts) {
+        opts = opts || {};
+        // Si el operador YA está viendo esa conversación y la pestaña está
+        // visible, no hace falta hacer ruido — solo el highlight visual del
+        // mensaje nuevo basta. Esto evita el beep redundante al chatear.
+        var convActivaVisible = opts.esConvActiva && !document.hidden;
+        if (!convActivaVisible) {
+            _beep();
+            _mostrarToast(nombre);
+        }
+        // Notificación nativa (solo si pestaña no visible — la check está
+        // adentro de _notificacionNativa).
+        _notificacionNativa(nombre, opts.preview, opts.conversacionId);
+
+        // Title parpadeante + contador
         if (document.hidden) {
-            let _orig = document.title;
-            let _blink = true;
-            let _iv = setInterval(function() {
-                document.title = _blink ? '💬 Nuevo mensaje' : _orig;
-                _blink = !_blink;
-            }, 800);
-            document.addEventListener('visibilitychange', function _stop() {
-                clearInterval(_iv);
-                document.title = _orig;
-                document.removeEventListener('visibilitychange', _stop);
-            });
+            if (_origTitle === null) _origTitle = document.title;
+            _noLeidosTab++;
+            if (!_blinkIv) {
+                let _blink = true;
+                _blinkIv = setInterval(function() {
+                    document.title = _blink
+                        ? '💬 (' + _noLeidosTab + ') Nuevo mensaje'
+                        : _origTitle;
+                    _blink = !_blink;
+                }, 1000);
+            }
         }
     }
 

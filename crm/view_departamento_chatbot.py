@@ -415,10 +415,20 @@ Devolvé SOLO el JSON.
     from whatsapp.horarios_view import _extraer_json_seguro
     payload = _extraer_json_seguro(contenido)
     if not payload or not isinstance(payload, dict):
+        # Log completo en server para debug
+        import logging as _lg
+        _lg.getLogger(__name__).warning(
+            "LLM no devolvió JSON válido. Respuesta cruda (%d chars):\n%s",
+            len(str(contenido)), str(contenido)[:3000],
+        )
         return JsonResponse({
             'error': True,
-            'message': 'La IA no devolvió un JSON válido.',
-            'raw_preview': str(contenido)[:500],
+            'message': (
+                'La IA no devolvió un JSON válido. Posibles causas: respuesta truncada '
+                '(reducí el detalle), modelo confundido (probá otro proveedor), o quota '
+                'agotada. Mirá la respuesta cruda abajo para ver qué pasó.'
+            ),
+            'raw_preview': str(contenido)[:1500],
         })
 
     nombre = (payload.get('nombre_departamento') or '').strip()
