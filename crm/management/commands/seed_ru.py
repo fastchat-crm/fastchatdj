@@ -342,7 +342,7 @@ class Command(BaseCommand):
         return q
 
     def _crear_rama_privada(self, depto, ep_ru, menu_raiz, salida_ok, no_encontrado,
-                            fin_error, proc, base_orden):
+                            fin_error, set_var_reset_buscar, proc, base_orden):
         """
         Crea la mini-rama privada de un procedimiento que requiere cédula:
 
@@ -350,9 +350,14 @@ class Command(BaseCommand):
                 cond_skip --[true]--> http_X
                 cond_skip --[false]--> preg_cedula --> http_buscar
                                                        --[ok]--> http_X
-                                                       --[error]--> no_encontrado
+                                                       --[error]--> set_var_reset --> no_encontrado
             http_X --[ok]--> salida_ok
             http_X --[error]--> fin_error
+
+        Tras buscar(error) limpiamos `variables.cedula`/`matricula_id` con
+        `set_var_reset_buscar` para que la próxima consulta vuelva a pedir
+        cédula (sin esto el cond_skip vería la cédula sticky y entraría
+        directo al API → fallo silencioso).
 
         Retorna http_X (útil cuando hay sub-menú post-handler).
         """
@@ -407,7 +412,9 @@ class Command(BaseCommand):
         self._conectar(preg, buscar, '', 1)
         self._conectar(preg, fin_error, 'timeout', 2)
         self._conectar(buscar, http_x, 'ok', 1)
-        self._conectar(buscar, no_encontrado, 'error', 2)
+        # Buscar fallido → reset variables → no_encontrado.
+        self._conectar(buscar, set_var_reset_buscar, 'error', 2,
+                       'Reset cédula/matricula tras fallo del buscar')
         self._conectar(http_x, salida_ok, 'ok', 1)
         self._conectar(http_x, fin_error, 'error', 2)
         return http_x
@@ -513,9 +520,59 @@ class Command(BaseCommand):
             depto, 'Transferir a asesor', 'handoff', orden=902,
             config={'mensaje': '👤 Te conecto con un asesor humano del RU. Un momento por favor…'},
         )
-        # Loop de cierre: ambos respuesta-fallback regresan al menu_raiz.
+        # Reset de variables tras buscar(error) — evita que la cédula
+        # inválida quede sticky y bloquee consultas siguientes.
+        set_var_reset_buscar = self._nodo(
+            depto, 'Reset cédula/matrícula tras buscar(error)', 'set_variable',
+            orden=903,
+            config={'asignaciones': [
+                {'variable': 'cedula',       'expresion': ''},
+                {'variable': 'matricula_id', 'expresion': ''},
+                {'variable': 'nombre',       'expresion': ''},
+            ]},
+        )
+        # Reset cuando el usuario pide "consultar otra matrícula".
+        set_var_reset_otra = self._nodo(
+            depto, 'Reset para otra matrícula', 'set_variable', orden=904,
+            config={'asignaciones': [
+                {'variable': 'cedula',       'expresion': ''},
+                {'variable': 'matricula_id', 'expresion': ''},
+                {'variable': 'nombre',       'expresion': ''},
+                {'variable': 'carrera',      'expresion': ''},
+            ]},
+        )
+        # Sub-menú reusable después de cada handler exitoso.
+        # Replica el UX del bot real: "Volver al menú / Consultar otra matrícula".
+        menu_post = self._nodo(
+            depto, 'Sub-menú post-handler', 'menu', orden=905,
+            config={
+                'mensaje': '¿Quieres consultar algo más?',
+                'opciones': [
+                    {'etiqueta': '↩️ Volver al menú',     'valor': 'volver', 'salida': 'volver'},
+                    {'etiqueta': '🔄 Otra matrícula',     'valor': 'otra',   'salida': 'otra'},
+                    {'etiqueta': '👋 Terminar',           'valor': 'fin',    'salida': 'fin'},
+                ],
+            },
+            variable='post_accion',
+            mensaje_error='Elige una opción.',
+        )
+        fin_despedida = self._nodo(
+            depto, 'Despedida', 'fin', orden=906,
+            config={'mensaje': (
+                '¡Gracias por usar Lucía! 💙 Si necesitas algo más, escribe *menu* '
+                'cuando quieras y volvemos a empezar. 👋'
+            )},
+        )
+
+        # Loop de cierre: respuesta-fallback / set_var → vuelven al menú.
+        self._conectar(set_var_reset_buscar, no_encontrado, '', 1, 'Tras reset → mensaje')
         self._conectar(no_encontrado, menu_raiz, '', 1, 'Tras error → vuelve al menú')
         self._conectar(fin_error,     menu_raiz, '', 1, 'Tras error → vuelve al menú')
+        self._conectar(set_var_reset_otra, menu_raiz, '', 1, 'Tras reset → menú (próxima opción privada pedirá cédula)')
+        self._conectar(menu_post, menu_raiz,           'volver', 1, 'Volver al menú raíz')
+        self._conectar(menu_post, set_var_reset_otra,  'otra',   2, 'Cambiar de matrícula')
+        self._conectar(menu_post, fin_despedida,       'fin',    3, 'Terminar conversación')
+        self._conectar(menu_post, menu_raiz,           'timeout', 4)
 
         # ── Generar mini-ramas por procedimiento ─────────────────
         # Cada rama empieza en `base_orden` y usa hasta 4 nodos (cond, preg,
@@ -524,21 +581,22 @@ class Command(BaseCommand):
             base = i * 10  # 10, 20, 30, ...
 
             if proc['tipo'] == 'estatico':
-                # Pública: respuesta directa → loop al menú.
+                # Pública: respuesta directa → sub-menú post-handler.
                 resp = self._nodo(
                     depto, f'Resp ({proc["codigo"]})', 'respuesta', orden=base,
                     config={'mensaje': proc['mensaje']},
                 )
                 self._conectar(menu_raiz, resp, proc['codigo'], 1)
-                self._conectar(resp, menu_raiz, '', 1, 'Loop al menú')
+                self._conectar(resp, menu_post, '', 1, 'Tras respuesta → opciones de seguimiento')
                 continue
 
             if proc['tipo'] == 'http':
                 self._crear_rama_privada(
                     depto, ep_ru, menu_raiz,
-                    salida_ok=menu_raiz,           # tras handler → vuelve al menú
+                    salida_ok=menu_post,           # tras handler → sub-menú post-handler
                     no_encontrado=no_encontrado,
                     fin_error=fin_error,
+                    set_var_reset_buscar=set_var_reset_buscar,
                     proc=proc, base_orden=base,
                 )
                 continue
@@ -564,12 +622,13 @@ class Command(BaseCommand):
                 # Conexión "volver" al menú raíz.
                 self._conectar(sub_menu, menu_raiz, 'volver', 99, 'Volver al menú principal')
 
-                # Mini-rama del handler padre → sub_menu (no menu_raiz).
+                # Mini-rama del handler padre → sub_menu (no menu_post).
                 self._crear_rama_privada(
                     depto, ep_ru, menu_raiz,
                     salida_ok=sub_menu,
                     no_encontrado=no_encontrado,
                     fin_error=fin_error,
+                    set_var_reset_buscar=set_var_reset_buscar,
                     proc=proc, base_orden=base,
                 )
 
@@ -585,9 +644,10 @@ class Command(BaseCommand):
                     }
                     self._crear_rama_privada(
                         depto, ep_ru, sub_menu,
-                        salida_ok=menu_raiz,           # tras sub-handler → menú raíz
+                        salida_ok=menu_post,           # tras sub-handler → sub-menú post
                         no_encontrado=no_encontrado,
                         fin_error=fin_error,
+                        set_var_reset_buscar=set_var_reset_buscar,
                         proc=sub_proc,
                         base_orden=base + 50 + j * 10,
                     )

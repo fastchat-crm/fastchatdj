@@ -1,5 +1,10 @@
 <li>
-    <div class="dp-tree-card tipo-{{ nodo.opcion.tipo_nodo }}">
+    {% if nodo.etiqueta %}
+        <div class="dp-tree-edge-label">
+            <span class="badge bg-light text-dark border">{{ nodo.etiqueta }}</span>
+        </div>
+    {% endif %}
+    <div class="dp-tree-card tipo-{{ nodo.opcion.tipo_nodo }}{% if nodo.cycle %} dp-tree-cycle{% endif %}">
         <div class="dp-tree-card-pill dp-tipo-pill tipo-{{ nodo.opcion.tipo_nodo }}">
             {{ nodo.opcion.get_tipo_nodo_display }}
         </div>
@@ -8,6 +13,9 @@
                 <i class="fa fa-play text-success me-1" title="Nodo de inicio"></i>
             {% endif %}
             {{ nodo.opcion.nombre|default:'(sin nombre)' }}
+            {% if nodo.cycle %}
+                <i class="fa fa-rotate-left text-muted ms-1" title="Vuelve a un nodo ya visitado"></i>
+            {% endif %}
         </div>
         {% if nodo.opcion.boton_id %}
             <div class="dp-tree-card-btnid">id: <code>{{ nodo.opcion.boton_id }}</code></div>

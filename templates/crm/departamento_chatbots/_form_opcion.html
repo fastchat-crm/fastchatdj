@@ -105,6 +105,104 @@
         </div>
     </div>
 
+    {# Bloque HTTP — visible solo cuando tipo=http #}
+    <div class="col-12 dp-tipo-block" data-show-when="http" style="display:none;">
+        <div class="alert alert-info py-2 small mb-2">
+            <i class="fa fa-globe me-1"></i>
+            <strong>Llamada HTTP:</strong> el motor llama a una API externa, extrae datos
+            de la respuesta y los guarda en variables que pueden usarse en mensajes posteriores.
+            Salidas: <code>ok</code> (HTTP 2xx) y <code>error</code>.
+        </div>
+        <div class="row g-2 p-2" style="background:#eff6ff;border-radius:6px;">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">
+                    Endpoint (host + auth) <span class="text-danger">*</span>
+                </label>
+                <select name="http_endpoint_id" class="form-select form-select-sm">
+                    <option value="">— Selecciona un endpoint —</option>
+                    {% for ep in endpoints_disponibles %}
+                        <option value="{{ ep.id }}"
+                                {% if opcion.endpoint_id == ep.id %}selected{% endif %}>
+                            {{ ep.nombre }} · {{ ep.base_url }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <small class="text-muted">
+                    Define base URL + auth. Crea endpoints desde
+                    <a href="/admin/crm/endpointapichatbot/" target="_blank">admin</a>.
+                </small>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold mb-1">Método</label>
+                {% with metodo_actual=opcion.config.metodo|default:'GET' %}
+                    <select name="http_metodo" class="form-select form-select-sm">
+                        <option value="GET"    {% if metodo_actual == 'GET' %}selected{% endif %}>GET</option>
+                        <option value="POST"   {% if metodo_actual == 'POST' %}selected{% endif %}>POST</option>
+                        <option value="PUT"    {% if metodo_actual == 'PUT' %}selected{% endif %}>PUT</option>
+                        <option value="PATCH"  {% if metodo_actual == 'PATCH' %}selected{% endif %}>PATCH</option>
+                        <option value="DELETE" {% if metodo_actual == 'DELETE' %}selected{% endif %}>DELETE</option>
+                    </select>
+                {% endwith %}
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-bold mb-1">Path</label>
+                <input type="text" name="http_path" class="form-control form-control-sm"
+                       value="{{ opcion.config.path|default:'' }}"
+                       placeholder="/horarios/" maxlength="500">
+                <small class="text-muted">Se concatena al base_url.</small>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Query (JSON)</label>
+                <textarea name="http_query_json" class="form-control form-control-sm font-monospace"
+                          rows="3"
+                          placeholder='{"cedula": "&#123;&#123;variables.cedula&#125;&#125;"}'>{{ http_query_json_str|default:'' }}</textarea>
+                <small class="text-muted">
+                    Pares clave→valor para query string. Soporta
+                    <code>&#123;&#123;variables.x&#125;&#125;</code>.
+                </small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Body (JSON)</label>
+                <textarea name="http_body_json" class="form-control form-control-sm font-monospace"
+                          rows="3"
+                          placeholder='{"cedula": "&#123;&#123;variables.cedula&#125;&#125;"}'>{{ http_body_json_str|default:'' }}</textarea>
+                <small class="text-muted">Solo para POST/PUT/PATCH. Vacío = sin body.</small>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Headers extra (JSON, opcional)</label>
+                <textarea name="http_headers_json" class="form-control form-control-sm font-monospace"
+                          rows="2"
+                          placeholder='{"X-Custom": "valor"}'>{{ http_headers_json_str|default:'' }}</textarea>
+                <small class="text-muted">Se mergean con los headers del endpoint.</small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Extraer (JSON array)</label>
+                <textarea name="http_extraer_json" class="form-control form-control-sm font-monospace"
+                          rows="2"
+                          placeholder='[{"variable": "nombre", "jsonpath": "data.nombre"}]'>{{ http_extraer_json_str|default:'' }}</textarea>
+                <small class="text-muted">
+                    Mapea response → variables. <code>jsonpath</code> soporta
+                    <code>a.b.c</code> y <code>a[0].b</code>.
+                </small>
+            </div>
+
+            <div class="col-12">
+                <label class="form-label small fw-bold mb-1">
+                    Plantilla de respuesta al cliente
+                </label>
+                <textarea name="http_plantilla" class="form-control form-control-sm" rows="3"
+                          placeholder="Ej: Hola {variables.nombre}, encontré tu matrícula">{{ opcion.config.plantilla_respuesta|default:'' }}</textarea>
+                <small class="text-muted">
+                    Mensaje que se envía cuando el HTTP responde 2xx. Soporta
+                    <code>&#123;&#123;variables.x&#125;&#125;</code>.
+                    Vacío = no enviar nada (útil si quieres usar las variables en un nodo siguiente).
+                </small>
+            </div>
+        </div>
+    </div>
+
     {# Bloque Ubicación — visible solo cuando tipo=ubicacion #}
     <div class="col-12 dp-tipo-block" data-show-when="ubicacion" style="display:none;">
         <div class="alert alert-secondary py-2 small mb-2" style="background:#f3e8ff;border-color:#d8b4fe">

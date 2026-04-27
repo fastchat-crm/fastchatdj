@@ -241,12 +241,18 @@ def departamentoChatbotsView(request):
                         opcion = OpcionDepartamentoChatBot.objects.filter(pk=op_id, status=True).first()
                         if not opcion:
                             return JsonResponse({'result': False, 'message': 'Nodo no encontrado'})
+                        cfg = opcion.config or {}
                         contexto.update({
                             'opcion': opcion,
                             'es_nuevo': False,
                             'departamento_id': opcion.departamento_id,
                             'parent_id': opcion.opcion_padre_id or 0,
-                            'config_json_str': json.dumps(opcion.config or {}, indent=2, ensure_ascii=False),
+                            'config_json_str': json.dumps(cfg, indent=2, ensure_ascii=False),
+                            # Sub-piezas serializadas para los inputs específicos del form HTTP.
+                            'http_query_json_str':   json.dumps(cfg.get('query') or {}, indent=2, ensure_ascii=False) if cfg.get('query') else '',
+                            'http_body_json_str':    json.dumps(cfg.get('body') or {}, indent=2, ensure_ascii=False) if cfg.get('body') else '',
+                            'http_headers_json_str': json.dumps(cfg.get('headers') or {}, indent=2, ensure_ascii=False) if cfg.get('headers') else '',
+                            'http_extraer_json_str': json.dumps(cfg.get('extraer') or [], indent=2, ensure_ascii=False) if cfg.get('extraer') else '',
                         })
                     else:
                         contexto.update({
@@ -255,6 +261,10 @@ def departamentoChatbotsView(request):
                             'departamento_id': dep_id,
                             'parent_id': parent_id,
                             'config_json_str': '{}',
+                            'http_query_json_str': '',
+                            'http_body_json_str': '',
+                            'http_headers_json_str': '',
+                            'http_extraer_json_str': '',
                         })
                     template = get_template('crm/departamento_chatbots/_form_opcion.html')
                     return JsonResponse({'result': True, 'data': template.render(contexto)})
@@ -820,14 +830,133 @@ def _serializar_para_preview(departamento):
 
 
 def _serializar_arbol_anidado(departamento, padre=None):
-    """Versión anidada (estructura recursiva) para el diagrama horizontal."""
-    qs = OpcionDepartamentoChatBot.objects.filter(
-        departamento=departamento, opcion_padre=padre, status=True,
-    ).order_by('orden', 'id')
-    return [
-        {'opcion': op, 'hijos': _serializar_arbol_anidado(departamento, padre=op)}
-        for op in qs
-    ]
+    """Versión anidada (estructura recursiva) para el diagrama horizontal.
+
+    Recorre el grafo `ConexionNodoChatbot` + `config.opciones` (formato del
+    motor de flujo) — los condicionales abren ramas `true`/`false`, los
+    menus abren una rama por opción, los nodos lineales siguen la default.
+
+    Cae al árbol legacy `opcion_padre` si no hay grafo. Anti-ciclo via
+    `visited` para que cada nodo aparezca una sola vez.
+    """
+    if padre is not None:
+        # Compat: llamadas recursivas legacy con padre fijo.
+        qs = OpcionDepartamentoChatBot.objects.filter(
+            departamento=departamento, opcion_padre=padre, status=True,
+        ).order_by('orden', 'id')
+        return [
+            {'opcion': op, 'hijos': _serializar_arbol_anidado(departamento, padre=op),
+             'etiqueta': ''}
+            for op in qs
+        ]
+
+    from .models import ConexionNodoChatbot
+
+    nodos_qs = OpcionDepartamentoChatBot.objects.filter(
+        departamento=departamento, status=True,
+    )
+    nodos_by_id = {n.id: n for n in nodos_qs}
+    if not nodos_by_id:
+        return []
+
+    conex_qs = ConexionNodoChatbot.objects.filter(
+        nodo_origen__departamento=departamento, status=True,
+    ).order_by('nodo_origen', 'orden', 'id')
+    conex_by_origen = {}
+    for c in conex_qs:
+        conex_by_origen.setdefault(c.nodo_origen_id, []).append(c)
+
+    def _conex_etq(op_id, etiqueta):
+        for c in conex_by_origen.get(op_id, []):
+            if c.etiqueta == etiqueta:
+                return c
+        return None
+
+    def _conex_default(op_id):
+        for et in ('', 'ok'):
+            c = _conex_etq(op_id, et)
+            if c:
+                return c
+        return None
+
+    def _walk(op, visited):
+        if op.id in visited:
+            return {'opcion': op, 'hijos': [], 'etiqueta': '',
+                    'cycle': True}
+        visited = visited | {op.id}
+        cfg = op.config or {}
+        hijos = []
+
+        if op.tipo_nodo == 'menu':
+            opciones_cfg = cfg.get('opciones') or []
+            for opt in opciones_cfg:
+                etq_label = (opt.get('etiqueta') or opt.get('valor') or '').strip()
+                sal = (opt.get('salida') or '').strip()
+                conn = _conex_etq(op.id, sal) if sal else _conex_default(op.id)
+                if conn:
+                    dest = nodos_by_id.get(conn.nodo_destino_id)
+                    if dest:
+                        sub = _walk(dest, visited)
+                        sub['etiqueta'] = etq_label or sal
+                        hijos.append(sub)
+            # Fallback árbol legacy
+            if not hijos:
+                for c in OpcionDepartamentoChatBot.objects.filter(
+                    opcion_padre=op, status=True,
+                ).order_by('orden', 'id'):
+                    sub = _walk(c, visited)
+                    sub['etiqueta'] = ''
+                    hijos.append(sub)
+        elif op.tipo_nodo == 'condicional':
+            for et, label in (('true', '✓ Sí'), ('false', '✗ No')):
+                conn = _conex_etq(op.id, et)
+                if conn:
+                    dest = nodos_by_id.get(conn.nodo_destino_id)
+                    if dest:
+                        sub = _walk(dest, visited)
+                        sub['etiqueta'] = label
+                        hijos.append(sub)
+        elif op.tipo_nodo == 'http':
+            for et, label in (('ok', '✓ ok'), ('error', '⚠️ error')):
+                conn = _conex_etq(op.id, et)
+                if conn:
+                    dest = nodos_by_id.get(conn.nodo_destino_id)
+                    if dest:
+                        sub = _walk(dest, visited)
+                        sub['etiqueta'] = label
+                        hijos.append(sub)
+        elif op.tipo_nodo in ('respuesta', 'pregunta', 'set_variable', 'cta_url'):
+            conn = _conex_default(op.id)
+            if conn:
+                dest = nodos_by_id.get(conn.nodo_destino_id)
+                if dest:
+                    sub = _walk(dest, visited)
+                    sub['etiqueta'] = ''
+                    hijos.append(sub)
+        # handoff / fin / ubicacion → sin hijos
+
+        return {'opcion': op, 'hijos': hijos, 'etiqueta': ''}
+
+    inicio = next((n for n in nodos_by_id.values() if n.es_inicio), None)
+    if not inicio:
+        inicio = OpcionDepartamentoChatBot.objects.filter(
+            departamento=departamento, opcion_padre__isnull=True, status=True,
+        ).order_by('orden', 'id').first()
+
+    raices = [_walk(inicio, set())] if inicio else []
+
+    # Anexar nodos huérfanos del grafo (sin entrada y no inicio) al final.
+    visited_ids = set()
+    def _collect_visited(node):
+        visited_ids.add(node['opcion'].id)
+        for h in node['hijos']:
+            _collect_visited(h)
+    for r in raices:
+        _collect_visited(r)
+    for n in sorted(nodos_by_id.values(), key=lambda x: (x.orden, x.id)):
+        if n.id not in visited_ids:
+            raices.append({'opcion': n, 'hijos': [], 'etiqueta': ''})
+    return raices
 
 
 # ============================================================================
@@ -974,14 +1103,81 @@ def _guardar_opcion(request):
             'name': (request.POST.get('ubicacion_nombre') or '').strip()[:120],
             'address': (request.POST.get('ubicacion_direccion') or '').strip()[:200],
         }
+    elif opcion.tipo_nodo == 'http':
+        # Endpoint FK
+        ep_id = request.POST.get('http_endpoint_id') or ''
+        if ep_id.isdigit():
+            ep = EndpointApiChatbot.objects.filter(pk=int(ep_id), status=True).first()
+            if not ep:
+                return JsonResponse({'ok': False, 'error': 'Endpoint no encontrado'})
+            opcion.endpoint = ep
+        else:
+            opcion.endpoint = None
+
+        metodo = (request.POST.get('http_metodo') or 'GET').upper().strip()
+        if metodo not in ('GET', 'POST', 'PUT', 'PATCH', 'DELETE'):
+            metodo = 'GET'
+        path = (request.POST.get('http_path') or '').strip()[:500]
+
+        def _parse_json_field(name, default):
+            raw = (request.POST.get(name) or '').strip()
+            if not raw:
+                return default
+            try:
+                return json.loads(raw)
+            except (TypeError, ValueError) as ex:
+                return JsonResponse({
+                    'ok': False,
+                    'error': f'Campo {name} no es JSON válido: {str(ex)[:120]}',
+                })
+
+        # Parsear cada campo y propagar errores como respuesta inmediata.
+        query = _parse_json_field('http_query_json', {})
+        if isinstance(query, JsonResponse):
+            return query
+        body = _parse_json_field('http_body_json', None)
+        if isinstance(body, JsonResponse):
+            return body
+        headers = _parse_json_field('http_headers_json', {})
+        if isinstance(headers, JsonResponse):
+            return headers
+        extraer = _parse_json_field('http_extraer_json', [])
+        if isinstance(extraer, JsonResponse):
+            return extraer
+
+        if not isinstance(query, dict):
+            return JsonResponse({'ok': False, 'error': 'http query debe ser objeto JSON'})
+        if body is not None and not isinstance(body, (dict, list)):
+            return JsonResponse({'ok': False, 'error': 'http body debe ser objeto/array JSON'})
+        if not isinstance(headers, dict):
+            return JsonResponse({'ok': False, 'error': 'http headers debe ser objeto JSON'})
+        if not isinstance(extraer, list):
+            return JsonResponse({'ok': False, 'error': 'http extraer debe ser array JSON'})
+
+        cfg = {
+            'metodo': metodo,
+            'path':   path,
+            'plantilla_respuesta': (request.POST.get('http_plantilla') or '').strip(),
+        }
+        if query:    cfg['query']   = query
+        if body is not None and body != {}:
+            cfg['body'] = body
+        if headers:  cfg['headers'] = headers
+        if extraer:  cfg['extraer'] = extraer
+        opcion.config = cfg
     else:
-        # Tipos sin config específica → limpiar si tenía cta_url/ubicacion previas
+        # Tipos sin form específico → limpiar config si era de otro tipo (cta_url/
+        # ubicacion/http) para evitar dejar fields obsoletos.
         if opcion.config and (
             'url' in opcion.config or 'lat' in opcion.config or 'meta_type' in opcion.config
+            or 'metodo' in opcion.config or 'path' in opcion.config
         ):
             opcion.config = {}
         elif not opcion.config:
             opcion.config = {}
+        # Si dejó de ser http, desvincular el endpoint también.
+        if opcion.tipo_nodo != 'http':
+            opcion.endpoint = None
 
     opcion.save(request)
 
