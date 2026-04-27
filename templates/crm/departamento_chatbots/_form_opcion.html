@@ -83,7 +83,7 @@
     </div>
 
     {# Bloque CTA URL — visible solo cuando tipo=cta_url #}
-    <div class="col-12 dp-tipo-block" data-show-when="cta_url">
+    <div class="col-12 dp-tipo-block" data-show-when="cta_url" style="display:none;">
         <div class="alert alert-primary py-2 small mb-2">
             <i class="fa fa-link me-1"></i>
             <strong>cta_url:</strong> WhatsApp envía un mensaje con UN botón que abre una URL externa.
@@ -106,7 +106,7 @@
     </div>
 
     {# Bloque Ubicación — visible solo cuando tipo=ubicacion #}
-    <div class="col-12 dp-tipo-block" data-show-when="ubicacion">
+    <div class="col-12 dp-tipo-block" data-show-when="ubicacion" style="display:none;">
         <div class="alert alert-secondary py-2 small mb-2" style="background:#f3e8ff;border-color:#d8b4fe">
             <i class="fa fa-map-marker-alt me-1 text-primary"></i>
             <strong>Ubicación:</strong> WhatsApp envía un mensaje tipo <code>location</code> que el cliente puede tocar para abrir su app de mapas.
@@ -140,20 +140,3 @@
     </div>
 </div>
 
-<script>
-(function () {
-    var tipoSel = document.getElementById('dpFormTipo');
-    var bloques = document.querySelectorAll('.dp-tipo-block');
-    function aplicar() {
-        var t = tipoSel.value;
-        bloques.forEach(function (b) {
-            var when = b.getAttribute('data-show-when');
-            b.style.display = (when === t) ? '' : 'none';
-        });
-    }
-    if (tipoSel) {
-        tipoSel.addEventListener('change', aplicar);
-        aplicar();
-    }
-})();
-</script>

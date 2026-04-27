@@ -149,10 +149,26 @@
                 return;
             }
             $('#dpModalNodoBody').innerHTML = resp.data;
+            wireTipoNodoToggle();
         }).catch(function (err) {
             $('#dpModalNodoBody').innerHTML =
                 '<div class="alert alert-danger">Error de conexión: ' + err.message + '</div>';
         });
+    }
+
+    function wireTipoNodoToggle() {
+        var tipoSel = document.getElementById('dpFormTipo');
+        if (!tipoSel) return;
+        var bloques = document.querySelectorAll('.dp-tipo-block');
+        function aplicar() {
+            var t = tipoSel.value;
+            bloques.forEach(function (b) {
+                var when = b.getAttribute('data-show-when');
+                b.style.display = (when === t) ? '' : 'none';
+            });
+        }
+        tipoSel.addEventListener('change', aplicar);
+        aplicar();
     }
 
     function wireModalSubmit() {
