@@ -736,13 +736,71 @@ def _serializar_arbol_opciones(departamento, padre=None, nivel=0):
 
 
 def _serializar_para_preview(departamento):
-    """Estructura compacta para el simulador WhatsApp del flujo. Cada nodo
-    incluye sus hijos inline para que el JS no tenga que recorrer un mapa.
+    """Devuelve un grafo plano para el simulador WhatsApp tipo state-machine.
 
-    Recorre el grafo real `ConexionNodoChatbot` + `config.opciones` (formato
-    del motor `motor_flujo_chatbot`). Cae al árbol legacy `opcion_padre` solo
-    si no hay ni opciones ni conexiones salientes.
+    El JS del preview recorre `nodos[current_id]` paso a paso, evaluando el
+    `tipo` del nodo y siguiendo `salidas` por etiqueta. Soporta:
+      - menu → renderiza opciones, espera click, avanza por `salida`.
+      - pregunta → input de texto, captura en `variable_destino`, avanza ''.
+      - http → modo mock (placeholder) o modo real (llama a /probar_http/).
+      - condicional → evalúa local con operadores básicos, avanza true/false.
+      - set_variable → aplica asignaciones, avanza ''.
+      - respuesta/cta_url/ubicacion/handoff/fin → comportamiento estándar.
     """
+    from .models import ConexionNodoChatbot
+
+    nodos_qs = OpcionDepartamentoChatBot.objects.filter(
+        departamento=departamento, status=True,
+    )
+
+    conex_qs = ConexionNodoChatbot.objects.filter(
+        nodo_origen__departamento=departamento, status=True,
+    ).order_by('nodo_origen', 'orden', 'id')
+    salidas_by_origen = {}
+    for c in conex_qs:
+        salidas_by_origen.setdefault(c.nodo_origen_id, []).append({
+            'etiqueta': c.etiqueta or '',
+            'destino_id': c.nodo_destino_id,
+        })
+
+    nodos = {}
+    for n in nodos_qs:
+        nodos[str(n.id)] = {
+            'id': n.id,
+            'nombre': n.nombre or '',
+            'tipo': n.tipo_nodo,
+            'config': n.config or {},
+            'respuesta': n.respuesta or '',
+            'es_inicio': bool(n.es_inicio),
+            'endpoint_id': n.endpoint_id or None,
+            'variable_destino': n.variable_destino or '',
+            'validacion_tipo': n.validacion_tipo or 'none',
+            'salidas': salidas_by_origen.get(n.id, []),
+            # Hijos legacy via opcion_padre — fallback si el nodo no tiene salidas.
+            'hijos_legacy': list(n.subopciones.filter(status=True)
+                                  .order_by('orden').values_list('id', flat=True)),
+        }
+
+    inicio = next((n for n in nodos_qs if n.es_inicio), None)
+    if not inicio:
+        inicio = OpcionDepartamentoChatBot.objects.filter(
+            departamento=departamento, opcion_padre__isnull=True, status=True,
+        ).order_by('orden', 'id').first()
+
+    return {
+        'departamento': {
+            'id': departamento.id,
+            'nombre': departamento.nombre,
+            'color': departamento.color or '#16a34a',
+            'mensaje_saludo': departamento.mensaje_saludo or '',
+        },
+        'nodos': nodos,
+        'inicio_id': inicio.id if inicio else None,
+    }
+
+
+def _serializar_para_preview_LEGACY(departamento):
+    """Versión nested anterior. Deprecada — el preview ahora usa flat map."""
     from .models import ConexionNodoChatbot
 
     nodos_qs = OpcionDepartamentoChatBot.objects.filter(

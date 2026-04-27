@@ -12,9 +12,18 @@
         <i class="fa fa-arrow-left me-1"></i> Volver al editor
     </a>
     <h5 class="mb-0">Preview · {{ filtro.nombre }}</h5>
-    <button type="button" class="btn btn-outline-secondary btn-sm" id="dpprev-reset">
-        <i class="fa fa-rotate me-1"></i> Reiniciar conversación
-    </button>
+    <div class="d-flex gap-2 align-items-center">
+        <div class="form-check form-switch m-0">
+            <input type="checkbox" class="form-check-input" id="dpprev-mode-real">
+            <label class="form-check-label small" for="dpprev-mode-real">
+                <i class="fa fa-bolt text-warning me-1"></i>
+                Modo real <small class="text-muted">(ejecuta APIs)</small>
+            </label>
+        </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="dpprev-reset">
+            <i class="fa fa-rotate me-1"></i> Reiniciar
+        </button>
+    </div>
 </div>
 
 <div class="dpprev-wrap">
@@ -27,33 +36,64 @@
             </div>
         </div>
         <div class="dpprev-chat" id="dpprev-chat"></div>
-        <div class="dpprev-input-bar">
+        <div class="dpprev-input-bar" id="dpprev-input-bar">
             <i class="fa fa-keyboard text-muted me-2"></i>
-            <span class="text-muted small">Tocá un botón arriba para responder…</span>
+            <span class="text-muted small">Tocá un botón arriba o escribí abajo cuando se pida…</span>
+        </div>
+        <div class="dpprev-text-input" id="dpprev-text-input" style="display:none;">
+            <input type="text" class="form-control form-control-sm" id="dpprev-text-field"
+                   placeholder="Escribí tu respuesta…">
+            <button type="button" class="btn btn-success btn-sm" id="dpprev-text-send">
+                <i class="fa fa-paper-plane"></i>
+            </button>
         </div>
     </div>
+
     <aside class="dpprev-side">
-        <h6><i class="fa fa-info-circle me-1 text-info"></i> Cómo funciona</h6>
-        <p class="small text-muted">
-            Este simulador recorre el flujo del depto como lo verá el cliente.
-            Cada burbuja verde es un mensaje del bot; las grises son tus respuestas.
-        </p>
-        <ul class="small text-muted">
-            <li><span class="badge bg-success">Respuesta</span> texto plano (Meta type=text)</li>
-            <li><span class="badge bg-primary">Menú</span> botones interactive (button/list según cantidad)</li>
-            <li><span class="badge bg-info text-dark">Handoff</span> deriva a un humano</li>
-            <li><span class="badge bg-secondary">Fin</span> termina el flujo</li>
+        <ul class="nav nav-tabs nav-tabs-sm small" id="dpprev-tabs">
+            <li class="nav-item">
+                <button class="nav-link active" data-tab="vars">
+                    <i class="fa fa-database me-1"></i> Variables
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-tab="log">
+                    <i class="fa fa-terminal me-1"></i> Debug log
+                </button>
+            </li>
         </ul>
-        <p class="small text-muted">
-            <code>config_json</code> con <code>meta_type:"cta_url"</code> renderiza un botón
-            con URL externa. <code>"location"</code> muestra una mini-card de mapa.
-        </p>
+        <div class="tab-content p-2">
+            <div class="tab-pane active" data-pane="vars">
+                <div class="text-muted small mb-1">
+                    Estado actual de variables capturadas durante el flujo.
+                </div>
+                <pre id="dpprev-vars" class="dpprev-vars-pre">{}</pre>
+                <details class="small mt-2">
+                    <summary class="text-muted">Ayuda</summary>
+                    <ul class="ps-3 mb-0">
+                        <li><b>Modo mock</b>: simula APIs, te deja navegar todas las ramas.</li>
+                        <li><b>Modo real</b>: ejecuta los nodos <code>http</code> contra el endpoint configurado y guarda las variables del response.</li>
+                        <li>Los <code>condicional</code> se evalúan localmente con las variables actuales.</li>
+                    </ul>
+                </details>
+            </div>
+            <div class="tab-pane" data-pane="log" style="display:none;">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="text-muted small">Eventos del runtime (más reciente abajo).</span>
+                    <button type="button" class="btn btn-sm btn-link p-0 small" id="dpprev-log-clear">
+                        <i class="fa fa-eraser"></i> Limpiar
+                    </button>
+                </div>
+                <div id="dpprev-log" class="dpprev-log"></div>
+            </div>
+        </div>
     </aside>
 </div>
 
 <script id="dp-preview-data" type="application/json">{{ preview_json|safe }}</script>
+<script>window.DPPREV_PROBAR_URL = "/crm/departamentos_chatbots/";</script>
 {% endblock %}
 
 {% block jscript %}
-    <script src="{% static 'js/dpchat_preview.js' %}?v=2"></script>
+    <script src="{% static 'js/dpchat_preview.js' %}?v=3"></script>
 {% endblock %}

@@ -72,10 +72,10 @@ def endpoint_api_view(request):
                     # mejor que romper la FK con on_delete=PROTECT.
                     if filtro.nodos.filter(status=True).exists():
                         n = filtro.nodos.filter(status=True).count()
-                        res_json = {
+                        res_json = [{
                             'error': True,
                             'message': f'No se puede eliminar: {n} nodo(s) http del flujo aún apuntan a este endpoint.',
-                        }
+                        }]
                     else:
                         filtro.status = False
                         filtro.save(request)
@@ -109,10 +109,10 @@ def endpoint_api_view(request):
                     cred = CredencialApiChatbot.objects.get(pk=int(request.POST['id']))
                     if cred.endpoints.filter(status=True).exists():
                         n = cred.endpoints.filter(status=True).count()
-                        res_json = {
+                        res_json = [{
                             'error': True,
                             'message': f'No se puede eliminar: {n} endpoint(s) la usan.',
-                        }
+                        }]
                     else:
                         cred.status = False
                         cred.save(request)

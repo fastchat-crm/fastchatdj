@@ -1,4 +1,8 @@
 {% extends 'base.html' %}
+{% load static %}
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/endpoints_api.css' %}">
+{% endblock %}
 {% block content %}
 
     <div class="card mb-3">
@@ -48,35 +52,37 @@
 
     {# Sección: lista de credenciales (sub-recurso) #}
     {% if credenciales %}
-        <div class="card mb-3">
-            <div class="card-header py-2">
-                <strong><i class="fa fa-key text-info me-1"></i> Credenciales registradas</strong>
+        <div class="card mb-3 card-credenciales">
+            <div class="card-header py-2 bg-info bg-opacity-10 border-info">
+                <strong class="text-info"><i class="fa fa-key me-1"></i> Credenciales</strong>
                 <small class="text-muted">— se reutilizan entre endpoints</small>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-sm table-hover mb-0">
-                        <thead>
+                        <thead class="table-light">
                             <tr>
                                 <th>Nombre</th>
                                 <th>Tipo</th>
-                                <th>Endpoints</th>
+                                <th class="text-center">Endpoints que la usan</th>
                                 <th class="text-end">Acción</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for c in credenciales %}
                                 <tr>
-                                    <td>{{ c.nombre }}</td>
-                                    <td><span class="badge bg-secondary">{{ c.get_tipo_display }}</span></td>
-                                    <td>{{ c.endpoints.count }}</td>
+                                    <td><i class="fa fa-key text-info me-1"></i>{{ c.nombre }}</td>
+                                    <td><span class="badge bg-info-subtle text-info">{{ c.get_tipo_display }}</span></td>
+                                    <td class="text-center">{{ c.endpoints.count }}</td>
                                     <td class="text-end">
                                         <a href="javascript:void(0);" class="btn btn-sm btn-outline-primary"
-                                           onclick="formModalCredencial({{ c.pk }}, 'Editar credencial', 'credencial_change')">
+                                           onclick="formModalCredencial({{ c.pk }}, 'Editar credencial', 'credencial_change')"
+                                           title="Editar">
                                             <i class="fa fa-pen"></i>
                                         </a>
                                         <a href="javascript:void(0);" class="btn btn-sm btn-outline-danger"
-                                           onclick="eliminarajax({{ c.pk }}, '{{ c.nombre }}', 'credencial_delete')">
+                                           onclick="eliminarajax({{ c.pk }}, '{{ c.nombre }}', 'credencial_delete')"
+                                           title="Eliminar">
                                             <i class="fa fa-trash"></i>
                                         </a>
                                     </td>
@@ -89,10 +95,10 @@
         </div>
     {% endif %}
 
-    <div class="card">
-        <div class="card-header py-2">
-            <strong><i class="fa fa-globe text-success me-1"></i> Endpoints</strong>
-            <small class="text-muted">— host base + auth + headers default</small>
+    <div class="card card-endpoints">
+        <div class="card-header py-2 bg-success bg-opacity-10 border-success">
+            <strong class="text-success"><i class="fa fa-globe me-1"></i> Endpoints API</strong>
+            <small class="text-muted">— host base + headers default + credencial vinculada</small>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -104,23 +110,23 @@
                             <th>Credencial</th>
                             <th class="text-center">Timeout</th>
                             <th class="text-center">Nodos</th>
-                            <th class="text-center">Acción</th>
+                            <th class="text-center col-accion">Acción</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for l in listado %}
                             <tr>
                                 <td>
-                                    <strong>{{ l.nombre }}</strong>
+                                    <i class="fa fa-globe text-success me-1"></i><strong>{{ l.nombre }}</strong>
                                     {% if l.descripcion %}
-                                        <br><small class="text-muted">{{ l.descripcion|truncatechars:80 }}</small>
+                                        <br><small class="text-muted ms-3">{{ l.descripcion|truncatechars:80 }}</small>
                                     {% endif %}
                                 </td>
                                 <td><code>{{ l.base_url }}</code></td>
                                 <td>
                                     {% if l.credencial %}
-                                        <span class="badge bg-secondary">{{ l.credencial.get_tipo_display }}</span>
-                                        {{ l.credencial.nombre }}
+                                        <i class="fa fa-key text-info me-1"></i>{{ l.credencial.nombre }}
+                                        <span class="badge bg-info-subtle text-info ms-1">{{ l.credencial.get_tipo_display }}</span>
                                     {% else %}
                                         <em class="text-muted">— Sin auth —</em>
                                     {% endif %}
@@ -128,26 +134,16 @@
                                 <td class="text-center">{{ l.timeout_seg }}s</td>
                                 <td class="text-center">{{ l.nodos.count }}</td>
                                 <td class="text-center">
-                                    <div class="dropdown">
-                                        <button class="btn btn-icon" type="button"
-                                                id="ddl-{{ l.pk }}" data-bs-toggle="dropdown">
-                                            <i class="fas fa-ellipsis-v"></i>
-                                        </button>
-                                        <ul class="dropdown-menu dropdown-menu-end">
-                                            <li>
-                                                <a class="dropdown-item" href="javascript:void(0);"
-                                                   onclick="formModal({{ l.pk }}, 'Editar endpoint', 'change')">
-                                                    <i class="fas fa-edit me-2 text-primary"></i>Editar
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <a class="dropdown-item" href="javascript:void(0);"
-                                                   onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'delete')">
-                                                    <i class="fas fa-trash me-2 text-danger"></i>Eliminar
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </div>
+                                    <a href="javascript:void(0);" class="btn btn-sm btn-outline-primary"
+                                       onclick="formModal({{ l.pk }}, 'Editar endpoint', 'change')"
+                                       title="Editar">
+                                        <i class="fa fa-pen"></i>
+                                    </a>
+                                    <a href="javascript:void(0);" class="btn btn-sm btn-outline-danger"
+                                       onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'delete')"
+                                       title="Eliminar">
+                                        <i class="fa fa-trash"></i>
+                                    </a>
                                 </td>
                             </tr>
                         {% empty %}
