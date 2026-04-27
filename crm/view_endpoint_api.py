@@ -27,6 +27,55 @@ from .forms import EndpointApiChatbotForm, CredencialApiChatbotForm
 from .models import EndpointApiChatbot, CredencialApiChatbot
 
 
+def _fusionar_duplicados(request):
+    """Agrupa credenciales por (nombre, tipo, secretos) y endpoints por
+    (nombre, base_url, credencial_id). En cada grupo deja el de menor pk como
+    canónico, repunta hijos al canónico y soft-deletea el resto.
+
+    Returns: (credenciales_fusionadas, endpoints_fusionados).
+    """
+    cred_dups = 0
+    ep_dups = 0
+
+    # ── Credenciales ─────────────────────────────────────────────
+    grupos_cred = {}
+    for c in CredencialApiChatbot.objects.filter(status=True).order_by('id'):
+        key = (c.nombre.strip().lower(), c.tipo, json.dumps(c.secretos, sort_keys=True))
+        grupos_cred.setdefault(key, []).append(c)
+
+    for grupo in grupos_cred.values():
+        if len(grupo) <= 1:
+            continue
+        canon = grupo[0]
+        for dup in grupo[1:]:
+            EndpointApiChatbot.objects.filter(credencial=dup, status=True).update(credencial=canon)
+            dup.status = False
+            dup.save(request)
+            cred_dups += 1
+
+    # ── Endpoints ────────────────────────────────────────────────
+    grupos_ep = {}
+    for e in EndpointApiChatbot.objects.filter(status=True).order_by('id'):
+        key = (
+            e.nombre.strip().lower(),
+            e.base_url.rstrip('/').lower(),
+            e.credencial_id or 0,
+        )
+        grupos_ep.setdefault(key, []).append(e)
+
+    for grupo in grupos_ep.values():
+        if len(grupo) <= 1:
+            continue
+        canon = grupo[0]
+        for dup in grupo[1:]:
+            dup.nodos.filter(status=True).update(endpoint=canon)
+            dup.status = False
+            dup.save(request)
+            ep_dups += 1
+
+    return cred_dups, ep_dups
+
+
 @login_required
 @secure_module
 def endpoint_api_view(request):
@@ -67,14 +116,14 @@ def endpoint_api_view(request):
 
                 elif action == 'delete':
                     filtro = model.objects.get(pk=int(request.POST['id']))
-                    # Soft-delete; los nodos http que lo usan quedan apuntando
-                    # al endpoint inactivo y fallarán al ejecutar — lo cual es
-                    # mejor que romper la FK con on_delete=PROTECT.
-                    if filtro.nodos.filter(status=True).exists():
-                        n = filtro.nodos.filter(status=True).count()
+                    force = request.POST.get('force') == '1'
+                    n = filtro.nodos.filter(status=True).count()
+                    if n and not force:
                         res_json = [{
                             'error': True,
-                            'message': f'No se puede eliminar: {n} nodo(s) http del flujo aún apuntan a este endpoint.',
+                            'confirm': True,
+                            'count': n,
+                            'message': f'{n} nodo(s) http del flujo aún apuntan a este endpoint. ¿Eliminar de todas formas? Los nodos quedarán apuntando al endpoint inactivo y fallarán al ejecutarse.',
                         }]
                     else:
                         filtro.status = False
@@ -107,17 +156,37 @@ def endpoint_api_view(request):
 
                 elif action == 'credencial_delete':
                     cred = CredencialApiChatbot.objects.get(pk=int(request.POST['id']))
-                    if cred.endpoints.filter(status=True).exists():
-                        n = cred.endpoints.filter(status=True).count()
+                    force = request.POST.get('force') == '1'
+                    n = cred.endpoints.filter(status=True).count()
+                    if n and not force:
                         res_json = [{
                             'error': True,
-                            'message': f'No se puede eliminar: {n} endpoint(s) la usan.',
+                            'confirm': True,
+                            'count': n,
+                            'message': f'{n} endpoint(s) usan esta credencial. ¿Eliminar de todas formas? Los endpoints quedarán sin auth y fallarán al llamar a la API.',
                         }]
                     else:
                         cred.status = False
                         cred.save(request)
                         log(f"Eliminó credencial API {cred}", request, "del", obj=cred.id)
                         res_json = {'error': False}
+
+                elif action == 'fusionar_duplicados':
+                    cred_fusionadas, ep_fusionados = _fusionar_duplicados(request)
+                    log(
+                        f"Fusionó duplicados: {cred_fusionadas} credenciales, {ep_fusionados} endpoints",
+                        request, "change", obj=0,
+                    )
+                    messages.success(
+                        request,
+                        f'Duplicados fusionados: {cred_fusionadas} credencial(es) + {ep_fusionados} endpoint(s).',
+                    )
+                    res_json = {
+                        'error': False,
+                        'reload': True,
+                        'cred_fusionadas': cred_fusionadas,
+                        'ep_fusionados': ep_fusionados,
+                    }
 
         except FormError as ex:
             res_json.append(ex.dict_error)

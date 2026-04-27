@@ -47,6 +47,23 @@
                onclick="formModalCredencial(0, 'Nueva credencial', 'credencial_add')">
                 <i class="fas fa-key me-2"></i> Nueva credencial
             </a>
+            <a href="javascript:void(0);" class="btn btn-warning btn-sm"
+               onclick="fusionarDuplicados()"
+               title="Agrupa registros con mismo nombre/URL, repunta hijos al original y elimina el resto">
+                <i class="fas fa-compress-arrows-alt me-2"></i> Fusionar duplicados
+            </a>
+        </div>
+    </div>
+
+    {# Banner explicativo: diferencia credencial vs endpoint #}
+    <div class="alert alert-light border d-flex flex-wrap gap-3 align-items-start py-2 mb-3 banner-explicativo">
+        <div class="flex-grow-1">
+            <span class="badge bg-info me-1"><i class="fa fa-key me-1"></i>Credencial</span>
+            <small class="text-muted">Cómo autenticarte (API key, Bearer token, Basic auth). Reusable entre varios endpoints.</small>
+        </div>
+        <div class="flex-grow-1">
+            <span class="badge bg-success me-1"><i class="fa fa-globe me-1"></i>Endpoint</span>
+            <small class="text-muted">A dónde llamar (host base + headers default). Usa una credencial para autenticarse.</small>
         </div>
     </div>
 
@@ -81,7 +98,7 @@
                                             <i class="fa fa-pen"></i>
                                         </a>
                                         <a href="javascript:void(0);" class="btn btn-sm btn-outline-danger"
-                                           onclick="eliminarajax({{ c.pk }}, '{{ c.nombre }}', 'credencial_delete')"
+                                           onclick="eliminarConFuerza({{ c.pk }}, '{{ c.nombre }}', 'credencial_delete')"
                                            title="Eliminar">
                                             <i class="fa fa-trash"></i>
                                         </a>
@@ -140,7 +157,7 @@
                                         <i class="fa fa-pen"></i>
                                     </a>
                                     <a href="javascript:void(0);" class="btn btn-sm btn-outline-danger"
-                                       onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'delete')"
+                                       onclick="eliminarConFuerza({{ l.pk }}, '{{ l.nombre }}', 'delete')"
                                        title="Eliminar">
                                         <i class="fa fa-trash"></i>
                                     </a>
@@ -205,6 +222,95 @@
     }
     function formModalCredencial(id, text, action) {
         formModal(id, text, action);  // reusa el mismo flujo
+    }
+
+    function fusionarDuplicados() {
+        Swal.fire({
+            title: 'Fusionar duplicados',
+            html: 'Se agruparán credenciales por <code>nombre + tipo + secretos</code> y endpoints por <code>nombre + base_url + credencial</code>. ' +
+                  'Se conserva el registro más antiguo de cada grupo y se repuntan los hijos. Los duplicados quedan inactivos.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, fusionar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (!result.value) return;
+            pantallaespera();
+            const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            $.post("{{ request.path }}",
+                {action: 'fusionar_duplicados', csrfmiddlewaretoken: csrf},
+                function (data) {
+                    $.unblockUI();
+                    if (data && data.error === false) {
+                        Swal.fire({
+                            title: 'Listo',
+                            text: `Fusionados: ${data.cred_fusionadas} credencial(es) y ${data.ep_fusionados} endpoint(s).`,
+                            icon: 'success',
+                            timer: 2500,
+                            showConfirmButton: false
+                        }).then(() => location.reload());
+                    } else {
+                        const item = Array.isArray(data) ? data[0] : data;
+                        alertaWarning((item && item.message) || 'Error al fusionar.');
+                    }
+                }, "json");
+        });
+    }
+
+    // Delete con doble confirmación cuando hay relaciones activas.
+    // El backend devuelve {confirm:true,count:N,message} y la UI ofrece "eliminar igual" → reenvía con force=1.
+    function eliminarConFuerza(pk, nombre, accion, force) {
+        const url = "{{ request.path }}";
+        const payload = {action: accion, id: pk};
+        if (force) payload.force = '1';
+
+        const titulo = force
+            ? `Confirmar eliminación forzada de "${nombre}"`
+            : `Estás a punto de eliminar "${nombre}"`;
+        const texto = force
+            ? 'Las referencias quedarán huérfanas y fallarán al ejecutarse.'
+            : 'Esta acción es irreversible.';
+
+        Swal.fire({
+            title: titulo,
+            text: texto,
+            type: 'warning',
+            icon: 'warning',
+            showCancelButton: true,
+            allowOutsideClick: false,
+            confirmButtonColor: force ? '#d33' : '#3085d6',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: force ? 'Sí, eliminar de todas formas' : 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (!result.value) return;
+            pantallaespera();
+            $.post(url, payload, function (data) {
+                $.unblockUI();
+                if (data && data.error === false) {
+                    location.reload();
+                    return;
+                }
+                const item = Array.isArray(data) ? data[0] : data;
+                if (item && item.confirm) {
+                    Swal.fire({
+                        title: '¿Eliminar de todas formas?',
+                        text: item.message,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#d33',
+                        confirmButtonText: 'Sí, eliminar igual',
+                        cancelButtonText: 'Cancelar'
+                    }).then((r) => {
+                        if (r.value) eliminarConFuerza(pk, nombre, accion, true);
+                    });
+                } else {
+                    alertaWarning((item && item.message) || 'Error al eliminar.');
+                }
+            }, "json");
+        });
     }
     </script>
 {% endblock %}

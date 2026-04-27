@@ -406,16 +406,26 @@
             logEvt(resp.etiqueta === 'ok' ? 'info' : 'error',
                    'HTTP ' + resp.status + ' (' + resp.etiqueta + ') · ' + resp.duracion_ms + 'ms',
                    { url: resp.url, body: resp.body, error: resp.error });
-            // Aplicar extracciones a STATE.vars
+
+            // Mostrar la response del API en el chat con detalle expandible
+            mostrarResponseEnChat(resp, cfg);
+
+            // Aplicar extracciones a STATE.vars + reportar qué se extrajo
+            var extrajo = {};
             (cfg.extraer || []).forEach(function (ex) {
                 if (resp.etiqueta === 'ok' && ex.variable) {
                     var rawPath = (ex.jsonpath || '').replace(/^\$/, '').replace(/^\./, '');
                     var val = getPath(resp.body, rawPath);
                     STATE.vars[ex.variable] = val;
+                    extrajo[ex.variable] = { jsonpath: ex.jsonpath, valor: val };
                 }
             });
             refreshVars();
-            // Mostrar plantilla si OK
+            if (Object.keys(extrajo).length) {
+                mostrarExtraccionEnChat(extrajo);
+                logEvt('info', 'Variables extraídas del response', extrajo);
+            }
+
             if (resp.etiqueta === 'ok' && cfg.plantilla_respuesta) {
                 botBubble(resolverExpr(cfg.plantilla_respuesta));
             } else if (resp.etiqueta === 'error') {
@@ -427,6 +437,64 @@
             logEvt('error', 'fetch falló', { error: err.message });
             avanzarA(buscarSalida(node, 'error') || siguienteDefault(node));
         });
+    }
+
+    function mostrarResponseEnChat(resp, cfg) {
+        var icono = (resp.etiqueta === 'ok') ? '✅' : '❌';
+        var headerHtml = icono + ' <strong>HTTP ' + escHtml(resp.status || '0') + '</strong>'
+            + ' · ' + escHtml(resp.metodo || '') + ' ' + escHtml(resp.url || '')
+            + ' · <span class="text-muted">' + (resp.duracion_ms || 0) + 'ms</span>';
+        if (resp.error) {
+            headerHtml += '<div class="text-danger small mt-1">⚠️ ' + escHtml(resp.error) + '</div>';
+        }
+        var bodyStr = '';
+        if (resp.body !== null && resp.body !== undefined) {
+            try { bodyStr = JSON.stringify(resp.body, null, 2); }
+            catch (e) { bodyStr = String(resp.body); }
+        }
+        var hint = '';
+        if (cfg && (cfg.extraer || []).length) {
+            hint = '<div class="dpprev-extraer-hint mt-2">'
+                + '<small class="text-muted">Tu config <code>extraer</code>:</small>'
+                + '<pre class="dpprev-extraer-pre">'
+                + escHtml(JSON.stringify(cfg.extraer, null, 2))
+                + '</pre></div>';
+        }
+        var detallesAbiertos = (resp.etiqueta !== 'ok') ? ' open' : '';
+        var html = '<div class="dpprev-api-resp">'
+            + '<div class="dpprev-api-header">' + headerHtml + '</div>'
+            + '<details' + detallesAbiertos + '>'
+            +   '<summary>📦 Response body (click para ver)</summary>'
+            +   '<pre class="dpprev-api-body">' + escHtml(bodyStr || '(vacío)') + '</pre>'
+            +   hint
+            + '</details>'
+            + '</div>';
+        var n = el('div', 'dpprev-msg system system-api', html);
+        chat.appendChild(n);
+        scroll();
+    }
+
+    function mostrarExtraccionEnChat(extrajo) {
+        var rows = Object.keys(extrajo).map(function (k) {
+            var v = extrajo[k].valor;
+            var vDisp = (v === null || v === undefined) ? '<em class="text-danger">null/undefined</em>'
+                      : (typeof v === 'object') ? '<code>' + escHtml(JSON.stringify(v)) + '</code>'
+                      : '<code>' + escHtml(String(v)) + '</code>';
+            return '<tr>'
+                +   '<td><code>' + escHtml(k) + '</code></td>'
+                +   '<td><code class="text-muted">' + escHtml(extrajo[k].jsonpath) + '</code></td>'
+                +   '<td>' + vDisp + '</td>'
+                + '</tr>';
+        }).join('');
+        var html = '<div class="dpprev-extraer-result">'
+            + '<div class="small fw-bold mb-1">📥 Variables extraídas:</div>'
+            + '<table class="dpprev-extraer-table">'
+            +   '<thead><tr><th>variable</th><th>jsonpath</th><th>valor</th></tr></thead>'
+            +   '<tbody>' + rows + '</tbody>'
+            + '</table></div>';
+        var n = el('div', 'dpprev-msg system system-api', html);
+        chat.appendChild(n);
+        scroll();
     }
 
     function getPath(obj, path) {

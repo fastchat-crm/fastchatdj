@@ -66,20 +66,27 @@ PROCEDIMIENTOS = [
         'tipo': 'http', 'requiere_cedula': True,
         'metodo': 'GET', 'path': '/actividades-semana/',
         'extraer': [
-            {'variable': 'titulo',   'jsonpath': 'data.titulo'},
-            {'variable': 'rango',    'jsonpath': 'data.rango_label'},
-            {'variable': 'tot',      'jsonpath': 'data.totales.total'},
-            {'variable': 'tot_tar',  'jsonpath': 'data.totales.tareas'},
-            {'variable': 'tot_for',  'jsonpath': 'data.totales.foros'},
-            {'variable': 'tot_test', 'jsonpath': 'data.totales.tests'},
+            {'variable': 'titulo',     'jsonpath': 'data.titulo'},
+            {'variable': 'rango',      'jsonpath': 'data.rango_label'},
+            {'variable': 'tot',        'jsonpath': 'data.totales.total'},
+            {'variable': 'tot_tar',    'jsonpath': 'data.totales.tareas'},
+            {'variable': 'tot_for',    'jsonpath': 'data.totales.foros'},
+            {'variable': 'tot_test',   'jsonpath': 'data.totales.tests'},
+            # Top-3 ítems pendientes (primeros 3 días con items).
+            {'variable': 'a1_dia',     'jsonpath': 'data.dias[0].dia_label'},
+            {'variable': 'a1_titulo',  'jsonpath': 'data.dias[0].items[0].titulo'},
+            {'variable': 'a1_tipo',    'jsonpath': 'data.dias[0].items[0].tipo_label'},
+            {'variable': 'a1_asig',    'jsonpath': 'data.dias[0].items[0].asignatura'},
+            {'variable': 'a1_hora',    'jsonpath': 'data.dias[0].items[0].hora'},
         ],
         'plantilla': (
             '📝 *{{variables.titulo}}*\n'
-            '🗓️ Semana: {{variables.rango}}\n\n'
+            '🗓️ {{variables.rango}}\n\n'
             'Total: *{{variables.tot}}* ítems\n'
-            '• Tareas: {{variables.tot_tar}}\n'
-            '• Foros: {{variables.tot_for}}\n'
-            '• Tests: {{variables.tot_test}}'
+            '• Tareas: {{variables.tot_tar}}  • Foros: {{variables.tot_for}}  • Tests: {{variables.tot_test}}\n\n'
+            'Próximo pendiente:\n'
+            '📌 {{variables.a1_dia}} — {{variables.a1_tipo}}: *{{variables.a1_titulo}}*\n'
+            '   _{{variables.a1_asig}} · {{variables.a1_hora}}_'
         ),
     },
     {
@@ -88,14 +95,26 @@ PROCEDIMIENTOS = [
         'tipo': 'http', 'requiere_cedula': True,
         'metodo': 'GET', 'path': '/materias/',
         'extraer': [
-            {'variable': 'm_titulo', 'jsonpath': 'data.titulo'},
-            {'variable': 'm_total',  'jsonpath': 'data.total'},
-            {'variable': 'm_url',    'jsonpath': 'data.url_materias'},
+            {'variable': 'm_titulo',   'jsonpath': 'data.titulo'},
+            {'variable': 'm_total',    'jsonpath': 'data.total'},
+            {'variable': 'm_url',      'jsonpath': 'data.url_materias'},
+            # Top-3 materias con docente
+            {'variable': 'm1_asig',    'jsonpath': 'data.materias[0].asignatura'},
+            {'variable': 'm1_doc',     'jsonpath': 'data.materias[0].docente'},
+            {'variable': 'm1_email',   'jsonpath': 'data.materias[0].docente_email'},
+            {'variable': 'm2_asig',    'jsonpath': 'data.materias[1].asignatura'},
+            {'variable': 'm2_doc',     'jsonpath': 'data.materias[1].docente'},
+            {'variable': 'm3_asig',    'jsonpath': 'data.materias[2].asignatura'},
+            {'variable': 'm3_doc',     'jsonpath': 'data.materias[2].docente'},
         ],
         'plantilla': (
             '📚 *{{variables.m_titulo}}*\n'
-            'Tienes *{{variables.m_total}}* materias activas.\n\n'
-            'Ver detalle (Meet, Moodle, docentes) 👉 {{variables.m_url}}'
+            'Tienes *{{variables.m_total}}* materias activas:\n\n'
+            '• *{{variables.m1_asig}}* — {{variables.m1_doc}}\n'
+            '  ✉️ {{variables.m1_email}}\n'
+            '• *{{variables.m2_asig}}* — {{variables.m2_doc}}\n'
+            '• *{{variables.m3_asig}}* — {{variables.m3_doc}}\n\n'
+            'Ver TODAS con Meet/Moodle/Teams 👉 {{variables.m_url}}'
         ),
     },
     {
@@ -104,13 +123,28 @@ PROCEDIMIENTOS = [
         'tipo': 'http_con_submenu', 'requiere_cedula': True,
         'metodo': 'GET', 'path': '/horarios/',
         'extraer': [
-            {'variable': 'h_url',     'jsonpath': 'data.url_horarios'},
-            {'variable': 'h_primera', 'jsonpath': 'data.materias[0].asignatura'},
+            {'variable': 'h_url',  'jsonpath': 'data.url_horarios'},
+            # Top-3 materias con primer horario
+            {'variable': 'h1_asig', 'jsonpath': 'data.materias[0].asignatura'},
+            {'variable': 'h1_dia',  'jsonpath': 'data.materias[0].horarios[0].dia'},
+            {'variable': 'h1_hora', 'jsonpath': 'data.materias[0].horarios[0].hora'},
+            {'variable': 'h1_prof', 'jsonpath': 'data.materias[0].horarios[0].profesor'},
+            {'variable': 'h2_asig', 'jsonpath': 'data.materias[1].asignatura'},
+            {'variable': 'h2_dia',  'jsonpath': 'data.materias[1].horarios[0].dia'},
+            {'variable': 'h2_hora', 'jsonpath': 'data.materias[1].horarios[0].hora'},
+            {'variable': 'h3_asig', 'jsonpath': 'data.materias[2].asignatura'},
+            {'variable': 'h3_dia',  'jsonpath': 'data.materias[2].horarios[0].dia'},
+            {'variable': 'h3_hora', 'jsonpath': 'data.materias[2].horarios[0].hora'},
         ],
         'plantilla': (
-            '📅 *Tus horarios de la semana*\n'
-            'Primera materia: {{variables.h_primera}}\n\n'
-            'Ver horario completo aquí 👉 {{variables.h_url}}'
+            '📅 *Estas son las materias que estás cursando:*\n\n'
+            '*{{variables.h1_asig}}*\n'
+            '{{variables.h1_dia}} · {{variables.h1_hora}} · _{{variables.h1_prof}}_\n\n'
+            '*{{variables.h2_asig}}*\n'
+            '{{variables.h2_dia}} · {{variables.h2_hora}}\n\n'
+            '*{{variables.h3_asig}}*\n'
+            '{{variables.h3_dia}} · {{variables.h3_hora}}\n\n'
+            '🔗 Ver horario completo en Ruedge: {{variables.h_url}}'
         ),
         'submenu': {
             'mensaje': '¿Quieres ver algo más específico?',
@@ -120,16 +154,19 @@ PROCEDIMIENTOS = [
                     'etiqueta': 'Clases de hoy',
                     'metodo': 'GET', 'path': '/horarios-hoy/',
                     'extraer': [
-                        {'variable': 'titulo',   'jsonpath': 'data.titulo'},
-                        {'variable': 'primera',  'jsonpath': 'data.clases[0].asignatura'},
-                        {'variable': 'hora',     'jsonpath': 'data.clases[0].hora'},
-                        {'variable': 'profesor', 'jsonpath': 'data.clases[0].profesor'},
+                        {'variable': 'titulo',     'jsonpath': 'data.titulo'},
+                        {'variable': 'cl1_asig',   'jsonpath': 'data.clases[0].asignatura'},
+                        {'variable': 'cl1_hora',   'jsonpath': 'data.clases[0].hora'},
+                        {'variable': 'cl1_prof',   'jsonpath': 'data.clases[0].profesor'},
+                        {'variable': 'cl2_asig',   'jsonpath': 'data.clases[1].asignatura'},
+                        {'variable': 'cl2_hora',   'jsonpath': 'data.clases[1].hora'},
                     ],
                     'plantilla': (
-                        '📅 *{{variables.titulo}}*\n'
-                        '• {{variables.primera}}\n'
-                        '🕐 {{variables.hora}}\n'
-                        '👤 {{variables.profesor}}'
+                        '📅 *{{variables.titulo}}*\n\n'
+                        '*{{variables.cl1_asig}}*\n'
+                        '🕐 {{variables.cl1_hora}} · _{{variables.cl1_prof}}_\n\n'
+                        '*{{variables.cl2_asig}}*\n'
+                        '🕐 {{variables.cl2_hora}}'
                     ),
                 },
                 {
@@ -137,14 +174,17 @@ PROCEDIMIENTOS = [
                     'etiqueta': 'Actividades semana',
                     'metodo': 'GET', 'path': '/actividades-semana/',
                     'extraer': [
-                        {'variable': 'a_titulo', 'jsonpath': 'data.titulo'},
-                        {'variable': 'a_rango',  'jsonpath': 'data.rango_label'},
-                        {'variable': 'a_tot',    'jsonpath': 'data.totales.total'},
+                        {'variable': 'a_titulo',  'jsonpath': 'data.titulo'},
+                        {'variable': 'a_rango',   'jsonpath': 'data.rango_label'},
+                        {'variable': 'a_tot',     'jsonpath': 'data.totales.total'},
+                        {'variable': 'a_tot_tar', 'jsonpath': 'data.totales.tareas'},
+                        {'variable': 'a_tot_for', 'jsonpath': 'data.totales.foros'},
                     ],
                     'plantilla': (
                         '📝 *{{variables.a_titulo}}*\n'
-                        '🗓️ {{variables.a_rango}}\n'
-                        'Total: *{{variables.a_tot}}* ítems'
+                        '🗓️ {{variables.a_rango}}\n\n'
+                        'Total: *{{variables.a_tot}}* ítems · '
+                        'Tareas: {{variables.a_tot_tar}} · Foros: {{variables.a_tot_for}}'
                     ),
                 },
             ],
@@ -155,20 +195,35 @@ PROCEDIMIENTOS = [
         'etiqueta': '💲 Mis deudas',
         'tipo': 'http', 'requiere_cedula': True,
         'metodo': 'GET', 'path': '/deudas/',
-        'sin_matricula': True,  # /deudas/ no requiere matricula_id
+        'sin_matricula': True,
         'extraer': [
-            {'variable': 'saldo',    'jsonpath': 'data.total_saldo'},
-            {'variable': 'vencido',  'jsonpath': 'data.total_vencido'},
-            {'variable': 'rubros',   'jsonpath': 'data.total_rubros'},
-            {'variable': 'detalle1', 'jsonpath': 'data.detalle[0].nombre'},
-            {'variable': 'estado1',  'jsonpath': 'data.detalle[0].estado'},
+            {'variable': 'd_saldo',   'jsonpath': 'data.total_saldo'},
+            {'variable': 'd_vencido', 'jsonpath': 'data.total_vencido'},
+            {'variable': 'd_rubros',  'jsonpath': 'data.total_rubros'},
+            # Top-3 rubros pendientes/vencidos
+            {'variable': 'd1_nom',    'jsonpath': 'data.detalle[0].nombre'},
+            {'variable': 'd1_vence',  'jsonpath': 'data.detalle[0].vence'},
+            {'variable': 'd1_saldo',  'jsonpath': 'data.detalle[0].saldo'},
+            {'variable': 'd1_estado', 'jsonpath': 'data.detalle[0].estado'},
+            {'variable': 'd2_nom',    'jsonpath': 'data.detalle[1].nombre'},
+            {'variable': 'd2_saldo',  'jsonpath': 'data.detalle[1].saldo'},
+            {'variable': 'd2_estado', 'jsonpath': 'data.detalle[1].estado'},
+            {'variable': 'd3_nom',    'jsonpath': 'data.detalle[2].nombre'},
+            {'variable': 'd3_saldo',  'jsonpath': 'data.detalle[2].saldo'},
+            {'variable': 'd3_estado', 'jsonpath': 'data.detalle[2].estado'},
         ],
         'plantilla': (
-            '💲 *Tu estado financiero*\n'
-            '• Saldo total: ${{variables.saldo}}\n'
-            '• Vencido: ${{variables.vencido}}\n'
-            '• Rubros del período: ${{variables.rubros}}\n\n'
-            'Último rubro: {{variables.detalle1}} → {{variables.estado1}}'
+            '💲 *Resumen de tus rubros:*\n\n'
+            'Total emitido: *${{variables.d_rubros}}*\n'
+            'Saldo pendiente: *${{variables.d_saldo}}*\n'
+            'Vencido: *${{variables.d_vencido}}*\n\n'
+            '*Detalle (últimos 3):*\n'
+            '• {{variables.d1_nom}}\n'
+            '  Vence {{variables.d1_vence}} · saldo ${{variables.d1_saldo}} · _{{variables.d1_estado}}_\n'
+            '• {{variables.d2_nom}}\n'
+            '  saldo ${{variables.d2_saldo}} · _{{variables.d2_estado}}_\n'
+            '• {{variables.d3_nom}}\n'
+            '  saldo ${{variables.d3_saldo}} · _{{variables.d3_estado}}_'
         ),
     },
     {
@@ -177,17 +232,20 @@ PROCEDIMIENTOS = [
         'tipo': 'http', 'requiere_cedula': True,
         'metodo': 'GET', 'path': '/mentor/',
         'extraer': [
+            {'variable': 'm_tiene', 'jsonpath': 'data.tiene_mentor'},
             {'variable': 'm_nom',   'jsonpath': 'data.nombre'},
             {'variable': 'm_email', 'jsonpath': 'data.email'},
             {'variable': 'm_cel',   'jsonpath': 'data.celular'},
             {'variable': 'm_wa',    'jsonpath': 'data.whatsapp_url'},
+            {'variable': 'm_mail',  'jsonpath': 'data.mailto_url'},
         ],
         'plantilla': (
-            '👤 *Tu mentor asignado*\n'
-            '• {{variables.m_nom}}\n'
+            '👤 *Tu mentor asignado*\n\n'
+            '• *{{variables.m_nom}}*\n'
             '✉️ {{variables.m_email}}\n'
             '📱 {{variables.m_cel}}\n\n'
-            'Escribirle por WhatsApp 👉 {{variables.m_wa}}'
+            '💬 Escribirle por WhatsApp 👉 {{variables.m_wa}}\n'
+            '📧 Mandarle email 👉 {{variables.m_mail}}'
         ),
     },
     {
@@ -288,6 +346,24 @@ PROCEDIMIENTOS = [
             '🌐 https://ister.edu.ec'
         ),
     },
+    {
+        'codigo': 'vinculacion', 'orden': 15,
+        'etiqueta': '🤝 Vinculación comunidad',
+        'tipo': 'estatico',
+        'mensaje': (
+            '🤝 *Vinculación con la Comunidad* 🌱\n\n'
+            'Aquí encontrarás todo lo relacionado con tus prácticas y '
+            'oportunidades laborales. Elige el módulo que necesitas:\n\n'
+            '👉 Prácticas Comunitarias:\n'
+            '   https://ruedge.ister.edu.ec/alu/practicascomunitarias/\n\n'
+            '👉 Prácticas Preprofesionales:\n'
+            '   https://ruedge.ister.edu.ec/alu/practicaspreprofesionales/\n\n'
+            '👉 Plazas Disponibles:\n'
+            '   https://ruedge.ister.edu.ec/alu/plazaspracticaspreprofesionales/\n\n'
+            '👉 Bolsa Laboral:\n'
+            '   https://ruedge.ister.edu.ec/alu/bolsa_laboral/'
+        ),
+    },
 ]
 
 
@@ -297,6 +373,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--reset', action='store_true',
                             help='Borra el depto previo y lo recrea.')
+        parser.add_argument('--delete', action='store_true',
+                            help='Solo borra el depto y sale (no recrea).')
         parser.add_argument('--sesion', type=int, default=None,
                             help='ID de SesionWhatsApp para asociar el flujo.')
         parser.add_argument('--base-url', type=str, default=BASE_URL_DEFAULT,
@@ -335,11 +413,16 @@ class Command(BaseCommand):
         )
 
     def _query_para(self, proc):
-        """Construye query del API en base al descriptor del procedimiento."""
-        q = {'cedula': '{{variables.cedula}}'}
-        if not proc.get('sin_matricula'):
-            q['matricula_id'] = '{{variables.matricula_id}}'
-        return q
+        """Construye query del API.
+
+        En esta versión del bot RU, `matricula_id` es OPCIONAL para todos los
+        handlers — la API auto-selecciona la última matrícula vigente
+        (prioriza pregrado vigente, fallback a cualquier vigente). Solo lo
+        pasamos si el usuario explícitamente eligió otra matrícula
+        (tracked en `variables.matricula_id_override`); de lo contrario,
+        dejamos que el server elija para evitar pasar valores stale.
+        """
+        return {'cedula': '{{variables.cedula}}'}
 
     def _crear_rama_privada(self, depto, ep_ru, menu_raiz, salida_ok, no_encontrado,
                             fin_error, set_var_reset_buscar, proc, base_orden):
@@ -384,12 +467,17 @@ class Command(BaseCommand):
                 'metodo': 'POST', 'path': '/buscar-estudiante/',
                 'body': {'cedula': '{{variables.cedula}}'},
                 'extraer': [
-                    {'variable': 'nombre',       'jsonpath': 'data.nombre'},
-                    {'variable': 'matricula_id', 'jsonpath': 'data.matriculas[0].id'},
-                    {'variable': 'carrera',      'jsonpath': 'data.matriculas[0].carrera'},
+                    {'variable': 'nombre',           'jsonpath': 'data.nombre'},
+                    {'variable': 'matricula_id',     'jsonpath': 'data.matricula_actual.id'},
+                    {'variable': 'matricula_label',  'jsonpath': 'data.matricula_actual.label'},
+                    {'variable': 'carrera',          'jsonpath': 'data.matricula_actual.carrera'},
+                    {'variable': 'nivel',            'jsonpath': 'data.matricula_actual.nivel'},
+                    {'variable': 'periodo',          'jsonpath': 'data.matricula_actual.periodo'},
                 ],
                 'plantilla_respuesta': (
-                    '✅ Hola *{{variables.nombre}}* 👋 — {{variables.carrera}}'
+                    '¡Qué gusto, *{{variables.nombre}}*! 🎓\n'
+                    'Estoy revisando tu matrícula activa:\n'
+                    '*{{variables.matricula_label}}*'
                 ),
             },
         )
@@ -423,24 +511,58 @@ class Command(BaseCommand):
     # Main
     # ─────────────────────────────────────────────────────────────
 
+    def _eliminar_depto(self):
+        """Borra hard-delete del depto + estados huérfanos. Devuelve resumen."""
+        from crm.models import EstadoFlujoChatbot, ConexionNodoChatbot
+        viejos = DepartamentoChatBot.objects.filter(nombre=NOMBRE_DEPTO)
+        n_deptos = viejos.count()
+        n_estados = EstadoFlujoChatbot.objects.filter(departamento__in=viejos).count()
+        n_nodos = OpcionDepartamentoChatBot.objects.filter(departamento__in=viejos).count()
+        n_conn = ConexionNodoChatbot.objects.filter(nodo_origen__departamento__in=viejos).count()
+
+        EstadoFlujoChatbot.objects.filter(departamento__in=viejos).delete()
+        viejos.delete()
+
+        n_huerfanos = 0
+        huerfanos = EstadoFlujoChatbot.objects.filter(departamento__isnull=True)
+        if huerfanos.exists():
+            n_huerfanos = huerfanos.count()
+            huerfanos.delete()
+
+        return {
+            'deptos': n_deptos, 'nodos': n_nodos, 'conexiones': n_conn,
+            'estados': n_estados, 'huerfanos': n_huerfanos,
+        }
+
     @transaction.atomic
     def handle(self, *args, **opts):
+        # --delete: solo borra y sale (sin recrear).
+        if opts.get('delete'):
+            res = self._eliminar_depto()
+            if res['deptos'] == 0:
+                self.stdout.write(self.style.WARNING(
+                    f'No habia depto "{NOMBRE_DEPTO}" para borrar.'
+                ))
+            else:
+                self.stdout.write(self.style.SUCCESS(
+                    f'[DELETE OK] "{NOMBRE_DEPTO}" eliminado.\n'
+                    f'   Deptos: {res["deptos"]} | Nodos: {res["nodos"]} | '
+                    f'Conexiones: {res["conexiones"]}\n'
+                    f'   Estados runtime: {res["estados"]} '
+                    f'(+ {res["huerfanos"]} estados huerfanos sueltos).'
+                ))
+            return
+
         if opts['reset']:
-            from crm.models import EstadoFlujoChatbot
-            viejos = DepartamentoChatBot.objects.filter(nombre=NOMBRE_DEPTO)
-            n_estados = EstadoFlujoChatbot.objects.filter(departamento__in=viejos).count()
-            EstadoFlujoChatbot.objects.filter(departamento__in=viejos).delete()
-            viejos.delete()
+            res = self._eliminar_depto()
             self.stdout.write(self.style.WARNING(
                 f'Depto "{NOMBRE_DEPTO}" previo eliminado '
-                f'({n_estados} estados runtime tambien borrados).'
+                f'({res["nodos"]} nodos, {res["conexiones"]} conexiones, '
+                f'{res["estados"]} estados runtime tambien borrados).'
             ))
-            huerfanos = EstadoFlujoChatbot.objects.filter(departamento__isnull=True)
-            if huerfanos.exists():
-                n = huerfanos.count()
-                huerfanos.delete()
+            if res['huerfanos']:
                 self.stdout.write(self.style.WARNING(
-                    f'  + {n} estados huerfanos sin depto tambien eliminados.'
+                    f'  + {res["huerfanos"]} estados huerfanos sin depto tambien eliminados.'
                 ))
 
         depto, creado = DepartamentoChatBot.objects.get_or_create(

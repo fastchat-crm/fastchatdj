@@ -215,5 +215,5 @@ def modulossistemaView(request):
         qs_modulos = model.objects.filter(filtros)
         data["list_count"] = qs_modulos.count()
         data["url_vars"] = url_vars
-        paginador(request, qs_modulos.order_by('orden', 'id'), 20, data, url_vars)
+        paginador(request, qs_modulos.order_by('-id'), 20, data, url_vars)
         return render(request, 'seguridad/modulossistema/listado.html', data)
