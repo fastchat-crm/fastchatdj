@@ -159,13 +159,10 @@
 {# ═══════════════════════════════════════════════════════════════════ #}
 <div class="wiz-pane active" data-pane="1">
     <div class="hint-card">
-        <strong>¿Qué es un departamento?</strong><br>
-        Es una sección del chatbot con un propósito claro. Ejemplo:
-        <span class="example-chip">Matrículas</span>
-        <span class="example-chip">Soporte técnico</span>
-        <span class="example-chip">Información general</span>
-        <span class="example-chip">Becas</span><br>
-        Más adelante (paso 3) definirás el flujo que se ejecuta dentro de este depto.
+        <strong>Departamento = unidad ejecutable del chatbot.</strong><br>
+        Contiene el flujo de nodos (menú, pregunta, respuesta, HTTP, handoff…) que el bot
+        corre cuando el cliente entra. El <em>mensaje de saludo</em> de abajo es lo primero
+        que se le envía y admite variables del contacto y la sesión.
     </div>
 
     <div class="row g-2">

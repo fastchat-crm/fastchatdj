@@ -1,7 +1,3 @@
-{# Editor full-page de Departamento + ChatBot con autosave granular.
-   No reusa form.html (que es el wizard del modal legacy). Cada cambio
-   en cabecera o nodo dispara un POST debounced al endpoint correspondiente:
-   action=guardar_meta / guardar_opcion / mover_opcion / eliminar_opcion. #}
 {% extends 'base.html' %}
 {% load static %}
 
@@ -10,8 +6,7 @@
 {% endblock %}
 
 {% block content %}
-{# jQuery anticipado: scripts inline corren durante el render del content,
-   y el jQuery global de base.html se carga despues. #}
+{# jQuery anticipado: scripts inline corren durante render del content block #}
 <script src="/static/jquery-3.7.1.min.js"></script>
 
 <div class="dpchat-editor" data-departamento-id="{{ filtro.pk|default:0 }}">
@@ -24,7 +19,15 @@
         <span class="dp-meta-status" id="dp-meta-status" data-state="idle">Sin cambios</span>
     </div>
 
-    {# ── Cabecera del departamento ── #}
+    <div class="alert alert-info py-2 small mb-3">
+        <i class="fa fa-circle-info me-1"></i>
+        <strong>Departamento = unidad ejecutable del chatbot.</strong>
+        Contiene el flujo de nodos (menú, pregunta, respuesta, HTTP, handoff…) que corre
+        cuando el cliente entra. El mensaje de saludo de abajo es lo primero que se le
+        envía y admite variables. Cada cambio se guarda automáticamente — no hay botón final.
+    </div>
+
+    {# Cabecera del departamento #}
     <div class="card dp-card-meta">
         <div class="card-header py-2">
             <strong><i class="fa fa-building me-1"></i> Cabecera del departamento</strong>
@@ -59,7 +62,7 @@
         </div>
     </div>
 
-    {# ── Árbol de opciones ── #}
+    {# Arbol de opciones #}
     <div class="card dp-card-tree" id="dp-tree-card" {% if not filtro %}style="display:none"{% endif %}>
         <div class="card-header py-2 d-flex justify-content-between align-items-center">
             <strong><i class="fa fa-sitemap me-1"></i> Opciones del flujo</strong>
@@ -68,6 +71,7 @@
             </button>
         </div>
         <div class="card-body">
+            <div id="dp-init-error" class="alert alert-danger small" style="display:none"></div>
             <div id="dp-tree" class="dp-tree-root"></div>
             <div id="dp-tree-empty" class="text-muted small text-center py-4" style="display:none">
                 Aún no hay opciones. Toca <b>Agregar opción raíz</b> para empezar.
@@ -121,5 +125,5 @@
 
 {% block jscript %}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="{% static 'js/dpchat_editor.js' %}?v=1"></script>
+    <script src="{% static 'js/dpchat_editor.js' %}?v=2"></script>
 {% endblock %}
