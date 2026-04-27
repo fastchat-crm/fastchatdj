@@ -270,11 +270,15 @@ def ejecutar_http(nodo, contexto: dict):
 # ─────────────────────────────────────────────────────────────────────
 
 class MotorFlujo:
-    def __init__(self, session, conversation, contacto, texto, estado, ws_service):
+    def __init__(self, session, conversation, contacto, texto, estado, ws_service, boton_id=''):
         self.session = session
         self.conversation = conversation
         self.contacto = contacto
         self.texto = (texto or '').strip()
+        # boton_id (Meta interactive button_reply.id / list_reply.id) — cuando
+        # el cliente toca un botón, llega acá para matchear contra
+        # OpcionDepartamentoChatBot.boton_id sin depender del texto del título.
+        self.boton_id = (boton_id or '').strip()
         self.estado = estado
         self.ws = ws_service
         self.respuestas: list[str] = []
