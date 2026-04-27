@@ -497,19 +497,28 @@ class MotorFlujo:
             if 0 <= idx < len(deptos):
                 return deptos[idx]
 
-        # 3) Ambigüedad: >1 depto activo y nada matcheó → meta-menú.
-        # Marcamos pendiente_seleccion para que `ejecutar` presente la lista al usuario.
-        if len(deptos) > 1:
-            self.pendiente_seleccion = True
-            return None
-
-        # 4) default de la sesión
+        # 3) default de la sesión: si está configurado, gana sobre la
+        # ambigüedad. La idea: M2M provee opciones para keyword-routing,
+        # pero el default es la "puerta de entrada" cuando nada matchea.
         dd = getattr(self.session, 'departamento_default', None)
         if dd and dd.status and dd.activo_tradicional:
             return dd
 
-        # 5) default marcado en el departamento
-        return next((d for d in deptos if getattr(d, 'es_default', False)), None)
+        # 4) default marcado en algún depto del M2M
+        elegido = next((d for d in deptos if getattr(d, 'es_default', False)), None)
+        if elegido:
+            return elegido
+
+        # 5) Ambigüedad: >1 depto y no hay default ni keyword match → meta-menú.
+        if len(deptos) > 1:
+            self.pendiente_seleccion = True
+            return None
+
+        # 6) Único depto en M2M sin default explícito → úsalo.
+        if len(deptos) == 1:
+            return deptos[0]
+
+        return None
 
     def _avanzar(self, etiqueta: str):
         nodo = self.estado.nodo_actual

@@ -583,24 +583,126 @@ def _build_meta_payload(departamento):
             'action': {'buttons': botones},
         }}
 
+    # Meta tiene límite hard de 10 rows POR SECCIÓN (max 10 secciones).
+    # Con >10 opciones, paginamos en chunks de 10 con títulos sintéticos.
+    sections = []
+    if len(items) <= 10:
+        sections = [{'title': 'Opciones', 'rows': items}]
+    else:
+        for i in range(0, min(len(items), 100), 10):
+            chunk = items[i:i + 10]
+            sections.append({
+                'title': f'Opciones {i + 1}–{i + len(chunk)}',
+                'rows': chunk,
+            })
     return {**base, 'type': 'interactive', 'interactive': {
         'type': 'list',
         'body': {'text': body_text[:1024]},
         'action': {
             'button': 'Ver opciones',
-            'sections': [{'title': 'Opciones', 'rows': items[:10]}],
+            'sections': sections,
         },
     }}
 
 
 def _serializar_arbol_opciones(departamento, padre=None, nivel=0):
+    """Aplana el flujo del depto en lista [{opcion, nivel}] respetando jerarquía.
+
+    Recorre el grafo `ConexionNodoChatbot` + `config.opciones` (formato del
+    motor de flujo). Cae al árbol legacy `opcion_padre` solo si no hay grafo.
+    Anti-ciclo via `visited`: cada nodo aparece una sola vez.
+    """
+    if padre is not None:
+        # Llamadas recursivas legacy: mantener compat con el árbol opcion_padre.
+        items = []
+        qs = OpcionDepartamentoChatBot.objects.filter(
+            departamento=departamento, opcion_padre=padre, status=True,
+        ).order_by('orden', 'id')
+        for op in qs:
+            items.append({'opcion': op, 'nivel': nivel})
+            items.extend(_serializar_arbol_opciones(departamento, padre=op, nivel=nivel + 1))
+        return items
+
+    from .models import ConexionNodoChatbot
+
+    nodos_qs = OpcionDepartamentoChatBot.objects.filter(
+        departamento=departamento, status=True,
+    )
+    nodos_by_id = {n.id: n for n in nodos_qs}
+    if not nodos_by_id:
+        return []
+
+    conex_qs = ConexionNodoChatbot.objects.filter(
+        nodo_origen__departamento=departamento, status=True,
+    ).order_by('nodo_origen', 'orden', 'id')
+    conex_by_origen = {}
+    for c in conex_qs:
+        conex_by_origen.setdefault(c.nodo_origen_id, []).append(c)
+
+    def _destino(op_id, etiqueta):
+        for c in conex_by_origen.get(op_id, []):
+            if c.etiqueta == etiqueta:
+                return nodos_by_id.get(c.nodo_destino_id)
+        return None
+
+    def _siguiente_default(op_id):
+        for et in ('', 'ok'):
+            d = _destino(op_id, et)
+            if d:
+                return d
+        return None
+
     items = []
-    qs = OpcionDepartamentoChatBot.objects.filter(
-        departamento=departamento, opcion_padre=padre, status=True,
-    ).order_by('orden', 'id')
-    for op in qs:
-        items.append({'opcion': op, 'nivel': nivel})
-        items.extend(_serializar_arbol_opciones(departamento, padre=op, nivel=nivel + 1))
+    visited = set()
+
+    def _walk(op, lvl):
+        if op.id in visited:
+            return
+        visited.add(op.id)
+        items.append({'opcion': op, 'nivel': lvl})
+        cfg = op.config or {}
+        if op.tipo_nodo == 'menu':
+            for opt in (cfg.get('opciones') or []):
+                sal = (opt.get('salida') or '').strip()
+                dest = _destino(op.id, sal) if sal else _siguiente_default(op.id)
+                if dest:
+                    _walk(dest, lvl + 1)
+            # Fallback legacy: hijos por opcion_padre
+            for c in OpcionDepartamentoChatBot.objects.filter(
+                opcion_padre=op, status=True,
+            ).order_by('orden', 'id'):
+                _walk(c, lvl + 1)
+        elif op.tipo_nodo == 'condicional':
+            # Sigue ambas ramas; 'true' primero para que el árbol refleje
+            # la lógica natural ("si pasa la condición → este sub-flujo").
+            for et in ('true', 'false'):
+                d = _destino(op.id, et)
+                if d:
+                    _walk(d, lvl + 1)
+        elif op.tipo_nodo in ('respuesta', 'pregunta', 'set_variable', 'cta_url'):
+            sig = _siguiente_default(op.id)
+            if sig:
+                _walk(sig, lvl + 1)
+        elif op.tipo_nodo == 'http':
+            sig = _destino(op.id, 'ok') or _siguiente_default(op.id)
+            if sig:
+                _walk(sig, lvl + 1)
+        # handoff / fin / ubicacion → no descendientes
+
+    inicio = next((n for n in nodos_by_id.values() if n.es_inicio), None)
+    if not inicio:
+        inicio = OpcionDepartamentoChatBot.objects.filter(
+            departamento=departamento, opcion_padre__isnull=True, status=True,
+        ).order_by('orden', 'id').first()
+    if inicio:
+        _walk(inicio, 0)
+
+    # Anexar nodos huérfanos del grafo (sin entrada y no inicio) al final, nivel 0,
+    # para que el editor pueda verlos y conectarlos.
+    for n in sorted(nodos_by_id.values(), key=lambda x: (x.orden, x.id)):
+        if n.id not in visited:
+            items.append({'opcion': n, 'nivel': 0})
+            visited.add(n.id)
     return items
 
 

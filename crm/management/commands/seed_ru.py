@@ -1,27 +1,29 @@
 """
 Seed del flujo "Asistente Virtual RU - Lucía".
 
-Crea un DepartamentoChatBot con su grafo de nodos listo para que el motor
-`crm.motor_flujo_chatbot` lo ejecute. Replica el bot RU del ISTER pero
-adaptado al motor de flujo tradicional de WhatsApp (no al bot web).
-
-Estructura:
-  - Menú raíz: estudiante / aspirante / asesor.
-  - Rama estudiante: pide cédula → POST /buscar-estudiante/ → menú con
-    opciones privadas (horarios, deudas, mentor, materias, contactos, etc.).
-  - Rama aspirante: menú con opciones públicas (oferta pre/posgrado, becas,
-    homologación, soporte).
-  - Sub-menú horarios: toda la semana / hoy / próxima clase / actividades.
+Modelo "1 solo agente, todo en uno":
+  - Un único `DepartamentoChatBot` con UN menú raíz que lista las 14 opciones
+    del bot RU (mismo orden que el JSON original).
+  - Opciones públicas (sin cédula) → respuesta estática → vuelve al menú.
+  - Opciones privadas (requieren cédula) → mini-rama:
+        cond_skip (¿ya tengo cédula?)
+            true  → http_X         (saltea pedir cédula)
+            false → pregunta_cedula → http_buscar → http_X
+    Tras http_X → vuelve al menú raíz.
+  - `ver_horarios` (handler con sub-preguntas) → tras /horarios/ presenta
+    sub-menú "Solo hoy / Actividades semana / Volver" — cada sub-opción
+    también es una mini-rama privada que reaprovecha la cédula.
+  - Tras una respuesta o handler exitoso, el flujo regresa SIEMPRE al menú
+    raíz para "nueva consulta".
 
 API base: https://ruedge.ister.edu.ec/service/v1/bot/lucia
-Doc: ver `bot_apis.json` del proyecto RU.
 
 Uso:
     python manage.py seed_ru
-    python manage.py seed_ru --reset                # borra y recrea
-    python manage.py seed_ru --sesion 5             # asocia a esa sesión y
-                                                      pone modo_bot='tradicional'
-    python manage.py seed_ru --base-url https://...  # override host
+    python manage.py seed_ru --reset
+    python manage.py seed_ru --sesion 5
+    python manage.py seed_ru --bearer "<token>"
+    python manage.py seed_ru --base-url https://...
 """
 
 from django.core.management.base import BaseCommand
@@ -37,8 +39,260 @@ NOMBRE_DEPTO = 'Asistente RU - Lucía'
 BASE_URL_DEFAULT = 'https://ruedge.ister.edu.ec/service/v1/bot/lucia'
 
 
+# Descriptor de los 14 procedimientos del JSON original.
+# Cada item declara qué nodos genera el seed y cómo se conectan al menú.
+# Tipos:
+#   'estatico': respuesta estática (sin cédula).
+#   'http': llamada API (requiere o no cédula según `requiere_cedula`).
+#   'http_con_submenu': como 'http' pero tras la API presenta sub-menú.
+PROCEDIMIENTOS = [
+    {
+        'codigo': 'ingreso', 'orden': 1,
+        'etiqueta': '🚪 Entrar a clases',
+        'tipo': 'estatico',
+        'mensaje': (
+            '🚪 *¿Cómo entro a mis clases?*\n\n'
+            '1️⃣ Portal Ruedge: https://ruedge.ister.edu.ec/alu/horarios/\n'
+            '2️⃣ Ingresa con tu usuario y contraseña institucional.\n'
+            '3️⃣ Tutorial: https://www.youtube.com/watch?v=gL_4UYdYwq0\n\n'
+            '💡 Si aún no apareces en *Teams* o *Aula Virtual*, tu cuenta '
+            'se está procesando — puede tardar algunas horas.\n\n'
+            '🆘 Sigue sin aparecer? Abre un ticket: https://procesos.ister.edu.ec'
+        ),
+    },
+    {
+        'codigo': 'actividades', 'orden': 2,
+        'etiqueta': '📝 Actividades semana',
+        'tipo': 'http', 'requiere_cedula': True,
+        'metodo': 'GET', 'path': '/actividades-semana/',
+        'extraer': [
+            {'variable': 'titulo',   'jsonpath': 'data.titulo'},
+            {'variable': 'rango',    'jsonpath': 'data.rango_label'},
+            {'variable': 'tot',      'jsonpath': 'data.totales.total'},
+            {'variable': 'tot_tar',  'jsonpath': 'data.totales.tareas'},
+            {'variable': 'tot_for',  'jsonpath': 'data.totales.foros'},
+            {'variable': 'tot_test', 'jsonpath': 'data.totales.tests'},
+        ],
+        'plantilla': (
+            '📝 *{{variables.titulo}}*\n'
+            '🗓️ Semana: {{variables.rango}}\n\n'
+            'Total: *{{variables.tot}}* ítems\n'
+            '• Tareas: {{variables.tot_tar}}\n'
+            '• Foros: {{variables.tot_for}}\n'
+            '• Tests: {{variables.tot_test}}'
+        ),
+    },
+    {
+        'codigo': 'materias', 'orden': 3,
+        'etiqueta': '📚 Mis materias',
+        'tipo': 'http', 'requiere_cedula': True,
+        'metodo': 'GET', 'path': '/materias/',
+        'extraer': [
+            {'variable': 'm_titulo', 'jsonpath': 'data.titulo'},
+            {'variable': 'm_total',  'jsonpath': 'data.total'},
+            {'variable': 'm_url',    'jsonpath': 'data.url_materias'},
+        ],
+        'plantilla': (
+            '📚 *{{variables.m_titulo}}*\n'
+            'Tienes *{{variables.m_total}}* materias activas.\n\n'
+            'Ver detalle (Meet, Moodle, docentes) 👉 {{variables.m_url}}'
+        ),
+    },
+    {
+        'codigo': 'horarios', 'orden': 4,
+        'etiqueta': '📅 Mis horarios',
+        'tipo': 'http_con_submenu', 'requiere_cedula': True,
+        'metodo': 'GET', 'path': '/horarios/',
+        'extraer': [
+            {'variable': 'h_url',     'jsonpath': 'data.url_horarios'},
+            {'variable': 'h_primera', 'jsonpath': 'data.materias[0].asignatura'},
+        ],
+        'plantilla': (
+            '📅 *Tus horarios de la semana*\n'
+            'Primera materia: {{variables.h_primera}}\n\n'
+            'Ver horario completo aquí 👉 {{variables.h_url}}'
+        ),
+        'submenu': {
+            'mensaje': '¿Quieres ver algo más específico?',
+            'opciones': [
+                {
+                    'codigo': 'horarios_hoy',
+                    'etiqueta': 'Clases de hoy',
+                    'metodo': 'GET', 'path': '/horarios-hoy/',
+                    'extraer': [
+                        {'variable': 'titulo',   'jsonpath': 'data.titulo'},
+                        {'variable': 'primera',  'jsonpath': 'data.clases[0].asignatura'},
+                        {'variable': 'hora',     'jsonpath': 'data.clases[0].hora'},
+                        {'variable': 'profesor', 'jsonpath': 'data.clases[0].profesor'},
+                    ],
+                    'plantilla': (
+                        '📅 *{{variables.titulo}}*\n'
+                        '• {{variables.primera}}\n'
+                        '🕐 {{variables.hora}}\n'
+                        '👤 {{variables.profesor}}'
+                    ),
+                },
+                {
+                    'codigo': 'horarios_actividades',
+                    'etiqueta': 'Actividades semana',
+                    'metodo': 'GET', 'path': '/actividades-semana/',
+                    'extraer': [
+                        {'variable': 'a_titulo', 'jsonpath': 'data.titulo'},
+                        {'variable': 'a_rango',  'jsonpath': 'data.rango_label'},
+                        {'variable': 'a_tot',    'jsonpath': 'data.totales.total'},
+                    ],
+                    'plantilla': (
+                        '📝 *{{variables.a_titulo}}*\n'
+                        '🗓️ {{variables.a_rango}}\n'
+                        'Total: *{{variables.a_tot}}* ítems'
+                    ),
+                },
+            ],
+        },
+    },
+    {
+        'codigo': 'deudas', 'orden': 5,
+        'etiqueta': '💲 Mis deudas',
+        'tipo': 'http', 'requiere_cedula': True,
+        'metodo': 'GET', 'path': '/deudas/',
+        'sin_matricula': True,  # /deudas/ no requiere matricula_id
+        'extraer': [
+            {'variable': 'saldo',    'jsonpath': 'data.total_saldo'},
+            {'variable': 'vencido',  'jsonpath': 'data.total_vencido'},
+            {'variable': 'rubros',   'jsonpath': 'data.total_rubros'},
+            {'variable': 'detalle1', 'jsonpath': 'data.detalle[0].nombre'},
+            {'variable': 'estado1',  'jsonpath': 'data.detalle[0].estado'},
+        ],
+        'plantilla': (
+            '💲 *Tu estado financiero*\n'
+            '• Saldo total: ${{variables.saldo}}\n'
+            '• Vencido: ${{variables.vencido}}\n'
+            '• Rubros del período: ${{variables.rubros}}\n\n'
+            'Último rubro: {{variables.detalle1}} → {{variables.estado1}}'
+        ),
+    },
+    {
+        'codigo': 'mentor', 'orden': 6,
+        'etiqueta': '👤 Mi mentor',
+        'tipo': 'http', 'requiere_cedula': True,
+        'metodo': 'GET', 'path': '/mentor/',
+        'extraer': [
+            {'variable': 'm_nom',   'jsonpath': 'data.nombre'},
+            {'variable': 'm_email', 'jsonpath': 'data.email'},
+            {'variable': 'm_cel',   'jsonpath': 'data.celular'},
+            {'variable': 'm_wa',    'jsonpath': 'data.whatsapp_url'},
+        ],
+        'plantilla': (
+            '👤 *Tu mentor asignado*\n'
+            '• {{variables.m_nom}}\n'
+            '✉️ {{variables.m_email}}\n'
+            '📱 {{variables.m_cel}}\n\n'
+            'Escribirle por WhatsApp 👉 {{variables.m_wa}}'
+        ),
+    },
+    {
+        'codigo': 'pass', 'orden': 7,
+        'etiqueta': '🔐 Cambiar clave',
+        'tipo': 'estatico',
+        'mensaje': (
+            '🔐 *Cambiar tu contraseña*\n\n'
+            'Ingresa al portal oficial de Ruedge:\n'
+            '👉 https://ruedge.ister.edu.ec/autenticacion/restorepass/'
+        ),
+    },
+    {
+        'codigo': 'contactos', 'orden': 8,
+        'etiqueta': '💬 Otra pregunta',
+        'tipo': 'http', 'requiere_cedula': True,
+        'metodo': 'GET', 'path': '/contactos/',
+        'extraer': [
+            {'variable': 'c_men_nom', 'jsonpath': 'data.contactos[0].nombre'},
+            {'variable': 'c_men_em',  'jsonpath': 'data.contactos[0].email'},
+            {'variable': 'c_ase_nom', 'jsonpath': 'data.contactos[1].nombre'},
+            {'variable': 'c_ase_em',  'jsonpath': 'data.contactos[1].email'},
+            {'variable': 'c_proc',    'jsonpath': 'data.url_procesos'},
+        ],
+        'plantilla': (
+            '💬 *Tus contactos académicos*\n\n'
+            '👤 *Mentor:* {{variables.c_men_nom}}\n'
+            '✉️ {{variables.c_men_em}}\n\n'
+            '👤 *Asesor:* {{variables.c_ase_nom}}\n'
+            '✉️ {{variables.c_ase_em}}\n\n'
+            'Portal de procesos 👉 {{variables.c_proc}}'
+        ),
+    },
+    {
+        'codigo': 'asesor_contacto', 'orden': 9,
+        'etiqueta': '📩 Asesor me contacta',
+        'tipo': 'estatico',
+        'mensaje': (
+            '📩 *Quiero que un asesor me contacte*\n\n'
+            'Completa este formulario y un asesor del ISTER se pondrá '
+            'en contacto contigo a la brevedad.\n\n'
+            '👉 https://admisiones.ister.edu.ec/?action=ver&id=OPPQQRRSSTTUUVVWWXXX'
+        ),
+    },
+    {
+        'codigo': 'pregrado', 'orden': 10,
+        'etiqueta': '🎓 Oferta pregrado',
+        'tipo': 'estatico',
+        'mensaje': (
+            '🎓 *Oferta de pregrado*\n\n'
+            'Conoce nuestras tecnologías superiores y carreras: modalidades, '
+            'horarios, requisitos y costos.\n\n'
+            '👉 https://admisiones.ister.edu.ec/admision-pregrado/'
+        ),
+    },
+    {
+        'codigo': 'posgrado', 'orden': 11,
+        'etiqueta': '🚀 Oferta posgrado',
+        'tipo': 'estatico',
+        'mensaje': (
+            '🚀 *Oferta de posgrado*\n\n'
+            '¿Buscas aumentar tu nivel académico y profesional? Especializaciones, '
+            'maestrías y programas avanzados.\n\n'
+            '👉 https://admisiones.ister.edu.ec/admision-posgrados/'
+        ),
+    },
+    {
+        'codigo': 'homologacion', 'orden': 12,
+        'etiqueta': '🔄 Homologación',
+        'tipo': 'estatico',
+        'mensaje': (
+            '🔄 *Homologar estudios*\n\n'
+            'Si vienes de otra institución y quieres convalidar tus materias '
+            'en el ISTER, gestiona tu homologación aquí:\n\n'
+            '👉 https://homologacion.ister.edu.ec'
+        ),
+    },
+    {
+        'codigo': 'becas', 'orden': 13,
+        'etiqueta': '🏆 Becas y ayudas',
+        'tipo': 'estatico',
+        'mensaje': (
+            '🏆 *Becas y ayudas económicas*\n\n'
+            'En el ISTER el talento merece oportunidades. 💚\n'
+            'Tipos de beca, requisitos y cómo postular:\n\n'
+            '👉 https://ister.edu.ec/sistema-de-becas-y-ayudas-economicas/'
+        ),
+    },
+    {
+        'codigo': 'soporte', 'orden': 14,
+        'etiqueta': '🎧 Soporte general',
+        'tipo': 'estatico',
+        'mensaje': (
+            '🎧 *Soporte general*\n\n'
+            'Si necesitas soporte académico o administrativo, abre un '
+            'trámite en el Balcón de Servicios:\n\n'
+            '👉 https://procesos.ister.edu.ec\n'
+            '🌐 https://ister.edu.ec'
+        ),
+    },
+]
+
+
 class Command(BaseCommand):
-    help = 'Crea el flujo del asistente RU (Lucía) calcado a la API del bot RU.'
+    help = 'Crea el flujo del asistente RU (Lucía) — un solo depto, loop al menú.'
 
     def add_arguments(self, parser):
         parser.add_argument('--reset', action='store_true',
@@ -80,6 +334,84 @@ class Command(BaseCommand):
             descripcion=descripcion,
         )
 
+    def _query_para(self, proc):
+        """Construye query del API en base al descriptor del procedimiento."""
+        q = {'cedula': '{{variables.cedula}}'}
+        if not proc.get('sin_matricula'):
+            q['matricula_id'] = '{{variables.matricula_id}}'
+        return q
+
+    def _crear_rama_privada(self, depto, ep_ru, menu_raiz, salida_ok, no_encontrado,
+                            fin_error, proc, base_orden):
+        """
+        Crea la mini-rama privada de un procedimiento que requiere cédula:
+
+            menu_raiz --[salida=codigo]--> cond_skip
+                cond_skip --[true]--> http_X
+                cond_skip --[false]--> preg_cedula --> http_buscar
+                                                       --[ok]--> http_X
+                                                       --[error]--> no_encontrado
+            http_X --[ok]--> salida_ok
+            http_X --[error]--> fin_error
+
+        Retorna http_X (útil cuando hay sub-menú post-handler).
+        """
+        codigo = proc['codigo']
+        cond = self._nodo(
+            depto, f'¿Tengo cédula? ({codigo})', 'condicional', orden=base_orden,
+            config={
+                'operador': 'and',
+                'condiciones': [
+                    {'izq': '{{variables.cedula}}', 'op': 'no_vacio', 'der': ''},
+                ],
+            },
+        )
+        preg = self._nodo(
+            depto, f'Pedir cédula ({codigo})', 'pregunta', orden=base_orden + 1,
+            config={'pregunta': '🪪 Por favor ingresa tu *número de cédula* (10 dígitos):'},
+            variable='cedula', validacion='cedula', reintentos=3,
+            mensaje_error='Cédula inválida. Vuelve a intentarlo (10 dígitos, sólo números).',
+        )
+        buscar = self._nodo(
+            depto, f'Buscar estudiante ({codigo})', 'http', orden=base_orden + 2,
+            endpoint=ep_ru,
+            config={
+                'metodo': 'POST', 'path': '/buscar-estudiante/',
+                'body': {'cedula': '{{variables.cedula}}'},
+                'extraer': [
+                    {'variable': 'nombre',       'jsonpath': 'data.nombre'},
+                    {'variable': 'matricula_id', 'jsonpath': 'data.matriculas[0].id'},
+                    {'variable': 'carrera',      'jsonpath': 'data.matriculas[0].carrera'},
+                ],
+                'plantilla_respuesta': (
+                    '✅ Hola *{{variables.nombre}}* 👋 — {{variables.carrera}}'
+                ),
+            },
+        )
+        http_x = self._nodo(
+            depto, f'API {proc["metodo"]} {proc["path"]} ({codigo})', 'http',
+            orden=base_orden + 3, endpoint=ep_ru,
+            config={
+                'metodo': proc['metodo'],
+                'path':   proc['path'],
+                'query':  self._query_para(proc),
+                'extraer': proc.get('extraer') or [],
+                'plantilla_respuesta': proc.get('plantilla') or '',
+            },
+        )
+
+        # Conexiones
+        self._conectar(menu_raiz, cond, codigo, 1)
+        self._conectar(cond, http_x, 'true', 1, 'Cédula ya está set')
+        self._conectar(cond, preg, 'false', 2, 'Cédula vacía → pedirla')
+        self._conectar(preg, buscar, '', 1)
+        self._conectar(preg, fin_error, 'timeout', 2)
+        self._conectar(buscar, http_x, 'ok', 1)
+        self._conectar(buscar, no_encontrado, 'error', 2)
+        self._conectar(http_x, salida_ok, 'ok', 1)
+        self._conectar(http_x, fin_error, 'error', 2)
+        return http_x
+
     # ─────────────────────────────────────────────────────────────
     # Main
     # ─────────────────────────────────────────────────────────────
@@ -94,14 +426,14 @@ class Command(BaseCommand):
             viejos.delete()
             self.stdout.write(self.style.WARNING(
                 f'Depto "{NOMBRE_DEPTO}" previo eliminado '
-                f'({n_estados} estados runtime también borrados).'
+                f'({n_estados} estados runtime tambien borrados).'
             ))
             huerfanos = EstadoFlujoChatbot.objects.filter(departamento__isnull=True)
             if huerfanos.exists():
                 n = huerfanos.count()
                 huerfanos.delete()
                 self.stdout.write(self.style.WARNING(
-                    f'  + {n} estados huérfanos sin depto también eliminados.'
+                    f'  + {n} estados huerfanos sin depto tambien eliminados.'
                 ))
 
         depto, creado = DepartamentoChatBot.objects.get_or_create(
@@ -129,16 +461,13 @@ class Command(BaseCommand):
         # ── Credencial + endpoint único ─────────────────────────
         if opts.get('bearer'):
             credencial = CredencialApiChatbot.objects.create(
-                nombre='Bot RU - Bearer',
-                tipo='bearer',
+                nombre='Bot RU - Bearer', tipo='bearer',
                 secretos={'token': opts['bearer']},
                 descripcion='Token Bearer del bot RU.',
             )
         else:
             credencial = CredencialApiChatbot.objects.create(
-                nombre='Bot RU - AllowAny',
-                tipo='none',
-                secretos={},
+                nombre='Bot RU - AllowAny', tipo='none', secretos={},
                 descripcion='APIs del bot RU actualmente públicas (AllowAny).',
             )
         ep_ru = EndpointApiChatbot.objects.create(
@@ -150,458 +479,119 @@ class Command(BaseCommand):
             descripcion='Endpoint base del bot RU del ISTER.',
         )
 
-        # ─────────────────────────────────────────────────────────
-        # NODOS: MENÚ RAÍZ
-        # ─────────────────────────────────────────────────────────
-        menu = self._nodo(
+        # ── Menú raíz ────────────────────────────────────────────
+        menu_raiz = self._nodo(
             depto, 'Menú principal', 'menu', es_inicio=True, orden=0,
-            config={
-                'mensaje': '¿Cómo te puedo ayudar hoy?',
-                'opciones': [
-                    {'etiqueta': 'Soy estudiante',     'valor': 'estudiante', 'salida': 'estudiante'},
-                    {'etiqueta': 'Soy aspirante',      'valor': 'aspirante',  'salida': 'aspirante'},
-                    {'etiqueta': 'Hablar con asesor',  'valor': 'asesor',     'salida': 'asesor'},
-                ],
-            },
-            variable='tipo_usuario',
-            mensaje_error='Elige 1, 2 o 3 para continuar.',
-        )
-
-        # ─────────────────────────────────────────────────────────
-        # RAMA ESTUDIANTE: pedir cédula → buscar → menú estudiante
-        # ─────────────────────────────────────────────────────────
-        p_cedula = self._nodo(
-            depto, 'Pedir cédula', 'pregunta', orden=10,
-            config={'pregunta': '🪪 Por favor ingresa tu *número de cédula* (10 dígitos):'},
-            variable='cedula', validacion='cedula', reintentos=3,
-            mensaje_error='La cédula no parece válida. Vuelve a intentarlo (10 dígitos, sólo números).',
-        )
-        http_buscar = self._nodo(
-            depto, 'Buscar estudiante', 'http', orden=11,
-            endpoint=ep_ru,
-            config={
-                'metodo': 'POST',
-                'path': '/buscar-estudiante/',
-                'body': {'cedula': '{{variables.cedula}}'},
-                'extraer': [
-                    {'variable': 'nombre',       'jsonpath': 'data.nombre'},
-                    {'variable': 'matricula_id', 'jsonpath': 'data.matriculas[0].id'},
-                    {'variable': 'carrera',      'jsonpath': 'data.matriculas[0].carrera'},
-                    {'variable': 'nivel',        'jsonpath': 'data.matriculas[0].nivel'},
-                    {'variable': 'periodo',      'jsonpath': 'data.matriculas[0].periodo'},
-                ],
-                'plantilla_respuesta': (
-                    '✅ Hola *{{variables.nombre}}* 👋\n'
-                    '🎓 {{variables.carrera}} · {{variables.nivel}}\n'
-                    '📅 Período: {{variables.periodo}}'
-                ),
-            },
-        )
-        no_encontrado = self._nodo(
-            depto, 'Estudiante no encontrado', 'respuesta', orden=12,
-            config={'mensaje': (
-                '🔎 No encontré información registrada con esa cédula.\n'
-                'Te llevo al menú de aspirantes — si crees que es un error, '
-                'comunícate con tu coordinación de carrera.'
-            )},
-        )
-
-        # Menú estudiante: mismo orden que el JSON original del bot RU.
-        # Etiquetas ≤24 chars (límite Meta para list rows).
-        menu_est = self._nodo(
-            depto, 'Menú estudiante', 'menu', orden=20,
             config={
                 'mensaje': '¿Qué te gustaría consultar?',
                 'opciones': [
-                    {'etiqueta': '🚪 Entrar a clases',    'valor': 'ingreso',     'salida': 'ingreso'},
-                    {'etiqueta': '📝 Actividades semana', 'valor': 'actividades', 'salida': 'actividades'},
-                    {'etiqueta': '📚 Mis materias',       'valor': 'materias',    'salida': 'materias'},
-                    {'etiqueta': '📅 Mis horarios',       'valor': 'horarios',    'salida': 'horarios'},
-                    {'etiqueta': '💲 Mis deudas',         'valor': 'deudas',      'salida': 'deudas'},
-                    {'etiqueta': '👤 Mi mentor',          'valor': 'mentor',      'salida': 'mentor'},
-                    {'etiqueta': '🔐 Cambiar clave',      'valor': 'pass',        'salida': 'pass'},
-                    {'etiqueta': '💬 Otra pregunta',      'valor': 'contactos',   'salida': 'contactos'},
-                    {'etiqueta': '🎧 Soporte',            'valor': 'soporte',     'salida': 'soporte'},
+                    {'etiqueta': p['etiqueta'], 'valor': p['codigo'], 'salida': p['codigo']}
+                    for p in PROCEDIMIENTOS
                 ],
             },
-            variable='opcion_estudiante',
+            variable='opcion_menu',
             mensaje_error='Elige el número de la opción.',
         )
 
-        # ── Sub-menú HORARIOS (subpreguntas de "Mis horarios") ────
-        # Replica la estructura del JSON: ver_horarios tiene 2 subpreguntas:
-        #   - ver_horarios_hoy
-        #   - ver_actividades_semana
-        # Se presenta DESPUÉS de ejecutar /horarios/ (handler padre).
-        menu_horarios = self._nodo(
-            depto, 'Sub-preguntas horarios', 'menu', orden=30,
-            config={
-                'mensaje': '¿Quieres ver algo más específico?',
-                'opciones': [
-                    {'etiqueta': 'Clases de hoy',      'valor': 'hoy',    'salida': 'hoy'},
-                    {'etiqueta': 'Actividades semana', 'valor': 'activ',  'salida': 'activ'},
-                    {'etiqueta': 'Volver al menú',     'valor': 'volver', 'salida': 'volver'},
-                ],
-            },
-            variable='opcion_horario',
-            mensaje_error='Elige una opción.',
-        )
-        http_horarios = self._nodo(
-            depto, 'GET /horarios/', 'http', orden=31, endpoint=ep_ru,
-            config={
-                'metodo': 'GET',
-                'path': '/horarios/',
-                'query': {
-                    'cedula': '{{variables.cedula}}',
-                    'matricula_id': '{{variables.matricula_id}}',
-                },
-                'extraer': [
-                    {'variable': 'h_url',     'jsonpath': 'data.url_horarios'},
-                    {'variable': 'h_primera', 'jsonpath': 'data.materias[0].asignatura'},
-                ],
-                'plantilla_respuesta': (
-                    '📅 *Tus horarios de la semana*\n'
-                    'Primera materia: {{variables.h_primera}}\n\n'
-                    'Ver horario completo aquí 👉 {{variables.h_url}}'
-                ),
-            },
-        )
-        http_horarios_hoy = self._nodo(
-            depto, 'GET /horarios-hoy/', 'http', orden=32, endpoint=ep_ru,
-            config={
-                'metodo': 'GET',
-                'path': '/horarios-hoy/',
-                'query': {
-                    'cedula': '{{variables.cedula}}',
-                    'matricula_id': '{{variables.matricula_id}}',
-                },
-                'extraer': [
-                    {'variable': 'titulo',    'jsonpath': 'data.titulo'},
-                    {'variable': 'primera',   'jsonpath': 'data.clases[0].asignatura'},
-                    {'variable': 'hora',      'jsonpath': 'data.clases[0].hora'},
-                    {'variable': 'profesor',  'jsonpath': 'data.clases[0].profesor'},
-                ],
-                'plantilla_respuesta': (
-                    '📅 *{{variables.titulo}}*\n'
-                    '• {{variables.primera}}\n'
-                    '🕐 {{variables.hora}}\n'
-                    '👤 {{variables.profesor}}'
-                ),
-            },
-        )
-        http_actividades = self._nodo(
-            depto, 'GET /actividades-semana/', 'http', orden=34, endpoint=ep_ru,
-            config={
-                'metodo': 'GET',
-                'path': '/actividades-semana/',
-                'query': {
-                    'cedula': '{{variables.cedula}}',
-                    'matricula_id': '{{variables.matricula_id}}',
-                },
-                'extraer': [
-                    {'variable': 'titulo',   'jsonpath': 'data.titulo'},
-                    {'variable': 'rango',    'jsonpath': 'data.rango_label'},
-                    {'variable': 'tot',      'jsonpath': 'data.totales.total'},
-                    {'variable': 'tot_tar',  'jsonpath': 'data.totales.tareas'},
-                    {'variable': 'tot_for',  'jsonpath': 'data.totales.foros'},
-                    {'variable': 'tot_test', 'jsonpath': 'data.totales.tests'},
-                ],
-                'plantilla_respuesta': (
-                    '📝 *{{variables.titulo}}*\n'
-                    '🗓️ Semana: {{variables.rango}}\n\n'
-                    'Total: *{{variables.tot}}* ítems\n'
-                    '• Tareas: {{variables.tot_tar}}\n'
-                    '• Foros: {{variables.tot_for}}\n'
-                    '• Tests: {{variables.tot_test}}'
-                ),
-            },
-        )
-
-        # ── Otros nodos http privados ────────────────────────────
-        http_materias = self._nodo(
-            depto, 'GET /materias/', 'http', orden=40, endpoint=ep_ru,
-            config={
-                'metodo': 'GET',
-                'path': '/materias/',
-                'query': {
-                    'cedula': '{{variables.cedula}}',
-                    'matricula_id': '{{variables.matricula_id}}',
-                },
-                'extraer': [
-                    {'variable': 'titulo', 'jsonpath': 'data.titulo'},
-                    {'variable': 'total',  'jsonpath': 'data.total'},
-                    {'variable': 'm_url',  'jsonpath': 'data.url_materias'},
-                ],
-                'plantilla_respuesta': (
-                    '📚 *{{variables.titulo}}*\n'
-                    'Tienes *{{variables.total}}* materias activas.\n\n'
-                    'Ver detalle (Meet, Moodle, docentes) 👉 {{variables.m_url}}'
-                ),
-            },
-        )
-        http_deudas = self._nodo(
-            depto, 'GET /deudas/', 'http', orden=41, endpoint=ep_ru,
-            config={
-                'metodo': 'GET',
-                'path': '/deudas/',
-                'query': {'cedula': '{{variables.cedula}}'},
-                'extraer': [
-                    {'variable': 'saldo',    'jsonpath': 'data.total_saldo'},
-                    {'variable': 'vencido',  'jsonpath': 'data.total_vencido'},
-                    {'variable': 'rubros',   'jsonpath': 'data.total_rubros'},
-                    {'variable': 'detalle1', 'jsonpath': 'data.detalle[0].nombre'},
-                    {'variable': 'estado1',  'jsonpath': 'data.detalle[0].estado'},
-                ],
-                'plantilla_respuesta': (
-                    '💲 *Tu estado financiero*\n'
-                    '• Saldo total: ${{variables.saldo}}\n'
-                    '• Vencido: ${{variables.vencido}}\n'
-                    '• Rubros del período: ${{variables.rubros}}\n\n'
-                    'Último rubro: {{variables.detalle1}} → {{variables.estado1}}'
-                ),
-            },
-        )
-        http_mentor = self._nodo(
-            depto, 'GET /mentor/', 'http', orden=42, endpoint=ep_ru,
-            config={
-                'metodo': 'GET',
-                'path': '/mentor/',
-                'query': {
-                    'cedula': '{{variables.cedula}}',
-                    'matricula_id': '{{variables.matricula_id}}',
-                },
-                'extraer': [
-                    {'variable': 'm_nom',   'jsonpath': 'data.nombre'},
-                    {'variable': 'm_email', 'jsonpath': 'data.email'},
-                    {'variable': 'm_cel',   'jsonpath': 'data.celular'},
-                    {'variable': 'm_wa',    'jsonpath': 'data.whatsapp_url'},
-                ],
-                'plantilla_respuesta': (
-                    '👤 *Tu mentor asignado*\n'
-                    '• {{variables.m_nom}}\n'
-                    '✉️ {{variables.m_email}}\n'
-                    '📱 {{variables.m_cel}}\n\n'
-                    'Escribirle por WhatsApp 👉 {{variables.m_wa}}'
-                ),
-            },
-        )
-        http_contactos = self._nodo(
-            depto, 'GET /contactos/', 'http', orden=43, endpoint=ep_ru,
-            config={
-                'metodo': 'GET',
-                'path': '/contactos/',
-                'query': {
-                    'cedula': '{{variables.cedula}}',
-                    'matricula_id': '{{variables.matricula_id}}',
-                },
-                'extraer': [
-                    {'variable': 'c_men_nom', 'jsonpath': 'data.contactos[0].nombre'},
-                    {'variable': 'c_men_em',  'jsonpath': 'data.contactos[0].email'},
-                    {'variable': 'c_ase_nom', 'jsonpath': 'data.contactos[1].nombre'},
-                    {'variable': 'c_ase_em',  'jsonpath': 'data.contactos[1].email'},
-                    {'variable': 'c_proc',    'jsonpath': 'data.url_procesos'},
-                ],
-                'plantilla_respuesta': (
-                    '📞 *Tus contactos académicos*\n\n'
-                    '👤 *Mentor:* {{variables.c_men_nom}}\n'
-                    '✉️ {{variables.c_men_em}}\n\n'
-                    '👤 *Asesor:* {{variables.c_ase_nom}}\n'
-                    '✉️ {{variables.c_ase_em}}\n\n'
-                    'Portal de procesos 👉 {{variables.c_proc}}'
-                ),
-            },
-        )
-
-        # ── Respuestas estáticas privadas ────────────────────────
-        resp_ingreso = self._nodo(
-            depto, 'Cómo entrar a clases', 'respuesta', orden=50,
+        # ── Nodos terminales / fallback ──────────────────────────
+        no_encontrado = self._nodo(
+            depto, 'Estudiante no encontrado', 'respuesta', orden=900,
             config={'mensaje': (
-                '🚪 *¿Cómo entro a mis clases?*\n\n'
-                '1️⃣ Portal Ruedge: https://ruedge.ister.edu.ec/alu/horarios/\n'
-                '2️⃣ Ingresa con tu usuario y contraseña institucional.\n'
-                '3️⃣ Tutorial en video: https://www.youtube.com/watch?v=gL_4UYdYwq0\n\n'
-                '💡 Si aún no apareces en *Teams* o *Aula Virtual*, tu cuenta '
-                'se está procesando — puede tardar algunas horas en sincronizarse.\n\n'
-                '🆘 ¿Sigue sin aparecer? Abre un ticket en https://procesos.ister.edu.ec'
-            )},
-        )
-        resp_pass = self._nodo(
-            depto, 'Cambiar contraseña', 'respuesta', orden=51,
-            config={'mensaje': (
-                '🔐 *Cambiar tu contraseña*\n\n'
-                'Ingresa al portal oficial de Ruedge:\n'
-                '👉 https://ruedge.ister.edu.ec/autenticacion/restorepass/'
-            )},
-        )
-
-        # ─────────────────────────────────────────────────────────
-        # RAMA INVITADO / ASPIRANTE
-        # ─────────────────────────────────────────────────────────
-        menu_inv = self._nodo(
-            depto, 'Menú aspirante / invitado', 'menu', orden=60,
-            config={
-                'mensaje': '¿Qué te interesa conocer?',
-                'opciones': [
-                    {'etiqueta': '🎓 Pregrado',         'valor': 'pre',     'salida': 'pre'},
-                    {'etiqueta': '🚀 Posgrado',         'valor': 'pos',     'salida': 'pos'},
-                    {'etiqueta': '🔄 Homologación',     'valor': 'homol',   'salida': 'homol'},
-                    {'etiqueta': '🏆 Becas y ayudas',   'valor': 'becas',   'salida': 'becas'},
-                    {'etiqueta': '📩 Asesor me contacta','valor': 'ases',   'salida': 'ases'},
-                    {'etiqueta': '🎧 Soporte',          'valor': 'soporte', 'salida': 'soporte'},
-                ],
-            },
-            variable='opcion_invitado',
-            mensaje_error='Elige el número de la opción.',
-        )
-        resp_pre = self._nodo(
-            depto, 'Oferta pregrado', 'respuesta', orden=61,
-            config={'mensaje': (
-                '🎓 *Oferta de pregrado*\n\n'
-                'Conoce nuestras tecnologías superiores y carreras: modalidades, '
-                'horarios, requisitos y costos en un solo lugar.\n\n'
-                '👉 https://admisiones.ister.edu.ec/admision-pregrado/'
-            )},
-        )
-        resp_pos = self._nodo(
-            depto, 'Oferta posgrado', 'respuesta', orden=62,
-            config={'mensaje': (
-                '🚀 *Oferta de posgrado*\n\n'
-                '¿Buscas aumentar tu nivel académico y profesional? Conoce '
-                'especializaciones, maestrías y programas avanzados.\n\n'
-                '👉 https://admisiones.ister.edu.ec/admision-posgrados/'
-            )},
-        )
-        resp_homol = self._nodo(
-            depto, 'Homologación', 'respuesta', orden=63,
-            config={'mensaje': (
-                '🔄 *Homologar estudios*\n\n'
-                'Si vienes de otra institución y quieres convalidar tus materias '
-                'aprobadas en el ISTER, gestiona tu homologación aquí:\n\n'
-                '👉 https://homologacion.ister.edu.ec'
-            )},
-        )
-        resp_becas = self._nodo(
-            depto, 'Sistema de becas', 'respuesta', orden=64,
-            config={'mensaje': (
-                '🏆 *Becas y ayudas económicas*\n\n'
-                'En el ISTER creemos que el talento merece oportunidades. 💚\n'
-                'Tipos de beca, requisitos, plazos y cómo postular:\n\n'
-                '👉 https://ister.edu.ec/sistema-de-becas-y-ayudas-economicas/'
-            )},
-        )
-        resp_asesor = self._nodo(
-            depto, 'Asesor de contacto', 'respuesta', orden=65,
-            config={'mensaje': (
-                '📩 *Quiero que un asesor me contacte*\n\n'
-                'Completa este formulario y un asesor del ISTER se pondrá en '
-                'contacto contigo a la brevedad por el medio que prefieras.\n\n'
-                '👉 https://admisiones.ister.edu.ec/?action=ver&id=OPPQQRRSSTTUUVVWWXXX'
-            )},
-        )
-        resp_soporte = self._nodo(
-            depto, 'Soporte general', 'respuesta', orden=66,
-            config={'mensaje': (
-                '🎧 *Soporte general*\n\n'
-                'Si necesitas soporte académico o administrativo, abre un '
-                'trámite formal en nuestro Balcón de Servicios. El equipo '
-                'del RU te dará seguimiento personalizado.\n\n'
-                '👉 https://procesos.ister.edu.ec\n'
-                '🌐 https://ister.edu.ec'
-            )},
-        )
-
-        # ── Cierre / handoff humano ─────────────────────────────
-        handoff = self._nodo(
-            depto, 'Transferir a asesor', 'handoff', orden=90,
-            config={'mensaje': (
-                '👤 Te conecto con un asesor humano del RU. Un momento por favor…'
-            )},
-        )
-        fin_estudiante = self._nodo(
-            depto, 'Fin (estudiante)', 'fin', orden=91,
-            config={'mensaje': (
-                '¿Necesitas algo más? Escribe *menu* para volver al inicio.'
-            )},
-        )
-        fin_invitado = self._nodo(
-            depto, 'Fin (invitado)', 'fin', orden=92,
-            config={'mensaje': (
-                '¿Algo más? Escribe *menu* para volver al inicio o *asesor* '
-                'si quieres hablar con un humano.'
+                '🔎 No encontré información registrada con esa cédula.\n'
+                'Si crees que es un error, comunícate con tu coordinación.\n\n'
+                'Te llevo de vuelta al menú…'
             )},
         )
         fin_error = self._nodo(
-            depto, 'Error API', 'respuesta', orden=93,
+            depto, 'Error API', 'respuesta', orden=901,
             config={'mensaje': (
-                '⚠️ No pude consultar tus datos en este momento. Intenta más '
-                'tarde o escribe *asesor* para hablar con alguien.'
+                '⚠️ No pude consultar tus datos en este momento. '
+                'Intenta más tarde o escribe *menu* para volver.'
             )},
         )
+        handoff = self._nodo(
+            depto, 'Transferir a asesor', 'handoff', orden=902,
+            config={'mensaje': '👤 Te conecto con un asesor humano del RU. Un momento por favor…'},
+        )
+        # Loop de cierre: ambos respuesta-fallback regresan al menu_raiz.
+        self._conectar(no_encontrado, menu_raiz, '', 1, 'Tras error → vuelve al menú')
+        self._conectar(fin_error,     menu_raiz, '', 1, 'Tras error → vuelve al menú')
 
-        # ─────────────────────────────────────────────────────────
-        # CONEXIONES
-        # ─────────────────────────────────────────────────────────
-        # Menú raíz → ramas
-        self._conectar(menu, p_cedula,  'estudiante', 1)
-        self._conectar(menu, menu_inv,  'aspirante',  2)
-        self._conectar(menu, handoff,   'asesor',     3)
-        self._conectar(menu, handoff,   'timeout',    4, 'Reintentos agotados → asesor')
+        # ── Generar mini-ramas por procedimiento ─────────────────
+        # Cada rama empieza en `base_orden` y usa hasta 4 nodos (cond, preg,
+        # buscar, http_X). Reservamos 10 órdenes por rama para holgura.
+        for i, proc in enumerate(PROCEDIMIENTOS, start=1):
+            base = i * 10  # 10, 20, 30, ...
 
-        # Rama estudiante: cédula → buscar → menú estudiante
-        self._conectar(p_cedula,    http_buscar,    '',        1)
-        self._conectar(p_cedula,    handoff,        'timeout', 2, 'Cédula inválida 3 veces')
-        self._conectar(http_buscar, menu_est,       'ok',      1)
-        self._conectar(http_buscar, no_encontrado,  'error',   2)
-        self._conectar(no_encontrado, menu_inv,     '',        1)
+            if proc['tipo'] == 'estatico':
+                # Pública: respuesta directa → loop al menú.
+                resp = self._nodo(
+                    depto, f'Resp ({proc["codigo"]})', 'respuesta', orden=base,
+                    config={'mensaje': proc['mensaje']},
+                )
+                self._conectar(menu_raiz, resp, proc['codigo'], 1)
+                self._conectar(resp, menu_raiz, '', 1, 'Loop al menú')
+                continue
 
-        # Menú estudiante → ramas (orden = JSON original del bot RU).
-        self._conectar(menu_est, resp_ingreso,     'ingreso',     1)
-        self._conectar(menu_est, http_actividades, 'actividades', 2)
-        self._conectar(menu_est, http_materias,    'materias',    3)
-        self._conectar(menu_est, http_horarios,    'horarios',    4)
-        self._conectar(menu_est, http_deudas,      'deudas',      5)
-        self._conectar(menu_est, http_mentor,      'mentor',      6)
-        self._conectar(menu_est, resp_pass,        'pass',        7)
-        self._conectar(menu_est, http_contactos,   'contactos',   8)
-        self._conectar(menu_est, resp_soporte,     'soporte',     9)
-        self._conectar(menu_est, handoff,          'timeout',    10)
+            if proc['tipo'] == 'http':
+                self._crear_rama_privada(
+                    depto, ep_ru, menu_raiz,
+                    salida_ok=menu_raiz,           # tras handler → vuelve al menú
+                    no_encontrado=no_encontrado,
+                    fin_error=fin_error,
+                    proc=proc, base_orden=base,
+                )
+                continue
 
-        # ver_horarios (handler padre) → muestra resumen → sub-preguntas
-        self._conectar(http_horarios, menu_horarios, 'ok',    1)
-        self._conectar(http_horarios, fin_error,     'error', 2)
+            if proc['tipo'] == 'http_con_submenu':
+                # Construir primero el sub-menú y sus mini-ramas (necesarios para
+                # apuntar `salida_ok` del handler padre al sub-menú).
+                sub_cfg = proc['submenu']
+                sub_menu = self._nodo(
+                    depto, f'Sub-menú ({proc["codigo"]})', 'menu',
+                    orden=base + 5,
+                    config={
+                        'mensaje': sub_cfg['mensaje'],
+                        'opciones': (
+                            [{'etiqueta': o['etiqueta'], 'valor': o['codigo'], 'salida': o['codigo']}
+                             for o in sub_cfg['opciones']]
+                            + [{'etiqueta': 'Volver al menú', 'valor': 'volver', 'salida': 'volver'}]
+                        ),
+                    },
+                    variable=f'sub_{proc["codigo"]}',
+                    mensaje_error='Elige una opción.',
+                )
+                # Conexión "volver" al menú raíz.
+                self._conectar(sub_menu, menu_raiz, 'volver', 99, 'Volver al menú principal')
 
-        # Sub-preguntas de horarios
-        self._conectar(menu_horarios, http_horarios_hoy, 'hoy',     1)
-        self._conectar(menu_horarios, http_actividades,  'activ',   2)
-        self._conectar(menu_horarios, menu_est,          'volver',  3)
-        self._conectar(menu_horarios, fin_estudiante,    'timeout', 4)
+                # Mini-rama del handler padre → sub_menu (no menu_raiz).
+                self._crear_rama_privada(
+                    depto, ep_ru, menu_raiz,
+                    salida_ok=sub_menu,
+                    no_encontrado=no_encontrado,
+                    fin_error=fin_error,
+                    proc=proc, base_orden=base,
+                )
 
-        # Resto de HTTPs estudiantes → fin / error (sin http_horarios y
-        # http_actividades/http_horarios_hoy: estos terminan en fin_estudiante
-        # tras la sub-pregunta).
-        for n in (http_horarios_hoy, http_actividades, http_materias,
-                  http_deudas, http_mentor, http_contactos):
-            self._conectar(n, fin_estudiante, 'ok',    1)
-            self._conectar(n, fin_error,      'error', 2)
-
-        # Estáticos privados → fin estudiante
-        self._conectar(resp_ingreso, fin_estudiante, '', 1)
-        self._conectar(resp_pass,    fin_estudiante, '', 1)
-        self._conectar(resp_soporte, fin_estudiante, '', 1)
-        self._conectar(fin_error,    fin_estudiante, '', 1)
-
-        # Menú invitado → ramas
-        self._conectar(menu_inv, resp_pre,     'pre',     1)
-        self._conectar(menu_inv, resp_pos,     'pos',     2)
-        self._conectar(menu_inv, resp_homol,   'homol',   3)
-        self._conectar(menu_inv, resp_becas,   'becas',   4)
-        self._conectar(menu_inv, resp_asesor,  'ases',    5)
-        self._conectar(menu_inv, resp_soporte, 'soporte', 6)
-        self._conectar(menu_inv, handoff,      'timeout', 7)
-
-        # Estáticos invitado → fin invitado
-        for n in (resp_pre, resp_pos, resp_homol, resp_becas, resp_asesor):
-            self._conectar(n, fin_invitado, '', 1)
+                # Mini-ramas de cada sub-opción (también privadas).
+                for j, sub_opt in enumerate(sub_cfg['opciones'], start=1):
+                    sub_proc = {
+                        'codigo': sub_opt['codigo'],
+                        'metodo': sub_opt['metodo'],
+                        'path':   sub_opt['path'],
+                        'extraer': sub_opt.get('extraer') or [],
+                        'plantilla': sub_opt.get('plantilla') or '',
+                        'sin_matricula': sub_opt.get('sin_matricula', False),
+                    }
+                    self._crear_rama_privada(
+                        depto, ep_ru, sub_menu,
+                        salida_ok=menu_raiz,           # tras sub-handler → menú raíz
+                        no_encontrado=no_encontrado,
+                        fin_error=fin_error,
+                        proc=sub_proc,
+                        base_orden=base + 50 + j * 10,
+                    )
+                continue
 
         # ── Asociar a una sesión si se pidió ─────────────────────
         if opts.get('sesion'):
@@ -620,7 +610,7 @@ class Command(BaseCommand):
                     s.modo_bot = 'tradicional'
                 s.save()
                 self.stdout.write(self.style.SUCCESS(
-                    f'Sesión "{s.nombre or s.session_id}" asociada al depto. '
+                    f'Sesion "{s.nombre or s.session_id}" asociada al depto. '
                     f'modo_bot={s.modo_bot}, departamento_default={s.departamento_default.nombre}'
                 ))
 
@@ -631,8 +621,8 @@ class Command(BaseCommand):
             f'   Nodos: {total_nodos}  |  Conexiones: {total_conns}\n'
             f'   Endpoint: {ep_ru.nombre} -> {ep_ru.base_url}\n'
             f'   Credencial: {credencial.nombre} ({credencial.get_tipo_display()})\n\n'
-            f'Puede coexistir este depto con "Centro de Atencion Estudiantil"\n'
-            f'asociando cada uno a sesiones distintas (o al mismo, con palabras\n'
-            f'clave separadas: "lucia"/"ru" -> este, otras keywords -> el otro).\n\n'
+            f'Modelo: 1 menu raiz con {len(PROCEDIMIENTOS)} opciones, todas vuelven al menu\n'
+            f'tras responder. La cedula se pide UNA SOLA VEZ y se reusa en\n'
+            f'consultas siguientes (cond_skip por opcion privada).\n\n'
             f'Siguiente: si la API ya pide auth, vuelve a correr con --bearer "<token>".'
         ))
