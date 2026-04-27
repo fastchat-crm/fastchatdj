@@ -724,7 +724,31 @@ class MotorFlujo:
             t = self.texto.strip()
             t_low = t.lower()
             elegida = None
-            if t.isdigit():
+            # Pase 0: boton_id de Meta interactive (más confiable que texto).
+            if self.boton_id:
+                from .models import OpcionDepartamentoChatBot as _Op
+                # Match directo por boton_id persistido en BD
+                hijo_match = _Op.objects.filter(
+                    boton_id=self.boton_id, status=True
+                ).first()
+                if hijo_match:
+                    for op in opciones:
+                        if op.get('_hijo_id') == hijo_match.id:
+                            elegida = op
+                            break
+                # Fallback: boton_id determinístico tipo "op_<id>"
+                if not elegida and self.boton_id.startswith('op_'):
+                    try:
+                        target_id = int(self.boton_id.split('_', 1)[1])
+                        for op in opciones:
+                            if op.get('_hijo_id') == target_id:
+                                elegida = op
+                                break
+                    except (ValueError, IndexError):
+                        pass
+            if elegida:
+                pass  # ya matcheó por boton_id
+            elif t.isdigit():
                 idx = int(t) - 1
                 if 0 <= idx < len(opciones):
                     elegida = opciones[idx]
@@ -846,19 +870,25 @@ class MotorFlujo:
 # Entry point público
 # ─────────────────────────────────────────────────────────────────────
 
-def procesar_mensaje_tradicional(session, conversation, contacto, texto) -> ResultadoFlujo:
+def procesar_mensaje_tradicional(session, conversation, contacto, texto, boton_id='') -> ResultadoFlujo:
     """
     Procesa un mensaje entrante usando el flujo tradicional de la sesión.
 
-    Se debe invocar SOLO cuando session.modo_bot in ('tradicional', 'hibrido').
+    Se debe invocar SOLO cuando session.modo_bot == 'tradicional'.
     El webhook es responsable de decidir la llamada — este módulo nunca se
     activa solo (cero interferencia con el pipeline IA).
+
+    Args:
+        boton_id: Si el cliente tocó un botón Meta (interactive), el webhook
+            extrae `button_reply.id` o `list_reply.id` y lo pasa acá. El motor
+            lo matchea contra OpcionDepartamentoChatBot.boton_id, evitando
+            depender del título visible (que cambia con i18n / typos).
     """
     # Imports perezosos: evitan ciclos y desacoplan el módulo.
     from crm.models import EstadoFlujoChatbot
     from whatsapp.services import get_whatsapp_service
 
-    if (session.modo_bot or 'ia') not in ('tradicional', 'hibrido'):
+    if (session.modo_bot or 'ia') != 'tradicional':
         return ResultadoFlujo(manejado=False)
 
     estado, _ = EstadoFlujoChatbot.objects.get_or_create(conversacion=conversation)
@@ -872,22 +902,22 @@ def procesar_mensaje_tradicional(session, conversation, contacto, texto) -> Resu
         estado.reset()
         estado.save()
 
-    motor = MotorFlujo(session, conversation, contacto, texto, estado, get_whatsapp_service(session))
+    motor = MotorFlujo(session, conversation, contacto, texto, estado,
+                      get_whatsapp_service(session), boton_id=boton_id)
     try:
         motor.ejecutar()
     except Exception as e:
         logger.exception('Motor flujo falló conv#%s: %s', conversation.id, e)
         return ResultadoFlujo(
             manejado=False,
-            fallback_ia=(session.modo_bot == 'hibrido'),
+            fallback_ia=False,
             error=str(e),
         )
 
     manejado = bool(motor.respuestas) or motor.handoff or motor.finalizado
-    fallback = (not manejado) and session.modo_bot == 'hibrido'
     return ResultadoFlujo(
         manejado=manejado,
-        fallback_ia=fallback,
+        fallback_ia=False,
         handoff=motor.handoff,
         finalizado=motor.finalizado,
         respuestas=motor.respuestas,

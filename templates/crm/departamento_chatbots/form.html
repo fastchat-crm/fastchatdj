@@ -197,13 +197,6 @@
     </div>
 </div>
 
-{# Paso 2 (Enrutamiento) — REMOVIDO. El depto se asocia directamente
-   a la sesión vía SesionWhatsApp.departamento_default y los clics de
-   botón llegan por el webhook como interactive.button_reply.id. Ya no
-   hace falta enrutamiento por palabras clave ni menús de números.
-   Los campos `palabras_clave`, `es_default` y `activo_tradicional`
-   siguen existiendo en el modelo (compat) pero se editan desde
-   Django Admin si hace falta. #}
 <input type="hidden" name="es_default" value="{{ form.es_default.value|yesno:'on,' }}">
 <input type="hidden" name="activo_tradicional" value="{{ form.activo_tradicional.value|yesno:'on,' }}">
 <input type="hidden" name="palabras_clave" value="{{ form.palabras_clave.value|default:'' }}">

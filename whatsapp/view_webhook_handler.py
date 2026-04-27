@@ -648,49 +648,78 @@ def process_incoming_message(session, event_data, channel_layer):
         numero_opcion_respondido = numero_opcion_respondido.isdigit() and numero_opcion_respondido or -1
 
         # ── GUARD: Horario de atención ───────────────────────────────────
-        # Si la sesión tiene HorarioAtencion configurado y el momento actual
-        # está fuera del horario → respondemos `mensaje_fuera_horario` y NO
-        # invocamos IA ni flujo. Esto baja costos (sin tokens fuera de hora)
-        # y mantiene UX honesta. Aplicamos solo en el primer mensaje del día
-        # para evitar spam si el cliente manda 10 seguidos.
+        # Política:
+        #   modo_bot = 'tradicional' → SIEMPRE deja correr el motor del flujo
+        #     (el flujo puede tener su propia rama "fuera de hora" en el menú).
+        #     Solo registra la traza informativa.
+        #   modo_bot = 'ia' o 'ninguno' → manda `mensaje_fuera_horario` y corta
+        #     ANTES de la IA (evita gastar tokens fuera de hora).
+        # Throttle del aviso: 1 vez por conversación cada 6h.
         try:
             from .services_horarios import dentro_de_horario, mensaje_fuera_horario_configurado
             _en_horario = dentro_de_horario(session)
             if not _en_horario:
-                # Mensaje custom de la sesión, o default amigable si no hay.
-                # Silencio = mala UX: siempre respondemos algo.
-                _msg_personalizado = mensaje_fuera_horario_configurado(session)
-                _msg_fuera = _msg_personalizado or (
-                    "👋 ¡Gracias por escribirnos! En este momento estamos fuera "
-                    "de nuestro horario de atención. Te responderemos en cuanto "
-                    "volvamos a estar disponibles. 🕐"
-                )
-                # Throttle: 1 aviso por conversación cada 6h.
-                _key_fuera = f'fuera_horario_aviso_{conversation.id}'
-                _ya_avisado = bool(cache.get(_key_fuera))
-                _envio_ok = None
-                if not _ya_avisado:
-                    cache.set(_key_fuera, True, 6 * 3600)
-                    try:
-                        _r = whatsapp_service.send_text_message(
-                            session.session_id, contacto.from_number, _msg_fuera, simularEscritura=True
-                        )
-                        _envio_ok = bool((_r or {}).get('success'))
-                    except Exception as _send_ex:
-                        logger.exception("Fuera_horario: error enviando aviso: %s", _send_ex)
-                        _envio_ok = False
-                _traza(
-                    etapa='webhook_recibido', sesion=session, conversacion=conversation, mensaje=message,
-                    numero=from_number, nivel='info',
-                    detalle={
-                        'fuera_horario': True,
-                        'aviso_throttled': _ya_avisado,
-                        'envio_ok': _envio_ok,
-                        'mensaje_personalizado': bool(_msg_personalizado),
-                        'mensaje_preview': _msg_fuera[:140],
-                    },
-                )
-                return JsonResponse({'status': 'ok', 'fuera_horario': True, 'envio_ok': _envio_ok})
+                _modo_actual = (session.modo_bot or 'ia')
+                if _modo_actual == 'tradicional':
+                    # Solo log — el motor del flujo se ejecuta normalmente.
+                    _traza(
+                        etapa='webhook_recibido', sesion=session, conversacion=conversation, mensaje=message,
+                        numero=from_number, nivel='info',
+                        detalle={'fuera_horario': True, 'modo_bot': 'tradicional',
+                                 'accion': 'continua_motor_flujo'},
+                    )
+                else:
+                    # IA o ninguno → enviar aviso + cortar para no invocar LLM.
+                    _msg_personalizado = mensaje_fuera_horario_configurado(session)
+                    _msg_fuera = _msg_personalizado or (
+                        "👋 ¡Gracias por escribirnos! En este momento estamos fuera "
+                        "de nuestro horario de atención. Te responderemos en cuanto "
+                        "volvamos a estar disponibles. 🕐"
+                    )
+                    _key_fuera = f'fuera_horario_aviso_{conversation.id}'
+                    _ya_avisado = bool(cache.get(_key_fuera))
+                    _envio_ok = None
+                    if not _ya_avisado:
+                        cache.set(_key_fuera, True, 6 * 3600)
+                        try:
+                            _r = whatsapp_service.send_text_message(
+                                session.session_id, contacto.from_number, _msg_fuera, simularEscritura=True
+                            )
+                            _envio_ok = bool((_r or {}).get('success'))
+                            # Persistir en el historial de la conversación
+                            # para que aparezca en /whatsapp/conversaciones/<id>/.
+                            if _envio_ok:
+                                try:
+                                    _msg_id_ext = (_r or {}).get('message_id') or ''
+                                    MensajeWhatsApp.objects.create(
+                                        conversacion=conversation,
+                                        remitente=session.numero,
+                                        mensaje=_msg_fuera,
+                                        tipo='texto',
+                                        fecha=timezone.now(),
+                                        mensaje_id_externo=_msg_id_ext,
+                                        leido=True,
+                                        fecha_leido=timezone.now(),
+                                        es_automatico=True,
+                                    )
+                                except Exception as _save_ex:
+                                    logger.warning("Fuera_horario: no se pudo persistir aviso: %s", _save_ex)
+                        except Exception as _send_ex:
+                            logger.exception("Fuera_horario: error enviando aviso: %s", _send_ex)
+                            _envio_ok = False
+                    _traza(
+                        etapa='webhook_recibido', sesion=session, conversacion=conversation, mensaje=message,
+                        numero=from_number, nivel='info',
+                        detalle={
+                            'fuera_horario': True,
+                            'modo_bot': _modo_actual,
+                            'aviso_throttled': _ya_avisado,
+                            'envio_ok': _envio_ok,
+                            'mensaje_personalizado': bool(_msg_personalizado),
+                            'mensaje_preview': _msg_fuera[:140],
+                        },
+                    )
+                    return JsonResponse({'status': 'ok', 'fuera_horario': True, 'envio_ok': _envio_ok})
         except Exception as _h_ex:
             logger.warning("Guard horario falló (continúa flujo normal): %s", _h_ex)
         # ─────────────────────────────────────────────────────────────────
@@ -764,15 +793,19 @@ def process_incoming_message(session, event_data, channel_layer):
         # Motor del chatbot TRADICIONAL (flujo/API, estilo n8n).
         # Se activa SÓLO si la sesión lo pide por su `modo_bot`. No
         # interfiere con el pipeline IA: si no maneja el mensaje y el
-        # modo es 'hibrido', cae al bloque IA de más abajo.
+        # No interfiere con IA: modos 'tradicional' e 'ia' son exclusivos.
         # ────────────────────────────────────────────────────────────
         _modo_bot = (session.modo_bot or 'ia')
-        if _modo_bot in ('tradicional', 'hibrido'):
+        if _modo_bot == 'tradicional':
             _ex_motor = None
             try:
                 from crm.motor_flujo_chatbot import procesar_mensaje_tradicional
+                # Extraer boton_id si vino de un interactive button/list reply
+                # (Meta lo inyecta en `_boton_id` desde meta_webhook_view).
+                _boton_id_evt = event_data.get('_boton_id') or ''
                 _res_motor = procesar_mensaje_tradicional(
-                    session, conversation, contacto, message_text or ''
+                    session, conversation, contacto, message_text or '',
+                    boton_id=_boton_id_evt,
                 )
             except Exception as _ex_motor_raised:
                 _ex_motor = _ex_motor_raised
@@ -800,10 +833,8 @@ def process_incoming_message(session, event_data, channel_layer):
             if _res_motor and (_res_motor.manejado or _res_motor.handoff or _res_motor.finalizado):
                 return JsonResponse({'status': 'ok', 'modo': 'tradicional'})
 
-            # modo='tradicional' puro: sin match → no delegamos a IA.
-            if _modo_bot == 'tradicional':
-                return JsonResponse({'status': 'ok', 'modo': 'tradicional_sin_match'})
-            # modo='hibrido' sin match → se deja caer al bloque IA de abajo.
+            # Modo tradicional puro: sin match → no delegamos a IA.
+            return JsonResponse({'status': 'ok', 'modo': 'tradicional_sin_match'})
 
         departamentos = conversation.sesion.departamentos.all().annotate(
             numero_opcion=Window(

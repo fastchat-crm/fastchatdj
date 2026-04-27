@@ -165,7 +165,7 @@ def probar_chatbot_view(request, sesion_enc_id):
 
             # Forzar modo tradicional para la prueba aunque la sesión esté en 'ia'.
             modo_original = sesion.modo_bot
-            if modo_original not in ('tradicional', 'hibrido'):
+            if modo_original != 'tradicional':
                 sesion.modo_bot = 'tradicional'
 
             estado, _ = EstadoFlujoChatbot.objects.get_or_create(conversacion=conversacion)
@@ -210,7 +210,7 @@ def probar_chatbot_view(request, sesion_enc_id):
                     'nodos_enviados': len(ws_stub.enviados),
                     'estado': _serializar_estado(estado),
                     'timeline': motor.trace,
-                    'modo_forzado_tradicional': modo_original not in ('tradicional', 'hibrido'),
+                    'modo_forzado_tradicional': modo_original != 'tradicional',
                     'modo_original': modo_original,
                 },
             })

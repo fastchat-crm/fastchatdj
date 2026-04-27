@@ -75,6 +75,47 @@
         return html;
     }
 
+    // Best-effort indent — para JSON truncado (body_preview de 600 chars)
+    // o con errores, recorre char a char insertando saltos/indent a partir
+    // de la estructura visible. Respeta strings (no rompe dentro de "...").
+    function bestEffortIndent(text) {
+        var out = '';
+        var depth = 0;
+        var inStr = false;
+        var esc = false;
+        var pad = function (n) {
+            var s = '';
+            for (var i = 0; i < n; i++) s += '  ';
+            return s;
+        };
+        for (var i = 0; i < text.length; i++) {
+            var c = text.charAt(i);
+            if (inStr) {
+                out += c;
+                if (esc) { esc = false; continue; }
+                if (c === '\\') { esc = true; continue; }
+                if (c === '"')  { inStr = false; }
+                continue;
+            }
+            if (c === '"') { inStr = true; out += c; continue; }
+            if (c === '{' || c === '[') {
+                depth++;
+                out += c + '\n' + pad(depth);
+                continue;
+            }
+            if (c === '}' || c === ']') {
+                depth = Math.max(0, depth - 1);
+                out += '\n' + pad(depth) + c;
+                continue;
+            }
+            if (c === ',') { out += c + '\n' + pad(depth); continue; }
+            if (c === ':') { out += c + ' '; continue; }
+            if (c === ' ' || c === '\n' || c === '\t' || c === '\r') continue;
+            out += c;
+        }
+        return out;
+    }
+
     function format(text) {
         if (text == null || text === '') {
             return '<pre class="json-raw json-empty">(vacío)</pre>';
@@ -86,12 +127,22 @@
                 return '<pre class="json-pretty">' + highlight(pretty) + '</pre>';
             } catch (e) { /* fallthrough */ }
         }
+        // Fallback: si arranca con { o [ asumimos JSON truncado/inválido y
+        // hacemos indent best-effort con highlight. Si no, texto plano.
+        var trimmed = String(text).trim();
+        if (trimmed && (trimmed[0] === '{' || trimmed[0] === '[')) {
+            var indented = bestEffortIndent(trimmed);
+            return '<pre class="json-pretty json-pretty-partial" '
+                 + 'title="JSON truncado o inválido — formato best-effort">'
+                 + highlight(indented) + '</pre>';
+        }
         return '<pre class="json-raw">' + escapeHtml(text) + '</pre>';
     }
 
     window.JsonPretty = {
         tryParse: tryParse,
         indent:   indent,
+        bestEffortIndent: bestEffortIndent,
         highlight: highlight,
         format:   format,
         escapeHtml: escapeHtml,

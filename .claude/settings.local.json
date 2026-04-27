@@ -57,7 +57,8 @@
       "Bash(pdfinfo docs/kommo/KOMMO.pdf)",
       "Bash(pdfinfo docs/kommo/ROTS.pdf)",
       "Bash(awk 'NR==206,NR==410' seguridad/view_credencial_meta.py)",
-      "Bash(awk *)"
+      "Bash(awk *)",
+      "Bash(git update-index *)"
     ]
   },
   "hooks": {

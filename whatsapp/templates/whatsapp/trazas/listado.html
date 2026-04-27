@@ -355,10 +355,16 @@
             if (res.result) {
                 $('#timelineContent').html(res.data);
             } else {
-                $('#timelineContent').html('<div class="alert alert-warning">No se pudo cargar el timeline.</div>');
+                var msg = res.message || 'No se pudo cargar el timeline.';
+                $('#timelineContent').html('<div class="alert alert-warning">'+msg+'</div>');
             }
-        }, 'json').fail(function() {
-            $('#timelineContent').html('<div class="alert alert-danger">Error al cargar el timeline.</div>');
+        }, 'json').fail(function(xhr) {
+            var msg = 'Error al cargar el timeline.';
+            try {
+                var j = JSON.parse(xhr.responseText || '{}');
+                if (j.message) msg += ' ' + j.message;
+            } catch (e) { /* respuesta no JSON */ }
+            $('#timelineContent').html('<div class="alert alert-danger">'+msg+'</div>');
         });
     }
 </script>

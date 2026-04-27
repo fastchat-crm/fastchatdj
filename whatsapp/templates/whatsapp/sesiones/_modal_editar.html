@@ -50,14 +50,11 @@
                         tradicional
                     </option>
                     <option value="ia" {% if sesion.modo_bot == 'ia' %}selected{% endif %}>Agente IA</option>
-                    <option value="hibrido" {% if sesion.modo_bot == 'hibrido' %}selected{% endif %}>Híbrido tradicional
-                        → IA
-                    </option>
                 </select>
                 <small class="muted d-block mt-1" id="hint-modo-bot"></small>
             </div>
 
-            {# Departamento (solo visible si modo = tradicional o hibrido) #}
+            {# Departamento (solo visible si modo = tradicional) #}
             <div class="form-row" id="row-departamento">
                 <label>Departamento del flujo tradicional <span class="text-danger">*</span></label>
                 <select name="departamento_default">
@@ -79,7 +76,7 @@
                 </small>
             </div>
 
-            {# Agente IA (solo visible si modo = ia o hibrido) #}
+            {# Agente IA (solo visible si modo = ia) #}
             <div class="form-row" id="row-agente-ia">
                 <label>Agente IA {% if sesion.modo_bot == 'ia' %}<span class="text-danger">*</span>{% endif %}</label>
                 <select name="agente_ia">
@@ -101,12 +98,11 @@
                         'ninguno':     'No se invoca ningún bot. El operador humano contesta todo.',
                         'tradicional': 'Solo se ejecuta el flujo del departamento (botones, opciones).',
                         'ia':          'Solo IA libre. Cada respuesta la genera el LLM del agente.',
-                        'hibrido':     'Primero matchea con el flujo del departamento; si no encuentra, cae a IA.',
                     };
                     function actualizar() {
                         const m = sel.value;
-                        const usaDepto = (m === 'tradicional' || m === 'hibrido');
-                        const usaIA    = (m === 'ia' || m === 'hibrido');
+                        const usaDepto = (m === 'tradicional');
+                        const usaIA    = (m === 'ia');
                         rowDepto.style.display  = usaDepto ? '' : 'none';
                         rowAgente.style.display = usaIA    ? '' : 'none';
                         if (hint) hint.textContent = HINTS[m] || '';

@@ -26,22 +26,56 @@ def trazasView(request):
 
     # AJAX: ver timeline completo de un mensaje o conversacion
     if request.GET.get('action') == 'ver_timeline':
-        conv_id = request.GET.get('conversacion_id')
-        msg_id = request.GET.get('mensaje_id')
-        numero = request.GET.get('numero')
-        filtros = Q()
-        if msg_id:
-            filtros &= Q(mensaje_id=msg_id)
-        elif conv_id:
-            filtros &= Q(conversacion_id=conv_id)
-        elif numero:
-            filtros &= Q(numero__icontains=numero)
-        trazas = TrazaMensajeIA.objects.filter(filtros).order_by('fecha', 'id')[:500]
-        template = get_template('whatsapp/trazas/timeline.html')
-        return JsonResponse({
-            'result': True,
-            'data': template.render({'trazas': trazas, 'request': request}),
-        })
+        try:
+            conv_id = request.GET.get('conversacion_id')
+            msg_id = request.GET.get('mensaje_id')
+            numero = (request.GET.get('numero') or '').strip()
+            # Validacion: ignorar literal 'null'/'None' que llegan del template
+            # cuando los FK estan vacios — sino filtraria por string 'null'.
+            def _id_valido(v):
+                if not v:
+                    return False
+                if str(v).lower() in ('null', 'none', 'undefined'):
+                    return False
+                try:
+                    int(v)
+                    return True
+                except (TypeError, ValueError):
+                    return False
+
+            filtros = Q()
+            if _id_valido(msg_id):
+                filtros &= Q(mensaje_id=int(msg_id))
+            elif _id_valido(conv_id):
+                filtros &= Q(conversacion_id=int(conv_id))
+            elif numero:
+                filtros &= Q(numero__icontains=numero)
+            else:
+                # Sin criterio no devolvemos las 500 ultimas — no tiene sentido
+                # como "timeline" de un evento puntual.
+                return JsonResponse({
+                    'result': False,
+                    'message': 'Sin criterio (mensaje/conversacion/numero) para construir el timeline.',
+                })
+
+            trazas = (
+                TrazaMensajeIA.objects
+                .filter(filtros)
+                .select_related('sesion', 'conversacion', 'mensaje', 'apikey')
+                .order_by('fecha', 'id')[:500]
+            )
+            template = get_template('whatsapp/trazas/timeline.html')
+            return JsonResponse({
+                'result': True,
+                'data': template.render({'trazas': trazas}, request=request),
+            })
+        except Exception as ex:
+            import traceback
+            return JsonResponse({
+                'result': False,
+                'message': f'Error al construir el timeline: {ex}',
+                'debug': traceback.format_exc().splitlines()[-3:],
+            })
 
     # ===== LISTADO PRINCIPAL =====
     # Scope: sesiones del usuario + trazas del webservice (apikey del perfil del usuario)

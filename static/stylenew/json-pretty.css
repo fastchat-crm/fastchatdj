@@ -23,6 +23,19 @@
     background: #1f2937;
     color: #d1d5db;
 }
+.json-pretty-partial {
+    border-left: 3px solid #f59e0b;
+}
+.json-pretty-partial::before {
+    content: "⚠ JSON truncado — formato best-effort";
+    display: block;
+    font-size: .68rem;
+    color: #fbbf24;
+    margin-bottom: .4rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    font-weight: 600;
+}
 .json-empty {
     color: #6b7280;
     font-style: italic;

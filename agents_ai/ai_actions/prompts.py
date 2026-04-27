@@ -9,6 +9,84 @@ sub-claves: `'plantillas_wa.con_contexto'`, `'plantillas_wa.sin_contexto'`.
 
 PROMPTS = {
     # ─────────────────────────────────────────────────────────────────────
+    # WhatsApp — PlantillaWhatsApp (Meta) — generacion de UNA plantilla
+    # Placeholders: {contexto_negocio}, {descripcion_usuario}
+    # ─────────────────────────────────────────────────────────────────────
+    'plantillas_wa.uno': (
+        "Eres un experto en plantillas de WhatsApp Business (Meta Cloud API).\n"
+        "Genera UNA plantilla de mensaje basandote en:\n"
+        "\n"
+        "CONTEXTO DEL NEGOCIO:\n"
+        "{contexto_negocio}\n"
+        "\n"
+        "SOLICITUD DEL USUARIO:\n"
+        "{descripcion_usuario}\n"
+        "\n"
+        "Responde SOLO con un bloque JSON valido (sin markdown, sin texto extra) con esta estructura exacta:\n"
+        "{{\n"
+        '  "nombre": "slug_en_minusculas_con_guiones_bajos",\n'
+        '  "categoria": "UTILITY o MARKETING o AUTHENTICATION",\n'
+        '  "idioma": "es",\n'
+        '  "header_tipo": "NONE o TEXT o IMAGE",\n'
+        '  "header_contenido": "texto del header o vacio si NONE",\n'
+        '  "cuerpo": "texto principal con {{{{1}}}}, {{{{2}}}}, etc para variables",\n'
+        '  "footer": "pie opcional o vacio",\n'
+        '  "variables_json": [\n'
+        '    {{"nombre": "nombre_descriptivo", "ejemplo": "valor de ejemplo"}}\n'
+        "  ]\n"
+        "}}\n"
+        "\n"
+        "Reglas:\n"
+        "- Los placeholders deben ser estrictamente {{{{1}}}}, {{{{2}}}}, {{{{3}}}}... en orden consecutivo.\n"
+        "- El nombre debe ser slug valido: solo a-z, 0-9 y guiones bajos, maximo 512 chars.\n"
+        "- El footer tiene maximo 60 caracteres.\n"
+        "- UTILITY es para confirmaciones, recordatorios, seguimiento. MARKETING para promos, ofertas, engagement.\n"
+        "- Usa emojis con moderacion. Escribe en espanol.\n"
+        "- El cuerpo debe ser natural, profesional y conciso.\n"
+    ),
+
+    # ─────────────────────────────────────────────────────────────────────
+    # WhatsApp — PlantillaWhatsApp (Meta) — generacion en lote (N plantillas)
+    # Placeholders: {n}, {descripcion}, {contexto_negocio}
+    # ─────────────────────────────────────────────────────────────────────
+    'plantillas_wa.lote': (
+        "Eres un experto en plantillas de WhatsApp Business (Meta Cloud API). Genera "
+        "{n} plantillas optimizadas. Devuelve SOLO un JSON valido (sin ```), con esta estructura:\n"
+        "{{\n"
+        '  "plantillas": [\n'
+        "    {{\n"
+        '      "nombre": "snake_case_unico_max_60_chars",\n'
+        '      "idioma": "es" o "es_MX" o "en_US" segun corresponda,\n'
+        '      "categoria": "UTILITY" | "MARKETING" | "AUTHENTICATION",\n'
+        '      "header_tipo": "NONE" | "TEXT",\n'
+        '      "header_contenido": "string sin emojis ni markdown, max 60 chars (vacio si NONE)",\n'
+        '      "cuerpo": "texto del mensaje con placeholders {{{{1}}}}, {{{{2}}}}... segun necesidad. Max 1024 chars.",\n'
+        '      "footer": "string opcional, max 60 chars, sin emojis"\n'
+        "    }}\n"
+        "  ]\n"
+        "}}\n"
+        "\n"
+        "REGLAS DURAS de Meta:\n"
+        "- nombre: solo a-z 0-9 _ (snake_case), unico por cuenta WABA, max 60 chars.\n"
+        "- header_contenido: SIN newlines, SIN asteriscos *_~`, SIN emojis, max 60 chars.\n"
+        "- footer: mismas reglas que header.\n"
+        "- cuerpo: max 1024 chars, puede usar *negrita*, _cursiva_, ~tachado~, `monospace`. Usa {{{{1}}}} {{{{2}}}} para variables dinamicas.\n"
+        "- categoria UTILITY = transaccional (confirmaciones, recordatorios, tracking).\n"
+        "- categoria MARKETING = promocional/engagement (Meta cobra mas + restricciones de opt-in).\n"
+        "- categoria AUTHENTICATION = solo para OTP/2FA, no usar para otro caso.\n"
+        "\n"
+        "Descripcion del usuario:\n"
+        "{descripcion}\n"
+        "\n"
+        "Contexto del negocio (si aplica):\n"
+        "{contexto_negocio}\n"
+        "\n"
+        "Idioma sugerido: detectalo del contexto (default es_MX si latam, es_ES si espanol generico).\n"
+        "\n"
+        "Devuelve EXCLUSIVAMENTE el JSON pedido.\n"
+    ),
+
+    # ─────────────────────────────────────────────────────────────────────
     # CRM — HerramientaAgente (asistente de configuracion via lenguaje natural)
     # Placeholders: {descripcion_usuario}
     # ─────────────────────────────────────────────────────────────────────

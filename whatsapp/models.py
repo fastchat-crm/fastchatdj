@@ -53,7 +53,6 @@ MODOS_BOT = (
     ('ninguno',     'Sin bot (sólo humanos)'),
     ('tradicional', 'Chatbot tradicional (flujo/menús/APIs)'),
     ('ia',          'Agente IA'),
-    ('hibrido',     'Híbrido: flujo tradicional, cae a IA si no matchea'),
 )
 
 

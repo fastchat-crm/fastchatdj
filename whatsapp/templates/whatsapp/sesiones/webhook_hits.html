@@ -180,11 +180,15 @@
 
 <script>
 (function(){
-    // Click row → detalle modal
-    document.querySelectorAll('.hit-row').forEach(function(row){
-        row.style.cursor = 'pointer';
-        row.addEventListener('click', function(){
+    // Click row → detalle modal. Delegacion en tbody para que las filas
+    // inyectadas por live-polling tambien respondan al click.
+    var tbody = document.querySelector('#hits-table tbody');
+    if (tbody) {
+        tbody.addEventListener('click', function(ev){
+            var row = ev.target.closest('.hit-row');
+            if (!row || !tbody.contains(row)) return;
             var id = row.getAttribute('data-hit-id');
+            if (!id) return;
             var modal = document.getElementById('hit-detail-modal');
             var body  = document.getElementById('hit-detail-body');
             body.innerHTML = '<div class="man-val-loader"><i class="fa fa-spinner fa-spin"></i><p>Cargando...</p></div>';
@@ -192,7 +196,7 @@
             fetch('/whatsapp/meta/webhook-hits/' + id + '/', {credentials:'same-origin'})
                 .then(function(r){return r.json();})
                 .then(function(d){
-                    if(!d.ok){ body.innerHTML = '<div class="man-val-msg is-error">'+d.error+'</div>'; return; }
+                    if(!d.ok){ body.innerHTML = '<div class="man-val-msg is-error">'+(d.error||'Error')+'</div>'; return; }
                     var esc = function(s){return (s||'').replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];});};
                     var bloqueResp = '';
                     if (d.direccion === 'out') {
@@ -223,7 +227,7 @@
                         bloqueResp;
                 });
         });
-    });
+    }
     document.querySelectorAll('[data-hit-close]').forEach(function(b){
         b.addEventListener('click', function(){ document.getElementById('hit-detail-modal').classList.remove('open'); });
     });
@@ -252,23 +256,54 @@
                 .then(function(r){return r.json();})
                 .then(function(d){
                     if (!d.ok || !d.data || !d.data.length) return;
-                    var tbody = document.querySelector('#hits-table tbody');
-                    if (!tbody) return;
+                    var tb = document.querySelector('#hits-table tbody');
+                    if (!tb) return;
+                    var escHtml = function(s){
+                        return String(s==null?'':s)
+                            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                    };
+                    // Headers reales: Fecha, Dir, Metodo, Status, Detalle, Firma, Tamano, Latencia, Nota.
+                    // Las 9 columnas DEBEN coincidir; faltarlas rompe el layout.
                     d.data.reverse().forEach(function(h){
                         if (h.id <= maxId) return;
                         maxId = Math.max(maxId, h.id);
                         var tr = document.createElement('tr');
+                        tr.className = 'hit-row' + (h.status_code >= 400 ? ' diag-row-error' : '');
+                        tr.setAttribute('data-hit-id', h.id);
                         tr.style.background = '#fffbeb';
+                        tr.style.cursor = 'pointer';
+                        var dirCell = (h.direccion === 'in')
+                            ? '<span class="diag-pill" style="background:#dbeafe;color:#1e40af" title="Meta -> nosotros"><i class="fa fa-arrow-down"></i> IN</span>'
+                            : '<span class="diag-pill" style="background:#fef3c7;color:#92400e" title="Nosotros -> Meta"><i class="fa fa-arrow-up"></i> OUT</span>';
+                        var methodColor = h.method === 'POST' ? '#dbeafe;color:#1e40af'
+                                        : h.method === 'GET'  ? '#dcfce7;color:#15803d'
+                                        : '#fef3c7;color:#92400e';
+                        var statusClass = h.status_code === 200 ? 'green'
+                                        : h.status_code >= 400 ? 'red'
+                                        : (h.status_code === 0 ? 'gray' : 'yellow');
+                        var detalleCell = (h.direccion === 'out')
+                            ? '<span class="diag-mono" title="'+escHtml(h.url||'')+'">'+escHtml((h.url||'').slice(0,50))+'</span>'
+                            : '<span class="diag-mono">'+escHtml(h.ip||'—')+'</span>'
+                              + ((h.user_agent||'').toLowerCase().indexOf('facebook')>=0
+                                 ? ' <i class="fab fa-facebook" style="color:#1877f2;margin-left:4px" title="Meta UA"></i>'
+                                 : '');
+                        var firmaCell = h.signature_presente
+                            ? '<i class="fa fa-shield-halved" style="color:#10b981" title="X-Hub-Signature-256 presente"></i>'
+                            : '<i class="fa fa-shield-halved" style="color:#9ca3af" title="Sin firma"></i>';
+                        var latCell = h.latencia_ms
+                            ? '<span class="diag-mono">'+h.latencia_ms+'ms</span>'
+                            : '—';
                         tr.innerHTML =
-                            '<td><span class="diag-mono">'+h.fecha+'</span></td>'+
-                            '<td><span class="diag-tag">'+h.method+'</span></td>'+
-                            '<td><span class="diag-pill diag-pill-'+(h.status_code===200?'green':h.status_code>=400?'red':'yellow')+'">'+h.status_code+'</span></td>'+
-                            '<td><span class="diag-mono">'+(h.ip||'—')+'</span></td>'+
-                            '<td>'+(h.signature_presente?'🛡️':'—')+'</td>'+
-                            '<td>'+h.body_length+'b</td>'+
-                            '<td>'+(h.nota||'—')+'</td>'+
-                            '<td>'+(h.user_agent.toLowerCase().indexOf('facebook')>=0?'Meta':h.user_agent.substring(0,30))+'</td>';
-                        tbody.insertBefore(tr, tbody.firstChild);
+                            '<td><span class="diag-mono">'+escHtml(h.fecha)+'</span></td>'+
+                            '<td>'+dirCell+'</td>'+
+                            '<td><span class="diag-tag" style="background:'+methodColor+'">'+escHtml(h.method)+'</span></td>'+
+                            '<td><span class="diag-pill diag-pill-'+statusClass+'">'+(h.status_code||'—')+'</span></td>'+
+                            '<td class="diag-detail-cell">'+detalleCell+'</td>'+
+                            '<td>'+firmaCell+'</td>'+
+                            '<td><span class="diag-mono">'+h.body_length+'b</span></td>'+
+                            '<td>'+latCell+'</td>'+
+                            '<td class="diag-detail-cell">'+escHtml(h.nota||'—')+'</td>';
+                        tb.insertBefore(tr, tb.firstChild);
                         setTimeout(function(){ tr.style.background = ''; }, 3000);
                     });
                 });
