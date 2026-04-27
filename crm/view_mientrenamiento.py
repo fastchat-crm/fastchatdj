@@ -1028,67 +1028,23 @@ def entrenamiento_ia_view(request):
                         return JsonResponse({'error': False, 'prioridad': filtro.prioridad})
 
                     elif action == 'herramienta_ia_asistida':
-                        from crm.herramienta_templates import PROMPT_IA_ASISTIDA
-                        agente_id = int(request.POST.get('agente_id') or 0)
-                        agente = AgentesIA.objects.get(pk=agente_id, perfil=perfil)
-                        frase = (request.POST.get('frase') or '').strip()
-                        if not frase:
-                            return JsonResponse({'error': True, 'message': 'Describe qué necesita consultar la herramienta.'})
-                        apikey_obj = agente.apikey.filter(estado=True).first()
-                        if not apikey_obj:
-                            return JsonResponse({'error': True, 'message': 'El agente no tiene una API Key activa.'})
+                        # Wrapper HTTP: la logica IA vive en
+                        # `agents_ai/ai_actions/herramientas_crm.py`.
+                        from agents_ai.ai_actions import IAActionError
+                        from agents_ai.ai_actions import herramientas_crm
                         try:
-                            # Usamos el mismo patrón del auditor: forzar JSON nativo en Gemini/OpenAI
-                            if apikey_obj.proveedor == 2:
-                                from langchain_google_genai import ChatGoogleGenerativeAI
-                                llm = ChatGoogleGenerativeAI(
-                                    model='gemini-2.5-flash', google_api_key=apikey_obj.descripcion,
-                                    max_output_tokens=4000, temperature=0.3,
-                                    model_kwargs={'response_mime_type': 'application/json'},
-                                )
-                            else:
-                                from langchain_community.chat_models import ChatOpenAI
-                                llm = ChatOpenAI(
-                                    model_name='gpt-4o-mini', openai_api_key=apikey_obj.descripcion,
-                                    max_tokens=4000, temperature=0.3,
-                                    model_kwargs={'response_format': {'type': 'json_object'}},
-                                )
-                            prompt = PROMPT_IA_ASISTIDA.format(descripcion_usuario=frase)
-                            msg = llm.invoke(prompt)
-                            texto = (getattr(msg, 'content', '') or '').strip()
-                            # Registrar consumo de tokens
-                            try:
-                                _meta = getattr(msg, 'response_metadata', {}) or {}
-                                _usage = (
-                                    getattr(msg, 'usage_metadata', None)
-                                    or _meta.get('usage_metadata')
-                                    or _meta.get('token_usage')
-                                    or {}
-                                )
-                                _te = _usage.get('input_tokens') or _usage.get('prompt_token_count') or _usage.get('prompt_tokens') or 0
-                                _ts = _usage.get('output_tokens') or _usage.get('candidates_token_count') or _usage.get('completion_tokens') or 0
-                                if _te or _ts:
-                                    ConsumoTokenIA.objects.create(
-                                        apikey=apikey_obj, agente=agente,
-                                        tokens_entrada=_te, tokens_salida=_ts,
-                                        tokens_total=_te + _ts,
-                                        modelo=getattr(llm, 'model', 'herramienta-builder'),
-                                        origen='herramienta',
-                                        prompt_preview=(frase or '')[:300],
-                                    )
-                                    from crm.alertas_consumo import verificar_alerta_consumo
-                                    verificar_alerta_consumo(apikey_obj, _te + _ts)
-                            except Exception:
-                                pass
-                            # Quitar posibles fences
-                            if texto.startswith('```'):
-                                texto = texto.strip('`')
-                                if texto.lower().startswith('json'):
-                                    texto = texto[4:].strip()
-                            config = json.loads(texto)
-                            return JsonResponse({'error': False, 'config': config})
+                            agente_id = int(request.POST.get('agente_id') or 0)
+                            agente = AgentesIA.objects.get(pk=agente_id, perfil=perfil)
+                            resultado = herramientas_crm.generar(
+                                frase=request.POST.get('frase'),
+                                agente=agente,
+                                request=request,
+                            )
+                        except IAActionError as ex:
+                            return JsonResponse({'error': True, 'message': str(ex)})
                         except Exception as ex:
                             return JsonResponse({'error': True, 'message': f'No pude generar la configuración: {ex}'})
+                        return JsonResponse({'error': False, 'config': resultado['config']})
 
             except ValueError as ex:
                 res_json.append({'error': True, "message": str(ex)})

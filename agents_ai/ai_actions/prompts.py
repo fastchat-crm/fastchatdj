@@ -9,6 +9,51 @@ sub-claves: `'plantillas_wa.con_contexto'`, `'plantillas_wa.sin_contexto'`.
 
 PROMPTS = {
     # ─────────────────────────────────────────────────────────────────────
+    # CRM — HerramientaAgente (asistente de configuracion via lenguaje natural)
+    # Placeholders: {descripcion_usuario}
+    # ─────────────────────────────────────────────────────────────────────
+    'herramientas_crm': (
+        "Eres un asistente que ayuda a configurar una herramienta de consulta API\n"
+        "para un chatbot que conversa con clientes por WhatsApp.\n"
+        "\n"
+        "El usuario describira en lenguaje natural que necesita consultar. Genera la\n"
+        "configuracion de la herramienta respondiendo SOLO con JSON valido — sin texto\n"
+        "adicional, sin markdown, sin explicaciones.\n"
+        "\n"
+        "El JSON debe tener EXACTAMENTE esta estructura:\n"
+        "\n"
+        "{{\n"
+        '  "nombre_amigable": "<titulo corto para humanos, max 80 chars>",\n'
+        '  "nombre": "<identificador en snake_case sin espacios, max 50 chars>",\n'
+        '  "descripcion": "<2-3 frases claras: que hace y CUANDO usarla; el LLM lo leera para decidir cuando invocarla>",\n'
+        '  "metodo": "GET" o "POST",\n'
+        '  "ubicacion_params": "query" | "json" | "form" | "path",\n'
+        '  "url": "<URL de ejemplo; puedes usar {{{{param}}}} si ubicacion_params es \'path\'>",\n'
+        '  "timeout": 10,\n'
+        '  "plantilla_respuesta": "<plantilla Jinja con {{{{variable}}}} para formatear la respuesta al cliente; o cadena vacia>",\n'
+        '  "parametros": [\n'
+        "    {{\n"
+        '      "nombre": "<slug snake_case>",\n'
+        '      "tipo": "string" | "integer" | "number" | "boolean",\n'
+        '      "requerido": true | false,\n'
+        '      "descripcion": "<que es este dato — lo vera el LLM>",\n'
+        '      "pregunta_sugerida": "<como el agente le pregunta al usuario en espanol natural>",\n'
+        '      "ejemplo": "<valor ejemplo>"\n'
+        "    }}\n"
+        "  ]\n"
+        "}}\n"
+        "\n"
+        "Reglas:\n"
+        "- Si el usuario no especifica URL, inventa una razonable (ej: https://api.cliente.com/recurso).\n"
+        "- Incluye SOLO los parametros realmente necesarios. Si algo lo puedes obtener del contexto del bot (numero de WhatsApp), no lo pidas.\n"
+        "- 'pregunta_sugerida' debe ser conversacional, calida y en espanol ecuatoriano neutro.\n"
+        "- Para consultas: usa GET. Para crear/agendar/registrar: usa POST.\n"
+        "\n"
+        "Descripcion del usuario:\n"
+        "{descripcion_usuario}\n"
+    ),
+
+    # ─────────────────────────────────────────────────────────────────────
     # CRM — AgentesIA (asistente de creacion de agente)
     # Placeholders: {tono}, {idioma}, {descripcion_usuario}
     # ─────────────────────────────────────────────────────────────────────

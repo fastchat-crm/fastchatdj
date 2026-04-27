@@ -118,44 +118,7 @@ HERRAMIENTA_TEMPLATES = [
 ]
 
 
-# ─── Prompt para IA-assist ──────────────────────────────────────────
-
-PROMPT_IA_ASISTIDA = """Eres un asistente que ayuda a configurar una herramienta de consulta API
-para un chatbot que conversa con clientes por WhatsApp.
-
-El usuario describirá en lenguaje natural qué necesita consultar. Genera la
-configuración de la herramienta respondiendo SOLO con JSON válido — sin texto
-adicional, sin markdown, sin explicaciones.
-
-El JSON debe tener EXACTAMENTE esta estructura:
-
-{{
-  "nombre_amigable": "<título corto para humanos, máx 80 chars>",
-  "nombre": "<identificador en snake_case sin espacios, máx 50 chars>",
-  "descripcion": "<2-3 frases claras: qué hace y CUÁNDO usarla; el LLM lo leerá para decidir cuándo invocarla>",
-  "metodo": "GET" o "POST",
-  "ubicacion_params": "query" | "json" | "form" | "path",
-  "url": "<URL de ejemplo; puedes usar {{{{param}}}} si ubicacion_params es 'path'>",
-  "timeout": 10,
-  "plantilla_respuesta": "<plantilla Jinja con {{{{variable}}}} para formatear la respuesta al cliente; o cadena vacía>",
-  "parametros": [
-    {{
-      "nombre": "<slug snake_case>",
-      "tipo": "string" | "integer" | "number" | "boolean",
-      "requerido": true | false,
-      "descripcion": "<qué es este dato — lo verá el LLM>",
-      "pregunta_sugerida": "<cómo el agente le pregunta al usuario en español natural>",
-      "ejemplo": "<valor ejemplo>"
-    }}
-  ]
-}}
-
-Reglas:
-- Si el usuario no especifica URL, inventa una razonable (ej: https://api.cliente.com/recurso).
-- Incluye SOLO los parámetros realmente necesarios. Si algo lo puedes obtener del contexto del bot (número de WhatsApp), no lo pidas.
-- "pregunta_sugerida" debe ser conversacional, cálida y en español ecuatoriano neutro.
-- Para consultas: usa GET. Para crear/agendar/registrar: usa POST.
-
-Descripción del usuario:
-{descripcion_usuario}
-"""
+# Nota: El prompt PROMPT_IA_ASISTIDA fue movido a
+# `agents_ai/ai_actions/prompts.py` (clave 'herramientas_crm') como parte
+# de la centralizacion de acciones IA. La accion vive ahora en
+# `agents_ai/ai_actions/herramientas_crm.py`.
