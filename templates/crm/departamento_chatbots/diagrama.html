@@ -44,9 +44,23 @@
                 <i class="fa fa-search-plus"></i>
             </button>
         </div>
-        <small class="text-muted ms-2">
+        <div class="dp-diag-search">
+            <i class="fa fa-search dp-diag-search-icon"></i>
+            <input type="text" id="dp-diag-search-input"
+                   class="form-control form-control-sm"
+                   placeholder="Buscar nodo por nombre, tipo o id…"
+                   autocomplete="off">
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    id="dp-diag-search-clear" title="Limpiar"
+                    style="display:none;">
+                <i class="fa fa-times"></i>
+            </button>
+            <div id="dp-diag-search-results" class="dp-diag-search-results"
+                 style="display:none;"></div>
+        </div>
+        <small class="text-muted ms-2 d-none d-md-inline">
             <i class="fa fa-info-circle"></i>
-            Arrastrá dentro del marco para ver todo el árbol.
+            Tipeá para filtrar / saltar a un nodo.
         </small>
     </div>
     <div class="card dp-diag-card">
@@ -125,6 +139,119 @@
         zoomNivel = 1; aplicarZoom();
     });
     aplicarZoom();
+
+    // ── Buscador ─────────────────────────────────────────────────
+    var inputBuscar = document.getElementById('dp-diag-search-input');
+    var btnClear    = document.getElementById('dp-diag-search-clear');
+    var listaResult = document.getElementById('dp-diag-search-results');
+
+    // Index local: leemos las cards renderizadas (cada una tiene data + nombre).
+    var indiceNodos = Array.prototype.map.call(
+        document.querySelectorAll('.dp-tree-card'),
+        function (card) {
+            // Extraemos el id del botón "ver-ficha-nodo" (data-nodo-id) que está
+            // dentro de cada card.
+            var btnFicha = card.querySelector('[data-nodo-id]');
+            var nid = btnFicha ? parseInt(btnFicha.getAttribute('data-nodo-id'), 10) : 0;
+            var nombreEl = card.querySelector('.dp-tree-card-name');
+            var pillEl   = card.querySelector('.dp-tipo-pill');
+            return {
+                id: nid,
+                nombre: (nombreEl ? nombreEl.textContent : '').trim(),
+                tipo: (pillEl ? pillEl.textContent : '').trim(),
+                card: card,
+            };
+        }
+    ).filter(function (n) { return n.id > 0; });
+
+    function escHtmlBuscar(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function buscar(q) {
+        q = (q || '').trim().toLowerCase();
+        if (!q) {
+            listaResult.style.display = 'none';
+            btnClear.style.display = 'none';
+            indiceNodos.forEach(function (n) {
+                n.card.classList.remove('dp-search-dim', 'dp-search-hit');
+            });
+            return;
+        }
+        btnClear.style.display = '';
+        var hits = indiceNodos.filter(function (n) {
+            return n.nombre.toLowerCase().indexOf(q) >= 0
+                || n.tipo.toLowerCase().indexOf(q) >= 0
+                || String(n.id).indexOf(q) >= 0;
+        });
+        // Marcar visualmente
+        indiceNodos.forEach(function (n) {
+            if (hits.indexOf(n) >= 0) {
+                n.card.classList.remove('dp-search-dim');
+                n.card.classList.add('dp-search-hit');
+            } else {
+                n.card.classList.add('dp-search-dim');
+                n.card.classList.remove('dp-search-hit');
+            }
+        });
+        // Lista de resultados (clickable para hacer scroll)
+        if (hits.length === 0) {
+            listaResult.innerHTML = '<div class="dp-diag-search-empty">'
+                + 'Sin resultados para "' + escHtmlBuscar(q) + '"</div>';
+        } else {
+            listaResult.innerHTML = hits.slice(0, 20).map(function (n) {
+                return '<a href="#" data-jump-to="' + n.id + '" class="dp-diag-search-row">'
+                    + '<span class="dp-diag-search-tipo">' + escHtmlBuscar(n.tipo) + '</span>'
+                    + '<span class="dp-diag-search-nombre">' + escHtmlBuscar(n.nombre) + '</span>'
+                    + '<span class="dp-diag-search-id">#' + n.id + '</span>'
+                    + '</a>';
+            }).join('') + (hits.length > 20
+                ? '<div class="dp-diag-search-empty small">+' + (hits.length - 20) + ' más</div>'
+                : '');
+        }
+        listaResult.style.display = 'block';
+    }
+
+    inputBuscar.addEventListener('input', function () { buscar(inputBuscar.value); });
+    inputBuscar.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape') { inputBuscar.value = ''; buscar(''); }
+        if (ev.key === 'Enter') {
+            // Salta al primer hit
+            var first = listaResult.querySelector('[data-jump-to]');
+            if (first) { ev.preventDefault(); first.click(); }
+        }
+    });
+    btnClear.addEventListener('click', function () {
+        inputBuscar.value = ''; buscar(''); inputBuscar.focus();
+    });
+    listaResult.addEventListener('click', function (ev) {
+        var a = ev.target.closest('[data-jump-to]');
+        if (!a) return;
+        ev.preventDefault();
+        var nid = parseInt(a.getAttribute('data-jump-to'), 10);
+        var hit = indiceNodos.find(function (n) { return n.id === nid; });
+        if (!hit) return;
+        // Scroll al card y destacar
+        hit.card.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        hit.card.classList.add('dp-search-flash');
+        setTimeout(function () { hit.card.classList.remove('dp-search-flash'); }, 1800);
+        listaResult.style.display = 'none';
+    });
+    // Cerrar resultados si click fuera
+    document.addEventListener('click', function (ev) {
+        if (!ev.target.closest('.dp-diag-search')) {
+            listaResult.style.display = 'none';
+        }
+    });
+    // Atajo Ctrl/Cmd+F focusea el buscador
+    document.addEventListener('keydown', function (ev) {
+        if ((ev.ctrlKey || ev.metaKey) && ev.key === 'f') {
+            ev.preventDefault();
+            inputBuscar.focus();
+            inputBuscar.select();
+        }
+    });
 
     document.body.addEventListener('click', function (ev) {
         var btn = ev.target.closest('[data-act="ver-ficha-nodo"]');

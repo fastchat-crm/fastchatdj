@@ -523,33 +523,49 @@
                     return;
                 }
                 var modalJson = bootstrap.Modal.getOrCreateInstance($('#dpModalMetaJson'));
-                $('#dp-ficha-content').innerHTML = '<i class="fa fa-spinner fa-spin"></i> Cargando…';
-                $('#dp-meta-json-pre').textContent = 'Cargando…';
-                $('#dp-meta-payload-pre').textContent = 'Cargando…';
+                var fichaBox  = $('#dp-ficha-content');
+                var jsonPre   = $('#dp-meta-json-pre');
+                if (fichaBox) fichaBox.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Cargando…';
+                if (jsonPre)  jsonPre.textContent = 'Cargando…';
                 modalJson.show();
 
-                // Cargar ambos en paralelo
-                Promise.all([
-                    getJson({ action: 'exportar_flujo_json', id: STATE.departamentoId }),
-                    getJson({ action: 'exportar_meta_payload', id: STATE.departamentoId }),
-                ]).then(function (results) {
-                    var flujo = results[0], meta = results[1];
-                    if (flujo.result) {
-                        $('#dp-meta-json-pre').textContent = JSON.stringify(flujo.data, null, 2);
-                        $('#dp-ficha-content').innerHTML = renderFicha(flujo.data);
-                    } else {
-                        $('#dp-meta-json-pre').textContent = 'Error: ' + (flujo.message || '?');
-                        $('#dp-ficha-content').innerHTML = '<div class="alert alert-danger">'
-                            + escHtml(flujo.message || 'Error') + '</div>';
-                    }
-                    if (meta.result) {
-                        $('#dp-meta-payload-pre').textContent = JSON.stringify(meta.payload, null, 2);
-                    } else {
-                        $('#dp-meta-payload-pre').textContent = 'Error: ' + (meta.message || '?');
-                    }
-                }).catch(function (err) {
-                    $('#dp-meta-json-pre').textContent = 'Error de conexión: ' + err.message;
-                });
+                getJson({ action: 'exportar_flujo_json', id: STATE.departamentoId })
+                    .then(function (resp) {
+                        if (!resp.result) {
+                            var msg = resp.message || 'Sin detalle';
+                            if (jsonPre) jsonPre.textContent = 'Error: ' + msg;
+                            if (fichaBox) fichaBox.innerHTML =
+                                '<div class="alert alert-danger">'
+                                + '<strong>No se pudo cargar:</strong> ' + escHtml(msg)
+                                + '</div>';
+                            return;
+                        }
+                        // JSON crudo
+                        if (jsonPre) {
+                            try { jsonPre.textContent = JSON.stringify(resp.data, null, 2); }
+                            catch (e) { jsonPre.textContent = 'Error formateando JSON: ' + e.message; }
+                        }
+                        // Ficha — protegida con try/catch para no quedar en "Cargando..."
+                        if (fichaBox) {
+                            try {
+                                fichaBox.innerHTML = renderFicha(resp.data);
+                            } catch (e) {
+                                console.error('renderFicha falló:', e);
+                                fichaBox.innerHTML =
+                                    '<div class="alert alert-warning small">'
+                                    + '<strong>Ficha no se pudo armar:</strong> '
+                                    + escHtml(e.message)
+                                    + '. Revisá la pestaña <em>JSON completo</em> para ver los datos.'
+                                    + '</div>';
+                            }
+                        }
+                    })
+                    .catch(function (err) {
+                        var msg = 'Error de red: ' + (err.message || err);
+                        if (jsonPre) jsonPre.textContent = msg;
+                        if (fichaBox) fichaBox.innerHTML =
+                            '<div class="alert alert-danger">' + escHtml(msg) + '</div>';
+                    });
 
                 // Tab switcher (idempotente)
                 document.querySelectorAll('#dpJsonTabs .nav-link').forEach(function (b) {

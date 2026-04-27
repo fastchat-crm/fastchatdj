@@ -165,11 +165,6 @@
                             <i class="fa fa-code me-1"></i> JSON completo
                         </button>
                     </li>
-                    <li class="nav-item">
-                        <button class="nav-link" data-tab="meta">
-                            <i class="fab fa-whatsapp me-1"></i> Payload Meta
-                        </button>
-                    </li>
                 </ul>
                 <div class="tab-content">
                     <div class="tab-pane active" data-pane="ficha">
@@ -179,20 +174,12 @@
                     <div class="tab-pane" data-pane="json" style="display:none;">
                         <div class="alert alert-light border py-2 small mb-2">
                             <i class="fa fa-circle-info me-1"></i>
-                            Snapshot completo del depto: cabecera, todos los nodos
-                            con su <code>config</code>, endpoints, credenciales
-                            (secretos REDACTED) y conexiones. Sirve para versionar
-                            o pasar entre ambientes.
+                            Snapshot del depto: cabecera, nodos con su
+                            <code>config</code>, endpoints, credenciales
+                            (secretos REDACTED) y conexiones. Útil para
+                            versionar o exportar entre ambientes.
                         </div>
                         <pre id="dp-meta-json-pre" class="dp-json-pre">Cargando…</pre>
-                    </div>
-                    <div class="tab-pane" data-pane="meta" style="display:none;">
-                        <div class="alert alert-light border py-2 small mb-2">
-                            <i class="fa fa-circle-info me-1"></i>
-                            Payload Meta Cloud API que el bot enviaría al primer turno
-                            (interactive button/list según cantidad de opciones).
-                        </div>
-                        <pre id="dp-meta-payload-pre" class="dp-json-pre">Cargando…</pre>
                     </div>
                 </div>
             </div>

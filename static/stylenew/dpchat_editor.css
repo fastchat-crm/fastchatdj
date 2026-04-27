@@ -128,19 +128,8 @@
 
 .dp-node-card.dp-hidden { display: none; }
 
-/* Decision tree horizontal */
-.dp-tree-decision-wrap {
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 1rem .5rem;
-    background: #fafbfc; border-radius: 8px;
-    width: 100%;
-    /* Scrollbar visible aunque no haya overflow forzado */
-    scrollbar-width: thin;
-}
-.dp-tree-decision-wrap::-webkit-scrollbar { height: 10px; }
-.dp-tree-decision-wrap::-webkit-scrollbar-thumb { background: #ced4da; border-radius: 5px; }
-.dp-tree-decision-wrap::-webkit-scrollbar-track { background: #f1f3f5; }
+/* (reglas consolidadas en `.dp-diag-card` / `.dp-tree-decision-wrap` más
+    abajo — esta sección queda vacía para no duplicar) */
 
 /* Root ul: ancho del contenido natural — esto fuerza overflow en el wrap
    cuando el árbol es más ancho que el modal */
@@ -516,4 +505,86 @@ body.dp-diag-page { overflow: hidden !important; }
     0%   { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7); }
     70%  { box-shadow: 0 0 0 12px rgba(251, 191, 36, 0); }
     100% { box-shadow: 0 0 0 3px #fcd34d, 0 0 24px rgba(251, 191, 36, 0.4); }
+}
+
+/* ─── Buscador del diagrama ─── */
+.dp-diag-search {
+    position: relative;
+    display: flex; align-items: center;
+    gap: .35rem;
+    flex: 1;
+    max-width: 480px;
+    margin-left: .5rem;
+}
+.dp-diag-search-icon {
+    position: absolute;
+    left: .65rem; top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    pointer-events: none;
+    z-index: 2;
+}
+.dp-diag-search input.form-control {
+    padding-left: 2rem;
+    border-radius: 6px;
+}
+.dp-diag-search-results {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0; right: 0;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.10);
+    max-height: 320px;
+    overflow-y: auto;
+    z-index: 1000;
+    padding: .25rem 0;
+}
+.dp-diag-search-row {
+    display: flex; align-items: center; gap: .5rem;
+    padding: .4rem .65rem;
+    text-decoration: none;
+    color: #1e293b;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: .82rem;
+}
+.dp-diag-search-row:last-child { border-bottom: 0; }
+.dp-diag-search-row:hover { background: #f1f5f9; }
+.dp-diag-search-tipo {
+    background: #e0e7ff; color: #3730a3;
+    padding: 1px 6px; border-radius: 3px;
+    font-size: .65rem; font-weight: 600;
+    min-width: 70px; text-align: center;
+}
+.dp-diag-search-nombre { flex: 1; font-weight: 500; }
+.dp-diag-search-id {
+    color: #94a3b8;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: .72rem;
+}
+.dp-diag-search-empty {
+    padding: .5rem .75rem;
+    color: #94a3b8;
+    font-style: italic;
+    font-size: .78rem;
+}
+
+/* Estados del card al buscar */
+.dp-tree-card.dp-search-dim {
+    opacity: .25;
+    transition: opacity .2s;
+}
+.dp-tree-card.dp-search-hit {
+    opacity: 1;
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+.dp-tree-card.dp-search-flash {
+    animation: dp-search-pulse 1.6s ease-out;
+}
+@keyframes dp-search-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); transform: scale(1); }
+    50%  { box-shadow: 0 0 0 14px rgba(59, 130, 246, 0); transform: scale(1.05); }
+    100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); transform: scale(1); }
 }
