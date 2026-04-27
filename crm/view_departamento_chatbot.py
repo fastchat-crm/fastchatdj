@@ -460,14 +460,11 @@ def _generar_departamento_con_ia(request):
 # muestra cada uno con margin-left = nivel * indent.
 # ============================================================================
 def _build_meta_payload(departamento):
-    """Construye un payload Meta Cloud API (interactive button/list) a partir
-    del saludo + opciones del departamento. Útil para previsualizar como
-    quedaría el primer mensaje del bot. Reglas:
-    - Si el depto tiene un nodo raíz `es_inicio` con respuesta, usa esa respuesta como body.
-      Si no, usa `mensaje_saludo` del depto.
-    - Hijos directos del root inicial = botones (max 3) o list rows (>3).
-    - Si no hay un root inicial, los nodos raíz mismos se vuelven los botones.
-    - title de botón: 20 chars max, description list: 72.
+    """Construye payload Meta Cloud API del primer mensaje del bot.
+    Despacha por tipo_nodo del root inicial:
+        cta_url   → interactive cta_url
+        ubicacion → location
+        menu/...  → interactive button (≤3 hijos) o list (>3)
     """
     raices = OpcionDepartamentoChatBot.objects.filter(
         departamento=departamento, opcion_padre__isnull=True, status=True,
@@ -480,14 +477,42 @@ def _build_meta_payload(departamento):
     if not body_text:
         body_text = departamento.nombre or '—'
 
-    # Hijos directos del root, o las raices mismas si no hay root claro.
+    base = {
+        'messaging_product': 'whatsapp',
+        'recipient_type': 'individual',
+        'to': '593XXXXXXXXX',
+    }
+
+    # Despacho por tipo del root
+    if root and root.tipo_nodo == 'cta_url':
+        cfg = root.config or {}
+        return {**base, 'type': 'interactive', 'interactive': {
+            'type': 'cta_url',
+            'body': {'text': body_text[:1024]},
+            'action': {
+                'name': 'cta_url',
+                'parameters': {
+                    'display_text': (cfg.get('display_text') or 'Abrir')[:20],
+                    'url': cfg.get('url') or '',
+                },
+            },
+        }}
+
+    if root and root.tipo_nodo == 'ubicacion':
+        cfg = root.config or {}
+        return {**base, 'type': 'location', 'location': {
+            'latitude': cfg.get('lat') or 0,
+            'longitude': cfg.get('lng') or 0,
+            'name': cfg.get('name') or '',
+            'address': cfg.get('address') or '',
+        }}
+
+    # Default: hijos del root → botones o list
     if root:
-        hijos_qs = OpcionDepartamentoChatBot.objects.filter(
+        opciones_lista = list(OpcionDepartamentoChatBot.objects.filter(
             opcion_padre=root, status=True,
-        ).order_by('orden', 'id')
-        opciones_lista = list(hijos_qs)
+        ).order_by('orden', 'id'))
         if not opciones_lista:
-            # No hay hijos del root → usar las otras raices
             opciones_lista = list(raices.exclude(pk=root.pk))
     else:
         opciones_lista = list(raices)
@@ -498,40 +523,37 @@ def _build_meta_payload(departamento):
     def _btn_title(op):
         return ((op.nombre or '').strip() or f'Opción {op.id}')[:20]
 
+    if not opciones_lista:
+        # Sin hijos → mensaje de texto plano
+        return {**base, 'type': 'text', 'text': {
+            'preview_url': False,
+            'body': body_text[:4096],
+        }}
+
     if len(opciones_lista) <= 3:
         botones = [{
             'type': 'reply',
             'reply': {'id': _btn_id(op), 'title': _btn_title(op)},
         } for op in opciones_lista]
-        return {
-            'messaging_product': 'whatsapp',
-            'to': '593XXXXXXXXX',
-            'type': 'interactive',
-            'interactive': {
-                'type': 'button',
-                'body': {'text': body_text[:1024]},
-                'action': {'buttons': botones},
-            },
-        }
-    # >3 → list type
+        return {**base, 'type': 'interactive', 'interactive': {
+            'type': 'button',
+            'body': {'text': body_text[:1024]},
+            'action': {'buttons': botones},
+        }}
+
     rows = [{
         'id': _btn_id(op),
         'title': _btn_title(op)[:24],
         'description': ((op.respuesta or '').strip()[:72]) or '',
     } for op in opciones_lista[:10]]
-    return {
-        'messaging_product': 'whatsapp',
-        'to': '593XXXXXXXXX',
-        'type': 'interactive',
-        'interactive': {
-            'type': 'list',
-            'body': {'text': body_text[:1024]},
-            'action': {
-                'button': 'Ver opciones',
-                'sections': [{'title': 'Opciones', 'rows': rows}],
-            },
+    return {**base, 'type': 'interactive', 'interactive': {
+        'type': 'list',
+        'body': {'text': body_text[:1024]},
+        'action': {
+            'button': 'Ver opciones',
+            'sections': [{'title': 'Opciones', 'rows': rows}],
         },
-    }
+    }}
 
 
 def _serializar_arbol_opciones(departamento, padre=None, nivel=0):
@@ -676,31 +698,42 @@ def _guardar_opcion(request):
         opcion.orden = max_orden + 1
 
     # boton_id viene del form (input directo)
-    boton_id = (request.POST.get('boton_id') or '').strip()[:64]
-    # Sanitizar: solo letras/números/_/-
     import re as _re
+    boton_id = (request.POST.get('boton_id') or '').strip()[:64]
     boton_id = _re.sub(r'[^a-zA-Z0-9_\-]', '', boton_id)
     opcion.boton_id = boton_id
 
-    # Acción con URL (cta_url Meta) — se guarda dentro de config_json
-    accion_url = (request.POST.get('accion_url') or '').strip()
-    accion_text = (request.POST.get('accion_display_text') or '').strip()[:20]
-    if accion_url:
+    # config_json se construye según tipo_nodo nativo
+    if opcion.tipo_nodo == 'cta_url':
+        url = (request.POST.get('accion_url') or '').strip()
+        text = (request.POST.get('accion_display_text') or '').strip()[:20]
+        if not url:
+            return JsonResponse({'ok': False, 'error': 'cta_url requiere URL destino'})
         opcion.config = {
-            'meta_type': 'cta_url',
-            'url': accion_url,
-            'display_text': accion_text or 'Abrir',
+            'url': url,
+            'display_text': text or 'Abrir',
+        }
+    elif opcion.tipo_nodo == 'ubicacion':
+        try:
+            lat = float(request.POST.get('ubicacion_lat') or 0)
+            lng = float(request.POST.get('ubicacion_lng') or 0)
+        except (TypeError, ValueError):
+            return JsonResponse({'ok': False, 'error': 'lat/lng inválidos'})
+        if lat == 0 and lng == 0:
+            return JsonResponse({'ok': False, 'error': 'Ubicación requiere lat/lng'})
+        opcion.config = {
+            'lat': lat, 'lng': lng,
+            'name': (request.POST.get('ubicacion_nombre') or '').strip()[:120],
+            'address': (request.POST.get('ubicacion_direccion') or '').strip()[:200],
         }
     else:
-        # Si la opción tenia config cta_url pero ya no hay URL, limpiamos.
-        # Conservamos otros tipos (p.ej. location) si vinieran.
-        if opcion.config and opcion.config.get('meta_type') == 'cta_url':
+        # Tipos sin config específica → limpiar si tenía cta_url/ubicacion previas
+        if opcion.config and (
+            'url' in opcion.config or 'lat' in opcion.config or 'meta_type' in opcion.config
+        ):
             opcion.config = {}
         elif not opcion.config:
             opcion.config = {}
-
-    # Campos avanzados (variable_destino, endpoint, validación) se mantienen
-    # como están si ya tenían valor; el form simplificado no los toca.
 
     opcion.save(request)
 

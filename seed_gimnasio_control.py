@@ -64,7 +64,7 @@ ARBOL = [
                         ),
                         'hijos': [
                             {
-                                'tipo': 'respuesta', 'nombre': '💳 Tarjeta de Crédito',
+                                'tipo': 'cta_url', 'nombre': '💳 Tarjeta de Crédito',
                                 'boton_id': 'pago_tarjeta_sede1',
                                 'respuesta': (
                                     '¡Excelente elección! 💳 Pagar con tarjeta es rápido y 100% seguro.\n'
@@ -72,7 +72,6 @@ ARBOL = [
                                     'ingreses el valor exacto.'
                                 ),
                                 'config': {
-                                    'meta_type': 'cta_url',
                                     'display_text': '💳 Pagar Membresía',
                                     'url': 'https://pay.payphonetodoesposible.com/sandowfitness',
                                 },
@@ -85,12 +84,16 @@ ARBOL = [
                                         ),
                                         'hijos': [
                                             {
-                                                'tipo': 'handoff', 'nombre': '📸 Enviar Comprobante',
+                                                'tipo': 'cta_url', 'nombre': '📸 Enviar Comprobante',
                                                 'boton_id': 'enviar_comprobante_tarjeta',
                                                 'respuesta': (
                                                     '¡Mil gracias por elegir Sandow Fitness! 😊💪 '
-                                                    'Una asesora te atenderá en breve para activar tu plan.'
+                                                    'Tocá el botón para subir tu comprobante:'
                                                 ),
+                                                'config': {
+                                                    'display_text': '📸 Subir Comprobante',
+                                                    'url': 'https://google.com',
+                                                },
                                             },
                                         ],
                                     },
@@ -109,18 +112,24 @@ ARBOL = [
                                 ),
                                 'hijos': [
                                     {
-                                        'tipo': 'handoff', 'nombre': '📸 Enviar Comprobante',
+                                        'tipo': 'cta_url', 'nombre': '📸 Enviar Comprobante',
                                         'boton_id': 'enviar_comprobante_transf',
-                                        'respuesta': 'Listo! Te conecto con un asesor para validar el pago. 💪',
+                                        'respuesta': (
+                                            '¡Listo! Tocá el botón para subir tu comprobante. '
+                                            'Una asesora validará el pago en breve. 💪'
+                                        ),
+                                        'config': {
+                                            'display_text': '📸 Subir Comprobante',
+                                            'url': 'https://google.com',
+                                        },
                                     },
                                 ],
                             },
                             {
-                                'tipo': 'respuesta', 'nombre': '📍 Ver Ubicación GPS',
+                                'tipo': 'ubicacion', 'nombre': '📍 Ver Ubicación GPS',
                                 'boton_id': 'ver_ubicacion_sede1',
-                                'respuesta': '📍 Sandow Fitness · Sede 1 García\nAv. García Moreno y 9 de Octubre, Milagro.',
+                                'respuesta': '📍 Sandow Fitness · Sede 1 García',
                                 'config': {
-                                    'meta_type': 'location',
                                     'lat': -2.1325, 'lng': -79.5878,
                                     'name': 'Sandow Fitness - Sede 1 García',
                                     'address': 'Av. García Moreno y 9 de Octubre, Milagro, Guayas',

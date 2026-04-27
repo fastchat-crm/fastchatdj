@@ -8,8 +8,7 @@
             <i class="fa fa-info-circle me-1"></i>
             <strong>Nueva sub-opción.</strong> Cuelga de un nodo padre.
             Si el padre es <span class="badge bg-primary">Menú</span>, esta opción aparece
-            como botón al usuario. Si el padre es <span class="badge bg-warning text-dark">Pregunta</span>,
-            se ejecuta cuando el usuario responde.
+            como botón interactive al cliente.
         </div>
     {% else %}
         <div class="alert alert-info py-2 small mb-2">
@@ -21,10 +20,11 @@
 {% endif %}
 
 <div class="alert alert-light border py-2 small mb-2">
-    <strong>Tipos:</strong>
+    <strong>Tipos disponibles:</strong>
+    <span class="badge bg-primary">Menú</span> sus hijos = botones interactive (≤3 button, &gt;3 list) ·
     <span class="badge bg-success">Respuesta</span> texto plano ·
-    <span class="badge bg-primary">Menú</span> hijos = botones interactive ·
-    <span class="badge bg-warning text-dark">Pregunta</span> captura input ·
+    <span class="badge" style="background:#2563eb">cta_url</span> botón con link externo (1 sólo) ·
+    <span class="badge" style="background:#6b21a8">Ubicación</span> mapa pulsable ·
     <span class="badge bg-info text-dark">Handoff</span> deriva a humano ·
     <span class="badge bg-secondary">Fin</span> cierra flujo.
 </div>
@@ -32,7 +32,7 @@
 <div class="row g-2">
     <div class="col-md-4">
         <label class="form-label small fw-bold mb-1">Tipo de nodo</label>
-        <select name="tipo_nodo" class="form-select form-select-sm">
+        <select name="tipo_nodo" id="dpFormTipo" class="form-select form-select-sm">
             {% for v, lbl in tipos_nodo_choices %}
                 <option value="{{ v }}" {% if opcion.tipo_nodo == v %}selected{% endif %}>{{ lbl }}</option>
             {% endfor %}
@@ -49,25 +49,28 @@
     </div>
 
     <div class="col-12">
-        <label class="form-label small fw-bold mb-1">Respuesta / mensaje al cliente</label>
+        <label class="form-label small fw-bold mb-1">
+            Mensaje al cliente / cuerpo del nodo
+        </label>
         <textarea name="respuesta" class="form-control form-control-sm" rows="4"
                   placeholder="Texto que envía el bot al activar este nodo.">{{ opcion.respuesta|default:'' }}</textarea>
         <small class="text-muted">
             Variables: {% verbatim %}<code>{{contacto.nombre}}</code>
             <code>{{contacto.numero}}</code>{% endverbatim %} · Soporta emojis y *negrita*.
+            Body Meta máx 1024 chars.
         </small>
     </div>
 
     <div class="col-md-6">
         <label class="form-label small fw-bold mb-1">
             ID del botón Meta
-            <small class="text-muted fw-normal">(auto si lo dejás vacío)</small>
+            <small class="text-muted fw-normal">(auto si vacío)</small>
         </label>
         <input type="text" name="boton_id" class="form-control form-control-sm"
                value="{{ opcion.boton_id|default:'' }}"
-               placeholder="Ej: ver_precios · sede_garcia · pago_tarjeta"
+               placeholder="Ej: ver_precios · sede_garcia"
                maxlength="64" pattern="[a-zA-Z0-9_\-]*">
-        <small class="text-muted">Solo letras, números, guiones. Llega al webhook como <code>button_reply.id</code>.</small>
+        <small class="text-muted">Solo letras/números/_-. Llega como <code>button_reply.id</code>.</small>
     </div>
     <div class="col-md-6 d-flex align-items-end">
         <div class="form-check form-switch">
@@ -79,31 +82,78 @@
         </div>
     </div>
 
-    <div class="col-12 mt-2">
-        <button type="button" class="btn btn-link btn-sm p-0" data-bs-toggle="collapse" data-bs-target="#opcAccion-{{ opcion.id|default:'new' }}">
-            <i class="fa fa-link me-1"></i> Acción con URL (opcional, tipo cta_url Meta)
-        </button>
-        <div class="collapse {% if opcion.config.meta_type == 'cta_url' %}show{% endif %}" id="opcAccion-{{ opcion.id|default:'new' }}">
-            <div class="row g-2 mt-1 p-2" style="background:#f8f9fa;border-radius:6px;">
-                <div class="col-12 small text-muted mb-1">
-                    <i class="fa fa-info-circle me-1"></i>
-                    Si llenás estos campos, la respuesta del bot incluirá un botón con URL externa
-                    (ideal para link de pago, ubicación web, formulario externo). Meta lo manda como
-                    <code>interactive.type=cta_url</code>.
-                </div>
-                <div class="col-md-5">
-                    <label class="form-label small fw-bold mb-1">Texto del botón</label>
-                    <input type="text" name="accion_display_text" class="form-control form-control-sm"
-                           value="{{ opcion.config.display_text|default:'' }}"
-                           placeholder="Ej: 💳 Pagar Membresía" maxlength="20">
-                </div>
-                <div class="col-md-7">
-                    <label class="form-label small fw-bold mb-1">URL destino</label>
-                    <input type="url" name="accion_url" class="form-control form-control-sm"
-                           value="{{ opcion.config.url|default:'' }}"
-                           placeholder="https://ejemplo.com/pagar">
-                </div>
+    {# Bloque CTA URL — visible solo cuando tipo=cta_url #}
+    <div class="col-12 dp-tipo-block" data-show-when="cta_url">
+        <div class="alert alert-primary py-2 small mb-2">
+            <i class="fa fa-link me-1"></i>
+            <strong>cta_url:</strong> WhatsApp envía un mensaje con UN botón que abre una URL externa.
+            Ideal para link de pago, formulario externo, sitio web. Solo permite 1 botón con URL.
+        </div>
+        <div class="row g-2 p-2" style="background:#eff6ff;border-radius:6px;">
+            <div class="col-md-5">
+                <label class="form-label small fw-bold mb-1">Texto del botón <span class="text-danger">*</span></label>
+                <input type="text" name="accion_display_text" class="form-control form-control-sm"
+                       value="{{ opcion.config.display_text|default:'' }}"
+                       placeholder="Ej: 💳 Pagar Membresía" maxlength="20">
+            </div>
+            <div class="col-md-7">
+                <label class="form-label small fw-bold mb-1">URL destino <span class="text-danger">*</span></label>
+                <input type="url" name="accion_url" class="form-control form-control-sm"
+                       value="{{ opcion.config.url|default:'' }}"
+                       placeholder="https://ejemplo.com/pagar">
+            </div>
+        </div>
+    </div>
+
+    {# Bloque Ubicación — visible solo cuando tipo=ubicacion #}
+    <div class="col-12 dp-tipo-block" data-show-when="ubicacion">
+        <div class="alert alert-secondary py-2 small mb-2" style="background:#f3e8ff;border-color:#d8b4fe">
+            <i class="fa fa-map-marker-alt me-1 text-primary"></i>
+            <strong>Ubicación:</strong> WhatsApp envía un mensaje tipo <code>location</code> que el cliente puede tocar para abrir su app de mapas.
+        </div>
+        <div class="row g-2 p-2" style="background:#faf5ff;border-radius:6px;">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Latitud <span class="text-danger">*</span></label>
+                <input type="number" step="any" name="ubicacion_lat" class="form-control form-control-sm"
+                       value="{{ opcion.config.lat|default:'' }}"
+                       placeholder="-2.1325">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Longitud <span class="text-danger">*</span></label>
+                <input type="number" step="any" name="ubicacion_lng" class="form-control form-control-sm"
+                       value="{{ opcion.config.lng|default:'' }}"
+                       placeholder="-79.5878">
+            </div>
+            <div class="col-md-5">
+                <label class="form-label small fw-bold mb-1">Nombre del lugar</label>
+                <input type="text" name="ubicacion_nombre" class="form-control form-control-sm"
+                       value="{{ opcion.config.name|default:'' }}"
+                       placeholder="Sandow Fitness · Sede 1" maxlength="120">
+            </div>
+            <div class="col-md-7">
+                <label class="form-label small fw-bold mb-1">Dirección</label>
+                <input type="text" name="ubicacion_direccion" class="form-control form-control-sm"
+                       value="{{ opcion.config.address|default:'' }}"
+                       placeholder="Av. García Moreno y 9 de Octubre" maxlength="200">
             </div>
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+    var tipoSel = document.getElementById('dpFormTipo');
+    var bloques = document.querySelectorAll('.dp-tipo-block');
+    function aplicar() {
+        var t = tipoSel.value;
+        bloques.forEach(function (b) {
+            var when = b.getAttribute('data-show-when');
+            b.style.display = (when === t) ? '' : 'none';
+        });
+    }
+    if (tipoSel) {
+        tipoSel.addEventListener('change', aplicar);
+        aplicar();
+    }
+})();
+</script>

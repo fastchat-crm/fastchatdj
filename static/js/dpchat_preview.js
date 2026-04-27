@@ -97,7 +97,8 @@
         card.appendChild(el('div', 'dpprev-location-map', '<i class="fa fa-map-marker-alt"></i>'));
         var info = el('div', 'dpprev-location-info');
         info.innerHTML = '<strong>' + escHtml(cfg.name || 'Ubicación') + '</strong>'
-            + escHtml(cfg.address || '');
+            + escHtml(cfg.address || '')
+            + '<br><small class="text-muted">' + (cfg.lat || 0) + ', ' + (cfg.lng || 0) + '</small>';
         card.appendChild(info);
         chat.appendChild(card);
         scroll();
@@ -105,31 +106,29 @@
 
     function ejecutarNodo(node) {
         typing().then(function () {
-            // Cuerpo del nodo
+            // Cuerpo del nodo (todos los tipos pueden tener body excepto location pura)
             if (node.respuesta) botBubble(node.respuesta);
 
-            var cfg = node.config || {};
-            // Extras Meta
-            if (cfg.meta_type === 'cta_url') {
+            // Despacho por tipo nativo
+            if (node.tipo === 'cta_url') {
                 renderCtaUrl(node);
-            } else if (cfg.meta_type === 'location') {
+            } else if (node.tipo === 'ubicacion') {
                 renderLocation(node);
             }
 
-            // Tipo de nodo determina qué viene después
             if (node.tipo === 'handoff') {
-                systemBubble('🤝 [El bot derivó esta conversación a un humano]');
+                systemBubble('🤝 [Bot derivó la conversación a un humano]');
                 return;
             }
             if (node.tipo === 'fin') {
                 systemBubble('🏁 [Flujo terminado]');
                 return;
             }
-            // Si tiene hijos → mostrar botones
+            // Hijos → botones interactive
             if (node.hijos && node.hijos.length) {
                 renderButtons(node.hijos);
             } else {
-                systemBubble('— No hay más opciones desde este nodo —');
+                systemBubble('— Sin más opciones desde este nodo —');
             }
         });
     }

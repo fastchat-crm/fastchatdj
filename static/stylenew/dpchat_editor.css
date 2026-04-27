@@ -58,6 +58,8 @@
 .tipo-handoff      { background: #cff4fc; color: #055160; }
 .tipo-fin          { background: #e2e3e5; color: #41464b; }
 .tipo-inicio       { background: #ffe3e3; color: #c92a2a; }
+.tipo-cta_url      { background: #dbeafe; color: #1e40af; }
+.tipo-ubicacion    { background: #f3e8ff; color: #6b21a8; }
 
 .dp-node-info { flex: 1; min-width: 0; }
 
@@ -125,8 +127,23 @@
 /* Decision tree horizontal */
 .dp-tree-decision-wrap {
     overflow-x: auto;
-    padding: 1rem 0;
+    overflow-y: hidden;
+    padding: 1rem .5rem;
     background: #fafbfc; border-radius: 8px;
+    width: 100%;
+    /* Scrollbar visible aunque no haya overflow forzado */
+    scrollbar-width: thin;
+}
+.dp-tree-decision-wrap::-webkit-scrollbar { height: 10px; }
+.dp-tree-decision-wrap::-webkit-scrollbar-thumb { background: #ced4da; border-radius: 5px; }
+.dp-tree-decision-wrap::-webkit-scrollbar-track { background: #f1f3f5; }
+
+/* Root ul: ancho del contenido natural — esto fuerza overflow en el wrap
+   cuando el árbol es más ancho que el modal */
+.dp-tree-decision {
+    width: max-content;
+    min-width: 100%;
+    margin: 0 auto;
 }
 .dp-tree-decision,
 .dp-tree-decision ul {
@@ -174,6 +191,8 @@
 .dp-tree-card.tipo-fin         { border-color: #6c757d; }
 .dp-tree-card.tipo-pregunta    { border-color: #ffc107; }
 .dp-tree-card.tipo-http        { border-color: #dc3545; }
+.dp-tree-card.tipo-cta_url     { border-color: #2563eb; }
+.dp-tree-card.tipo-ubicacion   { border-color: #6b21a8; }
 
 .dp-tree-card-pill { display: inline-block; margin-bottom: 4px; }
 .dp-tree-card-name {

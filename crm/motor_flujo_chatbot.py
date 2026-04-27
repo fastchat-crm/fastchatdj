@@ -330,7 +330,7 @@ class MotorFlujo:
             return
         resuelto = resolver_expresion(texto, self.contexto())
         try:
-            self.ws.send_text_message(
+            r = self.ws.send_text_message(
                 self.session.session_id,
                 self.contacto.from_number,
                 resuelto,
@@ -338,11 +338,42 @@ class MotorFlujo:
                 True,
             )
             self.respuestas.append(resuelto)
+            self._persistir_mensaje_saliente(resuelto, r)
             self._trace('envio', 'Mensaje enviado', True,
                         {'preview': resuelto[:160], 'chars': len(resuelto)})
         except Exception as e:
             logger.exception('Error enviando mensaje tradicional: %s', e)
             self._trace('envio', 'Error al enviar', False, {'error': str(e)[:200]})
+
+    def _persistir_mensaje_saliente(self, texto: str, response: dict | None = None):
+        """Guarda el mensaje saliente en MensajeWhatsApp para que aparezca
+        en /whatsapp/conversaciones/<id>/. Sin esto el motor manda al cliente
+        pero el historial queda en blanco."""
+        try:
+            from whatsapp.models import MensajeWhatsApp
+            from django.utils import timezone
+            msg_id_ext = ''
+            if isinstance(response, dict):
+                msg_id_ext = response.get('message_id') or ''
+                # MetaWhatsAppService a veces devuelve dict con messages: [{'id':...}]
+                if not msg_id_ext and 'messages' in response:
+                    try:
+                        msg_id_ext = response['messages'][0].get('id', '')
+                    except Exception:
+                        pass
+            MensajeWhatsApp.objects.create(
+                conversacion=self.conversation,
+                remitente=self.session.numero or '',
+                mensaje=texto,
+                tipo='texto',
+                fecha=timezone.now(),
+                mensaje_id_externo=msg_id_ext or None,
+                leido=True,
+                fecha_leido=timezone.now(),
+                es_automatico=True,
+            )
+        except Exception as ex:
+            logger.warning('Motor: no pude persistir saliente: %s', ex)
 
     def enviar_menu_interactivo(self, body_text: str, opciones: list,
                                  header: str = None, footer: str = None) -> bool:
@@ -385,6 +416,13 @@ class MotorFlujo:
                 )
             ok = bool((resp or {}).get('success'))
             self.respuestas.append(body_resuelto)
+            if ok:
+                # Persistir el body del menú interactivo en historial.
+                # Los botones/items quedan implícitos en el preview de las
+                # opciones (son audit suficiente desde la traza).
+                preview_opts = ' · '.join(o.get('title', '') for o in opciones[:5])
+                texto_log = body_resuelto + (f"\n[Opciones: {preview_opts}]" if preview_opts else '')
+                self._persistir_mensaje_saliente(texto_log, resp)
             self._trace('envio_interactivo', 'Menú interactivo enviado', ok, {
                 'tipo': 'button' if len(opciones) <= 3 else 'list',
                 'opciones': len(opciones),
@@ -459,9 +497,44 @@ class MotorFlujo:
         self._trace('inicio', 'Mensaje recibido', True, {
             'texto': self.texto[:160],
             'primer_turno': not bool(self.estado.nodo_actual),
+            'boton_id': self.boton_id,
         })
 
         variables = self.estado.variables or {}
+
+        # 0a) Salto directo por boton_id (Meta interactive). Si el cliente tocó
+        #     un botón que existe en CUALQUIER nodo del depto, saltamos ahí
+        #     directo. Resuelve el caso "elegí transferencia, terminé esa rama,
+        #     y ahora elijo tarjeta-crédito" — el motor estaría en raíz y no
+        #     reconocería el botón sin este atajo.
+        if self.boton_id:
+            from .models import OpcionDepartamentoChatBot as _Op
+            depto_actual = self.estado.departamento or self.session.departamento_default
+            objetivo = None
+            if depto_actual:
+                objetivo = _Op.objects.filter(
+                    departamento=depto_actual, status=True, boton_id=self.boton_id,
+                ).first()
+                if not objetivo and self.boton_id.startswith('op_'):
+                    try:
+                        op_id = int(self.boton_id.split('_', 1)[1])
+                        objetivo = _Op.objects.filter(
+                            departamento=depto_actual, id=op_id, status=True,
+                        ).first()
+                    except (ValueError, IndexError):
+                        pass
+            if objetivo:
+                self._trace('salto_boton_id', f'Salto directo a "{objetivo.nombre}"',
+                            True, {'boton_id': self.boton_id, 'destino_id': objetivo.id,
+                                   'desde_id': getattr(self.estado.nodo_actual, 'id', None)})
+                self.estado.departamento = depto_actual
+                self.estado.nodo_actual = objetivo
+                self.estado.intentos = 0
+                self.estado.save()
+                # Procesar el nodo destino directamente. Si es 'respuesta', envía
+                # y avanza. Si es 'menu', presenta opciones y espera.
+                self._run_loop(consumir_mensaje=False)
+                return
 
         # 0) Comando global de reset: si el usuario está atascado y escribe
         #    una palabra reservada (menu/inicio/atras/...), reiniciamos el
