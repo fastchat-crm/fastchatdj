@@ -392,10 +392,10 @@ def entrenamiento_ia_view(request):
                         log(f"Error limpiado de API Key {filtro}", request, "change", obj=filtro.id)
                         return JsonResponse({'error': False})
                     elif action == 'auditoria_generar':
-                        from agents_ai.auditor_agente import ejecutar_auditoria
+                        from agents_ai.ai_actions import auditor_crm
                         agente = AgentesIA.objects.get(pk=int(request.POST['agente_id']), perfil=perfil)
                         dias = int(request.POST.get('dias', 30) or 30)
-                        auditoria = ejecutar_auditoria(agente, usuario=request.user, dias=dias)
+                        auditoria = auditor_crm.generar(agente, usuario=request.user, dias=dias)
                         if auditoria.estado == 'error':
                             res_json = {'error': True, 'message': auditoria.error_mensaje or 'Fallo la auditoria'}
                         else:
@@ -409,14 +409,14 @@ def entrenamiento_ia_view(request):
                                 'metricas': auditoria.metricas,
                             }
                     elif action == 'auditoria_aplicar':
-                        from agents_ai.auditor_agente import aplicar_sugerencia
+                        from agents_ai.ai_actions import auditor_crm
                         auditoria = AuditoriaAgenteIA.objects.select_related('agente__perfil').get(
                             pk=int(request.POST['auditoria_id']), agente__perfil=perfil,
                         )
                         campo = request.POST.get('campo')
                         if campo not in ('prompt_template', 'contexto_estatico'):
                             raise ValueError('Campo no soportado')
-                        aplicar_sugerencia(auditoria, campo, usuario=request.user)
+                        auditor_crm.aplicar(auditoria, campo, usuario=request.user)
                         log(f"Aplicada sugerencia IA ({campo}) del agente {auditoria.agente}", request, "change", obj=auditoria.agente.id)
                         # Recargar agente para devolver el valor recién aplicado
                         auditoria.agente.refresh_from_db(fields=[campo])
@@ -425,11 +425,11 @@ def entrenamiento_ia_view(request):
                             'nuevo_valor': getattr(auditoria.agente, campo) or '',
                         }
                     elif action == 'auditoria_revertir':
-                        from agents_ai.auditor_agente import revertir_auditoria
+                        from agents_ai.ai_actions import auditor_crm
                         auditoria = AuditoriaAgenteIA.objects.select_related('agente__perfil').get(
                             pk=int(request.POST['auditoria_id']), agente__perfil=perfil,
                         )
-                        revertir_auditoria(auditoria, usuario=request.user)
+                        auditor_crm.revertir(auditoria, usuario=request.user)
                         log(f"Revertida auditoria IA del agente {auditoria.agente}", request, "change", obj=auditoria.agente.id)
                         auditoria.agente.refresh_from_db(fields=['prompt_template', 'contexto_estatico'])
                         res_json = {
@@ -438,11 +438,11 @@ def entrenamiento_ia_view(request):
                             'contexto_estatico': auditoria.agente.contexto_estatico or '',
                         }
                     elif action == 'auditoria_aplicar_faq':
-                        from agents_ai.auditor_agente import aplicar_faq_sugerido
+                        from agents_ai.ai_actions import auditor_crm
                         auditoria = AuditoriaAgenteIA.objects.select_related('agente__perfil').get(
                             pk=int(request.POST['auditoria_id']), agente__perfil=perfil,
                         )
-                        creadas = aplicar_faq_sugerido(auditoria, usuario=request.user)
+                        creadas = auditor_crm.aplicar_faq(auditoria, usuario=request.user)
                         log(f"Importadas {creadas} FAQ(s) pendientes del auditor — agente {auditoria.agente}",
                             request, "add", obj=auditoria.agente.id)
                         res_json = {'error': False, 'creadas': creadas}
