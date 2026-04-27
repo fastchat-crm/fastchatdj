@@ -472,21 +472,23 @@ def _generar_departamento_con_ia(request):
 # ============================================================================
 def _build_meta_payload(departamento):
     """Construye payload Meta Cloud API del primer mensaje del bot.
-    Despacha por tipo_nodo del root inicial:
+
+    Lee primero `config.opciones` del nodo root (formato del motor de flujo).
+    Si no existe, cae al árbol legacy `opcion_padre`. Despacha por tipo_nodo:
         cta_url   → interactive cta_url
         ubicacion → location
-        menu/...  → interactive button (≤3 hijos) o list (>3)
+        menu      → interactive button (≤3) o list (>3) usando config.opciones
+        pregunta  → text (config.pregunta como cuerpo)
+        respuesta → text (config.mensaje o respuesta)
     """
-    raices = OpcionDepartamentoChatBot.objects.filter(
-        departamento=departamento, opcion_padre__isnull=True, status=True,
-    ).order_by('-es_inicio', 'orden', 'id')
-    root = raices.first()
-
-    body_text = (departamento.mensaje_saludo or '').strip()
-    if root and (root.respuesta or '').strip():
-        body_text = (root.respuesta or body_text).strip()
-    if not body_text:
-        body_text = departamento.nombre or '—'
+    # Root: prefiere es_inicio=True, sino primer huérfano del árbol legacy.
+    root = OpcionDepartamentoChatBot.objects.filter(
+        departamento=departamento, status=True, es_inicio=True,
+    ).order_by('orden', 'id').first()
+    if not root:
+        root = OpcionDepartamentoChatBot.objects.filter(
+            departamento=departamento, opcion_padre__isnull=True, status=True,
+        ).order_by('orden', 'id').first()
 
     base = {
         'messaging_product': 'whatsapp',
@@ -494,9 +496,31 @@ def _build_meta_payload(departamento):
         'to': '593XXXXXXXXX',
     }
 
+    if not root:
+        body_text = (departamento.mensaje_saludo or departamento.nombre or '—').strip()
+        return {**base, 'type': 'text', 'text': {
+            'preview_url': False,
+            'body': body_text[:4096],
+        }}
+
+    cfg = root.config or {}
+    saludo = (departamento.mensaje_saludo or '').strip()
+
+    # Body según tipo del nodo
+    if root.tipo_nodo == 'menu':
+        msg_nodo = (cfg.get('mensaje') or root.respuesta or '').strip()
+        body_text = (saludo + ('\n\n' + msg_nodo if msg_nodo else '')).strip() or msg_nodo or saludo
+    elif root.tipo_nodo == 'pregunta':
+        body_text = (cfg.get('pregunta') or root.respuesta or saludo).strip()
+    elif root.tipo_nodo == 'respuesta':
+        body_text = (cfg.get('mensaje') or root.respuesta or saludo).strip()
+    else:
+        body_text = (root.respuesta or saludo or departamento.nombre or '—').strip()
+    if not body_text:
+        body_text = departamento.nombre or '—'
+
     # Despacho por tipo del root
-    if root and root.tipo_nodo == 'cta_url':
-        cfg = root.config or {}
+    if root.tipo_nodo == 'cta_url':
         return {**base, 'type': 'interactive', 'interactive': {
             'type': 'cta_url',
             'body': {'text': body_text[:1024]},
@@ -509,8 +533,7 @@ def _build_meta_payload(departamento):
             },
         }}
 
-    if root and root.tipo_nodo == 'ubicacion':
-        cfg = root.config or {}
+    if root.tipo_nodo == 'ubicacion':
         return {**base, 'type': 'location', 'location': {
             'latitude': cfg.get('lat') or 0,
             'longitude': cfg.get('lng') or 0,
@@ -518,51 +541,54 @@ def _build_meta_payload(departamento):
             'address': cfg.get('address') or '',
         }}
 
-    # Default: hijos del root → botones o list
-    if root:
-        opciones_lista = list(OpcionDepartamentoChatBot.objects.filter(
+    # Lista de opciones: 1) config.opciones (motor flujo), 2) hijos legacy
+    items = []  # [{id, title, description}]
+    opciones_cfg = cfg.get('opciones') or []
+    if root.tipo_nodo == 'menu' and opciones_cfg:
+        for opt in opciones_cfg:
+            etq = (opt.get('etiqueta') or opt.get('valor') or '').strip()
+            sal = (opt.get('salida') or opt.get('valor') or '').strip()
+            if not etq:
+                continue
+            items.append({
+                'id': sal[:256] or f'opcion_{len(items)+1}',
+                'title': etq[:24],
+                'description': '',
+            })
+    else:
+        hijos = list(OpcionDepartamentoChatBot.objects.filter(
             opcion_padre=root, status=True,
         ).order_by('orden', 'id'))
-        if not opciones_lista:
-            opciones_lista = list(raices.exclude(pk=root.pk))
-    else:
-        opciones_lista = list(raices)
+        for op in hijos:
+            items.append({
+                'id': (op.boton_id or f'opcion_{op.id}')[:256],
+                'title': ((op.nombre or '').strip() or f'Opción {op.id}')[:24],
+                'description': ((op.respuesta or '').strip()[:72]) or '',
+            })
 
-    def _btn_id(op):
-        return op.boton_id or f'opcion_{op.id}'
-
-    def _btn_title(op):
-        return ((op.nombre or '').strip() or f'Opción {op.id}')[:20]
-
-    if not opciones_lista:
-        # Sin hijos → mensaje de texto plano
+    if not items:
         return {**base, 'type': 'text', 'text': {
             'preview_url': False,
             'body': body_text[:4096],
         }}
 
-    if len(opciones_lista) <= 3:
+    if len(items) <= 3:
         botones = [{
             'type': 'reply',
-            'reply': {'id': _btn_id(op), 'title': _btn_title(op)},
-        } for op in opciones_lista]
+            'reply': {'id': it['id'], 'title': it['title'][:20]},
+        } for it in items]
         return {**base, 'type': 'interactive', 'interactive': {
             'type': 'button',
             'body': {'text': body_text[:1024]},
             'action': {'buttons': botones},
         }}
 
-    rows = [{
-        'id': _btn_id(op),
-        'title': _btn_title(op)[:24],
-        'description': ((op.respuesta or '').strip()[:72]) or '',
-    } for op in opciones_lista[:10]]
     return {**base, 'type': 'interactive', 'interactive': {
         'type': 'list',
         'body': {'text': body_text[:1024]},
         'action': {
             'button': 'Ver opciones',
-            'sections': [{'title': 'Opciones', 'rows': rows}],
+            'sections': [{'title': 'Opciones', 'rows': items[:10]}],
         },
     }}
 
@@ -580,8 +606,85 @@ def _serializar_arbol_opciones(departamento, padre=None, nivel=0):
 
 def _serializar_para_preview(departamento):
     """Estructura compacta para el simulador WhatsApp del flujo. Cada nodo
-    incluye sus hijos inline para que el JS no tenga que recorrer un mapa."""
-    def _conv(op):
+    incluye sus hijos inline para que el JS no tenga que recorrer un mapa.
+
+    Recorre el grafo real `ConexionNodoChatbot` + `config.opciones` (formato
+    del motor `motor_flujo_chatbot`). Cae al árbol legacy `opcion_padre` solo
+    si no hay ni opciones ni conexiones salientes.
+    """
+    from .models import ConexionNodoChatbot
+
+    nodos_qs = OpcionDepartamentoChatBot.objects.filter(
+        departamento=departamento, status=True,
+    )
+    nodos_by_id = {n.id: n for n in nodos_qs}
+
+    conex_qs = ConexionNodoChatbot.objects.filter(
+        nodo_origen__departamento=departamento, status=True,
+    ).order_by('nodo_origen', 'orden', 'id')
+    conex_by_origen = {}
+    for c in conex_qs:
+        conex_by_origen.setdefault(c.nodo_origen_id, []).append(c)
+
+    def _destino(op_id, etiqueta):
+        for c in conex_by_origen.get(op_id, []):
+            if c.etiqueta == etiqueta:
+                return nodos_by_id.get(c.nodo_destino_id)
+        return None
+
+    def _siguiente_default(op_id):
+        # Default = etiqueta vacía o 'ok'.
+        for et in ('', 'ok'):
+            d = _destino(op_id, et)
+            if d:
+                return d
+        return None
+
+    def _conv(op, visited):
+        if op.id in visited:
+            return {
+                'id': op.id, 'nombre': op.nombre or '', 'respuesta': '',
+                'tipo': op.tipo_nodo, 'boton_id': op.boton_id or f'opcion_{op.id}',
+                'es_inicio': False, 'config': op.config or {},
+                'hijos': [], 'cycle': True,
+            }
+        visited = visited | {op.id}
+        cfg = op.config or {}
+        hijos_data = []
+
+        if op.tipo_nodo == 'menu':
+            # 1) Opciones del config (motor flujo): cada salida resuelve a un nodo.
+            opciones = cfg.get('opciones') or []
+            for opt in opciones:
+                etq = (opt.get('etiqueta') or opt.get('valor') or '').strip()
+                sal = (opt.get('salida') or '').strip()
+                dest = _destino(op.id, sal) if sal else _siguiente_default(op.id)
+                if not dest:
+                    continue
+                child = _conv(dest, visited)
+                # El botón muestra la etiqueta de la opción, no el nombre del nodo destino.
+                child['nombre'] = etq or child.get('nombre', '')
+                child['boton_id'] = sal or child.get('boton_id', '')
+                hijos_data.append(child)
+            # 2) Fallback árbol legacy
+            if not hijos_data:
+                hijos_data = [
+                    _conv(c, visited)
+                    for c in OpcionDepartamentoChatBot.objects.filter(
+                        opcion_padre=op, status=True,
+                    ).order_by('orden', 'id')
+                ]
+        elif op.tipo_nodo in ('respuesta', 'pregunta', 'set_variable',
+                              'condicional', 'cta_url'):
+            sig = _siguiente_default(op.id)
+            if sig:
+                hijos_data = [_conv(sig, visited)]
+        elif op.tipo_nodo == 'http':
+            sig = _destino(op.id, 'ok') or _siguiente_default(op.id)
+            if sig:
+                hijos_data = [_conv(sig, visited)]
+        # handoff/fin/ubicacion → sin hijos
+
         return {
             'id': op.id,
             'nombre': op.nombre or '',
@@ -589,16 +692,20 @@ def _serializar_para_preview(departamento):
             'tipo': op.tipo_nodo,
             'boton_id': op.boton_id or f'opcion_{op.id}',
             'es_inicio': bool(op.es_inicio),
-            'config': op.config or {},
-            'hijos': [
-                _conv(c) for c in OpcionDepartamentoChatBot.objects.filter(
-                    opcion_padre=op, status=True,
-                ).order_by('orden', 'id')
-            ],
+            'config': cfg,
+            'hijos': hijos_data,
         }
-    raices = OpcionDepartamentoChatBot.objects.filter(
-        departamento=departamento, opcion_padre__isnull=True, status=True,
-    ).order_by('-es_inicio', 'orden', 'id')
+
+    inicio = OpcionDepartamentoChatBot.objects.filter(
+        departamento=departamento, status=True, es_inicio=True,
+    ).order_by('orden', 'id').first()
+    if not inicio:
+        inicio = OpcionDepartamentoChatBot.objects.filter(
+            departamento=departamento, opcion_padre__isnull=True, status=True,
+        ).order_by('orden', 'id').first()
+
+    raices_data = [_conv(inicio, set())] if inicio else []
+
     return {
         'departamento': {
             'id': departamento.id,
@@ -606,7 +713,7 @@ def _serializar_para_preview(departamento):
             'color': departamento.color or '#16a34a',
             'mensaje_saludo': departamento.mensaje_saludo or '',
         },
-        'raices': [_conv(r) for r in raices],
+        'raices': raices_data,
     }
 
 

@@ -158,9 +158,9 @@ class Command(BaseCommand):
             config={
                 'mensaje': '¿Cómo te puedo ayudar hoy?',
                 'opciones': [
-                    {'etiqueta': 'Soy estudiante (matriculado)', 'valor': 'estudiante', 'salida': 'estudiante'},
-                    {'etiqueta': 'Soy aspirante / invitado',     'valor': 'aspirante',  'salida': 'aspirante'},
-                    {'etiqueta': 'Hablar con un asesor',         'valor': 'asesor',     'salida': 'asesor'},
+                    {'etiqueta': 'Soy estudiante',     'valor': 'estudiante', 'salida': 'estudiante'},
+                    {'etiqueta': 'Soy aspirante',      'valor': 'aspirante',  'salida': 'aspirante'},
+                    {'etiqueta': 'Hablar con asesor',  'valor': 'asesor',     'salida': 'asesor'},
                 ],
             },
             variable='tipo_usuario',
@@ -206,40 +206,45 @@ class Command(BaseCommand):
             )},
         )
 
+        # Menú estudiante: mismo orden que el JSON original del bot RU.
+        # Etiquetas ≤24 chars (límite Meta para list rows).
         menu_est = self._nodo(
             depto, 'Menú estudiante', 'menu', orden=20,
             config={
                 'mensaje': '¿Qué te gustaría consultar?',
                 'opciones': [
-                    {'etiqueta': '📅 Mis horarios',         'valor': 'horarios',    'salida': 'horarios'},
-                    {'etiqueta': '📚 Mis materias',         'valor': 'materias',    'salida': 'materias'},
-                    {'etiqueta': '📝 Actividades semana',   'valor': 'actividades', 'salida': 'actividades'},
-                    {'etiqueta': '💲 Mis deudas',           'valor': 'deudas',      'salida': 'deudas'},
-                    {'etiqueta': '👤 Mi mentor',            'valor': 'mentor',      'salida': 'mentor'},
-                    {'etiqueta': '📞 Contactos académicos', 'valor': 'contactos',   'salida': 'contactos'},
-                    {'etiqueta': '🚪 ¿Cómo entro a clases?','valor': 'ingreso',     'salida': 'ingreso'},
-                    {'etiqueta': '🔐 Cambiar contraseña',   'valor': 'pass',        'salida': 'pass'},
-                    {'etiqueta': '🎧 Soporte general',      'valor': 'soporte',     'salida': 'soporte'},
+                    {'etiqueta': '🚪 Entrar a clases',    'valor': 'ingreso',     'salida': 'ingreso'},
+                    {'etiqueta': '📝 Actividades semana', 'valor': 'actividades', 'salida': 'actividades'},
+                    {'etiqueta': '📚 Mis materias',       'valor': 'materias',    'salida': 'materias'},
+                    {'etiqueta': '📅 Mis horarios',       'valor': 'horarios',    'salida': 'horarios'},
+                    {'etiqueta': '💲 Mis deudas',         'valor': 'deudas',      'salida': 'deudas'},
+                    {'etiqueta': '👤 Mi mentor',          'valor': 'mentor',      'salida': 'mentor'},
+                    {'etiqueta': '🔐 Cambiar clave',      'valor': 'pass',        'salida': 'pass'},
+                    {'etiqueta': '💬 Otra pregunta',      'valor': 'contactos',   'salida': 'contactos'},
+                    {'etiqueta': '🎧 Soporte',            'valor': 'soporte',     'salida': 'soporte'},
                 ],
             },
             variable='opcion_estudiante',
             mensaje_error='Elige el número de la opción.',
         )
 
-        # ── Sub-menú HORARIOS ────────────────────────────────────
+        # ── Sub-menú HORARIOS (subpreguntas de "Mis horarios") ────
+        # Replica la estructura del JSON: ver_horarios tiene 2 subpreguntas:
+        #   - ver_horarios_hoy
+        #   - ver_actividades_semana
+        # Se presenta DESPUÉS de ejecutar /horarios/ (handler padre).
         menu_horarios = self._nodo(
-            depto, 'Sub-menú horarios', 'menu', orden=30,
+            depto, 'Sub-preguntas horarios', 'menu', orden=30,
             config={
-                'mensaje': '📅 ¿Qué horario quieres ver?',
+                'mensaje': '¿Quieres ver algo más específico?',
                 'opciones': [
-                    {'etiqueta': 'Toda la semana',     'valor': 'semana',  'salida': 'semana'},
-                    {'etiqueta': 'Solo mis clases hoy','valor': 'hoy',     'salida': 'hoy'},
-                    {'etiqueta': 'Mi próxima clase',   'valor': 'proxima', 'salida': 'proxima'},
-                    {'etiqueta': 'Actividades semana', 'valor': 'activ',   'salida': 'activ'},
+                    {'etiqueta': 'Clases de hoy',      'valor': 'hoy',    'salida': 'hoy'},
+                    {'etiqueta': 'Actividades semana', 'valor': 'activ',  'salida': 'activ'},
+                    {'etiqueta': 'Volver al menú',     'valor': 'volver', 'salida': 'volver'},
                 ],
             },
             variable='opcion_horario',
-            mensaje_error='Elige una opción del 1 al 4.',
+            mensaje_error='Elige una opción.',
         )
         http_horarios = self._nodo(
             depto, 'GET /horarios/', 'http', orden=31, endpoint=ep_ru,
@@ -281,29 +286,6 @@ class Command(BaseCommand):
                     '• {{variables.primera}}\n'
                     '🕐 {{variables.hora}}\n'
                     '👤 {{variables.profesor}}'
-                ),
-            },
-        )
-        http_proxima = self._nodo(
-            depto, 'GET /proxima-clase/', 'http', orden=33, endpoint=ep_ru,
-            config={
-                'metodo': 'GET',
-                'path': '/proxima-clase/',
-                'query': {
-                    'cedula': '{{variables.cedula}}',
-                    'matricula_id': '{{variables.matricula_id}}',
-                },
-                'extraer': [
-                    {'variable': 'asig',  'jsonpath': 'data.proxima_clase.asignatura'},
-                    {'variable': 'dia',   'jsonpath': 'data.proxima_clase.dia'},
-                    {'variable': 'hora',  'jsonpath': 'data.proxima_clase.hora'},
-                    {'variable': 'prof',  'jsonpath': 'data.proxima_clase.profesor'},
-                ],
-                'plantilla_respuesta': (
-                    '⏭️ *Tu próxima clase*\n'
-                    '📚 {{variables.asig}}\n'
-                    '📆 {{variables.dia}}, {{variables.hora}}\n'
-                    '👤 {{variables.prof}}'
                 ),
             },
         )
@@ -460,12 +442,12 @@ class Command(BaseCommand):
             config={
                 'mensaje': '¿Qué te interesa conocer?',
                 'opciones': [
-                    {'etiqueta': '🎓 Oferta de pregrado',  'valor': 'pre',     'salida': 'pre'},
-                    {'etiqueta': '🚀 Oferta de posgrado',  'valor': 'pos',     'salida': 'pos'},
-                    {'etiqueta': '🔄 Homologar estudios',  'valor': 'homol',   'salida': 'homol'},
-                    {'etiqueta': '🏆 Becas y ayudas',      'valor': 'becas',   'salida': 'becas'},
-                    {'etiqueta': '📩 Que un asesor me contacte', 'valor': 'ases', 'salida': 'ases'},
-                    {'etiqueta': '🎧 Soporte general',     'valor': 'soporte', 'salida': 'soporte'},
+                    {'etiqueta': '🎓 Pregrado',         'valor': 'pre',     'salida': 'pre'},
+                    {'etiqueta': '🚀 Posgrado',         'valor': 'pos',     'salida': 'pos'},
+                    {'etiqueta': '🔄 Homologación',     'valor': 'homol',   'salida': 'homol'},
+                    {'etiqueta': '🏆 Becas y ayudas',   'valor': 'becas',   'salida': 'becas'},
+                    {'etiqueta': '📩 Asesor me contacta','valor': 'ases',   'salida': 'ases'},
+                    {'etiqueta': '🎧 Soporte',          'valor': 'soporte', 'salida': 'soporte'},
                 ],
             },
             variable='opcion_invitado',
@@ -572,29 +554,33 @@ class Command(BaseCommand):
         self._conectar(http_buscar, no_encontrado,  'error',   2)
         self._conectar(no_encontrado, menu_inv,     '',        1)
 
-        # Menú estudiante → ramas
-        self._conectar(menu_est, menu_horarios, 'horarios',    1)
-        self._conectar(menu_est, http_materias, 'materias',    2)
-        self._conectar(menu_est, http_actividades, 'actividades', 3)
-        self._conectar(menu_est, http_deudas,   'deudas',      4)
-        self._conectar(menu_est, http_mentor,   'mentor',      5)
-        self._conectar(menu_est, http_contactos,'contactos',   6)
-        self._conectar(menu_est, resp_ingreso,  'ingreso',     7)
-        self._conectar(menu_est, resp_pass,     'pass',        8)
-        self._conectar(menu_est, resp_soporte,  'soporte',     9)
-        self._conectar(menu_est, handoff,       'timeout',    10)
+        # Menú estudiante → ramas (orden = JSON original del bot RU).
+        self._conectar(menu_est, resp_ingreso,     'ingreso',     1)
+        self._conectar(menu_est, http_actividades, 'actividades', 2)
+        self._conectar(menu_est, http_materias,    'materias',    3)
+        self._conectar(menu_est, http_horarios,    'horarios',    4)
+        self._conectar(menu_est, http_deudas,      'deudas',      5)
+        self._conectar(menu_est, http_mentor,      'mentor',      6)
+        self._conectar(menu_est, resp_pass,        'pass',        7)
+        self._conectar(menu_est, http_contactos,   'contactos',   8)
+        self._conectar(menu_est, resp_soporte,     'soporte',     9)
+        self._conectar(menu_est, handoff,          'timeout',    10)
 
-        # Sub-menú horarios
-        self._conectar(menu_horarios, http_horarios,     'semana',  1)
-        self._conectar(menu_horarios, http_horarios_hoy, 'hoy',     2)
-        self._conectar(menu_horarios, http_proxima,      'proxima', 3)
-        self._conectar(menu_horarios, http_actividades,  'activ',   4)
-        self._conectar(menu_horarios, handoff,           'timeout', 5)
+        # ver_horarios (handler padre) → muestra resumen → sub-preguntas
+        self._conectar(http_horarios, menu_horarios, 'ok',    1)
+        self._conectar(http_horarios, fin_error,     'error', 2)
 
-        # HTTP estudiantes → fin / error
-        for n in (http_horarios, http_horarios_hoy, http_proxima,
-                  http_actividades, http_materias, http_deudas,
-                  http_mentor, http_contactos):
+        # Sub-preguntas de horarios
+        self._conectar(menu_horarios, http_horarios_hoy, 'hoy',     1)
+        self._conectar(menu_horarios, http_actividades,  'activ',   2)
+        self._conectar(menu_horarios, menu_est,          'volver',  3)
+        self._conectar(menu_horarios, fin_estudiante,    'timeout', 4)
+
+        # Resto de HTTPs estudiantes → fin / error (sin http_horarios y
+        # http_actividades/http_horarios_hoy: estos terminan en fin_estudiante
+        # tras la sub-pregunta).
+        for n in (http_horarios_hoy, http_actividades, http_materias,
+                  http_deudas, http_mentor, http_contactos):
             self._conectar(n, fin_estudiante, 'ok',    1)
             self._conectar(n, fin_error,      'error', 2)
 

@@ -106,15 +106,35 @@
 
     function ejecutarNodo(node) {
         typing().then(function () {
-            // Cuerpo del nodo (todos los tipos pueden tener body excepto location pura)
-            if (node.respuesta) botBubble(node.respuesta);
+            var cfg = node.config || {};
+
+            // Cuerpo del nodo según tipo. Cada caso elige el campo correcto.
+            var bodyText = '';
+            if (node.tipo === 'menu')      bodyText = cfg.mensaje || node.respuesta || '';
+            else if (node.tipo === 'pregunta') bodyText = cfg.pregunta || node.respuesta || '';
+            else if (node.tipo === 'respuesta') bodyText = cfg.mensaje || node.respuesta || '';
+            else                            bodyText = node.respuesta || '';
+            if (bodyText) botBubble(bodyText);
+
+            // HTTP: simula la llamada (no se ejecuta de verdad en preview).
+            if (node.tipo === 'http') {
+                var metodo = (cfg.metodo || 'GET').toUpperCase();
+                var path   = cfg.path || '/';
+                systemBubble('🌐 [Llamada al API: ' + metodo + ' ' + path + ']');
+                if (cfg.plantilla_respuesta) botBubble(cfg.plantilla_respuesta);
+            }
+
+            // set_variable / condicional: sólo señalan que ocurre algo runtime.
+            if (node.tipo === 'set_variable') {
+                systemBubble('⚙️ [Asigna variables internas]');
+            }
+            if (node.tipo === 'condicional') {
+                systemBubble('🔀 [Evalúa condición]');
+            }
 
             // Despacho por tipo nativo
-            if (node.tipo === 'cta_url') {
-                renderCtaUrl(node);
-            } else if (node.tipo === 'ubicacion') {
-                renderLocation(node);
-            }
+            if (node.tipo === 'cta_url') renderCtaUrl(node);
+            if (node.tipo === 'ubicacion') renderLocation(node);
 
             if (node.tipo === 'handoff') {
                 systemBubble('🤝 [Bot derivó la conversación a un humano]');
@@ -124,9 +144,12 @@
                 systemBubble('🏁 [Flujo terminado]');
                 return;
             }
+
             // Hijos → botones interactive
             if (node.hijos && node.hijos.length) {
                 renderButtons(node.hijos);
+            } else if (node.cycle) {
+                systemBubble('↩️ [Vuelve a un nodo ya visitado]');
             } else {
                 systemBubble('— Sin más opciones desde este nodo —');
             }

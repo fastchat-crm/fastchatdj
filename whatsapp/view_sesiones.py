@@ -266,16 +266,29 @@ def _accion_editar(request):
         sesion.agente_ia = agente
     elif agente_id == '':
         sesion.agente_ia = None
-    # Departamento default (solo aplica a modos tradicional / hibrido).
-    # Si llega vacío, deja el FK en None.
-    depto_id = request.POST.get('departamento_default') or ''
-    if depto_id.isdigit():
-        from crm.models import DepartamentoChatBot
-        depto = DepartamentoChatBot.objects.filter(id=int(depto_id), status=True).first()
-        sesion.departamento_default = depto
-    elif depto_id == '':
-        sesion.departamento_default = None
-    sesion.save()
+    # Departamentos asociados (M2M) — solo aplica a modo tradicional.
+    # Llegan como lista de ids vía multi-select. Si el modo no es tradicional,
+    # ignoramos el cambio para no perder asociaciones por error.
+    from crm.models import DepartamentoChatBot
+    if sesion.modo_bot == 'tradicional':
+        ids_post = request.POST.getlist('departamentos') or []
+        ids_validos = [int(x) for x in ids_post if x.isdigit()]
+        deptos_qs = DepartamentoChatBot.objects.filter(id__in=ids_validos, status=True)
+        # Departamento default: debe estar dentro de los seleccionados en el M2M.
+        depto_id = request.POST.get('departamento_default') or ''
+        depto_default = None
+        if depto_id.isdigit():
+            depto_default = deptos_qs.filter(id=int(depto_id)).first()
+            if depto_default is None:
+                return JsonResponse([{
+                    'error': True,
+                    'message': 'El departamento de entrada debe estar dentro de los seleccionados.',
+                }], safe=False)
+        sesion.departamento_default = depto_default
+        sesion.save()
+        sesion.departamentos.set(deptos_qs)
+    else:
+        sesion.save()
     log(f"Sesion {sesion.id} editada", request, "change", obj=sesion.id)
     return JsonResponse([{
         'error': False,
@@ -316,6 +329,7 @@ def _get_partial(request, accion):
         ctx['departamentos_disponibles'] = DepartamentoChatBot.objects.filter(
             status=True
         ).order_by('-es_default', 'nombre')
+        ctx['sesion_departamento_ids'] = list(sesion.departamentos.values_list('id', flat=True))
         tpl = 'whatsapp/sesiones/_modal_editar.html'
 
     elif accion == 'datos_transporte_modal':
