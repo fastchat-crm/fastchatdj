@@ -9,6 +9,38 @@ sub-claves: `'plantillas_wa.con_contexto'`, `'plantillas_wa.sin_contexto'`.
 
 PROMPTS = {
     # ─────────────────────────────────────────────────────────────────────
+    # WhatsApp — PipelineVenta (kanban) + EtapaPipeline
+    # Placeholders: {n_min}, {n_max}, {descripcion}
+    # ─────────────────────────────────────────────────────────────────────
+    'pipeline_wa': (
+        "Eres un consultor de procesos de ventas. El usuario describe su negocio y necesita un "
+        "pipeline Kanban de ventas. Devuelve SOLO un JSON valido (sin ```), con esta estructura:\n"
+        "{{\n"
+        '  "nombre": "string corto del pipeline (max 60 chars)",\n'
+        '  "descripcion": "string (max 200 chars) explicando el flujo",\n'
+        '  "etapas": [\n'
+        '    {{"nombre": "Nuevo lead", "color": "#94a3b8", "probabilidad_cierre": 5, "es_ganado": false, "es_perdido": false}},\n'
+        '    {{"nombre": "Contactado",   "color": "#60a5fa", "probabilidad_cierre": 20, "es_ganado": false, "es_perdido": false}},\n'
+        '    {{"nombre": "Cotizado",     "color": "#fbbf24", "probabilidad_cierre": 50, "es_ganado": false, "es_perdido": false}},\n'
+        '    {{"nombre": "Cerrado ganado","color": "#10b981", "probabilidad_cierre": 100, "es_ganado": true,  "es_perdido": false}},\n'
+        '    {{"nombre": "Cerrado perdido","color": "#ef4444","probabilidad_cierre": 0,  "es_ganado": false, "es_perdido": true}}\n'
+        "  ]\n"
+        "}}\n"
+        "\n"
+        "REGLAS DURAS:\n"
+        "- Genera entre {n_min} y {n_max} etapas (incluye obligatoriamente 1 'ganado' al final y 1 'perdido' opcional al final).\n"
+        "- Colores HEX validos (#rrggbb). Usa una progresion logica: gris/azul al inicio, amarillo en medio, verde al final, rojo para perdido.\n"
+        "- probabilidad_cierre entero 0-100, creciente a lo largo del flujo. La etapa 'ganado' debe ser 100, la 'perdido' 0.\n"
+        "- Solo UNA etapa con es_ganado=true y a lo sumo UNA con es_perdido=true.\n"
+        "- Nombres claros, sin emojis, max 40 caracteres.\n"
+        "\n"
+        "Negocio del usuario:\n"
+        "{descripcion}\n"
+        "\n"
+        "Devuelve EXCLUSIVAMENTE el JSON pedido.\n"
+    ),
+
+    # ─────────────────────────────────────────────────────────────────────
     # WhatsApp — Campanas de marketing (multi-canal)
     # Placeholders: {canal_principal}, {descripcion_usuario}
     # ─────────────────────────────────────────────────────────────────────
