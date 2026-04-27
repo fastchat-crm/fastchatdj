@@ -5,7 +5,8 @@ from autenticacion.models import Usuario
 from core.custom_forms import FormModeloBase
 from core.custom_models import ModelFormBase
 from crm.models import PerfilNegocioIA, ActividadEconomica, Industria, ProductoIA, ServicioIA, RespuestaEntrenadaIA, \
-    DepartamentoChatBot, AgentesIA, ApiKeyIA, HerramientaAgente, FaqAgente
+    DepartamentoChatBot, AgentesIA, ApiKeyIA, HerramientaAgente, FaqAgente, \
+    EndpointApiChatbot, CredencialApiChatbot
 
 
 class PerfilNegocioIAForm(ModelFormBase):
@@ -349,6 +350,70 @@ class ApiKeyIAForm(ModelFormBase):
                 self.fields[k].widget.attrs['col'] = '6'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+
+class CredencialApiChatbotForm(ModelFormBase):
+    """Form de credenciales API (Bearer / Basic / ApiKey / Custom).
+    `secretos` es un JSON libre — el contenido depende de `tipo`.
+    """
+    class Meta:
+        model = CredencialApiChatbot
+        fields = ('nombre', 'tipo', 'secretos', 'descripcion')
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super().__init__(*args, **kwargs)
+        for k, _ in self.fields.items():
+            self.fields[k].widget.attrs['class'] = 'form-control'
+            self.fields[k].widget.attrs['col'] = '12'
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+        self.fields['nombre'].widget.attrs['col'] = '6'
+        self.fields['tipo'].widget.attrs['col'] = '6'
+        self.fields['tipo'].widget.attrs['class'] = 'form-control jselect'
+        self.fields['secretos'].widget = forms.Textarea(attrs={
+            'class': 'form-control font-monospace', 'rows': 4, 'col': '12',
+            'placeholder': 'Bearer: {"token": "..."} · Basic: {"usuario": "...", "password": "..."} · '
+                           'ApiKey header: {"nombre_header": "X-API-Key", "valor": "..."}',
+        })
+        self.fields['descripcion'].widget = forms.Textarea(attrs={
+            'class': 'form-control', 'rows': 2, 'col': '12',
+        })
+
+
+class EndpointApiChatbotForm(ModelFormBase):
+    """Form de endpoints API reutilizables (host + auth + headers default)."""
+    class Meta:
+        model = EndpointApiChatbot
+        fields = ('nombre', 'base_url', 'credencial', 'headers_default',
+                  'timeout_seg', 'descripcion')
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super().__init__(*args, **kwargs)
+        self.fields['credencial'].queryset = CredencialApiChatbot.objects.filter(
+            status=True
+        ).order_by('nombre')
+        self.fields['credencial'].required = False
+        self.fields['credencial'].empty_label = '— Sin credencial (público) —'
+        for k, _ in self.fields.items():
+            self.fields[k].widget.attrs['class'] = 'form-control'
+            self.fields[k].widget.attrs['col'] = '12'
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+        self.fields['nombre'].widget.attrs['col'] = '6'
+        self.fields['timeout_seg'].widget.attrs['col'] = '6'
+        self.fields['base_url'].widget.attrs['col'] = '12'
+        self.fields['base_url'].widget.attrs['placeholder'] = 'https://api.miservicio.com'
+        self.fields['credencial'].widget.attrs['col'] = '12'
+        self.fields['credencial'].widget.attrs['class'] = 'form-control jselect'
+        self.fields['headers_default'].widget = forms.Textarea(attrs={
+            'class': 'form-control font-monospace', 'rows': 3, 'col': '12',
+            'placeholder': '{"Accept": "application/json", "Content-Type": "application/json"}',
+        })
+        self.fields['descripcion'].widget = forms.Textarea(attrs={
+            'class': 'form-control', 'rows': 2, 'col': '12',
+        })
 
 
 

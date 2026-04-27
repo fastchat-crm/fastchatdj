@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+{% block content %}
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="GET" class="mb-0">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Buscar</label>
+                        <div class="input-group">
+                            <span class="input-group-text border-end-0">
+                                <i class="fa fa-search text-muted"></i>
+                            </span>
+                            <input type="text" class="form-control border-start-0"
+                                   placeholder="Por nombre o base URL…" name="criterio" value="{{ criterio }}">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Acciones</label>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i>
+                            </button>
+                            {% if url_vars %}
+                                <a href="{{ ruta }}" class="btn btn-default">
+                                    <i class="fas fa-sync-alt"></i>
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row align-items-center mb-3">
+        <div class="col-md-12 mb-2 mb-md-0 d-flex gap-2 flex-wrap">
+            <a href="javascript:void(0);" class="btn btn-success btn-sm"
+               onclick="formModal(0, 'Nuevo endpoint API', 'add')">
+                <i class="fas fa-plus-circle me-2"></i> Nuevo endpoint
+            </a>
+            <a href="javascript:void(0);" class="btn btn-info btn-sm"
+               onclick="formModalCredencial(0, 'Nueva credencial', 'credencial_add')">
+                <i class="fas fa-key me-2"></i> Nueva credencial
+            </a>
+        </div>
+    </div>
+
+    {# Sección: lista de credenciales (sub-recurso) #}
+    {% if credenciales %}
+        <div class="card mb-3">
+            <div class="card-header py-2">
+                <strong><i class="fa fa-key text-info me-1"></i> Credenciales registradas</strong>
+                <small class="text-muted">— se reutilizan entre endpoints</small>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Tipo</th>
+                                <th>Endpoints</th>
+                                <th class="text-end">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in credenciales %}
+                                <tr>
+                                    <td>{{ c.nombre }}</td>
+                                    <td><span class="badge bg-secondary">{{ c.get_tipo_display }}</span></td>
+                                    <td>{{ c.endpoints.count }}</td>
+                                    <td class="text-end">
+                                        <a href="javascript:void(0);" class="btn btn-sm btn-outline-primary"
+                                           onclick="formModalCredencial({{ c.pk }}, 'Editar credencial', 'credencial_change')">
+                                            <i class="fa fa-pen"></i>
+                                        </a>
+                                        <a href="javascript:void(0);" class="btn btn-sm btn-outline-danger"
+                                           onclick="eliminarajax({{ c.pk }}, '{{ c.nombre }}', 'credencial_delete')">
+                                            <i class="fa fa-trash"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="card-header py-2">
+            <strong><i class="fa fa-globe text-success me-1"></i> Endpoints</strong>
+            <small class="text-muted">— host base + auth + headers default</small>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table id="tabla" class="table table-hover table-striped">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Base URL</th>
+                            <th>Credencial</th>
+                            <th class="text-center">Timeout</th>
+                            <th class="text-center">Nodos</th>
+                            <th class="text-center">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for l in listado %}
+                            <tr>
+                                <td>
+                                    <strong>{{ l.nombre }}</strong>
+                                    {% if l.descripcion %}
+                                        <br><small class="text-muted">{{ l.descripcion|truncatechars:80 }}</small>
+                                    {% endif %}
+                                </td>
+                                <td><code>{{ l.base_url }}</code></td>
+                                <td>
+                                    {% if l.credencial %}
+                                        <span class="badge bg-secondary">{{ l.credencial.get_tipo_display }}</span>
+                                        {{ l.credencial.nombre }}
+                                    {% else %}
+                                        <em class="text-muted">— Sin auth —</em>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">{{ l.timeout_seg }}s</td>
+                                <td class="text-center">{{ l.nodos.count }}</td>
+                                <td class="text-center">
+                                    <div class="dropdown">
+                                        <button class="btn btn-icon" type="button"
+                                                id="ddl-{{ l.pk }}" data-bs-toggle="dropdown">
+                                            <i class="fas fa-ellipsis-v"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            <li>
+                                                <a class="dropdown-item" href="javascript:void(0);"
+                                                   onclick="formModal({{ l.pk }}, 'Editar endpoint', 'change')">
+                                                    <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a class="dropdown-item" href="javascript:void(0);"
+                                                   onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'delete')">
+                                                    <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">
+                                    <i class="fa fa-circle-info me-1"></i>
+                                    Sin endpoints registrados. Crea uno para usarlo en nodos http del flujo.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% include "paginacion.html" %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalDetalle" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalNombre"></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body detalleProd"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/forms.js?version=1"></script>
+    <script>
+    function formModal(id, text, action) {
+        pantallaespera();
+        $.ajax({
+            type: "GET",
+            url: `{{ request.path }}`,
+            data: {'action': action, 'id': id},
+            success: function (data) {
+                setTimeout($.unblockUI, 1);
+                if (data.result === true) {
+                    $('#modalNombre').html(text);
+                    $('.detalleProd').html(data.data);
+                    new bootstrap.Modal(document.getElementById('modalDetalle')).show();
+                } else {
+                    mensajeWarning(data.message);
+                }
+            },
+            error: function () {
+                setTimeout($.unblockUI, 1);
+                mensajeWarning("Error de conexión.");
+            },
+            dataType: "json"
+        });
+    }
+    function formModalCredencial(id, text, action) {
+        formModal(id, text, action);  // reusa el mismo flujo
+    }
+    </script>
+{% endblock %}

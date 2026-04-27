@@ -62,7 +62,8 @@
       "Bash(node -c \"/e/DESARROLLO/FREELANCER/fastchat/fastchatdj/static/js/dpchat_editor.js\")",
       "Bash(git mv *)",
       "Bash(PYTHONIOENCODING=utf-8 python manage.py seed_centro_estudiantil --reset)",
-      "Bash(PYTHONIOENCODING=utf-8 python manage.py seed_ru --reset)"
+      "Bash(PYTHONIOENCODING=utf-8 python manage.py seed_ru --reset)",
+      "Bash(PYTHONIOENCODING=utf-8 python manage.py seed_modulos)"
     ]
   },
   "hooks": {

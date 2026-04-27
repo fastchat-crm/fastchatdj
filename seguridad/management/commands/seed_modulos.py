@@ -69,6 +69,7 @@ SECCIONES = [
             ('/crm/entrenamiento/',          'Entrenamiento IA',          10),
             ('/crm/entrenamiento/wizard/',   'Crear agente (rapido)',     15),
             ('/crm/departamentos_chatbots/', 'Flujos chatbot',            20),
+            ('/crm/endpoints_api/',          'Endpoints API',             25),
             ('/whatsapp/trazas/',            'Trazas IA',                 30),
         ],
     },

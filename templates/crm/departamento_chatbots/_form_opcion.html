@@ -200,6 +200,34 @@
                     Vacío = no enviar nada (útil si quieres usar las variables en un nodo siguiente).
                 </small>
             </div>
+
+            {# Probar API: ejecuta la request con la config actual sin guardar #}
+            <div class="col-12 mt-2 p-2"
+                 style="background:#fef3c7;border-radius:6px;border:1px solid #fcd34d;">
+                <div class="d-flex align-items-start gap-2 mb-2">
+                    <i class="fa fa-flask text-warning mt-1"></i>
+                    <div class="flex-grow-1">
+                        <strong class="small">Probar API antes de guardar</strong>
+                        <div class="text-muted small">
+                            Ejecuta la llamada con la config actual. Si tu URL usa
+                            <code>&#123;&#123;variables.cedula&#125;&#125;</code>, ingresa abajo un valor de prueba.
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-warning btn-sm"
+                            id="dpBtnProbarHttp" data-action="probar-http">
+                        <i class="fa fa-paper-plane me-1"></i> Probar
+                    </button>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small mb-1">Variables de prueba (JSON)</label>
+                    <textarea id="dpVarsTest" class="form-control form-control-sm font-monospace"
+                              rows="2"
+                              placeholder='{"cedula": "0301818480", "matricula_id": 42}'></textarea>
+                </div>
+                <div id="dpProbarResultado" style="display:none;"
+                     class="mt-2 p-2 bg-white border rounded small font-monospace"
+                     style="max-height:300px;overflow:auto;"></div>
+            </div>
         </div>
     </div>
 

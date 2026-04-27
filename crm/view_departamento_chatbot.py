@@ -126,6 +126,8 @@ def departamentoChatbotsView(request):
                     return _eliminar_opcion(request)
                 elif action == 'mover_opcion':
                     return _mover_opcion(request)
+                elif action == 'probar_http':
+                    return _probar_http(request)
         except ValueError as ex:
             res_json.append({'error': True, "message": str(ex)})
         except FormError as ex:
@@ -1257,4 +1259,87 @@ def _mover_opcion(request):
 
     opcion.save(request)
     return JsonResponse({'ok': True, 'opcion_id': opcion.id})
+
+
+def _probar_http(request):
+    """action=probar_http. Ejecuta una request real con la config provista
+    (sin guardar) y devuelve status, headers, body y duración. El usuario
+    puede pasar `variables_test_json` para resolver `{{variables.x}}`.
+
+    POST params:
+      endpoint_id: pk del EndpointApiChatbot
+      metodo, path, query_json, body_json, headers_json: tal cual el form del nodo
+      variables_test_json: JSON {x: valor, y: valor} para sustituir {{variables.x}}
+    """
+    import time
+    from .motor_flujo_chatbot import ejecutar_http, resolver_expresion
+
+    try:
+        ep_id = int(request.POST.get('endpoint_id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'endpoint_id inválido'})
+    ep = EndpointApiChatbot.objects.filter(pk=ep_id, status=True).select_related('credencial').first()
+    if not ep:
+        return JsonResponse({'ok': False, 'error': 'Endpoint no encontrado'})
+
+    metodo = (request.POST.get('metodo') or 'GET').upper().strip()
+    path = (request.POST.get('path') or '').strip()
+
+    def _parse(name, default):
+        raw = (request.POST.get(name) or '').strip()
+        if not raw:
+            return default
+        try:
+            return json.loads(raw)
+        except (TypeError, ValueError) as ex:
+            raise ValueError(f'{name} no es JSON válido: {str(ex)[:120]}')
+
+    try:
+        query = _parse('query_json', {})
+        body = _parse('body_json', None)
+        headers = _parse('headers_json', {})
+        variables_test = _parse('variables_test_json', {})
+    except ValueError as ex:
+        return JsonResponse({'ok': False, 'error': str(ex)})
+
+    class _VirtualNode:
+        def __init__(self, endpoint, config):
+            self.endpoint = endpoint
+            self.config = config
+
+    cfg = {
+        'metodo': metodo,
+        'path': path,
+        'query': query if isinstance(query, dict) else {},
+        'body': body,
+        'headers': headers if isinstance(headers, dict) else {},
+    }
+    nodo_virtual = _VirtualNode(ep, cfg)
+    contexto = {'variables': variables_test if isinstance(variables_test, dict) else {}}
+
+    url_resuelto = (ep.base_url or '').rstrip('/') + '/' + str(
+        resolver_expresion(path, contexto) or ''
+    ).lstrip('/')
+
+    inicio = time.time()
+    try:
+        etiqueta, body_resp, status, err = ejecutar_http(nodo_virtual, contexto)
+    except Exception as ex:
+        return JsonResponse({
+            'ok': False,
+            'error': f'Excepción al ejecutar: {ex.__class__.__name__}: {str(ex)[:200]}',
+            'url': url_resuelto,
+        })
+    duracion_ms = int((time.time() - inicio) * 1000)
+
+    return JsonResponse({
+        'ok': True,
+        'url': url_resuelto,
+        'metodo': metodo,
+        'etiqueta': etiqueta,        # 'ok' o 'error'
+        'status': status,
+        'duracion_ms': duracion_ms,
+        'body': body_resp,
+        'error': err,
+    })
 

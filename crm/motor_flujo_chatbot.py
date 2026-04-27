@@ -261,6 +261,15 @@ def ejecutar_http(nodo, contexto: dict):
         parsed = {'_raw': resp.text}
 
     if 200 <= resp.status_code < 300:
+        # Convención común: API responde 200 con `success/result: false` para
+        # errores de negocio (no encontrado, validación, etc.). Tratamos eso
+        # como 'error' para que el flujo enrute a la rama de fallback en lugar
+        # de avanzar como si todo estuviera bien.
+        if isinstance(parsed, dict):
+            biz_ok = parsed.get('success', parsed.get('result', True))
+            if biz_ok is False:
+                msg = parsed.get('message') or parsed.get('error') or 'Respuesta de negocio negativa'
+                return ('error', parsed, resp.status_code, str(msg)[:200])
         return ('ok', parsed, resp.status_code, '')
     return ('error', parsed, resp.status_code, f'HTTP {resp.status_code}')
 

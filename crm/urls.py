@@ -3,6 +3,7 @@ from django.urls import path, re_path
 from .view_actividad_economica import actividadEconomicaView
 from .view_agente_wizard import agente_wizard_view
 from .view_chat_agente import chat_agente_view
+from .view_endpoint_api import endpoint_api_view
 from .view_industria import industriaView
 from .view_mientrenamiento import entrenamiento_ia_view
 from .view_departamento_chatbot import departamentoChatbotsView
@@ -14,6 +15,11 @@ crm_urls = (
         "nombre": "Mensajeria Instantanea",
         "url": 'departamentos_chatbots/',
         "vista": departamentoChatbotsView,
+    },
+    {
+        "nombre": "Endpoints API",
+        "url": 'endpoints_api/',
+        "vista": endpoint_api_view,
     },
     {
         "nombre": "Crear Agente Rápido",

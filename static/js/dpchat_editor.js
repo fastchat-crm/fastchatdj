@@ -150,10 +150,86 @@
             }
             $('#dpModalNodoBody').innerHTML = resp.data;
             wireTipoNodoToggle();
+            wireProbarHttp();
         }).catch(function (err) {
             $('#dpModalNodoBody').innerHTML =
                 '<div class="alert alert-danger">Error de conexión: ' + err.message + '</div>';
         });
+    }
+
+    function wireProbarHttp() {
+        var btn = document.getElementById('dpBtnProbarHttp');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+            var form = document.getElementById('dpFormNodo') || btn.closest('form');
+            if (!form) return;
+            var resultado = document.getElementById('dpProbarResultado');
+            if (resultado) {
+                resultado.style.display = 'block';
+                resultado.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Ejecutando…';
+            }
+            var orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Probando…';
+
+            var fd = new FormData();
+            fd.append('action', 'probar_http');
+            fd.append('csrfmiddlewaretoken',
+                form.querySelector('input[name="csrfmiddlewaretoken"]').value);
+            fd.append('endpoint_id', (form.querySelector('[name="http_endpoint_id"]') || {}).value || '');
+            fd.append('metodo',     (form.querySelector('[name="http_metodo"]')      || {}).value || 'GET');
+            fd.append('path',       (form.querySelector('[name="http_path"]')        || {}).value || '');
+            fd.append('query_json', (form.querySelector('[name="http_query_json"]')  || {}).value || '');
+            fd.append('body_json',  (form.querySelector('[name="http_body_json"]')   || {}).value || '');
+            fd.append('headers_json', (form.querySelector('[name="http_headers_json"]') || {}).value || '');
+            fd.append('variables_test_json', (document.getElementById('dpVarsTest') || {}).value || '');
+
+            fetch(STATE.postUrl, {
+                method: 'POST', body: fd, credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            }).then(function (r) { return r.json(); }).then(function (resp) {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                if (!resultado) return;
+                if (!resp.ok) {
+                    resultado.innerHTML = '<div class="text-danger"><i class="fa fa-times-circle me-1"></i>'
+                        + escHtml(resp.error || 'Error desconocido') + '</div>';
+                    return;
+                }
+                var iconStatus = (resp.etiqueta === 'ok') ? '✅' : '⚠️';
+                var html = ''
+                    + '<div><strong>' + iconStatus + ' ' + escHtml(resp.metodo) + '</strong> '
+                    + '<code>' + escHtml(resp.url) + '</code></div>'
+                    + '<div class="mt-1">'
+                    + '<span class="badge bg-' + (resp.etiqueta === 'ok' ? 'success' : 'danger') + '">'
+                    + 'HTTP ' + (resp.status || 'sin respuesta') + '</span> '
+                    + '<span class="badge bg-secondary">' + (resp.duracion_ms || 0) + ' ms</span> '
+                    + (resp.error ? '<span class="text-danger">' + escHtml(resp.error) + '</span>' : '')
+                    + '</div>';
+                if (resp.body !== null && resp.body !== undefined) {
+                    var bodyStr;
+                    try { bodyStr = JSON.stringify(resp.body, null, 2); }
+                    catch (e) { bodyStr = String(resp.body); }
+                    html += '<details class="mt-2"><summary>Body de la respuesta</summary>'
+                         + '<pre class="mb-0 mt-1" style="white-space:pre-wrap;max-height:240px;overflow:auto;">'
+                         + escHtml(bodyStr) + '</pre></details>';
+                }
+                resultado.innerHTML = html;
+            }).catch(function (err) {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                if (resultado) {
+                    resultado.innerHTML = '<div class="text-danger">Error de red: '
+                        + escHtml(err.message || err) + '</div>';
+                }
+            });
+        });
+    }
+
+    function escHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
     }
 
     function wireTipoNodoToggle() {
