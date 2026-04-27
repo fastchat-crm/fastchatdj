@@ -568,11 +568,20 @@ def conversacionesView(request):
                         filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))
                     except Exception as ex:
                         raise NameError(f'No se encontró la conversación: {ex}')
-                    try:
-                        filtro.cerrar(enviar_despedida=True)
-                    except Exception as ex:
-                        raise NameError(str(ex))
-                    res_json.append({'error': False, 'url': '/whatsapp/conversaciones-finalizadas/'})
+                    # cerrar() ya no levanta excepción si la despedida falla
+                    # — cierra igual y deja traza fin_conversacion con nivel
+                    # 'error'. Esto evita que un fallo de envío (ventana 24h
+                    # Meta, Node caído, etc.) bloquee el cierre manual.
+                    filtro.cerrar(enviar_despedida=True)
+                    filtro.refresh_from_db(fields=['despedida_enviado'])
+                    msg_extra = '' if filtro.despedida_enviado else \
+                        ' Despedida no enviada — revisá /whatsapp/trazas/ filtrando fin_conversacion.'
+                    res_json.append({
+                        'error': False,
+                        'url': '/whatsapp/conversaciones-finalizadas/',
+                        'message': f'Conversación cerrada.{msg_extra}',
+                        'despedida_enviada': filtro.despedida_enviado,
+                    })
                     request.session['contactoId'] = encrypt(filtro.id)
                     log(f"Conversación marcada como resuelta {filtro.id}", request, "change", obj=filtro.id)
                     return JsonResponse(res_json, safe=False)

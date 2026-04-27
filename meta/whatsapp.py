@@ -8,7 +8,9 @@ Baileys segun `sesion.proveedor`.
 Documentacion Meta:
     https://developers.facebook.com/docs/whatsapp/cloud-api/reference/messages
 """
+import json as _json_audit
 import logging
+import time as _time_audit
 
 import requests
 from django.db.models import F
@@ -17,6 +19,61 @@ from django.utils import timezone
 from whatsapp.models import ConfigMeta, PlantillaWhatsApp, SesionWhatsApp
 
 logger = logging.getLogger(__name__)
+
+
+def _log_outbound(method: str, url: str, body=None, response=None,
+                  started_at: float | None = None, nota: str = ''):
+    """Registra un hit OUTBOUND a Graph API en MetaWebhookHit.
+
+    Best-effort — nunca rompe el flujo del envio si la BD esta caida.
+    Sanea body/response a strings <600 chars para preview.
+    """
+    try:
+        from whatsapp.models import MetaWebhookHit
+
+        # Body preview
+        body_preview = ''
+        body_length = 0
+        if body is not None:
+            if isinstance(body, (dict, list)):
+                try:
+                    body_str = _json_audit.dumps(body, ensure_ascii=False)
+                except Exception:
+                    body_str = repr(body)
+            elif isinstance(body, bytes):
+                body_str = body.decode('utf-8', errors='replace')
+            else:
+                body_str = str(body)
+            body_length = len(body_str.encode('utf-8'))
+            body_preview = body_str[:600]
+
+        # Response preview + status
+        status_code = 0
+        response_preview = ''
+        if response is not None:
+            try:
+                status_code = response.status_code
+                response_preview = (response.text or '')[:600]
+            except Exception:
+                pass
+
+        latencia_ms = None
+        if started_at is not None:
+            latencia_ms = max(0, int((_time_audit.time() - started_at) * 1000))
+
+        MetaWebhookHit.objects.create(
+            direccion='out',
+            method=(method or '').upper()[:10],
+            url=(url or '')[:500],
+            status_code=status_code,
+            body_length=body_length,
+            body_preview=body_preview,
+            response_preview=response_preview,
+            latencia_ms=latencia_ms,
+            nota=(nota or '')[:200],
+        )
+    except Exception:
+        logger.exception("MetaWebhookHit outbound: fallo registrando (ignorando)")
 
 
 import re as _re
@@ -610,12 +667,18 @@ class MetaWhatsAppService:
         import time as _time
         url = f'{GRAPH_API_BASE}/{config.phone_number_id}/messages'
         t0 = _time.monotonic()
+        # Usado tambien para log outbound — wallclock para timestamps absolutos.
+        wall_t0 = _time_audit.time()
+        nota_op = f"send_{(data.get('type') or 'unknown')}"
+        r = None
         try:
             r = requests.post(url, headers=self._headers(config), json=data, timeout=15)
         except Exception as e:
             logger.exception("Error enviando mensaje a Meta")
             resultado = {'success': False, 'error': str(e)}
             self._registrar_traza(config, data, resultado, conversacion_id, int((_time.monotonic() - t0) * 1000))
+            _log_outbound('POST', url, body=data, response=None,
+                          started_at=wall_t0, nota=f"{nota_op}_network_error")
             return resultado
 
         if r.status_code == 200:
@@ -628,6 +691,8 @@ class MetaWhatsAppService:
             resultado = {'success': False, 'error': f"{r.status_code}: {r.text[:500]}"}
 
         self._registrar_traza(config, data, resultado, conversacion_id, int((_time.monotonic() - t0) * 1000))
+        _log_outbound('POST', url, body=data, response=r,
+                      started_at=wall_t0, nota=nota_op)
         return resultado
 
     def _registrar_traza_bloqueo(self, config: ConfigMeta, to: str, tipo: str,

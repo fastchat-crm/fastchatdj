@@ -588,6 +588,37 @@
 }
 .diag-link-ver-todas:hover { color: #1d4ed8; text-decoration: underline; }
 
+/* Pretty print del detalle traza dentro del modal */
+.traza-json,
+.traza-raw {
+    background: #1f2937;
+    color: #d1d5db;
+    padding: .75rem .85rem;
+    border-radius: 8px;
+    font-size: .78rem;
+    line-height: 1.5;
+    max-height: 360px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: 'Consolas', 'Monaco', monospace;
+    margin: 0;
+}
+.traza-json {
+    background: #0f172a;
+    color: #a7f3d0;
+}
+
+.traza-row:hover {
+    background: #f0f9ff !important;
+}
+.traza-row.diag-row-error:hover {
+    background: #fef2f2 !important;
+}
+.traza-row.diag-row-warning:hover {
+    background: #fffbeb !important;
+}
+
 /* Tools de diagnóstico webhook (raw hits + Meta) */
 .diag-webhook-tools {
     margin-top: 1rem;

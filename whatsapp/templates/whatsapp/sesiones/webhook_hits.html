@@ -40,13 +40,13 @@
             <div class="diag-stat-num">{{ stats.ult_24h }}</div>
             <div class="diag-stat-lbl">Últimas 24h</div>
         </div>
-        <div class="diag-stat">
-            <div class="diag-stat-num">{{ stats.posts }}</div>
-            <div class="diag-stat-lbl">POST (eventos Meta)</div>
+        <div class="diag-stat" style="background:#dbeafe">
+            <div class="diag-stat-num">{{ stats.inbound }}</div>
+            <div class="diag-stat-lbl"><i class="fa fa-arrow-down"></i> Inbound (Meta→nosotros)</div>
         </div>
-        <div class="diag-stat">
-            <div class="diag-stat-num">{{ stats.gets }}</div>
-            <div class="diag-stat-lbl">GET (handshake/landing)</div>
+        <div class="diag-stat" style="background:#fef3c7">
+            <div class="diag-stat-num">{{ stats.outbound }}</div>
+            <div class="diag-stat-lbl"><i class="fa fa-arrow-up"></i> Outbound (envíos)</div>
         </div>
         <div class="diag-stat">
             <div class="diag-stat-num">{{ stats.errores }}</div>
@@ -54,14 +54,18 @@
         </div>
     </div>
 
-    {# Filtros simples #}
+    {# Filtros #}
     <div class="diag-card" style="padding:.65rem 1rem;margin-bottom:1rem">
         <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
-            <span class="muted" style="font-size:.85rem;color:#6b7280">Filtros:</span>
-            <a class="conex-chip {% if not filtro_metodo %}active{% endif %}" href="?">Todos</a>
+            <span style="font-size:.78rem;color:#6b7280;font-weight:600;text-transform:uppercase">Dirección:</span>
+            <a class="conex-chip {% if not filtro_direccion %}active{% endif %}" href="?">Todas</a>
+            <a class="conex-chip {% if filtro_direccion == 'in' %}active{% endif %}" href="?direccion=in"><i class="fa fa-arrow-down"></i> Inbound</a>
+            <a class="conex-chip {% if filtro_direccion == 'out' %}active{% endif %}" href="?direccion=out"><i class="fa fa-arrow-up"></i> Outbound</a>
+            <span style="margin-left:1rem;font-size:.78rem;color:#6b7280;font-weight:600;text-transform:uppercase">Método:</span>
             <a class="conex-chip {% if filtro_metodo == 'POST' %}active{% endif %}" href="?metodo=POST">POST</a>
             <a class="conex-chip {% if filtro_metodo == 'GET' %}active{% endif %}" href="?metodo=GET">GET</a>
-            <a class="conex-chip {% if filtro_status == '200' %}active{% endif %}" href="?status=200">200 OK</a>
+            <span style="margin-left:1rem;font-size:.78rem;color:#6b7280;font-weight:600;text-transform:uppercase">Status:</span>
+            <a class="conex-chip {% if filtro_status == '200' %}active{% endif %}" href="?status=200">200</a>
             <a class="conex-chip {% if filtro_status == '403' %}active{% endif %}" href="?status=403">403</a>
             <a class="conex-chip {% if filtro_status == '401' %}active{% endif %}" href="?status=401">401</a>
             <a class="conex-chip {% if filtro_status == '400' %}active{% endif %}" href="?status=400">400</a>
@@ -79,13 +83,14 @@
                 <thead>
                     <tr>
                         <th>Fecha</th>
+                        <th>Dir</th>
                         <th>Método</th>
                         <th>Status</th>
-                        <th>IP</th>
+                        <th>Detalle</th>
                         <th>Firma</th>
-                        <th>Body</th>
+                        <th>Tamaño</th>
+                        <th>Latencia</th>
                         <th>Nota</th>
-                        <th>UA</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -93,16 +98,36 @@
                         <tr data-hit-id="{{ h.id }}" class="hit-row {% if h.status_code >= 400 %}diag-row-error{% endif %}">
                             <td><span class="diag-mono">{{ h.fecha|date:"m-d H:i:s" }}</span></td>
                             <td>
+                                {% if h.direccion == 'in' %}
+                                    <span class="diag-pill" style="background:#dbeafe;color:#1e40af" title="Meta → nosotros">
+                                        <i class="fa fa-arrow-down"></i> IN
+                                    </span>
+                                {% else %}
+                                    <span class="diag-pill" style="background:#fef3c7;color:#92400e" title="Nosotros → Meta">
+                                        <i class="fa fa-arrow-up"></i> OUT
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
                                 <span class="diag-tag" style="background:{% if h.method == 'POST' %}#dbeafe;color:#1e40af{% elif h.method == 'GET' %}#dcfce7;color:#15803d{% else %}#fef3c7;color:#92400e{% endif %}">
                                     {{ h.method }}
                                 </span>
                             </td>
                             <td>
-                                <span class="diag-pill diag-pill-{% if h.status_code == 200 %}green{% elif h.status_code >= 400 %}red{% else %}yellow{% endif %}">
-                                    {{ h.status_code }}
+                                <span class="diag-pill diag-pill-{% if h.status_code == 200 %}green{% elif h.status_code >= 400 %}red{% elif h.status_code == 0 %}gray{% else %}yellow{% endif %}">
+                                    {{ h.status_code|default:'—' }}
                                 </span>
                             </td>
-                            <td><span class="diag-mono">{{ h.ip|default:'—' }}</span></td>
+                            <td class="diag-detail-cell">
+                                {% if h.direccion == 'out' %}
+                                    <span class="diag-mono" title="{{ h.url }}">{{ h.url|truncatechars:50 }}</span>
+                                {% else %}
+                                    <span class="diag-mono">{{ h.ip|default:'—' }}</span>
+                                    {% if 'facebook' in h.user_agent|lower %}
+                                        <i class="fab fa-facebook" style="color:#1877f2;margin-left:4px" title="Meta UA"></i>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if h.signature_presente %}
                                     <i class="fa fa-shield-halved" style="color:#10b981" title="X-Hub-Signature-256 presente"></i>
@@ -111,15 +136,12 @@
                                 {% endif %}
                             </td>
                             <td><span class="diag-mono">{{ h.body_length }}b</span></td>
-                            <td class="diag-detail-cell">{{ h.nota|default:'—' }}</td>
-                            <td class="diag-detail-cell" title="{{ h.user_agent }}">
-                                {% if 'facebook' in h.user_agent|lower %}
-                                    <i class="fab fa-facebook" style="color:#1877f2" title="Facebook UA"></i>
-                                    Meta
-                                {% else %}
-                                    {{ h.user_agent|truncatechars:30 }}
-                                {% endif %}
+                            <td>
+                                {% if h.latencia_ms %}
+                                    <span class="diag-mono">{{ h.latencia_ms }}ms</span>
+                                {% else %}—{% endif %}
                             </td>
+                            <td class="diag-detail-cell">{{ h.nota|default:'—' }}</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -169,20 +191,34 @@
                 .then(function(r){return r.json();})
                 .then(function(d){
                     if(!d.ok){ body.innerHTML = '<div class="man-val-msg is-error">'+d.error+'</div>'; return; }
+                    var esc = function(s){return (s||'').replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];});};
+                    var bloqueResp = '';
+                    if (d.direccion === 'out') {
+                        bloqueResp =
+                            '<h6 style="margin:1rem 0 .35rem;font-size:.85rem">Respuesta de Meta</h6>'+
+                            '<pre style="background:#0f172a;color:#a7f3d0;padding:.75rem;border-radius:6px;font-size:.78rem;max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all">'+esc(d.response_preview||'(vacío)')+'</pre>';
+                    }
                     body.innerHTML =
                         '<table class="diag-kv">'+
                         '<tr><td>Fecha</td><td><code>'+d.fecha+'</code></td></tr>'+
+                        '<tr><td>Dirección</td><td><b>'+(d.direccion_display||d.direccion||'—')+'</b></td></tr>'+
                         '<tr><td>Método</td><td>'+d.method+'</td></tr>'+
                         '<tr><td>Status</td><td>'+d.status_code+'</td></tr>'+
-                        '<tr><td>IP</td><td><code>'+(d.ip||'—')+'</code></td></tr>'+
-                        '<tr><td>User Agent</td><td style="word-break:break-all">'+(d.user_agent||'—')+'</td></tr>'+
-                        '<tr><td>Query string</td><td><code>'+(d.query_string||'—')+'</code></td></tr>'+
+                        (d.direccion === 'out'
+                            ? '<tr><td>URL Graph API</td><td><code style="word-break:break-all">'+esc(d.url||'—')+'</code></td></tr>'
+                            : '<tr><td>IP</td><td><code>'+(d.ip||'—')+'</code></td></tr>')+
+                        (d.direccion === 'in'
+                            ? '<tr><td>User Agent</td><td style="word-break:break-all">'+esc(d.user_agent||'—')+'</td></tr>'+
+                              '<tr><td>Query string</td><td><code>'+esc(d.query_string||'—')+'</code></td></tr>'
+                            : '')+
                         '<tr><td>Firma presente</td><td>'+(d.signature_presente?'Sí':'No')+'</td></tr>'+
                         '<tr><td>Body length</td><td>'+d.body_length+' bytes</td></tr>'+
-                        '<tr><td>Nota</td><td>'+(d.nota||'—')+'</td></tr>'+
+                        (d.latencia_ms !== null ? '<tr><td>Latencia</td><td>'+d.latencia_ms+' ms</td></tr>' : '')+
+                        '<tr><td>Nota</td><td>'+esc(d.nota||'—')+'</td></tr>'+
                         '</table>'+
-                        '<h6 style="margin:1rem 0 .35rem;font-size:.85rem">Body preview</h6>'+
-                        '<pre style="background:#1f2937;color:#d1d5db;padding:.75rem;border-radius:6px;font-size:.78rem;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-all">'+(d.body_preview||'(vacío)').replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];})+'</pre>';
+                        '<h6 style="margin:1rem 0 .35rem;font-size:.85rem">Body request</h6>'+
+                        '<pre style="background:#1f2937;color:#d1d5db;padding:.75rem;border-radius:6px;font-size:.78rem;max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all">'+esc(d.body_preview||'(vacío)')+'</pre>'+
+                        bloqueResp;
                 });
         });
     });

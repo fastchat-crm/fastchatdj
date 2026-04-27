@@ -27,6 +27,9 @@ def meta_webhook_hits(request):
     status = request.GET.get('status') or ''
     if status.isdigit():
         qs = qs.filter(status_code=int(status))
+    direccion = (request.GET.get('direccion') or '').lower()
+    if direccion in ('in', 'out'):
+        qs = qs.filter(direccion=direccion)
 
     hits = list(qs[:200])
 
@@ -36,24 +39,25 @@ def meta_webhook_hits(request):
     from datetime import timedelta
     ahora = timezone.now()
     ult_24h = MetaWebhookHit.objects.filter(fecha__gte=ahora - timedelta(hours=24)).count()
-    posts = MetaWebhookHit.objects.filter(method='POST').count()
-    gets = MetaWebhookHit.objects.filter(method='GET').count()
+    inbound = MetaWebhookHit.objects.filter(direccion='in').count()
+    outbound = MetaWebhookHit.objects.filter(direccion='out').count()
     errores = MetaWebhookHit.objects.filter(status_code__gte=400).count()
 
     contexto = {
-        'titulo': 'Hits HTTP webhook Meta',
-        'descripcion': 'Auditoría raw de cada request al endpoint /whatsapp/meta_webhook/.',
+        'titulo': 'Hits HTTP Meta (in + out)',
+        'descripcion': 'Auditoría raw de cada request relacionado con Meta — entrante (webhook) y saliente (envíos).',
         'ruta': request.path,
         'hits': hits,
         'stats': {
             'total': total,
             'ult_24h': ult_24h,
-            'posts': posts,
-            'gets': gets,
+            'inbound': inbound,
+            'outbound': outbound,
             'errores': errores,
         },
         'filtro_metodo': metodo,
         'filtro_status': status,
+        'filtro_direccion': direccion,
     }
     addData(request, contexto)
     return render(request, 'whatsapp/sesiones/webhook_hits.html', contexto)
@@ -67,12 +71,15 @@ def meta_webhook_hits_poll(request):
     data = [{
         'id': h.id,
         'fecha': h.fecha.strftime('%H:%M:%S'),
+        'direccion': h.direccion,
         'method': h.method,
+        'url': h.url,
         'status_code': h.status_code,
         'ip': h.ip,
         'user_agent': (h.user_agent or '')[:80],
         'signature_presente': h.signature_presente,
         'body_length': h.body_length,
+        'latencia_ms': h.latencia_ms,
         'nota': h.nota,
     } for h in qs]
     max_id = MetaWebhookHit.objects.order_by('-id').values_list('id', flat=True).first() or 0
@@ -94,7 +101,10 @@ def meta_webhook_hit_detalle(request, hit_id: int):
         'ok': True,
         'id': h.id,
         'fecha': h.fecha.isoformat(),
+        'direccion': h.direccion,
+        'direccion_display': h.get_direccion_display(),
         'method': h.method,
+        'url': h.url,
         'status_code': h.status_code,
         'ip': h.ip,
         'user_agent': h.user_agent,
@@ -102,5 +112,7 @@ def meta_webhook_hit_detalle(request, hit_id: int):
         'signature_presente': h.signature_presente,
         'body_length': h.body_length,
         'body_preview': h.body_preview,
+        'response_preview': h.response_preview,
+        'latencia_ms': h.latencia_ms,
         'nota': h.nota,
     })

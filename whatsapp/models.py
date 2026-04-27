@@ -659,22 +659,32 @@ class ConversacionWhatsApp(ModeloBase):
           1. resumir_conversacion() — sentimiento + resumen vía IA (idempotente).
           2. Registra fecha_fin_conversacion y duracion_conversacion.
           3. Si enviar_despedida: ejecuta ReglaFinConversacion o, en su defecto,
-             envía el mensaje_despedida clásico de la sesión.
+             envía el mensaje_despedida clásico de la sesión. Crea
+             MensajeWhatsApp local + TrazaMensajeIA para que el envío quede
+             en el historial de la conversación y en /whatsapp/trazas/.
           4. Marca despedida_enviado=True (si se envió algo),
              conversacion_finalizada=True y estado_conversacion=1.
+          5. Siempre deja una traza 'fin_conversacion' indicando qué pasó
+             con la despedida (enviada / fallida / omitida).
+
+        Comportamiento ante fallo de envío: NO bloquea el cierre. Logueamos
+        la falla y cerramos igual — la conversación queda cerrada, y el
+        operador puede ver en las trazas por qué la despedida no llegó.
 
         Flags:
-          enviar_despedida: si False, no envía mensaje al cliente
-                            (equivalente a 'terminar-sin-despedida').
+          enviar_despedida: si False, no envía mensaje al cliente.
           respetar_asignacion_humana: si True y hay asignado_a, no cierra.
           respetar_bloqueo_cierre: si True y bloquear_cierre=True con ai_activo=False,
                                    no cierra.
 
         Return: True si se cerró, False si fue saltado o ya estaba cerrada.
         """
+        import logging as _logging
         from crm.acciones_fin import ejecutar_acciones_fin
         from crm.models import ReglaFinConversacion
         from whatsapp.services import get_whatsapp_service
+
+        _log = _logging.getLogger(__name__)
 
         if self.conversacion_finalizada:
             return False
@@ -692,6 +702,11 @@ class ConversacionWhatsApp(ModeloBase):
         if self.fecha_registro:
             self.duracion_conversacion = ahora - self.fecha_registro
 
+        # Estado del flujo de despedida (para la traza final).
+        despedida_estado = 'omitida'   # omitida | enviada | fallida
+        despedida_detalle = ''
+        despedida_error = ''
+
         if enviar_despedida:
             regla = ReglaFinConversacion.para_sesion(sesion)
             if regla:
@@ -704,20 +719,75 @@ class ConversacionWhatsApp(ModeloBase):
                     'resumen': self.resumen_conversacion or '',
                     'agente': agente_ia.nombre if agente_ia else '',
                 }
-                ejecutar_acciones_fin(regla, contexto)
-                self.despedida_enviado = True
-            elif getattr(sesion, 'mensaje_despedida', None):
-                resultado = get_whatsapp_service(sesion).send_text_message(
-                    sesion.session_id,
-                    self.contacto.from_number,
-                    sesion.mensaje_despedida,
-                    conversacion_id=self.id,
-                    simularEscritura=True,
-                )
-                if not resultado.get('success'):
-                    raise RuntimeError(resultado.get('error', 'Error enviando despedida'))
-                self.despedida_enviado = True
+                try:
+                    ejecutar_acciones_fin(regla, contexto)
+                    self.despedida_enviado = True
+                    despedida_estado = 'enviada'
+                    despedida_detalle = f'regla_id={regla.id} acciones_ejecutadas'
+                except Exception as ex:
+                    _log.exception("ReglaFinConversacion fallo en cerrar()")
+                    despedida_estado = 'fallida'
+                    despedida_error = f'regla_id={regla.id}: {ex}'
 
+            elif getattr(sesion, 'mensaje_despedida', None):
+                texto_despedida = sesion.mensaje_despedida
+                try:
+                    resultado = get_whatsapp_service(sesion).send_text_message(
+                        sesion.session_id,
+                        self.contacto.from_number,
+                        texto_despedida,
+                        conversacion_id=self.id,
+                        simularEscritura=True,
+                    )
+                except Exception as ex:
+                    resultado = {'success': False, 'error': str(ex)}
+
+                if resultado.get('success'):
+                    self.despedida_enviado = True
+                    despedida_estado = 'enviada'
+                    despedida_detalle = f"message_id={resultado.get('message_id', '')}"
+                    # Crear MensajeWhatsApp local para que aparezca en el
+                    # historial de la conversación. Para Meta es la única
+                    # vía (no hay webhook que lo cree). Para Baileys, Node
+                    # podría emitir message_sent — usamos
+                    # mensaje_id_externo único para que el handler ignore
+                    # el duplicado si llega después.
+                    try:
+                        msg_id_ext = resultado.get('message_id') or ''
+                        ya_existe = (
+                            msg_id_ext
+                            and MensajeWhatsApp.objects
+                                .filter(conversacion=self, mensaje_id_externo=msg_id_ext)
+                                .exists()
+                        )
+                        if not ya_existe:
+                            MensajeWhatsApp.objects.create(
+                                conversacion=self,
+                                remitente=sesion.numero or '',
+                                mensaje=texto_despedida,
+                                tipo='texto',
+                                fecha=timezone.now(),
+                                leido=True,
+                                fecha_leido=timezone.now(),
+                                es_automatico=True,
+                                ia_generado=False,
+                                mensaje_id_externo=msg_id_ext,
+                                estado_envio='enviado',
+                            )
+                    except Exception:
+                        _log.exception("No pude persistir MensajeWhatsApp de despedida")
+                else:
+                    despedida_estado = 'fallida'
+                    despedida_error = str(resultado.get('error', 'Error desconocido'))[:500]
+                    _log.warning(
+                        "Despedida no enviada para conv=%s sesion=%s: %s",
+                        self.id, sesion.session_id, despedida_error,
+                    )
+            else:
+                despedida_detalle = 'sin regla y sin mensaje_despedida configurado'
+
+        # Cerrar SIEMPRE — no bloqueamos por fallo de envío. La traza
+        # registra qué pasó para que el operador pueda revisar.
         self.conversacion_finalizada = True
         self.estado_conversacion = 1
 
@@ -728,6 +798,33 @@ class ConversacionWhatsApp(ModeloBase):
             'fecha_fin_conversacion',
             'duracion_conversacion',
         ])
+
+        # Traza final — visible en /whatsapp/trazas/ filtrando por
+        # etapa=fin_conversacion. Imprescindible para que el operador
+        # pueda diagnosticar por qué un cliente no recibió despedida.
+        try:
+            partes = [f'estado_despedida={despedida_estado}']
+            if not enviar_despedida:
+                partes.append('flag_enviar_despedida=False')
+            if despedida_detalle:
+                partes.append(despedida_detalle)
+            if despedida_error:
+                partes.append(f'error={despedida_error}')
+            partes.append(f'transporte={getattr(sesion, "proveedor", "?")}')
+            nivel = 'error' if despedida_estado == 'fallida' else (
+                'success' if despedida_estado == 'enviada' else 'info'
+            )
+            TrazaMensajeIA.objects.create(
+                sesion=sesion,
+                conversacion=self,
+                numero=self.contacto.from_number or '',
+                etapa='fin_conversacion',
+                nivel=nivel,
+                detalle=' | '.join(partes)[:4000],
+            )
+        except Exception:
+            _log.exception("No pude registrar traza fin_conversacion")
+
         return True
 
     @classmethod
@@ -1312,8 +1409,15 @@ class MetaWebhookHit(models.Model):
     pero `EventoMetaRecibido` esta vacio (firma invalida, JSON malformado,
     etc.) o el inverso (Django nunca recibio porque proxy bloqueo).
     """
+    DIRECCIONES = (('in', 'Entrante (Meta→nosotros)'), ('out', 'Saliente (nosotros→Meta)'))
+
     fecha = models.DateTimeField(auto_now_add=True, db_index=True)
+    direccion = models.CharField(max_length=4, choices=DIRECCIONES, default='in', db_index=True)
     method = models.CharField(max_length=10, db_index=True)
+    url = models.CharField(
+        max_length=500, blank=True, default='',
+        help_text='Solo outbound: URL Graph API contra la que pegamos.'
+    )
     status_code = models.PositiveSmallIntegerField(default=0, db_index=True)
     ip = models.CharField(max_length=64, blank=True, default='')
     user_agent = models.CharField(max_length=256, blank=True, default='')
@@ -1322,11 +1426,19 @@ class MetaWebhookHit(models.Model):
     body_length = models.PositiveIntegerField(default=0)
     body_preview = models.CharField(
         max_length=600, blank=True, default='',
-        help_text='Primeros ~600 chars del body para diagnostico.'
+        help_text='Primeros ~600 chars del body request.'
+    )
+    response_preview = models.CharField(
+        max_length=600, blank=True, default='',
+        help_text='Solo outbound: primeros ~600 chars de la respuesta de Meta.'
+    )
+    latencia_ms = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text='Solo outbound: ms hasta recibir respuesta de Meta.'
     )
     nota = models.CharField(
         max_length=200, blank=True, default='',
-        help_text='Por que el response fue ese (ej: "verify_token_no_match").'
+        help_text='Tipo de operacion (send_text, handshake, etc.).'
     )
 
     class Meta:
@@ -1334,6 +1446,7 @@ class MetaWebhookHit(models.Model):
         verbose_name_plural = 'Hits HTTP webhook Meta'
         ordering = ['-fecha', '-id']
         indexes = [
+            models.Index(fields=['direccion', '-fecha']),
             models.Index(fields=['method', '-fecha']),
             models.Index(fields=['status_code', '-fecha']),
         ]

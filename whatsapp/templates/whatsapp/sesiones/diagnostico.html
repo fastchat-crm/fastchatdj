@@ -423,7 +423,18 @@
                     </thead>
                     <tbody>
                     {% for tz in trazas_recientes %}
-                        <tr class="diag-row-{{ tz.nivel }}">
+                        <tr class="diag-row-{{ tz.nivel }} traza-row" style="cursor:pointer"
+                            data-traza-id="{{ tz.id }}"
+                            data-fecha="{{ tz.fecha|date:'Y-m-d H:i:s' }}"
+                            data-etapa="{{ tz.etapa }}"
+                            data-etapa-display="{{ tz.get_etapa_display }}"
+                            data-nivel="{{ tz.nivel }}"
+                            data-latencia="{{ tz.latencia_ms|default:'' }}"
+                            data-numero="{{ tz.numero|default:'' }}"
+                            data-conversacion="{{ tz.conversacion_id|default:'' }}"
+                            data-mensaje="{{ tz.mensaje_id|default:'' }}"
+                            data-apikey="{% if tz.apikey %}{{ tz.apikey.proveedor|default:'?' }}{% endif %}"
+                            data-detalle="{{ tz.detalle|default:''|escape }}">
                             <td><span class="diag-mono">{{ tz.fecha|date:"m-d H:i:s" }}</span></td>
                             <td><span class="diag-tag">{{ tz.etapa }}</span></td>
                             <td>
@@ -437,6 +448,7 @@
                             <td class="diag-detail-cell">
                                 {% if tz.detalle %}
                                     {{ tz.detalle|truncatechars:120 }}
+                                    <i class="fa fa-expand text-muted" style="font-size:.7rem;margin-left:4px;color:#9ca3af" title="Ver detalle"></i>
                                 {% else %}—{% endif %}
                             </td>
                         </tr>
@@ -456,6 +468,98 @@
         </div>
 
     </div>
+
+    {# ───────── Modal detalle Traza IA ───────── #}
+    <div class="man-val-backdrop" id="traza-detail-modal" aria-hidden="true">
+        <div class="man-val-panel" role="dialog" style="max-width:680px">
+            <div class="man-val-header">
+                <div class="man-val-header-title">
+                    <i class="fa fa-clock-rotate-left" style="color:#2563eb"></i>
+                    <h5 id="traza-modal-title">Detalle de la traza</h5>
+                </div>
+                <button type="button" class="man-val-close" data-traza-close aria-label="Cerrar">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="man-val-body" id="traza-modal-body"></div>
+            <div class="man-val-footer">
+                <button type="button" class="conex-btn conex-btn-ghost" data-traza-close>Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var modal = document.getElementById('traza-detail-modal');
+            var body = document.getElementById('traza-modal-body');
+            var title = document.getElementById('traza-modal-title');
+
+            function cerrar() {
+                modal.classList.remove('open');
+                modal.setAttribute('aria-hidden', 'true');
+            }
+            document.querySelectorAll('[data-traza-close]').forEach(function (b) {
+                b.addEventListener('click', cerrar);
+            });
+            modal.addEventListener('click', function (e) {
+                if (e.target === modal) cerrar();
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && modal.classList.contains('open')) cerrar();
+            });
+
+            function escapeHtml(s) {
+                return (s || '').replace(/[<>&]/g, function (c) {
+                    return {'<': '&lt;', '>': '&gt;', '&': '&amp;'}[c];
+                });
+            }
+
+            function pretty(detalle) {
+                if (!detalle) return '<i class="text-muted">(vacío)</i>';
+                var trimmed = detalle.trim();
+                if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                    try {
+                        var parsed = JSON.parse(trimmed);
+                        return '<pre class="traza-json">' + escapeHtml(JSON.stringify(parsed, null, 2)) + '</pre>';
+                    } catch (e) {}
+                }
+                return '<pre class="traza-raw">' + escapeHtml(detalle) + '</pre>';
+            }
+
+            document.querySelectorAll('.traza-row').forEach(function (row) {
+                row.addEventListener('click', function () {
+                    var d = row.dataset;
+                    title.textContent = (d.etapaDisplay || d.etapa) + ' · ' + d.fecha;
+
+                    var rows = '';
+                    function addRow(label, val, mono) {
+                        if (val === undefined || val === null || val === '') return;
+                        rows += '<tr><td>' + label + '</td><td>' +
+                            (mono ? '<code>' + escapeHtml(val) + '</code>' : escapeHtml(val)) +
+                            '</td></tr>';
+                    }
+                    addRow('Fecha', d.fecha, true);
+                    addRow('Etapa', d.etapaDisplay || d.etapa);
+                    addRow('Etapa (clave)', d.etapa, true);
+                    addRow('Nivel', d.nivel);
+                    addRow('Latencia', d.latencia ? d.latencia + ' ms' : '');
+                    addRow('Número', d.numero, true);
+                    addRow('Conversación ID', d.conversacion, true);
+                    addRow('Mensaje ID', d.mensaje, true);
+                    addRow('API Key proveedor', d.apikey, true);
+                    addRow('Traza ID (interno)', d.trazaId, true);
+
+                    body.innerHTML =
+                        '<table class="diag-kv">' + rows + '</table>' +
+                        '<h6 style="margin:1rem 0 .35rem;font-size:.85rem">Detalle / payload</h6>' +
+                        pretty(d.detalle);
+
+                    modal.classList.add('open');
+                    modal.setAttribute('aria-hidden', 'false');
+                });
+            });
+        })();
+    </script>
 
     {% csrf_token %}
     <script>
