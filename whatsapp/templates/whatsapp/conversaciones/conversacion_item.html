@@ -1,7 +1,4 @@
 {% load humanize %}
-{# CSS movido a static/stylenew/conversaciones.css — antes se duplicaba
-   en cada item del listado. listado.html lo carga una sola vez. #}
-
 <div class="p-2 border border-dashed rounded mb-2 conversacion-item border-theme-color"
      style="order: -{{ conversacion.order }};" data-id="{{ conversacion.id }}">
     <a href="javascript:void(0);" class="cargar-conversacion text-decoration-none text-dark"
@@ -30,13 +27,17 @@
                             Si la sesion migra de Baileys a Meta luego, el historial mantiene su badge real.
                             {% endcomment %}
                             {% if conversacion.atendida_por_meta %}
-                                <small class="badge bg-primary" title="Atendida via Meta Cloud API"><i class="fa fa-cloud"></i> Meta</small>
+                                <small class="badge bg-primary" title="Atendida via Meta Cloud API"><i
+                                        class="fa fa-cloud"></i> Meta</small>
                             {% elif conversacion.atendida_por_baileys %}
-                                <small class="badge bg-success" title="Atendida via Baileys (WhatsApp Web)"><i class="fab fa-whatsapp"></i> Baileys</small>
+                                <small class="badge bg-success" title="Atendida via Baileys (WhatsApp Web)"><i
+                                        class="fab fa-whatsapp"></i> Baileys</small>
                             {% elif conversacion.atendida_por_instagram %}
-                                <small class="badge bg-danger" title="Atendida via Instagram DM"><i class="fab fa-instagram"></i> IG</small>
+                                <small class="badge bg-danger" title="Atendida via Instagram DM"><i
+                                        class="fab fa-instagram"></i> IG</small>
                             {% elif conversacion.atendida_por_messenger %}
-                                <small class="badge bg-info text-white" title="Atendida via Facebook Messenger"><i class="fab fa-facebook-messenger"></i> FB</small>
+                                <small class="badge bg-info text-white" title="Atendida via Facebook Messenger"><i
+                                        class="fab fa-facebook-messenger"></i> FB</small>
                             {% endif %}
                             <small class="badge badge-{{ conversacion.get_estado_color_clasificacion }}">
                                 {{ conversacion.get_clasificacion_display }}
@@ -47,7 +48,8 @@
                                 </small>
                             {% endif %}
                             {% if conversacion.asignado_a %}
-                                <small class="badge bg-light text-dark border" title="Asignado a {{ conversacion.asignado_a.get_full_name }}">
+                                <small class="badge bg-light text-dark border"
+                                       title="Asignado a {{ conversacion.asignado_a.get_full_name }}">
                                     <i class="fa fa-user"></i> {{ conversacion.asignado_a.first_name }}
                                 </small>
                             {% endif %}
@@ -76,12 +78,13 @@
 
         <!-- Sentimiento (solo visible si está calculado, típicamente en finalizadas) -->
         {% if conversacion.sentimiento %}
-        <div class="mt-1 px-1">
-            <small class="badge bg-{{ conversacion.get_sentimiento_color }}">
-                {{ conversacion.get_sentimiento_emoji }} {{ conversacion.get_sentimiento_display }}
-                {% if conversacion.puntuacion_sentimiento %}({{ conversacion.puntuacion_sentimiento }}/10){% endif %}
-            </small>
-        </div>
+            <div class="mt-1 px-1">
+                <small class="badge bg-{{ conversacion.get_sentimiento_color }}">
+                    {{ conversacion.get_sentimiento_emoji }} {{ conversacion.get_sentimiento_display }}
+                    {% if conversacion.puntuacion_sentimiento %}({{ conversacion.puntuacion_sentimiento }}
+                        /10){% endif %}
+                </small>
+            </div>
         {% endif %}
 
         <!-- Mensaje y fecha DEBAJO DE LA IMAGEN -->
