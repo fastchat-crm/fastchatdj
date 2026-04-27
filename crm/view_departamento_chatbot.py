@@ -179,6 +179,7 @@ def departamentoChatbotsView(request):
                             'titulo_pagina': f'Editar {filtro}',
                             'ruta_post': request.path,
                             'arbol_plano': _serializar_arbol_opciones(filtro),
+                            'arbol_anidado': _serializar_arbol_anidado(filtro),
                             'tipos_nodo_choices': OpcionDepartamentoChatBot.TIPOS_NODO,
                             'validaciones_choices': OpcionDepartamentoChatBot.VALIDACIONES,
                             'endpoints_disponibles': EndpointApiChatbot.objects.filter(status=True).order_by('nombre'),
@@ -188,6 +189,18 @@ def departamentoChatbotsView(request):
                     return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:
                     return JsonResponse({"result": False, 'message': str(ex)})
+
+            elif action == 'preview':
+                # Simulador WhatsApp-like del flujo. Renderiza pagina full con
+                # arbol serializado en JSON para que el JS del cliente lo recorra.
+                try:
+                    pk = int(request.GET['id'])
+                    filtro = model.objects.get(pk=pk)
+                    data["filtro"] = filtro
+                    data["preview_json"] = json.dumps(_serializar_para_preview(filtro), ensure_ascii=False)
+                    return render(request, 'crm/departamento_chatbots/preview.html', data)
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
 
             elif action == 'exportar_meta_payload':
                 # Devuelve el JSON Meta Cloud API (interactive button/list) construido
@@ -532,6 +545,49 @@ def _serializar_arbol_opciones(departamento, padre=None, nivel=0):
     return items
 
 
+def _serializar_para_preview(departamento):
+    """Estructura compacta para el simulador WhatsApp del flujo. Cada nodo
+    incluye sus hijos inline para que el JS no tenga que recorrer un mapa."""
+    def _conv(op):
+        return {
+            'id': op.id,
+            'nombre': op.nombre or '',
+            'respuesta': op.respuesta or '',
+            'tipo': op.tipo_nodo,
+            'boton_id': op.boton_id or f'opcion_{op.id}',
+            'es_inicio': bool(op.es_inicio),
+            'config': op.config or {},
+            'hijos': [
+                _conv(c) for c in OpcionDepartamentoChatBot.objects.filter(
+                    opcion_padre=op, status=True,
+                ).order_by('orden', 'id')
+            ],
+        }
+    raices = OpcionDepartamentoChatBot.objects.filter(
+        departamento=departamento, opcion_padre__isnull=True, status=True,
+    ).order_by('-es_inicio', 'orden', 'id')
+    return {
+        'departamento': {
+            'id': departamento.id,
+            'nombre': departamento.nombre,
+            'color': departamento.color or '#16a34a',
+            'mensaje_saludo': departamento.mensaje_saludo or '',
+        },
+        'raices': [_conv(r) for r in raices],
+    }
+
+
+def _serializar_arbol_anidado(departamento, padre=None):
+    """Versión anidada (estructura recursiva) para el diagrama horizontal."""
+    qs = OpcionDepartamentoChatBot.objects.filter(
+        departamento=departamento, opcion_padre=padre, status=True,
+    ).order_by('orden', 'id')
+    return [
+        {'opcion': op, 'hijos': _serializar_arbol_anidado(departamento, padre=op)}
+        for op in qs
+    ]
+
+
 # ============================================================================
 # Autosave granular — endpoints para la nueva UI sin wizard. Cada uno persiste
 # *solo* su pieza (header del depto / un nodo / mover / eliminar) para que el
@@ -619,37 +675,32 @@ def _guardar_opcion(request):
         ).aggregate(m=Max('orden'))['m'] or 0
         opcion.orden = max_orden + 1
 
-    opcion.variable_destino = (request.POST.get('variable_destino') or '').strip()[:80]
-    val_tipo = (request.POST.get('validacion_tipo') or 'none').strip()
-    opcion.validacion_tipo = val_tipo if val_tipo in VALIDACIONES_VALIDAS else 'none'
-    opcion.validacion_expresion = (request.POST.get('validacion_expresion') or '').strip()[:250]
-    opcion.mensaje_error = (request.POST.get('mensaje_error') or '').strip()
-    try:
-        opcion.reintentos_max = max(0, int(request.POST.get('reintentos_max') or 3))
-    except (TypeError, ValueError):
-        opcion.reintentos_max = 3
+    # boton_id viene del form (input directo)
+    boton_id = (request.POST.get('boton_id') or '').strip()[:64]
+    # Sanitizar: solo letras/números/_/-
+    import re as _re
+    boton_id = _re.sub(r'[^a-zA-Z0-9_\-]', '', boton_id)
+    opcion.boton_id = boton_id
 
-    cfg_raw = request.POST.get('config_json')
-    if cfg_raw is not None and cfg_raw != '':
-        try:
-            parsed = json.loads(cfg_raw)
-            if isinstance(parsed, dict):
-                opcion.config = parsed
-            else:
-                return JsonResponse({'ok': False, 'error': 'config_json debe ser objeto'})
-        except json.JSONDecodeError as ex:
-            return JsonResponse({'ok': False, 'error': f'config_json invalido: {ex}'})
-    elif not opcion.config:
-        opcion.config = {}
-
-    end_id = request.POST.get('endpoint_id') or ''
-    if end_id and end_id not in ('0', 'null', 'none'):
-        try:
-            opcion.endpoint = EndpointApiChatbot.objects.filter(pk=int(end_id), status=True).first()
-        except (TypeError, ValueError):
-            opcion.endpoint = None
+    # Acción con URL (cta_url Meta) — se guarda dentro de config_json
+    accion_url = (request.POST.get('accion_url') or '').strip()
+    accion_text = (request.POST.get('accion_display_text') or '').strip()[:20]
+    if accion_url:
+        opcion.config = {
+            'meta_type': 'cta_url',
+            'url': accion_url,
+            'display_text': accion_text or 'Abrir',
+        }
     else:
-        opcion.endpoint = None
+        # Si la opción tenia config cta_url pero ya no hay URL, limpiamos.
+        # Conservamos otros tipos (p.ej. location) si vinieran.
+        if opcion.config and opcion.config.get('meta_type') == 'cta_url':
+            opcion.config = {}
+        elif not opcion.config:
+            opcion.config = {}
+
+    # Campos avanzados (variable_destino, endpoint, validación) se mantienen
+    # como están si ya tenían valor; el form simplificado no los toca.
 
     opcion.save(request)
 

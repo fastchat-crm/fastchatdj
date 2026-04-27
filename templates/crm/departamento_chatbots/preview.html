@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/dpchat_preview.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="dpprev-toolbar">
+    <a href="/crm/departamentos_chatbots/?action=change&id={{ filtro.pk }}&full=1"
+       class="btn btn-light btn-sm">
+        <i class="fa fa-arrow-left me-1"></i> Volver al editor
+    </a>
+    <h5 class="mb-0">Preview · {{ filtro.nombre }}</h5>
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="dpprev-reset">
+        <i class="fa fa-rotate me-1"></i> Reiniciar conversación
+    </button>
+</div>
+
+<div class="dpprev-wrap">
+    <div class="dpprev-phone">
+        <div class="dpprev-header" style="background:{{ filtro.color|default:'#075e54' }}">
+            <i class="fab fa-whatsapp me-2"></i>
+            <div class="dpprev-header-info">
+                <div class="dpprev-header-name">{{ filtro.nombre }}</div>
+                <div class="dpprev-header-sub">Bot · simulador</div>
+            </div>
+        </div>
+        <div class="dpprev-chat" id="dpprev-chat"></div>
+        <div class="dpprev-input-bar">
+            <i class="fa fa-keyboard text-muted me-2"></i>
+            <span class="text-muted small">Tocá un botón arriba para responder…</span>
+        </div>
+    </div>
+    <aside class="dpprev-side">
+        <h6><i class="fa fa-info-circle me-1 text-info"></i> Cómo funciona</h6>
+        <p class="small text-muted">
+            Este simulador recorre el flujo del depto como lo verá el cliente.
+            Cada burbuja verde es un mensaje del bot; las grises son tus respuestas.
+        </p>
+        <ul class="small text-muted">
+            <li><span class="badge bg-success">Respuesta</span> texto plano (Meta type=text)</li>
+            <li><span class="badge bg-primary">Menú</span> botones interactive (button/list según cantidad)</li>
+            <li><span class="badge bg-info text-dark">Handoff</span> deriva a un humano</li>
+            <li><span class="badge bg-secondary">Fin</span> termina el flujo</li>
+        </ul>
+        <p class="small text-muted">
+            <code>config_json</code> con <code>meta_type:"cta_url"</code> renderiza un botón
+            con URL externa. <code>"location"</code> muestra una mini-card de mapa.
+        </p>
+    </aside>
+</div>
+
+<script id="dp-preview-data" type="application/json">{{ preview_json|safe }}</script>
+{% endblock %}
+
+{% block jscript %}
+    <script src="{% static 'js/dpchat_preview.js' %}?v=1"></script>
+{% endblock %}

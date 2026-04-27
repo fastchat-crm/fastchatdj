@@ -1,0 +1,29 @@
+{# Recursivo. Renderiza un nodo del arbol de decision como <li> con sus hijos
+   en un <ul> nested para que el CSS .dp-tree-decision pueda dibujar conectores.
+   Vars esperadas: nodo (dict {opcion, hijos}). #}
+<li>
+    <div class="dp-tree-card tipo-{{ nodo.opcion.tipo_nodo }}">
+        <div class="dp-tree-card-pill dp-tipo-pill tipo-{{ nodo.opcion.tipo_nodo }}">
+            {{ nodo.opcion.get_tipo_nodo_display }}
+        </div>
+        <div class="dp-tree-card-name">
+            {% if nodo.opcion.es_inicio %}
+                <i class="fa fa-play text-success me-1" title="Nodo de inicio"></i>
+            {% endif %}
+            {{ nodo.opcion.nombre|default:'(sin nombre)' }}
+        </div>
+        {% if nodo.opcion.boton_id %}
+            <div class="dp-tree-card-btnid">id: <code>{{ nodo.opcion.boton_id }}</code></div>
+        {% endif %}
+        {% if nodo.opcion.respuesta %}
+            <div class="dp-tree-card-resp">{{ nodo.opcion.respuesta|truncatechars:90 }}</div>
+        {% endif %}
+    </div>
+    {% if nodo.hijos %}
+        <ul>
+            {% for h in nodo.hijos %}
+                {% include "crm/departamento_chatbots/_diagrama_node.html" with nodo=h %}
+            {% endfor %}
+        </ul>
+    {% endif %}
+</li>

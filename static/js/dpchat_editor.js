@@ -360,12 +360,56 @@
         });
     }
 
+    /* ────────────── Filtros (cliente) ────────────── */
+    function aplicarFiltros() {
+        var qEl = $('#dp-filter-q');
+        var tipoEl = $('#dp-filter-tipo');
+        if (!qEl || !tipoEl) return;
+        var q = (qEl.value || '').toLowerCase().trim();
+        var tipo = tipoEl.value || '';
+        var cards = $$('.dp-node-card');
+        var visibles = 0;
+        cards.forEach(function (c) {
+            var tipoNodo = c.getAttribute('data-tipo') || '';
+            var nombre = (c.querySelector('.dp-node-title') || {}).textContent || '';
+            var preview = (c.querySelector('.dp-node-preview') || {}).textContent || '';
+            var matchTipo = !tipo || tipoNodo === tipo;
+            var matchTexto = !q ||
+                nombre.toLowerCase().indexOf(q) >= 0 ||
+                preview.toLowerCase().indexOf(q) >= 0;
+            var ok = matchTipo && matchTexto;
+            c.classList.toggle('dp-hidden', !ok);
+            if (ok) visibles++;
+        });
+        var resumen = $('#dp-filter-resumen');
+        if (resumen) {
+            resumen.textContent = (visibles === cards.length)
+                ? cards.length + ' nodos'
+                : visibles + ' de ' + cards.length + ' nodos';
+        }
+    }
+
+    function wireFiltros() {
+        var q = $('#dp-filter-q');
+        var tipo = $('#dp-filter-tipo');
+        var clear = $('#dp-filter-clear');
+        if (q) q.addEventListener('input', aplicarFiltros);
+        if (tipo) tipo.addEventListener('change', aplicarFiltros);
+        if (clear) clear.addEventListener('click', function () {
+            if (q) q.value = '';
+            if (tipo) tipo.value = '';
+            aplicarFiltros();
+        });
+        aplicarFiltros();
+    }
+
     /* ────────────── Init ────────────── */
     function init() {
         wireMeta();
         wireModalSubmit();
         wireTreeActions();
         wireSortable();
+        wireFiltros();
         setupBeforeUnload();
         console.log('[dpchat_editor] init OK · dep_id=' + STATE.departamentoId);
     }

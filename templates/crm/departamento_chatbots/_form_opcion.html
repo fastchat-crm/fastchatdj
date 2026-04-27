@@ -1,4 +1,3 @@
-
 <input type="hidden" name="opcion_id" value="{{ opcion.id|default:0 }}">
 <input type="hidden" name="departamento_id" value="{{ departamento_id }}">
 <input type="hidden" name="parent_id" value="{{ parent_id|default:0 }}">
@@ -7,29 +6,27 @@
     {% if parent_id and parent_id != 0 %}
         <div class="alert alert-info py-2 small mb-2">
             <i class="fa fa-info-circle me-1"></i>
-            <strong>Nueva sub-opción.</strong> Este nodo va a colgar de otro como hijo.
-            Si el padre es de tipo <span class="badge bg-primary">Menú</span>, esta opción
-            aparecerá listada al usuario. Si el padre es <span class="badge bg-warning text-dark">Pregunta</span>,
-            este nodo se ejecuta cuando el usuario responde.
+            <strong>Nueva sub-opción.</strong> Cuelga de un nodo padre.
+            Si el padre es <span class="badge bg-primary">Menú</span>, esta opción aparece
+            como botón al usuario. Si el padre es <span class="badge bg-warning text-dark">Pregunta</span>,
+            se ejecuta cuando el usuario responde.
         </div>
     {% else %}
         <div class="alert alert-info py-2 small mb-2">
             <i class="fa fa-info-circle me-1"></i>
-            <strong>Nueva opción raíz.</strong> Una opción raíz es el punto de entrada o una
-            rama principal del flujo. Marcala como <em>"nodo de inicio"</em> en
-            <em>Configuración avanzada</em> para que el bot la ejecute al entrar el cliente.
+            <strong>Nueva opción raíz.</strong> Punto de entrada del flujo.
+            Marcala como <em>"nodo de inicio"</em> si es la primera que el bot ejecuta.
         </div>
     {% endif %}
 {% endif %}
 
 <div class="alert alert-light border py-2 small mb-2">
-    <strong>Guía rápida de tipos:</strong>
-    <span class="badge bg-success">Respuesta</span> envía un texto fijo ·
-    <span class="badge bg-primary">Menú</span> lista opciones a elegir ·
-    <span class="badge bg-warning text-dark">Pregunta</span> captura input del usuario (con validación) ·
-    <span class="badge bg-danger">HTTP</span> llama a una API ·
-    <span class="badge bg-info text-dark">Handoff</span> pasa la conversación a humano ·
-    <span class="badge bg-secondary">Fin</span> cierra el flujo.
+    <strong>Tipos:</strong>
+    <span class="badge bg-success">Respuesta</span> texto plano ·
+    <span class="badge bg-primary">Menú</span> hijos = botones interactive ·
+    <span class="badge bg-warning text-dark">Pregunta</span> captura input ·
+    <span class="badge bg-info text-dark">Handoff</span> deriva a humano ·
+    <span class="badge bg-secondary">Fin</span> cierra flujo.
 </div>
 
 <div class="row g-2">
@@ -42,91 +39,69 @@
         </select>
     </div>
     <div class="col-md-8">
-        <label class="form-label small fw-bold mb-1">Nombre</label>
+        <label class="form-label small fw-bold mb-1">
+            Nombre / título del botón
+            <small class="text-muted fw-normal">(máx 20 chars en Meta)</small>
+        </label>
         <input type="text" name="nombre" class="form-control form-control-sm"
                value="{{ opcion.nombre|default:'' }}"
-               placeholder="Ej: Ver menú · Hablar con asesor" maxlength="100" required>
+               placeholder="Ej: 💪 Ver Precios" maxlength="100" required>
     </div>
 
     <div class="col-12">
         <label class="form-label small fw-bold mb-1">Respuesta / mensaje al cliente</label>
-        <textarea name="respuesta" class="form-control form-control-sm" rows="3"
+        <textarea name="respuesta" class="form-control form-control-sm" rows="4"
                   placeholder="Texto que envía el bot al activar este nodo.">{{ opcion.respuesta|default:'' }}</textarea>
         <small class="text-muted">
             Variables: {% verbatim %}<code>{{contacto.nombre}}</code>
-            <code>{{variables.X}}</code>{% endverbatim %} (donde X es una variable_destino capturada antes).
+            <code>{{contacto.numero}}</code>{% endverbatim %} · Soporta emojis y *negrita*.
         </small>
     </div>
 
-    <div class="col-12 mt-2">
-        <button type="button" class="btn btn-link btn-sm p-0" data-bs-toggle="collapse" data-bs-target="#opcAvanzado-{{ opcion.id|default:'new' }}">
-            <i class="fa fa-caret-right me-1"></i> Configuración avanzada
-        </button>
-        <div class="collapse" id="opcAvanzado-{{ opcion.id|default:'new' }}">
-            <div class="row g-2 mt-1 p-2" style="background:#f8f9fa;border-radius:6px;">
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold mb-1">Variable destino</label>
-                    <input type="text" name="variable_destino" class="form-control form-control-sm"
-                           value="{{ opcion.variable_destino|default:'' }}"
-                           placeholder="Ej: cedula · saldo" maxlength="80">
-                    <small class="text-muted">Para tipo Pregunta o HTTP.</small>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label small fw-bold mb-1">Endpoint API</label>
-                    <select name="endpoint_id" class="form-select form-select-sm">
-                        <option value="0">— ninguno —</option>
-                        {% for ep in endpoints_disponibles %}
-                            <option value="{{ ep.id }}" {% if opcion.endpoint_id == ep.id %}selected{% endif %}>
-                                {{ ep.nombre }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                    <small class="text-muted">Solo para tipo HTTP.</small>
-                </div>
+    <div class="col-md-6">
+        <label class="form-label small fw-bold mb-1">
+            ID del botón Meta
+            <small class="text-muted fw-normal">(auto si lo dejás vacío)</small>
+        </label>
+        <input type="text" name="boton_id" class="form-control form-control-sm"
+               value="{{ opcion.boton_id|default:'' }}"
+               placeholder="Ej: ver_precios · sede_garcia · pago_tarjeta"
+               maxlength="64" pattern="[a-zA-Z0-9_\-]*">
+        <small class="text-muted">Solo letras, números, guiones. Llega al webhook como <code>button_reply.id</code>.</small>
+    </div>
+    <div class="col-md-6 d-flex align-items-end">
+        <div class="form-check form-switch">
+            <input type="checkbox" name="es_inicio" class="form-check-input" id="esInicio-{{ opcion.id|default:'new' }}"
+                   value="1" {% if opcion.es_inicio %}checked{% endif %}>
+            <label class="form-check-label small" for="esInicio-{{ opcion.id|default:'new' }}">
+                Es nodo de inicio del flujo
+            </label>
+        </div>
+    </div>
 
-                <div class="col-md-4">
-                    <label class="form-label small fw-bold mb-1">Validación</label>
-                    <select name="validacion_tipo" class="form-select form-select-sm">
-                        {% for v, lbl in validaciones_choices %}
-                            <option value="{{ v }}" {% if opcion.validacion_tipo == v %}selected{% endif %}>{{ lbl }}</option>
-                        {% endfor %}
-                    </select>
+    <div class="col-12 mt-2">
+        <button type="button" class="btn btn-link btn-sm p-0" data-bs-toggle="collapse" data-bs-target="#opcAccion-{{ opcion.id|default:'new' }}">
+            <i class="fa fa-link me-1"></i> Acción con URL (opcional, tipo cta_url Meta)
+        </button>
+        <div class="collapse {% if opcion.config.meta_type == 'cta_url' %}show{% endif %}" id="opcAccion-{{ opcion.id|default:'new' }}">
+            <div class="row g-2 mt-1 p-2" style="background:#f8f9fa;border-radius:6px;">
+                <div class="col-12 small text-muted mb-1">
+                    <i class="fa fa-info-circle me-1"></i>
+                    Si llenás estos campos, la respuesta del bot incluirá un botón con URL externa
+                    (ideal para link de pago, ubicación web, formulario externo). Meta lo manda como
+                    <code>interactive.type=cta_url</code>.
                 </div>
                 <div class="col-md-5">
-                    <label class="form-label small fw-bold mb-1">Regex (si validación = regex)</label>
-                    <input type="text" name="validacion_expresion" class="form-control form-control-sm"
-                           value="{{ opcion.validacion_expresion|default:'' }}" maxlength="250">
+                    <label class="form-label small fw-bold mb-1">Texto del botón</label>
+                    <input type="text" name="accion_display_text" class="form-control form-control-sm"
+                           value="{{ opcion.config.display_text|default:'' }}"
+                           placeholder="Ej: 💳 Pagar Membresía" maxlength="20">
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold mb-1">Reintentos</label>
-                    <input type="number" name="reintentos_max" min="0" max="10"
-                           class="form-control form-control-sm"
-                           value="{{ opcion.reintentos_max|default:3 }}">
-                </div>
-                <div class="col-12">
-                    <label class="form-label small fw-bold mb-1">Mensaje si validación falla</label>
-                    <input type="text" name="mensaje_error" class="form-control form-control-sm"
-                           value="{{ opcion.mensaje_error|default:'' }}">
-                </div>
-
-                <div class="col-12">
-                    <div class="form-check form-switch">
-                        <input type="checkbox" name="es_inicio" class="form-check-input" id="esInicio-{{ opcion.id|default:'new' }}"
-                               value="1" {% if opcion.es_inicio %}checked{% endif %}>
-                        <label class="form-check-label small" for="esInicio-{{ opcion.id|default:'new' }}">
-                            Es nodo de inicio del flujo
-                        </label>
-                    </div>
-                </div>
-
-                <div class="col-12">
-                    <label class="form-label small fw-bold mb-1">Config JSON (parámetros del tipo de nodo)</label>
-                    <textarea name="config_json" class="form-control form-control-sm" rows="4"
-                              style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.78rem;">{{ config_json_str }}</textarea>
-                    <small class="text-muted">
-                        Ejemplo HTTP: <code>{"metodo":"GET","path":"/clientes/{cedula}"}</code>.
-                        JSON inválido = no se guarda config.
-                    </small>
+                <div class="col-md-7">
+                    <label class="form-label small fw-bold mb-1">URL destino</label>
+                    <input type="url" name="accion_url" class="form-control form-control-sm"
+                           value="{{ opcion.config.url|default:'' }}"
+                           placeholder="https://ejemplo.com/pagar">
                 </div>
             </div>
         </div>
