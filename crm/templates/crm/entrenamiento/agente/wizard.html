@@ -134,7 +134,9 @@ Aceptamos efectivo, MP y transferencia."></textarea>
 </div>
 
 <script>
-(function() {
+// jQuery se carga al final de base.html, despues del bloque content.
+// Esperamos DOMContentLoaded para que `$` exista cuando ejecutamos.
+document.addEventListener('DOMContentLoaded', function() {
     const $form   = $('#wizardForm');
     const $steps  = $('#wizardSteps .ws-item');
     const $panes  = $('.wizard-pane');
@@ -202,6 +204,6 @@ Aceptamos efectivo, MP y transferencia."></textarea>
     });
 
     actualizarResumen();
-})();
+});
 </script>
 {% endblock %}

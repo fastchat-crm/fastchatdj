@@ -117,6 +117,9 @@ def entrenamiento_ia_view(request):
                                 guardar_detalles_agente(agente, detalles_data, request.FILES)
 
                             log(f"Registro un agente IA {agente.__str__()}", request, "add", obj=agente.id)
+                            if request.POST.get('redirect_to'):
+                                messages.success(request, "Agente creado correctamente")
+                                return redirect(request.POST['redirect_to'])
                             res_json.append({'error': False, "reload": True})
                         else:
                             raise FormError(form)
@@ -132,6 +135,9 @@ def entrenamiento_ia_view(request):
                                 guardar_detalles_agente(agente, detalles_data, request.FILES)
 
                             log(f"Edito un agente IA {agente.__str__()}", request, "change", obj=agente.id)
+                            if request.POST.get('redirect_to'):
+                                messages.success(request, "Agente actualizado correctamente")
+                                return redirect(request.POST['redirect_to'])
                             res_json.append({'error': False, "reload": True})
                         else:
                             raise FormError(form)
@@ -1057,40 +1063,37 @@ def entrenamiento_ia_view(request):
         else:
             if 'action' in request.GET:
                 data["action"] = action = request.GET['action']
-                if action == 'addagente':
+                if action == 'procedimiento':
+                    # Pagina dedicada para crear/editar agente IA (8 tabs, un solo POST).
+                    # Reemplaza el viejo modal `?action=changeagente` y `?action=addagente`.
                     try:
                         from core.constantes import PERSONALIDAD_PRESETS
-                        form = AgentesIAForm()
+                        pk = request.GET.get('id')
+                        filtro = None
+                        if pk:
+                            filtro = AgentesIA.objects.get(pk=int(pk), perfil=perfil)
+                        data['filtro'] = filtro
+                        data['form'] = form = AgentesIAForm(instance=filtro)
                         form.fields['apikey'].queryset = ApiKeyIA.objects.filter(perfil=perfil, status=True)
-                        data["form"] = form
-                        data["personalidad_presets"] = PERSONALIDAD_PRESETS
-                        template = get_template("crm/entrenamiento/agente/form.html")
-                        return JsonResponse({"result": True, 'data': template.render(data)})
-                    except Exception as ex:
-                        return JsonResponse({"result": False, 'message': str(ex)})
-                elif action == 'changeagente':
-                    try:
-                        from core.constantes import PERSONALIDAD_PRESETS
-                        pk = int(request.GET['id'])
-                        filtro = AgentesIA.objects.get(pk=pk)
-                        data["filtro"] = filtro
-                        data["form"] = form = AgentesIAForm(instance=filtro)
-                        data["personalidad_presets"] = PERSONALIDAD_PRESETS
-                        form.fields['apikey'].queryset = ApiKeyIA.objects.filter(perfil=perfil, status=True)
-                        data['detalles_existentes'] = filtro.obtener_detalles_agente()
-                        data['regla_fin'] = getattr(filtro, 'regla_fin', None)
-                        data['acciones_fin'] = data['regla_fin'].acciones.filter(status=True) if data['regla_fin'] else []
-                        data['herramientas'] = filtro.herramientas.filter(status=True).order_by('nombre')
-                        _faqs_qs = filtro.faqs.filter(status=True)
-                        data['faqs_contadores'] = {
-                            'pendiente':   _faqs_qs.filter(estado='pendiente').count(),
-                            'aprobada':    _faqs_qs.filter(estado='aprobada').count(),
-                            'desactivada': _faqs_qs.filter(estado='desactivada').count(),
-                        }
-                        template = get_template("crm/entrenamiento/agente/form.html")
-                        return JsonResponse({"result": True, 'data': template.render(data)})
-                    except Exception as ex:
-                        return JsonResponse({"result": False, 'message': str(ex)})
+                        data['personalidad_presets'] = PERSONALIDAD_PRESETS
+                        data['action'] = 'changeagente' if filtro else 'addagente'
+                        if filtro:
+                            data['detalles_existentes'] = filtro.obtener_detalles_agente()
+                            data['regla_fin'] = getattr(filtro, 'regla_fin', None)
+                            data['acciones_fin'] = data['regla_fin'].acciones.filter(status=True) if data['regla_fin'] else []
+                            data['herramientas'] = filtro.herramientas.filter(status=True).order_by('nombre')
+                            _faqs_qs = filtro.faqs.filter(status=True)
+                            data['faqs_contadores'] = {
+                                'pendiente':   _faqs_qs.filter(estado='pendiente').count(),
+                                'aprobada':    _faqs_qs.filter(estado='aprobada').count(),
+                                'desactivada': _faqs_qs.filter(estado='desactivada').count(),
+                            }
+                        data['titulo_pagina'] = f'Editar agente IA — {filtro}' if filtro else 'Nuevo agente IA'
+                        data['ruta_post'] = request.path
+                        return render(request, 'crm/entrenamiento/agente/form_pagina.html', data)
+                    except AgentesIA.DoesNotExist:
+                        messages.error(request, "Agente no encontrado")
+                        return redirect(request.path)
                 elif action == 'auditoria_historial':
                     try:
                         pk = int(request.GET['id'])

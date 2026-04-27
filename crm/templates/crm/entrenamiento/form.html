@@ -479,8 +479,7 @@
                            title="Baja los parámetros de token de los agentes que aún usan valores viejos (10/300/800/2000) a los nuevos defaults optimizados (5/150/400/1200). No toca agentes con tuning manual.">
                             <i class="fa fa-bolt"></i> Optimizar agentes
                         </a>
-                        <a href="javascript:void(0)" class="btn btn-sm btn-dark"
-                           onclick="formModal('', 'Agregar Agente Entrenado', 'addagente')">
+                        <a href="?action=procedimiento" class="btn btn-sm btn-dark">
                             <i class="fa fa-plus"></i> Agente
                         </a>
                     </div>
@@ -569,8 +568,7 @@
                                                         <i class="fas fa-comments"></i> Probar
                                                     </a>
                                                     {% endif %}
-                                                    <a href="javascript:void(0)" class="btn-ag edit"
-                                                       onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeagente')">
+                                                    <a href="?action=procedimiento&id={{ l.pk }}" class="btn-ag edit">
                                                         <i class="fas fa-edit"></i> Editar
                                                     </a>
                                                     <a href="javascript:void(0)" class="btn-ag del"
@@ -589,10 +587,9 @@
                                 <i class="fas fa-robot"></i>
                                 <h4>No hay agentes configurados</h4>
                                 <p class="mb-3">Comienza creando tu primer agente AI para automatizar respuestas.</p>
-                                <button class="btn btn-primary"
-                                        onclick="formModal('', 'Agregar Agente Entrenado', 'addagente')">
+                                <a href="?action=procedimiento" class="btn btn-primary">
                                     <i class="fas fa-plus me-2"></i>Crear Primer Agente
-                                </button>
+                                </a>
                             </div>
                         {% endif %}
                     </div>

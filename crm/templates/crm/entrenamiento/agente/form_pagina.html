@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/entrenamiento.css' %}">
+    <link rel="stylesheet" href="{% static 'stylenew/agentesia_form.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="d-flex align-items-center mb-3 gap-2 flex-wrap">
+        <a href="/crm/entrenamiento/" class="btn btn-light btn-sm">
+            <i class="fa fa-arrow-left me-1"></i> Volver al listado
+        </a>
+        <h5 class="mb-0">{{ titulo_pagina }}</h5>
+    </div>
+
+    <form method="post" action="{{ ruta_post }}" enctype="multipart/form-data" id="form-procedimiento-agente">
+        {% csrf_token %}
+        <input type="hidden" name="redirect_to" value="/crm/entrenamiento/">
+
+        {% include 'crm/entrenamiento/agente/form.html' %}
+
+        <div class="d-flex justify-content-end gap-2 mt-4 mb-5">
+            <a href="/crm/entrenamiento/" class="btn btn-secondary">
+                <i class="fa fa-times me-1"></i> Cancelar
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <i class="fa fa-save me-1"></i> Guardar agente
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+// Antes de submit, serializa los detalles dinámicos al hidden #detalles_json.
+// El partial agente/form.html define `funcionAntesDeGuardar()` (que internamente
+// llama a `actualizarDetallesJSON()`).
+$(function() {
+    $('#form-procedimiento-agente').on('submit', function() {
+        if (typeof funcionAntesDeGuardar === 'function') {
+            try { funcionAntesDeGuardar(); } catch (e) { console.warn('funcionAntesDeGuardar falló:', e); }
+        } else if (typeof actualizarDetallesJSON === 'function') {
+            try { actualizarDetallesJSON(); } catch (e) { console.warn('actualizarDetallesJSON falló:', e); }
+        }
+    });
+});
+</script>
+{% endblock %}

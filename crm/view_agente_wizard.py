@@ -72,7 +72,7 @@ def agente_wizard_view(request):
         return JsonResponse({
             'result': True,
             'agente_id': agente.id,
-            'redirect': f'/crm/entrenamiento/?accion=changeagente&id={agente.id}',
+            'redirect': f'/crm/entrenamiento/?action=procedimiento&id={agente.id}',
             'mensaje': f'Listo, {nombre} creado. Te llevamos al editor para que termines de afinarlo.',
         })
 

@@ -219,12 +219,17 @@ class AgentesIAForm(ModelFormBase):
                     continue
                 if f.initial in (None, ''):
                     default = getattr(model_field, 'default', None)
+                    # NOT_PROVIDED es la clase sentinel cuando el field no tiene
+                    # default. Es callable (cualquier clase lo es), asi que hay
+                    # que descartarla antes de invocar default().
+                    if default is models.NOT_PROVIDED:
+                        continue
                     if callable(default):
                         try:
                             default = default()
                         except Exception:
                             default = None
-                    if default is not None and default != models.NOT_PROVIDED:
+                    if default is not None:
                         f.initial = default
         for k, v in self.fields.items():
             self.fields[k].widget.attrs['class'] = 'form-control'

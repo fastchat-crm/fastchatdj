@@ -1142,12 +1142,16 @@ class OpcionDepartamentoChatBot(ModeloBase):
     `{{response.body.data[0].nombre}}`. El motor las resuelve al ejecutar.
     """
     TIPOS_NODO = [
-        ('menu',      'Menú con botones'),
-        ('respuesta', 'Respuesta de texto'),
-        ('cta_url',   'Botón con URL externa'),
-        ('ubicacion', 'Ubicación / Mapa'),
-        ('handoff',   'Transferir a humano'),
-        ('fin',       'Fin de conversación'),
+        ('menu',         'Menú con botones'),
+        ('respuesta',    'Respuesta de texto'),
+        ('pregunta',     'Pregunta al usuario'),
+        ('http',         'Llamada HTTP'),
+        ('condicional',  'Condicional / If'),
+        ('set_variable', 'Asignar variable'),
+        ('cta_url',      'Botón con URL externa'),
+        ('ubicacion',    'Ubicación / Mapa'),
+        ('handoff',      'Transferir a humano'),
+        ('fin',          'Fin de conversación'),
     ]
     VALIDACIONES = [
         ('none',   'Sin validación'),
