@@ -22,9 +22,15 @@ def _crear_opciones_recursivo(departamento, opciones_lista, parent=None,
                               orden_inicial: int = 0) -> int:
     """Crea OpcionDepartamentoChatBot en cascada respetando jerarquia del JSON IA.
 
-    El modelo usa `nombre` (visible al usuario) y `respuesta` (mensaje del bot).
-    La IA puede devolver `texto_boton` (preferido) o `nombre`. Devuelve el
-    conteo total de opciones creadas (incluyendo descendientes).
+    `tipo_nodo` se decide por la presencia de hijos:
+      - hijos no vacios → 'menu' (presenta opciones, ESPERA input del cliente)
+      - hijos vacios    → 'respuesta' (envia texto y termina la rama)
+
+    Sin esta distincion el motor auto-recorria todo el arbol sin parar
+    (manda greeting + sub-menu + opcion + respuesta-final, todo de corrido).
+
+    `nombre` = texto del boton visible (≤100). `respuesta` = mensaje del bot.
+    La IA puede devolver `texto_boton` (preferido) o `nombre`.
     """
     from crm.models import OpcionDepartamentoChatBot
 
@@ -36,19 +42,21 @@ def _crear_opciones_recursivo(departamento, opciones_lista, parent=None,
         if not texto:
             continue
         respuesta_txt = (op.get('respuesta') or '').strip()
+        hijos = op.get('hijos') or []
+        tiene_hijos = isinstance(hijos, list) and len(hijos) > 0
+        tipo = 'menu' if tiene_hijos else 'respuesta'
         nueva = OpcionDepartamentoChatBot.objects.create(
             departamento=departamento,
             opcion_padre=parent,
             nombre=texto[:100],
             respuesta=respuesta_txt[:2000],
             orden=orden_inicial + i,
-            tipo_nodo='respuesta',
+            tipo_nodo=tipo,
             es_inicio=(parent is None and i == 0),
             usuario_creacion=departamento.usuario_creacion,
         )
         creadas += 1
-        hijos = op.get('hijos') or []
-        if isinstance(hijos, list) and hijos:
+        if tiene_hijos:
             creadas += _crear_opciones_recursivo(departamento, hijos, parent=nueva)
     return creadas
 

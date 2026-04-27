@@ -270,9 +270,15 @@
         <i class="fa fa-arrow-left me-1"></i> Anterior
     </button>
     <div>
-        <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
-            <i class="fa fa-window-close me-1"></i> Cancelar
-        </button>
+        {% if pagina_completa %}
+            <a href="/crm/departamentos_chatbots/" class="btn btn-danger btn-sm me-1">
+                <i class="fa fa-window-close me-1"></i> Cancelar
+            </a>
+        {% else %}
+            <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
+                <i class="fa fa-window-close me-1"></i> Cancelar
+            </button>
+        {% endif %}
         <button type="button" class="btn btn-primary btn-sm" id="wiz-next">
             Siguiente <i class="fa fa-arrow-right ms-1"></i>
         </button>
@@ -1158,9 +1164,11 @@
     window.eliminarNodo      = eliminarNodo;
     window.saveForm          = saveForm;
 
-    // Si el modal ya está abierto cuando cargó el script (caso "editar"),
-    // inicializar el árbol de una vez.
-    if ($('#modalDetalle').hasClass('show') || $('#modalDetalle').is(':visible')) {
+    // Init: en modo pagina (sin modal en el DOM) corre directo; en modal,
+    // si ya esta visible cuando llego el script, init inmediato (caso editar).
+    if (!$('#modalDetalle').length
+        || $('#modalDetalle').hasClass('show')
+        || $('#modalDetalle').is(':visible')) {
         initArbolOpciones();
         wizGoTo(1);
     }

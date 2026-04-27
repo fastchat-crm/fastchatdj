@@ -11,6 +11,16 @@ from .view_prueba_chatbot import probar_chatbot_view
 
 crm_urls = (
     {
+        "nombre": "Mensajeria Instantanea",
+        "url": 'departamentos_chatbots/',
+        "vista": departamentoChatbotsView,
+    },
+    {
+        "nombre": "Crear Agente Rápido",
+        "url": 'entrenamiento/wizard/',
+        "vista": agente_wizard_view,
+    },
+    {
         "nombre": "Entrenamiento IA",
         "url": 'entrenamiento/',
         "vista": entrenamiento_ia_view,
@@ -29,16 +39,6 @@ crm_urls = (
         "nombre": "Actividad Economica",
         "url": 'actividad_economica/',
         "vista": actividadEconomicaView,
-    },
-    {
-        "nombre": "Departamentos & Chatbots",
-        "url": 'departamentos_chatbots/',
-        "vista": departamentoChatbotsView,
-    },
-    {
-        "nombre": "Crear Agente Rápido",
-        "url": 'entrenamiento/wizard/',
-        "vista": agente_wizard_view,
     },
 )
 

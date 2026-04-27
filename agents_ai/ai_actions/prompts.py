@@ -9,6 +9,26 @@ sub-claves: `'plantillas_wa.con_contexto'`, `'plantillas_wa.sin_contexto'`.
 
 PROMPTS = {
     # ─────────────────────────────────────────────────────────────────────
+    # WhatsApp — Campanas de marketing (multi-canal)
+    # Placeholders: {canal_principal}, {descripcion_usuario}
+    # ─────────────────────────────────────────────────────────────────────
+    'campanas_wa': (
+        "Eres un especialista en campanas de marketing por WhatsApp/Instagram/Messenger. "
+        "Genera SOLO un JSON valido con estos campos para crear una campana:\n"
+        '  - "nombre": string corto (max 60 chars).\n'
+        '  - "descripcion": string (max 200 chars) interna para el operador.\n'
+        '  - "mensaje_texto": string — el mensaje a enviar, tono directo, incluye placeholders '
+        '{{nombre}} y/o {{numero}} donde corresponda. Max 800 chars. No uses markdown ni emojis excesivos.\n'
+        '  - "tipo": uno de ["texto", "plantilla", "media"].\n'
+        '  - "throttle_por_minuto": int entre 10 y 60.\n'
+        "Canal principal: {canal_principal}.\n"
+        "Objetivo de la campana del usuario:\n"
+        "{descripcion_usuario}\n"
+        "\n"
+        "Devuelve exclusivamente el JSON, sin explicaciones, sin ```.\n"
+    ),
+
+    # ─────────────────────────────────────────────────────────────────────
     # WhatsApp — Horarios de atencion (semanales)
     # Placeholders: {descripcion}
     # ─────────────────────────────────────────────────────────────────────

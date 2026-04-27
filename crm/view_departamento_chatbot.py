@@ -35,6 +35,15 @@ def departamentoChatbotsView(request):
         action = request.POST['action']
         try:
             with transaction.atomic():
+                # Cuando el form vino del render full-page, redirige al listado
+                # despues de guardar; si vino del modal, sigue con reload.
+                redirect_to = (request.POST.get('redirect_to') or '').strip()
+                ok_response = (
+                    {'error': False, 'to': redirect_to}
+                    if redirect_to else
+                    {'error': False, 'reload': True}
+                )
+
                 if action == 'add':
                     form = Formulario(request.POST, request=request)
                     if form.is_valid():
@@ -43,7 +52,7 @@ def departamentoChatbotsView(request):
                         if opciones_json:
                             sincronizar_opciones(form.instance, opciones_json)
                         log(f"Registro un departamento {form.instance.__str__()}", request, "add", obj=form.instance.id)
-                        res_json.append({'error': False, "reload": True})
+                        res_json.append(ok_response)
                     else:
                         raise FormError(form)
                 elif action == 'change':
@@ -65,7 +74,7 @@ def departamentoChatbotsView(request):
                                 OpcionDepartamentoChatBot.objects.filter(id__in=ids_eliminados).update(status=False)
 
                             log(f"Editó un departamento {form.instance}", request, "change", obj=form.instance.id)
-                            res_json.append({'error': False, "reload": True})
+                            res_json.append(ok_response)
                         else:
                             raise FormError(form)
                 elif action == 'delete':
@@ -125,6 +134,9 @@ def departamentoChatbotsView(request):
         addData(request, data)
         if 'action' in request.GET:
             data["action"] = action = request.GET['action']
+            # full=1 → render full page (extends base.html); modo legacy = JSON modal.
+            full_page = request.GET.get('full') == '1'
+
             if action == 'add':
                 try:
                     data["form"] = Formulario()
@@ -132,6 +144,14 @@ def departamentoChatbotsView(request):
                         EndpointApiChatbot.objects.filter(status=True).order_by('nombre')
                         .values('id', 'nombre', 'base_url')
                     ))
+                    if full_page:
+                        data.update({
+                            'pagina_completa': True,
+                            'titulo_pagina': f'Agregar {data["titulo"]}',
+                            'ruta_post': request.path,
+                            'filtro': None,
+                        })
+                        return render(request, 'crm/departamento_chatbots/form_pagina.html', data)
                     template = get_template("crm/departamento_chatbots/form.html")
                     return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:
@@ -148,6 +168,13 @@ def departamentoChatbotsView(request):
                         EndpointApiChatbot.objects.filter(status=True).order_by('nombre')
                         .values('id', 'nombre', 'base_url')
                     ))
+                    if full_page:
+                        data.update({
+                            'pagina_completa': True,
+                            'titulo_pagina': f'Editar {filtro}',
+                            'ruta_post': request.path,
+                        })
+                        return render(request, 'crm/departamento_chatbots/form_pagina.html', data)
                     template = get_template("crm/departamento_chatbots/form.html")
                     return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:

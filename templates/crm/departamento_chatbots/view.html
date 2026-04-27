@@ -35,8 +35,7 @@
 
     <div class="row align-items-center mb-3">
         <div class="col-md-12 mb-2 mb-md-0 d-flex gap-2 flex-wrap">
-            <a href="javascript:void(0);" class="btn btn-success btn-sm"
-               onclick="formModal(0, 'Agregar {{ titulo }}', 'add')">
+            <a href="?action=add&full=1" class="btn btn-success btn-sm">
                 <i class="fas fa-plus-circle me-2"></i> Nuevo {{ titulo }}
             </a>
             {% if ia_disponible %}
@@ -94,8 +93,7 @@
                                         <li class="dropdown-divider"></li>
                                         <li>
                                             <a class="dropdown-item"
-                                               onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'change')"
-                                               href="javascript:void(0);">
+                                               href="?action=change&id={{ l.pk }}&full=1">
                                                 <i class="fas fa-edit me-2 text-primary"></i>Editar
                                             </a>
                                         </li>
