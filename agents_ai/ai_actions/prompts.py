@@ -9,6 +9,30 @@ sub-claves: `'plantillas_wa.con_contexto'`, `'plantillas_wa.sin_contexto'`.
 
 PROMPTS = {
     # ─────────────────────────────────────────────────────────────────────
+    # CRM — AgentesIA (asistente de creacion de agente)
+    # Placeholders: {tono}, {idioma}, {descripcion_usuario}
+    # ─────────────────────────────────────────────────────────────────────
+    'agentes_crm': (
+        "Eres un arquitecto de agentes conversacionales. El usuario describe lo que necesita "
+        "y tu tarea es devolver SOLO un JSON valido con estos campos:\n"
+        '  - "nombre": string corto (max 60 chars), descriptivo.\n'
+        '  - "descripcion": string (max 400 chars) — resumen del rol y alcance del agente.\n'
+        '  - "prompt_template": string — plantilla completa de sistema para el agente. '
+        'DEBE incluir los placeholders literales {{descripcion_agente}}, {{contexto_extra}}, {{question}} y {{context}}. '
+        'Usa el tono solicitado y sigue el patron: instrucciones -> "====" -> "{{context}}" -> "====" -> "Respuesta:". '
+        'NO incluyas datos inventados, solo reglas de comportamiento y estilo.\n'
+        '  - "contexto_estatico": string opcional — conocimiento fijo/FAQ sugerido que el usuario '
+        'deberia agregar (puede estar vacio si no aplica).\n'
+        '  - "anotar_listas": bool — true solo si el agente debe recordar listas de productos/servicios.\n'
+        "\n"
+        "Tono: {tono}. Idioma: {idioma}.\n"
+        "Necesidad del usuario:\n"
+        "{descripcion_usuario}\n"
+        "\n"
+        "Devuelve exclusivamente el JSON, sin explicaciones, sin ```.\n"
+    ),
+
+    # ─────────────────────────────────────────────────────────────────────
     # CRM — Departamento ChatBot
     # Placeholders: {tipo_negocio}, {descripcion}, {tono}, {tono_title}
     # ─────────────────────────────────────────────────────────────────────

@@ -453,155 +453,43 @@ def entrenamiento_ia_view(request):
                         return JsonResponse({'error': False, 'token': filtro.webservice_token, 'message': 'Token regenerado.'})
 
                     elif action == 'generar_agente_ia':
+                        # Wrapper HTTP: la logica IA vive en
+                        # `agents_ai/ai_actions/agentes_crm.py`.
+                        from agents_ai.ai_actions import IAActionError
+                        from agents_ai.ai_actions import agentes_crm
                         try:
                             apikey_obj = ApiKeyIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
                         except (ApiKeyIA.DoesNotExist, ValueError, KeyError):
                             return JsonResponse({'error': True, 'message': 'API Key no encontrada.'})
-                        if not apikey_obj.estado:
-                            return JsonResponse({'error': True, 'message': 'La API Key está desactivada. Reactívala o prueba otra.'})
-                        if not (apikey_obj.descripcion or '').strip():
-                            return JsonResponse({'error': True, 'message': 'La API Key no tiene la clave del proveedor LLM configurada.'})
-                        descripcion_usuario = (request.POST.get('descripcion') or '').strip()
-                        if len(descripcion_usuario) < 15:
-                            return JsonResponse({'error': True, 'message': 'Describe con más detalle qué debe hacer el agente (mínimo 15 caracteres).'})
-                        tono = (request.POST.get('tono') or 'amigable').strip()[:60]
-                        idioma = (request.POST.get('idioma') or 'es').strip()[:8]
                         try:
-                            from core.constantes import PROMPT_TEMPLATES
-                        except Exception:
-                            PROMPT_TEMPLATES = {}
-                        try:
-                            # LLM con respuesta JSON forzada
-                            if apikey_obj.proveedor == 2:
-                                from langchain_google_genai import ChatGoogleGenerativeAI
-                                llm = ChatGoogleGenerativeAI(
-                                    model=(apikey_obj.modelo or 'gemini-2.5-flash'),
-                                    google_api_key=apikey_obj.descripcion,
-                                    max_output_tokens=4000, temperature=0.4,
-                                    model_kwargs={'response_mime_type': 'application/json'},
-                                )
-                            elif apikey_obj.proveedor == 4:
-                                from langchain_anthropic import ChatAnthropic
-                                # Claude no tiene "response_format"; instruimos JSON por prompt
-                                llm = ChatAnthropic(
-                                    model=(apikey_obj.modelo or 'claude-haiku-4-5-20251001'),
-                                    anthropic_api_key=apikey_obj.descripcion,
-                                    max_tokens=4000, temperature=0.4,
-                                )
-                            else:
-                                from langchain_community.chat_models import ChatOpenAI
-                                llm = ChatOpenAI(
-                                    model_name=(apikey_obj.modelo or 'gpt-4o-mini'),
-                                    openai_api_key=apikey_obj.descripcion,
-                                    max_tokens=4000, temperature=0.4,
-                                    model_kwargs={'response_format': {'type': 'json_object'}},
-                                )
-                            prompt_generador = (
-                                "Eres un arquitecto de agentes conversacionales. El usuario describe lo que necesita "
-                                "y tu tarea es devolver SOLO un JSON válido con estos campos:\n"
-                                '  - "nombre": string corto (máx 60 chars), descriptivo.\n'
-                                '  - "descripcion": string (máx 400 chars) — resumen del rol y alcance del agente.\n'
-                                '  - "prompt_template": string — plantilla completa de sistema para el agente. '
-                                'DEBE incluir los placeholders literales {descripcion_agente}, {contexto_extra}, {question} y {context}. '
-                                'Usa el tono solicitado y sigue el patrón: instrucciones → "====" → "{context}" → "====" → "Respuesta:". '
-                                'NO incluyas datos inventados, solo reglas de comportamiento y estilo.\n'
-                                '  - "contexto_estatico": string opcional — conocimiento fijo/FAQ sugerido que el usuario '
-                                'debería agregar (puede estar vacío si no aplica).\n'
-                                '  - "anotar_listas": bool — true solo si el agente debe recordar listas de productos/servicios.\n\n'
-                                f"Tono: {tono}. Idioma: {idioma}.\n"
-                                f"Necesidad del usuario:\n{descripcion_usuario}\n\n"
-                                "Devuelve exclusivamente el JSON, sin explicaciones, sin ```."
+                            resultado = agentes_crm.generar(
+                                descripcion=request.POST.get('descripcion'),
+                                tono=request.POST.get('tono') or 'amigable',
+                                idioma=request.POST.get('idioma') or 'es',
+                                apikey_obj=apikey_obj,
+                                perfil=perfil,
+                                request=request,
                             )
-                            msg = llm.invoke(prompt_generador)
-                            texto = (getattr(msg, 'content', '') or '').strip()
-                            if texto.startswith('```'):
-                                texto = texto.strip('`')
-                                if texto.lower().startswith('json'):
-                                    texto = texto[4:].strip()
-                            try:
-                                cfg = json.loads(texto)
-                                if not isinstance(cfg, dict):
-                                    cfg = {}
-                            except Exception:
-                                return JsonResponse({'error': True, 'message': 'La IA devolvió un JSON inválido. Intenta de nuevo o ajusta la descripción.'})
-
-                            def _as_str(v, default=''):
-                                if v is None:
-                                    return default
-                                if isinstance(v, str):
-                                    return v
-                                try:
-                                    return str(v)
-                                except Exception:
-                                    return default
-
-                            default_tpl = PROMPT_TEMPLATES.get('es') or ''
-                            nombre = _as_str(cfg.get('nombre'), 'Agente generado').strip()[:255] or 'Agente generado'
-                            descripcion_ag = _as_str(cfg.get('descripcion'), descripcion_usuario).strip()[:4000] or descripcion_usuario
-                            prompt_tpl = _as_str(cfg.get('prompt_template'), '').strip() or default_tpl
-                            contexto_est_raw = _as_str(cfg.get('contexto_estatico'), '').strip()
-                            contexto_est = contexto_est_raw or None
-                            anotar = bool(cfg.get('anotar_listas'))
-
-                            # Validar placeholders críticos — si faltan, usar plantilla default
-                            required_ph = ('{descripcion_agente}', '{question}', '{context}')
-                            if not prompt_tpl or not all(p in prompt_tpl for p in required_ph):
-                                prompt_tpl = default_tpl
-                            if not prompt_tpl:
-                                # Fallback ultra-conservador por si PROMPT_TEMPLATES falla
-                                prompt_tpl = (
-                                    "Eres un asistente para: {descripcion_agente}\n"
-                                    "{contexto_extra}Cliente: {question}\n====\n{context}\n====\nRespuesta:"
-                                )
-
-                            agente = AgentesIA(
-                                perfil=perfil, nombre=nombre, descripcion=descripcion_ag,
-                                prompt_template=prompt_tpl, contexto_estatico=contexto_est,
-                                anotar_listas=anotar,
-                            )
-                            agente.save(request)
-                            agente.apikey.add(apikey_obj)
-
-                            # Registrar consumo de tokens
-                            try:
-                                _meta = getattr(msg, 'response_metadata', {}) or {}
-                                _usage = (
-                                    getattr(msg, 'usage_metadata', None)
-                                    or _meta.get('usage_metadata')
-                                    or _meta.get('token_usage')
-                                    or {}
-                                )
-                                _te = _usage.get('input_tokens') or _usage.get('prompt_token_count') or _usage.get('prompt_tokens') or 0
-                                _ts = _usage.get('output_tokens') or _usage.get('candidates_token_count') or _usage.get('completion_tokens') or 0
-                                if _te or _ts:
-                                    ConsumoTokenIA.objects.create(
-                                        apikey=apikey_obj, agente=agente,
-                                        tokens_entrada=_te, tokens_salida=_ts,
-                                        tokens_total=_te + _ts,
-                                        modelo=getattr(llm, 'model', 'agente-builder'),
-                                        origen='otro',
-                                        prompt_preview=(descripcion_usuario or '')[:300],
-                                    )
-                                    from crm.alertas_consumo import verificar_alerta_consumo
-                                    verificar_alerta_consumo(apikey_obj, _te + _ts)
-                            except Exception:
-                                pass
-
-                            log(f"Agente IA creado por asistente — {agente.nombre} asignado a API Key {apikey_obj}",
-                                request, "add", obj=agente.id)
-                            return JsonResponse({
-                                'error': False,
-                                'agente_id': agente.id,
-                                'nombre': agente.nombre,
-                                'descripcion': agente.descripcion,
-                                'prompt_template': agente.prompt_template,
-                                'contexto_estatico': agente.contexto_estatico or '',
-                                'anotar_listas': agente.anotar_listas,
-                                'message': f'✅ Agente "{agente.nombre}" creado y asignado a {apikey_obj}.',
-                                'reload': True,
-                            })
+                        except IAActionError as ex:
+                            return JsonResponse({'error': True, 'message': str(ex)})
                         except Exception as ex:
                             return JsonResponse({'error': True, 'message': f'Fallo generando agente: {str(ex)[:400]}'})
+
+                        log(
+                            f"Agente IA creado por asistente — {resultado['nombre']} asignado a API Key {apikey_obj}",
+                            request, "add", obj=resultado['agente_id'],
+                        )
+                        return JsonResponse({
+                            'error': False,
+                            'agente_id': resultado['agente_id'],
+                            'nombre': resultado['nombre'],
+                            'descripcion': resultado['descripcion'],
+                            'prompt_template': resultado['prompt_template'],
+                            'contexto_estatico': resultado['contexto_estatico'],
+                            'anotar_listas': resultado['anotar_listas'],
+                            'message': f'✅ Agente "{resultado["nombre"]}" creado y asignado a {apikey_obj}.',
+                            'reload': True,
+                        })
 
                     elif action == 'testapikey':
                         from crm.view_chat_agente import _billing_info_por_proveedor
