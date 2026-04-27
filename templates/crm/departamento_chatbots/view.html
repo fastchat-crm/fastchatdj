@@ -343,7 +343,96 @@
             $('#modalDetalle').on('hidden.bs.modal', function () {
                 $('#arbolOpciones').empty();
             });
+        });
 
-        })
+        {% if ia_disponible %}
+        // ───── Crear con IA ─────
+        let _modalIaInstance = null;
+        function abrirModalCrearConIA() {
+            const el = document.getElementById('modalCrearConIA');
+            if (!el) return;
+            if (!_modalIaInstance) _modalIaInstance = new bootstrap.Modal(el);
+            // Reset campos
+            document.getElementById('ia_negocio_tipo').value = '';
+            document.getElementById('ia_descripcion').value = '';
+            document.getElementById('ia_tono').value = 'amable';
+            document.getElementById('ia_charcount').textContent = '0';
+            const res = document.getElementById('ia_resultado');
+            res.classList.add('d-none');
+            res.innerHTML = '';
+            _modalIaInstance.show();
+        }
+
+        // Contador chars
+        document.addEventListener('input', function (e) {
+            if (e.target && e.target.id === 'ia_descripcion') {
+                document.getElementById('ia_charcount').textContent = e.target.value.length;
+            }
+        });
+
+        document.getElementById('btnGenerarIA').addEventListener('click', async function () {
+            const desc = document.getElementById('ia_descripcion').value.trim();
+            const tipo = document.getElementById('ia_negocio_tipo').value.trim();
+            const tono = document.getElementById('ia_tono').value;
+            const res = document.getElementById('ia_resultado');
+            const btn = this;
+
+            if (desc.length < 30) {
+                res.classList.remove('d-none', 'alert-success', 'alert-info');
+                res.classList.add('alert-danger');
+                res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Describí con más detalle (mínimo 30 caracteres).';
+                return;
+            }
+
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Generando con IA...';
+            res.classList.remove('d-none', 'alert-danger', 'alert-success');
+            res.classList.add('alert-info');
+            res.innerHTML = '<i class="fa fa-robot me-1"></i> La IA está armando tu departamento... esto toma 5-15 segundos.';
+
+            const fd = new FormData();
+            fd.append('action', 'generar_con_ia');
+            fd.append('csrfmiddlewaretoken', document.querySelector('input[name=csrfmiddlewaretoken]').value);
+            fd.append('descripcion', desc);
+            fd.append('tipo_negocio', tipo);
+            fd.append('tono', tono);
+
+            try {
+                const r = await fetch('{{ request.path }}', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'X-Requested-With': 'XMLHttpRequest'},
+                    credentials: 'same-origin',
+                });
+                const data = await r.json();
+                btn.disabled = false;
+                btn.innerHTML = orig;
+
+                if (data.error) {
+                    res.classList.remove('alert-info', 'alert-success');
+                    res.classList.add('alert-danger');
+                    res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> ' + (data.message || 'Error generando con IA.');
+                    return;
+                }
+
+                res.classList.remove('alert-info', 'alert-danger');
+                res.classList.add('alert-success');
+                res.innerHTML =
+                    '<i class="fa fa-circle-check me-1"></i> <b>Departamento creado:</b> ' +
+                    (data.nombre || '') +
+                    ' con ' + (data.opciones_count || 0) + ' opciones de menú. ' +
+                    'Recargando...';
+                setTimeout(() => window.location.reload(), 1500);
+
+            } catch (ex) {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                res.classList.remove('alert-info', 'alert-success');
+                res.classList.add('alert-danger');
+                res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Error de red: ' + ex.message;
+            }
+        });
+        {% endif %}
     </script>
 {% endblock %}

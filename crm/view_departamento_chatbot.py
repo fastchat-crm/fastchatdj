@@ -108,6 +108,8 @@ def departamentoChatbotsView(request):
                     filtro.save(request)
                     log(f"Elimino un usuario del departamento {filtro.__str__()}", request, "del", obj=filtro.id)
                     res_json={"error":False}
+                elif action == 'generar_con_ia':
+                    return _generar_departamento_con_ia(request)
 
 
         except ValueError as ex:
@@ -310,4 +312,172 @@ def sincronizar_opciones(departamento, lista, padre=None):
             OpcionDepartamentoChatBot.objects.filter(id=ids_al_nivel_raiz[0]).update(es_inicio=True)
 
     return nuevos_ids
+
+
+# ============================================================================
+# Generador IA — crea un DepartamentoChatBot completo a partir de la
+# descripción del operador. Usa la ApiKey IA del sistema (Configuracion.token_ia).
+# ============================================================================
+def _generar_departamento_con_ia(request):
+    """Action: generar_con_ia. Llama al LLM con un prompt estructurado y
+    parsea la respuesta JSON para crear el departamento + opciones jerárquicas.
+    """
+    from seguridad.models import Configuracion
+
+    confi = Configuracion.get_instancia()
+    if not confi or not getattr(confi, 'ia_features_activas', False) or not confi.token_ia_id:
+        return JsonResponse({
+            'error': True,
+            'message': 'Features de IA del sistema deshabilitadas. Configurá un token IA en Configuración.',
+        })
+
+    apikey = confi.token_ia
+    if not apikey or not (apikey.descripcion or '').strip():
+        return JsonResponse({'error': True, 'message': 'La API Key IA del sistema no tiene clave válida.'})
+
+    descripcion = (request.POST.get('descripcion') or '').strip()
+    tipo_negocio = (request.POST.get('tipo_negocio') or '').strip()
+    tono = (request.POST.get('tono') or 'amable').strip()
+    if len(descripcion) < 30:
+        return JsonResponse({'error': True, 'message': 'Descripción muy corta (mínimo 30 chars).'})
+
+    prompt = f"""Sos un experto en chatbots de WhatsApp Business. Te paso la descripción de un negocio y vos generás un departamento completo con menú jerárquico.
+
+NEGOCIO ({tipo_negocio or 'no especificado'}):
+{descripcion}
+
+TONO: {tono}
+
+Devolvé SOLO un objeto JSON válido (sin prosa, sin fences ```), con esta estructura exacta:
+
+{{
+  "nombre_departamento": "string corto, ej 'Atención al cliente'",
+  "descripcion_departamento": "string 1-2 frases, qué resuelve este departamento",
+  "mensaje_bienvenida": "string que el bot envía al cliente al entrar al departamento. {tono.title()} en tono. Hasta 250 chars. Puede usar emojis.",
+  "opciones": [
+    {{
+      "texto_boton": "string ≤24 chars (es lo que ve el cliente como botón)",
+      "respuesta": "string que el bot envía al elegir esta opción. Hasta 500 chars.",
+      "hijos": [
+        {{
+          "texto_boton": "...",
+          "respuesta": "...",
+          "hijos": []
+        }}
+      ]
+    }}
+  ]
+}}
+
+REGLAS:
+- 4 a 7 opciones de primer nivel.
+- Hasta 2 niveles de profundidad (opciones de opciones). Algunas pueden no tener hijos.
+- Si el negocio tiene sucursales, mencionalas con sus nombres.
+- Incluí siempre una opción para "hablar con humano" o "asesor" al final.
+- Tono {tono}. Respuestas naturales, no robóticas.
+- Emojis sí pero sin abusar (1-2 por mensaje).
+- NO inventés datos que no están en la descripción (precios, horarios, nombres de personas).
+
+Devolvé SOLO el JSON.
+"""
+
+    # Construir LLM según proveedor
+    try:
+        if apikey.proveedor == 2:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            llm = ChatGoogleGenerativeAI(
+                model=(apikey.modelo or 'gemini-2.5-flash'),
+                google_api_key=apikey.descripcion,
+                max_output_tokens=4000, temperature=0.5,
+                model_kwargs={'response_mime_type': 'application/json'},
+            )
+        elif apikey.proveedor == 4:
+            from langchain_anthropic import ChatAnthropic
+            llm = ChatAnthropic(
+                model=(apikey.modelo or 'claude-haiku-4-5-20251001'),
+                anthropic_api_key=apikey.descripcion,
+                max_tokens=4000, temperature=0.5,
+            )
+        else:
+            from langchain_community.chat_models import ChatOpenAI
+            llm = ChatOpenAI(
+                model_name=(apikey.modelo or 'gpt-4o-mini'),
+                openai_api_key=apikey.descripcion,
+                max_tokens=4000, temperature=0.5,
+                model_kwargs={'response_format': {'type': 'json_object'}},
+            )
+        respuesta = llm.invoke(prompt)
+        contenido = respuesta.content if hasattr(respuesta, 'content') else str(respuesta)
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': f'Error invocando LLM: {ex}'})
+
+    # Parsear JSON tolerante (mismo helper que ya usa generar_horarios_ia)
+    from whatsapp.horarios_view import _extraer_json_seguro
+    payload = _extraer_json_seguro(contenido)
+    if not payload or not isinstance(payload, dict):
+        return JsonResponse({
+            'error': True,
+            'message': 'La IA no devolvió un JSON válido.',
+            'raw_preview': str(contenido)[:500],
+        })
+
+    nombre = (payload.get('nombre_departamento') or '').strip()
+    if not nombre:
+        return JsonResponse({'error': True, 'message': 'IA no devolvió nombre_departamento.'})
+
+    bienvenida = (payload.get('mensaje_bienvenida') or '').strip()
+    opciones_arbol = payload.get('opciones') or []
+    if not isinstance(opciones_arbol, list):
+        opciones_arbol = []
+
+    # Crear departamento (modelo: nombre + mensaje_saludo + activo_tradicional)
+    try:
+        with transaction.atomic():
+            depto = DepartamentoChatBot.objects.create(
+                nombre=nombre,
+                mensaje_saludo=bienvenida,
+                activo_tradicional=True,
+                usuario_creacion=request.user,
+            )
+            opciones_count = _crear_opciones_recursivo(depto, opciones_arbol, parent=None)
+            log(f"Generó departamento '{nombre}' con IA ({opciones_count} opciones)",
+                request, "add", obj=depto.id)
+        return JsonResponse({
+            'error': False,
+            'nombre': depto.nombre,
+            'departamento_id': depto.id,
+            'opciones_count': opciones_count,
+        })
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': f'Error creando departamento: {ex}'})
+
+
+def _crear_opciones_recursivo(departamento, opciones_lista, parent=None, orden_inicial=0):
+    """Crea OpcionDepartamentoChatBot en cascada respetando jerarquía del JSON IA.
+    El modelo usa `nombre` (visible al usuario) y `respuesta` (mensaje del bot).
+    Devuelve el conteo total de opciones creadas."""
+    creadas = 0
+    for i, op in enumerate(opciones_lista):
+        if not isinstance(op, dict):
+            continue
+        # IA puede devolver `texto_boton` (preferido en prompt) o `nombre`.
+        texto = (op.get('texto_boton') or op.get('nombre') or '').strip()
+        if not texto:
+            continue
+        respuesta_txt = (op.get('respuesta') or '').strip()
+        nueva = OpcionDepartamentoChatBot.objects.create(
+            departamento=departamento,
+            opcion_padre=parent,
+            nombre=texto[:100],
+            respuesta=respuesta_txt[:2000],
+            orden=orden_inicial + i,
+            tipo_nodo='respuesta',
+            es_inicio=(parent is None and i == 0),
+            usuario_creacion=departamento.usuario_creacion,
+        )
+        creadas += 1
+        hijos = op.get('hijos') or []
+        if isinstance(hijos, list) and hijos:
+            creadas += _crear_opciones_recursivo(departamento, hijos, parent=nueva)
+    return creadas
 
