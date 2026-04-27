@@ -18,7 +18,8 @@
         <button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>
     </div>
 
-    <form id="form-editar-sesion" class="detail-body" method="post" action="/whatsapp/sesiones/">
+    <form id="form-editar-sesion" class="detail-body" method="post"
+          action="javascript:void(0)" onsubmit="return false;">
         {% csrf_token %}
         <input type="hidden" name="action" value="editar">
         <input type="hidden" name="id" value="{{ sesion.id }}">
