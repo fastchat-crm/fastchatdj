@@ -216,6 +216,26 @@ class Contacto(ModeloBase):
         verbose_name='ID externo',
         help_text='IGSID / PSID / wa_id según canal.'
     )
+    # Identidad cross-app de Meta (formato "EC.xxxxx"). Meta lo manda en
+    # contacts[].user_id en algunos eventos. A diferencia de wa_id (que es
+    # el número), este ID es el mismo si el usuario contacta por WA + IG +
+    # Messenger desde la misma cuenta. Útil para deduplicación y atribución
+    # CAPI. Solo aplica a sesiones Meta Cloud API.
+    meta_user_id = models.CharField(
+        max_length=80, blank=True, null=True, db_index=True,
+        verbose_name='Meta User ID',
+        help_text='Identidad cross-app del usuario en Meta (EC.xxx). Solo Meta Cloud.'
+    )
+    # Referral de Click-to-WhatsApp ads. Meta lo manda cuando el contacto
+    # entra por primera vez desde un anuncio. Estructura típica:
+    #   {source_id, source_url, source_type, headline, body,
+    #    media_type, media_url, ctwa_clid, thumbnail_url}
+    # Lo guardamos completo en JSON para reportes de atribución posteriores.
+    referral_meta = models.JSONField(
+        blank=True, null=True,
+        verbose_name='Referral Meta (CTWA)',
+        help_text='Datos del Click-to-WhatsApp ad por el que entró el contacto.'
+    )
 
     def get_foto_gris(self):
         try:

@@ -84,8 +84,8 @@
                                 <i class="fa fa-copy me-1"></i> Usar como plantilla
                             </button>
                             {% if sesion_actual.es_meta %}
-                                <button class="btn btn-sm btn-warning" onclick="enviarMeta({{ sesion_actual.id }})">
-                                    <i class="fa-brands fa-meta me-1"></i> Enviar a Meta
+                                <button class="btn btn-sm btn-warning" onclick="abrirModalMetaProfile({{ sesion_actual.id }})">
+                                    <i class="fa-brands fa-meta me-1"></i> Configurar perfil Meta
                                 </button>
                             {% endif %}
                         </div>
@@ -558,5 +558,138 @@
                 setTimeout(() => t.remove(), 300);
             }, 2500);
         }
+    </script>
+
+    {# ───────── Modal: Configurar perfil Meta ───────── #}
+    <div class="modal fade" id="modalMetaProfile" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title">
+                        <i class="fa-brands fa-meta me-2 text-warning"></i>
+                        Perfil de WhatsApp Business en Meta
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body" id="metaProfileBody">
+                    <div class="text-center py-4 text-muted">
+                        <i class="fa fa-spinner fa-spin fa-2x mb-2"></i><br>
+                        Consultando perfil actual en Meta...
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <a id="metaProfileDeepLink" href="#" target="_blank" rel="noopener" class="btn btn-outline-info btn-sm me-auto" style="display:none">
+                        <i class="fa fa-external-link me-1"></i> Editar en Meta Business
+                    </a>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning btn-sm" id="btnSaveMetaProfile">
+                        <i class="fa-brands fa-meta me-1"></i> Guardar en Meta
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let _metaSesionActual = null;
+        let _modalMetaInstance = null;
+
+        async function abrirModalMetaProfile(sesionId) {
+            _metaSesionActual = sesionId;
+            const modalEl = document.getElementById('modalMetaProfile');
+            if (!_modalMetaInstance) _modalMetaInstance = new bootstrap.Modal(modalEl);
+            const body = document.getElementById('metaProfileBody');
+            body.innerHTML = '<div class="text-center py-4 text-muted"><i class="fa fa-spinner fa-spin fa-2x mb-2"></i><br>Consultando perfil actual en Meta...</div>';
+            document.getElementById('metaProfileDeepLink').style.display = 'none';
+            _modalMetaInstance.show();
+
+            const j = await post('consultar_meta_profile', {sesion_id: sesionId}, null);
+            if (j.error) {
+                body.innerHTML = '<div class="alert alert-danger mb-0"><i class="fa fa-circle-xmark me-2"></i>' + (j.message || 'Error consultando Meta') + '</div>';
+                return;
+            }
+            const p = j.profile || {};
+            const sugerido = j.sugerido_description || '';
+            const horariosTxt = j.horarios_txt || '';
+
+            // Botón deep-link
+            if (j.deep_link_meta) {
+                const link = document.getElementById('metaProfileDeepLink');
+                link.href = j.deep_link_meta;
+                link.style.display = '';
+            }
+
+            body.innerHTML = `
+                <div class="alert alert-info py-2 small mb-3">
+                    <i class="fa fa-info-circle me-1"></i>
+                    Lo que ven tus clientes al abrir el perfil del número en WhatsApp.
+                    Solo se actualizan los campos que tengan valor — los vacíos se preservan tal como están en Meta.
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">About <small class="text-muted">(máx 139 chars · debajo del nombre)</small></label>
+                    <input type="text" class="form-control form-control-sm" id="meta_about" maxlength="139" value="${escHtml(p.about)}" placeholder="Ej: Tu pizzería favorita 🍕">
+                    <small class="text-muted">Línea breve. No emojis si Meta los rechaza.</small>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Description <small class="text-muted">(máx 512 chars · pestaña "Info de la empresa")</small></label>
+                    <textarea class="form-control form-control-sm" id="meta_description" rows="3" maxlength="512" placeholder="Descripción extendida del negocio. Aquí van bien los horarios.">${escHtml(p.description)}</textarea>
+                    ${horariosTxt ? `
+                        <button type="button" class="btn btn-sm btn-outline-warning mt-1" onclick="document.getElementById('meta_description').value = ${JSON.stringify(sugerido)}">
+                            <i class="fa fa-clock me-1"></i> Llenar con horarios actuales
+                        </button>
+                        <small class="text-muted ms-2">Sugerencia: <code>${escHtml(sugerido)}</code></small>
+                    ` : '<small class="text-muted">No hay horarios configurados en BD.</small>'}
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-bold">Email</label>
+                        <input type="email" class="form-control form-control-sm" id="meta_email" value="${escHtml(p.email)}">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-bold">Vertical (industria)</label>
+                        <select class="form-select form-select-sm" id="meta_vertical">
+                            <option value="">— No cambiar —</option>
+                            ${['UNDEFINED','OTHER','AUTO','BEAUTY','APPAREL','EDU','ENTERTAIN','EVENT_PLAN','FINANCE','GROCERY','GOVT','HOTEL','HEALTH','NONPROFIT','PROF_SERVICES','RETAIL','TRAVEL','RESTAURANT'].map(v => `<option value="${v}" ${p.vertical === v ? 'selected' : ''}>${v}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Address</label>
+                    <input type="text" class="form-control form-control-sm" id="meta_address" maxlength="256" value="${escHtml(p.address)}">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Websites <small class="text-muted">(máx 2, separados por coma)</small></label>
+                    <input type="text" class="form-control form-control-sm" id="meta_websites" value="${escHtml((p.websites || []).join(', '))}" placeholder="https://misitio.com, https://otro.com">
+                </div>
+
+                ${p.profile_picture_url ? `<div class="mb-2 small text-muted"><strong>Profile picture:</strong> <a href="${p.profile_picture_url}" target="_blank">ver imagen</a> <em>(se actualiza por separado)</em></div>` : ''}
+            `;
+        }
+
+        document.getElementById('btnSaveMetaProfile').addEventListener('click', async () => {
+            if (!_metaSesionActual) return;
+            const data = {
+                sesion_id:   _metaSesionActual,
+                about:       document.getElementById('meta_about').value.trim(),
+                description: document.getElementById('meta_description').value.trim(),
+                email:       document.getElementById('meta_email').value.trim(),
+                vertical:    document.getElementById('meta_vertical').value.trim(),
+                address:     document.getElementById('meta_address').value.trim(),
+                websites:    document.getElementById('meta_websites').value.trim(),
+            };
+            const j = await post('actualizar_meta_profile', data, 'Actualizando perfil en Meta...');
+            if (j.error) {
+                if (window.Swal) Swal.fire('Error', j.message || 'No se pudo actualizar', 'error');
+                else alert(j.message);
+                return;
+            }
+            if (window.Swal) Swal.fire({icon:'success', title:'Perfil actualizado', text: j.message, timer: 2400, showConfirmButton: false});
+            _modalMetaInstance.hide();
+        });
     </script>
 {% endblock %}

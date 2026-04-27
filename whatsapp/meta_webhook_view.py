@@ -479,14 +479,23 @@ def _meta_a_evento_interno(msg_meta: dict, value: dict, sesion: SesionWhatsApp) 
         referral = msg_meta.get('referral') or value.get('referral') or {}
         if referral:
             evento_interno['_referral'] = referral
-        # External id (wa_id) — para deduplicación multi-canal
+        # External id (wa_id) + meta_user_id (cross-app identity).
+        # Meta puede mandar ambos en contacts[]:
+        #   wa_id    → "593994233732" (es el numero, mismo que from_num)
+        #   user_id  → "EC.955878333820533" (identidad cross-app del usuario,
+        #              mismo si entra por WA / IG / Messenger). Util para
+        #              deduplicacion y atribucion CAPI.
         wa_id = None
+        meta_user_id = None
         for c in value.get('contacts') or []:
-            if c.get('wa_id'):
+            if c.get('wa_id') and not wa_id:
                 wa_id = c['wa_id']
-                break
+            if c.get('user_id') and not meta_user_id:
+                meta_user_id = c['user_id']
         if wa_id:
             evento_interno['_external_id'] = wa_id
+        if meta_user_id:
+            evento_interno['_meta_user_id'] = meta_user_id
         evento_interno['_canal'] = 'whatsapp'
 
         return evento_interno

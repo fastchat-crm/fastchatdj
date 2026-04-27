@@ -19,7 +19,11 @@
                         <small class="text-muted">{{ t.fecha|date:"d/m/Y H:i:s" }}</small>
                     </div>
                     {% if t.detalle %}
-                        <pre class="trace-detalle">{{ t.detalle }}</pre>
+                        {# data-trace-detalle: lo agarra el script post-load
+                           para reemplazarlo por JsonPretty.format() si parsea
+                           como JSON; si es texto plano (key=val | …) queda
+                           como pre raw. #}
+                        <div class="trace-detalle-wrap" data-trace-detalle>{{ t.detalle }}</div>
                     {% endif %}
                     <small class="text-muted">
                         {% if t.sesion %}<i class="fab fa-whatsapp me-1"></i>{{ t.sesion.numero|default:t.sesion.session_id }}{% endif %}
@@ -31,6 +35,17 @@
             </div>
         {% endfor %}
     </div>
+    <script>
+    (function () {
+        if (!window.JsonPretty) return;
+        document.querySelectorAll('[data-trace-detalle]').forEach(function (el) {
+            // textContent ya viene escapado por Django (el {{ }} escapa por
+            // defecto). Pasamos el texto crudo a JsonPretty.format que decide
+            // si formatear como JSON o dejar como pre raw.
+            el.innerHTML = JsonPretty.format(el.textContent);
+        });
+    })();
+    </script>
 {% else %}
     <div class="text-center text-muted py-4">
         <i class="fa-solid fa-inbox fa-2x mb-2"></i>

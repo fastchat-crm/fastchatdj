@@ -4,6 +4,8 @@
 {% block head %}
     <link rel="stylesheet" href="{% static 'stylenew/sesiones.css' %}">
     <link rel="stylesheet" href="{% static 'stylenew/diagnostico.css' %}">
+    <link rel="stylesheet" href="{% static 'stylenew/json-pretty.css' %}">
+    <script src="{% static 'javascript/json-pretty.js' %}"></script>
 {% endblock %}
 
 {% block content %}
@@ -195,8 +197,8 @@
                     var bloqueResp = '';
                     if (d.direccion === 'out') {
                         bloqueResp =
-                            '<h6 style="margin:1rem 0 .35rem;font-size:.85rem">Respuesta de Meta</h6>'+
-                            '<pre style="background:#0f172a;color:#a7f3d0;padding:.75rem;border-radius:6px;font-size:.78rem;max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all">'+esc(d.response_preview||'(vacío)')+'</pre>';
+                            '<h6 class="hit-section-title">Respuesta de Meta</h6>'+
+                            JsonPretty.format(d.response_preview);
                     }
                     body.innerHTML =
                         '<table class="diag-kv">'+
@@ -216,8 +218,8 @@
                         (d.latencia_ms !== null ? '<tr><td>Latencia</td><td>'+d.latencia_ms+' ms</td></tr>' : '')+
                         '<tr><td>Nota</td><td>'+esc(d.nota||'—')+'</td></tr>'+
                         '</table>'+
-                        '<h6 style="margin:1rem 0 .35rem;font-size:.85rem">Body request</h6>'+
-                        '<pre style="background:#1f2937;color:#d1d5db;padding:.75rem;border-radius:6px;font-size:.78rem;max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all">'+esc(d.body_preview||'(vacío)')+'</pre>'+
+                        '<h6 class="hit-section-title">Body request</h6>'+
+                        JsonPretty.format(d.body_preview)+
                         bloqueResp;
                 });
         });

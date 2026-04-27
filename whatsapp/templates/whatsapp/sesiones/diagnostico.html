@@ -4,6 +4,8 @@
 {% block head %}
     <link rel="stylesheet" href="{% static 'stylenew/sesiones.css' %}">
     <link rel="stylesheet" href="{% static 'stylenew/diagnostico.css' %}">
+    <link rel="stylesheet" href="{% static 'stylenew/json-pretty.css' %}">
+    <script src="{% static 'javascript/json-pretty.js' %}"></script>
 {% endblock %}
 
 {% block atras %}/whatsapp/sesiones/{% endblock %}
@@ -508,23 +510,11 @@
                 if (e.key === 'Escape' && modal.classList.contains('open')) cerrar();
             });
 
-            function escapeHtml(s) {
-                return (s || '').replace(/[<>&]/g, function (c) {
-                    return {'<': '&lt;', '>': '&gt;', '&': '&amp;'}[c];
-                });
-            }
-
-            function pretty(detalle) {
-                if (!detalle) return '<i class="text-muted">(vacío)</i>';
-                var trimmed = detalle.trim();
-                if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-                    try {
-                        var parsed = JSON.parse(trimmed);
-                        return '<pre class="traza-json">' + escapeHtml(JSON.stringify(parsed, null, 2)) + '</pre>';
-                    } catch (e) {}
-                }
-                return '<pre class="traza-raw">' + escapeHtml(detalle) + '</pre>';
-            }
+            // Reemplazado por el helper global JsonPretty (json-pretty.js).
+            // Mantenemos escapeHtml/pretty como wrappers finos para no romper
+            // el resto del JS de este modal.
+            function escapeHtml(s) { return window.JsonPretty.escapeHtml(s); }
+            function pretty(detalle) { return window.JsonPretty.format(detalle); }
 
             document.querySelectorAll('.traza-row').forEach(function (row) {
                 row.addEventListener('click', function () {
@@ -551,7 +541,7 @@
 
                     body.innerHTML =
                         '<table class="diag-kv">' + rows + '</table>' +
-                        '<h6 style="margin:1rem 0 .35rem;font-size:.85rem">Detalle / payload</h6>' +
+                        '<h6 class="json-section-title">Detalle / payload</h6>' +
                         pretty(d.detalle);
 
                     modal.classList.add('open');

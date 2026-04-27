@@ -171,21 +171,89 @@ def horariosView(request):
                         'message': f'{copiados} horario(s) duplicado(s) a {destino}.',
                     })
 
-                if action == 'enviar_meta':
+                if action == 'consultar_meta_profile':
+                    """Lee el whatsapp_business_profile actual desde Graph API
+                    para que la UI lo muestre antes de proponer cambios."""
                     import requests
                     sesion = SesionWhatsApp.objects.get(pk=int(request.POST['sesion_id']))
                     if not sesion.es_meta:
                         return JsonResponse({'error': True, 'message': 'Solo aplica a sesiones Meta.'})
                     cfg = getattr(sesion, 'config_meta', None)
                     if not cfg or not cfg.phone_number_id or not cfg.access_token:
-                        return JsonResponse({'error': True, 'message': 'La sesión Meta no tiene config_meta completo (phone_number_id o access_token faltante).'})
+                        return JsonResponse({'error': True, 'message': 'La sesión Meta no tiene config_meta completo.'})
 
+                    api_version = 'v21.0'
+                    fields = 'about,description,address,email,vertical,websites,profile_picture_url,messaging_product'
+                    url = f'https://graph.facebook.com/{api_version}/{cfg.phone_number_id}/whatsapp_business_profile?fields={fields}'
+                    try:
+                        resp = requests.get(url, headers={'Authorization': f'Bearer {cfg.access_token}'}, timeout=15)
+                        data = resp.json() if resp.status_code == 200 else {}
+                        # Meta envuelve los campos en data[0]
+                        perfil = (data.get('data') or [{}])[0] if data.get('data') else data
+                    except Exception as ex:
+                        return JsonResponse({'error': True, 'message': f'Graph API: {ex}'})
+                    if resp.status_code != 200:
+                        return JsonResponse({
+                            'error': True,
+                            'message': f'Meta devolvió {resp.status_code}',
+                            'response': data,
+                        })
+                    # Adicional: deep-link Meta para que el operador edite directo
+                    business_id = cfg.business_account_id or ''
+                    deep_link = f'https://business.facebook.com/latest/whatsapp_manager/phone_numbers'
+                    if business_id:
+                        deep_link += f'?business_id={business_id}&waba_id={cfg.waba_id}'
+
+                    # Generar el texto de horarios sugerido (no enviado todavía)
                     horarios_qs = sesion.horarios.filter(status=True, activo=True).order_by('dia_semana', 'hora_inicio')
                     horarios_txt = ', '.join(
                         f"{h.get_dia_semana_display()} {h.hora_inicio:%H:%M}-{h.hora_fin:%H:%M}"
                         for h in horarios_qs
-                    ) or 'Horario abierto 24/7'
-                    about_text = f'Horarios: {horarios_txt}'[:139]  # WABA about: máx 139
+                    ) or ''
+                    sugerido_description = (
+                        f"Horarios de atención: {horarios_txt}." if horarios_txt else ''
+                    )[:512]  # Meta description: máx 512
+
+                    return JsonResponse({
+                        'error': False,
+                        'profile': {
+                            'about':               perfil.get('about') or '',
+                            'description':         perfil.get('description') or '',
+                            'address':             perfil.get('address') or '',
+                            'email':               perfil.get('email') or '',
+                            'vertical':            perfil.get('vertical') or '',
+                            'websites':            perfil.get('websites') or [],
+                            'profile_picture_url': perfil.get('profile_picture_url') or '',
+                        },
+                        'horarios_txt': horarios_txt,
+                        'sugerido_description': sugerido_description,
+                        'deep_link_meta': deep_link,
+                    })
+
+                if action == 'actualizar_meta_profile':
+                    """Acepta cualquier combinación de campos editables y los manda
+                    a Graph API. NO pisa lo que no se mandó (Meta hace patch).
+                    """
+                    import requests
+                    sesion = SesionWhatsApp.objects.get(pk=int(request.POST['sesion_id']))
+                    if not sesion.es_meta:
+                        return JsonResponse({'error': True, 'message': 'Solo aplica a sesiones Meta.'})
+                    cfg = getattr(sesion, 'config_meta', None)
+                    if not cfg or not cfg.phone_number_id or not cfg.access_token:
+                        return JsonResponse({'error': True, 'message': 'La sesión Meta no tiene config_meta completo.'})
+
+                    payload = {'messaging_product': 'whatsapp'}
+                    for campo in ('about', 'description', 'address', 'email', 'vertical'):
+                        valor = (request.POST.get(campo) or '').strip()
+                        if valor:
+                            payload[campo] = valor
+                    # Websites: hasta 2 URLs separadas por coma
+                    websites_raw = (request.POST.get('websites') or '').strip()
+                    if websites_raw:
+                        payload['websites'] = [w.strip() for w in websites_raw.split(',') if w.strip()][:2]
+
+                    if len(payload) == 1:  # solo messaging_product
+                        return JsonResponse({'error': True, 'message': 'No hay nada para actualizar.'})
 
                     api_version = 'v21.0'
                     url = f'https://graph.facebook.com/{api_version}/{cfg.phone_number_id}/whatsapp_business_profile'
@@ -193,7 +261,7 @@ def horariosView(request):
                         'Authorization': f'Bearer {cfg.access_token}',
                         'Content-Type': 'application/json',
                     }
-                    payload = {'messaging_product': 'whatsapp', 'about': about_text}
+                    fields_sent = {k: v for k, v in payload.items() if k != 'messaging_product'}
                     meta_status, meta_resp, err = None, {}, None
                     try:
                         resp = requests.post(url, headers=headers, json=payload, timeout=15)
@@ -207,22 +275,21 @@ def horariosView(request):
                         ok = False
                         err = str(ex)[:400]
 
-                    log(f'Envío horarios a Meta para {sesion}: {horarios_txt} (status={meta_status}, ok={ok})',
+                    log(f'Update perfil Meta para {sesion}: {list(fields_sent.keys())} (status={meta_status}, ok={ok})',
                         request, 'change', obj=sesion.id)
 
                     if ok:
                         return JsonResponse({
                             'error': False,
-                            'message': 'Configuración de horarios enviada correctamente a Meta.',
+                            'message': 'Perfil de WhatsApp actualizado correctamente en Meta.',
                             'meta': {
                                 'endpoint': url,
                                 'status': meta_status,
-                                'about_sent': about_text,
-                                'horarios_txt': horarios_txt,
+                                'fields_sent': fields_sent,
                                 'response': meta_resp,
                             },
                         })
-                    # Hints por tipo de error para que el usuario sepa que tocar
+                    # Hints por tipo de error para que el operador sepa que tocar
                     hint = ''
                     _err = (meta_resp or {}).get('error') or {}
                     _code = _err.get('code')
@@ -230,27 +297,25 @@ def horariosView(request):
                     if meta_status == 500 and _code == 1:
                         hint = (
                             ' Hint: tu Access Token probablemente no tiene el scope '
-                            '"whatsapp_business_management" (solo lo tiene uno de System User, '
-                            'no el temporal de API Setup). Regeneralo desde Business Settings → '
-                            'System Users con los 3 permisos y volve a probar.'
+                            '"whatsapp_business_management". Regenerá desde Business Settings → '
+                            'System Users con los 3 permisos y volvé a probar.'
                         )
                     elif meta_status == 400 and _subc == 2388072:
                         hint = (
-                            ' Hint: Meta rechaza el "about" por formato. Evita emojis, '
-                            'negritas, saltos de linea o URLs. Max 139 chars.'
+                            ' Hint: Meta rechaza el formato. Evitá emojis, negritas, '
+                            'saltos de linea o URLs en about (máx 139 chars).'
                         )
                     elif meta_status == 401:
-                        hint = ' Hint: Access Token invalido o expirado. Regeneralo.'
+                        hint = ' Hint: Access Token invalido o expirado.'
                     elif meta_status == 403:
                         hint = ' Hint: Access Token sin permiso sobre este phone_number_id.'
                     return JsonResponse({
                         'error': True,
-                        'message': (err or f'Meta respondió {meta_status}: {meta_resp}') + hint,
+                        'message': (err or f'Meta respondió {meta_status}') + hint,
                         'meta': {
                             'endpoint': url,
                             'status': meta_status,
-                            'about_sent': about_text,
-                            'horarios_txt': horarios_txt,
+                            'fields_sent': fields_sent,
                             'response': meta_resp,
                             'exception': err,
                         },

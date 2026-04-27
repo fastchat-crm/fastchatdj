@@ -456,6 +456,21 @@ def process_incoming_message(session, event_data, channel_layer):
         if ext_id and not contacto.external_id:
             contacto.external_id = ext_id
 
+        # Identidad cross-app de Meta (EC.xxx). Solo se setea la primera vez
+        # — si Meta cambia el identificador (raro), no sobreescribimos para
+        # no perder el ID original con el que ya construimos historial.
+        meta_uid = event_data.get('_meta_user_id')
+        if meta_uid and not contacto.meta_user_id:
+            contacto.meta_user_id = meta_uid
+
+        # Referral de Click-to-WhatsApp ad — touchpoint de adquisición.
+        # Solo se guarda la primera vez para preservarlo aun si después el
+        # contacto vuelve por mensaje orgánico. Si necesitamos historial
+        # completo de campañas, irá a otra tabla.
+        referral = event_data.get('_referral')
+        if referral and not contacto.referral_meta:
+            contacto.referral_meta = referral
+
         contacto.save()
 
         # Determinar el tipo de mensaje y su contenido
@@ -631,6 +646,36 @@ def process_incoming_message(session, event_data, channel_layer):
         primer_mensaje = not conversation.bienvenida_enviado
         numero_opcion_respondido = (message_text or '').replace(' ', '')
         numero_opcion_respondido = numero_opcion_respondido.isdigit() and numero_opcion_respondido or -1
+
+        # ── GUARD: Horario de atención ───────────────────────────────────
+        # Si la sesión tiene HorarioAtencion configurado y el momento actual
+        # está fuera del horario → respondemos `mensaje_fuera_horario` y NO
+        # invocamos IA ni flujo. Esto baja costos (sin tokens fuera de hora)
+        # y mantiene UX honesta. Aplicamos solo en el primer mensaje del día
+        # para evitar spam si el cliente manda 10 seguidos.
+        try:
+            from .services_horarios import dentro_de_horario, mensaje_fuera_horario_configurado
+            _en_horario = dentro_de_horario(session)
+            if not _en_horario:
+                _msg_fuera = mensaje_fuera_horario_configurado(session)
+                # Throttle: 1 vez por conversación cada 6h
+                _key_fuera = f'fuera_horario_aviso_{conversation.id}'
+                if _msg_fuera and not cache.get(_key_fuera):
+                    cache.set(_key_fuera, True, 6 * 3600)
+                    whatsapp_service.send_text_message(
+                        session.session_id, contacto.from_number, _msg_fuera, simularEscritura=True
+                    )
+                _traza(
+                    etapa='webhook_recibido', sesion=session, conversacion=conversation, mensaje=message,
+                    numero=from_number, nivel='info',
+                    detalle='fuera_de_horario: skip IA/flujo' + (' + aviso enviado' if _msg_fuera else ''),
+                )
+                # No bloqueamos guardado del mensaje entrante — solo evitamos IA.
+                return JsonResponse({'status': 'ok', 'fuera_horario': True})
+        except Exception as _h_ex:
+            logger.warning("Guard horario falló (continúa flujo normal): %s", _h_ex)
+        # ─────────────────────────────────────────────────────────────────
+
         if not conversation.bienvenida_enviado:
             conversation.bienvenida_enviado = True
             conversation.save()
