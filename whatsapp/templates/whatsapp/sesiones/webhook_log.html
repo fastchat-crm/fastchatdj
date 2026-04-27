@@ -277,8 +277,16 @@
         }, 2200);
     }
 
+    // Polling: 10s, sólo cuando la pestaña está visible (no consume recursos
+    // de fondo y nada se "recarga" si el operador no está mirando). Usamos
+    // setTimeout encadenado en lugar de setInterval para no apilar requests
+    // si una respuesta tarda más que el intervalo.
     let pollFails = 0;
+    let pollTimer = null;
+    const POLL_MS = 10000;
+
     async function poll () {
+        if (document.hidden) { schedule(); return; }
         try {
             const r = await fetch(buildPollUrl(), { credentials: 'same-origin' });
             if (!r.ok) throw new Error('http ' + r.status);
@@ -290,8 +298,18 @@
             pollFails++;
             if (pollFails >= 3) indic.classList.add('wlog-live-stale');
         }
+        schedule();
     }
-    setInterval(poll, 5000);
+    function schedule () {
+        clearTimeout(pollTimer);
+        pollTimer = setTimeout(poll, POLL_MS);
+    }
+    schedule();
+    document.addEventListener('visibilitychange', () => {
+        // Cuando vuelve a ser visible, dispara un poll inmediato para
+        // ponerse al día sin esperar el ciclo completo.
+        if (!document.hidden) { clearTimeout(pollTimer); poll(); }
+    });
 
     // ---- Modal payload ----
     const modal     = document.getElementById('wlog-modal');

@@ -56,7 +56,8 @@
       "Bash(pdftotext -layout docs/kommo/ROTS.pdf docs/kommo/ROTS.txt)",
       "Bash(pdfinfo docs/kommo/KOMMO.pdf)",
       "Bash(pdfinfo docs/kommo/ROTS.pdf)",
-      "Bash(awk 'NR==206,NR==410' seguridad/view_credencial_meta.py)"
+      "Bash(awk 'NR==206,NR==410' seguridad/view_credencial_meta.py)",
+      "Bash(awk *)"
     ]
   },
   "hooks": {

@@ -224,6 +224,7 @@ def meta_manual_conectar(request):
         phone_number_id=phone_number_id,
         business_account_id=business_account_id or None,
         display_phone_number=display or None,
+        verified_name=verified_name or None,
         access_token=access_token,
         webhook_verify_token=secrets.token_urlsafe(32),
         quality_rating=chequeo.get('quality_rating') or 'UNKNOWN',

@@ -18,7 +18,7 @@ from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 
-from core.funciones import secure_module
+from core.funciones import secure_module, addData
 
 from .models import EventoMetaRecibido, SesionWhatsApp
 
@@ -152,6 +152,9 @@ def meta_webhook_log(request, sesion_id: int):
         ultimo_id = 0
 
     contexto = {
+        'titulo':            f'Auditoría webhook · {sesion.nombre or sesion.numero or "sesión"}',
+        'descripcion':       'Eventos recibidos desde Meta Cloud API en tiempo real.',
+        'ruta':              request.path,
         'sesion':            sesion,
         'config':            config,
         'eventos':           eventos,
@@ -168,6 +171,7 @@ def meta_webhook_log(request, sesion_id: int):
         'filtro_firma':      request.GET.get('firma') or '',
         'filtro_proc':       request.GET.get('proc') or '',
     }
+    addData(request, contexto)
     return render(request, 'whatsapp/sesiones/webhook_log.html', contexto)
 
 

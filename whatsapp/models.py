@@ -1114,6 +1114,11 @@ class ConfigMeta(ModeloBase):
         verbose_name='Numero visible',
         help_text='Numero formateado tal como Meta lo muestra (+593 99 999 9999).'
     )
+    verified_name = models.CharField(
+        max_length=100, blank=True, null=True,
+        verbose_name='Nombre verificado',
+        help_text='Nombre del negocio verificado por Meta. Se sincroniza desde Graph.'
+    )
 
     # Credenciales (cifradas en BD via Fernet — transparente en Python).
     # Las credenciales App-level (app_id, app_secret) viven en

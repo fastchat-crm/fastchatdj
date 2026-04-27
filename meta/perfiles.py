@@ -116,10 +116,12 @@ def sincronizar_meta_desde_graph(session, config, timeout=10):
     config.quality_rating = (data.get('quality_rating') or 'UNKNOWN').upper()
     if data.get('messaging_limit_tier'):
         config.messaging_limit_tier = data.get('messaging_limit_tier')
+    if data.get('verified_name'):
+        config.verified_name = data.get('verified_name')
     config.ultima_sincronizacion = _tz.now()
     config.save(update_fields=[
         'display_phone_number', 'quality_rating',
-        'messaging_limit_tier', 'ultima_sincronizacion',
+        'messaging_limit_tier', 'verified_name', 'ultima_sincronizacion',
     ])
     numero_sincronizado = None
     if config.display_phone_number:

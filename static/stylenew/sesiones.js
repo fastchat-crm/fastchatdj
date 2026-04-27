@@ -39,6 +39,39 @@
     }).then(function (r) { return r.json(); });
   }
 
+  // ---------- Refresco de cards sin recargar la página ----------
+  // El endpoint sesiones?partial=card&id=X devuelve {error, estado, html}.
+  // Si la card ya está en el grid, la reemplazamos; si es nueva (Meta connect /
+  // OAuth recién creado), la insertamos arriba para evitar el location.reload.
+  function htmlAElemento(html) {
+    var t = document.createElement('template');
+    t.innerHTML = (html || '').trim();
+    return t.content.firstElementChild;
+  }
+  function refrescarCard(sesionId) {
+    if (!sesionId) return Promise.resolve(null);
+    var url = '/whatsapp/sesiones/?partial=card&id=' + encodeURIComponent(sesionId);
+    return fetch(url, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+    }).then(function (r) { return r.json(); }).then(function (data) {
+      if (!data || data.error || !data.html) return null;
+      var nueva = htmlAElemento(data.html);
+      if (!nueva) return null;
+      var grid = document.getElementById('conex-grid');
+      var existente = document.querySelector('.conex-card[data-sesion-id="' + sesionId + '"]');
+      if (existente) {
+        existente.replaceWith(nueva);
+      } else if (grid) {
+        // Si el grid estaba vacío, sacamos el placeholder antes de insertar.
+        var empty = grid.querySelector('.conex-empty');
+        if (empty) empty.remove();
+        grid.insertBefore(nueva, grid.firstChild);
+      }
+      return nueva;
+    }).catch(function () { return null; });
+  }
+
   // ---------- Toast helper ----------
   function mostrarToast(msg, tipo) {
     if (window.Swal && Swal.fire) {
@@ -348,10 +381,10 @@
           fmShowResult('<i class="fa fa-circle-xmark me-2"></i>' + (data.error || 'No se pudo conectar la sesión.'), 'danger');
           return;
         }
-        fmShowResult('<i class="fa fa-circle-check me-2"></i>Sesión <b>' + (data.nombre || '') + '</b> conectada. Recargando...', 'success');
+        fmShowResult('<i class="fa fa-circle-check me-2"></i>Sesión <b>' + (data.nombre || '') + '</b> conectada.', 'success');
         cerrarModal();
         mostrarToast('WhatsApp conectado manualmente: ' + (data.display_phone_number || data.nombre || ''), 'ok');
-        setTimeout(function () { window.location.reload(); }, 900);
+        refrescarCard(data.sesion_id);
       });
     });
   }
@@ -364,7 +397,7 @@
     if (p.ok) {
       cerrarModal();
       mostrarToast('WhatsApp enlazado: ' + (p.numero || p.nombre || ''), 'ok');
-      setTimeout(function () { window.location.reload(); }, 900);
+      refrescarCard(p.sesion_id);
     } else {
       mostrarToast(p.error || 'Meta no permitió completar la conexión.', 'err');
     }
