@@ -9,6 +9,50 @@ sub-claves: `'plantillas_wa.con_contexto'`, `'plantillas_wa.sin_contexto'`.
 
 PROMPTS = {
     # ─────────────────────────────────────────────────────────────────────
+    # WhatsApp — Horarios de atencion (semanales)
+    # Placeholders: {descripcion}
+    # ─────────────────────────────────────────────────────────────────────
+    'horarios_wa.semanales': (
+        "Convierte la descripcion en horarios semanales. Responde con SOLO un objeto JSON "
+        "(sin explicaciones, sin ``` markdown, sin texto fuera del JSON).\n"
+        "\n"
+        "Esquema:\n"
+        "{{\n"
+        '  "horarios": [\n'
+        '    {{"dia_semana": 0-6, "hora_inicio": "HH:MM", "hora_fin": "HH:MM"}}\n'
+        "  ]\n"
+        "}}\n"
+        "Donde dia_semana: 0=Lun, 1=Mar, 2=Mie, 3=Jue, 4=Vie, 5=Sab, 6=Dom. "
+        "Permite multiples bloques por dia. No inventes dias no mencionados.\n"
+        "\n"
+        "Descripcion:\n"
+        "{descripcion}\n"
+    ),
+
+    # ─────────────────────────────────────────────────────────────────────
+    # WhatsApp — Excepciones / feriados
+    # Placeholders: {anio_actual}, {descripcion}
+    # ─────────────────────────────────────────────────────────────────────
+    'horarios_wa.excepciones': (
+        "Convierte la descripcion en excepciones/feriados. Responde con SOLO un objeto JSON "
+        "(sin explicaciones, sin ``` markdown, sin texto fuera del JSON).\n"
+        "\n"
+        "Esquema:\n"
+        "{{\n"
+        '  "excepciones": [\n'
+        '    {{"fecha": "YYYY-MM-DD", "abierto": true|false, "motivo": "string corto"}}\n'
+        "  ]\n"
+        "}}\n"
+        "Si no se especifica anio, usa {anio_actual}. Para feriados latinoamericanos/ecuatorianos, "
+        "resuelve las fechas exactas cuando se mencionen por nombre (ej. 'Navidad' -> "
+        "{anio_actual}-12-25). 'abierto' = false cuando es feriado cerrado, true cuando "
+        "es horario especial.\n"
+        "\n"
+        "Descripcion:\n"
+        "{descripcion}\n"
+    ),
+
+    # ─────────────────────────────────────────────────────────────────────
     # WhatsApp — PlantillaWhatsApp (Meta) — generacion de UNA plantilla
     # Placeholders: {contexto_negocio}, {descripcion_usuario}
     # ─────────────────────────────────────────────────────────────────────
