@@ -677,10 +677,12 @@ def process_incoming_message(session, event_data, channel_layer):
                         "volvamos a estar disponibles. 🕐"
                     )
                     _key_fuera = f'fuera_horario_aviso_{conversation.id}'
-                    _ya_avisado = bool(cache.get(_key_fuera))
+                    # cache.add es atómico: solo un proceso/worker gana el lock
+                    # cuando llegan webhooks concurrentes del mismo cliente.
+                    _lock_aceptado = cache.add(_key_fuera, True, 6 * 3600)
+                    _ya_avisado = not _lock_aceptado
                     _envio_ok = None
-                    if not _ya_avisado:
-                        cache.set(_key_fuera, True, 6 * 3600)
+                    if _lock_aceptado:
                         try:
                             _r = whatsapp_service.send_text_message(
                                 session.session_id, contacto.from_number, _msg_fuera, simularEscritura=True
@@ -724,14 +726,12 @@ def process_incoming_message(session, event_data, channel_layer):
             logger.warning("Guard horario falló (continúa flujo normal): %s", _h_ex)
         # ─────────────────────────────────────────────────────────────────
 
+        _ia_activa = bool(session.agente_ia and session.agente_ia.apikey.filter(estado=True).exists())
         if not conversation.bienvenida_enviado:
             conversation.bienvenida_enviado = True
             conversation.save()
-            _ia_activa = bool(session.agente_ia and session.agente_ia.apikey.filter(estado=True).exists())
-            if conversation.sesion.mensaje_bienvenida and not _ia_activa:
+            if conversation.sesion.mensaje_bienvenida:
                 whatsapp_service.send_text_message(conversation.sesion.session_id, contacto.from_number, conversation.sesion.mensaje_bienvenida, simularEscritura=True)
-        else:
-            _ia_activa = bool(session.agente_ia and session.agente_ia.apikey.filter(estado=True).exists())
 
         # Auto-respuesta amigable cuando el medio no fue capturado (imagen/video/documento/sticker)
         # Audio se procesa por transcripción; los demás no se leen automáticamente.
@@ -1426,10 +1426,6 @@ def process_sent_message(session, event_data, channel_layer):
             leido=True,  # Marcamos como leído ya que lo enviamos nosotros
             fecha_leido=timezone.now()
         )
-
-        if not conversation.bienvenida_enviado:
-            conversation.bienvenida_enviado = True
-            conversation.save()
 
         # Actualizar estadísticas
         update_conversation_stats(conversation)
