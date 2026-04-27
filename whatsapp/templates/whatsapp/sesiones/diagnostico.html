@@ -38,6 +38,29 @@
                 <a href="/whatsapp/sesiones/{{ sesion.id }}/diagnostico/" class="conex-btn conex-btn-secondary">
                     <i class="fa fa-rotate"></i> Refrescar
                 </a>
+
+                {# ── Deep-links a Meta Business: Insights + Facturación ── #}
+                <div class="diag-meta-links">
+                    <a class="conex-btn conex-btn-secondary"
+                       href="https://business.facebook.com/latest/whatsapp_manager/insights{% if meta_business_id %}?business_id={{ meta_business_id }}{% if config.waba_id %}&waba_id={{ config.waba_id }}{% endif %}{% endif %}"
+                       target="_blank" rel="noopener"
+                       title="Conversaciones, mensajes y costos por categoría en WhatsApp Manager">
+                        <i class="fa fa-chart-pie"></i> Insights / Costos
+                    </a>
+                    <a class="conex-btn conex-btn-secondary"
+                       href="https://business.facebook.com/billing_hub/payment_settings{% if meta_business_id %}?business_id={{ meta_business_id }}{% endif %}"
+                       target="_blank" rel="noopener"
+                       title="Métodos de pago, facturas y configuración de cobro del Business">
+                        <i class="fa fa-credit-card"></i> Facturación
+                    </a>
+                    <a class="conex-btn conex-btn-secondary"
+                       href="https://business.facebook.com/latest/whatsapp_manager/payment_methods{% if meta_business_id %}?business_id={{ meta_business_id }}{% if config.waba_id %}&waba_id={{ config.waba_id }}{% endif %}{% endif %}"
+                       target="_blank" rel="noopener"
+                       title="Métodos de pago específicos de esta WABA">
+                        <i class="fa fa-receipt"></i> Pagos WABA
+                    </a>
+                </div>
+
                 <a href="/whatsapp/conversaciones/?sesion={{ sesion.id|encrypt_id }}"
                    class="conex-btn conex-btn-primary">
                     <i class="fa fa-comments"></i> Ver conversaciones

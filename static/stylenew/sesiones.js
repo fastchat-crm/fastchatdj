@@ -48,6 +48,9 @@
     t.innerHTML = (html || '').trim();
     return t.content.firstElementChild;
   }
+  // Helper expuesto globalmente para que partials inyectados (modales) puedan
+  // refrescar la card sin necesidad de location.reload.
+  window.refrescarCardSesion = function (sesionId) { return refrescarCard(sesionId); };
   function refrescarCard(sesionId) {
     if (!sesionId) return Promise.resolve(null);
     var url = '/whatsapp/sesiones/?partial=card&id=' + encodeURIComponent(sesionId);

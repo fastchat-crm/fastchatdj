@@ -314,8 +314,26 @@
                                 showConfirmButton: false
                             });
                         }
-                        // Recargamos el modal para mostrar los nuevos valores.
-                        setTimeout(() => location.reload(), 800);
+                        // Refrescamos la card del tablero (badges, calidad, etc.)
+                        // y reinyectamos este modal con los datos recién traídos
+                        // de Meta — sin recargar la página completa.
+                        if (typeof window.refrescarCardSesion === 'function') {
+                            window.refrescarCardSesion(pk);
+                        }
+                        var modalUrl = (window.CONEX_URL || window.location.pathname)
+                            + '?action=editar_modal&pk=' + encodeURIComponent(pk);
+                        fetch(modalUrl, {
+                            headers: {'X-Requested-With': 'XMLHttpRequest'},
+                            credentials: 'same-origin'
+                        })
+                            .then(r => r.json())
+                            .then(j => {
+                                if (j && j.ok && j.html) {
+                                    var cont = document.getElementById('conex-detail-content');
+                                    if (cont) cont.innerHTML = j.html;
+                                }
+                            })
+                            .catch(() => { /* el toast de éxito ya se mostró */ });
                     } else {
                         alert((data && data.message) || 'No se pudo sincronizar.');
                     }

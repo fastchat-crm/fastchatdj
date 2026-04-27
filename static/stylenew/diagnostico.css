@@ -74,7 +74,30 @@
     display: flex;
     gap: .5rem;
     flex-wrap: wrap;
+    align-items: center;
 }
+
+/* Deep-links a Meta agrupados como un cluster diferenciado */
+.diag-meta-links {
+    display: inline-flex;
+    gap: 4px;
+    padding: 3px;
+    background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
+    border: 1px solid #c7d2fe;
+    border-radius: 10px;
+}
+.diag-meta-links .conex-btn {
+    background: #fff;
+    color: #1d4ed8;
+    border-color: transparent;
+    padding: .45rem .75rem;
+    font-size: .8rem;
+}
+.diag-meta-links .conex-btn:hover {
+    background: #1d4ed8;
+    color: #fff;
+}
+.diag-meta-links .fa { font-size: .85rem; }
 
 /* ─────── Score ─────── */
 .diag-score {

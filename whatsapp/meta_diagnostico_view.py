@@ -140,6 +140,23 @@ def meta_diagnostico(request, sesion_id: int):
     phone_info = _consultar_phone_number(config) if config else {'ok': False, 'error': 'Sesión sin ConfigMeta.'}
     subscribed = _consultar_subscribed_apps(config) if config else {'ok': False, 'error': 'Sesión sin ConfigMeta.'}
 
+    # ── Business ID para deep-links de Meta (Insights + Billing) ──
+    # Prioriza el de la sesión (ConfigMeta.business_account_id) y cae al
+    # singleton org-level (CredencialMetaApp.business_id) si no está cargado.
+    meta_business_id = ''
+    if config and config.business_account_id:
+        meta_business_id = config.business_account_id
+    else:
+        try:
+            from seguridad.models import Configuracion as _Conf, CredencialMetaApp as _Cred
+            _confi = _Conf.get_instancia()
+            if _confi and _confi.pk:
+                _cred = _Cred.objects.filter(configuracion=_confi).first()
+                if _cred and _cred.business_id:
+                    meta_business_id = _cred.business_id
+        except Exception:
+            pass
+
     # ── Health summary ──
     salud = []
     salud.append({
@@ -211,6 +228,7 @@ def meta_diagnostico(request, sesion_id: int):
         'salud_total':       salud_total,
         'salud_pct':         int((salud_total_ok / salud_total) * 100) if salud_total else 0,
         'now':               ahora,
+        'meta_business_id':  meta_business_id,
     }
     addData(request, contexto)
     return render(request, 'whatsapp/sesiones/diagnostico.html', contexto)
