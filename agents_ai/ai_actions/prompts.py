@@ -274,6 +274,8 @@ PROMPTS = {
         "    {{\n"
         '      "texto_boton": "string <=24 chars (es lo que ve el cliente como boton)",\n'
         '      "respuesta": "string que el bot envia al elegir esta opcion. Hasta 500 chars.",\n'
+        '      "cta_url": "OPCIONAL — URL externa que el boton debe abrir (PayPhone, Calendly, etc). Solo en hojas (sin hijos).",\n'
+        '      "cta_display_text": "OPCIONAL — texto del boton CTA (<=20 chars). Solo si cta_url esta presente.",\n'
         '      "hijos": [\n'
         "        {{\n"
         '          "texto_boton": "...",\n'
@@ -293,6 +295,8 @@ PROMPTS = {
         "- Tono {tono}. Respuestas naturales, no roboticas.\n"
         "- Emojis si pero sin abusar (1-2 por mensaje).\n"
         "- NO inventes datos que no estan en la descripcion (precios, horarios, nombres de personas).\n"
+        "- Si la descripcion menciona pasos como 'pagar online', 'agendar en calendly', 'subir comprobante a un link', usa `cta_url` con un placeholder claro tipo 'https://configurable.com/REEMPLAZAR' — el operador edita despues. NO inventes URLs reales.\n"
+        "- `cta_url` SOLO en nodos hoja (sin hijos). Junto con `cta_display_text` (ej. 'Pagar', 'Agendar', 'Subir comprobante').\n"
         "\n"
         "Devolve SOLO el JSON.\n"
     ),

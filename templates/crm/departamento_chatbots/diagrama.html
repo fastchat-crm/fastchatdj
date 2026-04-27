@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/dpchat_editor.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="dp-toolbar">
+    <a href="/crm/departamentos_chatbots/?action=change&id={{ filtro.pk }}&full=1"
+       class="btn btn-light btn-sm">
+        <i class="fa fa-arrow-left me-1"></i> Volver al editor
+    </a>
+    <h5 class="mb-0">
+        <i class="fa fa-diagram-project me-1 text-info"></i>
+        Árbol de decisiones · {{ filtro.nombre }}
+    </h5>
+    <a href="/crm/departamentos_chatbots/?action=preview&id={{ filtro.pk }}"
+       class="btn btn-outline-success btn-sm">
+        <i class="fab fa-whatsapp me-1"></i> Ver preview
+    </a>
+</div>
+
+{% if filtro.mensaje_saludo %}
+    <div class="dp-diag-saludo mb-3">
+        <i class="fa fa-comment-dots me-1"></i>
+        <strong>Saludo inicial:</strong> {{ filtro.mensaje_saludo|truncatechars:300 }}
+    </div>
+{% endif %}
+
+{% if arbol_anidado %}
+    <div class="card">
+        <div class="card-body p-2">
+            <div class="dp-tree-decision-wrap">
+                <ul class="dp-tree-decision">
+                    {% for nodo in arbol_anidado %}
+                        {% include "crm/departamento_chatbots/_diagrama_node.html" with nodo=nodo %}
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="text-muted small mt-2">
+        <i class="fa fa-info-circle me-1"></i>
+        Arrastrá horizontalmente si el árbol es más ancho que la pantalla.
+    </div>
+{% else %}
+    <div class="card">
+        <div class="card-body text-center text-muted py-5">
+            <i class="fa fa-circle-info fa-2x mb-2"></i>
+            <p>Aún no hay nodos en el flujo.</p>
+            <a href="/crm/departamentos_chatbots/?action=change&id={{ filtro.pk }}&full=1" class="btn btn-primary btn-sm">
+                Volver al editor para agregar
+            </a>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

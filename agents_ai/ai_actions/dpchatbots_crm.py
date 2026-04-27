@@ -45,6 +45,18 @@ def _crear_opciones_recursivo(departamento, opciones_lista, parent=None,
         hijos = op.get('hijos') or []
         tiene_hijos = isinstance(hijos, list) and len(hijos) > 0
         tipo = 'menu' if tiene_hijos else 'respuesta'
+
+        # Soporte CTA URL: si la IA devuelve `cta_url` (link externo) en una
+        # opción hoja, lo guardamos en `config` para que el motor lo render
+        # como botón interactivo cta_url en vez de texto plano.
+        config = {}
+        cta_url = (op.get('cta_url') or '').strip()
+        cta_display = (op.get('cta_display_text') or op.get('cta_text') or '').strip()
+        if cta_url and not tiene_hijos:
+            config['cta_url'] = cta_url[:2000]
+            if cta_display:
+                config['cta_display_text'] = cta_display[:20]
+
         nueva = OpcionDepartamentoChatBot.objects.create(
             departamento=departamento,
             opcion_padre=parent,
@@ -54,6 +66,7 @@ def _crear_opciones_recursivo(departamento, opciones_lista, parent=None,
             tipo_nodo=tipo,
             es_inicio=(parent is None and i == 0),
             usuario_creacion=departamento.usuario_creacion,
+            config=config,
         )
         creadas += 1
         if tiene_hijos:

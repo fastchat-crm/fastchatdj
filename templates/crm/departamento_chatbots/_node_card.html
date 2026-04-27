@@ -23,14 +23,24 @@
                 </div>
             {% endif %}
             <div class="dp-node-tags">
-                {% if op.variable_destino %}
-                    <span class="dp-tag"><i class="fa fa-tag"></i> var: {{ op.variable_destino }}</span>
+                {% if op.boton_id %}
+                    <span class="dp-tag dp-tag-id" title="ID que llega al webhook como button_reply.id">
+                        <i class="fa fa-fingerprint"></i> {{ op.boton_id }}
+                    </span>
                 {% endif %}
-                {% if op.validacion_tipo and op.validacion_tipo != 'none' %}
-                    <span class="dp-tag"><i class="fa fa-check"></i> {{ op.get_validacion_tipo_display }}</span>
+                {% if op.tipo_nodo == 'cta_url' and op.config.url %}
+                    <a href="{{ op.config.url }}" target="_blank" rel="noopener"
+                       class="dp-tag dp-tag-url" title="Abre la URL en nueva pestaña">
+                        <i class="fa fa-link"></i> {{ op.config.display_text|default:'URL' }}
+                        →&nbsp;{{ op.config.url|truncatechars:40 }}
+                    </a>
                 {% endif %}
-                {% if op.endpoint %}
-                    <span class="dp-tag"><i class="fa fa-plug"></i> {{ op.endpoint.nombre }}</span>
+                {% if op.tipo_nodo == 'ubicacion' and op.config.lat %}
+                    <span class="dp-tag dp-tag-loc" title="Ubicación configurada">
+                        <i class="fa fa-map-marker-alt"></i>
+                        {{ op.config.name|default:'Ubicación' }}
+                        ({{ op.config.lat }}, {{ op.config.lng }})
+                    </span>
                 {% endif %}
                 <span class="dp-tag dp-tag-orden">orden #{{ op.orden }}</span>
             </div>

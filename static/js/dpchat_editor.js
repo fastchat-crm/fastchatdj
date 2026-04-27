@@ -235,15 +235,6 @@
                 });
                 return;
             }
-            if (act === 'ver-diagrama') {
-                if (STATE.departamentoId === 0) {
-                    alert('Primero guardá el departamento (cabecera) para ver el diagrama.');
-                    return;
-                }
-                var modalDiag = bootstrap.Modal.getOrCreateInstance($('#dpModalDiagrama'));
-                modalDiag.show();
-                return;
-            }
             if (act === 'ver-meta-json') {
                 if (STATE.departamentoId === 0) {
                     alert('Primero guardá el departamento (cabecera) para generar el payload.');

@@ -375,6 +375,40 @@ class MotorFlujo:
         except Exception as ex:
             logger.warning('Motor: no pude persistir saliente: %s', ex)
 
+    def _enviar_cta_url(self, body_text: str, url: str, display_text: str = 'Abrir') -> bool:
+        """Envía un botón CTA URL (Meta interactive cta_url). Si la sesión NO es
+        Meta, fallback a mandar el texto + el link en línea (Baileys no soporta CTA)."""
+        body_resuelto = resolver_expresion(body_text or '', self.contexto())
+        if not getattr(self.session, 'es_meta', False):
+            self.enviar(body_resuelto + (f"\n\n👉 {url}" if url else ''))
+            return False
+        try:
+            resp = self.ws.send_interactive_cta_url(
+                self.session.session_id,
+                self.contacto.from_number,
+                body_resuelto,
+                url=url,
+                display_text=(display_text or 'Abrir')[:20],
+                conversacion_id=self.conversation.id,
+            )
+            ok = bool((resp or {}).get('success'))
+            self.respuestas.append(body_resuelto)
+            if ok:
+                # Persistir con el link entre corchetes para auditoría
+                self._persistir_mensaje_saliente(
+                    body_resuelto + f"\n[CTA: {display_text} → {url}]", resp,
+                )
+            self._trace('envio_cta_url', 'CTA URL enviado', ok, {
+                'url': url[:200], 'display_text': display_text,
+                'error': (resp or {}).get('error', '') if not ok else '',
+            })
+            return ok
+        except Exception as e:
+            logger.exception('Error enviando CTA URL: %s', e)
+            self._trace('envio_cta_url', 'Error', False, {'error': str(e)[:200]})
+            self.enviar(body_resuelto + f"\n\n👉 {url}")
+            return False
+
     def enviar_menu_interactivo(self, body_text: str, opciones: list,
                                  header: str = None, footer: str = None) -> bool:
         """Envía un menú con botones (≤3) o lista (≤10) si la sesión es Meta.
@@ -759,7 +793,15 @@ class MotorFlujo:
             return ''
 
         if tipo == 'respuesta':
-            self.enviar(cfg.get('mensaje') or nodo.respuesta)
+            mensaje = cfg.get('mensaje') or nodo.respuesta
+            # Si el nodo tiene `config.cta_url` definido y la sesión es Meta,
+            # mandamos como botón interactivo CTA URL en vez de texto plano.
+            cta_url = (cfg.get('cta_url') or '').strip()
+            cta_text = (cfg.get('cta_display_text') or 'Abrir').strip()
+            if cta_url and getattr(self.session, 'es_meta', False):
+                self._enviar_cta_url(mensaje, cta_url, cta_text)
+            else:
+                self.enviar(mensaje)
             return ''
 
         if tipo == 'pregunta':

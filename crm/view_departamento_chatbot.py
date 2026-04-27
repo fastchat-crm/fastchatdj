@@ -190,6 +190,17 @@ def departamentoChatbotsView(request):
                 except Exception as ex:
                     return JsonResponse({"result": False, 'message': str(ex)})
 
+            elif action == 'diagrama':
+                # Diagrama del árbol de decisiones, full-page (no modal).
+                try:
+                    pk = int(request.GET['id'])
+                    filtro = model.objects.get(pk=pk)
+                    data["filtro"] = filtro
+                    data["arbol_anidado"] = _serializar_arbol_anidado(filtro)
+                    return render(request, 'crm/departamento_chatbots/diagrama.html', data)
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
+
             elif action == 'preview':
                 # Simulador WhatsApp-like del flujo. Renderiza pagina full con
                 # arbol serializado en JSON para que el JS del cliente lo recorra.
@@ -697,11 +708,39 @@ def _guardar_opcion(request):
         ).aggregate(m=Max('orden'))['m'] or 0
         opcion.orden = max_orden + 1
 
-    # boton_id viene del form (input directo)
+    # boton_id: input directo o auto-generado desde el nombre (slug legible).
+    # Usamos snake_case sin emojis ni caracteres especiales. Si dos nodos terminan
+    # con el mismo slug, agregamos sufijo _<id> al guardar.
     import re as _re
-    boton_id = (request.POST.get('boton_id') or '').strip()[:64]
-    boton_id = _re.sub(r'[^a-zA-Z0-9_\-]', '', boton_id)
-    opcion.boton_id = boton_id
+    import unicodedata as _ud
+
+    def _slugify(text):
+        # NFKD: separa acentos; ascii: descarta no-ascii (emojis, ñ→n, etc.)
+        norm = _ud.normalize('NFKD', text or '')
+        ascii_txt = norm.encode('ascii', 'ignore').decode('ascii')
+        # baja a minúsculas, espacios+guiones a _, descarta lo demás
+        slug = _re.sub(r'[^a-zA-Z0-9]+', '_', ascii_txt).strip('_').lower()
+        return slug[:50]
+
+    boton_id_input = (request.POST.get('boton_id') or '').strip()[:64]
+    boton_id_input = _re.sub(r'[^a-zA-Z0-9_\-]', '', boton_id_input)
+    if boton_id_input:
+        opcion.boton_id = boton_id_input
+    else:
+        base = _slugify(opcion.nombre)
+        if base:
+            # Buscar primer slug libre: base, base_2, base_3, ...
+            candidato = base
+            n = 1
+            qs = OpcionDepartamentoChatBot.objects.filter(departamento=dep, status=True)
+            if opcion.pk:
+                qs = qs.exclude(pk=opcion.pk)
+            while qs.filter(boton_id=candidato).exists():
+                n += 1
+                candidato = f"{base}_{n}"
+            opcion.boton_id = candidato
+        else:
+            opcion.boton_id = ''
 
     # config_json se construye según tipo_nodo nativo
     if opcion.tipo_nodo == 'cta_url':

@@ -88,6 +88,10 @@
     background: #f1f3f5; color: #495057; font-weight: 500;
 }
 .dp-tag-orden { background: #e9ecef; color: #6c757d; }
+.dp-tag-id    { background: #e0e7ff; color: #3730a3; font-family: ui-monospace, Menlo, monospace; font-size: .65rem; }
+.dp-tag-url   { background: #dbeafe; color: #1e40af; text-decoration: none; }
+.dp-tag-url:hover { background: #bfdbfe; color: #1e3a8a; text-decoration: underline; }
+.dp-tag-loc   { background: #f3e8ff; color: #6b21a8; }
 .dp-tag i { font-size: .62rem; margin-right: 2px; }
 
 .dp-node-actions {
