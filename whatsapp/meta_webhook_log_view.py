@@ -27,10 +27,14 @@ from .models import EventoMetaRecibido, SesionWhatsApp
 # Helpers
 # ---------------------------------------------------------------------------
 
+# ── _hoy_local ────────────────────────────────────────────────────────────
+# Devuelve la fecha (date) local de hoy según TIME_ZONE.
+# Por qué existe: `timezone.localdate()` revienta cuando USE_TZ=False
+# (en este proyecto está comentado en settings.py:191), porque
+# `timezone.now()` devuelve naive y `localtime()` exige aware. Este
+# helper detecta ambos casos y se queda con la fecha correcta sin crashear.
 def _hoy_local():
-    """Fecha local de hoy. Tolera USE_TZ True/False (en este proyecto está
-    comentado, default False, así que `timezone.now()` devuelve naive y
-    `timezone.localdate()` revienta)."""
+    """Fecha local de hoy. Tolera USE_TZ True/False."""
     ahora = timezone.now()
     if timezone.is_aware(ahora):
         try:
@@ -40,7 +44,12 @@ def _hoy_local():
     return ahora.date()
 
 
+# ── _ahora_local_str ──────────────────────────────────────────────────────
+# Devuelve la hora actual local como string (default 'HH:MM:SS').
+# Lo usa el endpoint poll para mandar al frontend la marca "última
+# actualización" del indicador "en vivo" sin tener que formatear en JS.
 def _ahora_local_str(fmt='%H:%M:%S'):
+    """Hora actual local formateada. Tolera USE_TZ True/False igual que _hoy_local."""
     ahora = timezone.now()
     if timezone.is_aware(ahora):
         try:
@@ -50,10 +59,14 @@ def _ahora_local_str(fmt='%H:%M:%S'):
     return ahora.strftime(fmt)
 
 
+# ── _fmt_dt ───────────────────────────────────────────────────────────────
+# Formatea un datetime (de modelo) a string en hora local.
+# Sirve tanto para datetimes aware como naive — en el segundo caso asume
+# que el valor YA está en hora local (típico cuando USE_TZ=False y la BD
+# tiene TIMESTAMP WITHOUT TIME ZONE). Lo usan _serializar_evento y el
+# endpoint detalle para mandar la fecha lista para mostrar en el frontend.
 def _fmt_dt(dt, fmt):
-    """Formatea un datetime (naive o aware) en hora local. Si es aware, lo
-    convierte a TIME_ZONE; si es naive, lo asume ya en hora local (caso típico
-    cuando USE_TZ=False)."""
+    """Formatea un datetime (naive o aware) en hora local sin crashear."""
     if dt is None:
         return ''
     if timezone.is_aware(dt):
@@ -64,6 +77,10 @@ def _fmt_dt(dt, fmt):
     return dt.strftime(fmt)
 
 
+# ── _parse_fecha ──────────────────────────────────────────────────────────
+# Parsea el query param `?fecha=YYYY-MM-DD`. Si viene vacío o con formato
+# inválido cae a hoy — así la página se puede cargar sin filtros y la
+# llamada nunca rompe por input mal formado del usuario o un bot.
 def _parse_fecha(raw: str | None):
     """Parsea YYYY-MM-DD; cae a hoy si viene vacío o inválido."""
     hoy = _hoy_local()
@@ -75,9 +92,13 @@ def _parse_fecha(raw: str | None):
         return hoy
 
 
+# ── _serializar_evento ────────────────────────────────────────────────────
+# Convierte un EventoMetaRecibido en el dict ligero que devuelve el poll
+# JSON. Deliberadamente NO incluye el payload crudo (puede ser grande):
+# se pide on-demand vía /webhook-log/<evento_id>/ al abrir el modal.
+# Mantiene un `payload_preview` corto para mostrar en la celda Preview.
 def _serializar_evento(ev: EventoMetaRecibido) -> dict:
-    """Forma JSON ligera para el polling (sin payload crudo, que se pide aparte
-    al hacer click en la fila)."""
+    """Dict ligero para polling (sin payload crudo)."""
     return {
         'id':                  ev.id,
         'tipo_evento':         ev.tipo_evento,
@@ -90,8 +111,13 @@ def _serializar_evento(ev: EventoMetaRecibido) -> dict:
     }
 
 
+# ── _filtrar ──────────────────────────────────────────────────────────────
+# Aplica los filtros opcionales del usuario (tipo / firma / procesado)
+# sobre cualquier queryset de EventoMetaRecibido. Compartido por la vista
+# HTML y el endpoint poll para garantizar que el "live update" respete
+# exactamente los mismos criterios que la primera carga.
 def _filtrar(qs, request):
-    """Aplica filtros opcionales sobre el queryset (compartido entre HTML y poll)."""
+    """Aplica filtros tipo/firma/proc sobre el queryset (HTML + poll)."""
     tipo = request.GET.get('tipo') or ''
     firma = request.GET.get('firma') or ''  # '', 'ok', 'mal'
     proc = request.GET.get('proc') or ''    # '', 'si', 'no', 'error'
@@ -115,9 +141,19 @@ def _filtrar(qs, request):
 # Vista principal (HTML)
 # ---------------------------------------------------------------------------
 
+# ── meta_webhook_log ──────────────────────────────────────────────────────
+# Vista HTML principal. Renderiza la página de auditoría con la tabla del
+# día seleccionado (default: hoy), las métricas resumen y la lista de
+# tipos de evento disponibles para el dropdown de filtros.
+# Sólo aplica a sesiones con proveedor='meta' — si el id no existe o es
+# Baileys, redirige al listado de sesiones.
+# Llama addData(request, contexto) para que base.html tenga sidebar,
+# header, nombre de empresa, ruta_val, etc. — sin esto la página
+# renderiza con layout roto.
 @login_required
 @secure_module
 def meta_webhook_log(request, sesion_id: int):
+    """Render HTML de la página de auditoría (tabla + filtros + polling JS)."""
     sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
     if not sesion:
         return HttpResponseRedirect('/whatsapp/sesiones/')
@@ -179,14 +215,18 @@ def meta_webhook_log(request, sesion_id: int):
 # Endpoint poll (JSON)
 # ---------------------------------------------------------------------------
 
+# ── meta_webhook_log_poll ─────────────────────────────────────────────────
+# Endpoint JSON que el frontend dispara cada 10s (visibility-aware).
+# Devuelve solo eventos con `id > since_id` para la fecha indicada — así
+# las requests son incrementales y baratas, no traen lo que ya está en
+# pantalla. Tope de 100 eventos por respuesta: si el cliente estuvo
+# desconectado mucho tiempo, hace varios polls hasta ponerse al día.
+# También devuelve los totales del día para refrescar las stats arriba
+# y la marca "now" para el reloj del indicador "en vivo".
 @login_required
 @secure_module
 def meta_webhook_log_poll(request, sesion_id: int):
-    """Devuelve eventos con id > since_id para la fecha indicada (default: hoy).
-
-    Pensado para polling cada 5s desde la página de auditoría. Limita a 100
-    eventos por respuesta — si el cliente quedó muy atrás, hace varios polls.
-    """
+    """Eventos con id > since_id + totales + reloj. Para polling incremental."""
     sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
     if not sesion:
         return JsonResponse({'ok': False, 'error': 'sesion_no_encontrada'}, status=404)
@@ -231,11 +271,17 @@ def meta_webhook_log_poll(request, sesion_id: int):
 # Endpoint detalle payload (JSON)
 # ---------------------------------------------------------------------------
 
+# ── meta_webhook_log_detalle ──────────────────────────────────────────────
+# Endpoint JSON que devuelve el payload crudo de UN evento concreto.
+# Se llama on-demand cuando el usuario hace click en una fila de la tabla
+# y abre el modal con el JSON formateado. Separado del poll para no
+# inflar cada request periódico con payloads que pueden pesar varios KB.
+# Valida que el evento pertenezca a la ConfigMeta de la sesión — si no,
+# devuelve 404 (defensa contra acceso cruzado entre sesiones).
 @login_required
 @secure_module
 def meta_webhook_log_detalle(request, sesion_id: int, evento_id: int):
-    """Devuelve el payload crudo de un evento — pedido on demand al abrir
-    el modal, para no saturar el render inicial ni el polling."""
+    """Payload crudo de un evento (on-demand al abrir el modal)."""
     sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
     if not sesion:
         return JsonResponse({'ok': False, 'error': 'sesion_no_encontrada'}, status=404)

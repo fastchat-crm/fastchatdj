@@ -236,13 +236,21 @@ def _accion_meta_plantilla_prueba(request):
 
 
 def _accion_editar(request):
-    """Guarda cambios del modal "Modificar": campos basicos de la sesion."""
+    """Guarda cambios del modal "Modificar": campos basicos de la sesion.
+
+    Responde en formato array (compatible con `static/js/forms.js`):
+    `[{error: bool, message: str, reload?: bool, ...}]`.
+    """
     sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
     if not sesion:
-        return JsonResponse({'error': True, 'message': 'Sesion no encontrada.'})
+        return JsonResponse([{'error': True, 'message': 'Sesion no encontrada.'}], safe=False)
     nombre = (request.POST.get('nombre') or '').strip()
     if not nombre:
-        return JsonResponse({'error': True, 'message': 'El nombre es obligatorio.'})
+        return JsonResponse([{
+            'error': True,
+            'message': 'El nombre es obligatorio.',
+            'form': [{'nombre': 'El nombre es obligatorio.'}],
+        }], safe=False)
     sesion.nombre = nombre
     sesion.modo_bot = request.POST.get('modo_bot') or sesion.modo_bot
     sesion.language = request.POST.get('language') or sesion.language
@@ -260,7 +268,11 @@ def _accion_editar(request):
         sesion.agente_ia = None
     sesion.save()
     log(f"Sesion {sesion.id} editada", request, "change", obj=sesion.id)
-    return JsonResponse({'error': False, 'message': 'Cambios guardados.', 'reload': True})
+    return JsonResponse([{
+        'error': False,
+        'message': 'Cambios guardados.',
+        'reload': True,
+    }], safe=False)
 
 
 _ACCIONES = {
