@@ -1,0 +1,262 @@
+{# Modal "Datos del transporte" — read-only. Muestra info técnica de la
+   conexión Meta / Baileys / Instagram / Messenger sin mezclarla con el
+   form editable. #}
+<div class="detail-wrap">
+    <div class="detail-head">
+        <div>
+            {% if sesion.es_meta %}
+                <h5><i class="fa fa-cloud me-1 text-primary"></i> Datos del transporte (Meta Cloud API)</h5>
+            {% elif sesion.es_baileys %}
+                <h5><i class="fa fa-mobile me-1 text-success"></i> Datos del transporte (Baileys)</h5>
+            {% elif sesion.es_instagram %}
+                <h5><i class="fa-brands fa-instagram me-1" style="color:#e1306c"></i> Datos del transporte (Instagram)</h5>
+            {% elif sesion.es_messenger %}
+                <h5><i class="fa-brands fa-facebook-messenger me-1 text-primary"></i> Datos del transporte (Messenger)</h5>
+            {% else %}
+                <h5>Datos del transporte</h5>
+            {% endif %}
+            <p class="muted">Sesión <b>{{ sesion.nombre|default:sesion.numero|default:sesion.id }}</b> · solo lectura</p>
+        </div>
+        <button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>
+    </div>
+
+    <div class="detail-body">
+
+        {% if sesion.es_meta and config_meta %}
+            <div class="conex-data-block">
+                <div class="conex-data-head">
+                    <i class="fa fa-circle-check text-success me-1"></i>
+                    <span>Identificación Meta Cloud API</span>
+                </div>
+
+                <div class="form-row form-row-two">
+                    <div>
+                        <label>WABA ID</label>
+                        <input type="text" value="{{ config_meta.waba_id|default:'—' }}" readonly>
+                    </div>
+                    <div>
+                        <label>Phone Number ID</label>
+                        <input type="text" value="{{ config_meta.phone_number_id|default:'—' }}" readonly>
+                    </div>
+                </div>
+
+                <div class="form-row form-row-two">
+                    <div>
+                        <label>Número visible</label>
+                        <input type="text" value="{{ config_meta.display_phone_number|default:'—' }}" readonly>
+                    </div>
+                    <div>
+                        <label>Nombre verificado</label>
+                        <input type="text" value="{{ config_meta.verified_name|default:'—' }}" readonly>
+                    </div>
+                </div>
+
+                <div class="form-row form-row-two">
+                    <div>
+                        <label>Quality rating</label>
+                        <input type="text" value="{{ config_meta.get_quality_rating_display }}" readonly
+                               class="conex-rating-{{ config_meta.quality_rating|lower }}">
+                    </div>
+                    <div>
+                        <label>Tier mensajería</label>
+                        <input type="text"
+                               value="{% if config_meta.messaging_limit_tier %}{{ config_meta.get_messaging_limit_tier_display }}{% else %}—{% endif %}"
+                               readonly>
+                    </div>
+                </div>
+            </div>
+
+            <div class="conex-data-block">
+                <div class="conex-data-head">
+                    <i class="fa fa-link text-primary me-1"></i>
+                    <span>Webhook</span>
+                </div>
+
+                <div class="form-row form-row-two">
+                    <div>
+                        <label>Webhook verificado</label>
+                        <input type="text"
+                               value="{% if config_meta.webhook_verificado_en %}{{ config_meta.webhook_verificado_en|date:'d/m/Y H:i' }}{% else %}— pendiente —{% endif %}"
+                               readonly>
+                    </div>
+                    <div>
+                        <label>Última sincronización</label>
+                        <input type="text"
+                               value="{% if config_meta.ultima_sincronizacion %}{{ config_meta.ultima_sincronizacion|date:'d/m/Y H:i' }}{% else %}—{% endif %}"
+                               readonly>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <label>Verify token <small class="muted">(para validar el webhook con Meta)</small></label>
+                    <input type="text"
+                           value="{{ config_meta.webhook_verify_token|default:'' }}"
+                           placeholder="(autogenerado al crear la sesión)" readonly>
+                </div>
+            </div>
+
+            <div class="conex-data-actions">
+                <button type="button" class="conex-btn conex-btn-light btn-sm" id="btn-resync-meta"
+                        data-pk="{{ sesion.id }}"
+                        title="Vuelve a consultar Graph API y refresca display_phone, quality y tier.">
+                    <i class="fa fa-rotate me-1"></i> Resincronizar con Meta
+                </button>
+                <a href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers?asset_id={{ config_meta.waba_id }}{% if config_meta.business_account_id %}&business_id={{ config_meta.business_account_id }}{% endif %}&ir_qe_exposed=1"
+                   target="_blank" rel="noopener" class="conex-btn conex-btn-light btn-sm">
+                    <i class="fa fa-external-link me-1"></i> Abrir en Meta Business
+                </a>
+                <a href="/whatsapp/sesiones/{{ sesion.id }}/diagnostico/"
+                   class="conex-btn conex-btn-light btn-sm">
+                    <i class="fa fa-stethoscope me-1"></i> Diagnóstico completo
+                </a>
+            </div>
+
+        {% elif sesion.es_baileys %}
+            <div class="conex-data-block">
+                <div class="conex-data-head">
+                    <i class="fa fa-mobile text-success me-1"></i>
+                    <span>Datos de WhatsApp Web (Baileys)</span>
+                </div>
+
+                <div class="form-row form-row-two">
+                    <div>
+                        <label>Número</label>
+                        <input type="text" value="{{ sesion.numero|default:'—' }}" readonly>
+                    </div>
+                    <div>
+                        <label>WhatsApp ID</label>
+                        <input type="text" value="{{ sesion.config_baileys.whatsapp_id|default:'—' }}" readonly>
+                    </div>
+                </div>
+
+                <div class="form-row form-row-two">
+                    <div>
+                        <label>Estado</label>
+                        <input type="text" value="{{ sesion.get_estado_display }}" readonly>
+                    </div>
+                    <div>
+                        <label>Contactos sincronizados</label>
+                        <input type="text" value="{{ sesion.config_baileys.contacts_length|default:0 }}" readonly>
+                    </div>
+                </div>
+
+                {% if sesion.config_baileys.desconectado_manualmente %}
+                    <div class="conex-data-warn">
+                        <i class="fa fa-triangle-exclamation me-1"></i>
+                        Esta sesión fue desconectada manualmente. Reconectá desde el botón "Reconectar" del listado.
+                    </div>
+                {% endif %}
+            </div>
+
+        {% elif sesion.es_instagram and config_instagram %}
+            <div class="conex-data-block">
+                <div class="conex-data-head">
+                    <i class="fa-brands fa-instagram me-1" style="color:#e1306c"></i>
+                    <span>Datos de Instagram Graph API</span>
+                </div>
+
+                <div class="form-row form-row-two">
+                    <div>
+                        <label>IG User ID</label>
+                        <input type="text" value="{{ config_instagram.ig_user_id|default:'—' }}" readonly>
+                    </div>
+                    <div>
+                        <label>Username</label>
+                        <input type="text" value="@{{ config_instagram.username|default:'?' }}" readonly>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <label>Última sincronización</label>
+                    <input type="text"
+                           value="{% if config_instagram.ultima_sincronizacion %}{{ config_instagram.ultima_sincronizacion|date:'d/m/Y H:i' }}{% else %}—{% endif %}"
+                           readonly>
+                </div>
+            </div>
+
+        {% elif sesion.es_messenger and config_messenger %}
+            <div class="conex-data-block">
+                <div class="conex-data-head">
+                    <i class="fa-brands fa-facebook-messenger me-1 text-primary"></i>
+                    <span>Datos de Facebook Messenger</span>
+                </div>
+
+                <div class="form-row form-row-two">
+                    <div>
+                        <label>Page ID</label>
+                        <input type="text" value="{{ config_messenger.page_id|default:'—' }}" readonly>
+                    </div>
+                    <div>
+                        <label>Nombre de página</label>
+                        <input type="text" value="{{ config_messenger.page_name|default:'—' }}" readonly>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <label>Última sincronización</label>
+                    <input type="text"
+                           value="{% if config_messenger.ultima_sincronizacion %}{{ config_messenger.ultima_sincronizacion|date:'d/m/Y H:i' }}{% else %}—{% endif %}"
+                           readonly>
+                </div>
+            </div>
+        {% else %}
+            <div class="conex-data-warn">
+                <i class="fa fa-info-circle me-1"></i>
+                Esta sesión no tiene datos de transporte cargados aún.
+            </div>
+        {% endif %}
+
+        <div class="detail-actions">
+            <button type="button" class="conex-btn conex-btn-light" data-cerrar-detail>Cerrar</button>
+        </div>
+    </div>
+</div>
+
+{% if sesion.es_meta and config_meta %}
+<script>
+    (function () {
+        const $btn = document.getElementById('btn-resync-meta');
+        if (!$btn) return;
+        $btn.addEventListener('click', function () {
+            const pk = $btn.dataset.pk;
+            if (!pk) return;
+            const orig = $btn.innerHTML;
+            $btn.disabled = true;
+            $btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Sincronizando...';
+
+            const fd = new FormData();
+            fd.append('action', 'meta_validar');
+            fd.append('id', pk);
+            const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+            if (csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+
+            fetch(window.location.pathname, {
+                method: 'POST', body: fd,
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
+                credentials: 'same-origin',
+            })
+                .then(r => r.json())
+                .then(data => {
+                    $btn.disabled = false;
+                    $btn.innerHTML = orig;
+                    if (window.Swal) {
+                        Swal.fire({
+                            icon: data.error ? 'error' : 'success',
+                            title: data.error ? 'Error' : 'Sincronizado',
+                            text: data.message || 'Datos actualizados desde Meta.',
+                            timer: 1800, showConfirmButton: false,
+                        });
+                    }
+                    if (!data.error && typeof window.refrescarCardSesion === 'function') {
+                        window.refrescarCardSesion(pk);
+                    }
+                })
+                .catch(() => {
+                    $btn.disabled = false;
+                    $btn.innerHTML = orig;
+                    alert('Error de red al sincronizar.');
+                });
+        });
+    })();
+</script>
+{% endif %}

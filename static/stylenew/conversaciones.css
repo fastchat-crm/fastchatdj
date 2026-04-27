@@ -1,0 +1,88 @@
+/* ============================================================
+   Conversaciones — sidebar items + estados
+   /whatsapp/conversaciones/
+   ──────────────────────────────────────────────────────────
+   Antes vivía inline dentro de conversacion_item.html, lo que
+   duplicaba el bloque <style> N veces (una por cada conv listada)
+   en cada respuesta del partial. Movido acá: 1 sola descarga,
+   cacheado por el browser.
+   ============================================================ */
+
+.estado-contacto {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 12px;
+    height: 12px;
+    border-width: 2px;
+    border-style: solid;
+}
+
+/* Contenedor responsivo */
+.conversacion-item {
+    position: relative;
+    overflow: hidden;
+}
+
+.conversacion-content {
+    min-width: 0;
+    flex: 1;
+}
+
+.conversacion-header {
+    min-width: 0;
+}
+
+/* Badge de contador posicionado abajo a la derecha */
+.mensaje-badge-container {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    z-index: 2;
+}
+.mensaje-badge {
+    min-width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+    line-height: 1;
+}
+
+/* Mensaje debajo de la imagen */
+.mensaje-abajo {
+    margin-top: 0.5rem;
+    padding-right: 45px; /* Espacio para el badge */
+}
+
+/* Fecha último mensaje arriba a la derecha */
+.conversacion-fecha {
+    position: absolute !important;
+    top: 8px;
+    right: 8px;
+    z-index: 1;
+}
+
+@media (max-width: 576px) {
+    .conversacion-header {
+        flex-direction: column;
+        align-items: flex-start !important;
+    }
+    .conversacion-fecha {
+        position: absolute !important;
+        top: 6px;
+        right: 6px;
+        align-self: auto !important;
+        margin-top: 0;
+    }
+    .mensaje-badge {
+        font-size: 0.65rem;
+        min-width: 18px;
+        height: 18px;
+    }
+    .mensaje-abajo {
+        padding-right: 40px;
+    }
+}
