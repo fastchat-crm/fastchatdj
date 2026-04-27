@@ -63,7 +63,9 @@
       "Bash(git mv *)",
       "Bash(PYTHONIOENCODING=utf-8 python manage.py seed_centro_estudiantil --reset)",
       "Bash(PYTHONIOENCODING=utf-8 python manage.py seed_ru --reset)",
-      "Bash(PYTHONIOENCODING=utf-8 python manage.py seed_modulos)"
+      "Bash(PYTHONIOENCODING=utf-8 python manage.py seed_modulos)",
+      "Bash(PYTHONIOENCODING=utf-8 python manage.py makemigrations whatsapp)",
+      "Bash(PYTHONIOENCODING=utf-8 python manage.py migrate whatsapp)"
     ]
   },
   "hooks": {

@@ -1048,6 +1048,11 @@ ETAPAS_TRAZA = (
     ('ws_respuesta',    '[WS] Respuesta entregada'),
     ('ws_sin_agente',   '[WS] Agente no encontrado'),
     ('ws_error',        '[WS] Error procesando solicitud'),
+    # Eventos del chatbot tradicional (motor de flujo)
+    ('chatbot_ruteo',   '[Chatbot] Ruteo a departamento'),
+    ('chatbot_http',    '[Chatbot] Llamada HTTP del flujo'),
+    ('chatbot_nodo',    '[Chatbot] Transición de nodo'),
+    ('chatbot_error',   '[Chatbot] Error en el flujo'),
 )
 
 NIVELES_TRAZA = (

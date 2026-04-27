@@ -31,17 +31,19 @@
             </div>
         {% endfor %}
     </div>
+    {% verbatim %}
     <script>
     (function () {
         if (!window.JsonPretty) return;
         document.querySelectorAll('[data-trace-detalle]').forEach(function (el) {
-            // textContent ya viene escapado por Django (el {{ }} escapa por
-            // defecto). Pasamos el texto crudo a JsonPretty.format que decide
+            // textContent ya viene escapado por Django (las llaves dobles escapan
+            // por defecto). Pasamos el texto crudo a JsonPretty.format que decide
             // si formatear como JSON o dejar como pre raw.
             el.innerHTML = JsonPretty.format(el.textContent);
         });
     })();
     </script>
+    {% endverbatim %}
 {% else %}
     <div class="text-center text-muted py-4">
         <i class="fa-solid fa-inbox fa-2x mb-2"></i>

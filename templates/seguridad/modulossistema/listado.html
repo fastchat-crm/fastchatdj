@@ -1,4 +1,7 @@
 {% extends 'base.html' %}
+{% block head %}
+    <link rel="stylesheet" href="/static/stylenew/modulossistema.css">
+{% endblock %}
 {% block content %}
 
     <div class="card mb-3">
@@ -58,7 +61,10 @@
                     {% for mod in listado %}
                         <tr>
                             <td class="text-center">{{ mod.id }}</td>
-                            <td class="text-center">{{ mod.orden }}</td>
+                            <td class="text-center">
+                                <input type="number" class="form-control form-control-sm orden-input"
+                                       ida="{{ mod.id }}" vl="{{ mod.orden }}" value="{{ mod.orden }}" step="1">
+                            </td>
                             <td class="text-center">{{ mod.nombre }}</td>
                             <td class="text-center">
                                 <a href="{{ mod.url }}" target="_blank" class="text-primary">{{ mod.url }}</a>
@@ -198,6 +204,45 @@
                     dataType: "json"
                 });
             }
+        });
+
+        $(document).on('change blur', '.orden-input', function () {
+            var elemento = $(this);
+            var id = elemento.attr('ida');
+            var prev = elemento.attr('vl');
+            var texto = elemento.val();
+            if (texto === '' || isNaN(parseInt(texto))) {
+                elemento.val(prev);
+                return;
+            }
+            if (prev == texto) return;
+            pantallaespera();
+            $.ajax({
+                type: 'POST',
+                url: '{{ ruta }}',
+                data: {
+                    csrfmiddlewaretoken: '{{ csrf_token }}',
+                    action: 'act_orden',
+                    id: id,
+                    valor: texto
+                },
+                success: function (data) {
+                    $.unblockUI();
+                    if (data.result === true) {
+                        elemento.attr('vl', data.orden);
+                        location.reload();
+                    } else {
+                        elemento.val(prev);
+                        mensajeWarning(data.mensaje || 'Error al guardar');
+                    }
+                },
+                error: function () {
+                    $.unblockUI();
+                    elemento.val(prev);
+                    mensajeWarning('Error de conexión.');
+                },
+                dataType: 'json'
+            });
         });
 
         function eliminarajax(pk, nombre, accion, dict_url_vars = "", titulo = `Estas a punto de eliminar este registro ${nombre}`) {

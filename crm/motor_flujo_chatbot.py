@@ -27,6 +27,7 @@ Entry point:
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import re
 import time as _time
@@ -226,10 +227,14 @@ def _aplicar_credencial(cred, headers: dict, query: dict) -> None:
         headers.update(s.get('headers') or {})
 
 
-def ejecutar_http(nodo, contexto: dict):
+def ejecutar_http(nodo, contexto: dict, _traza_extra: Optional[dict] = None):
     """
     Ejecuta un nodo `http`.
     Devuelve (etiqueta, body, status_code, error_str) con etiqueta ∈ {'ok','error'}.
+
+    Si se pasa `_traza_extra` (dict), lo rellena in-place con info de la
+    request/response: url, metodo, request_body, response_body — útil para
+    persistir en TrazaMensajeIA y diagnosticar.
     """
     ep = nodo.endpoint
     if ep is None:
@@ -244,6 +249,12 @@ def ejecutar_http(nodo, contexto: dict):
     headers = dict(ep.headers_default or {})
     _aplicar_credencial(ep.credencial, headers, query)
 
+    if _traza_extra is not None:
+        _traza_extra.update({
+            'url': url, 'metodo': metodo,
+            'query': query, 'request_body': body,
+        })
+
     try:
         resp = requests.request(
             metodo, url,
@@ -253,12 +264,17 @@ def ejecutar_http(nodo, contexto: dict):
             timeout=ep.timeout_seg or 15,
         )
     except requests.RequestException as e:
+        if _traza_extra is not None:
+            _traza_extra['exception'] = str(e)
         return ('error', None, 0, str(e))
 
     try:
         parsed = resp.json()
     except ValueError:
         parsed = {'_raw': resp.text}
+
+    if _traza_extra is not None:
+        _traza_extra['response_body'] = parsed
 
     if 200 <= resp.status_code < 300:
         # Convención común: API responde 200 con `success/result: false` para
@@ -310,6 +326,49 @@ class MotorFlujo:
             'detalle': detalle or {},
             'ts_ms': int((_time.time() - self._trace_t0) * 1000),
         })
+
+    def _traza_db(self, etapa_db: str, label: str, ok: bool, detalle: Optional[dict] = None,
+                  latencia_ms: Optional[int] = None):
+        """Persiste un evento al modelo TrazaMensajeIA.
+
+        Solo se llama para eventos importantes (http, ruteo, errores) — no para
+        cada transición de nodo. La idea es que /whatsapp/trazas/ refleje el
+        flujo del chatbot tradicional igual que el del pipeline IA.
+        """
+        try:
+            from whatsapp.models import TrazaMensajeIA
+            nivel = 'info' if ok else 'error'
+            partes = [label]
+            if detalle:
+                # Serializa el detalle pero acota el body de la response a 1500
+                # chars para que la fila no se vuelva enorme.
+                d = dict(detalle)
+                rb = d.get('response_body')
+                if rb is not None:
+                    try:
+                        rb_str = json.dumps(rb, ensure_ascii=False)
+                    except (TypeError, ValueError):
+                        rb_str = str(rb)
+                    d['response_body'] = rb_str[:1500] + ('…' if len(rb_str) > 1500 else '')
+                qb = d.get('request_body')
+                if qb is not None:
+                    try:
+                        qb_str = json.dumps(qb, ensure_ascii=False)
+                    except (TypeError, ValueError):
+                        qb_str = str(qb)
+                    d['request_body'] = qb_str[:500] + ('…' if len(qb_str) > 500 else '')
+                partes.append(json.dumps(d, ensure_ascii=False, default=str))
+            TrazaMensajeIA.objects.create(
+                sesion=self.session,
+                conversacion=self.conversation,
+                numero=self.contacto.from_number,
+                etapa=etapa_db,
+                nivel=nivel,
+                detalle=' | '.join(partes)[:4000],
+                latencia_ms=latencia_ms,
+            )
+        except Exception:
+            logger.exception('Error persistiendo traza chatbot')
 
     # ── Contexto de expresiones ──────────────────────────────────────
 
@@ -622,6 +681,16 @@ class MotorFlujo:
             self._trace('ruteo', f'Departamento elegido: {depto.nombre}', True,
                         {'departamento_id': depto.id, 'nombre': depto.nombre,
                          'es_default': bool(getattr(depto, 'es_default', False))})
+            self._traza_db(
+                etapa_db='chatbot_ruteo',
+                label=f'Departamento elegido: {depto.nombre}',
+                ok=True,
+                detalle={
+                    'departamento_id': depto.id,
+                    'es_default': bool(getattr(depto, 'es_default', False)),
+                    'texto_entrada': self.texto[:120],
+                },
+            )
             self.estado.departamento = depto
             if depto.mensaje_saludo:
                 self.enviar(depto.mensaje_saludo)
@@ -935,9 +1004,26 @@ class MotorFlujo:
             return ''
 
         if tipo == 'http':
-            etq, body, status, err = ejecutar_http(nodo, self.contexto())
+            traza_extra = {}
+            t0 = _time.time()
+            etq, body, status, err = ejecutar_http(nodo, self.contexto(), _traza_extra=traza_extra)
+            latencia_ms = int((_time.time() - t0) * 1000)
             self._trace('http', f'Llamada HTTP → {status or "sin respuesta"}',
                         etq == 'ok', {'status': status, 'error': err[:200] if err else ''})
+            # Persistir a TrazaMensajeIA para inspección posterior en /whatsapp/trazas/
+            self._traza_db(
+                etapa_db='chatbot_http',
+                label=f'{traza_extra.get("metodo", "?")} {traza_extra.get("url", "?")} → HTTP {status} ({etq})',
+                ok=(etq == 'ok'),
+                detalle={
+                    'nodo': nodo.nombre,
+                    'request_body': traza_extra.get('request_body'),
+                    'query': traza_extra.get('query'),
+                    'response_body': traza_extra.get('response_body'),
+                    'error': err,
+                },
+                latencia_ms=latencia_ms,
+            )
             self.estado.set_variable('_last_http', {'status': status, 'error': err})
             for ex in (cfg.get('extraer') or []):
                 if etq == 'ok' and ex.get('variable'):

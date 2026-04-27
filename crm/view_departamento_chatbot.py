@@ -244,11 +244,24 @@ def departamentoChatbotsView(request):
                         if not opcion:
                             return JsonResponse({'result': False, 'message': 'Nodo no encontrado'})
                         cfg = opcion.config or {}
+                        # Padres posibles: nodos del mismo depto excluyendo self
+                        # y todo el sub-árbol (anti-ciclo).
+                        descendientes_ids = set()
+                        pendientes = [opcion]
+                        while pendientes:
+                            n = pendientes.pop()
+                            descendientes_ids.add(n.pk)
+                            for h in n.subopciones.filter(status=True):
+                                pendientes.append(h)
+                        padres_disponibles = OpcionDepartamentoChatBot.objects.filter(
+                            departamento=opcion.departamento, status=True,
+                        ).exclude(pk__in=descendientes_ids).order_by('orden', 'nombre')
                         contexto.update({
                             'opcion': opcion,
                             'es_nuevo': False,
                             'departamento_id': opcion.departamento_id,
                             'parent_id': opcion.opcion_padre_id or 0,
+                            'padres_disponibles': padres_disponibles,
                             'config_json_str': json.dumps(cfg, indent=2, ensure_ascii=False),
                             # Sub-piezas serializadas para los inputs específicos del form HTTP.
                             'http_query_json_str':   json.dumps(cfg.get('query') or {}, indent=2, ensure_ascii=False) if cfg.get('query') else '',
@@ -257,11 +270,15 @@ def departamentoChatbotsView(request):
                             'http_extraer_json_str': json.dumps(cfg.get('extraer') or [], indent=2, ensure_ascii=False) if cfg.get('extraer') else '',
                         })
                     else:
+                        padres_disponibles = OpcionDepartamentoChatBot.objects.filter(
+                            departamento_id=dep_id, status=True,
+                        ).order_by('orden', 'nombre')
                         contexto.update({
                             'opcion': None,
                             'es_nuevo': True,
                             'departamento_id': dep_id,
                             'parent_id': parent_id,
+                            'padres_disponibles': padres_disponibles,
                             'config_json_str': '{}',
                             'http_query_json_str': '',
                             'http_body_json_str': '',
@@ -1021,9 +1038,19 @@ def _guardar_opcion(request):
     parent_id = request.POST.get('parent_id') or ''
     if parent_id and parent_id not in ('0', 'null', 'none'):
         try:
-            opcion.opcion_padre = OpcionDepartamentoChatBot.objects.filter(
+            padre_nuevo = OpcionDepartamentoChatBot.objects.filter(
                 pk=int(parent_id), departamento=dep, status=True,
             ).first()
+            if padre_nuevo:
+                if padre_nuevo.pk == opcion.pk:
+                    return JsonResponse({'ok': False, 'error': 'Un nodo no puede ser su propio padre'})
+                # Anti-ciclo (solo aplica si el nodo ya existe; al crear no hay descendientes).
+                if opcion.pk and _es_descendiente(opcion, padre_nuevo):
+                    return JsonResponse({
+                        'ok': False,
+                        'error': f'Ciclo: "{padre_nuevo.nombre}" es descendiente de este nodo.',
+                    })
+            opcion.opcion_padre = padre_nuevo
         except (TypeError, ValueError):
             opcion.opcion_padre = None
     else:
@@ -1226,6 +1253,23 @@ def _eliminar_opcion(request):
     return JsonResponse({'ok': True, 'eliminados': eliminados})
 
 
+def _es_descendiente(ancestro, candidato):
+    """¿`candidato` está en el sub-árbol de `ancestro`? Detecta ciclos
+    al cambiar el padre de un nodo."""
+    visitados = set()
+    pendientes = [ancestro]
+    while pendientes:
+        n = pendientes.pop()
+        if n.pk in visitados:
+            continue
+        visitados.add(n.pk)
+        for hijo in n.subopciones.filter(status=True):
+            if hijo.pk == candidato.pk:
+                return True
+            pendientes.append(hijo)
+    return False
+
+
 def _mover_opcion(request):
     """action=mover_opcion. Reordena un nodo y/o cambia su padre.
     parent_id puede venir vacio para nodo raiz."""
@@ -1246,6 +1290,12 @@ def _mover_opcion(request):
             ).first()
             if padre and padre.pk == opcion.pk:
                 return JsonResponse({'ok': False, 'error': 'Un nodo no puede ser su propio padre'})
+            # Anti-ciclo: el nuevo padre no puede estar dentro del sub-árbol del nodo.
+            if padre and _es_descendiente(opcion, padre):
+                return JsonResponse({
+                    'ok': False,
+                    'error': f'Ciclo detectado: "{padre.nombre}" es descendiente de "{opcion.nombre}".',
+                })
             opcion.opcion_padre = padre
         except (TypeError, ValueError):
             opcion.opcion_padre = None

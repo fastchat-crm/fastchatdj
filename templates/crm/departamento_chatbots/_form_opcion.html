@@ -1,6 +1,5 @@
 <input type="hidden" name="opcion_id" value="{{ opcion.id|default:0 }}">
 <input type="hidden" name="departamento_id" value="{{ departamento_id }}">
-<input type="hidden" name="parent_id" value="{{ parent_id|default:0 }}">
 
 {% if es_nuevo %}
     {% if parent_id and parent_id != 0 %}
@@ -80,6 +79,28 @@
                 Es nodo de inicio del flujo
             </label>
         </div>
+    </div>
+
+    {# Selector de padre — alternativa al drag-and-drop para mover nodos entre niveles #}
+    <div class="col-md-12">
+        <label class="form-label small fw-bold mb-1">
+            <i class="fa fa-sitemap text-muted me-1"></i>
+            Padre (cuelga de…)
+        </label>
+        <select name="parent_id" class="form-select form-select-sm">
+            <option value="0" {% if not parent_id or parent_id == 0 %}selected{% endif %}>
+                — Sin padre (nodo raíz) —
+            </option>
+            {% for p in padres_disponibles %}
+                <option value="{{ p.id }}" {% if parent_id == p.id %}selected{% endif %}>
+                    {{ p.nombre|default:'(sin nombre)' }} · #{{ p.id }} · {{ p.get_tipo_nodo_display }}
+                </option>
+            {% endfor %}
+        </select>
+        <small class="text-muted">
+            Mover este nodo bajo otro padre. Auto-excluye descendientes para evitar ciclos.
+            También podés arrastrar la card en el árbol — esto es un fallback explícito.
+        </small>
     </div>
 
     {# Bloque CTA URL — visible solo cuando tipo=cta_url #}

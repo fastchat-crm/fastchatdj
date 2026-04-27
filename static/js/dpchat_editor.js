@@ -380,7 +380,7 @@
         }
     }
 
-    /* ────────────── Sortable (reordenar nodos del mismo padre) ────────────── */
+    /* ────────────── Sortable (reordenar + cambiar padre por drop) ────────────── */
     function wireSortable() {
         var container = $('#dp-tree');
         if (!container) return;
@@ -389,40 +389,61 @@
         container._sortable = new Sortable(container, {
             handle: '.dp-drag-handle',
             animation: 140,
-            // Bloquea drops entre nodos de distinto padre — sólo reordenamos hermanos.
-            // Para mover un nodo a otro padre, usar el modal "Editar" (TODO: campo padre).
-            onMove: function (evt) {
-                var dragged = evt.dragged;
-                var related = evt.related;
-                if (!related) return true;
-                return dragged.getAttribute('data-padre') === related.getAttribute('data-padre');
-            },
-            onEnd: function () {
-                // Recalcula orden por nodo (solo entre hermanos del mismo padre)
-                // El render server-side mezcla profundidades; para reordenar seguro
-                // solo aceptamos drops que mantengan el padre del nodo movido.
-                var cards = $$('.dp-node-card', container);
-                // Agrupar por padre
-                var groups = {};
-                cards.forEach(function (c) {
-                    var p = c.getAttribute('data-padre') || 'root';
-                    (groups[p] = groups[p] || []).push(c);
-                });
-                Object.keys(groups).forEach(function (k) {
-                    groups[k].forEach(function (c, idx) {
-                        var id = parseInt(c.getAttribute('data-id'), 10);
-                        if (!id) return;
-                        // Solo postear si el orden cambió respecto al inicial
-                        var ordenActual = idx;
-                        if (c._ordenInicial !== ordenActual) {
-                            postAction('mover_opcion', {
-                                opcion_id: id,
-                                parent_id: c.getAttribute('data-padre') || 0,
-                                orden: ordenActual,
-                            });
-                            c._ordenInicial = ordenActual;
+            // Permitimos drops en cualquier posición; el padre se infiere por
+            // la card anterior tras el drop (ver onEnd). El backend valida ciclos.
+            onEnd: function (evt) {
+                var moved = evt.item;
+                var movedId = parseInt(moved.getAttribute('data-id'), 10);
+                if (!movedId) return;
+
+                // Nuevo padre = padre de la card anterior (ya que tras el drop,
+                // el nodo movido se inserta como sibling del que lo precede).
+                // Si no hay anterior, el nodo queda en raíz.
+                var prev = moved.previousElementSibling;
+                while (prev && !prev.classList.contains('dp-node-card')) {
+                    prev = prev.previousElementSibling;
+                }
+                var newParent = prev ? (prev.getAttribute('data-padre') || '') : '';
+                var oldParent = moved.getAttribute('data-padre') || '';
+                moved.setAttribute('data-padre', newParent);
+
+                // Calcula nuevo orden dentro del grupo de hermanos.
+                var hermanos = $$('.dp-node-card[data-padre="' + (newParent || '') + '"]', container);
+                var newOrden = hermanos.indexOf(moved);
+
+                postAction('mover_opcion', {
+                    opcion_id: movedId,
+                    parent_id: newParent || 0,
+                    orden: newOrden,
+                }).then(function (resp) {
+                    if (!resp || !resp.ok) {
+                        // Backend rechazó (ej. ciclo). Revertir DOM y avisar.
+                        moved.setAttribute('data-padre', oldParent);
+                        if (window.mensajeWarning) {
+                            mensajeWarning((resp && resp.error) || 'No se pudo mover el nodo.');
+                        } else {
+                            alert((resp && resp.error) || 'No se pudo mover el nodo.');
                         }
-                    });
+                        // Re-fetch del árbol para resincronizar.
+                        location.reload();
+                        return;
+                    }
+                    // Si cambió el padre, re-render para que la indentación
+                    // refleje el nuevo nivel; si solo fue reorden de hermanos,
+                    // los datos ya son consistentes.
+                    if (oldParent !== newParent) {
+                        location.reload();
+                    } else {
+                        // Solo reorden — actualiza órdenes de todos los hermanos
+                        // afectados para que el siguiente drag empiece limpio.
+                        hermanos.forEach(function (c, idx) {
+                            var hid = parseInt(c.getAttribute('data-id'), 10);
+                            if (!hid || hid === movedId) return;
+                            postAction('mover_opcion', {
+                                opcion_id: hid, parent_id: newParent || 0, orden: idx,
+                            });
+                        });
+                    }
                 });
             },
         });
