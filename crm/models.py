@@ -1142,17 +1142,12 @@ class OpcionDepartamentoChatBot(ModeloBase):
     `{{response.body.data[0].nombre}}`. El motor las resuelve al ejecutar.
     """
     TIPOS_NODO = [
-        ('inicio',       'Inicio'),
-        ('menu',         'Menú de opciones'),
-        ('respuesta',    'Enviar respuesta'),
-        ('pregunta',     'Capturar entrada del usuario'),
-        ('http',         'Llamada HTTP (API externa)'),
-        ('condicional',  'If / Else'),
-        ('switch',       'Switch por valor'),
-        ('set_variable', 'Definir variable(s)'),
-        ('handoff',      'Transferir a humano'),
-        ('esperar',      'Esperar (delay)'),
-        ('fin',          'Fin de conversación'),
+        ('menu',      'Menú con botones'),
+        ('respuesta', 'Respuesta de texto'),
+        ('cta_url',   'Botón con URL externa'),
+        ('ubicacion', 'Ubicación / Mapa'),
+        ('handoff',   'Transferir a humano'),
+        ('fin',       'Fin de conversación'),
     ]
     VALIDACIONES = [
         ('none',   'Sin validación'),
