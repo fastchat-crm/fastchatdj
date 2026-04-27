@@ -29,9 +29,23 @@
 {% endif %}
 
 {% if arbol_anidado %}
+    <div class="dp-diag-toolbar mb-2">
+        <div class="btn-group btn-group-sm" role="group" id="dp-diag-orientacion">
+            <button type="button" class="btn btn-outline-secondary active" data-orient="horizontal">
+                <i class="fa fa-arrows-left-right me-1"></i> Horizontal
+            </button>
+            <button type="button" class="btn btn-outline-secondary" data-orient="vertical">
+                <i class="fa fa-arrows-up-down me-1"></i> Vertical
+            </button>
+        </div>
+        <small class="text-muted ms-2">
+            <i class="fa fa-info-circle"></i>
+            Vertical es más cómodo en pantallas pequeñas.
+        </small>
+    </div>
     <div class="card">
         <div class="card-body p-2">
-            <div class="dp-tree-decision-wrap">
+            <div class="dp-tree-decision-wrap" id="dp-tree-wrap">
                 <ul class="dp-tree-decision">
                     {% for nodo in arbol_anidado %}
                         {% include "crm/departamento_chatbots/_diagrama_node.html" with nodo=nodo %}
@@ -40,9 +54,26 @@
             </div>
         </div>
     </div>
-    <div class="text-muted small mt-2">
-        <i class="fa fa-info-circle me-1"></i>
-        Arrastrá horizontalmente si el árbol es más ancho que la pantalla.
+
+    {# Modal: ficha completa de un nodo del diagrama #}
+    <div class="modal fade" id="dpDiagFichaModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">
+                        <i class="fa fa-id-card text-info me-1"></i>
+                        Ficha del nodo
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="dp-diag-ficha-content">Cargando…</div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
     </div>
 {% else %}
     <div class="card">
@@ -55,4 +86,103 @@
         </div>
     </div>
 {% endif %}
+{% endblock %}
+
+{% block jscript %}
+<script>
+(function () {
+    'use strict';
+    var DEP_ID = {{ filtro.pk }};
+
+    document.querySelectorAll('#dp-diag-orientacion button').forEach(function (b) {
+        b.addEventListener('click', function () {
+            document.querySelectorAll('#dp-diag-orientacion button').forEach(function (x) {
+                x.classList.remove('active');
+            });
+            b.classList.add('active');
+            var wrap = document.getElementById('dp-tree-wrap');
+            if (b.getAttribute('data-orient') === 'vertical') wrap.classList.add('dp-tree-vertical');
+            else wrap.classList.remove('dp-tree-vertical');
+        });
+    });
+
+    if (window.innerWidth < 992) {
+        var btnV = document.querySelector('#dp-diag-orientacion button[data-orient="vertical"]');
+        if (btnV) btnV.click();
+    }
+
+    document.body.addEventListener('click', function (ev) {
+        var btn = ev.target.closest('[data-act="ver-ficha-nodo"]');
+        if (!btn) return;
+        var nid = parseInt(btn.getAttribute('data-nodo-id'), 10);
+        if (!nid) return;
+
+        var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('dpDiagFichaModal'));
+        var box = document.getElementById('dp-diag-ficha-content');
+        box.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Cargando…';
+        modal.show();
+
+        fetch('/crm/departamentos_chatbots/?action=exportar_flujo_json&id=' + DEP_ID, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        }).then(function (r) { return r.json(); }).then(function (resp) {
+            if (!resp.result) {
+                box.innerHTML = '<div class="alert alert-danger">' + (resp.message || 'Error') + '</div>';
+                return;
+            }
+            var n = (resp.data.nodos || []).find(function (x) { return x.id === nid; });
+            if (!n) {
+                box.innerHTML = '<div class="alert alert-warning">Nodo no encontrado.</div>';
+                return;
+            }
+            box.innerHTML = renderFichaUnNodo(n, resp.data);
+        }).catch(function (e) {
+            box.innerHTML = '<div class="alert alert-danger">Error: ' + e.message + '</div>';
+        });
+    });
+
+    function escHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function renderFichaUnNodo(n, data) {
+        var cfg = n.config || {};
+        var ep = (data.endpoints || []).find(function (e) { return e.id === n.endpoint_id; });
+        var html = '<div class="dp-ficha-nodo dp-ficha-tipo-' + escHtml(n.tipo_nodo) + '">'
+                 +   '<div class="dp-ficha-nodo-head">'
+                 +     '<span class="badge dp-ficha-badge-' + escHtml(n.tipo_nodo) + '">'
+                 +     escHtml(n.tipo_nodo) + '</span> '
+                 +     '<strong>' + escHtml(n.nombre) + '</strong> '
+                 +     '<small class="text-muted">#' + n.id + ' · orden ' + n.orden + '</small>'
+                 +   '</div>'
+                 +   '<div class="dp-ficha-nodo-body mt-2">';
+        if (n.tipo_nodo === 'http' && ep) {
+            html += '<div><span class="badge bg-primary">' + escHtml(cfg.metodo || 'GET')
+                 +   '</span> <code>' + escHtml(ep.base_url + (cfg.path || '')) + '</code></div>';
+            html += '<div class="mt-1"><strong>Endpoint:</strong> ' + escHtml(ep.nombre)
+                 +   ' · timeout ' + ep.timeout_seg + 's</div>';
+        }
+        html += '<pre class="dp-json-pre mt-2" style="font-size:.72rem;max-height:400px;">'
+             + escHtml(JSON.stringify(n, null, 2)) + '</pre>';
+
+        var salidas = (data.conexiones || []).filter(function (c) { return c.origen_id === n.id; });
+        if (salidas.length) {
+            html += '<div class="mt-2"><strong>→ Salidas:</strong></div><ul>';
+            salidas.forEach(function (c) {
+                html += '<li><code>' + escHtml(c.etiqueta || '(default)') + '</code> → '
+                     + '#' + c.destino_id + ' ' + escHtml(c.destino_nombre) + '</li>';
+            });
+            html += '</ul>';
+        }
+
+        html += '<div class="mt-2"><a class="btn btn-sm btn-primary" '
+             +   'href="/crm/departamentos_chatbots/?action=change&id='
+             +   data.departamento.id + '&full=1#nodo-' + n.id + '">'
+             +   '<i class="fa fa-pen me-1"></i> Editar este nodo</a></div>';
+        html += '</div></div>';
+        return html;
+    }
+})();
+</script>
 {% endblock %}

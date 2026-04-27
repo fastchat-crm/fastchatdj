@@ -16,12 +16,153 @@
                 {{ op.nombre|default:'(sin nombre)' }}
                 <span class="dp-node-id-badge">#{{ op.id }}</span>
             </div>
-            {% if op.respuesta %}
+
+            {# ── HTTP: URL completa, método, request body, extraer ── #}
+            {% if op.tipo_nodo == 'http' %}
+                <div class="dp-node-http">
+                    <div class="dp-http-line">
+                        <span class="dp-http-method dp-method-{{ op.config.metodo|lower|default:'get' }}">
+                            {{ op.config.metodo|default:'GET' }}
+                        </span>
+                        {% if op.endpoint %}
+                            <code class="dp-http-url">{{ op.endpoint.base_url }}{{ op.config.path|default:'' }}</code>
+                        {% else %}
+                            <code class="dp-http-url text-danger">⚠️ Sin endpoint</code>
+                        {% endif %}
+                    </div>
+                    {% if op.endpoint %}
+                        <div class="dp-http-meta">
+                            <i class="fa fa-key text-info me-1" title="Credencial"></i>
+                            {% if op.endpoint.credencial %}
+                                {{ op.endpoint.credencial.nombre }}
+                                <span class="text-muted">({{ op.endpoint.credencial.get_tipo_display }})</span>
+                            {% else %}
+                                <span class="text-muted">— Sin auth —</span>
+                            {% endif %}
+                            · timeout {{ op.endpoint.timeout_seg }}s
+                        </div>
+                    {% endif %}
+                    {% if op.config.query %}
+                        <div class="dp-http-meta">
+                            <strong>query:</strong>
+                            {% for k, v in op.config.query.items %}
+                                <code class="dp-http-pair">{{ k }}={{ v|truncatechars:30 }}</code>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    {% if op.config.body %}
+                        <div class="dp-http-meta">
+                            <strong>body:</strong>
+                            <code class="dp-http-pair">{{ op.config.body|truncatechars:80 }}</code>
+                        </div>
+                    {% endif %}
+                    {% if op.config.extraer %}
+                        <div class="dp-http-meta">
+                            <strong>extrae {{ op.config.extraer|length }} var{{ op.config.extraer|length|pluralize }}:</strong>
+                            {% for ex in op.config.extraer %}
+                                <code class="dp-http-extract"
+                                      title="jsonpath: {{ ex.jsonpath }}">${{ ex.variable }}</code>{% if not forloop.last %} {% endif %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    {% if op.config.plantilla_respuesta %}
+                        <div class="dp-node-preview">
+                            <i class="fa fa-quote-left me-1"></i>
+                            {{ op.config.plantilla_respuesta|truncatechars:120 }}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            {# ── PREGUNTA: pregunta + variable destino + validación ── #}
+            {% if op.tipo_nodo == 'pregunta' %}
+                <div class="dp-node-preview">
+                    <i class="fa fa-question-circle me-1"></i>
+                    {{ op.config.pregunta|default:op.respuesta|truncatechars:140 }}
+                </div>
+                <div class="dp-http-meta">
+                    {% if op.variable_destino %}
+                        <strong>captura en:</strong> <code>${{ op.variable_destino }}</code>
+                    {% endif %}
+                    {% if op.validacion_tipo and op.validacion_tipo != 'none' %}
+                        · valida: <span class="badge bg-warning text-dark">{{ op.get_validacion_tipo_display }}</span>
+                    {% endif %}
+                    · {{ op.reintentos_max }} reintentos
+                </div>
+            {% endif %}
+
+            {# ── CONDICIONAL: operador + condiciones ── #}
+            {% if op.tipo_nodo == 'condicional' %}
+                <div class="dp-http-meta">
+                    <strong>{{ op.config.operador|default:'and'|upper }}</strong>
+                    {% for c in op.config.condiciones %}
+                        <code class="dp-http-pair">{{ c.izq }} {{ c.op }} {{ c.der|default:'""' }}</code>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {# ── SET_VARIABLE: variables asignadas ── #}
+            {% if op.tipo_nodo == 'set_variable' %}
+                <div class="dp-http-meta">
+                    <strong>asigna:</strong>
+                    {% for a in op.config.asignaciones %}
+                        <code class="dp-http-pair">${{ a.variable }} = {{ a.expresion|default:'""'|truncatechars:30 }}</code>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {# ── MENU: cantidad de opciones + previa de las primeras 3 ── #}
+            {% if op.tipo_nodo == 'menu' and op.config.opciones %}
+                <div class="dp-http-meta">
+                    <strong>{{ op.config.opciones|length }} opcion{{ op.config.opciones|length|pluralize:"es" }}:</strong>
+                    {% for opt in op.config.opciones|slice:":4" %}
+                        <code class="dp-http-pair">{{ opt.etiqueta|truncatechars:24 }}→{{ opt.salida }}</code>
+                    {% endfor %}
+                    {% if op.config.opciones|length > 4 %}
+                        <span class="text-muted">· +{{ op.config.opciones|length|add:"-4" }} más</span>
+                    {% endif %}
+                </div>
+                {% if op.config.mensaje %}
+                    <div class="dp-node-preview">
+                        <i class="fa fa-quote-left me-1"></i>
+                        {{ op.config.mensaje|truncatechars:120 }}
+                    </div>
+                {% endif %}
+            {% endif %}
+
+            {# ── RESPUESTA: muestra mensaje (config.mensaje O respuesta) ── #}
+            {% if op.tipo_nodo == 'respuesta' %}
+                {% if op.config.mensaje %}
+                    <div class="dp-node-preview">
+                        <i class="fa fa-quote-left me-1"></i>
+                        {{ op.config.mensaje|truncatechars:160 }}
+                    </div>
+                {% elif op.respuesta %}
+                    <div class="dp-node-preview">
+                        <i class="fa fa-quote-left me-1"></i>
+                        {{ op.respuesta|truncatechars:160 }}
+                    </div>
+                {% endif %}
+            {% endif %}
+
+            {# ── FIN / HANDOFF: muestra mensaje del config ── #}
+            {% if op.tipo_nodo == 'fin' or op.tipo_nodo == 'handoff' %}
+                {% if op.config.mensaje %}
+                    <div class="dp-node-preview">
+                        <i class="fa fa-quote-left me-1"></i>
+                        {{ op.config.mensaje|truncatechars:140 }}
+                    </div>
+                {% endif %}
+            {% endif %}
+
+            {# ── Fallback genérico para tipos sin sección específica ── #}
+            {% if op.respuesta and op.tipo_nodo not in 'http,pregunta,condicional,set_variable,menu,respuesta,fin,handoff'|cut:',' %}
                 <div class="dp-node-preview">
                     <i class="fa fa-quote-left me-1"></i>
                     {{ op.respuesta|truncatechars:140 }}
                 </div>
             {% endif %}
+
             <div class="dp-node-tags">
                 {% if op.boton_id %}
                     <span class="dp-tag dp-tag-id" title="ID que llega al webhook como button_reply.id">

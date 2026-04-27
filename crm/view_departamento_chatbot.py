@@ -228,6 +228,21 @@ def departamentoChatbotsView(request):
                 except Exception as ex:
                     return JsonResponse({'result': False, 'message': str(ex)})
 
+            elif action == 'exportar_flujo_json':
+                # Devuelve el snapshot COMPLETO del flujo: depto + nodos +
+                # conexiones + endpoints/credenciales referenciados. Sirve
+                # para auditar configuración, exportar/importar entre
+                # ambientes, y como "ficha técnica" del bot.
+                try:
+                    dep_id = int(request.GET.get('id') or 0)
+                    filtro = model.objects.filter(pk=dep_id, status=True).first()
+                    if not filtro:
+                        return JsonResponse({'result': False, 'message': 'Departamento no encontrado'})
+                    payload = _exportar_flujo_completo(filtro)
+                    return JsonResponse({'result': True, 'data': payload})
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
+
             elif action == 'editar_opcion':
                 # Devuelve HTML del form de un nodo (modal en form_pagina).
                 try:
@@ -733,6 +748,132 @@ def _serializar_arbol_opciones(departamento, padre=None, nivel=0):
             items.append({'opcion': n, 'nivel': 0})
             visited.add(n.id)
     return items
+
+
+def _exportar_flujo_completo(departamento):
+    """Snapshot completo del flujo en JSON estructurado.
+
+    Incluye: cabecera del depto, todos los nodos con su config completo,
+    todas las conexiones (nodo_origen, nodo_destino, etiqueta), endpoints
+    y credenciales referenciados (con secretos REDACTED), y stats agregadas.
+
+    Útil como "ficha técnica" del bot, para auditar configuración antes
+    de pasar a producción, o para versionar/exportar entre ambientes.
+    """
+    from .models import ConexionNodoChatbot
+    from datetime import datetime
+
+    nodos_qs = OpcionDepartamentoChatBot.objects.filter(
+        departamento=departamento, status=True,
+    ).select_related('endpoint', 'endpoint__credencial').order_by('orden', 'id')
+    conex_qs = ConexionNodoChatbot.objects.filter(
+        nodo_origen__departamento=departamento, status=True,
+    ).select_related('nodo_origen', 'nodo_destino').order_by('nodo_origen', 'orden')
+
+    # Endpoints únicos referenciados por nodos http
+    endpoints_usados = {}
+    creds_usadas = {}
+    for n in nodos_qs:
+        if n.endpoint and n.endpoint.id not in endpoints_usados:
+            ep = n.endpoint
+            endpoints_usados[ep.id] = {
+                'id': ep.id,
+                'nombre': ep.nombre,
+                'base_url': ep.base_url,
+                'headers_default': ep.headers_default or {},
+                'timeout_seg': ep.timeout_seg,
+                'descripcion': ep.descripcion or '',
+                'credencial_id': ep.credencial_id,
+            }
+            if ep.credencial and ep.credencial.id not in creds_usadas:
+                cr = ep.credencial
+                # Secretos REDACTED — exponer solo las claves, no los valores.
+                secretos_redacted = {
+                    k: '***REDACTED***' for k in (cr.secretos or {})
+                }
+                creds_usadas[cr.id] = {
+                    'id': cr.id,
+                    'nombre': cr.nombre,
+                    'tipo': cr.tipo,
+                    'tipo_display': cr.get_tipo_display(),
+                    'secretos': secretos_redacted,
+                    'descripcion': cr.descripcion or '',
+                }
+
+    # Stats agregadas
+    tipos_count = {}
+    for n in nodos_qs:
+        tipos_count[n.tipo_nodo] = tipos_count.get(n.tipo_nodo, 0) + 1
+    nodo_inicio = next((n for n in nodos_qs if n.es_inicio), None)
+    sin_entrada = []  # nodos no alcanzables (sin conexión entrante y no inicio)
+    destinos = set(c.nodo_destino_id for c in conex_qs)
+    for n in nodos_qs:
+        if n.id not in destinos and not n.es_inicio:
+            sin_entrada.append({'id': n.id, 'nombre': n.nombre, 'tipo': n.tipo_nodo})
+
+    return {
+        '_meta': {
+            'exportado_en': datetime.now().isoformat(timespec='seconds'),
+            'version_schema': '1.0',
+            'nota': 'Secretos de credenciales aparecen como ***REDACTED***',
+        },
+        'departamento': {
+            'id': departamento.id,
+            'nombre': departamento.nombre,
+            'color': departamento.color or '',
+            'mensaje_saludo': departamento.mensaje_saludo or '',
+            'palabras_clave': departamento.get_palabras_clave(),
+            'es_default': bool(departamento.es_default),
+            'activo_tradicional': bool(departamento.activo_tradicional),
+        },
+        'estadisticas': {
+            'total_nodos': nodos_qs.count(),
+            'total_conexiones': conex_qs.count(),
+            'nodos_por_tipo': tipos_count,
+            'nodo_inicio': {
+                'id': nodo_inicio.id, 'nombre': nodo_inicio.nombre,
+                'tipo': nodo_inicio.tipo_nodo,
+            } if nodo_inicio else None,
+            'nodos_huerfanos': sin_entrada,
+            'endpoints_usados': len(endpoints_usados),
+            'credenciales_usadas': len(creds_usadas),
+        },
+        'endpoints': list(endpoints_usados.values()),
+        'credenciales': list(creds_usadas.values()),
+        'nodos': [
+            {
+                'id': n.id,
+                'nombre': n.nombre,
+                'tipo_nodo': n.tipo_nodo,
+                'tipo_display': n.get_tipo_display() if hasattr(n, 'get_tipo_display') else n.tipo_nodo,
+                'orden': n.orden,
+                'es_inicio': bool(n.es_inicio),
+                'opcion_padre_id': n.opcion_padre_id,
+                'boton_id': n.boton_id or '',
+                'respuesta': n.respuesta or '',
+                'config': n.config or {},
+                'endpoint_id': n.endpoint_id,
+                'variable_destino': n.variable_destino or '',
+                'validacion_tipo': n.validacion_tipo or 'none',
+                'validacion_expresion': n.validacion_expresion or '',
+                'mensaje_error': n.mensaje_error or '',
+                'reintentos_max': n.reintentos_max or 3,
+            }
+            for n in nodos_qs
+        ],
+        'conexiones': [
+            {
+                'origen_id': c.nodo_origen_id,
+                'origen_nombre': c.nodo_origen.nombre,
+                'destino_id': c.nodo_destino_id,
+                'destino_nombre': c.nodo_destino.nombre,
+                'etiqueta': c.etiqueta or '',
+                'orden': c.orden,
+                'descripcion': c.descripcion or '',
+            }
+            for c in conex_qs
+        ],
+    }
 
 
 def _serializar_para_preview(departamento):

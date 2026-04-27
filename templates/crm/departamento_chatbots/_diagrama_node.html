@@ -23,6 +23,18 @@
         {% if nodo.opcion.respuesta %}
             <div class="dp-tree-card-resp">{{ nodo.opcion.respuesta|truncatechars:90 }}</div>
         {% endif %}
+        <div class="dp-tree-card-actions">
+            <a href="/crm/departamentos_chatbots/?action=change&id={{ nodo.opcion.departamento_id }}&full=1#nodo-{{ nodo.opcion.id }}"
+               class="btn btn-xs btn-outline-primary"
+               title="Editar este nodo en el editor">
+                <i class="fa fa-pen"></i>
+            </a>
+            <button type="button" class="btn btn-xs btn-outline-info"
+                    data-act="ver-ficha-nodo" data-nodo-id="{{ nodo.opcion.id }}"
+                    title="Ver ficha completa de este nodo">
+                <i class="fa fa-id-card"></i>
+            </button>
+        </div>
     </div>
     {% if nodo.hijos %}
         <ul>

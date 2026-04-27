@@ -232,6 +232,196 @@
             .replace(/"/g, '&quot;');
     }
 
+    // Arma la "ficha resumida" desde el snapshot del flujo. Pinta cabecera,
+    // estadísticas, endpoints, y cada nodo con sus campos relevantes.
+    function renderFicha(data) {
+        var d = data.departamento || {};
+        var s = data.estadisticas || {};
+        var html = '';
+        html += '<div class="dp-ficha-section">'
+             +    '<h6 class="dp-ficha-h"><i class="fa fa-folder-tree me-1"></i>'
+             +        ' Departamento</h6>'
+             +    '<div class="row g-2">'
+             +      ficha_kv('Nombre', d.nombre)
+             +      ficha_kv('ID', d.id)
+             +      ficha_kv('Color', '<span class="dp-ficha-color" style="background:'
+                                    + escHtml(d.color || '#888') + '"></span> ' + escHtml(d.color || '—'))
+             +      ficha_kv('Es default', d.es_default ? '✅ Sí' : '—')
+             +      ficha_kv('Activo (tradicional)', d.activo_tradicional ? '✅ Sí' : '—')
+             +    '</div>'
+             +    '<div class="dp-ficha-saludo mt-2">'
+             +      '<strong>Saludo:</strong> ' + escHtml(d.mensaje_saludo || '—')
+             +    '</div>';
+        if ((d.palabras_clave || []).length) {
+            html += '<div class="mt-1"><strong>Keywords:</strong> '
+                  + d.palabras_clave.map(function (k) {
+                        return '<code class="dp-ficha-tag">' + escHtml(k) + '</code>';
+                    }).join(' ') + '</div>';
+        }
+        html += '</div>';
+
+        // Estadísticas
+        html += '<div class="dp-ficha-section">'
+             +   '<h6 class="dp-ficha-h"><i class="fa fa-chart-pie me-1"></i> Estadísticas</h6>'
+             +   '<div class="row g-2">'
+             +     ficha_kv('Nodos', s.total_nodos)
+             +     ficha_kv('Conexiones', s.total_conexiones)
+             +     ficha_kv('Endpoints usados', s.endpoints_usados)
+             +     ficha_kv('Credenciales', s.credenciales_usadas)
+             +   '</div>';
+        if (s.nodo_inicio) {
+            html += '<div class="mt-1"><strong>Nodo inicial:</strong> '
+                  + '<span class="badge bg-success">'
+                  + escHtml(s.nodo_inicio.tipo) + '</span> '
+                  + escHtml(s.nodo_inicio.nombre) + ' #' + s.nodo_inicio.id + '</div>';
+        }
+        if (s.nodos_por_tipo) {
+            html += '<div class="mt-1"><strong>Por tipo:</strong> '
+                  + Object.keys(s.nodos_por_tipo).map(function (k) {
+                        return '<code class="dp-ficha-tag">' + escHtml(k)
+                             + ': ' + s.nodos_por_tipo[k] + '</code>';
+                    }).join(' ') + '</div>';
+        }
+        if ((s.nodos_huerfanos || []).length) {
+            html += '<div class="mt-1 text-warning"><strong>⚠️ Huérfanos (sin conexión entrante):</strong> '
+                  + s.nodos_huerfanos.map(function (n) {
+                        return '<code class="dp-ficha-tag">#' + n.id
+                             + ' ' + escHtml(n.nombre) + '</code>';
+                    }).join(' ') + '</div>';
+        }
+        html += '</div>';
+
+        // Endpoints
+        if ((data.endpoints || []).length) {
+            html += '<div class="dp-ficha-section">'
+                 +   '<h6 class="dp-ficha-h"><i class="fa fa-globe me-1"></i> Endpoints</h6>';
+            data.endpoints.forEach(function (ep) {
+                var cred = (data.credenciales || []).find(function (c) { return c.id === ep.credencial_id; });
+                html += '<div class="dp-ficha-endpoint">'
+                     +   '<strong>' + escHtml(ep.nombre) + '</strong> '
+                     +   '<small class="text-muted">#' + ep.id + ' · timeout '
+                     +   ep.timeout_seg + 's</small><br>'
+                     +   '<code>' + escHtml(ep.base_url) + '</code><br>'
+                     +   '<small>Auth: '
+                     +   (cred ? escHtml(cred.nombre) + ' (' + escHtml(cred.tipo_display) + ')'
+                              : '<em>— sin credencial —</em>')
+                     +   '</small>'
+                     + '</div>';
+            });
+            html += '</div>';
+        }
+
+        // Nodos (lista compacta)
+        html += '<div class="dp-ficha-section">'
+             +   '<h6 class="dp-ficha-h"><i class="fa fa-list-ol me-1"></i> Nodos ('
+             +   (data.nodos || []).length + ')</h6>'
+             +   '<div class="dp-ficha-nodos">';
+        (data.nodos || []).forEach(function (n) {
+            html += renderFichaNodo(n, data);
+        });
+        html += '</div></div>';
+        return html;
+    }
+
+    function ficha_kv(k, v) {
+        return '<div class="col-6 col-md-4 dp-ficha-kv">'
+             +   '<div class="text-muted small">' + escHtml(k) + '</div>'
+             +   '<div class="dp-ficha-v">' + (v == null ? '—' : v) + '</div>'
+             + '</div>';
+    }
+
+    function renderFichaNodo(n, data) {
+        var cfg = n.config || {};
+        var html = '<div class="dp-ficha-nodo dp-ficha-tipo-' + escHtml(n.tipo_nodo) + '">'
+                 +   '<div class="dp-ficha-nodo-head">'
+                 +     '<span class="badge dp-ficha-badge-' + escHtml(n.tipo_nodo) + '">'
+                 +       escHtml(n.tipo_nodo) + '</span> '
+                 +     (n.es_inicio ? '<i class="fa fa-play text-success me-1" title="Inicio"></i>' : '')
+                 +     '<strong>' + escHtml(n.nombre || '(sin nombre)') + '</strong> '
+                 +     '<small class="text-muted">#' + n.id + ' · orden ' + n.orden + '</small>';
+        if (n.boton_id) {
+            html += ' <code class="dp-ficha-tag">' + escHtml(n.boton_id) + '</code>';
+        }
+        html += '</div>';
+
+        if (n.tipo_nodo === 'http') {
+            var ep = (data.endpoints || []).find(function (e) { return e.id === n.endpoint_id; });
+            html += '<div class="dp-ficha-nodo-body">'
+                  +   '<div><span class="badge bg-primary">' + escHtml(cfg.metodo || 'GET')
+                  +     '</span> <code>' + escHtml((ep ? ep.base_url : '?')
+                  +     (cfg.path || '')) + '</code></div>';
+            if (cfg.query) {
+                html += '<div><strong>query:</strong> <code>' + escHtml(JSON.stringify(cfg.query)) + '</code></div>';
+            }
+            if (cfg.body) {
+                html += '<div><strong>body:</strong> <code>' + escHtml(JSON.stringify(cfg.body)) + '</code></div>';
+            }
+            if ((cfg.extraer || []).length) {
+                html += '<div><strong>extrae:</strong> '
+                     + cfg.extraer.map(function (e) {
+                            return '<code class="dp-ficha-tag">$' + escHtml(e.variable)
+                                 + ' ← ' + escHtml(e.jsonpath) + '</code>';
+                        }).join(' ') + '</div>';
+            }
+            if (cfg.plantilla_respuesta) {
+                html += '<div class="dp-ficha-plantilla">'
+                     + '<strong>plantilla:</strong> ' + escHtml(cfg.plantilla_respuesta) + '</div>';
+            }
+            html += '</div>';
+        } else if (n.tipo_nodo === 'pregunta') {
+            html += '<div class="dp-ficha-nodo-body">'
+                 +   '<div>' + escHtml(cfg.pregunta || n.respuesta || '—') + '</div>'
+                 +   '<div><strong>captura:</strong> <code>$' + escHtml(n.variable_destino) + '</code>'
+                 +   ' · <strong>valida:</strong> ' + escHtml(n.validacion_tipo) + '</div>'
+                 + '</div>';
+        } else if (n.tipo_nodo === 'menu') {
+            html += '<div class="dp-ficha-nodo-body">';
+            if (cfg.mensaje) html += '<div>' + escHtml(cfg.mensaje) + '</div>';
+            html += '<div><strong>opciones (' + ((cfg.opciones || []).length) + '):</strong></div>';
+            (cfg.opciones || []).forEach(function (opt) {
+                html += '<div class="ms-2">• <strong>' + escHtml(opt.etiqueta || opt.valor)
+                      + '</strong> → <code>' + escHtml(opt.salida || '') + '</code></div>';
+            });
+            html += '</div>';
+        } else if (n.tipo_nodo === 'condicional') {
+            html += '<div class="dp-ficha-nodo-body">'
+                 +   '<div><strong>' + escHtml((cfg.operador || 'and').toUpperCase())
+                 +   '</strong></div>';
+            (cfg.condiciones || []).forEach(function (c) {
+                html += '<div class="ms-2">• <code>' + escHtml(c.izq) + '</code> '
+                      + '<strong>' + escHtml(c.op) + '</strong> '
+                      + '<code>' + escHtml(c.der || '""') + '</code></div>';
+            });
+            html += '</div>';
+        } else if (n.tipo_nodo === 'set_variable') {
+            html += '<div class="dp-ficha-nodo-body">';
+            (cfg.asignaciones || []).forEach(function (a) {
+                html += '<div class="ms-2">• <code>$' + escHtml(a.variable)
+                      + '</code> ← <code>' + escHtml(a.expresion || '""') + '</code></div>';
+            });
+            html += '</div>';
+        } else if (cfg.mensaje || n.respuesta) {
+            html += '<div class="dp-ficha-nodo-body">'
+                 +   '<div>' + escHtml(cfg.mensaje || n.respuesta) + '</div>'
+                 + '</div>';
+        }
+
+        // Conexiones salientes
+        var salidas = (data.conexiones || []).filter(function (c) { return c.origen_id === n.id; });
+        if (salidas.length) {
+            html += '<div class="dp-ficha-nodo-body dp-ficha-salidas">'
+                 +   '<strong>→ salidas:</strong> '
+                 + salidas.map(function (c) {
+                        return '<code class="dp-ficha-tag">'
+                             + (c.etiqueta ? escHtml(c.etiqueta) + '→' : '')
+                             + '#' + c.destino_id + ' ' + escHtml(c.destino_nombre)
+                             + '</code>';
+                    }).join(' ') + '</div>';
+        }
+        html += '</div>';
+        return html;
+    }
+
     function wireTipoNodoToggle() {
         var tipoSel = document.getElementById('dpFormTipo');
         if (!tipoSel) return;
@@ -329,23 +519,50 @@
             }
             if (act === 'ver-meta-json') {
                 if (STATE.departamentoId === 0) {
-                    alert('Primero guardá el departamento (cabecera) para generar el payload.');
+                    alert('Primero guardá el departamento (cabecera) para generar la ficha.');
                     return;
                 }
                 var modalJson = bootstrap.Modal.getOrCreateInstance($('#dpModalMetaJson'));
+                $('#dp-ficha-content').innerHTML = '<i class="fa fa-spinner fa-spin"></i> Cargando…';
                 $('#dp-meta-json-pre').textContent = 'Cargando…';
+                $('#dp-meta-payload-pre').textContent = 'Cargando…';
                 modalJson.show();
-                getJson({
-                    action: 'exportar_meta_payload',
-                    id: STATE.departamentoId,
-                }).then(function (resp) {
-                    if (!resp.result) {
-                        $('#dp-meta-json-pre').textContent = 'Error: ' + (resp.message || 'desconocido');
-                        return;
+
+                // Cargar ambos en paralelo
+                Promise.all([
+                    getJson({ action: 'exportar_flujo_json', id: STATE.departamentoId }),
+                    getJson({ action: 'exportar_meta_payload', id: STATE.departamentoId }),
+                ]).then(function (results) {
+                    var flujo = results[0], meta = results[1];
+                    if (flujo.result) {
+                        $('#dp-meta-json-pre').textContent = JSON.stringify(flujo.data, null, 2);
+                        $('#dp-ficha-content').innerHTML = renderFicha(flujo.data);
+                    } else {
+                        $('#dp-meta-json-pre').textContent = 'Error: ' + (flujo.message || '?');
+                        $('#dp-ficha-content').innerHTML = '<div class="alert alert-danger">'
+                            + escHtml(flujo.message || 'Error') + '</div>';
                     }
-                    $('#dp-meta-json-pre').textContent = JSON.stringify(resp.payload, null, 2);
+                    if (meta.result) {
+                        $('#dp-meta-payload-pre').textContent = JSON.stringify(meta.payload, null, 2);
+                    } else {
+                        $('#dp-meta-payload-pre').textContent = 'Error: ' + (meta.message || '?');
+                    }
                 }).catch(function (err) {
                     $('#dp-meta-json-pre').textContent = 'Error de conexión: ' + err.message;
+                });
+
+                // Tab switcher (idempotente)
+                document.querySelectorAll('#dpJsonTabs .nav-link').forEach(function (b) {
+                    b.onclick = function () {
+                        document.querySelectorAll('#dpJsonTabs .nav-link').forEach(function (x) {
+                            x.classList.remove('active');
+                        });
+                        b.classList.add('active');
+                        var t = b.getAttribute('data-tab');
+                        document.querySelectorAll('#dpModalMetaJson .tab-pane').forEach(function (p) {
+                            p.style.display = (p.getAttribute('data-pane') === t) ? '' : 'none';
+                        });
+                    };
                 });
                 return;
             }

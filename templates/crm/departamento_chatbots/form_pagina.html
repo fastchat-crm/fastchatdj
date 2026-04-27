@@ -81,8 +81,8 @@
                     <i class="fab fa-whatsapp me-1"></i> Preview
                 </a>
                 <button type="button" class="btn btn-sm btn-outline-success"
-                        data-act="ver-meta-json" title="Exportar como payload Meta Cloud API">
-                    <i class="fa fa-code me-1"></i> Meta JSON
+                        data-act="ver-meta-json" title="Snapshot completo del flujo (depto + nodos + endpoints + conexiones)">
+                    <i class="fa fa-code me-1"></i> Ver configuración (JSON)
                 </button>
                 <button type="button" class="btn btn-sm btn-primary"
                         data-act="add-root">
@@ -142,31 +142,64 @@
 
 </div>
 
-{# Modal: Meta Cloud API JSON payload (read-only, copy) #}
+{# Modal: Configuración completa del flujo (read-only, copy) #}
 <div class="modal fade" id="dpModalMetaJson" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header py-2">
                 <h6 class="modal-title">
-                    <i class="fab fa-whatsapp me-1 text-success"></i>
-                    Payload Meta Cloud API
+                    <i class="fa fa-code me-1 text-success"></i>
+                    Configuración completa del flujo
                 </h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-light border py-2 small mb-2">
-                    <i class="fa fa-circle-info me-1"></i>
-                    Este JSON es lo que el bot enviaría al usuario al entrar al departamento.
-                    Si tenés ≤3 opciones se arma como <code>interactive button</code>; con 4+
-                    se usa <code>interactive list</code>. <code>to</code> es placeholder —
-                    reemplazá con el número del cliente.
+                <ul class="nav nav-tabs nav-tabs-sm small mb-2" id="dpJsonTabs">
+                    <li class="nav-item">
+                        <button class="nav-link active" data-tab="ficha">
+                            <i class="fa fa-clipboard-list me-1"></i> Ficha resumida
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-tab="json">
+                            <i class="fa fa-code me-1"></i> JSON completo
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-tab="meta">
+                            <i class="fab fa-whatsapp me-1"></i> Payload Meta
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content">
+                    <div class="tab-pane active" data-pane="ficha">
+                        <div id="dp-ficha-content"
+                             class="dp-ficha-content small">Cargando…</div>
+                    </div>
+                    <div class="tab-pane" data-pane="json" style="display:none;">
+                        <div class="alert alert-light border py-2 small mb-2">
+                            <i class="fa fa-circle-info me-1"></i>
+                            Snapshot completo del depto: cabecera, todos los nodos
+                            con su <code>config</code>, endpoints, credenciales
+                            (secretos REDACTED) y conexiones. Sirve para versionar
+                            o pasar entre ambientes.
+                        </div>
+                        <pre id="dp-meta-json-pre" class="dp-json-pre">Cargando…</pre>
+                    </div>
+                    <div class="tab-pane" data-pane="meta" style="display:none;">
+                        <div class="alert alert-light border py-2 small mb-2">
+                            <i class="fa fa-circle-info me-1"></i>
+                            Payload Meta Cloud API que el bot enviaría al primer turno
+                            (interactive button/list según cantidad de opciones).
+                        </div>
+                        <pre id="dp-meta-payload-pre" class="dp-json-pre">Cargando…</pre>
+                    </div>
                 </div>
-                <pre id="dp-meta-json-pre" class="dp-json-pre">Cargando…</pre>
             </div>
             <div class="modal-footer py-2">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
                 <button type="button" class="btn btn-success btn-sm" id="dp-copy-json">
-                    <i class="fa fa-copy me-1"></i> Copiar
+                    <i class="fa fa-copy me-1"></i> Copiar JSON
                 </button>
             </div>
         </div>
