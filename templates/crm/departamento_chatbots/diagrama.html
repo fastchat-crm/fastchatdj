@@ -3,6 +3,9 @@
 
 {% block head %}
     <link rel="stylesheet" href="{% static 'stylenew/dpchat_editor.css' %}">
+    <script>document.addEventListener('DOMContentLoaded', function () {
+        document.body.classList.add('dp-diag-page');
+    });</script>
 {% endblock %}
 
 {% block content %}
@@ -30,34 +33,29 @@
 
 {% if arbol_anidado %}
     <div class="dp-diag-toolbar mb-2">
-        <div class="btn-group btn-group-sm" role="group" id="dp-diag-orientacion">
-            <button type="button" class="btn btn-outline-secondary active" data-orient="n8n"
-                    title="Padre a la izquierda, hijos a la derecha — estilo n8n">
-                <i class="fa fa-diagram-project me-1"></i> n8n (←→)
+        <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-secondary" id="dp-zoom-out" title="Reducir">
+                <i class="fa fa-search-minus"></i>
             </button>
-            <button type="button" class="btn btn-outline-secondary" data-orient="horizontal"
-                    title="Padre arriba, hijos abajo en árbol clásico">
-                <i class="fa fa-sitemap me-1"></i> Árbol (↓)
+            <button type="button" class="btn btn-outline-secondary" id="dp-zoom-100" title="100%">
+                100%
             </button>
-            <button type="button" class="btn btn-outline-secondary" data-orient="vertical"
-                    title="Lista columnar — recomendado en móvil">
-                <i class="fa fa-list me-1"></i> Lista
+            <button type="button" class="btn btn-outline-secondary" id="dp-zoom-in" title="Ampliar">
+                <i class="fa fa-search-plus"></i>
             </button>
         </div>
         <small class="text-muted ms-2">
             <i class="fa fa-info-circle"></i>
-            El contenedor es scrolleable. Tirá del borde inferior para ajustar la altura.
+            Arrastrá dentro del marco para ver todo el árbol.
         </small>
     </div>
-    <div class="card">
-        <div class="card-body p-2">
-            <div class="dp-tree-decision-wrap" id="dp-tree-wrap">
-                <ul class="dp-tree-decision">
-                    {% for nodo in arbol_anidado %}
-                        {% include "crm/departamento_chatbots/_diagrama_node.html" with nodo=nodo %}
-                    {% endfor %}
-                </ul>
-            </div>
+    <div class="card dp-diag-card">
+        <div class="dp-tree-decision-wrap" id="dp-tree-wrap">
+            <ul class="dp-tree-decision" id="dp-tree-root">
+                {% for nodo in arbol_anidado %}
+                    {% include "crm/departamento_chatbots/_diagrama_node.html" with nodo=nodo %}
+                {% endfor %}
+            </ul>
         </div>
     </div>
 
@@ -100,30 +98,33 @@
     'use strict';
     var DEP_ID = {{ filtro.pk }};
 
-    function aplicarOrient(orient) {
-        var wrap = document.getElementById('dp-tree-wrap');
-        wrap.classList.remove('dp-tree-vertical', 'dp-tree-n8n');
-        if (orient === 'vertical') wrap.classList.add('dp-tree-vertical');
-        else if (orient === 'n8n') wrap.classList.add('dp-tree-n8n');
-        // 'horizontal' = sin clase = árbol clásico top-down
-        try { localStorage.setItem('dp_diag_orient_' + DEP_ID, orient); } catch (e) {}
-    }
-    document.querySelectorAll('#dp-diag-orientacion button').forEach(function (b) {
-        b.addEventListener('click', function () {
-            document.querySelectorAll('#dp-diag-orientacion button').forEach(function (x) {
-                x.classList.remove('active');
-            });
-            b.classList.add('active');
-            aplicarOrient(b.getAttribute('data-orient'));
-        });
-    });
+    // Zoom del árbol (CSS scale sobre el ul root). Persistente por depto.
+    var ZOOM_KEY = 'dp_diag_zoom_' + DEP_ID;
+    var zoomNivel = 1;
+    try {
+        var z = parseFloat(localStorage.getItem(ZOOM_KEY));
+        if (!isNaN(z) && z > 0) zoomNivel = z;
+    } catch (e) {}
 
-    // Restaurar orientación guardada (default: n8n; en móvil: vertical)
-    var saved = null;
-    try { saved = localStorage.getItem('dp_diag_orient_' + DEP_ID); } catch (e) {}
-    if (!saved) saved = (window.innerWidth < 992) ? 'vertical' : 'n8n';
-    var savedBtn = document.querySelector('#dp-diag-orientacion button[data-orient="' + saved + '"]');
-    if (savedBtn) savedBtn.click();
+    function aplicarZoom() {
+        var root = document.getElementById('dp-tree-root');
+        if (!root) return;
+        root.style.transform = 'scale(' + zoomNivel + ')';
+        root.style.transformOrigin = 'top left';
+        var btn100 = document.getElementById('dp-zoom-100');
+        if (btn100) btn100.textContent = Math.round(zoomNivel * 100) + '%';
+        try { localStorage.setItem(ZOOM_KEY, String(zoomNivel)); } catch (e) {}
+    }
+    document.getElementById('dp-zoom-in').addEventListener('click', function () {
+        zoomNivel = Math.min(2, zoomNivel + 0.1); aplicarZoom();
+    });
+    document.getElementById('dp-zoom-out').addEventListener('click', function () {
+        zoomNivel = Math.max(0.4, zoomNivel - 0.1); aplicarZoom();
+    });
+    document.getElementById('dp-zoom-100').addEventListener('click', function () {
+        zoomNivel = 1; aplicarZoom();
+    });
+    aplicarZoom();
 
     document.body.addEventListener('click', function (ev) {
         var btn = ev.target.closest('[data-act="ver-ficha-nodo"]');

@@ -159,44 +159,60 @@
 .dp-tree-decision li {
     flex: 0 0 auto; padding: 0 .5em; position: relative; text-align: center;
 }
-/* Líneas verticales y horizontales */
+/* Líneas verticales y horizontales — estilo más sutil y moderno */
 .dp-tree-decision li::before,
 .dp-tree-decision li::after {
-    content: ''; position: absolute; top: 0; height: .8em;
-    width: 50%; border-top: 2px solid #adb5bd;
+    content: ''; position: absolute; top: 0; height: 1em;
+    width: 50%; border-top: 1.5px solid #cbd5e1;
 }
-.dp-tree-decision li::before { right: 50%; border-right: 2px solid #adb5bd; }
+.dp-tree-decision li::before { right: 50%; border-right: 1.5px solid #cbd5e1; }
 .dp-tree-decision li::after  { left: 50%; }
 .dp-tree-decision li:only-child::before,
 .dp-tree-decision li:only-child::after { display: none; }
 .dp-tree-decision li:first-child::before,
 .dp-tree-decision li:last-child::after { border: 0 none; }
-.dp-tree-decision li:last-child::before { border-right: 2px solid #adb5bd; border-radius: 0 6px 0 0; }
-.dp-tree-decision li:first-child::after { border-radius: 6px 0 0 0; }
+.dp-tree-decision li:last-child::before { border-right: 1.5px solid #cbd5e1; border-radius: 0 8px 0 0; }
+.dp-tree-decision li:first-child::after { border-radius: 8px 0 0 0; }
 /* Línea desde li al ul de hijos */
 .dp-tree-decision li > ul::before {
     content: ''; position: absolute; top: 0; left: 50%;
-    height: 1.6em; border-left: 2px solid #adb5bd;
+    height: 2em; border-left: 1.5px solid #cbd5e1;
 }
 /* Quitar línea superior del root */
 .dp-tree-decision > li::before,
 .dp-tree-decision > li::after { display: none; }
 
 .dp-tree-card {
-    display: inline-block; min-width: 180px; max-width: 240px;
-    padding: .55rem .7rem; border: 1.5px solid #dee2e6; border-radius: 8px;
-    background: #fff; text-align: left; box-shadow: 0 1px 3px rgba(0,0,0,.06);
-    transition: transform .12s, box-shadow .12s;
+    display: inline-block; min-width: 200px; max-width: 260px;
+    padding: .6rem .75rem;
+    border: 1px solid #e2e8f0;
+    border-top: 3px solid #94a3b8;
+    border-radius: 8px;
+    background: #fff;
+    text-align: left;
+    box-shadow: 0 2px 4px rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.06);
+    transition: transform .15s, box-shadow .15s;
+    position: relative;
 }
-.dp-tree-card:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,.08); }
-.dp-tree-card.tipo-menu        { border-color: #0d6efd; }
-.dp-tree-card.tipo-respuesta   { border-color: #198754; }
-.dp-tree-card.tipo-handoff     { border-color: #0dcaf0; }
-.dp-tree-card.tipo-fin         { border-color: #6c757d; }
-.dp-tree-card.tipo-pregunta    { border-color: #ffc107; }
-.dp-tree-card.tipo-http        { border-color: #dc3545; }
-.dp-tree-card.tipo-cta_url     { border-color: #2563eb; }
-.dp-tree-card.tipo-ubicacion   { border-color: #6b21a8; }
+.dp-tree-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.06);
+}
+.dp-tree-card.tipo-menu          { border-top-color: #8b5cf6; }
+.dp-tree-card.tipo-respuesta     { border-top-color: #16a34a; }
+.dp-tree-card.tipo-handoff       { border-top-color: #f97316; }
+.dp-tree-card.tipo-fin           { border-top-color: #64748b; }
+.dp-tree-card.tipo-pregunta      { border-top-color: #f59e0b; }
+.dp-tree-card.tipo-http          { border-top-color: #3b82f6; }
+.dp-tree-card.tipo-condicional   { border-top-color: #ec4899; }
+.dp-tree-card.tipo-set_variable  { border-top-color: #06b6d4; }
+.dp-tree-card.tipo-cta_url       { border-top-color: #2563eb; }
+.dp-tree-card.tipo-ubicacion     { border-top-color: #6b21a8; }
+.dp-tree-card.dp-tree-cycle {
+    opacity: 0.65;
+    border-style: dashed;
+    background: #f8fafc;
+}
 
 .dp-tree-card-pill { display: inline-block; margin-bottom: 4px; }
 .dp-tree-card-name {
@@ -421,11 +437,32 @@
     flex-wrap: wrap;
 }
 .dp-tree-card-actions {
-    display: flex; gap: .25rem;
-    margin-top: .35rem;
+    display: flex; gap: .35rem;
+    margin-top: .5rem;
     padding-top: .35rem;
-    border-top: 1px dashed #e2e8f0;
+    border-top: 1px solid #f1f5f9;
     justify-content: flex-end;
+}
+.dp-tree-card-actions .btn-xs {
+    border-radius: 4px;
+    transition: all .15s;
+}
+.dp-tree-card-actions .btn-xs:hover {
+    transform: scale(1.1);
+}
+.dp-tree-edge-label {
+    margin-bottom: .4rem;
+    text-align: center;
+}
+.dp-tree-edge-label .badge {
+    font-size: .68rem;
+    font-weight: 500;
+    padding: 2px 8px;
+    background: #fff !important;
+    border: 1px solid #e2e8f0;
+    color: #475569 !important;
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
 }
 .btn-xs {
     padding: 1px 6px;
@@ -434,91 +471,40 @@
     border-radius: 3px;
 }
 
-/* Container con tamaño acotado y scroll en ambos ejes — evita que el
-   diagrama empuje el layout horizontalmente. n8n-style. */
+/* ─── Container del diagrama: scroll único, body NO scrollea ─── */
+.dp-diag-card {
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fafbfc;
+    /* Toma TODO el alto restante de la viewport (header + toolbar + footer
+       no afectan); el body queda fijo y solo scrollea el wrap interior. */
+    height: calc(100vh - 200px);
+    min-height: 480px;
+    margin-bottom: .75rem;
+}
 .dp-tree-decision-wrap {
-    max-height: 75vh;
-    overflow: auto;
-    resize: vertical;
-}
-
-/* ─── Modo n8n: parent IZQUIERDA, children apilados a la DERECHA ─── */
-.dp-tree-n8n .dp-tree-decision,
-.dp-tree-n8n .dp-tree-decision ul {
-    display: flex !important;
-    flex-direction: row;
-    align-items: flex-start;
-    justify-content: flex-start;
-    padding: 0 0 0 2rem;
-    margin: 0;
-    list-style: none;
-}
-.dp-tree-n8n .dp-tree-decision > li {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 1.5rem;
-    padding: .35rem 0;
-    margin: 0;
-    position: relative;
-    text-align: left;
-}
-/* Una columna de hijos a la derecha */
-.dp-tree-n8n .dp-tree-decision li > ul {
-    flex-direction: column !important;
-    padding: 0;
-    align-items: flex-start;
-}
-/* Reset líneas viejas y dibuja conectores L-shape */
-.dp-tree-n8n .dp-tree-decision li::before,
-.dp-tree-n8n .dp-tree-decision li::after { display: none !important; }
-.dp-tree-n8n .dp-tree-decision li > ul::before { display: none !important; }
-.dp-tree-n8n .dp-tree-decision li > ul > li {
-    flex-direction: row;
-    align-items: center;
-}
-/* Conector horizontal del parent al child */
-.dp-tree-n8n .dp-tree-decision li > ul > li::before {
-    content: ''; display: block !important;
-    position: relative;
-    width: 2rem;
-    height: 0;
-    border-top: 2px solid #94a3b8;
-    margin-right: -.5rem;
-    flex: 0 0 2rem;
-}
-.dp-tree-n8n .dp-tree-card {
-    margin: 0;
-    flex: 0 0 auto;
-}
-.dp-tree-n8n .dp-tree-edge-label {
-    text-align: left;
-    margin: 0 0 .15rem 0;
-}
-
-/* ─── Modo VERTICAL — apila columnar (móvil/tablet) ─── */
-.dp-tree-vertical .dp-tree-decision,
-.dp-tree-vertical .dp-tree-decision ul {
-    display: flex !important;
-    flex-direction: column;
-    align-items: flex-start;
-    padding-left: 1.5rem;
-    border-left: 2px solid #cbd5e1;
-}
-.dp-tree-vertical .dp-tree-decision > li {
-    margin: .25rem 0;
-    padding: 0;
-}
-.dp-tree-vertical .dp-tree-decision > li::before,
-.dp-tree-vertical .dp-tree-decision li::before,
-.dp-tree-vertical .dp-tree-decision li::after {
-    display: none !important;
-}
-.dp-tree-vertical .dp-tree-card {
     width: 100%;
-    max-width: 480px;
-    margin: 0;
+    height: 100%;
+    overflow: auto;
+    padding: 1.5rem 1rem;
+    background: linear-gradient(135deg, #fafbfc 0%, #f1f5f9 100%);
+    /* Patrón de puntos sutil para sensación n8n/Figma */
+    background-image:
+        radial-gradient(circle at 1px 1px, rgba(148,163,184,.18) 1px, transparent 0);
+    background-size: 18px 18px;
+    background-color: #fafbfc;
+    scrollbar-width: thin;
 }
+.dp-tree-decision-wrap::-webkit-scrollbar { width: 10px; height: 10px; }
+.dp-tree-decision-wrap::-webkit-scrollbar-thumb {
+    background: #cbd5e1; border-radius: 5px;
+}
+.dp-tree-decision-wrap::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.dp-tree-decision-wrap::-webkit-scrollbar-track { background: transparent; }
+
+/* Que el body NO tenga scroll cuando estamos en el diagrama */
+body.dp-diag-page { overflow: hidden !important; }
 
 /* ─── Highlight del nodo enfocado por anchor (#nodo-X) ─── */
 .dp-node-card.dp-highlight {
