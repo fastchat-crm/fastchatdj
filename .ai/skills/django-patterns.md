@@ -454,7 +454,7 @@ limited = cache.get(f'wa_rate_limited_{sesion.id}', False)
 cache.delete(f'wa_rate_limited_{sesion.id}')
 ```
 
-Patrón usado en `whatsapp/view_webhook_handler.py` para rate-limit.
+Patrón usado en `whatsapp/webhook_baileys_view.py` para rate-limit.
 
 ---
 

@@ -1,30 +1,30 @@
 from django.urls import re_path, path
 
-from .conversaciones_finalizadas_view import conversacionesFinalizadasView
-from .sesiones_view import sesionesView
+from .view_conversaciones_finalizadas import conversacionesFinalizadasView
+from .view_sesiones import sesionesView
 from .meta_oauth_view import meta_oauth_start, meta_oauth_callback
 from .meta_manual_view import meta_manual_validar, meta_manual_conectar, meta_webhook_info, meta_test_message
 from .meta_diagnostico_view import meta_diagnostico, meta_suscribir_waba_action
 from .meta_webhook_log_view import meta_webhook_log, meta_webhook_log_poll, meta_webhook_log_detalle
 from .meta_webhook_hits_view import meta_webhook_hits, meta_webhook_hits_poll, meta_webhook_hit_detalle
 from .meta_foto_perfil_view import meta_actualizar_foto_perfil
-from .conversaciones_view import conversacionesView
+from .view_conversaciones import conversacionesView
 from .sync_contacts import sync_contacts_view
 from .update_profile_view import update_profile_view
 from .view_contacto import contactoView
-from .trazas_view import trazasView
-from .view_webhook_handler import webhook_handler
+from .view_trazas import trazasView
+from .webhook_baileys_view import webhook_handler
 from .webhook_batch_view import webhook_handler_batch
 from .heartbeat_view import heartbeat_receiver
 from .trace_receiver_view import trace_receiver
 from .meta_webhook_view import meta_webhook
 from .meta_social_webhook_view import instagram_webhook, messenger_webhook
-from .plantillas_view import plantillasView
-from .etiquetas_view import etiquetasView
-from .pipeline_view import pipelineView
-from .campanas_view import campanasView
-from .horarios_view import horariosView
-from .analytics_view import analyticsView
+from .view_plantillas import plantillasView
+from .view_etiquetas import etiquetasView
+from .view_pipeline import pipelineView
+from .view_campanas import campanasView
+from .view_horarios import horariosView
+from .view_analytics import analyticsView
 from . import api_rest
 
 whatsapp_urls = (

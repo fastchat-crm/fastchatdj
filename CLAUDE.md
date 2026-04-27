@@ -143,7 +143,7 @@ When adding a feature that talks to WhatsApp, branch on `sesion.proveedor` and d
 **Parallel files per transport:**
 | Role | Baileys | Meta Cloud API |
 |---|---|---|
-| Receiver (webhook) | `whatsapp/view_webhook_handler.py` → `/whatsapp/webhook_handler/` | `whatsapp/meta_webhook_view.py` → `/whatsapp/meta_webhook/` |
+| Receiver (webhook) | `whatsapp/webhook_baileys_view.py` → `/whatsapp/webhook_handler/` | `whatsapp/meta_webhook_view.py` → `/whatsapp/meta_webhook/` |
 | Sender (service) | `whatsapp/services.py` → `WhatsAppService` | `whatsapp/services_meta.py` → `MetaWhatsAppService` |
 | Dispatcher | — | `services.get_whatsapp_service(sesion)` returns the right instance |
 

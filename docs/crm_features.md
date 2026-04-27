@@ -283,7 +283,7 @@ referral_payload_json # payload completo para reproceso
 3. En **Sesiones WhatsApp**, asigna el `pixel_meta` a la sesión correspondiente.
 
 **Cuándo se dispara automáticamente:**
-- **Lead**: al crearse una conversación con `ctwa_clid` o `ad_id` presentes (ver `process_incoming_message` en `view_webhook_handler.py:~530`).
+- **Lead**: al crearse una conversación con `ctwa_clid` o `ad_id` presentes (ver `process_incoming_message` en `webhook_baileys_view.py:~530`).
 - **Purchase**: al mover una tarjeta Kanban a una etapa con `es_ganado=True`. Usa `card.valor_estimado` como `value`.
 
 **Disparo manual vía API:**
@@ -545,7 +545,7 @@ whatsapp/
 ├── horarios_view.py                     ← nuevo
 ├── analytics_view.py                    ← nuevo
 ├── api_rest.py                          ← nuevo
-├── view_webhook_handler.py              (inyecta referral / CAPI / round-robin al crear conversación)
+├── webhook_baileys_view.py              (inyecta referral / CAPI / round-robin al crear conversación)
 └── templates/whatsapp/
     ├── etiquetas/listado.html           ← nuevo
     ├── pipeline/listado.html            ← nuevo

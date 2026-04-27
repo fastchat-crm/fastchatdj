@@ -190,7 +190,7 @@ Tope de seguridad: `MAX_NODOS_POR_TURNO = 25`.
 | `hibrido` | ✅ | ✅ si motor no matcheó | FAQ por flujo, el resto a IA |
 | `ninguno` | ❌ | ❌ | Sólo humanos |
 
-El bloque nuevo en `whatsapp/view_webhook_handler.py` **corta** antes de llegar al pipeline IA cuando el motor manejó la conversación. Genera trazas `etapa='motor_flujo'`.
+El bloque nuevo en `whatsapp/webhook_baileys_view.py` **corta** antes de llegar al pipeline IA cuando el motor manejó la conversación. Genera trazas `etapa='motor_flujo'`.
 
 ---
 
@@ -348,7 +348,7 @@ Ejemplos demostrados en el seed:
 | `crm/motor_flujo_chatbot.py` | **Motor de ejecución** (único entry: `procesar_mensaje_tradicional`) |
 | `crm/admin.py` | Admin de Django para editar el grafo manualmente |
 | `crm/management/commands/seed_centro_estudiantil.py` | **Seed base — comando a ejecutar para plantillas** |
-| `whatsapp/view_webhook_handler.py` | Enganche del motor (bloque nuevo antes del pipeline IA) |
+| `whatsapp/webhook_baileys_view.py` | Enganche del motor (bloque nuevo antes del pipeline IA) |
 | `whatsapp/models.py` | `SesionWhatsApp.modo_bot` + `departamento_default` |
 
 ---

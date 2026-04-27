@@ -14,7 +14,7 @@ from seguridad.templatetags.templatefunctions import encrypt
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp
 from .services import WhatsAppService, get_whatsapp_service
 from .forms import CambiarClasificacionForm
-from .conversaciones_view import _control_respuestas, _tokens_conversacion, _estadisticas_conversacion
+from .view_conversaciones import _control_respuestas, _tokens_conversacion, _estadisticas_conversacion
 
 HORAS_BLOQUEO_REACTIVAR_FINALIZADA = 20
 

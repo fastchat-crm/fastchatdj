@@ -33,7 +33,7 @@ from django.views.decorators.csrf import csrf_exempt
 from channels.layers import get_channel_layer
 
 from .models import ConfigMeta, EventoMetaRecibido, MetaWebhookHit, SesionWhatsApp
-from .view_webhook_handler import process_incoming_message
+from .procesar_mensaje import process_incoming_message
 from .trazas import registrar as _traza
 
 
@@ -333,7 +333,7 @@ def _enrutar_payload(payload: dict, config: ConfigMeta, evento: EventoMetaRecibi
 
 def _meta_a_evento_interno(msg_meta: dict, value: dict, sesion: SesionWhatsApp) -> dict | None:
     """Convierte un mensaje entrante en formato Meta al shape que
-    process_incoming_message (view_webhook_handler) espera, originalmente
+    process_incoming_message (webhook_baileys_view) espera, originalmente
     disenado para Baileys."""
     try:
         from_num = msg_meta.get('from', '')
@@ -350,7 +350,7 @@ def _meta_a_evento_interno(msg_meta: dict, value: dict, sesion: SesionWhatsApp) 
         #     y deja solo "593xxx" (lo que Meta exige en Graph API).
         # Edge case: si Meta alguna vez manda '+' o tiene ya sufijo, lo
         # sanitizamos aqui para evitar que el comparador
-        # `session.numero == contacto_numero` (en view_webhook_handler) falle.
+        # `session.numero == contacto_numero` (en webhook_baileys_view) falle.
         from_num = from_num.strip().lstrip('+')
         if '@' not in from_num:
             from_num_fmt = f"{from_num}@s.whatsapp.net"
@@ -414,7 +414,7 @@ def _meta_a_evento_interno(msg_meta: dict, value: dict, sesion: SesionWhatsApp) 
             media_id = media_obj.get('id')
             # Descargamos los bytes de Meta (dos llamadas Graph API) y los
             # codificamos a base64 para que save_media_file (pensado para el
-            # formato Baileys) los persista sin cambios en view_webhook_handler.
+            # formato Baileys) los persista sin cambios en webhook_baileys_view.
             media_data = None
             if media_id:
                 try:

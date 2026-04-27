@@ -2,7 +2,7 @@
 
 Cuando Node persiste eventos en su outbox (porque Django estuvo caído o lento),
 los reenvía agrupados por este endpoint. La idempotencia ya existente en
-view_webhook_handler.process_incoming_message (chequeo por mensaje_id_externo)
+procesar_mensaje.process_incoming_message (chequeo por mensaje_id_externo)
 cubre los duplicados, así que Node puede reintentar sin riesgo.
 
 URL: POST /whatsapp/webhook_handler/batch/
@@ -38,7 +38,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from .view_webhook_handler import webhook_handler
+from .webhook_baileys_view import webhook_handler
 
 logger = logging.getLogger(__name__)
 

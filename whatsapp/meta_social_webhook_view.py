@@ -31,7 +31,7 @@ from .models import (
     EventoMetaRecibido,
     SesionWhatsApp,
 )
-from .view_webhook_handler import process_incoming_message
+from .procesar_mensaje import process_incoming_message
 from .trazas import registrar as _traza
 
 logger = logging.getLogger(__name__)
