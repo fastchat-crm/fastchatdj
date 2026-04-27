@@ -215,14 +215,53 @@ def crear_arbol(dep, items, padre=None):
 
 
 def main():
-    # 1. Crear o reusar el depto
-    dep = DepartamentoChatBot.objects.filter(nombre=NOMBRE_DEPTO).first()
-    if dep:
-        print(f"Depto '{NOMBRE_DEPTO}' ya existe (id={dep.id}). Limpiando opciones previas...")
-        # Hard delete para no acumular soft-deleted con los mismos boton_id
+    # 1. Crear o reusar el depto.
+    # Buscamos sin filtrar por `status=True` para detectar también deptos
+    # soft-deleted previos (el manager default a veces los oculta) y evitar
+    # crear uno nuevo cada corrida. Si hay varios con el mismo nombre, nos
+    # quedamos con el más reciente y eliminamos los duplicados viejos.
+    matches = list(
+        DepartamentoChatBot.objects
+        .filter(nombre=NOMBRE_DEPTO)
+        .order_by('-id')
+    )
+    # Tolerar managers que filtran status=True por default — fallback a all_objects
+    # buscando vía SQL crudo si el queryset vino vacío.
+    if not matches:
+        try:
+            matches = list(
+                DepartamentoChatBot._default_manager.filter(nombre=NOMBRE_DEPTO).order_by('-id')
+            )
+        except Exception:
+            pass
+    # Backup extra: search en TODA la BD ignorando manager filters.
+    if not matches:
+        from django.db import connection
+        with connection.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM crm_departamentochatbot WHERE nombre = %s ORDER BY id DESC",
+                [NOMBRE_DEPTO],
+            )
+            ids = [r[0] for r in cur.fetchall()]
+        if ids:
+            matches = list(DepartamentoChatBot.objects.filter(id__in=ids).order_by('-id'))
+
+    if matches:
+        dep = matches[0]
+        viejos = matches[1:]
+        if viejos:
+            print(f"Encontrados {len(matches)} deptos con nombre '{NOMBRE_DEPTO}'. "
+                  f"Reusando el más reciente (id={dep.id}); eliminando {len(viejos)} duplicados...")
+            ids_viejos = [d.id for d in viejos]
+            OpcionDepartamentoChatBot.objects.filter(departamento_id__in=ids_viejos).delete()
+            DepartamentoChatBot.objects.filter(id__in=ids_viejos).delete()
+        else:
+            print(f"Depto '{NOMBRE_DEPTO}' ya existe (id={dep.id}, status={dep.status}). Reusando.")
+        # Reactivar + limpiar opciones (hard delete) y refrescar metadata
         OpcionDepartamentoChatBot.objects.filter(departamento=dep).delete()
         dep.color = COLOR
         dep.mensaje_saludo = SALUDO
+        dep.status = True  # reactivar si estaba soft-deleted
         dep.save()
     else:
         dep = DepartamentoChatBot(
