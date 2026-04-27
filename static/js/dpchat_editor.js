@@ -529,8 +529,18 @@
                 if (jsonPre)  jsonPre.textContent = 'Cargando…';
                 modalJson.show();
 
+                console.log('[dpchat] solicitando exportar_flujo_json id=' + STATE.departamentoId
+                          + ' url=' + STATE.postUrl);
                 getJson({ action: 'exportar_flujo_json', id: STATE.departamentoId })
                     .then(function (resp) {
+                        console.log('[dpchat] resp exportar_flujo_json:', resp);
+                        if (!resp || typeof resp !== 'object') {
+                            var raw = JSON.stringify(resp);
+                            if (jsonPre) jsonPre.textContent = 'Respuesta inesperada: ' + raw;
+                            if (fichaBox) fichaBox.innerHTML =
+                                '<div class="alert alert-warning">Respuesta inesperada del servidor.</div>';
+                            return;
+                        }
                         if (!resp.result) {
                             var msg = resp.message || 'Sin detalle';
                             if (jsonPre) jsonPre.textContent = 'Error: ' + msg;
