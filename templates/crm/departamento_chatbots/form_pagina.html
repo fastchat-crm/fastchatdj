@@ -241,12 +241,12 @@
                 <div class="dp-tutorial-nivel nivel-intermedio">
                     <h6><i class="fa fa-tree text-primary"></i> Nivel 2 — Intermedio (variables, validaciones, menús)</h6>
                     <ul>
-                        <li><b>Capturar respuestas</b>: nodo tipo <code>pregunta</code> con <i>variable_destino</i> (ej. <code>cedula</code>) → el contenido del cliente queda en <code>{{ '{{variables.cedula}}' }}</code>.</li>
+                        <li><b>Capturar respuestas</b>: nodo tipo <code>pregunta</code> con <i>variable_destino</i> (ej. <code>cedula</code>) → el contenido del cliente queda en <code>{% verbatim %}{{variables.cedula}}{% endverbatim %}</code>.</li>
                         <li><b>Validaciones</b>: regex (<code>^\d{10}$</code>), email, teléfono — el bot reintenta hasta <i>reintentos_max</i> y luego salta a la rama de error.</li>
                         <li><b>Menús</b>: nodo tipo <code>menu</code> → opciones estáticas (<i>etiqueta → siguiente</i>) o dinámicas (<i>opciones_fuente</i> = lista cargada desde una variable).</li>
-                        <li><b>Condicionales</b>: nodo tipo <code>condicional</code> con expresiones tipo <code>{{ '{{variables.encontrado}}' }} == true</code> → ramas <code>true</code>/<code>false</code>.</li>
+                        <li><b>Condicionales</b>: nodo tipo <code>condicional</code> con expresiones tipo <code>{% verbatim %}{{variables.encontrado}} == true{% endverbatim %}</code> → ramas <code>true</code>/<code>false</code>.</li>
                         <li><b>Asignar variables</b>: <code>set_variable</code> permite calcular o resetear valores. El último paso suele resetear todo antes del <code>fin</code>.</li>
-                        <li><b>Plantillas</b>: en cualquier mensaje podés interpolar variables: <code>{{ '{{contacto.nombre}}' }}</code>, <code>{{ '{{conversacion.id}}' }}</code>, <code>{{ '{{variables.foo}}' }}</code>.</li>
+                        <li><b>Plantillas</b>: en cualquier mensaje podés interpolar variables: <code>{% verbatim %}{{contacto.nombre}}{% endverbatim %}</code>, <code>{% verbatim %}{{conversacion.id}}{% endverbatim %}</code>, <code>{% verbatim %}{{variables.foo}}{% endverbatim %}</code>.</li>
                     </ul>
                 </div>
 
@@ -254,7 +254,7 @@
                 <div class="dp-tutorial-nivel nivel-avanzado">
                     <h6><i class="fa fa-rocket text-purple"></i> Nivel 3 — Avanzado (HTTP, side-effects, integración)</h6>
                     <ul>
-                        <li><b>Llamadas HTTP</b>: tipo <code>http</code> con endpoint registrado en <i>/crm/endpoints_api/</i>. Path soporta templates: <code>api/cotizar/{{ '{{conversacion.id}}' }}/</code>.</li>
+                        <li><b>Llamadas HTTP</b>: tipo <code>http</code> con endpoint registrado en <i>/crm/endpoints_api/</i>. Path soporta templates: <code>api/cotizar/{% verbatim %}{{conversacion.id}}{% endverbatim %}/</code>.</li>
                         <li><b>Extraer variables</b>: <code>extraer = [{variable: 'cotpk', jsonpath: 'data.cotpk'}]</code> — JSONPath relativo al body de respuesta.</li>
                         <li><b>Ramificación ok/error</b>: status 2xx con <code>success: true</code> → rama <code>ok</code>; 4xx/5xx o <code>success: false</code> → rama <code>error</code>.</li>
                         <li><b>Envío de correo</b>: marcá el nodo con <code>config.envia_correo = true</code> y el sistema lo identificará con <span class="dp-flag-pill dp-flag-email"><i class="fa fa-envelope"></i> Envía correo</span>. Útil para procesos como "notificar asesor cuando se cotiza".</li>
@@ -286,7 +286,7 @@
                     <li>Toda rama de error debería desembocar en un <code>fin</code> con un mensaje claro tipo "Inténtalo más tarde".</li>
                     <li>Antes del <code>fin</code>, usá <code>set_variable</code> para limpiar las variables temporales (cedula, placa, etc.) por si el cliente reabre la conv.</li>
                     <li>En nodos HTTP, configurá <code>timeout_seg</code> realista — un POST a un cotizador puede tardar 30-60s.</li>
-                    <li>Las URLs externas y los mensajes con <code>{{ '{{variables.foo}}' }}</code> se resuelven en runtime — probá con <i>Preview</i> antes de exponerlo.</li>
+                    <li>Las URLs externas y los mensajes con <code>{% verbatim %}{{variables.foo}}{% endverbatim %}</code> se resuelven en runtime — probá con <i>Preview</i> antes de exponerlo.</li>
                     <li>Si un nodo dispara correos / notificaciones, marcá <code>config.envia_correo = true</code> para que el operador lo vea como tal en el editor.</li>
                 </ul>
 
