@@ -346,38 +346,22 @@ PASOS = [
         'codigo': 'cotizacion_creada', 'nombre': 'Cotización creada',
         'mensaje': (
             '✅ ¡Listo! Cotización generada (ID *{{variables.cotpk}}*).\n'
-            '💰 Avalúo: *${{variables.avaluo}}*'
+            '💰 Avalúo: *${{variables.avaluo}}*\n\n'
+            'Buscando los planes de Zurich…'
         ),
-        'siguiente': 360,
+        'siguiente': 365,
     },
 
-    # ── 360/365/370 — Menú aseguradora + planes filtrados ──────
-    # Una sola aseguradora por consulta → respuesta rápida (5-10s)
-    # vs /planes/all/ que toma 30-60s. El usuario elige y hacemos
-    # GET /planes/{{aseguradora}}/ con path dinámico.
-    {
-        'id': 360, 'orden': 360, 'tipo': 'menu_botones',
-        'codigo': 'menu_aseguradora', 'nombre': 'Elegir aseguradora',
-        'mensaje': (
-            '🏢 ¿De qué *aseguradora* quieres ver los planes?\n'
-            '_(consulta directa — no incluye las que no estén habilitadas en este broker)_'
-        ),
-        'guardar_en': 'aseguradora',
-        'opciones': [
-            {'etiqueta': 'Zurich',         'valor': 'zurich',    'siguiente': 365},
-            {'etiqueta': 'AIG',            'valor': 'aig',       'siguiente': 365},
-            {'etiqueta': 'Generali',       'valor': 'generali',  'siguiente': 365},
-            {'etiqueta': 'Aseg. del Sur',  'valor': 'adsur',     'siguiente': 365},
-            {'etiqueta': 'Chubb',          'valor': 'chubb',     'siguiente': 365},
-            {'etiqueta': 'Atlántida',      'valor': 'atlantida', 'siguiente': 365},
-            {'etiqueta': 'Locales',        'valor': 'locales',   'siguiente': 365},
-        ],
-    },
+    # ── 365/370 — Planes Zurich (único proveedor, rápido) ──────
+    # Llamamos directo a /planes/zurich/ (5-10s) en vez de /planes/all/
+    # (30-60s). Si en el futuro quieres ofrecer más aseguradoras, vuelve
+    # a meter un menú antes de este nodo y cambia el path por
+    # 'planes/{{variables.aseguradora}}/'.
     {
         'id': 365, 'orden': 365, 'tipo': 'llamada_http',
-        'codigo': 'http_planes_aseg',
-        'nombre': 'GET /planes/{{aseguradora}}/?cotpk= — endpoint dedicado',
-        'metodo': 'GET', 'path': 'planes/{{variables.aseguradora}}/',
+        'codigo': 'http_planes_zurich',
+        'nombre': 'GET /planes/zurich/?cotpk= — solo Zurich',
+        'metodo': 'GET', 'path': 'planes/zurich/',
         'query': {'cotpk': '{{variables.cotpk}}'},
         'timeout_seg': 30,
         'extrae_variables': {
@@ -388,9 +372,9 @@ PASOS = [
     },
     {
         'id': 370, 'orden': 370, 'tipo': 'respuesta_texto',
-        'codigo': 'mostrar_planes', 'nombre': 'Mostrar planes',
+        'codigo': 'mostrar_planes', 'nombre': 'Mostrar planes Zurich',
         'mensaje': (
-            '🛒 *Planes en {{variables.aseguradora}}:*\n\n'
+            '🛒 *Planes Zurich disponibles ({{variables.total_planes}}):*\n\n'
             '{% for p in variables.planes %}'
             '*ID {{p.id}}* — {{p.plan}}\n'
             '  Anual: ${{p.anual}} · Mensual: ${{p.mensual}}\n\n'
@@ -404,9 +388,8 @@ PASOS = [
         'mensaje': '👇 Elige una opción:',
         'guardar_en': 'post_planes_resp',
         'opciones': [
-            {'etiqueta': '📝 Ver detalle de un plan',     'valor': 'detalle', 'siguiente': 380},
-            {'etiqueta': '🔄 Otra aseguradora',          'valor': 'otra',    'siguiente': 360},
-            {'etiqueta': '👋 Terminar',                  'valor': 'fin',     'siguiente': 998},
+            {'etiqueta': '📝 Ver detalle de un plan', 'valor': 'detalle', 'siguiente': 380},
+            {'etiqueta': '👋 Terminar',               'valor': 'fin',     'siguiente': 998},
         ],
     },
     {
@@ -453,9 +436,9 @@ PASOS = [
         ),
         'guardar_en': 'confirmar_seleccion',
         'opciones': [
-            {'etiqueta': '✅ Sí, este plan',         'valor': 'si',    'siguiente': 410},
-            {'etiqueta': '🔍 Ver otro plan',         'valor': 'otro',  'siguiente': 380},
-            {'etiqueta': '🔄 Otra aseguradora',      'valor': 'aseg',  'siguiente': 360},
+            {'etiqueta': '✅ Sí, este plan',  'valor': 'si',    'siguiente': 410},
+            {'etiqueta': '🔍 Ver otro plan',  'valor': 'otro',  'siguiente': 380},
+            {'etiqueta': '📋 Ver lista',      'valor': 'lista', 'siguiente': 370},
         ],
     },
 
