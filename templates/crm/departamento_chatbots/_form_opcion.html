@@ -51,8 +51,12 @@
         <label class="form-label small fw-bold mb-1">
             Mensaje al cliente / cuerpo del nodo
         </label>
+        {# Compatibilidad con nodos IA-generados: el motor de flujo acepta el
+           texto en `opcion.respuesta` o en `config.mensaje`/`config.pregunta`.
+           Mostramos el primero que tenga contenido para que el form siempre
+           pueda editar el mensaje aunque venga de cualquier de las fuentes. #}
         <textarea name="respuesta" class="form-control form-control-sm" rows="4"
-                  placeholder="Texto que envía el bot al activar este nodo.">{{ opcion.respuesta|default:'' }}</textarea>
+                  placeholder="Texto que envía el bot al activar este nodo.">{% firstof opcion.respuesta opcion.config.mensaje opcion.config.pregunta '' %}</textarea>
         <small class="text-muted">
             Variables: {% verbatim %}<code>{{contacto.nombre}}</code>
             <code>{{contacto.numero}}</code>{% endverbatim %} · Soporta emojis y *negrita*.

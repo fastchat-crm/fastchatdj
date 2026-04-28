@@ -1425,6 +1425,13 @@ def _guardar_opcion(request):
             opcion.config = {}
         elif not opcion.config:
             opcion.config = {}
+        # Para tipos cuya carrocería de texto vive en `opcion.respuesta`, retirar
+        # `cfg.mensaje`/`cfg.pregunta` heredados de generadores IA. Si no, el
+        # runtime (`cfg.get('mensaje') or opcion.respuesta`) preferiría el valor
+        # viejo y la edición desde el form quedaría invisible al cliente.
+        if opcion.tipo_nodo in ('respuesta', 'menu', 'pregunta') and isinstance(opcion.config, dict):
+            opcion.config.pop('mensaje', None)
+            opcion.config.pop('pregunta', None)
         # Si dejó de ser http, desvincular el endpoint también.
         if opcion.tipo_nodo != 'http':
             opcion.endpoint = None
