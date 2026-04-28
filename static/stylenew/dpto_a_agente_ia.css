@@ -47,3 +47,39 @@
 #modalGenerarAgente .modal-footer {
     background-color: #f9fafb;
 }
+
+/* ─── Modal "Duplicar departamento" ─── */
+#modalDuplicarDpto .dup-dpto-header {
+    background: linear-gradient(135deg, #d97706 0%, #92400e 100%);
+    color: #fff;
+    border-bottom: none;
+}
+#modalDuplicarDpto .dup-dpto-header .modal-title {
+    font-weight: 600;
+    letter-spacing: .2px;
+}
+#modalDuplicarDpto .modal-footer {
+    background-color: #f9fafb;
+}
+#modalDuplicarDpto .card {
+    background-color: #f9fafb;
+    border: 1px solid #e5e7eb;
+}
+#modalDuplicarDpto #dup_dpto_resultado {
+    font-size: .85rem;
+}
+#modalDuplicarDpto #dup_dpto_resultado.alert-info {
+    background-color: #fef3c7;
+    border-color: #fde68a;
+    color: #92400e;
+}
+#modalDuplicarDpto #dup_dpto_resultado.alert-success {
+    background-color: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #065f46;
+}
+#modalDuplicarDpto #dup_dpto_resultado.alert-danger {
+    background-color: #fef2f2;
+    border-color: #fecaca;
+    color: #991b1b;
+}

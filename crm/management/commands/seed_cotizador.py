@@ -115,7 +115,9 @@ PASOS = [
             '$color_id':            '$.data.vehiculo.color_id',
             '$color_name':          '$.data.vehiculo.color_name',
         },
-        'siguiente_ok': 50, 'siguiente_error': 900,
+        # HTTP 400 = placa inválida según Zurich → mismo destino que `encontrado=false`:
+        # nodo 901 envía botón CTA al cotizador web donde puede ingresar manualmente.
+        'siguiente_ok': 50, 'siguiente_error': 901,
     },
     {
         'id': 50, 'orden': 50, 'tipo': 'decision',
@@ -344,20 +346,40 @@ PASOS = [
         'codigo': 'cotizacion_creada', 'nombre': 'Cotización creada',
         'mensaje': (
             '✅ ¡Listo! Cotización generada (ID *{{variables.cotpk}}*).\n'
-            '💰 Avalúo: *${{variables.avaluo}}*\n\n'
-            'Buscando los planes disponibles…'
+            '💰 Avalúo: *${{variables.avaluo}}*'
         ),
         'siguiente': 360,
     },
 
-    # ── 360/370 — GET /planes/ + mostrar ───────────────────────
+    # ── 360/365/370 — Menú aseguradora + planes filtrados ──────
+    # Una sola aseguradora por consulta → respuesta rápida (5-10s)
+    # vs /planes/all/ que toma 30-60s. El usuario elige y hacemos
+    # GET /planes/{{aseguradora}}/ con path dinámico.
     {
-        'id': 360, 'orden': 360, 'tipo': 'llamada_http',
-        'codigo': 'http_planes',
-        'nombre': 'GET /planes/?cotpk=',
-        'metodo': 'GET', 'path': 'planes/',
+        'id': 360, 'orden': 360, 'tipo': 'menu_botones',
+        'codigo': 'menu_aseguradora', 'nombre': 'Elegir aseguradora',
+        'mensaje': (
+            '🏢 ¿De qué *aseguradora* quieres ver los planes?\n'
+            '_(consulta directa — no incluye las que no estén habilitadas en este broker)_'
+        ),
+        'guardar_en': 'aseguradora',
+        'opciones': [
+            {'etiqueta': 'Zurich',         'valor': 'zurich',    'siguiente': 365},
+            {'etiqueta': 'AIG',            'valor': 'aig',       'siguiente': 365},
+            {'etiqueta': 'Generali',       'valor': 'generali',  'siguiente': 365},
+            {'etiqueta': 'Aseg. del Sur',  'valor': 'adsur',     'siguiente': 365},
+            {'etiqueta': 'Chubb',          'valor': 'chubb',     'siguiente': 365},
+            {'etiqueta': 'Atlántida',      'valor': 'atlantida', 'siguiente': 365},
+            {'etiqueta': 'Locales',        'valor': 'locales',   'siguiente': 365},
+        ],
+    },
+    {
+        'id': 365, 'orden': 365, 'tipo': 'llamada_http',
+        'codigo': 'http_planes_aseg',
+        'nombre': 'GET /planes/{{aseguradora}}/?cotpk= — endpoint dedicado',
+        'metodo': 'GET', 'path': 'planes/{{variables.aseguradora}}/',
         'query': {'cotpk': '{{variables.cotpk}}'},
-        'timeout_seg': 60,
+        'timeout_seg': 30,
         'extrae_variables': {
             '$planes':       '$.data.planes',
             '$total_planes': '$.data.total',
@@ -368,19 +390,29 @@ PASOS = [
         'id': 370, 'orden': 370, 'tipo': 'respuesta_texto',
         'codigo': 'mostrar_planes', 'nombre': 'Mostrar planes',
         'mensaje': (
-            '🛒 *Planes disponibles ({{variables.total_planes}}):*\n\n'
+            '🛒 *Planes en {{variables.aseguradora}}:*\n\n'
             '{% for p in variables.planes %}'
-            '*ID {{p.id}}* · _{{p.aseguradora}}_ — {{p.plan}}\n'
+            '*ID {{p.id}}* — {{p.plan}}\n'
             '  Anual: ${{p.anual}} · Mensual: ${{p.mensual}}\n\n'
             '{% endfor %}'
-            'Escribe el *ID* del plan que te interesa para ver el detalle.'
         ),
-        'siguiente': 380,
+        'siguiente': 375,
+    },
+    {
+        'id': 375, 'orden': 375, 'tipo': 'menu_botones',
+        'codigo': 'menu_post_planes', 'nombre': '¿Qué hacer con los planes?',
+        'mensaje': '👇 Elige una opción:',
+        'guardar_en': 'post_planes_resp',
+        'opciones': [
+            {'etiqueta': '📝 Ver detalle de un plan',     'valor': 'detalle', 'siguiente': 380},
+            {'etiqueta': '🔄 Otra aseguradora',          'valor': 'otra',    'siguiente': 360},
+            {'etiqueta': '👋 Terminar',                  'valor': 'fin',     'siguiente': 998},
+        ],
     },
     {
         'id': 380, 'orden': 380, 'tipo': 'input_texto',
         'codigo': 'pedir_detalle_id', 'nombre': 'Pedir ID del plan',
-        'mensaje': 'Pega el *ID* del plan:',
+        'mensaje': 'Pega el *ID* del plan que te interesa:',
         'guardar_en': 'detalle_id',
         'validacion': r'^[0-9]+$',
         'siguiente': 390,
@@ -421,9 +453,9 @@ PASOS = [
         ),
         'guardar_en': 'confirmar_seleccion',
         'opciones': [
-            {'etiqueta': '✅ Sí, este plan',  'valor': 'si',    'siguiente': 410},
-            {'etiqueta': '🔍 Ver otro plan',  'valor': 'otro',  'siguiente': 380},
-            {'etiqueta': '📋 Ver lista',      'valor': 'lista', 'siguiente': 370},
+            {'etiqueta': '✅ Sí, este plan',         'valor': 'si',    'siguiente': 410},
+            {'etiqueta': '🔍 Ver otro plan',         'valor': 'otro',  'siguiente': 380},
+            {'etiqueta': '🔄 Otra aseguradora',      'valor': 'aseg',  'siguiente': 360},
         ],
     },
 
@@ -467,14 +499,14 @@ PASOS = [
     },
     {
         'id': 901, 'orden': 901, 'tipo': 'respuesta_texto',
-        'codigo': 'placa_no_encontrada', 'nombre': 'Placa no encontrada',
+        'codigo': 'placa_no_encontrada', 'nombre': 'Placa no encontrada / inválida',
         'mensaje': (
-            '🔎 No encontré información para *{{variables.placa}}* en la base. '
-            'Puedes cotizar directamente en nuestro cotizador web '
-            '(ahí puedes ingresar marca, modelo y año manualmente):'
+            '🔎 No pudimos validar la placa *{{variables.placa}}* en nuestra base. '
+            'Puede ser que la placa no exista en Zurich o no tenga el formato correcto.\n\n'
+            'Te llevamos al cotizador web donde puedes ingresar marca, modelo y año manualmente:'
         ),
         'cta_url': 'https://fguerrero.mgaseguros.ec/cotizar/',
-        'cta_display_text': 'Ir al cotizador web',
+        'cta_display_text': '🔗 Ir al cotizador web',
         'siguiente': 999,
     },
     {

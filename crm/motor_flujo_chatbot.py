@@ -1010,6 +1010,10 @@ class MotorFlujo:
             if cta_url and getattr(self.session, 'es_meta', False):
                 self._enviar_cta_url(mensaje, cta_url, cta_text)
             else:
+                # Baileys / preview: anexar el link al final del cuerpo, así
+                # el usuario ve clicable al menos como URL plana.
+                if cta_url:
+                    mensaje = (mensaje or '').rstrip() + f'\n\n👉 {cta_text}: {cta_url}'
                 self.enviar(mensaje)
             return ''
 

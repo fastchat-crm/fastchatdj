@@ -288,6 +288,21 @@
         if (node.tipo === 'respuesta') {
             var msg = resolverExpr(cfg.mensaje || node.respuesta || '');
             if (msg) botBubble(msg);
+            // CTA URL embebido en respuesta: render como botón link.
+            var ctaUrl = (cfg.cta_url || '').trim();
+            if (ctaUrl) {
+                var box = el('div', 'dpprev-buttons');
+                var a = document.createElement('a');
+                a.className = 'dpprev-cta';
+                a.href = ctaUrl;
+                a.target = '_blank';
+                a.rel = 'noopener';
+                a.innerHTML = '<i class="fa fa-external-link-alt me-1"></i> '
+                    + escHtml(cfg.cta_display_text || 'Abrir');
+                box.appendChild(a);
+                chat.appendChild(box);
+                scroll();
+            }
             avanzarA(siguienteDefault(node));
             return;
         }

@@ -111,6 +111,12 @@
                                         </li>
                                         <li>
                                             <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="abrirModalDuplicar({{ l.pk }})">
+                                                <i class="fa fa-copy me-2 text-warning"></i>Duplicar
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
                                                onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'delete')">
                                                 <i class="fas fa-trash me-2 text-danger"></i>Eliminar
                                             </a>
@@ -277,6 +283,94 @@
                             <i class="fa fa-wand-magic-sparkles me-1"></i> Generar Agente IA
                         </button>
                     {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ───────── Modal: Duplicar departamento ───────── #}
+    <div class="modal fade" id="modalDuplicarDpto" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2 dup-dpto-header">
+                    <h5 class="modal-title">
+                        <i class="fa fa-copy me-2"></i>
+                        Duplicar departamento
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                            aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="dup_dpto_loading" class="text-center text-muted py-4">
+                        <i class="fa fa-spinner fa-spin fa-2x mb-2"></i>
+                        <div>Cargando información…</div>
+                    </div>
+
+                    <div id="dup_dpto_content" style="display:none;">
+                        <div class="alert alert-info py-2 small mb-3">
+                            <i class="fa fa-circle-info me-1"></i>
+                            Vamos a crear una copia exacta del departamento, incluyendo
+                            <b>nodos, conexiones, endpoints y usuarios asignados</b>.
+                            Cambiá el nombre si querés diferenciarlo.
+                        </div>
+
+                        <input type="hidden" id="dup_dpto_id" value="">
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-8">
+                                <label class="form-label small fw-bold">Nuevo nombre <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control form-control-sm" id="dup_dpto_nombre"
+                                       maxlength="100" placeholder="Nombre del nuevo departamento">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Color</label>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span id="dup_dpto_color_swatch"
+                                          style="display:inline-block;width:30px;height:30px;border-radius:6px;border:1px solid #ccc;"></span>
+                                    <span id="dup_dpto_color_hex" class="small text-muted font-monospace"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-body py-2 px-3">
+                                <h6 class="fw-bold mb-2 small text-uppercase text-muted">
+                                    <i class="fa fa-list-check me-1"></i> Resumen del original
+                                </h6>
+                                <div class="row g-2 small">
+                                    <div class="col-md-6">
+                                        <div><b>Nombre original:</b> <span id="dup_dpto_orig_nombre"></span></div>
+                                        <div><b>Saludo:</b> <span id="dup_dpto_saludo" class="text-muted"></span></div>
+                                        <div><b>Default del sistema:</b> <span id="dup_dpto_default"></span>
+                                            <small class="text-muted">(la copia siempre se crea como NO default)</small>
+                                        </div>
+                                        <div><b>Flujo activo:</b> <span id="dup_dpto_activo"></span></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div><b>Nodos:</b> <span id="dup_dpto_nodos" class="badge bg-primary"></span></div>
+                                        <div><b>Conexiones:</b> <span id="dup_dpto_conexiones" class="badge bg-info"></span></div>
+                                        <div><b>Endpoints API distintos:</b> <span id="dup_dpto_endpoints" class="badge bg-secondary"></span>
+                                            <small class="text-muted">(se reutilizan, no se clonan)</small>
+                                        </div>
+                                        <div><b>Usuarios asignados:</b> <span id="dup_dpto_usuarios" class="badge bg-success"></span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="dup_dpto_palabras_wrap" class="mb-3" style="display:none;">
+                            <label class="form-label small fw-bold mb-1">Palabras clave</label>
+                            <div id="dup_dpto_palabras" class="d-flex flex-wrap gap-1"></div>
+                        </div>
+
+                        <div id="dup_dpto_resultado" class="alert d-none mb-0"></div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning btn-sm" id="btnDuplicarDpto" disabled>
+                        <i class="fa fa-copy me-1"></i> Duplicar
+                    </button>
                 </div>
             </div>
         </div>
@@ -528,6 +622,151 @@
                         }
                     }, 1100);
 
+                } catch (ex) {
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+                    res.classList.remove('alert-info', 'alert-success');
+                    res.classList.add('alert-danger');
+                    res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Error de red: ' + ex.message;
+                }
+            });
+        }
+
+        // ───── Duplicar departamento ─────
+        let _modalDupInstance = null;
+        function abrirModalDuplicar(dptoId) {
+            const el = document.getElementById('modalDuplicarDpto');
+            if (!el) return;
+            if (!_modalDupInstance) _modalDupInstance = new bootstrap.Modal(el);
+            // Reset estado del modal
+            document.getElementById('dup_dpto_loading').style.display = '';
+            document.getElementById('dup_dpto_content').style.display = 'none';
+            const res = document.getElementById('dup_dpto_resultado');
+            res.classList.add('d-none');
+            res.innerHTML = '';
+            const btn = document.getElementById('btnDuplicarDpto');
+            btn.disabled = true;
+            _modalDupInstance.show();
+
+            // Cargar info del depto
+            const fd = new FormData();
+            fd.append('action', 'duplicar_info');
+            fd.append('csrfmiddlewaretoken', document.querySelector('input[name=csrfmiddlewaretoken]').value);
+            fd.append('id', dptoId);
+
+            fetch('{{ request.path }}', {
+                method: 'POST',
+                body: fd,
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
+                credentials: 'same-origin',
+            }).then(r => r.json()).then(resp => {
+                if (resp.error) {
+                    document.getElementById('dup_dpto_loading').innerHTML =
+                        '<div class="alert alert-danger mb-0">' +
+                        '<i class="fa fa-circle-xmark me-1"></i> ' + (resp.message || 'Error') + '</div>';
+                    return;
+                }
+                const d = resp.data;
+                document.getElementById('dup_dpto_id').value = d.id;
+                document.getElementById('dup_dpto_nombre').value = d.nombre_sugerido;
+                document.getElementById('dup_dpto_orig_nombre').textContent = d.nombre;
+                const swatch = document.getElementById('dup_dpto_color_swatch');
+                swatch.style.backgroundColor = d.color || '#cccccc';
+                document.getElementById('dup_dpto_color_hex').textContent = d.color || '(sin color)';
+                document.getElementById('dup_dpto_saludo').textContent =
+                    d.mensaje_saludo ? (d.mensaje_saludo.length > 120 ? d.mensaje_saludo.slice(0, 120) + '…' : d.mensaje_saludo) : '(sin saludo)';
+                document.getElementById('dup_dpto_default').textContent = d.es_default ? 'Sí' : 'No';
+                document.getElementById('dup_dpto_activo').textContent = d.activo_tradicional ? 'Sí' : 'No';
+                document.getElementById('dup_dpto_nodos').textContent = d.count_opciones;
+                document.getElementById('dup_dpto_conexiones').textContent = d.count_conexiones;
+                document.getElementById('dup_dpto_endpoints').textContent = d.count_endpoints;
+                document.getElementById('dup_dpto_usuarios').textContent = d.count_usuarios;
+
+                const palWrap = document.getElementById('dup_dpto_palabras_wrap');
+                const palCont = document.getElementById('dup_dpto_palabras');
+                palCont.innerHTML = '';
+                if (d.palabras_clave && d.palabras_clave.length) {
+                    d.palabras_clave.forEach(p => {
+                        const span = document.createElement('span');
+                        span.className = 'badge bg-light text-dark border';
+                        span.textContent = p;
+                        palCont.appendChild(span);
+                    });
+                    palWrap.style.display = '';
+                } else {
+                    palWrap.style.display = 'none';
+                }
+
+                document.getElementById('dup_dpto_loading').style.display = 'none';
+                document.getElementById('dup_dpto_content').style.display = '';
+                btn.disabled = false;
+            }).catch(ex => {
+                document.getElementById('dup_dpto_loading').innerHTML =
+                    '<div class="alert alert-danger mb-0">' +
+                    '<i class="fa fa-circle-xmark me-1"></i> Error de red: ' + ex.message + '</div>';
+            });
+        }
+
+        const _btnDup = document.getElementById('btnDuplicarDpto');
+        if (_btnDup) {
+            _btnDup.addEventListener('click', async function () {
+                const dptoId = (document.getElementById('dup_dpto_id') || {}).value;
+                const nombre = ((document.getElementById('dup_dpto_nombre') || {}).value || '').trim();
+                const res = document.getElementById('dup_dpto_resultado');
+                const btn = this;
+
+                if (!dptoId) {
+                    res.classList.remove('d-none', 'alert-success', 'alert-info');
+                    res.classList.add('alert-danger');
+                    res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Departamento no detectado, recargá.';
+                    return;
+                }
+                if (!nombre) {
+                    res.classList.remove('d-none', 'alert-success', 'alert-info');
+                    res.classList.add('alert-danger');
+                    res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Ingresá un nombre para la copia.';
+                    return;
+                }
+
+                const orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Duplicando...';
+                res.classList.remove('d-none', 'alert-danger', 'alert-success');
+                res.classList.add('alert-info');
+                res.innerHTML = '<i class="fa fa-cog fa-spin me-1"></i> Clonando nodos, conexiones y usuarios...';
+
+                const fd = new FormData();
+                fd.append('action', 'duplicar');
+                fd.append('csrfmiddlewaretoken', document.querySelector('input[name=csrfmiddlewaretoken]').value);
+                fd.append('id', dptoId);
+                fd.append('nuevo_nombre', nombre);
+
+                try {
+                    const r = await fetch('{{ request.path }}', {
+                        method: 'POST',
+                        body: fd,
+                        headers: {'X-Requested-With': 'XMLHttpRequest'},
+                        credentials: 'same-origin',
+                    });
+                    const data = await r.json();
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+
+                    if (data.error) {
+                        res.classList.remove('alert-info', 'alert-success');
+                        res.classList.add('alert-danger');
+                        res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> ' + (data.message || 'Error al duplicar.');
+                        return;
+                    }
+
+                    res.classList.remove('alert-info', 'alert-danger');
+                    res.classList.add('alert-success');
+                    res.innerHTML =
+                        '<i class="fa fa-circle-check me-1"></i> <b>' + (data.departamento_nombre || '') +
+                        '</b> creado · ' + (data.nodos || 0) + ' nodos · ' +
+                        (data.conexiones || 0) + ' conexiones · ' +
+                        (data.usuarios || 0) + ' usuarios. Recargando…';
+                    setTimeout(() => window.location.reload(), 1200);
                 } catch (ex) {
                     btn.disabled = false;
                     btn.innerHTML = orig;

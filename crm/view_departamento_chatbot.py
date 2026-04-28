@@ -17,6 +17,8 @@ from .funciones_departamento_chatbot import (
     sincronizar_opciones,
     _generar_departamento_con_ia,
     _crear_agente_desde_dpto,
+    _duplicar_info,
+    _duplicar_departamento,
     _guardar_meta,
     _guardar_opcion,
     _eliminar_opcion,
@@ -134,6 +136,10 @@ def departamentoChatbotsView(request):
                     return _generar_departamento_con_ia(request)
                 elif action == 'crear_agente_desde_dpto':
                     return _crear_agente_desde_dpto(request)
+                elif action == 'duplicar_info':
+                    return _duplicar_info(request)
+                elif action == 'duplicar':
+                    return _duplicar_departamento(request)
                 elif action == 'guardar_meta':
                     return _guardar_meta(request)
                 elif action == 'guardar_opcion':

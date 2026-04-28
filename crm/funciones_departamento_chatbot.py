@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.http import JsonResponse
 
 from core.funciones import log
@@ -271,6 +272,171 @@ def _crear_agente_desde_dpto(request):
         'redirect': f'/crm/entrenamiento/?action=procedimiento&id={agente.id}',
         'mensaje': f"Agente '{agente.nombre}' creado desde el departamento '{dpto.nombre}'.",
     })
+
+
+# ============================================================================
+# Duplicación de departamento. Dos endpoints: `_duplicar_info` (resumen para
+# el modal de confirmación) y `_duplicar_departamento` (clona depto + nodos +
+# conexiones + asignaciones de usuarios). El nodo `EstadoFlujoChatbot` no se
+# clona — es estado runtime de conversaciones reales.
+# ============================================================================
+def _duplicar_info(request):
+    """GET-via-POST opcional: devuelve resumen del depto a duplicar para
+    pintar el modal de confirmación (cuenta de nodos, palabras clave, etc.)."""
+    try:
+        dpto_id = int(request.POST.get('id') or request.GET.get('id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'error': True, 'message': 'ID inválido.'})
+
+    dpto = DepartamentoChatBot.objects.filter(pk=dpto_id, status=True).first()
+    if not dpto:
+        return JsonResponse({'error': True, 'message': 'Departamento no encontrado.'})
+
+    palabras = dpto.get_palabras_clave()
+    count_opciones = OpcionDepartamentoChatBot.objects.filter(
+        departamento=dpto, status=True,
+    ).count()
+    count_usuarios = PerfilDepartamentoChatBot.objects.filter(
+        departamento=dpto, status=True,
+    ).count()
+    count_conexiones = ConexionNodoChatbot.objects.filter(
+        nodo_origen__departamento=dpto, status=True,
+    ).count()
+    count_endpoints = OpcionDepartamentoChatBot.objects.filter(
+        departamento=dpto, status=True, tipo_nodo='http', endpoint__isnull=False,
+    ).values_list('endpoint_id', flat=True).distinct().count()
+
+    return JsonResponse({
+        'error': False,
+        'data': {
+            'id': dpto.id,
+            'nombre': dpto.nombre,
+            'color': dpto.color,
+            'mensaje_saludo': dpto.mensaje_saludo or '',
+            'palabras_clave': palabras,
+            'es_default': bool(dpto.es_default),
+            'activo_tradicional': bool(dpto.activo_tradicional),
+            'count_opciones': count_opciones,
+            'count_conexiones': count_conexiones,
+            'count_endpoints': count_endpoints,
+            'count_usuarios': count_usuarios,
+            'nombre_sugerido': f"{dpto.nombre} - COPIA",
+        },
+    })
+
+
+def _duplicar_departamento(request):
+    """Action: duplicar. Clona DepartamentoChatBot completo:
+      1. Nuevo Departamento con los mismos campos (es_default forzado a False).
+      2. Clona OpcionDepartamentoChatBot manteniendo árbol (opcion_padre).
+      3. Clona ConexionNodoChatbot remapeando origen/destino.
+      4. Clona PerfilDepartamentoChatBot (asignaciones de usuarios)."""
+    try:
+        dpto_id = int(request.POST.get('id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'error': True, 'message': 'ID inválido.'})
+
+    dpto = DepartamentoChatBot.objects.filter(pk=dpto_id, status=True).first()
+    if not dpto:
+        return JsonResponse({'error': True, 'message': 'Departamento no encontrado.'})
+
+    nuevo_nombre = (request.POST.get('nuevo_nombre') or '').strip() or f"{dpto.nombre} - COPIA"
+    if len(nuevo_nombre) > 100:
+        nuevo_nombre = nuevo_nombre[:100]
+
+    with transaction.atomic():
+        nuevo = DepartamentoChatBot(
+            nombre=nuevo_nombre,
+            color=dpto.color,
+            mensaje_saludo=dpto.mensaje_saludo,
+            palabras_clave=dpto.palabras_clave,
+            es_default=False,  # nunca duplicar el default; evita conflicto de ruteo
+            activo_tradicional=dpto.activo_tradicional,
+        )
+        nuevo.save(request)
+
+        # Pase 1 — clonar nodos sin opcion_padre (lo seteamos en pase 2 con el mapeo)
+        nodos_origen = list(OpcionDepartamentoChatBot.objects.filter(
+            departamento=dpto, status=True,
+        ).order_by('id'))
+        mapeo_nodos = {}  # old_id → new_node
+        for n in nodos_origen:
+            nuevo_nodo = OpcionDepartamentoChatBot(
+                departamento=nuevo,
+                orden=n.orden,
+                nombre=n.nombre,
+                respuesta=n.respuesta,
+                opcion_padre=None,
+                boton_id=n.boton_id,
+                tipo_nodo=n.tipo_nodo,
+                es_inicio=n.es_inicio,
+                config=n.config or {},
+                endpoint=n.endpoint,  # endpoints son compartidos, no se clonan
+                variable_destino=n.variable_destino,
+                validacion_tipo=n.validacion_tipo,
+                validacion_expresion=n.validacion_expresion,
+                mensaje_error=n.mensaje_error,
+                reintentos_max=n.reintentos_max,
+                posicion_x=n.posicion_x,
+                posicion_y=n.posicion_y,
+            )
+            nuevo_nodo.save(request)
+            mapeo_nodos[n.id] = nuevo_nodo
+
+        # Pase 2 — setear opcion_padre con el mapeo
+        for n in nodos_origen:
+            if n.opcion_padre_id and n.opcion_padre_id in mapeo_nodos:
+                nuevo_nodo = mapeo_nodos[n.id]
+                nuevo_nodo.opcion_padre = mapeo_nodos[n.opcion_padre_id]
+                nuevo_nodo.save(request)
+
+        # Pase 3 — clonar conexiones del grafo
+        conexiones = ConexionNodoChatbot.objects.filter(
+            nodo_origen__departamento=dpto, status=True,
+        )
+        count_conex_clonadas = 0
+        for c in conexiones:
+            origen_new = mapeo_nodos.get(c.nodo_origen_id)
+            destino_new = mapeo_nodos.get(c.nodo_destino_id)
+            if not origen_new or not destino_new:
+                continue
+            ConexionNodoChatbot(
+                nodo_origen=origen_new,
+                nodo_destino=destino_new,
+                etiqueta=c.etiqueta,
+                orden=c.orden,
+                descripcion=c.descripcion,
+            ).save(request)
+            count_conex_clonadas += 1
+
+        # Pase 4 — clonar usuarios asignados
+        perfiles = PerfilDepartamentoChatBot.objects.filter(
+            departamento=dpto, status=True,
+        )
+        count_usuarios_clonados = 0
+        for p in perfiles:
+            PerfilDepartamentoChatBot(
+                departamento=nuevo,
+                usuario=p.usuario,
+            ).save(request)
+            count_usuarios_clonados += 1
+
+    log(
+        f"Duplicó departamento '{dpto.nombre}' → '{nuevo.nombre}' "
+        f"({len(mapeo_nodos)} nodos, {count_conex_clonadas} conexiones, "
+        f"{count_usuarios_clonados} usuarios)",
+        request, "add", obj=nuevo.id,
+    )
+    return JsonResponse({
+        'error': False,
+        'departamento_id': nuevo.id,
+        'departamento_nombre': nuevo.nombre,
+        'nodos': len(mapeo_nodos),
+        'conexiones': count_conex_clonadas,
+        'usuarios': count_usuarios_clonados,
+        'mensaje': f"Departamento duplicado como '{nuevo.nombre}'.",
+    })
+
 
 # ============================================================================
 # Serialización plana del árbol de opciones para render server-side. Cada item
