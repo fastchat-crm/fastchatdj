@@ -257,11 +257,13 @@ PASOS = [
     },
 
     # ── 240..260 — Cantones (solo si requiere_canton) ──────────
+    # Color: NO se pregunta. /vehiculo/ ya devuelve `color_id` en el formato
+    # opaco que /cotizar/ espera (JSON-string). Se reenvía tal cual.
     {
         'id': 240, 'orden': 240, 'tipo': 'decision',
         'codigo': 'requiere_canton', 'nombre': '¿El tenant requiere cantón?',
         'condicion': '{{variables.requiere_canton}} == true',
-        'siguiente_si': 250, 'siguiente_no': 300,
+        'siguiente_si': 250, 'siguiente_no': 320,
     },
     {
         'id': 250, 'orden': 250, 'tipo': 'llamada_http',
@@ -284,31 +286,6 @@ PASOS = [
             'campo_etiqueta': 'nombre',
             'salida': '',
             'limite': 50,
-        },
-        'siguiente': 300,
-    },
-
-    # ── 300/310 — Catálogo colores ─────────────────────────────
-    {
-        'id': 300, 'orden': 300, 'tipo': 'llamada_http',
-        'codigo': 'http_colores',
-        'nombre': 'GET /catalogos/colores/',
-        'metodo': 'GET', 'path': 'catalogos/colores/',
-        'extrae_variables': {'$colores': '$.data.colores'},
-        'siguiente_ok': 310, 'siguiente_error': 900,
-    },
-    {
-        'id': 310, 'orden': 310, 'tipo': 'menu_botones',
-        'codigo': 'pedir_color', 'nombre': 'Elegir color',
-        'mensaje': '🎨 Elige el *color* (sugerido: {{variables.color_name}}):',
-        'guardar_en': 'color_id',
-        'opciones': [],
-        'opciones_fuente': {
-            'variable': 'variables.colores',
-            'campo_id': 'id',
-            'campo_etiqueta': 'nombre',
-            'salida': '',
-            'limite': 10,
         },
         'siguiente': 320,
     },
@@ -337,7 +314,7 @@ PASOS = [
         'codigo': 'http_cotizar',
         'nombre': 'POST /cotizar/ — DISPARA cotización',
         'metodo': 'POST', 'path': 'cotizar/',
-        'timeout_seg': 60,
+        'timeout_seg': 90,  # consulta múltiples aseguradoras, puede tardar
         'body': {
             'placa':            '{{variables.placa}}',
             'cedula':           '{{variables.cedula}}',
@@ -843,7 +820,7 @@ class Command(BaseCommand):
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                 },
-                'timeout_seg': 30,
+                'timeout_seg': 60,  # default amplio; nodos pueden subir a 90s
                 'descripcion': 'Endpoint base REST del cotizador ARIA v2.',
             },
         )

@@ -6,12 +6,10 @@
 }
 .dpprev-toolbar h5 { margin: 0; flex: 1; }
 
+/* Layout en row Bootstrap (col-md-4 × 3): Phone | Variables | Debug log.
+   La regla grid antigua queda obsoleta — ahora usamos el sistema de cols. */
 .dpprev-wrap {
-    display: grid; grid-template-columns: 380px 1fr;
-    gap: 1.5rem; align-items: start;
-}
-@media (max-width: 900px) {
-    .dpprev-wrap { grid-template-columns: 1fr; }
+    align-items: stretch;
 }
 
 .dpprev-phone {
@@ -111,10 +109,29 @@
 
 .dpprev-side {
     background: #fff; border: 1px solid #e9ecef;
-    border-radius: 10px; padding: 1rem;
+    border-radius: 10px;
+    height: 100%;
+    display: flex; flex-direction: column;
+    overflow: hidden;
 }
 .dpprev-side h6 { font-weight: 600; }
 .dpprev-side ul { padding-left: 1.2rem; margin-bottom: .5rem; }
+.dpprev-side-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: .5rem;
+    padding: .65rem .85rem;
+    border-bottom: 1px solid #e9ecef;
+    background: #f8fafc;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+.dpprev-side-vars .dpprev-side-head h6 i { color: #2563eb; }
+.dpprev-side-log  .dpprev-side-head h6 i { color: #16a34a; }
+.dpprev-side-body {
+    flex: 1;
+    padding: .75rem .85rem;
+    overflow: auto;
+}
 
 /* Animación typing */
 .dpprev-typing { display: flex; gap: 3px; padding: .35rem .5rem; }
@@ -139,35 +156,18 @@
     flex: 1;
 }
 
-/* ─── Panel derecho: tabs + variables + log ─── */
-.dpprev-side {
-    padding: 0;
-    overflow: hidden;
-    display: flex; flex-direction: column;
-    max-height: calc(100vh - 140px);
-}
-.dpprev-side .nav-tabs {
-    border-bottom: 1px solid #e9ecef;
-    margin: 0; padding: 0 .5rem;
-}
-.dpprev-side .nav-tabs .nav-link {
-    border: none; border-bottom: 2px solid transparent;
-    padding: .5rem .75rem;
-    color: #6b7280; background: transparent;
-}
-.dpprev-side .nav-tabs .nav-link.active {
-    color: #075e54; border-bottom-color: #075e54;
-    background: transparent;
-}
-.dpprev-side .tab-content {
-    flex: 1; overflow: auto;
+/* ─── Panel derecho: variables + log (alturas alineadas al phone) ─── */
+.dpprev-side-vars,
+.dpprev-side-log {
+    max-height: 640px; /* coincide con la altura del phone */
 }
 .dpprev-vars-pre {
     background: #1f2937; color: #f9fafb;
     padding: .75rem; border-radius: 6px;
     font-size: .78rem; line-height: 1.4;
-    max-height: 400px; overflow: auto;
+    max-height: 380px; overflow: auto;
     white-space: pre-wrap;
+    margin-bottom: 0;
 }
 
 /* ─── Debug log ─── */

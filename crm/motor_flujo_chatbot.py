@@ -345,12 +345,17 @@ def ejecutar_http(nodo, contexto: dict, _traza_extra: Optional[dict] = None):
             'query': query, 'request_body': body,
         })
 
+    # Timeout: prefiere el del nodo (cfg.timeout_seg) si está definido — útil
+    # cuando un POST específico (ej. /cotizar/) toma más que el resto y no
+    # quieres subir el timeout global del endpoint.
+    timeout_eff = int(cfg.get('timeout_seg') or ep.timeout_seg or 15)
+
     try:
         resp = requests.request(
             metodo, url,
             headers=headers,
             params=query or None,
-            timeout=ep.timeout_seg or 15,
+            timeout=timeout_eff,
             **body_kwargs,
         )
     except requests.RequestException as e:
