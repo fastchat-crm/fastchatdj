@@ -1465,6 +1465,10 @@ def _guardar_opcion(request):
             cfg['body'] = body
         if headers:  cfg['headers'] = headers
         if extraer:  cfg['extraer'] = extraer
+        # Side-effect: si está marcado, el motor envía correo a los asesores
+        # del depto al ejecutar este nodo HTTP exitosamente.
+        if request.POST.get('envia_correo'):
+            cfg['envia_correo'] = True
         opcion.config = cfg
     else:
         # Tipos sin form específico → limpiar config si era de otro tipo (cta_url/

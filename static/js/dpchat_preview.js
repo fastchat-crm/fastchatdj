@@ -496,6 +496,11 @@
                 botBubble(resolverExpr(cfg.plantilla_respuesta));
             }
             logEvt('info', '[mock] HTTP ' + metodo + ' ' + pathResuelto);
+            // Aviso del side-effect de correo (preview no envía real, solo informa).
+            if (cfg.envia_correo) {
+                systemBubble('📧 [Simulación] En real: notificaría por correo a los asesores del depto.', 'info');
+                logEvt('info', 'Side-effect: envia_correo=true (preview no manda real)');
+            }
             avanzarA(buscarSalida(node, 'ok') || siguienteDefault(node));
             return;
         }
@@ -555,6 +560,12 @@
                 botBubble(resolverExpr(cfg.plantilla_respuesta));
             } else if (resp.etiqueta === 'error') {
                 systemBubble('❌ API retornó error: ' + (resp.error || 'HTTP ' + resp.status), 'warn');
+            }
+            // Aviso del side-effect de correo. El preview NO dispara el envío
+            // real (probar_http no pasa por el motor); solo informa al operador.
+            if (resp.etiqueta === 'ok' && cfg.envia_correo) {
+                systemBubble('📧 [Simulación] En real: notificaría por correo a los asesores del depto.', 'info');
+                logEvt('info', 'Side-effect: envia_correo=true (preview no manda real)');
             }
             avanzarA(buscarSalida(node, resp.etiqueta) || siguienteDefault(node));
         }).catch(function (err) {

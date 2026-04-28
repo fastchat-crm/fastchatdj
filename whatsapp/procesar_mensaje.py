@@ -273,6 +273,34 @@ def process_incoming_message(session, event_data, channel_layer):
         # Actualizar estadísticas
         update_conversation_stats(conversation)
 
+        # Notificar al listado y al chat ANTES de la lógica de negocio que
+        # puede cortar el flujo (rate-limit, fuera-horario, IA, motor flujo).
+        # Sin esto el mensaje queda en BD pero la conversación no aparece en
+        # la lista hasta refrescar la página manualmente.
+        async_to_sync(channel_layer.group_send)(
+            f"chat_{conversation.id}",
+            {
+                'type': 'whatsapp_message',
+                'event': 'new_message',
+                'conversation_id': conversation.id,
+                'message_id': message.id,
+                'message_type': message_type,
+                'message_text': message_text,
+                'sender': from_number,
+                'timestamp': message_date.isoformat(),
+            },
+        )
+        async_to_sync(channel_layer.group_send)(
+            f"whatsapp_sessionroom_{session.id}",
+            {
+                'type': 'whatsapp_event',
+                'event': 'new_message',
+                'conversation_id': conversation.id,
+                'from_me': False,
+                'timestamp': message_date.isoformat(),
+            },
+        )
+
         # ── Cortar envío si Node ya nos avisó que está rate-limited ──
         # Evita amplificar la saturación enviando bienvenida/IA/avisos durante la ventana.
         _rate_info = cache.get(f'wa_rate_limited_{session.id}')
@@ -923,35 +951,6 @@ def process_incoming_message(session, event_data, channel_layer):
                     conversation.estado_mensaje = 'MENU_DEPARTAMENTOS'
                     conversation.modelo = None
                 conversation.save()
-
-
-
-
-            # Notificar a través de WebSockets
-        async_to_sync(channel_layer.group_send)(
-            f"chat_{conversation.id}",
-            {
-                'type': 'whatsapp_message',
-                'event': 'new_message',
-                'conversation_id': conversation.id,
-                'message_id': message.id,
-                'message_type': message_type,
-                'message_text': message_text,
-                'sender': from_number,
-                'timestamp': message_date.isoformat()
-            }
-        )
-
-        async_to_sync(channel_layer.group_send)(
-            f"whatsapp_sessionroom_{session.id}",
-            {
-                'type': 'whatsapp_event',
-                'event': 'new_message',
-                'conversation_id': conversation.id,
-                'from_me': False,
-                'timestamp': message_date.isoformat()
-            }
-        )
 
         logger.info(f"Mensaje recibido de {from_number} en la sesión {session.session_id}")
 

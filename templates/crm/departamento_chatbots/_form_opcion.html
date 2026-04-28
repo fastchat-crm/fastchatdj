@@ -222,6 +222,36 @@
                 </small>
             </div>
 
+            {# ── Side-effects del nodo HTTP ──────────────────────────── #}
+            <div class="col-12">
+                <div class="border rounded p-2 bg-light">
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="dp_envia_correo"
+                               name="envia_correo" value="1"
+                               {% if opcion.config.envia_correo %}checked{% endif %}>
+                        <label class="form-check-label small fw-bold" for="dp_envia_correo">
+                            <i class="fa fa-envelope text-info me-1"></i>
+                            Envía correo a asesores del departamento al ejecutar este paso
+                        </label>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        Cuando el HTTP responde 2xx, se manda automáticamente un correo a
+                        TODOS los usuarios activos asignados al departamento
+                        (<code>PerfilDepartamentoChatBot.status=True</code>) con un link a
+                        la conversación. Útil para notificar handoff, cotización terminada,
+                        cita agendada, etc. Si no hay asesores con email, el flujo del
+                        cliente sigue normal y solo queda log.
+                    </small>
+                    <small class="text-muted d-block mt-2">
+                        <i class="fa fa-circle-info me-1"></i>
+                        <b>Tip — pasar id de la conversación a la API</b>: usa
+                        <code>&#123;&#123;conversacion.id&#125;&#125;</code> en el path o el body.
+                        Ejemplo path: <code>api/cotizar/&#123;&#123;conversacion.id&#125;&#125;/</code>.
+                        Ejemplo body: <code>{"id_conversacion": "&#123;&#123;conversacion.id&#125;&#125;"}</code>.
+                    </small>
+                </div>
+            </div>
+
             {# Probar API: ejecuta la request con la config actual sin guardar #}
             <div class="col-12 mt-2 p-2"
                  style="background:#fef3c7;border-radius:6px;border:1px solid #fcd34d;">

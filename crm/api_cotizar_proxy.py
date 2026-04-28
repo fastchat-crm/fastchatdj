@@ -1,16 +1,11 @@
 """Proxy interno para el flujo de cotización ARIA.
 
 El motor del flujo del chatbot tradicional invoca un único nodo HTTP que pega
-acá. Este endpoint orquesta dos efectos:
+acá. Este endpoint solo orquesta el webhook externo de ARIA — el envío de
+correo al asesor lo dispara el motor genéricamente cuando el nodo tiene
+`config.envia_correo = true` (ver `crm/helpers_correo_flujo.py`).
 
-1. POST al webhook externo `https://fguerrero.mgaseguros.ec/webhook/cotizar/`
-   con el body que arma el flujo (cliente + vehiculo + aseguradoras).
-2. Si el webhook acepta (HTTP 202 con `ok: true`), envía un correo a los
-   asesores del departamento del flujo — todos los `PerfilDepartamentoChatBot`
-   activos del depto cuyo `EstadoFlujoChatbot.departamento` coincide con la
-   conversación.
-
-Devuelve siempre `{success: bool, message: str}` para que el motor del flujo
+Devuelve `{success: bool, message: str}` para que el motor del flujo
 ramifique a `siguiente_ok` (success=True) o `siguiente_error` (success=False).
 
 Sin auth — es un endpoint interno, lo único que valida es que la conversación
@@ -22,20 +17,10 @@ import json
 import logging
 
 import requests
-from django.conf import settings
 from django.http import JsonResponse
-from django.template.loader import get_template
-from django.urls import reverse  # noqa: F401  (se usa indirectamente para tests)
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from core.email_config import send_html_mail
-from core.funciones import encrypt_sesion_id
-from crm.models import (
-    DepartamentoChatBot,
-    EstadoFlujoChatbot,
-    PerfilDepartamentoChatBot,
-)
 from whatsapp.models import ConversacionWhatsApp
 
 
@@ -44,71 +29,6 @@ logger = logging.getLogger(__name__)
 
 WEBHOOK_ARIA_URL = 'https://fguerrero.mgaseguros.ec/webhook/cotizar/'
 WEBHOOK_TIMEOUT_SEG = 30
-
-
-def _resolver_departamento(conv: ConversacionWhatsApp):
-    """Resuelve el depto desde el cual notificar.
-    Orden de preferencia:
-      1. EstadoFlujoChatbot.departamento (depto activo del flujo).
-      2. SesionWhatsApp.departamento_default.
-      3. Depto con codigo='aria' (fallback del seed).
-    """
-    estado = EstadoFlujoChatbot.objects.filter(conversacion=conv).first()
-    if estado and estado.departamento:
-        return estado.departamento
-    sesion = getattr(conv.contacto, 'sesion', None)
-    if sesion and sesion.departamento_default:
-        return sesion.departamento_default
-    return DepartamentoChatBot.objects.filter(codigo='aria', status=True).first()
-
-
-def _emails_asesores(depto):
-    if not depto:
-        return []
-    return list(
-        PerfilDepartamentoChatBot.objects
-        .filter(departamento=depto, status=True)
-        .select_related('usuario')
-        .values_list('usuario__email', flat=True)
-        .exclude(usuario__email='')
-    )
-
-
-def _link_conversacion(conv: ConversacionWhatsApp) -> str:
-    """Arma URL absoluta a /whatsapp/conversaciones/?conv=<token> con dominio
-    de settings. Si la conv está finalizada, view_conversaciones la redirige
-    sola a /conversaciones-finalizadas/."""
-    base = getattr(settings, 'URL_GENERAL', '').rstrip('/')
-    token = encrypt_sesion_id(conv.id)
-    return f'{base}/whatsapp/conversaciones/?conv={token}'
-
-
-def _enviar_correo_asesores(conv, body_webhook, respuesta_webhook):
-    depto = _resolver_departamento(conv)
-    emails = _emails_asesores(depto)
-    if not emails:
-        logger.warning(
-            'Cotización conv#%s: no hay asesores con email en depto %s',
-            conv.id, depto.nombre if depto else '(none)'
-        )
-        return False
-    cliente = body_webhook.get('cliente') or {}
-    vehiculo = body_webhook.get('vehiculo') or {}
-    datos = {
-        'conv_id': conv.id,
-        'contacto_nombre': (conv.contacto.contacto_nombre or '').strip()
-                           or conv.contacto.from_number,
-        'contacto_numero': conv.contacto.from_number,
-        'cliente': cliente,
-        'vehiculo': vehiculo,
-        'aseguradoras': body_webhook.get('aseguradoras') or {},
-        'respuesta_webhook': respuesta_webhook,
-        'link_chat': _link_conversacion(conv),
-        'depto_nombre': depto.nombre if depto else '',
-    }
-    asunto = f'🚗 Nueva cotización solicitada — Conv #{conv.id}'
-    send_html_mail(asunto, 'email/asesor_cotizacion.html', datos, emails, [])
-    return True
 
 
 @csrf_exempt
@@ -179,14 +99,8 @@ def cotizar_proxy(request, conv_id: int):
             'webhook_body': resp_json,
         }, status=502)
 
-    # Éxito: notificar por correo a los asesores del depto.
-    try:
-        _enviar_correo_asesores(conv, payload, resp_json)
-    except Exception:
-        # Si el correo falla, NO rompemos el flujo del cliente — la cotización
-        # ya está encolada del lado de ARIA. Solo logueamos.
-        logger.exception('Fallo enviando correo de cotización conv#%s', conv.id)
-
+    # Éxito. El correo a los asesores lo dispara el motor del flujo si el
+    # nodo tiene `config.envia_correo=true` (ver helpers_correo_flujo.py).
     return JsonResponse({
         'success': True,
         'message': resp_json.get('mensaje') or 'Cotización en proceso.',

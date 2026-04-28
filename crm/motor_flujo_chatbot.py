@@ -1159,6 +1159,21 @@ class MotorFlujo:
             plantilla = cfg.get('plantilla_respuesta')
             if plantilla and (etq == 'ok' or cfg.get('enviar_respuesta_en_error')):
                 self.enviar(plantilla)
+            # Side-effect genérico: si el nodo está marcado con
+            # `config.envia_correo`, notifica por mail a los asesores del
+            # depto al que pertenece el flujo. Falla silenciosa: si no hay
+            # asesores o el envío rebota, solo loguea (el cliente sigue).
+            if etq == 'ok' and cfg.get('envia_correo'):
+                try:
+                    from crm.helpers_correo_flujo import notificar_asesores_depto
+                    notificar_asesores_depto(
+                        conv=self.conversation,
+                        nodo=nodo,
+                        request_body=traza_extra.get('request_body'),
+                        response_body=traza_extra.get('response_body'),
+                    )
+                except Exception:
+                    logger.exception('Error enviando correo (nodo %s)', nodo.id)
             if etq == 'error' and err:
                 logger.warning('Nodo http %s falló: %s', nodo.id, err)
             return etq
