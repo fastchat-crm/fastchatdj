@@ -923,7 +923,31 @@ class MotorFlujo:
         y como fallback, los hijos del árbol legacy (subopciones).
         """
         cfg = nodo.config or {}
-        opciones = cfg.get('opciones') or []
+        opciones = list(cfg.get('opciones') or [])
+
+        # Opciones dinámicas: se construyen desde una variable del contexto en
+        # runtime. Útil para catálogos (tipos vehículo, colores, etc.) traídos
+        # por un nodo HTTP previo. Todas las opciones dinámicas comparten la
+        # misma `salida` (default = '') → una sola conexión saliente del menú.
+        fuente = cfg.get('opciones_fuente') or {}
+        if fuente:
+            path = fuente.get('variable', '')
+            campo_id = fuente.get('campo_id', 'id')
+            campo_etq = fuente.get('campo_etiqueta', 'nombre')
+            salida = fuente.get('salida', '')
+            limite = int(fuente.get('limite', 10))
+            items = _get_path(self.contexto(), path)
+            if isinstance(items, (list, tuple)):
+                for it in items[:limite]:
+                    if isinstance(it, dict):
+                        valor = str(it.get(campo_id, ''))
+                        etq = str(it.get(campo_etq, valor))
+                    else:
+                        valor = str(it)
+                        etq = valor
+                    if valor:
+                        opciones.append({'etiqueta': etq, 'valor': valor, 'salida': salida})
+
         if opciones:
             return opciones
         hijos = list(nodo.subopciones.filter(status=True).order_by('orden'))

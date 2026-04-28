@@ -216,15 +216,18 @@ PASOS = [
         'siguiente_ok': 210, 'siguiente_error': 900,
     },
     {
-        'id': 210, 'orden': 210, 'tipo': 'input_texto',
+        'id': 210, 'orden': 210, 'tipo': 'menu_botones',
         'codigo': 'pedir_tipo_vehiculo', 'nombre': 'Elegir tipo de vehículo',
-        'mensaje': (
-            '🚙 Elige el *tipo de vehículo* (escribe el ID):\n\n'
-            '{% for t in variables.tipos %}'
-            '*{{t.id}}* — {{t.nombre}}\n'
-            '{% endfor %}'
-        ),
+        'mensaje': '🚙 Elige el *tipo de vehículo*:',
         'guardar_en': 'tipo_vehiculo_id',
+        'opciones': [],  # dinámicas, se generan desde variables.tipos
+        'opciones_fuente': {
+            'variable': 'variables.tipos',
+            'campo_id': 'id',
+            'campo_etiqueta': 'nombre',
+            'salida': '',  # arista default
+            'limite': 10,
+        },
         'siguiente': 220,
     },
 
@@ -289,16 +292,18 @@ PASOS = [
         'siguiente_ok': 310, 'siguiente_error': 900,
     },
     {
-        'id': 310, 'orden': 310, 'tipo': 'input_texto',
+        'id': 310, 'orden': 310, 'tipo': 'menu_botones',
         'codigo': 'pedir_color', 'nombre': 'Elegir color',
-        'mensaje': (
-            '🎨 Elige el *color* (escribe el ID; sugerido: '
-            '*{{variables.color_id}}* — {{variables.color_name}}):\n\n'
-            '{% for c in variables.colores %}'
-            '*{{c.id}}* — {{c.nombre}}\n'
-            '{% endfor %}'
-        ),
+        'mensaje': '🎨 Elige el *color* (sugerido: {{variables.color_name}}):',
         'guardar_en': 'color_id',
+        'opciones': [],
+        'opciones_fuente': {
+            'variable': 'variables.colores',
+            'campo_id': 'id',
+            'campo_etiqueta': 'nombre',
+            'salida': '',
+            'limite': 10,
+        },
         'siguiente': 320,
     },
 
@@ -481,9 +486,12 @@ PASOS = [
         'id': 901, 'orden': 901, 'tipo': 'respuesta_texto',
         'codigo': 'placa_no_encontrada', 'nombre': 'Placa no encontrada',
         'mensaje': (
-            '🔎 No encontré información para esa placa en la base de Zurich. '
-            'Verifica que esté bien escrita; el cotizador solo soporta vehículos con placa.'
+            '🔎 No encontré información para *{{variables.placa}}* en la base. '
+            'Puedes cotizar directamente en nuestro cotizador web '
+            '(ahí puedes ingresar marca, modelo y año manualmente):'
         ),
+        'cta_url': 'https://fguerrero.mgaseguros.ec/cotizar/',
+        'cta_display_text': 'Ir al cotizador web',
         'siguiente': 999,
     },
     {
@@ -591,17 +599,24 @@ class Command(BaseCommand):
     def _config_para(self, paso):
         t = paso['tipo']
         if t == 'respuesta_texto' or t == 'fin_conversacion':
-            return {'mensaje': paso.get('mensaje', '')}
+            cfg = {'mensaje': paso.get('mensaje', '')}
+            if paso.get('cta_url'):
+                cfg['cta_url'] = paso['cta_url']
+                cfg['cta_display_text'] = paso.get('cta_display_text', 'Abrir')
+            return cfg
         if t == 'input_texto':
             return {'pregunta': paso.get('mensaje', '')}
         if t == 'menu_botones':
-            return {
+            cfg = {
                 'mensaje': paso.get('mensaje', ''),
                 'opciones': [
                     {'etiqueta': o['etiqueta'], 'valor': o['valor'], 'salida': o['valor']}
                     for o in paso.get('opciones', [])
                 ],
             }
+            if paso.get('opciones_fuente'):
+                cfg['opciones_fuente'] = paso['opciones_fuente']
+            return cfg
         if t == 'decision':
             return {'expresion': paso.get('condicion', '')}
         if t == 'asignar_variable':
@@ -649,6 +664,7 @@ class Command(BaseCommand):
         t = paso['tipo']
 
         if t == 'menu_botones':
+            # Conexiones por opción estática (etiqueta = valor del botón).
             for i, o in enumerate(paso.get('opciones', []), start=1):
                 destino_id = o.get('siguiente')
                 if destino_id and destino_id in mapa:
@@ -656,6 +672,14 @@ class Command(BaseCommand):
                         nodo_origen=origen, nodo_destino=mapa[destino_id],
                         etiqueta=o['valor'], orden=i,
                     )
+            # Conexión default (etiqueta vacía) — usada por opciones dinámicas
+            # de catálogo, donde todas las opciones comparten salida=''.
+            destino_default = paso.get('siguiente')
+            if destino_default and destino_default in mapa:
+                ConexionNodoChatbot.objects.create(
+                    nodo_origen=origen, nodo_destino=mapa[destino_default],
+                    etiqueta='', orden=99,
+                )
             return
 
         if t == 'decision':
