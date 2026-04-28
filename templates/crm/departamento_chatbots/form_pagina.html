@@ -81,8 +81,12 @@
                     <i class="fab fa-whatsapp me-1"></i> Preview
                 </a>
                 <button type="button" class="btn btn-sm btn-outline-success"
-                        data-act="ver-meta-json" title="Snapshot completo del flujo (depto + nodos + endpoints + conexiones)">
-                    <i class="fa fa-code me-1"></i> Ver configuración (JSON)
+                        data-act="ver-json" title="JSON completo + cookbook para seed">
+                    <i class="fa fa-code me-1"></i> JSON
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-info"
+                        data-act="ver-ficha" title="Ficha visual con todos los nodos">
+                    <i class="fa fa-clipboard-list me-1"></i> Ficha
                 </button>
                 <button type="button" class="btn btn-sm btn-primary"
                         data-act="add-root">
@@ -142,52 +146,53 @@
 
 </div>
 
-{# Modal: Configuración completa del flujo (read-only, copy) #}
-<div class="modal fade" id="dpModalMetaJson" tabindex="-1" aria-hidden="true">
+{# Modal 1: JSON completo del flujo + cookbook #}
+<div class="modal fade" id="dpModalJson" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header py-2">
                 <h6 class="modal-title">
                     <i class="fa fa-code me-1 text-success"></i>
-                    Configuración completa del flujo
+                    JSON completo del flujo
                 </h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <ul class="nav nav-tabs nav-tabs-sm small mb-2" id="dpJsonTabs">
-                    <li class="nav-item">
-                        <button class="nav-link active" data-tab="json">
-                            <i class="fa fa-code me-1"></i> JSON completo
-                        </button>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link" data-tab="ficha">
-                            <i class="fa fa-clipboard-list me-1"></i> Ficha visual
-                        </button>
-                    </li>
-                </ul>
-                <div class="tab-content">
-                    <div class="tab-pane active" data-pane="json">
-                        <div class="alert alert-light border py-2 small mb-2">
-                            <i class="fa fa-circle-info me-1"></i>
-                            Snapshot del depto: cabecera, todos los nodos, endpoints,
-                            credenciales (secretos REDACTED) y conexiones. Bajo
-                            <code>_help</code> tenés snippets listos para armar un
-                            seed nuevo desde cero (estilo <code>seed_ru.py</code>).
-                        </div>
-                        <pre id="dp-meta-json-pre" class="dp-json-pre">Cargando…</pre>
-                    </div>
-                    <div class="tab-pane" data-pane="ficha" style="display:none;">
-                        <div id="dp-ficha-content"
-                             class="dp-ficha-content small">Cargando…</div>
-                    </div>
+                <div class="alert alert-light border py-2 small mb-2">
+                    <i class="fa fa-circle-info me-1"></i>
+                    Snapshot del depto: cabecera, todos los nodos, endpoints,
+                    credenciales (secretos REDACTED) y conexiones. Bajo
+                    <code>_help</code> tenés snippets listos para armar un
+                    seed nuevo desde cero (estilo <code>seed_ru.py</code>).
                 </div>
+                <pre id="dp-meta-json-pre" class="dp-json-pre">Cargando…</pre>
             </div>
             <div class="modal-footer py-2">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
                 <button type="button" class="btn btn-success btn-sm" id="dp-copy-json">
                     <i class="fa fa-copy me-1"></i> Copiar JSON
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal 2: Ficha visual del flujo #}
+<div class="modal fade" id="dpModalFicha" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title">
+                    <i class="fa fa-clipboard-list me-1 text-info"></i>
+                    Ficha del flujo
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="dp-ficha-content" class="dp-ficha-content small">Cargando…</div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>
@@ -224,5 +229,5 @@
 
 {% block jscript %}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="{% static 'js/dpchat_editor.js' %}?v=10"></script>
+    <script src="{% static 'js/dpchat_editor.js' %}?v=11"></script>
 {% endblock %}

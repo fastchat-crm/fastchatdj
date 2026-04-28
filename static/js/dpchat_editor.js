@@ -517,45 +517,43 @@
                 });
                 return;
             }
-            if (act === 'ver-meta-json') {
+            if (act === 'ver-json' || act === 'ver-ficha') {
                 if (STATE.departamentoId === 0) {
                     alert('Primero guardá el departamento (cabecera) para generar la ficha.');
                     return;
                 }
-                var modalJson = bootstrap.Modal.getOrCreateInstance($('#dpModalMetaJson'));
-                var fichaBox  = $('#dp-ficha-content');
-                var jsonPre   = $('#dp-meta-json-pre');
-                if (fichaBox) fichaBox.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Cargando…';
+                var esJson = (act === 'ver-json');
+                var modalEl = esJson ? $('#dpModalJson') : $('#dpModalFicha');
+                var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                var jsonPre  = esJson ? $('#dp-meta-json-pre') : null;
+                var fichaBox = esJson ? null : $('#dp-ficha-content');
                 if (jsonPre)  jsonPre.textContent = 'Cargando…';
-                modalJson.show();
+                if (fichaBox) fichaBox.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Cargando…';
+                modal.show();
 
-                console.log('[dpchat] solicitando exportar_flujo_json id=' + STATE.departamentoId
-                          + ' url=' + STATE.postUrl);
+                console.log('[dpchat] solicitando exportar_flujo_json id=' + STATE.departamentoId);
                 getJson({ action: 'exportar_flujo_json', id: STATE.departamentoId })
                     .then(function (resp) {
                         console.log('[dpchat] resp exportar_flujo_json:', resp);
                         if (!resp || typeof resp !== 'object') {
                             var raw = JSON.stringify(resp);
-                            if (jsonPre) jsonPre.textContent = 'Respuesta inesperada: ' + raw;
+                            if (jsonPre)  jsonPre.textContent = 'Respuesta inesperada: ' + raw;
                             if (fichaBox) fichaBox.innerHTML =
                                 '<div class="alert alert-warning">Respuesta inesperada del servidor.</div>';
                             return;
                         }
                         if (!resp.result) {
                             var msg = resp.message || 'Sin detalle';
-                            if (jsonPre) jsonPre.textContent = 'Error: ' + msg;
+                            if (jsonPre)  jsonPre.textContent = 'Error: ' + msg;
                             if (fichaBox) fichaBox.innerHTML =
-                                '<div class="alert alert-danger">'
-                                + '<strong>No se pudo cargar:</strong> ' + escHtml(msg)
-                                + '</div>';
+                                '<div class="alert alert-danger"><strong>No se pudo cargar:</strong> '
+                                + escHtml(msg) + '</div>';
                             return;
                         }
-                        // JSON crudo
                         if (jsonPre) {
                             try { jsonPre.textContent = JSON.stringify(resp.data, null, 2); }
                             catch (e) { jsonPre.textContent = 'Error formateando JSON: ' + e.message; }
                         }
-                        // Ficha — protegida con try/catch para no quedar en "Cargando..."
                         if (fichaBox) {
                             try {
                                 fichaBox.innerHTML = renderFicha(resp.data);
@@ -563,33 +561,18 @@
                                 console.error('renderFicha falló:', e);
                                 fichaBox.innerHTML =
                                     '<div class="alert alert-warning small">'
-                                    + '<strong>Ficha no se pudo armar:</strong> '
-                                    + escHtml(e.message)
-                                    + '. Revisá la pestaña <em>JSON completo</em> para ver los datos.'
+                                    + '<strong>Ficha no se pudo armar:</strong> ' + escHtml(e.message)
+                                    + '. Mirá el botón <em>JSON</em> para ver los datos crudos.'
                                     + '</div>';
                             }
                         }
                     })
                     .catch(function (err) {
                         var msg = 'Error de red: ' + (err.message || err);
-                        if (jsonPre) jsonPre.textContent = msg;
+                        if (jsonPre)  jsonPre.textContent = msg;
                         if (fichaBox) fichaBox.innerHTML =
                             '<div class="alert alert-danger">' + escHtml(msg) + '</div>';
                     });
-
-                // Tab switcher (idempotente)
-                document.querySelectorAll('#dpJsonTabs .nav-link').forEach(function (b) {
-                    b.onclick = function () {
-                        document.querySelectorAll('#dpJsonTabs .nav-link').forEach(function (x) {
-                            x.classList.remove('active');
-                        });
-                        b.classList.add('active');
-                        var t = b.getAttribute('data-tab');
-                        document.querySelectorAll('#dpModalMetaJson .tab-pane').forEach(function (p) {
-                            p.style.display = (p.getAttribute('data-pane') === t) ? '' : 'none';
-                        });
-                    };
-                });
                 return;
             }
         });
