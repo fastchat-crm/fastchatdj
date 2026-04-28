@@ -150,7 +150,7 @@
                                 </td>
                                 <td class="text-center">{{ l.timeout_seg }}s</td>
                                 <td class="text-center">
-                                    {% with n=l.nodos.count %}
+                                    {% with n=l.nodos_activos %}
                                         {% if n %}
                                             <a href="javascript:void(0);" class="badge bg-success-subtle text-success badge-nodos"
                                                onclick="verNodos({{ l.pk }}, '{{ l.nombre|escapejs }}')"

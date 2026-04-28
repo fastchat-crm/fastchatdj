@@ -14,7 +14,7 @@ from datetime import date
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.template.loader import get_template
@@ -265,8 +265,16 @@ def endpoint_api_view(request):
                 return JsonResponse({'result': False, 'message': str(ex)})
 
     # Listado principal
+    # Reglas de visibilidad:
+    #   - Endpoint debe estar activo (status=True).
+    #   - Si tiene credencial vinculada, esa credencial también debe estar activa
+    #     (credencial__status=True). Endpoints "Sin auth" (credencial NULL) siguen
+    #     visibles porque no dependen de ninguna credencial.
+    #   - La columna "Nodos" cuenta sólo OpcionDepartamentoChatBot activos
+    #     (anotación `nodos_activos`).
     criterio = request.GET.get('criterio', '').strip()
-    filtros, url_vars = Q(status=True), ''
+    filtros = Q(status=True) & (Q(credencial__isnull=True) | Q(credencial__status=True))
+    url_vars = ''
     if criterio:
         filtros = filtros & (
             Q(nombre__icontains=criterio) | Q(base_url__icontains=criterio)
@@ -274,7 +282,13 @@ def endpoint_api_view(request):
         data['criterio'] = criterio
         url_vars += '&criterio=' + criterio
 
-    listado = model.objects.filter(filtros).select_related('credencial').order_by('nombre')
+    listado = (
+        model.objects
+        .filter(filtros)
+        .select_related('credencial')
+        .annotate(nodos_activos=Count('nodos', filter=Q(nodos__status=True)))
+        .order_by('nombre')
+    )
     data['list_count'] = listado.count()
     data['url_vars'] = url_vars
     data['credenciales'] = CredencialApiChatbot.objects.filter(status=True).order_by('nombre')

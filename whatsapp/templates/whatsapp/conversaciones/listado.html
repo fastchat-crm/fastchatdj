@@ -177,6 +177,24 @@
     </div>
 </div>
 
+    {% if sesion_seleccionada and not sesion_seleccionada.activo %}
+        <div class="alert-sesion-pausada" role="alert">
+            <div class="alert-sp-icon"><i class="fa fa-pause-circle"></i></div>
+            <div class="alert-sp-body">
+                <div class="alert-sp-title">Esta sesión está PAUSADA</div>
+                <div class="alert-sp-msg">
+                    <b>{{ sesion_seleccionada.nombre|default:sesion_seleccionada.numero }}</b> no procesa mensajes
+                    entrantes ni envía respuestas (no consume API ni IA). Selecciona otra sesión del combo o
+                    reactívala desde
+                    <a href="/whatsapp/sesiones/" class="alert-sp-link">Sesiones</a>.
+                </div>
+            </div>
+            <button type="button" class="alert-sp-cta" id="btn-cambiar-sesion-pausada">
+                <i class="fa fa-arrow-left-right"></i> Cambiar sesión
+            </button>
+        </div>
+    {% endif %}
+
     <div class="row">
         <div class="col-12">
             <div class="chat-box-left">
@@ -184,7 +202,7 @@
                 <!-- Selector de sesiones -->
                 <div class="p-3">
                     <div class="d-flex">
-                        <select id="sesion-selector" class="form-select">
+                        <select id="sesion-selector" class="form-select{% if sesion_seleccionada and not sesion_seleccionada.activo %} sesion-selector-pausada{% endif %}">
                                 {% for sesion in sesiones %}
                                     <option value="{{ sesion.id }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
                                         {% if sesion.es_meta %}☁️ Meta{% elif sesion.es_baileys %}📱 Baileys{% elif sesion.es_instagram %}📸 IG{% elif sesion.es_messenger %}💬 FB{% endif %} · {{ sesion.numero }} | {{ sesion.nombre }} ({{ sesion.get_estado_display }}{% if not sesion.activo %} · ⏸ PAUSADA{% endif %})
@@ -808,6 +826,16 @@
         let buscando = false;
 
         console.log("Inicializando chat de WhatsApp");
+
+        // CTA de la alerta "sesión pausada": foco + scroll al combo + flash
+        $(document).on('click', '#btn-cambiar-sesion-pausada', function() {
+            var $sel = $('#sesion-selector');
+            if (!$sel.length) return;
+            $('html, body').animate({ scrollTop: $sel.offset().top - 90 }, 250);
+            $sel.addClass('flash-attention').focus();
+            try { $sel[0].showPicker && $sel[0].showPicker(); } catch (e) {}
+            setTimeout(function() { $sel.removeClass('flash-attention'); }, 1600);
+        });
 
         // Cambiar de sesión
         $('#sesion-selector').change(function() {

@@ -487,3 +487,44 @@
   background: #f3f4f6;
   color: #0b6b5f;
 }
+
+/* ─── Sesión pausada (servicio suspendido — no consume API/IA) ─── */
+.pp-sesion {
+  position: relative;
+}
+.pp-sesion-pausada {
+  background: repeating-linear-gradient(
+    135deg,
+    #fffdf5,
+    #fffdf5 14px,
+    #fef9e7 14px,
+    #fef9e7 28px
+  );
+  border-color: #fcd34d;
+}
+.pp-sesion-pausada:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, .18);
+}
+.pp-sesion-pausada .pp-sesion-avatar {
+  filter: grayscale(.55);
+}
+.pp-badge-pausada {
+  position: absolute;
+  top: .55rem;
+  right: .55rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  border-radius: 999px;
+  padding: 2px .55rem;
+  font-size: .65rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  z-index: 2;
+}
+.pp-badge-pausada i { font-size: .7rem; }
+

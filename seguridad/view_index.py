@@ -55,6 +55,7 @@ def index(request):
         pendientes=Count('id', filter=Q(estado='pendiente')),
         desconectadas=Count('id', filter=Q(estado='desconectado')),
         errores=Count('id', filter=Q(estado='error')),
+        pausadas=Count('id', filter=Q(activo=False)),
     )
 
     sesiones_activas = list(

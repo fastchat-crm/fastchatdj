@@ -31,8 +31,17 @@
       </div>
 
       {# ───────── Alertas reales ───────── #}
-      {% if stats_sesiones.desconectadas or stats_sesiones.errores or calidad_alertas or convs_no_asignadas %}
+      {% if stats_sesiones.desconectadas or stats_sesiones.errores or calidad_alertas or convs_no_asignadas or stats_sesiones.pausadas %}
         <div class="pp-alerts">
+          {% if stats_sesiones.pausadas %}
+            <div class="pp-alert pp-alert-warn">
+              <i class="fa fa-pause-circle"></i>
+              <span>
+                <b>{{ stats_sesiones.pausadas }}</b> sesión{{ stats_sesiones.pausadas|pluralize:"es" }} pausada{{ stats_sesiones.pausadas|pluralize }} — no procesan mensajes ni consumen API.
+              </span>
+              <a href="/whatsapp/sesiones/">Revisar →</a>
+            </div>
+          {% endif %}
           {% if stats_sesiones.desconectadas %}
             <div class="pp-alert pp-alert-danger">
               <i class="fa fa-plug-circle-xmark"></i>
@@ -89,7 +98,9 @@
             <div class="pp-kpi-body">
               <p class="pp-kpi-label">Sesiones conectadas</p>
               <p class="pp-kpi-value">{{ stats_sesiones.conectadas }}<span class="den">/{{ stats_sesiones.total }}</span></p>
-              {% if stats_sesiones.desconectadas %}
+              {% if stats_sesiones.pausadas %}
+                <p class="pp-kpi-hint warn">{{ stats_sesiones.pausadas }} pausada{{ stats_sesiones.pausadas|pluralize }}</p>
+              {% elif stats_sesiones.desconectadas %}
                 <p class="pp-kpi-hint bad">{{ stats_sesiones.desconectadas }} fuera de línea</p>
               {% else %}
                 <p class="pp-kpi-hint ok">Todas operativas</p>
@@ -139,7 +150,12 @@
             {% if sesiones_activas %}
               <div class="pp-sesiones">
                 {% for s in sesiones_activas %}
-                  <div class="pp-sesion">
+                  <div class="pp-sesion{% if not s.activo %} pp-sesion-pausada{% endif %}">
+                    {% if not s.activo %}
+                      <span class="pp-badge-pausada" title="Sesión pausada — no procesa mensajes ni consume API">
+                        <i class="fa fa-pause-circle"></i> PAUSADA
+                      </span>
+                    {% endif %}
                     <div class="pp-sesion-head">
                       <div class="pp-sesion-avatar {% if s.es_baileys %}prov-baileys{% endif %}">
                         <i class="fab fa-whatsapp"></i>
@@ -271,7 +287,12 @@
             </div>
             <div class="pp-sesiones">
               {% for s in sesiones_atencion %}
-                <div class="pp-sesion">
+                <div class="pp-sesion{% if not s.activo %} pp-sesion-pausada{% endif %}">
+                  {% if not s.activo %}
+                    <span class="pp-badge-pausada" title="Sesión pausada — no procesa mensajes ni consume API">
+                      <i class="fa fa-pause-circle"></i> PAUSADA
+                    </span>
+                  {% endif %}
                   <div class="pp-sesion-head">
                     <div class="pp-sesion-avatar {% if s.es_baileys %}prov-baileys{% endif %}">
                       <i class="fab fa-whatsapp"></i>

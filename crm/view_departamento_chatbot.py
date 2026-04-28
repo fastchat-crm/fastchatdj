@@ -31,7 +31,7 @@ from .funciones_departamento_chatbot import (
     _exportar_flujo_completo,
 )
 from .models import Industria, ActividadEconomica, DepartamentoChatBot, OpcionDepartamentoChatBot, \
-    PerfilDepartamentoChatBot, EndpointApiChatbot
+    PerfilDepartamentoChatBot, EndpointApiChatbot, EstadoFlujoChatbot
 from django.contrib import messages
 
 @login_required
@@ -93,11 +93,37 @@ def departamentoChatbotsView(request):
                         else:
                             raise FormError(form)
                 elif action == 'delete':
+                    # Soft-delete con cascada manual a TODO lo que cuelgue del
+                    # departamento. Necesario porque varios FKs son SET_NULL en
+                    # BD (no borran realmente) y la UI filtra por status=True.
+                    # Sin esto quedan "huérfanos lógicos": referencias a un
+                    # departamento status=False que la UI no muestra pero el
+                    # motor del flujo sigue resolviendo.
+                    from whatsapp.models import SesionWhatsApp
                     filtro = model.objects.get(pk=int(request.POST['id']))
-                    filtro.status = False
-                    filtro.save(request)
-                    PerfilDepartamentoChatBot.objects.filter(status=True, departamento=filtro).update(status=False)
-                    OpcionDepartamentoChatBot.objects.filter(status=True, departamento=filtro).update(status=False)
+                    with transaction.atomic():
+                        filtro.status = False
+                        filtro.save(request)
+                        # Asesores asignados al depto.
+                        PerfilDepartamentoChatBot.objects.filter(
+                            status=True, departamento=filtro
+                        ).update(status=False)
+                        # Nodos del flujo del depto.
+                        OpcionDepartamentoChatBot.objects.filter(
+                            status=True, departamento=filtro
+                        ).update(status=False)
+                        # Estado runtime del flujo (en qué nodo quedó cada conversación).
+                        EstadoFlujoChatbot.objects.filter(
+                            status=True, departamento=filtro
+                        ).update(status=False, departamento=None, nodo_actual=None)
+                        # Sesiones que tenían este depto como entrada por defecto.
+                        SesionWhatsApp.objects.filter(
+                            departamento_default=filtro
+                        ).update(departamento_default=None)
+                        # M2M sesiones ↔ departamentos (la tabla intermedia no
+                        # tiene status, hay que limpiar la relación a mano).
+                        for sesion in SesionWhatsApp.objects.filter(departamentos=filtro):
+                            sesion.departamentos.remove(filtro)
                     log(f"Elimino un departamento {filtro.__str__()}", request, "del", obj=filtro.id)
                     messages.success(request, f"Registro Eliminado")
                     res_json={"error":False}
