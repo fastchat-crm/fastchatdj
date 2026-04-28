@@ -319,7 +319,25 @@ def ejecutar_http(nodo, contexto: dict, _traza_extra: Optional[dict] = None):
     query = resolver_expresion(cfg.get('query') or {}, contexto) or {}
     body = resolver_expresion(cfg.get('body') or None, contexto)
     headers = dict(ep.headers_default or {})
+    # Headers extra definidos en el nodo (ej: Referer requerido por CSRF Django)
+    headers.update(resolver_expresion(cfg.get('headers') or {}, contexto) or {})
     _aplicar_credencial(ep.credencial, headers, query)
+
+    # Elegir serialización del body según Content-Type:
+    #   - application/x-www-form-urlencoded  → data=  (request.POST en Django)
+    #   - multipart/form-data                → data=  (sin boundary explicit)
+    #   - application/json (o no especificado) → json= (default histórico)
+    body_kwargs = {}
+    if metodo in ('POST', 'PUT', 'PATCH') and body is not None:
+        ct = ''
+        for k, v in headers.items():
+            if k.lower() == 'content-type':
+                ct = (v or '').lower()
+                break
+        if 'x-www-form-urlencoded' in ct or 'multipart/form-data' in ct:
+            body_kwargs['data'] = body
+        else:
+            body_kwargs['json'] = body
 
     if _traza_extra is not None:
         _traza_extra.update({
@@ -332,8 +350,8 @@ def ejecutar_http(nodo, contexto: dict, _traza_extra: Optional[dict] = None):
             metodo, url,
             headers=headers,
             params=query or None,
-            json=body if metodo in ('POST', 'PUT', 'PATCH') and body is not None else None,
             timeout=ep.timeout_seg or 15,
+            **body_kwargs,
         )
     except requests.RequestException as e:
         if _traza_extra is not None:

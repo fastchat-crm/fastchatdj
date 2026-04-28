@@ -35,6 +35,31 @@ NOMBRE_DEPTO = 'ARIA — Cotizador de seguros'
 BASE_URL_DEFAULT = 'https://fguerrero.mgaseguros.ec/aria/'
 
 
+# Provincias EC (códigos INEC). Si el broker usa otra tabla, ajustar valor.
+PROVINCIAS_EC = [
+    ('01', 'Azuay'),            ('02', 'Bolívar'),
+    ('03', 'Cañar'),            ('04', 'Carchi'),
+    ('05', 'Cotopaxi'),         ('06', 'Chimborazo'),
+    ('07', 'El Oro'),           ('08', 'Esmeraldas'),
+    ('09', 'Guayas'),           ('10', 'Imbabura'),
+    ('11', 'Loja'),             ('12', 'Los Ríos'),
+    ('13', 'Manabí'),           ('14', 'Morona Santiago'),
+    ('15', 'Napo'),             ('16', 'Pastaza'),
+    ('17', 'Pichincha'),        ('18', 'Tungurahua'),
+    ('19', 'Zamora Chinchipe'), ('20', 'Galápagos'),
+    ('21', 'Sucumbíos'),        ('22', 'Orellana'),
+    ('23', 'Santo Domingo'),    ('24', 'Santa Elena'),
+]
+
+
+def _opciones_provincia(siguiente_id):
+    """Genera el array `opciones` del menú de provincias EC."""
+    return [
+        {'etiqueta': nombre, 'valor': cod, 'siguiente': siguiente_id}
+        for cod, nombre in PROVINCIAS_EC
+    ]
+
+
 # ─────────────────────────────────────────────────────────────────
 # Bot config (= DepartamentoChatBot)
 # ─────────────────────────────────────────────────────────────────
@@ -331,11 +356,11 @@ PASOS = [
         'siguiente_ok': 216, 'siguiente_error': 900,
     },
     {
-        'id': 216, 'orden': 216, 'tipo': 'input_texto',
+        'id': 216, 'orden': 216, 'tipo': 'menu_botones',
         'codigo': 'pedir_provincia_placa', 'nombre': 'Pedir provincia',
-        'mensaje': '¿En qué provincia circula el vehículo? (ID de provincia)',
+        'mensaje': '¿En qué provincia circula el vehículo?',
         'guardar_en': 'provincia_placa',
-        'siguiente': 217,
+        'opciones': _opciones_provincia(217),
     },
     {
         'id': 217, 'orden': 217, 'tipo': 'llamada_http',
@@ -452,11 +477,11 @@ PASOS = [
         'siguiente_ok': 318, 'siguiente_error': 900,
     },
     {
-        'id': 318, 'orden': 318, 'tipo': 'input_texto',
+        'id': 318, 'orden': 318, 'tipo': 'menu_botones',
         'codigo': 'pedir_provincia_sin_placa', 'nombre': 'Pedir provincia',
-        'mensaje': '¿En qué provincia circula? (ID)',
+        'mensaje': '¿En qué provincia circula?',
         'guardar_en': 'provincia',
-        'siguiente': 319,
+        'opciones': _opciones_provincia(319),
     },
     {
         'id': 319, 'orden': 319, 'tipo': 'llamada_http',
@@ -539,20 +564,9 @@ PASOS = [
         'mensaje': (
             '✅ ¡Listo! Cotización generada (ID *{{variables.cotpk}}*).\n\n'
             '📋 *Resumen:*\n{{variables.resumen}}\n\n'
-            'Continúa para ver los planes disponibles.'
+            'Buscando planes disponibles…'
         ),
-        'siguiente': 420,
-    },
-    {
-        'id': 420, 'orden': 420, 'tipo': 'menu_botones',
-        'codigo': 'menu_post_cotizacion', 'nombre': '¿Qué quieres hacer ahora?',
-        'mensaje': '¿Quieres ver los planes disponibles?',
-        'guardar_en': 'post_cot_resp',
-        'opciones': [
-            {'etiqueta': '📋 Ver todos los planes', 'valor': 'todos',    'siguiente': 430},
-            {'etiqueta': '🏢 Por aseguradora',      'valor': 'por_aseg', 'siguiente': 440},
-            {'etiqueta': '👋 Terminar',             'valor': 'fin',      'siguiente': 998},
-        ],
+        'siguiente': 430,
     },
     {
         'id': 430, 'orden': 430, 'tipo': 'llamada_http',
@@ -564,40 +578,15 @@ PASOS = [
         'siguiente_ok': 450, 'siguiente_error': 900,
     },
     {
-        'id': 440, 'orden': 440, 'tipo': 'menu_botones',
-        'codigo': 'menu_aseguradoras', 'nombre': 'Elige aseguradora',
-        'mensaje': '¿De qué aseguradora quieres ver planes?',
-        'guardar_en': 'aseg_elegida',
-        'opciones': [
-            {'etiqueta': 'Zurich',         'valor': 'zurich',    'siguiente': 445},
-            {'etiqueta': 'AIG',            'valor': 'aig',       'siguiente': 445},
-            {'etiqueta': 'Generali',       'valor': 'generali',  'siguiente': 445},
-            {'etiqueta': 'Aseg. del Sur',  'valor': 'adsur',     'siguiente': 445},
-            {'etiqueta': 'Chubb',          'valor': 'chubb',     'siguiente': 445},
-            {'etiqueta': 'Atlántida',      'valor': 'atlantida', 'siguiente': 445},
-            {'etiqueta': 'Locales',        'valor': 'locales',   'siguiente': 445},
-        ],
-    },
-    {
-        'id': 445, 'orden': 445, 'tipo': 'llamada_http',
-        'codigo': 'http_listar_plan_aseg',
-        'nombre': 'API POST /aria/ (action=listar_plan_aseguradora)',
-        'metodo': 'POST', 'timeout_seg': 60,
-        'body': {'action': 'listar_plan_aseguradora',
-                 'cotpk': '{{variables.cotpk}}',
-                 'nombre': '{{variables.aseg_elegida}}'},
-        'extrae_variables': {'$planes': '$.planes', '$ok': '$.ok'},
-        'siguiente_ok': 450, 'siguiente_error': 900,
-    },
-    {
         'id': 450, 'orden': 450, 'tipo': 'respuesta_texto',
         'codigo': 'mostrar_planes', 'nombre': 'Mostrar planes',
         'mensaje': (
-            '🛒 *Planes disponibles:*\n'
+            '🛒 *Planes disponibles:*\n\n'
             '{% for p in variables.planes %}'
-            '• *{{p.aseguradora}}* — {{p.plan}} — Anual: ${{p.anual}} · Mensual: ${{p.mensual}}\n'
+            '*ID {{p.id}}* · _{{p.aseguradora}}_ — {{p.plan}}\n'
+            '  Anual: ${{p.anual}} · Mensual: ${{p.mensual}}\n\n'
             '{% endfor %}'
-            '\nEscribe el ID del plan para ver detalle.'
+            'Escribe el *ID* del plan que te interesa para ver el detalle.'
         ),
         'siguiente': 460,
     },
@@ -633,9 +622,9 @@ PASOS = [
         ),
         'guardar_en': 'confirmar_seleccion',
         'opciones': [
-            {'etiqueta': '✅ Sí, este plan',   'valor': 'si',   'siguiente': 480},
-            {'etiqueta': '🔍 Ver otro plan',   'valor': 'otro', 'siguiente': 460},
-            {'etiqueta': '↩️ Volver al menú',  'valor': 'menu', 'siguiente': 420},
+            {'etiqueta': '✅ Sí, este plan',   'valor': 'si',    'siguiente': 480},
+            {'etiqueta': '🔍 Ver otro plan',   'valor': 'otro',  'siguiente': 460},
+            {'etiqueta': '📋 Ver lista',       'valor': 'lista', 'siguiente': 450},
         ],
     },
     {
