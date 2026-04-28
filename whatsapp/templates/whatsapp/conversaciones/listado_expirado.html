@@ -166,7 +166,10 @@
                                  class="rounded-circle thumb-lg" id="contacto-foto">
                         </div>
                         <div class="flex-grow-1 ms-2 align-self-center">
-                            <h6 class="my-0 fw-medium text-dark fs-14" id="contacto-nombre">Selecciona una conversación</h6>
+                            <h6 class="my-0 fw-medium text-dark fs-14">
+                                <span id="contacto-nombre">Selecciona una conversación</span>
+                                <span id="conv-id-badge" class="badge bg-light text-dark border ms-1" style="font-size:.7rem;display:none;"></span>
+                            </h6>
                             <p class="text-muted mb-0" id="contacto-numero"></p>
                             <p class="text-muted mb-0 d-none d-sm-block">
                                 <span id="contacto-hashedId"></span>
@@ -494,6 +497,7 @@ $(document).ready(function() {
         $('#reactivar-btn, #ver-resumen-btn, #chat-footer, #dropdowns-btn').addClass('d-none').hide();
         $('#contacto-nombre').text('Selecciona una conversación');
         $('#contacto-numero, #contacto-hashedId').text('');
+        $('#conv-id-badge').hide();
         $('#conv-fechas').hide();
         conversacionActiva = null;
     }
@@ -543,6 +547,7 @@ $(document).ready(function() {
                 $('#contacto-nombre').text(r.contacto_nombre || r.contacto_numero);
                 $('#contacto-numero').text(r.contacto_numero);
                 $('#contacto-hashedId').text(r.hashed_id ? '#' + r.hashed_id : '');
+                $('#conv-id-badge').text('Conv #' + id).show();
                 $('#contacto-foto').attr('src', r.contacto_foto || '/static/assets/img/avatar.png');
 
                 if (r.fecha_inicio || r.fecha_fin) {

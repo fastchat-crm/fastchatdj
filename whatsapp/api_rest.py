@@ -273,9 +273,14 @@ def conversacion_enviar(request, pk):
         archivo  : file  (opcional, multipart)
         caption  : str   (opcional, va con el archivo)
 
-    Sin auth — endpoint público intencionalmente. Lo único que valida es que
-    la conversación exista y NO esté finalizada.
+    Sin auth — endpoint público intencionalmente. Validaciones mínimas:
+    - La conversación debe existir.
+    - No debe estar finalizada (`conversacion_finalizada=False`).
+    - La sesión asociada debe estar activa (`sesion.activo=True`).
+    - La conversación no puede tener más de 2 horas desde su creación
+      (regla de WhatsApp: ventana de 24h, pero acá usamos 2h por política).
     """
+    from datetime import timedelta
     from django.utils import timezone
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
@@ -283,11 +288,30 @@ def conversacion_enviar(request, pk):
     try:
         conv = ConversacionWhatsApp.objects.select_related('contacto', 'contacto__sesion').get(pk=pk)
     except ConversacionWhatsApp.DoesNotExist:
-        return JsonResponse({'error': 'not_found'}, status=404)
+        return JsonResponse({
+            'success': False, 'error': 'not_found',
+            'message': 'La conversación no existe.',
+        }, status=404)
     if conv.conversacion_finalizada:
-        return JsonResponse({'error': 'conversation_closed'}, status=409)
+        return JsonResponse({
+            'success': False, 'error': 'conversation_closed',
+            'message': 'No se puede enviar: la conversación ya está finalizada.',
+        }, status=409)
+    # Ventana de envío: 2h desde la creación de la conversación.
+    edad = timezone.now() - conv.fecha_registro
+    if edad > timedelta(hours=2):
+        return JsonResponse({
+            'success': False, 'error': 'conversation_too_old',
+            'message': 'No se puede enviar: la conversación tiene más de 2 horas de creada.',
+            'edad_minutos': int(edad.total_seconds() // 60),
+        }, status=409)
 
     sesion = conv.contacto.sesion
+    if not sesion or not getattr(sesion, 'activo', True):
+        return JsonResponse({
+            'success': False, 'error': 'session_paused',
+            'message': 'No se puede enviar: la sesión de WhatsApp está desactivada.',
+        }, status=423)
 
     texto = (request.POST.get('texto') or '').strip()
     caption = (request.POST.get('caption') or '').strip()
@@ -303,7 +327,10 @@ def conversacion_enviar(request, pk):
             pass
 
     if not texto and not archivo:
-        return JsonResponse({'error': 'texto_o_archivo_requerido'}, status=400)
+        return JsonResponse({
+            'success': False, 'error': 'texto_o_archivo_requerido',
+            'message': 'Debes enviar al menos un campo: texto o archivo.',
+        }, status=400)
 
     service = get_whatsapp_service(sesion)
     destino = conv.contacto.from_number
@@ -316,7 +343,10 @@ def conversacion_enviar(request, pk):
     if texto:
         r = service.send_text_message(sesion.session_id, destino, texto, conversacion_id=conv.id)
         if not r.get('success'):
-            return JsonResponse({'error': r.get('error') or 'send_failed'}, status=502)
+            return JsonResponse({
+                'success': False, 'error': 'send_failed',
+                'message': r.get('error') or 'El proveedor (Baileys/Meta) rechazó el envío.',
+            }, status=502)
         msg = MensajeWhatsApp.objects.create(
             conversacion=conv, remitente=sesion.numero, mensaje=texto,
             tipo='texto', fecha=ahora, mensaje_id_externo=r.get('message_id') or '',
@@ -343,7 +373,10 @@ def conversacion_enviar(request, pk):
             conversacion_id=conv.id,
         )
         if not r.get('success'):
-            return JsonResponse({'error': r.get('error') or 'send_failed'}, status=502)
+            return JsonResponse({
+                'success': False, 'error': 'send_failed',
+                'message': r.get('error') or 'El proveedor (Baileys/Meta) rechazó el envío del archivo.',
+            }, status=502)
         msg = MensajeWhatsApp(
             conversacion=conv, remitente=sesion.numero,
             mensaje=caption or '', tipo=tipo_msg, fecha=ahora,
