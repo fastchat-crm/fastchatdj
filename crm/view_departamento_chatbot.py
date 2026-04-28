@@ -331,6 +331,9 @@ def departamentoChatbotsView(request):
                             'http_body_json_str':    json.dumps(cfg.get('body') or {}, indent=2, ensure_ascii=False) if cfg.get('body') else '',
                             'http_headers_json_str': json.dumps(cfg.get('headers') or {}, indent=2, ensure_ascii=False) if cfg.get('headers') else '',
                             'http_extraer_json_str': json.dumps(cfg.get('extraer') or [], indent=2, ensure_ascii=False) if cfg.get('extraer') else '',
+                            # Condicional / set_variable: JSON serializado para el textarea.
+                            'cond_condiciones_json_str':    json.dumps(cfg.get('condiciones') or [], indent=2, ensure_ascii=False) if cfg.get('condiciones') else '',
+                            'setvar_asignaciones_json_str': json.dumps(cfg.get('asignaciones') or [], indent=2, ensure_ascii=False) if cfg.get('asignaciones') else '',
                         })
                     else:
                         padres_disponibles = OpcionDepartamentoChatBot.objects.filter(
@@ -347,6 +350,8 @@ def departamentoChatbotsView(request):
                             'http_body_json_str': '',
                             'http_headers_json_str': '',
                             'http_extraer_json_str': '',
+                            'cond_condiciones_json_str': '',
+                            'setvar_asignaciones_json_str': '',
                         })
                     template = get_template('crm/departamento_chatbots/_form_opcion.html')
                     return JsonResponse({'result': True, 'data': template.render(contexto)})

@@ -1470,6 +1470,60 @@ def _guardar_opcion(request):
         if request.POST.get('envia_correo'):
             cfg['envia_correo'] = True
         opcion.config = cfg
+    elif opcion.tipo_nodo == 'menu':
+        # Preserva keys que no edita el form (ej: `opciones` estáticas), y
+        # actualiza solo `opciones_fuente` desde los inputs `menu_fuente_*`.
+        cfg = dict(opcion.config or {})
+        var = (request.POST.get('menu_fuente_variable') or '').strip()
+        if var:
+            fuente = {
+                'variable':       var,
+                'campo_id':       (request.POST.get('menu_fuente_campo_id') or 'id').strip() or 'id',
+                'campo_etiqueta': (request.POST.get('menu_fuente_campo_etiqueta') or 'nombre').strip() or 'nombre',
+                'salida':         (request.POST.get('menu_fuente_salida') or '').strip(),
+            }
+            limite_raw = (request.POST.get('menu_fuente_limite') or '').strip()
+            if limite_raw.isdigit():
+                fuente['limite'] = int(limite_raw)
+            cfg['opciones_fuente'] = fuente
+        else:
+            cfg.pop('opciones_fuente', None)
+        # Limpiar fields heredados de otro tipo (texto plano vive en
+        # `opcion.respuesta`, no en config.mensaje/pregunta).
+        for k in ('mensaje', 'pregunta', 'url', 'display_text',
+                  'lat', 'lng', 'name', 'address', 'meta_type',
+                  'metodo', 'path', 'plantilla_respuesta'):
+            cfg.pop(k, None)
+        opcion.config = cfg
+        opcion.endpoint = None
+    elif opcion.tipo_nodo == 'condicional':
+        cfg = {}
+        raw = (request.POST.get('cond_condiciones_json') or '').strip()
+        if raw:
+            try:
+                conds = json.loads(raw)
+            except (TypeError, ValueError) as ex:
+                return JsonResponse({'ok': False, 'error': f'Condiciones JSON inválido: {str(ex)[:120]}'})
+            if not isinstance(conds, list):
+                return JsonResponse({'ok': False, 'error': 'Condiciones debe ser array JSON'})
+            cfg['condiciones'] = conds
+        operador = (request.POST.get('cond_operador') or 'and').strip().lower()
+        cfg['operador'] = operador if operador in ('and', 'or') else 'and'
+        opcion.config = cfg
+        opcion.endpoint = None
+    elif opcion.tipo_nodo == 'set_variable':
+        cfg = {}
+        raw = (request.POST.get('setvar_asignaciones_json') or '').strip()
+        if raw:
+            try:
+                asigs = json.loads(raw)
+            except (TypeError, ValueError) as ex:
+                return JsonResponse({'ok': False, 'error': f'Asignaciones JSON inválido: {str(ex)[:120]}'})
+            if not isinstance(asigs, list):
+                return JsonResponse({'ok': False, 'error': 'Asignaciones debe ser array JSON'})
+            cfg['asignaciones'] = asigs
+        opcion.config = cfg
+        opcion.endpoint = None
     else:
         # Tipos sin form específico → limpiar config si era de otro tipo (cta_url/
         # ubicacion/http) para evitar dejar fields obsoletos.

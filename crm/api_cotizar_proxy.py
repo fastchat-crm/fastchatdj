@@ -39,9 +39,14 @@ def cotizar_proxy(request, conv_id: int):
 
     Body JSON esperado (lo arma el flujo desde sus variables):
         {
-          "cliente": {cedula, email, telefono, edad, civil_status, genero},
-          "vehiculo": {placa, tipo_vehiculo, color, provincia, valor_comercial},
-          "aseguradoras": {"all": true}
+          "cliente":  {cedula, email, nombres, apellidos, telefono, edad,
+                       civil_status, genero},
+          "vehiculo": {placa, tipo_vehiculo, color, provincia, canton,
+                       valor_comercial, precio_accesorios},
+          "aseguradoras": {all, zurich, aig, generali, mapfre, latina,
+                           alianza, condor, chubb, aseguradora_del_sur,
+                           atlantida}  # bool por aseguradora; precio_accesorios
+                                       # siempre 0.
         }
     """
     try:

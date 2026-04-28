@@ -17,7 +17,7 @@ selección de plan / PDF la maneja ARIA en background.
 Flujo del bot (resumido):
   /info/ → placa → /vehiculo/?placa= → confirmar →
   cédula → /cliente/?cedula= → (si no encontrado: pedir datos básicos) →
-  catálogos (tipos-vehiculo, provincias) → pedir valor →
+  catálogos (tipos-vehiculo, provincias, [cantones si requiere]) → pedir valor →
   POST proxy interno → mensaje de cierre (éxito o error)
 
 Uso:
@@ -269,14 +269,45 @@ PASOS = [
             'salida': '',
             'limite': 30,  # 24+ provincias EC, sin tope WhatsApp en preview
         },
+        'siguiente': 240,
+    },
+
+    # ── 240..260 — Cantones (solo si requiere_canton) ──────────
+    # Color: NO se pregunta. /vehiculo/ ya devuelve `color_id` listo para
+    # reenviar al webhook. Si el tenant no requiere cantón saltamos a 320.
+    {
+        'id': 240, 'orden': 240, 'tipo': 'decision',
+        'codigo': 'requiere_canton', 'nombre': '¿El tenant requiere cantón?',
+        'condicion': '{{variables.requiere_canton}} == true',
+        'siguiente_si': 250, 'siguiente_no': 320,
+    },
+    {
+        'id': 250, 'orden': 250, 'tipo': 'llamada_http',
+        'codigo': 'http_cantones',
+        'nombre': 'GET /catalogos/cantones/?provincia_id=',
+        'metodo': 'GET', 'path': 'catalogos/cantones/',
+        'query': {'provincia_id': '{{variables.provincia_id}}'},
+        'extrae_variables': {'$cantones': '$.data.cantones'},
+        'siguiente_ok': 260, 'siguiente_error': 900,
+    },
+    {
+        'id': 260, 'orden': 260, 'tipo': 'menu_botones',
+        'codigo': 'pedir_canton', 'nombre': 'Elegir cantón',
+        'mensaje': '🏙️ Elige tu *cantón*:',
+        'guardar_en': 'canton_id',
+        'opciones': [],
+        'opciones_fuente': {
+            'variable': 'variables.cantones',
+            'campo_id': 'id',
+            'campo_etiqueta': 'nombre',
+            'salida': '',
+            'limite': 50,
+        },
         'siguiente': 320,
     },
 
-    # ── (eliminado en v3) — pasos 240/250/260 de cantón. El webhook nuevo
-    #     no necesita canton_id, así que saltamos directo a pedir el valor.
-
     # ── 320 — Valor del vehículo ───────────────────────────────
-    # En v3 ya no preguntamos accesorios (el webhook no los pide).
+    # `precio_accesorios` se manda hardcoded a 0 (ver nodo 340).
     {
         'id': 320, 'orden': 320, 'tipo': 'input_texto',
         'codigo': 'pedir_valor_vehiculo', 'nombre': 'Pedir valor del vehículo',
@@ -306,19 +337,35 @@ PASOS = [
             'cliente': {
                 'cedula':        '{{variables.cedula}}',
                 'email':         '{{variables.email}}',
+                'nombres':       '{{variables.nombres}}',
+                'apellidos':     '{{variables.apellidos}}',
                 'telefono':      '{{variables.telefono}}',
                 'edad':          '{{variables.driver_age}}',
                 'civil_status':  '{{variables.civil_status}}',
                 'genero':        '{{variables.gender}}',
             },
             'vehiculo': {
-                'placa':           '{{variables.placa}}',
-                'tipo_vehiculo':   '{{variables.tipo_vehiculo_id}}',
-                'color':           '{{variables.color_id}}',
-                'provincia':       '{{variables.provincia_id}}',
-                'valor_comercial': '{{variables.valor_vehiculo}}',
+                'placa':             '{{variables.placa}}',
+                'tipo_vehiculo':     '{{variables.tipo_vehiculo_id}}',
+                'color':             '{{variables.color_id}}',
+                'provincia':         '{{variables.provincia_id}}',
+                'canton':            '{{variables.canton_id}}',
+                'valor_comercial':   '{{variables.valor_vehiculo}}',
+                'precio_accesorios': 0,
             },
-            'aseguradoras': {'all': True},
+            'aseguradoras': {
+                'all':                 False,
+                'zurich':              True,
+                'aig':                 True,
+                'generali':            False,
+                'mapfre':              False,
+                'latina':              False,
+                'alianza':             False,
+                'condor':              False,
+                'chubb':               True,
+                'aseguradora_del_sur': False,
+                'atlantida':           False,
+            },
         },
         'extrae_variables': {
             '$cotizacion_status':  '$.status',
@@ -385,7 +432,7 @@ PASOS = [
         'asigna': {
             'cedula': '', 'placa': '',
             'nombres': '', 'apellidos': '', 'email': '', 'telefono': '',
-            'tipo_vehiculo_id': '', 'provincia_id': '',
+            'tipo_vehiculo_id': '', 'provincia_id': '', 'canton_id': '',
             'color_id': '', 'valor_vehiculo': '',
             'civil_status': '', 'gender': '', 'driver_age': '',
             'cotizacion_status': '', 'cotizacion_mensaje': '',

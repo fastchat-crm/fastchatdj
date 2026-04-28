@@ -282,6 +282,137 @@
         </div>
     </div>
 
+    {# Bloque Menú con botones — visible solo cuando tipo=menu #}
+    {# Las opciones del menú pueden ser:                                 #}
+    {#   1. ESTÁTICAS: subnodos hijos (cada uno = botón). Las gestionas   #}
+    {#      desde el árbol arrastrando hijos bajo este nodo.              #}
+    {#   2. DINÁMICAS: vienen de una variable (catálogo HTTP previo).     #}
+    {#      Aquí editas la fuente: qué variable, qué campo es id, etc.    #}
+    <div class="col-12 dp-tipo-block" data-show-when="menu" style="display:none;">
+        <div class="alert alert-info py-2 small mb-2" style="background:#e0f2fe;border-color:#7dd3fc;">
+            <i class="fa fa-list-ul me-1"></i>
+            <strong>Menú con botones:</strong> envía un mensaje interactive (≤3 button, &gt;3 list).
+            Las opciones pueden venir de <em>subnodos hijos</em> (estáticas, gestiónalas desde el árbol)
+            o de una <em>variable</em> que un nodo HTTP previo llenó (dinámicas, abajo).
+        </div>
+        <div class="row g-2 p-2" style="background:#f0f9ff;border-radius:6px;">
+
+            {# Ayuda contextual: si ya hay opciones_fuente, decirle al operador
+               qué nodo HTTP previo llena la variable. Si no hay, mostrar
+               instrucciones para configurarla. #}
+            {% if opcion.config.opciones_fuente %}
+                <div class="col-12">
+                    <div class="alert alert-success py-2 small mb-0">
+                        <i class="fa fa-database me-1"></i>
+                        Este menú lee de la variable
+                        <code>{{ opcion.config.opciones_fuente.variable|default:'(sin definir)' }}</code>.
+                        La variable la llena algún nodo <strong>Llamada HTTP</strong>
+                        previo en el flujo (ver el atributo <code>extraer</code> de ese nodo).
+                    </div>
+                </div>
+            {% else %}
+                <div class="col-12">
+                    <div class="alert alert-light border py-2 small mb-0">
+                        <i class="fa fa-circle-info me-1"></i>
+                        Sin <em>opciones_fuente</em> configuradas: el menú usa los <strong>subnodos hijos</strong>
+                        como botones. Si querés llenar las opciones dinámicamente desde una API,
+                        configurá los campos abajo.
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">
+                    Variable fuente
+                    <small class="text-muted fw-normal">(ej: <code>variables.tipos</code>)</small>
+                </label>
+                <input type="text" name="menu_fuente_variable" class="form-control form-control-sm"
+                       value="{{ opcion.config.opciones_fuente.variable|default:'' }}"
+                       placeholder="variables.tipos">
+                <small class="text-muted">
+                    Path a la lista. Vacío = usar subnodos hijos como botones estáticos.
+                </small>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold mb-1">Límite</label>
+                <input type="number" name="menu_fuente_limite" class="form-control form-control-sm"
+                       value="{{ opcion.config.opciones_fuente.limite|default:'' }}"
+                       placeholder="10" min="1" max="100">
+                <small class="text-muted">Máx items.</small>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-bold mb-1">Salida (etiqueta arista)</label>
+                <input type="text" name="menu_fuente_salida" class="form-control form-control-sm"
+                       value="{{ opcion.config.opciones_fuente.salida|default:'' }}"
+                       placeholder="(vacío = arista default)">
+                <small class="text-muted">Etiqueta de la conexión que se sigue.</small>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Campo id (de cada item)</label>
+                <input type="text" name="menu_fuente_campo_id" class="form-control form-control-sm"
+                       value="{{ opcion.config.opciones_fuente.campo_id|default:'' }}"
+                       placeholder="id">
+                <small class="text-muted">Clave que se guarda como respuesta del usuario.</small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Campo etiqueta (texto del botón)</label>
+                <input type="text" name="menu_fuente_campo_etiqueta" class="form-control form-control-sm"
+                       value="{{ opcion.config.opciones_fuente.campo_etiqueta|default:'' }}"
+                       placeholder="nombre">
+                <small class="text-muted">Clave que se muestra al cliente.</small>
+            </div>
+        </div>
+    </div>
+
+    {# Bloque Condicional — visible solo cuando tipo=condicional #}
+    <div class="col-12 dp-tipo-block" data-show-when="condicional" style="display:none;">
+        <div class="alert alert-warning py-2 small mb-2">
+            <i class="fa fa-code-branch me-1"></i>
+            <strong>Decisión:</strong> evalúa condiciones sobre las variables y ramifica
+            por aristas <code>true</code>/<code>false</code>. Edita el JSON crudo abajo.
+        </div>
+        <div class="col-12">
+            <label class="form-label small fw-bold mb-1">Condiciones (JSON array)</label>
+            <textarea name="cond_condiciones_json" class="form-control form-control-sm font-monospace"
+                      rows="3"
+                      placeholder='[{"izq": "variables.x", "op": "==", "der": true}]'
+            >{{ cond_condiciones_json_str|default:'' }}</textarea>
+            <small class="text-muted">
+                Operadores: <code>==</code>, <code>!=</code>, <code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code>.
+            </small>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label small fw-bold mb-1">Operador entre condiciones</label>
+            {% with op_actual=opcion.config.operador|default:'and' %}
+                <select name="cond_operador" class="form-select form-select-sm">
+                    <option value="and" {% if op_actual == 'and' %}selected{% endif %}>AND (todas)</option>
+                    <option value="or"  {% if op_actual == 'or' %}selected{% endif %}>OR (cualquiera)</option>
+                </select>
+            {% endwith %}
+        </div>
+    </div>
+
+    {# Bloque Set Variable — visible solo cuando tipo=set_variable #}
+    <div class="col-12 dp-tipo-block" data-show-when="set_variable" style="display:none;">
+        <div class="alert alert-secondary py-2 small mb-2">
+            <i class="fa fa-equals me-1"></i>
+            <strong>Asignar variables:</strong> aplica una lista de
+            <code>variable = expresion</code> y avanza por la arista default.
+        </div>
+        <div class="col-12">
+            <label class="form-label small fw-bold mb-1">Asignaciones (JSON array)</label>
+            <textarea name="setvar_asignaciones_json" class="form-control form-control-sm font-monospace"
+                      rows="4"
+                      placeholder='[{"variable": "x", "expresion": ""}]'
+            >{{ setvar_asignaciones_json_str|default:'' }}</textarea>
+            <small class="text-muted">
+                Cada item: <code>{variable: "nombre", expresion: "valor"}</code>.
+                Soporta {% verbatim %}<code>{{variables.x}}</code>{% endverbatim %} en <code>expresion</code>.
+            </small>
+        </div>
+    </div>
+
     {# Bloque Ubicación — visible solo cuando tipo=ubicacion #}
     <div class="col-12 dp-tipo-block" data-show-when="ubicacion" style="display:none;">
         <div class="alert alert-secondary py-2 small mb-2" style="background:#f3e8ff;border-color:#d8b4fe">

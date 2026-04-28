@@ -502,8 +502,42 @@
     height: calc(100vh - 200px);
     min-height: 480px;
     margin-bottom: .75rem;
+    /* Grid 2x2 para mirror-scrollbars arriba e izquierda. El wrap real
+       vive en (col2, row2) con sus scrollbars naturales en abajo/derecha. */
+    display: grid;
+    grid-template-columns: 14px 1fr;
+    grid-template-rows: 14px 1fr;
 }
+.dp-scroll-corner {
+    grid-column: 1; grid-row: 1;
+    background: #f1f5f9;
+}
+.dp-scroll-top {
+    grid-column: 2; grid-row: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    background: #f1f5f9;
+}
+.dp-scroll-top-inner { height: 1px; }
+.dp-scroll-left {
+    grid-column: 1; grid-row: 2;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    background: #f1f5f9;
+}
+.dp-scroll-left-inner { width: 1px; }
+.dp-scroll-top::-webkit-scrollbar,
+.dp-scroll-left::-webkit-scrollbar { width: 10px; height: 10px; }
+.dp-scroll-top::-webkit-scrollbar-thumb,
+.dp-scroll-left::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 5px; }
+.dp-scroll-top::-webkit-scrollbar-thumb:hover,
+.dp-scroll-left::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.dp-scroll-top::-webkit-scrollbar-track,
+.dp-scroll-left::-webkit-scrollbar-track { background: transparent; }
 .dp-tree-decision-wrap {
+    grid-column: 2; grid-row: 2;
     width: 100%;
     height: 100%;
     overflow: auto;

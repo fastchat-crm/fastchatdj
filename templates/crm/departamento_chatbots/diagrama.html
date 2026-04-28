@@ -3,9 +3,6 @@
 
 {% block head %}
     <link rel="stylesheet" href="{% static 'stylenew/dpchat_editor.css' %}">
-    {# Mantener la clase dp-diag-page: dpchat_editor.css la usa para fijar
-       la altura full-viewport del .dp-diag-card. base_lite ya remueve
-       sidebar/topbar, así que las reglas de ocultamiento son no-ops. #}
     <script>document.addEventListener('DOMContentLoaded', function () {
         document.body.classList.add('dp-diag-page');
     });</script>
@@ -67,11 +64,17 @@
         </small>
     </div>
     <div class="card dp-diag-card">
+        {# Grid 2x2: corner + scroll-top arriba; scroll-left + wrap abajo. #}
+        {# Los mirror scrollbars (top/left) se sincronizan via JS con el  #}
+        {# wrap, que mantiene sus scrollbars naturales en bottom/right.   #}
+        <div class="dp-scroll-corner"></div>
+        <div class="dp-scroll-top" id="dp-scroll-top" aria-hidden="true">
+            <div class="dp-scroll-top-inner" id="dp-scroll-top-inner"></div>
+        </div>
+        <div class="dp-scroll-left" id="dp-scroll-left" aria-hidden="true">
+            <div class="dp-scroll-left-inner" id="dp-scroll-left-inner"></div>
+        </div>
         <div class="dp-tree-decision-wrap" id="dp-tree-wrap">
-            {# Stage: wrapper que SÍ toma las dimensiones escaladas para
-               que .dp-tree-decision-wrap (overflow:auto) muestre scrollbars
-               horizontales/verticales al hacer zoom>1. El <ul> usa CSS
-               transform:scale, que no afecta layout — por eso el stage. #}
             <div id="dp-tree-stage" style="width:max-content;">
                 <ul class="dp-tree-decision" id="dp-tree-root">
                     {% for nodo in arbol_anidado %}
@@ -148,7 +151,40 @@
         var btn100 = document.getElementById('dp-zoom-100');
         if (btn100) btn100.textContent = Math.round(zoomNivel * 100) + '%';
         try { localStorage.setItem(ZOOM_KEY, String(zoomNivel)); } catch (e) {}
+        sincronizarTamanoMirrors();
     }
+
+    // ── Mirror scrollbars (top + left) ────────────────────────────
+    // Duplican los scrollbars del wrap para que el usuario pueda
+    // desplazarse desde arriba/izquierda sin tener que ir al borde
+    // contrario del contenedor. Se sincronizan en ambas direcciones.
+    var wrap       = document.getElementById('dp-tree-wrap');
+    var scrollTop  = document.getElementById('dp-scroll-top');
+    var scrollLeft = document.getElementById('dp-scroll-left');
+    var topInner   = document.getElementById('dp-scroll-top-inner');
+    var leftInner  = document.getElementById('dp-scroll-left-inner');
+    var _syncing = false;
+    function sincronizarTamanoMirrors() {
+        if (!wrap || !topInner || !leftInner) return;
+        topInner.style.width  = wrap.scrollWidth + 'px';
+        leftInner.style.height = wrap.scrollHeight + 'px';
+    }
+    function bindMirrorScroll(src, target, axis) {
+        if (!src || !target) return;
+        src.addEventListener('scroll', function () {
+            if (_syncing) return;
+            _syncing = true;
+            if (axis === 'x') target.scrollLeft = src.scrollLeft;
+            else              target.scrollTop  = src.scrollTop;
+            _syncing = false;
+        });
+    }
+    bindMirrorScroll(scrollTop, wrap, 'x');
+    bindMirrorScroll(wrap, scrollTop, 'x');
+    bindMirrorScroll(scrollLeft, wrap, 'y');
+    bindMirrorScroll(wrap, scrollLeft, 'y');
+    // Resize del viewport puede cambiar layout interno → re-medir.
+    window.addEventListener('resize', sincronizarTamanoMirrors);
     document.getElementById('dp-zoom-in').addEventListener('click', function () {
         zoomNivel = Math.min(2, zoomNivel + 0.1); aplicarZoom();
     });
