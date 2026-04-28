@@ -130,13 +130,13 @@
 
     var modalFicha = null;
     function getFichaModal() {
-        if (!modalFicha) modalFicha = new bootstrap.Modal($('#dpModalFicha'));
+        if (!modalFicha) modalFicha = new bootstrap.Modal($('#dpModalFichaNodo'));
         return modalFicha;
     }
 
     function openFichaModal(opcionId) {
         if (!opcionId) return;
-        $('#dpModalFichaBody').innerHTML =
+        $('#dpModalFichaNodoBody').innerHTML =
             '<div class="text-center text-muted py-4"><i class="fa fa-spinner fa-spin"></i> Cargando…</div>';
         getFichaModal().show();
         getJson({
@@ -145,13 +145,13 @@
             full: 1,
         }).then(function (resp) {
             if (!resp.result) {
-                $('#dpModalFichaBody').innerHTML =
+                $('#dpModalFichaNodoBody').innerHTML =
                     '<div class="alert alert-danger">' + (resp.message || 'Error') + '</div>';
                 return;
             }
-            $('#dpModalFichaBody').innerHTML = resp.data;
+            $('#dpModalFichaNodoBody').innerHTML = resp.data;
         }).catch(function (err) {
-            $('#dpModalFichaBody').innerHTML =
+            $('#dpModalFichaNodoBody').innerHTML =
                 '<div class="alert alert-danger">Error de conexión: ' + err.message + '</div>';
         });
     }

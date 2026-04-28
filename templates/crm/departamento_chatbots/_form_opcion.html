@@ -81,11 +81,35 @@
         </div>
     </div>
 
-    {# Selector de padre — alternativa al drag-and-drop para mover nodos entre niveles #}
+    {# Predecesores del grafo (read-only): nodos que apuntan a este vía ConexionNodoChatbot. #}
+    {# Un nodo puede tener varios predecesores en el grafo, por eso es lista informativa. #}
+    {% if predecesores_grafo %}
+    <div class="col-md-12">
+        <label class="form-label small fw-bold mb-1">
+            <i class="fa fa-arrow-right-to-bracket text-success me-1"></i>
+            Predecesores en el grafo (quién llega a este nodo)
+        </label>
+        <div class="border rounded p-2 bg-light small">
+            {% for c in predecesores_grafo %}
+                <span class="badge bg-success-subtle text-success border me-1 mb-1">
+                    #{{ c.nodo_origen_id }} · {{ c.nodo_origen.nombre|default:'(sin nombre)' }}
+                    {% if c.etiqueta %}<span class="text-muted">[{{ c.etiqueta }}]</span>{% endif %}
+                </span>
+            {% endfor %}
+        </div>
+        <small class="text-muted">
+            Se calcula desde las conexiones del flujo. Para cambiar de quién depende este nodo,
+            edita las conexiones en el diagrama del depto.
+        </small>
+    </div>
+    {% endif %}
+
+    {# Selector de padre — solo aplica al modo árbol legacy (opcion_padre). #}
+    {# Para flujos modernos basados en grafo, usar las conexiones (ver predecesores arriba). #}
     <div class="col-md-12">
         <label class="form-label small fw-bold mb-1">
             <i class="fa fa-sitemap text-muted me-1"></i>
-            Padre (cuelga de…)
+            Padre legacy (árbol simple)
         </label>
         {# Comparación con stringformat para evitar mismatch int/str que   #}
         {# en algunos contextos hace que la opción nunca quede seleccionada. #}

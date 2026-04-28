@@ -319,12 +319,19 @@ def departamentoChatbotsView(request):
                         padres_disponibles = OpcionDepartamentoChatBot.objects.filter(
                             departamento=opcion.departamento, status=True,
                         ).exclude(pk__in=descendientes_ids).order_by('orden', 'nombre')
+                        predecesores_grafo = (
+                            ConexionNodoChatbot.objects
+                            .filter(nodo_destino=opcion, status=True)
+                            .select_related('nodo_origen')
+                            .order_by('nodo_origen__orden', 'nodo_origen__nombre')
+                        )
                         contexto.update({
                             'opcion': opcion,
                             'es_nuevo': False,
                             'departamento_id': opcion.departamento_id,
                             'parent_id': opcion.opcion_padre_id or 0,
                             'padres_disponibles': padres_disponibles,
+                            'predecesores_grafo': predecesores_grafo,
                             'config_json_str': json.dumps(cfg, indent=2, ensure_ascii=False),
                             # Sub-piezas serializadas para los inputs específicos del form HTTP.
                             'http_query_json_str':   json.dumps(cfg.get('query') or {}, indent=2, ensure_ascii=False) if cfg.get('query') else '',
