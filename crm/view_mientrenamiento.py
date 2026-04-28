@@ -111,10 +111,17 @@ def entrenamiento_ia_view(request):
                             form.instance.perfil = perfil
                             agente = form.save()
 
-                            # Procesar los detalles si existen
-                            if 'detalles_json' in request.POST:
-                                detalles_data = json.loads(request.POST['detalles_json'])
-                                guardar_detalles_agente(agente, detalles_data, request.FILES)
+                            # Procesar los detalles si existen. Tolerar valor
+                            # vacío o JSON inválido — un agente sin detalles
+                            # cargados es válido (se setean luego).
+                            _det_raw = (request.POST.get('detalles_json') or '').strip()
+                            if _det_raw:
+                                try:
+                                    detalles_data = json.loads(_det_raw)
+                                except json.JSONDecodeError:
+                                    detalles_data = []
+                                if detalles_data:
+                                    guardar_detalles_agente(agente, detalles_data, request.FILES)
 
                             log(f"Registro un agente IA {agente.__str__()}", request, "add", obj=agente.id)
                             if request.POST.get('redirect_to'):
@@ -129,10 +136,16 @@ def entrenamiento_ia_view(request):
                         if form.is_valid() and filtro:
                             agente = form.save()
 
-                            # Eliminar detalles existentes y crear los nuevos
-                            if 'detalles_json' in request.POST:
-                                detalles_data = json.loads(request.POST['detalles_json'])
-                                guardar_detalles_agente(agente, detalles_data, request.FILES)
+                            # Eliminar detalles existentes y crear los nuevos.
+                            # Tolerar valor vacío o JSON inválido del front.
+                            _det_raw = (request.POST.get('detalles_json') or '').strip()
+                            if _det_raw:
+                                try:
+                                    detalles_data = json.loads(_det_raw)
+                                except json.JSONDecodeError:
+                                    detalles_data = []
+                                if detalles_data:
+                                    guardar_detalles_agente(agente, detalles_data, request.FILES)
 
                             log(f"Edito un agente IA {agente.__str__()}", request, "change", obj=agente.id)
                             if request.POST.get('redirect_to'):
@@ -154,10 +167,15 @@ def entrenamiento_ia_view(request):
                             form.instance.perfil = perfil
                             agente = form.save()
 
-                            # Procesar los detalles si existen
-                            if 'detalles_json' in request.POST:
-                                detalles_data = json.loads(request.POST['detalles_json'])
-                                guardar_detalles_agente(agente, detalles_data, request.FILES)
+                            # Procesar los detalles si existen (tolerar vacío).
+                            _det_raw = (request.POST.get('detalles_json') or '').strip()
+                            if _det_raw:
+                                try:
+                                    detalles_data = json.loads(_det_raw)
+                                except json.JSONDecodeError:
+                                    detalles_data = []
+                                if detalles_data:
+                                    guardar_detalles_agente(agente, detalles_data, request.FILES)
 
                             log(f"Registro un api key IA {agente.__str__()}", request, "add", obj=agente.id)
                             res_json.append({'error': False, "reload": True})
