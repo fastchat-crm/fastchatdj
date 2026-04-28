@@ -159,7 +159,17 @@ def _arbol_opciones_a_markdown(nodos, nivel=0):
             if n.get('variable_destino'):
                 lineas.append(f"{sangria}  · Guarda en variable `{n['variable_destino']}`")
         elif tipo == 'http':
-            lineas.append(f"{sangria}  · Llamada HTTP a un endpoint API configurado")
+            metodo = (cfg.get('metodo') or 'GET').upper()
+            path = (cfg.get('path') or '').strip() or '/'
+            lineas.append(f"{sangria}  · Llamada `{metodo} {path}`")
+            extrae = cfg.get('extraer') or []
+            if extrae:
+                vars_str = ', '.join(
+                    f"`{e.get('variable')}` ← `{e.get('jsonpath')}`"
+                    for e in extrae[:6] if e.get('variable')
+                )
+                if vars_str:
+                    lineas.append(f"{sangria}    Extrae: {vars_str}")
         elif tipo == 'menu':
             mensaje = (cfg.get('mensaje') or '').strip()
             if mensaje:
@@ -196,18 +206,59 @@ def _serializar_dpto_para_agente(dpto):
         partes.append("\n## Flujo y opciones del menú")
         partes.append(_arbol_opciones_a_markdown(arbol, nivel=0))
 
-    endpoints_ids = OpcionDepartamentoChatBot.objects.filter(
+    nodos_http = OpcionDepartamentoChatBot.objects.filter(
         departamento=dpto, status=True, tipo_nodo='http', endpoint__isnull=False,
-    ).values_list('endpoint_id', flat=True).distinct()
-    if endpoints_ids:
-        eps = EndpointApiChatbot.objects.filter(id__in=list(endpoints_ids), status=True)
-        if eps.exists():
-            partes.append("\n## APIs disponibles para este flujo")
-            for ep in eps:
-                linea = f"- **{ep.nombre}** — {ep.base_url}"
-                if (ep.descripcion or '').strip():
-                    linea += f": {ep.descripcion.strip()}"
-                partes.append(linea)
+    ).select_related('endpoint').order_by('orden', 'id')
+
+    if nodos_http.exists():
+        # 1) Resumen de endpoints (host base reutilizado)
+        partes.append("\n## Endpoints API base disponibles")
+        endpoints_vistos = {}
+        for n in nodos_http:
+            ep = n.endpoint
+            if ep.id not in endpoints_vistos:
+                endpoints_vistos[ep.id] = ep
+        for ep in endpoints_vistos.values():
+            linea = f"- **{ep.nombre}** — `{ep.base_url}`"
+            if (ep.descripcion or '').strip():
+                linea += f"\n  {ep.descripcion.strip()}"
+            partes.append(linea)
+
+        # 2) Catálogo detallado por nodo HTTP — el agente puede usarlo para
+        #    saber qué API llamar para resolver consultas concretas (ej. "consulta
+        #    placa X" → GET /vehiculo/?placa=X).
+        partes.append("\n## Llamadas HTTP del flujo (catálogo para el agente)")
+        for n in nodos_http:
+            cfg = n.config or {}
+            metodo = (cfg.get('metodo') or 'GET').upper()
+            path = (cfg.get('path') or '').strip() or '/'
+            base = (n.endpoint.base_url or '').rstrip('/')
+            url_completa = base + '/' + path.lstrip('/')
+
+            partes.append(f"\n### {n.nombre}")
+            partes.append(f"- **{metodo}** `{url_completa}`")
+
+            query = cfg.get('query') or {}
+            if query:
+                qs_lineas = ', '.join(f"`{k}`={v}" for k, v in query.items())
+                partes.append(f"- Query: {qs_lineas}")
+
+            body = cfg.get('body') or {}
+            if body and metodo in ('POST', 'PUT', 'PATCH'):
+                campos = ', '.join(f"`{k}`" for k in body.keys())
+                partes.append(f"- Body fields: {campos}")
+
+            extrae = cfg.get('extraer') or []
+            if extrae:
+                partes.append("- Variables que extrae de la respuesta:")
+                for e in extrae:
+                    var = e.get('variable')
+                    jp = e.get('jsonpath')
+                    if var and jp:
+                        partes.append(f"  - `{var}` ← `${jp}`")
+
+            timeout = cfg.get('timeout_seg') or n.endpoint.timeout_seg
+            partes.append(f"- Timeout: {timeout}s")
 
     return '\n'.join(partes).strip()
 
