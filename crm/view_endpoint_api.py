@@ -241,6 +241,34 @@ def endpoint_api_view(request):
             except Exception as ex:
                 return JsonResponse({'result': False, 'message': str(ex)})
 
+        elif action == 'endpoints_credencial':
+            # Lista los endpoints (activos e inactivos) que usan una credencial.
+            # Incluye `activo` para que el modal pinte un badge verde/rojo y el
+            # operador sepa cuáles realmente cuelgan vs. cuáles ya están dados
+            # de baja pero siguen referenciando la credencial.
+            try:
+                pk = int(request.GET['id'])
+                cred = CredencialApiChatbot.objects.get(pk=pk)
+                eps = cred.endpoints.all().annotate(
+                    nodos_activos=Count('nodos', filter=Q(nodos__status=True))
+                ).order_by('-status', 'nombre')
+                data_eps = [{
+                    'id': e.id,
+                    'nombre': e.nombre,
+                    'base_url': e.base_url,
+                    'timeout_seg': e.timeout_seg,
+                    'nodos': e.nodos_activos,
+                    'activo': bool(e.status),
+                } for e in eps]
+                return JsonResponse({
+                    'result': True,
+                    'credencial': cred.nombre,
+                    'tipo': cred.get_tipo_display(),
+                    'endpoints': data_eps,
+                })
+            except Exception as ex:
+                return JsonResponse({'result': False, 'message': str(ex)})
+
         elif action == 'nodos':
             try:
                 pk = int(request.GET['id'])
@@ -291,12 +319,18 @@ def endpoint_api_view(request):
     )
     data['list_count'] = listado.count()
     data['url_vars'] = url_vars
-    # Credenciales activas + conteo de endpoints activos que las usan
-    # (toda la cadena en status=True). Endpoints inactivos no inflan el contador.
+    # Credenciales activas con dos contadores:
+    #   - endpoints_activos: para el número visible en la tabla (toda la cadena
+    #     en status=True, según el contrato pedido).
+    #   - endpoints_total: para decidir si el badge es clickeable (permitir
+    #     inspeccionar la credencial aunque sus endpoints estén dados de baja).
     data['credenciales'] = (
         CredencialApiChatbot.objects
         .filter(status=True)
-        .annotate(endpoints_activos=Count('endpoints', filter=Q(endpoints__status=True)))
+        .annotate(
+            endpoints_activos=Count('endpoints', filter=Q(endpoints__status=True)),
+            endpoints_total=Count('endpoints'),
+        )
         .order_by('nombre')
     )
     paginador(request, listado, 20, data, url_vars)

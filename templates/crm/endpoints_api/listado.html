@@ -90,7 +90,21 @@
                                 <tr>
                                     <td><i class="fa fa-key text-info me-1"></i>{{ c.nombre }}</td>
                                     <td><span class="badge bg-info-subtle text-info">{{ c.get_tipo_display }}</span></td>
-                                    <td class="text-center">{{ c.endpoints_activos }}</td>
+                                    <td class="text-center">
+                                        {% if c.endpoints_total %}
+                                            <a href="javascript:void(0);"
+                                               class="badge {% if c.endpoints_activos %}bg-success-subtle text-success{% else %}bg-secondary-subtle text-secondary{% endif %} badge-endpoints-cred"
+                                               onclick="verEndpointsCredencial({{ c.pk }}, '{{ c.nombre|escapejs }}')"
+                                               title="Ver endpoints que usan esta credencial">
+                                                <i class="fa fa-globe me-1"></i>{{ c.endpoints_activos }}
+                                                {% if c.endpoints_activos < c.endpoints_total %}
+                                                    <small class="ms-1 opacity-75">/ {{ c.endpoints_total }}</small>
+                                                {% endif %}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">0</span>
+                                        {% endif %}
+                                    </td>
                                     <td class="text-end">
                                         <a href="javascript:void(0);" class="btn btn-sm btn-outline-primary"
                                            onclick="formModalCredencial({{ c.pk }}, 'Editar credencial', 'credencial_change')"
@@ -205,6 +219,24 @@
         </div>
     </div>
 
+    <div class="modal fade" id="modalEndpointsCred" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fa fa-key text-info me-2"></i>
+                        Endpoints que usan: <span id="credEndpointsNombre"></span>
+                        <small class="text-muted ms-2" id="credEndpointsTipo"></small>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="credEndpointsBody">
+                    <div class="text-center py-4 text-muted">Cargando…</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="modalNodos" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
             <div class="modal-content">
@@ -251,6 +283,67 @@
     }
     function formModalCredencial(id, text, action) {
         formModal(id, text, action);  // reusa el mismo flujo
+    }
+
+    function verEndpointsCredencial(id, nombreCredencial) {
+        $('#credEndpointsNombre').text(nombreCredencial);
+        $('#credEndpointsTipo').text('');
+        $('#credEndpointsBody').html('<div class="text-center py-4 text-muted">Cargando…</div>');
+        const modal = new bootstrap.Modal(document.getElementById('modalEndpointsCred'));
+        modal.show();
+        $.ajax({
+            type: 'GET',
+            url: '{{ request.path }}',
+            data: {action: 'endpoints_credencial', id: id},
+            dataType: 'json',
+            success: function (data) {
+                if (data.result !== true) {
+                    $('#credEndpointsBody').html(
+                        '<div class="alert alert-warning mb-0">' + (data.message || 'No se pudo cargar') + '</div>'
+                    );
+                    return;
+                }
+                $('#credEndpointsTipo').text('· ' + data.tipo);
+                if (!data.endpoints.length) {
+                    $('#credEndpointsBody').html(
+                        '<div class="text-center py-4 text-muted"><i class="fa fa-circle-info me-1"></i>Ningún endpoint usa esta credencial.</div>'
+                    );
+                    return;
+                }
+                let activos = data.endpoints.filter(function (e) { return e.activo; }).length;
+                let inactivos = data.endpoints.length - activos;
+                let html = '';
+                html += '<div class="d-flex gap-2 mb-3 flex-wrap">';
+                html += '<span class="badge bg-success">Activos: ' + activos + '</span>';
+                if (inactivos) html += '<span class="badge bg-secondary">Inactivos: ' + inactivos + '</span>';
+                html += '</div>';
+                html += '<ul class="list-group">';
+                data.endpoints.forEach(function (e) {
+                    html += '<li class="list-group-item d-flex justify-content-between align-items-start gap-2 py-2">';
+                    html += '<div class="flex-grow-1" style="min-width:0;">';
+                    html += '<div class="d-flex align-items-center gap-2 mb-1">';
+                    if (e.activo) {
+                        html += '<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="fa fa-circle-check me-1"></i>Activo</span>';
+                    } else {
+                        html += '<span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="fa fa-circle-xmark me-1"></i>Inactivo</span>';
+                    }
+                    html += '<strong>' + $('<div>').text(e.nombre).html() + '</strong>';
+                    html += '</div>';
+                    html += '<small class="text-muted d-block text-truncate"><code>' + $('<div>').text(e.base_url).html() + '</code></small>';
+                    html += '</div>';
+                    html += '<div class="text-end flex-shrink-0">';
+                    html += '<span class="badge bg-light text-dark border" title="Timeout">' + e.timeout_seg + 's</span> ';
+                    html += '<span class="badge bg-info-subtle text-info" title="Nodos activos que lo referencian"><i class="fa fa-diagram-project me-1"></i>' + e.nodos + '</span>';
+                    html += '</div>';
+                    html += '</li>';
+                });
+                html += '</ul>';
+                $('#credEndpointsBody').html(html);
+            },
+            error: function () {
+                $('#credEndpointsBody').html('<div class="alert alert-danger mb-0">Error de conexión.</div>');
+            }
+        });
     }
 
     function verNodos(id, nombreEndpoint) {

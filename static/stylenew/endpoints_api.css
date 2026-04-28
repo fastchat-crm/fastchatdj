@@ -16,12 +16,14 @@
     width: 120px;
 }
 
-.badge-nodos {
+.badge-nodos,
+.badge-endpoints-cred {
     cursor: pointer;
     font-size: 0.85em;
     text-decoration: none;
 }
 
-.badge-nodos:hover {
+.badge-nodos:hover,
+.badge-endpoints-cred:hover {
     filter: brightness(0.92);
 }
