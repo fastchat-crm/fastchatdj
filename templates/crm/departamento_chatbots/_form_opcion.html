@@ -87,16 +87,20 @@
             <i class="fa fa-sitemap text-muted me-1"></i>
             Padre (cuelga de…)
         </label>
+        {# Comparación con stringformat para evitar mismatch int/str que   #}
+        {# en algunos contextos hace que la opción nunca quede seleccionada. #}
+        {% with parent_id_str=parent_id|stringformat:"s" %}
         <select name="parent_id" class="form-select form-select-sm">
-            <option value="0" {% if not parent_id or parent_id == 0 %}selected{% endif %}>
+            <option value="0" {% if parent_id_str == "0" or not parent_id %}selected{% endif %}>
                 — Sin padre (nodo raíz) —
             </option>
             {% for p in padres_disponibles %}
-                <option value="{{ p.id }}" {% if parent_id == p.id %}selected{% endif %}>
+                <option value="{{ p.id }}" {% if p.id|stringformat:"s" == parent_id_str %}selected{% endif %}>
                     {{ p.nombre|default:'(sin nombre)' }} · #{{ p.id }} · {{ p.get_tipo_nodo_display }}
                 </option>
             {% endfor %}
         </select>
+        {% endwith %}
         <small class="text-muted">
             Mover este nodo bajo otro padre. Auto-excluye descendientes para evitar ciclos.
             También podés arrastrar la card en el árbol — esto es un fallback explícito.

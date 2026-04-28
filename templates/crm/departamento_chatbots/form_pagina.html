@@ -298,6 +298,28 @@
     </div>
 </div>
 
+{# Modal Ver ficha read-only de un nodo #}
+<div class="modal fade" id="dpModalFicha" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title">
+                    <i class="fa fa-eye text-info me-1"></i>Ficha del nodo
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" id="dpModalFichaBody">
+                <div class="text-center text-muted py-4">
+                    <i class="fa fa-spinner fa-spin"></i> Cargando…
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {# Modal editor de un nodo #}
 <div class="modal fade" id="dpModalNodo" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
@@ -329,5 +351,5 @@
 
 {% block jscript %}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="{% static 'js/dpchat_editor.js' %}?v=11"></script>
+    <script src="{% static 'js/dpchat_editor.js' %}?v=12"></script>
 {% endblock %}

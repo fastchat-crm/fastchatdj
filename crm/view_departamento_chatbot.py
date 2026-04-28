@@ -31,7 +31,7 @@ from .funciones_departamento_chatbot import (
     _exportar_flujo_completo,
 )
 from .models import Industria, ActividadEconomica, DepartamentoChatBot, OpcionDepartamentoChatBot, \
-    PerfilDepartamentoChatBot, EndpointApiChatbot, EstadoFlujoChatbot
+    PerfilDepartamentoChatBot, EndpointApiChatbot, EstadoFlujoChatbot, ConexionNodoChatbot
 from django.contrib import messages
 
 @login_required
@@ -354,6 +354,46 @@ def departamentoChatbotsView(request):
                             'setvar_asignaciones_json_str': '',
                         })
                     template = get_template('crm/departamento_chatbots/_form_opcion.html')
+                    return JsonResponse({'result': True, 'data': template.render(contexto)})
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
+
+            elif action == 'ficha_opcion':
+                # Devuelve la ficha read-only de un nodo: TODOS los campos
+                # registrados (modelo + config dinámico + endpoint + conexiones
+                # entrantes/salientes + auditoría). El front la muestra en
+                # un modal aparte del modal de edición.
+                try:
+                    op_id = int(request.GET.get('id') or 0)
+                    opcion = (
+                        OpcionDepartamentoChatBot.objects
+                        .select_related('endpoint', 'endpoint__credencial', 'opcion_padre',
+                                        'usuario_creacion', 'usuario_modificacion')
+                        .filter(pk=op_id, status=True).first()
+                    )
+                    if not opcion:
+                        return JsonResponse({'result': False, 'message': 'Nodo no encontrado'})
+                    cfg = opcion.config or {}
+                    salidas = (
+                        ConexionNodoChatbot.objects
+                        .filter(nodo_origen=opcion, status=True)
+                        .select_related('nodo_destino')
+                        .order_by('orden', 'id')
+                    )
+                    entradas = (
+                        ConexionNodoChatbot.objects
+                        .filter(nodo_destino=opcion, status=True)
+                        .select_related('nodo_origen')
+                        .order_by('orden', 'id')
+                    )
+                    contexto = {
+                        'opcion': opcion,
+                        'cfg': cfg,
+                        'config_json_str': json.dumps(cfg, indent=2, ensure_ascii=False),
+                        'salidas': salidas,
+                        'entradas': entradas,
+                    }
+                    template = get_template('crm/departamento_chatbots/_ficha_opcion.html')
                     return JsonResponse({'result': True, 'data': template.render(contexto)})
                 except Exception as ex:
                     return JsonResponse({'result': False, 'message': str(ex)})

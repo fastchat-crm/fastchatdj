@@ -128,6 +128,34 @@
         return modalNodo;
     }
 
+    var modalFicha = null;
+    function getFichaModal() {
+        if (!modalFicha) modalFicha = new bootstrap.Modal($('#dpModalFicha'));
+        return modalFicha;
+    }
+
+    function openFichaModal(opcionId) {
+        if (!opcionId) return;
+        $('#dpModalFichaBody').innerHTML =
+            '<div class="text-center text-muted py-4"><i class="fa fa-spinner fa-spin"></i> Cargando…</div>';
+        getFichaModal().show();
+        getJson({
+            action: 'ficha_opcion',
+            id: opcionId,
+            full: 1,
+        }).then(function (resp) {
+            if (!resp.result) {
+                $('#dpModalFichaBody').innerHTML =
+                    '<div class="alert alert-danger">' + (resp.message || 'Error') + '</div>';
+                return;
+            }
+            $('#dpModalFichaBody').innerHTML = resp.data;
+        }).catch(function (err) {
+            $('#dpModalFichaBody').innerHTML =
+                '<div class="alert alert-danger">Error de conexión: ' + err.message + '</div>';
+        });
+    }
+
     function openNodeModal(opts) {
         // opts: { id?, parent_id? }. id=0 → crear nuevo
         var titulo = opts.id ? 'Editar nodo #' + opts.id : 'Nuevo nodo';
@@ -502,6 +530,10 @@
             }
             if (act === 'edit') {
                 openNodeModal({ id: parseInt(btn.getAttribute('data-id'), 10) });
+                return;
+            }
+            if (act === 'view') {
+                openFichaModal(parseInt(btn.getAttribute('data-id'), 10));
                 return;
             }
             if (act === 'delete') {
