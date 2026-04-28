@@ -1,8 +1,11 @@
-{% extends 'base.html' %}
+{% extends 'base_lite.html' %}
 {% load static %}
 
 {% block head %}
     <link rel="stylesheet" href="{% static 'stylenew/dpchat_editor.css' %}">
+    {# Mantener la clase dp-diag-page: dpchat_editor.css la usa para fijar
+       la altura full-viewport del .dp-diag-card. base_lite ya remueve
+       sidebar/topbar, así que las reglas de ocultamiento son no-ops. #}
     <script>document.addEventListener('DOMContentLoaded', function () {
         document.body.classList.add('dp-diag-page');
     });</script>
