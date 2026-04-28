@@ -86,6 +86,14 @@
                 </button>
             </div>
 
+            <div class="form-check form-switch px-3 pb-2" style="font-size:.78rem;">
+                <input type="checkbox" class="form-check-input" id="chk-skip-side-effects">
+                <label class="form-check-label text-muted" for="chk-skip-side-effects"
+                       title="Si está activo, los nodos con &quot;envía correo&quot; NO disparan el envío real. Útil para iterar sin spamear asesores.">
+                    🔇 Modo dry-run — no enviar correos a asesores
+                </label>
+            </div>
+
             <div class="pchat-info-banner" id="info-banner" style="display:none;">
                 <i class="fas fa-circle-info"></i>
                 <span id="info-banner-text"></span>
@@ -308,10 +316,12 @@
                 input.style.height = 'auto';
                 btnSend.disabled = true;
 
+                const skipSide = document.getElementById('chk-skip-side-effects')?.checked ? '1' : '';
                 $.ajax({
                     type: 'POST',
                     url: CHAT_URL,
-                    data: {csrfmiddlewaretoken: CSRF, action: 'send', mensaje: texto},
+                    data: {csrfmiddlewaretoken: CSRF, action: 'send', mensaje: texto,
+                           skip_side_effects: skipSide},
                     dataType: 'json',
                     success: function (res) {
                         if (res.error) {

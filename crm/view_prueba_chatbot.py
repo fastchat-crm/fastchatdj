@@ -174,7 +174,13 @@ def probar_chatbot_view(request, sesion_enc_id):
                 estado.save()
 
             ws_stub = StubWhatsAppService()
-            motor = MotorFlujo(sesion, conversacion, contacto, texto, estado, ws_stub)
+            # Checkbox "🔇 Modo dry-run" en el simulador → desactiva el
+            # envío de correos a asesores (y otros side-effects configurados
+            # vía `config.envia_correo`). El flujo cliente-facing se ejecuta
+            # idéntico — solo se omiten las notificaciones internas.
+            skip_side = bool(request.POST.get('skip_side_effects'))
+            motor = MotorFlujo(sesion, conversacion, contacto, texto, estado, ws_stub,
+                               skip_side_effects=skip_side)
 
             _t0 = time.time()
             error_str = ''

@@ -391,7 +391,8 @@ def ejecutar_http(nodo, contexto: dict, _traza_extra: Optional[dict] = None):
 # ─────────────────────────────────────────────────────────────────────
 
 class MotorFlujo:
-    def __init__(self, session, conversation, contacto, texto, estado, ws_service, boton_id=''):
+    def __init__(self, session, conversation, contacto, texto, estado, ws_service, boton_id='',
+                 skip_side_effects=False):
         self.session = session
         self.conversation = conversation
         self.contacto = contacto
@@ -405,6 +406,12 @@ class MotorFlujo:
         self.respuestas: list[str] = []
         self.handoff = False
         self.finalizado = False
+        # `skip_side_effects=True` desactiva los efectos colaterales no
+        # cliente-facing del flujo (envío de correo a asesores, etc.). Lo usa
+        # el simulador `/prueba/` cuando el operador tilda "modo dry-run"
+        # para iterar sin spamear. Por defecto OFF: en una conv real siempre
+        # se disparan los side-effects configurados en cada nodo.
+        self.skip_side_effects = bool(skip_side_effects)
         # True cuando _elegir_departamento determina que hay >1 depto activo y
         # ninguno matcheó → caller debe presentar meta-menú al usuario.
         self.pendiente_seleccion = False
@@ -1163,17 +1170,25 @@ class MotorFlujo:
             # `config.envia_correo`, notifica por mail a los asesores del
             # depto al que pertenece el flujo. Falla silenciosa: si no hay
             # asesores o el envío rebota, solo loguea (el cliente sigue).
+            # En modo dry-run (`skip_side_effects=True`) solo se loguea — útil
+            # para iterar el flujo desde el simulador sin spamear asesores.
             if etq == 'ok' and cfg.get('envia_correo'):
-                try:
-                    from crm.helpers_correo_flujo import notificar_asesores_depto
-                    notificar_asesores_depto(
-                        conv=self.conversation,
-                        nodo=nodo,
-                        request_body=traza_extra.get('request_body'),
-                        response_body=traza_extra.get('response_body'),
-                    )
-                except Exception:
-                    logger.exception('Error enviando correo (nodo %s)', nodo.id)
+                if self.skip_side_effects:
+                    self._trace('side_effect_skipped',
+                                'Correo a asesores OMITIDO (dry-run)', True,
+                                {'nodo_id': nodo.id})
+                    logger.info('Side-effect omitido (dry-run) en nodo %s', nodo.id)
+                else:
+                    try:
+                        from crm.helpers_correo_flujo import notificar_asesores_depto
+                        notificar_asesores_depto(
+                            conv=self.conversation,
+                            nodo=nodo,
+                            request_body=traza_extra.get('request_body'),
+                            response_body=traza_extra.get('response_body'),
+                        )
+                    except Exception:
+                        logger.exception('Error enviando correo (nodo %s)', nodo.id)
             if etq == 'error' and err:
                 logger.warning('Nodo http %s falló: %s', nodo.id, err)
             return etq

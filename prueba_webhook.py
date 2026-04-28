@@ -27,7 +27,7 @@ import requests
 # ─────────────────────────────────────────────────────────────────────────────
 # Config
 # ─────────────────────────────────────────────────────────────────────────────
-ID_CHAT = 1102
+ID_CHAT = 1103
 BASE_URL = "https://mensajeria.broktech.com.ec"
 TEXTO = "✅ Prueba desde prueba_webhook.py — el webhook funciona."
 CAPTION = "📎 Índice de URLs y módulos del sistema"
