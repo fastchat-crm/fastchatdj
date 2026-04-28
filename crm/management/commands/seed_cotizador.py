@@ -185,7 +185,45 @@ PASOS = [
         'id': 90, 'orden': 90, 'tipo': 'decision',
         'codigo': 'cliente_encontrado', 'nombre': '¿Cliente encontrado?',
         'condicion': '{{variables.encontrado_cli}} == true',
-        'siguiente_si': 200, 'siguiente_no': 100,
+        'siguiente_si': 95, 'siguiente_no': 100,
+    },
+
+    # ── 95 — Mostrar al cliente los datos que ya tenemos en BD ──
+    # Después del lookup exitoso por cédula, confirmamos al cliente los datos
+    # que vamos a usar y le ofrecemos corregir el correo (es lo que más
+    # cambia entre cotizaciones — el resto raramente se actualiza).
+    {
+        'id': 95, 'orden': 95, 'tipo': 'respuesta_texto',
+        'codigo': 'mostrar_cliente', 'nombre': 'Mostrar datos del cliente',
+        'mensaje': (
+            '✅ Encontré tus datos en nuestra base:\n'
+            '• Nombre: *{{variables.nombres}} {{variables.apellidos}}*\n'
+            '• Email: *{{variables.email}}*\n'
+            '• Teléfono: *{{variables.telefono}}*'
+        ),
+        'siguiente': 96,
+    },
+
+    # ── 96 — Menu: ¿el correo es correcto? ────────────────────
+    {
+        'id': 96, 'orden': 96, 'tipo': 'menu_botones',
+        'codigo': 'confirmar_correo', 'nombre': '¿Correo correcto?',
+        'mensaje': '¿El correo que tenemos sigue siendo el correcto para enviarte la cotización?',
+        'guardar_en': 'confirma_correo',
+        'opciones': [
+            {'etiqueta': '✅ Sí, está bien',   'valor': 'si',     'siguiente': 200},
+            {'etiqueta': '✏️ Cambiar correo', 'valor': 'cambiar', 'siguiente': 97},
+        ],
+    },
+
+    # ── 97 — Pedir correo nuevo y sobreescribir variable email ─
+    {
+        'id': 97, 'orden': 97, 'tipo': 'input_texto',
+        'codigo': 'pedir_email_nuevo', 'nombre': 'Pedir correo actualizado',
+        'mensaje': '📧 Escribime el *correo nuevo* al que querés recibir la cotización:',
+        'guardar_en': 'email',  # sobreescribe la variable que vino del lookup
+        'validacion': r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$',
+        'siguiente': 200,
     },
 
     # ── 100..130 — Datos del cliente (si no estaba en BD) ──────
