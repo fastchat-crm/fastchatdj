@@ -6,10 +6,33 @@
      data-tipo="{{ op.tipo_nodo }}"
      style="margin-left: {{ nivel|add:nivel|add:nivel }}0px;">
     <div class="dp-node-row">
-        <i class="fa fa-grip-vertical dp-drag-handle" title="Arrastrar para reordenar"></i>
-        <span class="dp-tipo-pill tipo-{{ op.tipo_nodo }}">
-            {{ op.get_tipo_nodo_display }}
-        </span>
+
+        <div class="dp-node-header">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fa fa-grip-vertical dp-drag-handle" title="Arrastrar para reordenar"></i>
+                <span class="dp-tipo-pill tipo-{{ op.tipo_nodo }}">
+                    {{ op.get_tipo_nodo_display }}
+                </span>
+            </div>
+            <div class="dp-node-actions">
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        data-act="add-child" data-parent-id="{{ op.id }}"
+                        title="Agregar sub-opción">
+                    <i class="fa fa-plus"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        data-act="edit" data-id="{{ op.id }}"
+                        title="Editar">
+                    <i class="fa fa-pen"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                        data-act="delete" data-id="{{ op.id }}" data-nombre="{{ op.nombre|default:'' }}"
+                        title="Eliminar">
+                    <i class="fa fa-trash"></i>
+                </button>
+            </div>
+        </div>
+
         <div class="dp-node-info">
             <div class="dp-node-title">
                 {% if op.es_inicio %}<i class="fa fa-play text-success me-1" title="Nodo de inicio"></i>{% endif %}
@@ -186,22 +209,6 @@
                 <span class="dp-tag dp-tag-orden">orden #{{ op.orden }}</span>
             </div>
         </div>
-        <div class="dp-node-actions">
-            <button type="button" class="btn btn-sm btn-outline-secondary"
-                    data-act="add-child" data-parent-id="{{ op.id }}"
-                    title="Agregar sub-opción">
-                <i class="fa fa-plus"></i>
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-primary"
-                    data-act="edit" data-id="{{ op.id }}"
-                    title="Editar">
-                <i class="fa fa-pen"></i>
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-danger"
-                    data-act="delete" data-id="{{ op.id }}" data-nombre="{{ op.nombre|default:'' }}"
-                    title="Eliminar">
-                <i class="fa fa-trash"></i>
-            </button>
-        </div>
+
     </div>
 </div>

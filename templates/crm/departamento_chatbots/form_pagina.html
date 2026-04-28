@@ -37,18 +37,18 @@
         </div>
         <div class="card-body">
             <div class="row g-2">
-                <div class="col-lg-7">
+                <div class="col-md-7">
                     <label class="form-label small mb-1">Nombre</label>
                     <input type="text" class="form-control" id="dp-nombre"
                            value="{{ filtro.nombre|default:'' }}"
                            placeholder="Ej: Atención al cliente · Matrículas · Soporte" maxlength="120">
                 </div>
-                <div class="col-lg-2">
+                <div class="col-md-2 col-6">
                     <label class="form-label small mb-1">Color</label>
                     <input type="color" class="form-control form-control-color w-100" id="dp-color"
                            value="{{ filtro.color|default:'#6c757d' }}">
                 </div>
-                <div class="col-lg-3 d-flex align-items-end">
+                <div class="col-md-3 col-6 d-flex align-items-end">
                     <small class="text-muted">El primer save crea el departamento.</small>
                 </div>
                 <div class="col-12">
@@ -74,23 +74,23 @@
                 </small>
                 <a href="?action=diagrama&id={{ filtro.pk }}"
                    class="btn btn-sm btn-outline-info" title="Ver árbol de decisiones full-page">
-                    <i class="fa fa-diagram-project me-1"></i> Diagrama
+                    <i class="fa fa-diagram-project"></i><span class="d-none d-md-inline ms-1">Diagrama</span>
                 </a>
                 <a href="?action=preview&id={{ filtro.pk }}"
                    class="btn btn-sm btn-outline-success" title="Simular como WhatsApp">
-                    <i class="fab fa-whatsapp me-1"></i> Preview
+                    <i class="fab fa-whatsapp"></i><span class="d-none d-md-inline ms-1">Preview</span>
                 </a>
                 <button type="button" class="btn btn-sm btn-outline-success"
                         data-act="ver-json" title="JSON completo + cookbook para seed">
-                    <i class="fa fa-code me-1"></i> JSON
+                    <i class="fa fa-code"></i><span class="d-none d-md-inline ms-1">JSON</span>
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-info"
                         data-act="ver-ficha" title="Ficha visual con todos los nodos">
-                    <i class="fa fa-clipboard-list me-1"></i> Ficha
+                    <i class="fa fa-clipboard-list"></i><span class="d-none d-md-inline ms-1">Ficha</span>
                 </button>
                 <button type="button" class="btn btn-sm btn-primary"
                         data-act="add-root">
-                    <i class="fa fa-plus me-1"></i> Agregar opción raíz
+                    <i class="fa fa-plus"></i><span class="d-none d-sm-inline ms-1">Agregar</span><span class="d-none d-md-inline"> opción raíz</span>
                 </button>
             </div>
         </div>

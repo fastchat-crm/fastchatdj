@@ -35,17 +35,22 @@
 .dp-node-card.sortable-chosen { box-shadow: 0 4px 14px rgba(0,0,0,.12); }
 
 .dp-node-row {
-    display: flex; align-items: flex-start; gap: .65rem;
-    padding: .6rem .85rem;
+    display: flex; flex-direction: column; gap: .35rem;
+    padding: .55rem .85rem;
 }
-.dp-drag-handle { color: #adb5bd; cursor: grab; padding-top: 4px; }
+
+.dp-node-header {
+    display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+}
+
+.dp-drag-handle { color: #adb5bd; cursor: grab; }
 .dp-drag-handle:active { cursor: grabbing; }
 
 .dp-tipo-pill {
     flex-shrink: 0;
     font-size: .65rem; font-weight: 700; padding: 4px 10px; border-radius: 10px;
     text-transform: uppercase; letter-spacing: .03em; min-width: 90px;
-    text-align: center; align-self: flex-start; margin-top: 2px;
+    text-align: center;
 }
 .tipo-respuesta    { background: #d1e7dd; color: #0f5132; }
 .tipo-menu         { background: #cfe2ff; color: #084298; }
@@ -61,7 +66,7 @@
 .tipo-cta_url      { background: #dbeafe; color: #1e40af; }
 .tipo-ubicacion    { background: #f3e8ff; color: #6b21a8; }
 
-.dp-node-info { flex: 1; min-width: 0; }
+.dp-node-info { min-width: 0; }
 
 .dp-node-title {
     font-weight: 600; color: #212529; font-size: .92rem;
@@ -96,7 +101,6 @@
 
 .dp-node-actions {
     display: flex; gap: 4px; flex-shrink: 0;
-    align-self: flex-start; margin-top: 2px;
 }
 .dp-node-actions .btn {
     padding: 3px 9px; font-size: .75rem;
@@ -561,6 +565,21 @@ body.dp-diag-page .dp-diag-card {
     0%   { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7); }
     70%  { box-shadow: 0 0 0 12px rgba(251, 191, 36, 0); }
     100% { box-shadow: 0 0 0 3px #fcd34d, 0 0 24px rgba(251, 191, 36, 0.4); }
+}
+
+/* ── Responsive: scroll horizontal en pantallas pequeñas ────────────── */
+@media (max-width: 767.98px) {
+    .dp-card-tree .card-body {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-left: .5rem;
+        padding-right: .5rem;
+    }
+
+    .dp-filters,
+    .dp-tree-flat {
+        min-width: 540px;
+    }
 }
 
 /* ─── Buscador del diagrama ─── */
