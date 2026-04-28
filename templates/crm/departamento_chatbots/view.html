@@ -64,6 +64,7 @@
                 <table id="tabla" class="table table-hover table-striped">
                     <thead>
                     <tr>
+                        <th class="text-center">Cod.</th>
                         <th class="text-center">Nombre</th>
                         <th class="text-center">Color</th>
                         <th class="text-center">Mensaje de Saludo</th>
@@ -73,6 +74,7 @@
                     <tbody>
                     {% for l in listado %}
                         <tr>
+                            <td class="text-center"><b>{{ l.id|default:'' }}</b></td>
                             <td class="text-center">{{ l.nombre|default:'' }}</td>
                             <td class="text-center"><span
                                     style="display:inline-block; width:25px; height:25px; border-radius:5px; border:1px solid #ccc; background-color:{{ l.color }};"></span>
