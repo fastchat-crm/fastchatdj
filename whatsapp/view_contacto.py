@@ -4,7 +4,7 @@ import sys
 from datetime import date, datetime, timedelta
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Count, Prefetch
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.template.loader import get_template
@@ -320,7 +320,28 @@ def contactoView(request):
             url_vars += '&solo_duplicados=1'
             data["solo_duplicados"] = True
 
-        listado = model.objects.filter(filtros)
+        # Optimización del listado: el template itera 20 contactos y por cada
+        # uno acceder a `l.sesion.*`, `l.referral_meta` y `l.get_mensajes_programados.count`
+        # disparaba 3-4 queries extra → 60-80 queries por página. Con
+        # select_related + annotate las llevamos a 1 sola query agregada.
+        listado = (
+            model.objects
+            .filter(filtros)
+            .select_related(
+                'sesion',
+                'sesion__config_meta',
+                'sesion__config_baileys',
+                'referral_meta',
+            )
+            .annotate(
+                _msj_prog_count=Count(
+                    'mensajes_programados',
+                    filter=Q(mensajes_programados__status=True,
+                             mensajes_programados__enviado=False),
+                    distinct=True,
+                ),
+            )
+        )
         data["mis_sesiones"] = mis_sesiones
         data["numeros_duplicados"] = numeros_duplicados
         data["total_duplicados"] = len(numeros_duplicados)

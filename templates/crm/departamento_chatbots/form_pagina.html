@@ -103,14 +103,22 @@
             {# Filtros + buscador (cliente, sin recargar) #}
             <div class="dp-filters">
                 <div class="row g-2 align-items-end">
-                    <div class="col-md-5">
+                    <div class="col-md-3">
                         <label class="form-label small mb-1">
                             <i class="fa fa-search me-1"></i> Buscar por nombre o respuesta
                         </label>
                         <input type="text" id="dp-filter-q" class="form-control form-control-sm"
                                placeholder="Escribí para filtrar...">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">
+                            <i class="fa fa-magnifying-glass-plus me-1"></i> Buscar en TODO el texto
+                            <small class="text-muted fw-normal">(URL, body, vars, etc.)</small>
+                        </label>
+                        <input type="text" id="dp-filter-fulltext" class="form-control form-control-sm"
+                               placeholder="Coincidencia en cualquier campo visible…">
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label small mb-1">Tipo de acción / botón</label>
                         <select id="dp-filter-tipo" class="form-select form-select-sm">
                             <option value="">Todos</option>
@@ -351,5 +359,5 @@
 
 {% block jscript %}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="{% static 'js/dpchat_editor.js' %}?v=13"></script>
+    <script src="{% static 'js/dpchat_editor.js' %}?v=14"></script>
 {% endblock %}

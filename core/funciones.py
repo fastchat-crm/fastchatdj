@@ -570,6 +570,19 @@ def addData(request, data):
     if 'user_anterior' in request.session:
         data["sesion_anterior"] = True
     if request.user.is_authenticated:
+        # Notificaciones para el dropdown del topbar (base.html). Sin esto el
+        # popup queda siempre vacío. Mostramos las 5 últimas no leídas y el
+        # total no leído para el badge.
+        try:
+            from seguridad.models import Notificacion as _Notif
+            _qs_not = _Notif.objects.filter(
+                destinatario=request.user, leido=False, status=True,
+            ).order_by('-fecha_registro')
+            data['totalnot'] = _qs_not.count()
+            data['listnotification'] = list(_qs_not[:5])
+        except Exception:
+            data['totalnot'] = 0
+            data['listnotification'] = []
         if request.user.cambio_clave and request.path != '/changepass/':
             data['activar_cambio_clave'] = request.user.cambio_clave
         if not 'perfilprincipal' in request.session:

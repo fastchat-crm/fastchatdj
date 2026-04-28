@@ -75,24 +75,50 @@
                     </a>
                 </li>
                 <li class="dropdown topbar-item">
-                    <a class="nav-link dropdown-toggle arrow-none nav-icon" data-bs-toggle="dropdown" href="#"
+                    <a class="nav-link dropdown-toggle arrow-none nav-icon position-relative" data-bs-toggle="dropdown" href="#"
                        role="button"
                        aria-haspopup="false" aria-expanded="false">
-                        <i class="icofont-bell-alt {% if listnotification %}text-warning{% endif %}"></i>
-                        <span class="alert-badge"></span>
+                        <i class="icofont-bell-alt {% if totalnot %}text-warning{% endif %}"></i>
+                        {% if totalnot %}
+                            <span class="badge bg-danger rounded-pill position-absolute top-0 start-100 translate-middle"
+                                  style="font-size:.6rem;">
+                                {% if totalnot > 99 %}99+{% else %}{{ totalnot }}{% endif %}
+                            </span>
+                        {% endif %}
                     </a>
-                    <div class="dropdown-menu stop dropdown-menu-end dropdown-lg py-0">
-                        {% for notificacion in listnotification %}
-                            asdasd
+                    <div class="dropdown-menu stop dropdown-menu-end dropdown-lg py-0" style="min-width:320px;max-width:380px;">
+                        <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
+                            <strong class="fs-14">Notificaciones</strong>
+                            {% if totalnot %}
+                                <small class="text-muted">{{ totalnot }} sin leer</small>
+                            {% endif %}
+                        </div>
+                        {% for notif in listnotification %}
+                            <a href="{% if notif.url %}{{ notif.url }}{% else %}/notificaciones/{% endif %}"
+                               class="dropdown-item d-flex align-items-start py-2 border-bottom"
+                               style="white-space:normal;">
+                                <div class="me-2 flex-shrink-0">
+                                    <span class="badge rounded-circle d-inline-flex align-items-center justify-content-center"
+                                          style="width:32px;height:32px;background:{% if notif.tipo == 4 %}#dc3545{% elif notif.tipo == 3 %}#198754{% elif notif.tipo == 2 %}#0d6efd{% else %}#0dcaf0{% endif %};color:#fff;">
+                                        <i class="fa fa-{% if notif.tipo == 4 %}triangle-exclamation{% elif notif.tipo == 3 %}circle-check{% elif notif.tipo == 2 %}bullhorn{% else %}circle-info{% endif %}"></i>
+                                    </span>
+                                </div>
+                                <div class="flex-grow-1" style="min-width:0;">
+                                    <div class="fw-medium fs-13 text-dark text-truncate">{{ notif.titulo|default:'(sin título)' }}</div>
+                                    <div class="text-muted fs-12" style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">{{ notif.cuerpo|striptags|truncatechars:80 }}</div>
+                                    <small class="text-muted fs-11">
+                                        <i class="fa fa-clock me-1"></i>{{ notif.fecha_registro|date:'d/m/Y H:i' }}
+                                    </small>
+                                </div>
+                            </a>
                         {% empty %}
-                            <div class="ms-3" style="text-align: center">
-                                <img src="/static/iconos/notificacion.svg" style="width: 150px">
-                                <p class="mb-3" style="color: #7C7C7C">Actualmente no tiene nuevas
-                                    notificaciones</p>
+                            <div class="ms-3 py-3" style="text-align: center">
+                                <img src="/static/iconos/notificacion.svg" style="width: 120px">
+                                <p class="mb-2 mt-2" style="color: #7C7C7C">Sin notificaciones nuevas</p>
                             </div>
                         {% endfor %}
-                        <a href="/notificaciones/" class="dropdown-item text-center text-dark fs-13 py-2">
-                            Ver mis notificaciones<i class="fi-arrow-right"></i>
+                        <a href="/notificaciones/" class="dropdown-item text-center text-primary fs-13 py-2 fw-medium">
+                            Ver todas las notificaciones <i class="fi-arrow-right ms-1"></i>
                         </a>
                     </div>
                 </li>

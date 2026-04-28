@@ -230,16 +230,19 @@ def departamentoChatbotsView(request):
                         from collections import defaultdict
                         arbol_plano = _serializar_arbol_opciones(filtro)
                         preds_por_nodo = defaultdict(list)
+                        salidas_por_nodo = defaultdict(list)
                         conexiones = (
                             ConexionNodoChatbot.objects
                             .filter(nodo_origen__departamento=filtro, status=True)
-                            .select_related('nodo_origen')
-                            .order_by('nodo_origen__orden', 'nodo_origen__id')
+                            .select_related('nodo_origen', 'nodo_destino')
+                            .order_by('nodo_origen__orden', 'nodo_origen__id', 'orden', 'id')
                         )
                         for c in conexiones:
                             preds_por_nodo[c.nodo_destino_id].append(c)
+                            salidas_por_nodo[c.nodo_origen_id].append(c)
                         for item in arbol_plano:
                             item['opcion'].predecesores_grafo = preds_por_nodo.get(item['opcion'].id, [])
+                            item['opcion'].salidas_grafo = salidas_por_nodo.get(item['opcion'].id, [])
                         data.update({
                             'pagina_completa': True,
                             'titulo_pagina': f'Editar {filtro}',
@@ -341,6 +344,21 @@ def departamentoChatbotsView(request):
                             .select_related('nodo_origen')
                             .order_by('nodo_origen__orden', 'nodo_origen__nombre')
                         )
+                        # Salidas del grafo (editable): conexiones que parten
+                        # de este nodo hacia otros. El form permite agregar /
+                        # editar / borrar; al guardar, se reescriben.
+                        salidas_grafo = (
+                            ConexionNodoChatbot.objects
+                            .filter(nodo_origen=opcion, status=True)
+                            .select_related('nodo_destino')
+                            .order_by('orden', 'id')
+                        )
+                        # Catálogo de nodos del depto para el dropdown de destino.
+                        nodos_destino_disponibles = (
+                            OpcionDepartamentoChatBot.objects
+                            .filter(departamento=opcion.departamento, status=True)
+                            .order_by('orden', 'nombre')
+                        )
                         contexto.update({
                             'opcion': opcion,
                             'es_nuevo': False,
@@ -348,6 +366,8 @@ def departamentoChatbotsView(request):
                             'parent_id': opcion.opcion_padre_id or 0,
                             'padres_disponibles': padres_disponibles,
                             'predecesores_grafo': predecesores_grafo,
+                            'salidas_grafo': salidas_grafo,
+                            'nodos_destino_disponibles': nodos_destino_disponibles,
                             'config_json_str': json.dumps(cfg, indent=2, ensure_ascii=False),
                             # Sub-piezas serializadas para los inputs específicos del form HTTP.
                             'http_query_json_str':   json.dumps(cfg.get('query') or {}, indent=2, ensure_ascii=False) if cfg.get('query') else '',
@@ -368,6 +388,8 @@ def departamentoChatbotsView(request):
                             'departamento_id': dep_id,
                             'parent_id': parent_id,
                             'padres_disponibles': padres_disponibles,
+                            'salidas_grafo': [],
+                            'nodos_destino_disponibles': padres_disponibles,
                             'config_json_str': '{}',
                             'http_query_json_str': '',
                             'http_body_json_str': '',

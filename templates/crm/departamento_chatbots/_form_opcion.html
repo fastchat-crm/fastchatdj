@@ -98,11 +98,90 @@
             {% endfor %}
         </div>
         <small class="text-muted">
-            Se calcula desde las conexiones del flujo. Para cambiar de quién depende este nodo,
-            edita las conexiones en el diagrama del depto.
+            Read-only — se calcula desde las salidas de otros nodos. Para cambiar quién apunta acá,
+            editá el nodo origen y modificá su salida.
         </small>
     </div>
     {% endif %}
+
+    {# ── Editor de Salidas / Siguientes ──────────────────────────────── #}
+    {# Conexiones salientes de este nodo. Cada una tiene una etiqueta que el
+       motor usa para enrutar (vacío=default, ok/error para http,
+       true/false para condicional, valor de la opción para menu) y un
+       nodo destino. El form persiste como `salidas_json` (JSON array). #}
+    <div class="col-12">
+        <label class="form-label small fw-bold mb-1">
+            <i class="fa fa-arrow-right-from-bracket text-primary me-1"></i>
+            Salidas / Siguientes (a quién apunta este nodo)
+        </label>
+        <div class="border rounded p-2" style="background:#f8fafc;">
+            <table class="table table-sm small mb-2" id="dp-salidas-table">
+                <thead>
+                    <tr>
+                        <th style="width:130px;">Etiqueta</th>
+                        <th>Nodo destino</th>
+                        <th style="width:60px;"></th>
+                    </tr>
+                </thead>
+                <tbody id="dp-salidas-body">
+                {% for s in salidas_grafo %}
+                    <tr data-conex-id="{{ s.id }}">
+                        <td>
+                            <input type="text" class="form-control form-control-sm dp-salida-etq"
+                                   value="{{ s.etiqueta }}"
+                                   placeholder="ok / error / true / false / vacío">
+                        </td>
+                        <td>
+                            <select class="form-select form-select-sm dp-salida-dst">
+                                <option value="0">— Selecciona —</option>
+                                {% for n in nodos_destino_disponibles %}
+                                    <option value="{{ n.id }}" {% if n.id == s.nodo_destino_id %}selected{% endif %}>
+                                        #{{ n.id }} · {{ n.nombre|default:'(sin nombre)'|truncatechars:50 }} ({{ n.get_tipo_nodo_display }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td class="text-end">
+                            <button type="button" class="btn btn-sm btn-outline-danger" data-act="dp-salida-del">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="dp-salida-add">
+                <i class="fa fa-plus me-1"></i> Agregar salida
+            </button>
+            <input type="hidden" name="salidas_json" id="dp-salidas-json" value="">
+        </div>
+        <small class="text-muted">
+            Etiquetas comunes: <code>ok</code>/<code>error</code> (HTTP), <code>true</code>/<code>false</code>
+            (condicional), valor de la opción (menu), vacío (default). El motor matchea por etiqueta.
+        </small>
+    </div>
+
+    {# Template invisible para clonar al "Agregar salida". #}
+    <template id="dp-salida-row-tpl">
+        <tr data-conex-id="">
+            <td>
+                <input type="text" class="form-control form-control-sm dp-salida-etq" placeholder="ok / error / true / false / vacío">
+            </td>
+            <td>
+                <select class="form-select form-select-sm dp-salida-dst">
+                    <option value="0">— Selecciona —</option>
+                    {% for n in nodos_destino_disponibles %}
+                        <option value="{{ n.id }}">#{{ n.id }} · {{ n.nombre|default:'(sin nombre)'|truncatechars:50 }} ({{ n.get_tipo_nodo_display }})</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td class="text-end">
+                <button type="button" class="btn btn-sm btn-outline-danger" data-act="dp-salida-del">
+                    <i class="fa fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    </template>
 
     {# Selector de padre — solo aplica al modo árbol legacy (opcion_padre). #}
     {# Para flujos modernos basados en grafo, usar las conexiones (ver predecesores arriba). #}

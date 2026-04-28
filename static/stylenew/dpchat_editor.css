@@ -98,6 +98,7 @@
 .dp-tag-url:hover { background: #bfdbfe; color: #1e3a8a; text-decoration: underline; }
 .dp-tag-loc   { background: #f3e8ff; color: #6b21a8; }
 .dp-tag-pred  { background: #dcfce7; color: #166534; font-family: ui-monospace, Menlo, monospace; font-size: .65rem; cursor: help; }
+.dp-tag-out   { background: #dbeafe; color: #1e40af; font-family: ui-monospace, Menlo, monospace; font-size: .65rem; cursor: help; }
 .dp-tag i { font-size: .62rem; margin-right: 2px; }
 
 .dp-node-preds {

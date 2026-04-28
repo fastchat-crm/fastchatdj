@@ -1557,6 +1557,65 @@ def _guardar_opcion(request):
             opcion.es_inicio = True
             opcion.save(request)
 
+    # ── Conexiones salientes (ConexionNodoChatbot) ──────────────────
+    # `salidas_json` viaja como JSON-array desde el form:
+    #   [{etiqueta:"ok", destino_id:95}, {etiqueta:"error", destino_id:900}, ...]
+    # Reescribimos las conexiones del nodo: borramos las que no vinieron,
+    # actualizamos las existentes, creamos las nuevas. Solo pisamos si el
+    # form mandó el campo (presencia explícita); si no vino, mantenemos.
+    salidas_raw = request.POST.get('salidas_json')
+    if salidas_raw is not None:
+        try:
+            salidas = json.loads(salidas_raw or '[]')
+        except (TypeError, ValueError):
+            salidas = None
+        if isinstance(salidas, list):
+            from .models import ConexionNodoChatbot
+            actuales = {c.id: c for c in ConexionNodoChatbot.objects.filter(
+                nodo_origen=opcion, status=True,
+            )}
+            ids_recibidos = set()
+            for orden_idx, item in enumerate(salidas, start=1):
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    destino_id = int(item.get('destino_id') or 0)
+                except (TypeError, ValueError):
+                    continue
+                if destino_id <= 0:
+                    continue
+                destino = OpcionDepartamentoChatBot.objects.filter(
+                    pk=destino_id, departamento=dep, status=True,
+                ).first()
+                if not destino:
+                    continue
+                etiqueta = (item.get('etiqueta') or '').strip()[:50]
+                conex_id = item.get('id')
+                try:
+                    conex_id = int(conex_id) if conex_id else None
+                except (TypeError, ValueError):
+                    conex_id = None
+                if conex_id and conex_id in actuales:
+                    c = actuales[conex_id]
+                    c.nodo_destino = destino
+                    c.etiqueta = etiqueta
+                    c.orden = orden_idx
+                    c.save()
+                    ids_recibidos.add(conex_id)
+                else:
+                    nueva = ConexionNodoChatbot.objects.create(
+                        nodo_origen=opcion,
+                        nodo_destino=destino,
+                        etiqueta=etiqueta,
+                        orden=orden_idx,
+                    )
+                    ids_recibidos.add(nueva.id)
+            # Soft-delete de las conexiones que ya no figuran en el form.
+            for cid, c in actuales.items():
+                if cid not in ids_recibidos:
+                    c.status = False
+                    c.save()
+
     return JsonResponse({
         'ok': True,
         'opcion_id': opcion.id,

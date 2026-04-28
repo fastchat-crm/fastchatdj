@@ -465,6 +465,32 @@
         aplicar();
     }
 
+    function wireSalidasEditor() {
+        // Editor de "Salidas / Siguientes" del modal del nodo. Delegamos
+        // todos los clicks porque el modal-body se reemplaza por AJAX cada
+        // vez que abrís un nodo (el editor se re-renderiza).
+        document.addEventListener('click', function (ev) {
+            // Agregar nueva fila clonando el <template>.
+            if (ev.target.closest('#dp-salida-add')) {
+                ev.preventDefault();
+                var tpl = document.getElementById('dp-salida-row-tpl');
+                var body = document.getElementById('dp-salidas-body');
+                if (tpl && body) {
+                    body.appendChild(tpl.content.cloneNode(true));
+                }
+                return;
+            }
+            // Borrar fila.
+            var delBtn = ev.target.closest('[data-act="dp-salida-del"]');
+            if (delBtn) {
+                ev.preventDefault();
+                var tr = delBtn.closest('tr');
+                if (tr) tr.remove();
+                return;
+            }
+        });
+    }
+
     function wireModalSubmit() {
         var form = $('#dpFormNodo');
         if (!form) return;
@@ -486,6 +512,27 @@
                     alert('Config JSON invalido: ' + e.message);
                     return;
                 }
+            }
+
+            // Serializar editor de salidas (ConexionNodoChatbot) si está
+            // presente — antes del FormData, así viaja como `salidas_json`.
+            var salidasBody = form.querySelector('#dp-salidas-body');
+            var salidasInput = form.querySelector('#dp-salidas-json');
+            if (salidasBody && salidasInput) {
+                var rows = salidasBody.querySelectorAll('tr');
+                var lista = [];
+                rows.forEach(function (tr) {
+                    var dst = parseInt(tr.querySelector('.dp-salida-dst').value || '0', 10);
+                    if (!dst) return;
+                    var etq = (tr.querySelector('.dp-salida-etq').value || '').trim();
+                    var cid = tr.getAttribute('data-conex-id') || '';
+                    lista.push({
+                        id: cid ? parseInt(cid, 10) : null,
+                        etiqueta: etq,
+                        destino_id: dst,
+                    });
+                });
+                salidasInput.value = JSON.stringify(lista);
             }
 
             var fd = new FormData(form);
@@ -725,9 +772,11 @@
     /* ────────────── Filtros (cliente) ────────────── */
     function aplicarFiltros() {
         var qEl = $('#dp-filter-q');
+        var ftEl = $('#dp-filter-fulltext');
         var tipoEl = $('#dp-filter-tipo');
         if (!qEl || !tipoEl) return;
         var q = (qEl.value || '').toLowerCase().trim();
+        var qFull = (ftEl && ftEl.value || '').toLowerCase().trim();
         var tipo = tipoEl.value || '';
         var cards = $$('.dp-node-card');
         var visibles = 0;
@@ -739,7 +788,19 @@
             var matchTexto = !q ||
                 nombre.toLowerCase().indexOf(q) >= 0 ||
                 preview.toLowerCase().indexOf(q) >= 0;
-            var ok = matchTipo && matchTexto;
+            // Full-text: coincidencia en CUALQUIER texto renderizado de la card
+            // (URL, body, headers, predecesores, salidas, tags, lo que sea).
+            // Cacheamos el textContent en un atributo para no leer DOM en cada keystroke.
+            var matchFull = true;
+            if (qFull) {
+                var hay = c._fullTextLower;
+                if (hay === undefined) {
+                    hay = (c.textContent || '').toLowerCase();
+                    c._fullTextLower = hay;
+                }
+                matchFull = hay.indexOf(qFull) >= 0;
+            }
+            var ok = matchTipo && matchTexto && matchFull;
             c.classList.toggle('dp-hidden', !ok);
             if (ok) visibles++;
         });
@@ -753,12 +814,15 @@
 
     function wireFiltros() {
         var q = $('#dp-filter-q');
+        var ft = $('#dp-filter-fulltext');
         var tipo = $('#dp-filter-tipo');
         var clear = $('#dp-filter-clear');
         if (q) q.addEventListener('input', aplicarFiltros);
+        if (ft) ft.addEventListener('input', aplicarFiltros);
         if (tipo) tipo.addEventListener('change', aplicarFiltros);
         if (clear) clear.addEventListener('click', function () {
             if (q) q.value = '';
+            if (ft) ft.value = '';
             if (tipo) tipo.value = '';
             aplicarFiltros();
         });
@@ -768,6 +832,7 @@
     /* ────────────── Init ────────────── */
     function init() {
         wireMeta();
+        wireSalidasEditor();
         wireModalSubmit();
         wireTreeActions();
         wireSortable();

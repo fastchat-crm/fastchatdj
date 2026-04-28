@@ -72,6 +72,19 @@
                 </div>
             {% endif %}
 
+            {% if op.salidas_grafo %}
+                <div class="dp-node-preds">
+                    <i class="fa fa-arrow-right text-muted me-1" title="Va a"></i>
+                    <span class="text-muted small">va a:</span>
+                    {% for c in op.salidas_grafo %}
+                        <span class="dp-tag dp-tag-out"
+                              title="Destino: {{ c.nodo_destino.nombre|default:'(sin nombre)' }} ({{ c.nodo_destino.get_tipo_nodo_display }}){% if c.etiqueta %} · etiqueta {{ c.etiqueta }}{% endif %}">
+                            {% if c.etiqueta %}<span class="text-muted">[{{ c.etiqueta }}]</span> {% endif %}#{{ c.nodo_destino_id }}
+                        </span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
             {# ── HTTP: URL completa, método, request body, extraer ── #}
             {% if op.tipo_nodo == 'http' %}
                 <div class="dp-node-http">

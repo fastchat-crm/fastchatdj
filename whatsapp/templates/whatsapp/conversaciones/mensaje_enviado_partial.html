@@ -1,9 +1,10 @@
+{% load templatefunctions %}
 <div class="msg-row msg-out d-flex flex-row-reverse align-items-end gap-2 mb-2">
     <img src="{{ mensaje.conversacion.sesion.usuario.get_foto_url|default:'/static/assets/img/avatar.png' }}"
          alt="yo" class="rounded-circle flex-shrink-0" style="width:32px;height:32px;object-fit:cover;">
     <div class="msg-bubble msg-bubble-out" style="max-width:82%;">
         {% if mensaje.mensaje %}
-            <p class="mb-0">{{ mensaje.mensaje }}</p>
+            <p class="mb-0 wa-msg">{{ mensaje.mensaje|whatsapp_format }}</p>
         {% endif %}
         {% with url=mensaje.get_archivo_url %}
         {% if url %}
