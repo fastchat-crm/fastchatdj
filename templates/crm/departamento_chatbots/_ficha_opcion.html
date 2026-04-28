@@ -1,0 +1,281 @@
+{# Ficha read-only del nodo. Vars: opcion, cfg (=opcion.config), config_json_str,
+   salidas (queryset ConexionNodoChatbot origen=op), entradas (destino=op).      #}
+<div class="dp-ficha-nodo dp-ficha-tipo-{{ opcion.tipo_nodo }}">
+
+    {# ── Cabecera ────────────────────────────────────────────── #}
+    <div class="dp-ficha-nodo-head d-flex flex-wrap align-items-center gap-2 pb-2 border-bottom">
+        <span class="dp-tipo-pill tipo-{{ opcion.tipo_nodo }}">
+            {{ opcion.get_tipo_nodo_display }}
+        </span>
+        <strong class="fs-15">{{ opcion.nombre|default:'(sin nombre)' }}</strong>
+        <small class="text-muted">#{{ opcion.id }} · orden {{ opcion.orden }}</small>
+        {% if opcion.es_inicio %}
+            <span class="badge bg-success"><i class="fa fa-play me-1"></i>Inicio</span>
+        {% endif %}
+        {% if not opcion.status %}
+            <span class="badge bg-danger">Inactivo</span>
+        {% endif %}
+    </div>
+
+    {# ── Identidad y árbol ───────────────────────────────────── #}
+    <div class="row g-2 small mt-2">
+        <div class="col-md-6">
+            <strong class="text-muted">Padre:</strong>
+            {% if opcion.opcion_padre %}
+                <code>{{ opcion.opcion_padre.nombre|default:'(sin nombre)' }}</code>
+                <small class="text-muted">#{{ opcion.opcion_padre.id }}</small>
+            {% else %}
+                <em class="text-muted">— raíz —</em>
+            {% endif %}
+        </div>
+        <div class="col-md-6">
+            <strong class="text-muted">Boton ID (Meta):</strong>
+            {% if opcion.boton_id %}
+                <code>{{ opcion.boton_id }}</code>
+            {% else %}
+                <em class="text-muted">— vacío —</em>
+            {% endif %}
+        </div>
+        <div class="col-md-6">
+            <strong class="text-muted">Variable destino:</strong>
+            {% if opcion.variable_destino %}
+                <code>${{ opcion.variable_destino }}</code>
+            {% else %}
+                <em class="text-muted">— ninguna —</em>
+            {% endif %}
+        </div>
+        <div class="col-md-6">
+            <strong class="text-muted">Validación:</strong>
+            <span class="badge bg-{% if opcion.validacion_tipo == 'none' %}light text-dark border{% else %}warning text-dark{% endif %}">
+                {{ opcion.get_validacion_tipo_display }}
+            </span>
+            {% if opcion.validacion_expresion %}
+                · <code>{{ opcion.validacion_expresion|truncatechars:60 }}</code>
+            {% endif %}
+            · {{ opcion.reintentos_max }} reintentos
+        </div>
+        {% if opcion.mensaje_error %}
+            <div class="col-12">
+                <strong class="text-muted">Mensaje de error:</strong>
+                <em>{{ opcion.mensaje_error }}</em>
+            </div>
+        {% endif %}
+    </div>
+
+    {# ── Cuerpo / mensaje principal ─────────────────────────── #}
+    {% if opcion.respuesta or cfg.mensaje or cfg.pregunta %}
+        <div class="mt-3">
+            <strong class="text-muted small">Mensaje al cliente:</strong>
+            <div class="dp-node-preview p-2 rounded" style="background:#f8fafc;">
+                <i class="fa fa-quote-left text-muted me-1"></i>
+                {% firstof opcion.respuesta cfg.mensaje cfg.pregunta '— vacío —' %}
+            </div>
+        </div>
+    {% endif %}
+
+    {# ── Bloques específicos por tipo ────────────────────────── #}
+
+    {% if opcion.tipo_nodo == 'http' %}
+        <div class="mt-3 p-2 rounded" style="background:#eff6ff;">
+            <strong class="small">Llamada HTTP</strong>
+            <div class="small mt-1">
+                <span class="badge bg-primary">{{ cfg.metodo|default:'GET' }}</span>
+                {% if opcion.endpoint %}
+                    <code>{{ opcion.endpoint.base_url }}{{ cfg.path|default:'' }}</code>
+                {% else %}
+                    <span class="text-danger">⚠️ Sin endpoint</span>
+                {% endif %}
+            </div>
+            {% if opcion.endpoint %}
+                <div class="small mt-1">
+                    <strong>Endpoint:</strong> {{ opcion.endpoint.nombre }}
+                    · timeout {{ opcion.endpoint.timeout_seg }}s
+                    {% if opcion.endpoint.credencial %}
+                        · auth: {{ opcion.endpoint.credencial.nombre }}
+                        ({{ opcion.endpoint.credencial.get_tipo_display }})
+                    {% else %}
+                        · sin auth
+                    {% endif %}
+                </div>
+            {% endif %}
+            {% if cfg.query %}
+                <div class="small mt-1"><strong>query:</strong>
+                    {% for k, v in cfg.query.items %}
+                        <code class="dp-http-pair">{{ k }}={{ v|truncatechars:50 }}</code>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            {% if cfg.headers %}
+                <div class="small mt-1"><strong>headers extra:</strong>
+                    {% for k, v in cfg.headers.items %}
+                        <code class="dp-http-pair">{{ k }}: {{ v|truncatechars:50 }}</code>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            {% if cfg.body %}
+                <div class="small mt-1"><strong>body:</strong>
+                    <pre class="mb-0 mt-1" style="font-size:.7rem;background:#fff;padding:.4rem;border-radius:4px;max-height:160px;overflow:auto;">{{ cfg.body|pprint }}</pre>
+                </div>
+            {% endif %}
+            {% if cfg.extraer %}
+                <div class="small mt-1"><strong>extrae {{ cfg.extraer|length }}:</strong>
+                    {% for ex in cfg.extraer %}
+                        <code class="dp-http-extract" title="jsonpath: {{ ex.jsonpath }}">${{ ex.variable }}</code>{% if not forloop.last %} {% endif %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+            {% if cfg.plantilla_respuesta %}
+                <div class="small mt-1"><strong>plantilla respuesta:</strong>
+                    <em>{{ cfg.plantilla_respuesta|truncatechars:200 }}</em>
+                </div>
+            {% endif %}
+            {% if cfg.envia_correo %}
+                <div class="small mt-1">
+                    <span class="badge bg-info text-dark">
+                        <i class="fa fa-envelope me-1"></i>Envía correo a asesores
+                    </span>
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {% if opcion.tipo_nodo == 'condicional' %}
+        <div class="mt-3 p-2 rounded" style="background:#fef3c7;">
+            <strong class="small">Decisión</strong>
+            <span class="badge bg-warning text-dark ms-1">{{ cfg.operador|default:'and'|upper }}</span>
+            <div class="small mt-1">
+                {% for c in cfg.condiciones %}
+                    <code class="dp-http-pair">{{ c.izq }} {{ c.op }} {{ c.der|default:'""' }}</code>
+                    {% if not forloop.last %} <span class="text-muted">{{ cfg.operador|default:'and' }}</span> {% endif %}
+                {% empty %}
+                    <em class="text-muted">— sin condiciones —</em>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+    {% if opcion.tipo_nodo == 'set_variable' %}
+        <div class="mt-3 p-2 rounded" style="background:#f3e8ff;">
+            <strong class="small">Asignaciones</strong>
+            <div class="small mt-1">
+                {% for a in cfg.asignaciones %}
+                    <div><code class="dp-http-pair">${{ a.variable }} = {{ a.expresion|default:'""'|truncatechars:80 }}</code></div>
+                {% empty %}
+                    <em class="text-muted">— sin asignaciones —</em>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+    {% if opcion.tipo_nodo == 'menu' %}
+        <div class="mt-3 p-2 rounded" style="background:#e0f2fe;">
+            <strong class="small">Menú con botones</strong>
+            {% if cfg.opciones_fuente %}
+                <div class="small mt-1">
+                    <strong>Fuente dinámica:</strong>
+                    variable <code>{{ cfg.opciones_fuente.variable }}</code>
+                    · id=<code>{{ cfg.opciones_fuente.campo_id|default:'id' }}</code>
+                    · etiqueta=<code>{{ cfg.opciones_fuente.campo_etiqueta|default:'nombre' }}</code>
+                    {% if cfg.opciones_fuente.limite %}· límite {{ cfg.opciones_fuente.limite }}{% endif %}
+                    {% if cfg.opciones_fuente.salida %}· salida=<code>{{ cfg.opciones_fuente.salida }}</code>{% endif %}
+                </div>
+            {% endif %}
+            {% if cfg.opciones %}
+                <div class="small mt-1">
+                    <strong>{{ cfg.opciones|length }} opciones estáticas:</strong>
+                    {% for opt in cfg.opciones %}
+                        <div><code class="dp-http-pair">{{ opt.etiqueta }}</code> → <code>{{ opt.salida|default:opt.valor }}</code></div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            {% if not cfg.opciones_fuente and not cfg.opciones %}
+                <div class="small mt-1 text-muted">
+                    <em>Sin fuente configurada — usa subnodos hijos como botones.</em>
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {% if opcion.tipo_nodo == 'cta_url' %}
+        <div class="mt-3 p-2 rounded" style="background:#dbeafe;">
+            <strong class="small">CTA URL</strong>
+            <div class="small mt-1">
+                <strong>Texto botón:</strong> <code>{{ cfg.display_text|default:'Abrir' }}</code><br>
+                <strong>URL:</strong>
+                {% if cfg.url %}
+                    <a href="{{ cfg.url }}" target="_blank" rel="noopener"><code>{{ cfg.url }}</code></a>
+                {% else %}
+                    <span class="text-danger">⚠️ Sin URL</span>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
+    {% if opcion.tipo_nodo == 'ubicacion' %}
+        <div class="mt-3 p-2 rounded" style="background:#fae8ff;">
+            <strong class="small">Ubicación</strong>
+            <div class="small mt-1">
+                <strong>{{ cfg.name|default:'Sin nombre' }}</strong> — {{ cfg.address|default:'(sin dirección)' }}<br>
+                <code>lat: {{ cfg.lat|default:'0' }}, lng: {{ cfg.lng|default:'0' }}</code>
+            </div>
+        </div>
+    {% endif %}
+
+    {# ── Conexiones (entrantes / salientes) ──────────────────── #}
+    <div class="row g-2 mt-3">
+        <div class="col-md-6">
+            <strong class="small text-muted">→ Salidas ({{ salidas|length }})</strong>
+            {% if salidas %}
+                <ul class="list-unstyled small mb-0 mt-1">
+                    {% for c in salidas %}
+                        <li>
+                            <span class="badge bg-light text-dark border">{{ c.etiqueta|default:'(default)' }}</span>
+                            → #{{ c.nodo_destino_id }}
+                            <strong>{{ c.nodo_destino.nombre|default:'(sin nombre)' }}</strong>
+                            <small class="text-muted">orden {{ c.orden }}</small>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <em class="text-muted small">— ninguna —</em>
+            {% endif %}
+        </div>
+        <div class="col-md-6">
+            <strong class="small text-muted">← Entradas ({{ entradas|length }})</strong>
+            {% if entradas %}
+                <ul class="list-unstyled small mb-0 mt-1">
+                    {% for c in entradas %}
+                        <li>
+                            <span class="badge bg-light text-dark border">{{ c.etiqueta|default:'(default)' }}</span>
+                            ← #{{ c.nodo_origen_id }}
+                            <strong>{{ c.nodo_origen.nombre|default:'(sin nombre)' }}</strong>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <em class="text-muted small">— ninguna —</em>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── Config raw JSON ────────────────────────────────────── #}
+    <div class="mt-3">
+        <details>
+            <summary class="text-muted small" style="cursor:pointer;">
+                <i class="fa fa-code me-1"></i>Ver config JSON crudo
+            </summary>
+            <pre class="dp-json-pre mt-2" style="font-size:.72rem;background:#0f172a;color:#e2e8f0;padding:.6rem;border-radius:6px;max-height:320px;overflow:auto;">{{ config_json_str }}</pre>
+        </details>
+    </div>
+
+    {# ── Auditoría ──────────────────────────────────────────── #}
+    <div class="mt-3 pt-2 border-top small text-muted">
+        <i class="fa fa-clock me-1"></i>
+        Creado: {{ opcion.fecha_registro|date:'d/m/Y H:i' }}
+        {% if opcion.usuario_creacion %} por {{ opcion.usuario_creacion.get_full_name|default:opcion.usuario_creacion.username }}{% endif %}
+        {% if opcion.fecha_modificacion %}
+            · Modificado: {{ opcion.fecha_modificacion|date:'d/m/Y H:i' }}
+            {% if opcion.usuario_modificacion %} por {{ opcion.usuario_modificacion.get_full_name|default:opcion.usuario_modificacion.username }}{% endif %}
+        {% endif %}
+    </div>
+</div>
