@@ -372,6 +372,13 @@
                                     <i class="fa fa-lock me-2 text-warning" id="icon-bloquear-cierre"></i>
                                     <span id="label-bloquear-cierre">Bloquear cierre automático</span>
                                 </a>
+                                {% if request.user.is_superuser %}
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="javascript:void(0)" id="ver-webhook-conv"
+                                       onclick="abrirWebhookConv()" title="Endpoint para inyectar mensajes desde un proceso externo">
+                                        <i class="fa fa-plug me-2 text-success"></i> Ver webhook API <span class="badge bg-success ms-1" style="font-size:.62rem;">SUPERUSER</span>
+                                    </a>
+                                {% endif %}
                                 <div class="dropdown-divider"></div>
                                 <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida" title="Terminar sin despedida">
                                     <i class="fa fa-times me-2 text-danger"></i> Terminar sin despedida
@@ -588,6 +595,79 @@
             </div>
         </div>
     </div>
+
+    {% if request.user.is_superuser %}
+    <div class="modal fade" id="modalWebhookConv" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-success bg-opacity-10">
+                    <h5 class="modal-title text-success">
+                        <i class="fa fa-plug me-2"></i> Webhook API · Conversación <span id="webhook-conv-id"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-2">
+                        Endpoint para inyectar mensajes a esta conversación desde un proceso externo
+                        (ej. cuando termine un job en background). Despacha automáticamente por Baileys o Meta
+                        según el proveedor de la sesión.
+                    </p>
+
+                    <h6 class="mt-3 mb-1"><i class="fa fa-link me-1"></i> URL</h6>
+                    <div class="input-group input-group-sm mb-2">
+                        <input type="text" class="form-control font-monospace" id="webhook-url" readonly>
+                        <button class="btn btn-outline-success" type="button" onclick="copiarTexto('webhook-url')">
+                            <i class="fa fa-copy"></i> Copiar
+                        </button>
+                    </div>
+
+                    <h6 class="mt-3 mb-1"><i class="fa fa-key me-1"></i> Header de autenticación</h6>
+                    <div class="input-group input-group-sm mb-1">
+                        <span class="input-group-text">X-API-Key:</span>
+                        <input type="text" class="form-control font-monospace" value="<NODE_SECRET_KEY>" readonly>
+                    </div>
+                    <small class="text-muted d-block mb-3">
+                        Usa el valor de <code>NODE_SECRET_KEY</code> definido en <code>credenciales.json</code>.
+                        No lo compartas — quien lo tenga puede mandar mensajes a cualquier conversación.
+                    </small>
+
+                    <h6 class="mt-3 mb-1"><i class="fa fa-cube me-1"></i> Body</h6>
+                    <ul class="small mb-2">
+                        <li><code>texto</code> — string (opcional si hay archivo)</li>
+                        <li><code>archivo</code> — file (opcional, multipart). Tipo deducido por MIME (image/video/audio/document)</li>
+                        <li><code>caption</code> — string opcional, va con el archivo</li>
+                    </ul>
+
+                    <h6 class="mt-3 mb-1"><i class="fa fa-terminal me-1"></i> Ejemplo: solo texto (JSON)</h6>
+                    <pre class="bg-dark text-light p-2 rounded small mb-2" style="white-space:pre-wrap;"><code id="webhook-curl-json"></code></pre>
+                    <button class="btn btn-sm btn-outline-secondary mb-3" type="button" onclick="copiarTexto('webhook-curl-json')">
+                        <i class="fa fa-copy"></i> Copiar comando
+                    </button>
+
+                    <h6 class="mt-3 mb-1"><i class="fa fa-terminal me-1"></i> Ejemplo: texto + archivo (multipart)</h6>
+                    <pre class="bg-dark text-light p-2 rounded small mb-2" style="white-space:pre-wrap;"><code id="webhook-curl-multipart"></code></pre>
+                    <button class="btn btn-sm btn-outline-secondary mb-3" type="button" onclick="copiarTexto('webhook-curl-multipart')">
+                        <i class="fa fa-copy"></i> Copiar comando
+                    </button>
+
+                    <h6 class="mt-3 mb-1"><i class="fa fa-triangle-exclamation me-1"></i> Errores</h6>
+                    <table class="table table-sm small mb-0">
+                        <thead><tr><th style="width:80px;">Status</th><th>Caso</th></tr></thead>
+                        <tbody>
+                            <tr><td><code>401</code></td><td>X-API-Key faltante o inválida</td></tr>
+                            <tr><td><code>404</code></td><td>Conversación no existe</td></tr>
+                            <tr><td><code>409</code></td><td>Conversación finalizada</td></tr>
+                            <tr><td><code>423</code></td><td>Sesión pausada (<code>activo=false</code>)</td></tr>
+                            <tr><td><code>400</code></td><td>Sin <code>texto</code> ni <code>archivo</code></td></tr>
+                            <tr><td><code>502</code></td><td>Baileys/Meta rechazó el envío</td></tr>
+                            <tr><td><code>429</code></td><td>Rate limit (120 req/min por API key)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 {% endblock %}
 
 {% block jscript %}
@@ -826,6 +906,49 @@
         let buscando = false;
 
         console.log("Inicializando chat de WhatsApp");
+
+        // Webhook API modal (solo superuser — el botón ya viene oculto si no lo es)
+        window.copiarTexto = function(elId) {
+            var el = document.getElementById(elId);
+            if (!el) return;
+            var txt = (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') ? el.value : el.innerText;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(txt).then(function() {
+                    if (typeof toastr !== 'undefined') toastr.success('Copiado al portapapeles');
+                });
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = txt;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                if (typeof toastr !== 'undefined') toastr.success('Copiado');
+            }
+        };
+
+        window.abrirWebhookConv = function() {
+            if (!conversacionActiva) {
+                if (typeof toastr !== 'undefined') toastr.warning('Selecciona primero una conversación.');
+                return;
+            }
+            var url = window.location.origin + '/whatsapp/api/v1/conversaciones/' + conversacionActiva + '/enviar/';
+            $('#webhook-conv-id').text('#' + conversacionActiva);
+            $('#webhook-url').val(url);
+            var curlJson =
+                'curl -X POST "' + url + '" \\\n' +
+                '  -H "X-API-Key: $NODE_SECRET_KEY" \\\n' +
+                '  -H "Content-Type: application/json" \\\n' +
+                '  -d \'{"texto":"Tu reporte está listo ✅"}\'';
+            var curlMulti =
+                'curl -X POST "' + url + '" \\\n' +
+                '  -H "X-API-Key: $NODE_SECRET_KEY" \\\n' +
+                '  -F "texto=Reporte adjunto" \\\n' +
+                '  -F "archivo=@reporte.pdf"';
+            $('#webhook-curl-json').text(curlJson);
+            $('#webhook-curl-multipart').text(curlMulti);
+            new bootstrap.Modal(document.getElementById('modalWebhookConv')).show();
+        };
 
         // CTA de la alerta "sesión pausada": foco + scroll al combo + flash
         $(document).on('click', '#btn-cambiar-sesion-pausada', function() {

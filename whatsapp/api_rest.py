@@ -13,6 +13,7 @@ Endpoints:
     POST /api/v1/conversaciones/<id>/asignar/  → asignar agente
     POST /api/v1/conversaciones/<id>/etapa/    → mover en pipeline
     POST /api/v1/mensajes/enviar/              → enviar mensaje texto/media
+    POST /api/v1/conversaciones/<id>/enviar/   → enviar a conversación activa (texto+archivo)
     POST /api/v1/etiquetas/aplicar/            → bulk tag a contactos
     POST /api/v1/capi/evento/                  → disparar evento CAPI manual
     GET  /api/v1/campanas/<id>/stats/          → estadísticas campaña
@@ -257,6 +258,117 @@ def conversacion_etapa(request, pk):
 # ---------------------------------------------------------------------------
 # Envío de mensajes
 # ---------------------------------------------------------------------------
+
+@api_endpoint
+@csrf_exempt
+@require_POST
+def conversacion_enviar(request, pk):
+    """Envía un mensaje a una conversación activa.
+
+    Pensado para procesos en segundo plano: cuando el job termine, hace
+    `POST /api/v1/conversaciones/<id>/enviar/` con `texto` y/o `archivo`
+    y la plataforma lo despacha por Baileys o Meta según `sesion.proveedor`.
+
+    Body (multipart/form-data o JSON):
+        texto    : str   (opcional si hay archivo)
+        archivo  : file  (opcional, multipart)
+        caption  : str   (opcional, va con el archivo)
+
+    Auth: header `X-API-Key: <NODE_SECRET_KEY>`.
+    """
+    from django.utils import timezone
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
+    conv = ConversacionWhatsApp.objects.select_related('contacto', 'contacto__sesion').get(pk=pk)
+    if conv.conversacion_finalizada:
+        return JsonResponse({'error': 'conversation_closed'}, status=409)
+
+    sesion = conv.contacto.sesion
+    if not sesion or not getattr(sesion, 'activo', True):
+        return JsonResponse({'error': 'session_paused'}, status=423)
+
+    texto = (request.POST.get('texto') or '').strip()
+    caption = (request.POST.get('caption') or '').strip()
+    archivo = request.FILES.get('archivo')
+
+    # Si vino como JSON (sin multipart), parsear body
+    if not texto and not archivo and request.body:
+        try:
+            body = json.loads(request.body or '{}')
+            texto = (body.get('texto') or '').strip()
+            caption = (body.get('caption') or '').strip()
+        except Exception:
+            pass
+
+    if not texto and not archivo:
+        return JsonResponse({'error': 'texto_o_archivo_requerido'}, status=400)
+
+    service = get_whatsapp_service(sesion)
+    destino = conv.contacto.from_number
+    if sesion.es_baileys and '@' not in destino:
+        destino = service.format_phone_number(destino)
+
+    resultados = []
+    ahora = timezone.now()
+
+    if texto:
+        r = service.send_text_message(sesion.session_id, destino, texto, conversacion_id=conv.id)
+        if not r.get('success'):
+            return JsonResponse({'error': r.get('error') or 'send_failed'}, status=502)
+        msg = MensajeWhatsApp.objects.create(
+            conversacion=conv, remitente=sesion.numero, mensaje=texto,
+            tipo='texto', fecha=ahora, mensaje_id_externo=r.get('message_id') or '',
+            leido=True, fecha_leido=ahora, es_automatico=True,
+        )
+        resultados.append({'tipo': 'texto', 'mensaje_id': msg.id, 'externo': r.get('message_id')})
+
+    if archivo:
+        contenido = archivo.read()
+        nombre_archivo = archivo.name
+        mime = (archivo.content_type or '').lower()
+        if mime.startswith('image/'):
+            tipo_msg, media_type = 'imagen', 'image'
+        elif mime.startswith('video/'):
+            tipo_msg, media_type = 'video', 'video'
+        elif mime.startswith('audio/'):
+            tipo_msg, media_type = 'audio', 'audio'
+        else:
+            tipo_msg, media_type = 'documento', 'document'
+        r = service.send_media_message(
+            sesion.session_id, destino,
+            file_content=contenido, filename=nombre_archivo,
+            caption=caption or None, media_type=media_type,
+            conversacion_id=conv.id,
+        )
+        if not r.get('success'):
+            return JsonResponse({'error': r.get('error') or 'send_failed'}, status=502)
+        msg = MensajeWhatsApp(
+            conversacion=conv, remitente=sesion.numero,
+            mensaje=caption or '', tipo=tipo_msg, fecha=ahora,
+            mensaje_id_externo=r.get('message_id') or '',
+            leido=True, fecha_leido=ahora, es_automatico=True,
+        )
+        from django.core.files.base import ContentFile
+        msg.archivo.save(nombre_archivo, ContentFile(contenido), save=False)
+        msg.save()
+        resultados.append({'tipo': tipo_msg, 'mensaje_id': msg.id, 'externo': r.get('message_id')})
+
+    # Broadcast websocket para que el chat UI refresque al instante
+    try:
+        cl = get_channel_layer()
+        if cl:
+            async_to_sync(cl.group_send)(
+                f'chat_{conv.id}',
+                {'type': 'whatsapp_message', 'event': 'new_message',
+                 'conversation_id': conv.id, 'sender': sesion.numero,
+                 'timestamp': ahora.isoformat()},
+            )
+    except Exception:
+        pass
+
+    return JsonResponse({'success': True, 'conversacion_id': conv.id, 'enviados': resultados})
+
 
 @api_endpoint
 @require_POST

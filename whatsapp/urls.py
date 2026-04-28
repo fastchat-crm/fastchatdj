@@ -120,6 +120,7 @@ urlpatterns = [
     path('api/v1/conversaciones/<int:pk>/mensajes/', api_rest.conversacion_mensajes, name='api_v1_conv_mensajes'),
     path('api/v1/conversaciones/<int:pk>/asignar/',  api_rest.conversacion_asignar,  name='api_v1_conv_asignar'),
     path('api/v1/conversaciones/<int:pk>/etapa/',    api_rest.conversacion_etapa,    name='api_v1_conv_etapa'),
+    path('api/v1/conversaciones/<int:pk>/enviar/',   api_rest.conversacion_enviar,   name='api_v1_conv_enviar'),
     path('api/v1/mensajes/enviar/',                api_rest.enviar_mensaje,         name='api_v1_enviar_mensaje'),
     path('api/v1/etiquetas/aplicar/',              api_rest.etiquetas_aplicar,      name='api_v1_etiquetas_aplicar'),
     path('api/v1/capi/evento/',                    api_rest.capi_evento,            name='api_v1_capi_evento'),
