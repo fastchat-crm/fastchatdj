@@ -184,8 +184,9 @@
     position: relative;
 }
 .dp-tree-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.06);
+    /* Solo cambio de shadow — sin translate (evita reflow del árbol). */
+    box-shadow: 0 4px 10px rgba(0,0,0,.10), 0 1px 3px rgba(0,0,0,.08);
+    border-color: #94a3b8;
 }
 .dp-tree-card.tipo-menu          { border-top-color: #8b5cf6; }
 .dp-tree-card.tipo-respuesta     { border-top-color: #16a34a; }
@@ -477,13 +478,12 @@
     height: 100%;
     overflow: auto;
     padding: 1.5rem 1rem;
-    background: linear-gradient(135deg, #fafbfc 0%, #f1f5f9 100%);
-    /* Patrón de puntos sutil para sensación n8n/Figma */
-    background-image:
-        radial-gradient(circle at 1px 1px, rgba(148,163,184,.18) 1px, transparent 0);
-    background-size: 18px 18px;
-    background-color: #fafbfc;
+    /* Fondo sólido — sin patrón ni gradient para que el scroll sea fluido
+       en árboles grandes (cada repaint del background era costoso). */
+    background: #fafbfc;
     scrollbar-width: thin;
+    /* Pinta solo lo visible; mejora scroll en árboles muy anchos. */
+    contain: paint;
 }
 .dp-tree-decision-wrap::-webkit-scrollbar { width: 10px; height: 10px; }
 .dp-tree-decision-wrap::-webkit-scrollbar-thumb {
@@ -494,6 +494,36 @@
 
 /* Que el body NO tenga scroll cuando estamos en el diagrama */
 body.dp-diag-page { overflow: hidden !important; }
+
+/* ─── Modo full-screen del diagrama: oculta sidebar/topbar/breadcrumb ─── */
+body.dp-diag-page .startbar,
+body.dp-diag-page .startbar-overlay,
+body.dp-diag-page .topbar,
+body.dp-diag-page .startbar-menu,
+body.dp-diag-page .row.mb-2:has(nav[aria-label="breadcrumb"]),
+body.dp-diag-page nav[aria-label="breadcrumb"] {
+    display: none !important;
+}
+body.dp-diag-page .page-wrapper {
+    margin-left: 0 !important;
+    padding-top: 0 !important;
+}
+body.dp-diag-page .page-content {
+    padding: 0 !important;
+}
+body.dp-diag-page .container-xxl {
+    max-width: 100% !important;
+    padding: .75rem 1rem !important;
+}
+
+/* Botón "salir de pantalla completa" / volver al editor */
+.dp-toolbar { position: relative; z-index: 5; }
+
+/* Hace que la card del diagrama use TODO el alto disponible
+   (sin restar header global ya que está oculto) */
+body.dp-diag-page .dp-diag-card {
+    height: calc(100vh - 130px);
+}
 
 /* ─── Highlight del nodo enfocado por anchor (#nodo-X) ─── */
 .dp-node-card.dp-highlight {
