@@ -68,11 +68,17 @@
     </div>
     <div class="card dp-diag-card">
         <div class="dp-tree-decision-wrap" id="dp-tree-wrap">
-            <ul class="dp-tree-decision" id="dp-tree-root">
-                {% for nodo in arbol_anidado %}
-                    {% include "crm/departamento_chatbots/_diagrama_node.html" with nodo=nodo %}
-                {% endfor %}
-            </ul>
+            {# Stage: wrapper que SÍ toma las dimensiones escaladas para
+               que .dp-tree-decision-wrap (overflow:auto) muestre scrollbars
+               horizontales/verticales al hacer zoom>1. El <ul> usa CSS
+               transform:scale, que no afecta layout — por eso el stage. #}
+            <div id="dp-tree-stage" style="width:max-content;">
+                <ul class="dp-tree-decision" id="dp-tree-root">
+                    {% for nodo in arbol_anidado %}
+                        {% include "crm/departamento_chatbots/_diagrama_node.html" with nodo=nodo %}
+                    {% endfor %}
+                </ul>
+            </div>
         </div>
     </div>
 
@@ -125,9 +131,20 @@
 
     function aplicarZoom() {
         var root = document.getElementById('dp-tree-root');
+        var stage = document.getElementById('dp-tree-stage');
         if (!root) return;
+        // Medir tamaño natural sin transform (transform:scale no afecta el
+        // layout box; necesitamos las dimensiones reales para luego dárselas
+        // al stage y que el wrap detecte overflow al ampliar).
+        root.style.transform = '';
+        var natW = root.offsetWidth, natH = root.offsetHeight;
         root.style.transform = 'scale(' + zoomNivel + ')';
         root.style.transformOrigin = 'top left';
+        if (stage) {
+            // Stage = caja real escalada → wrap.overflow:auto muestra scrollbars.
+            stage.style.width  = (natW * zoomNivel) + 'px';
+            stage.style.height = (natH * zoomNivel) + 'px';
+        }
         var btn100 = document.getElementById('dp-zoom-100');
         if (btn100) btn100.textContent = Math.round(zoomNivel * 100) + '%';
         try { localStorage.setItem(ZOOM_KEY, String(zoomNivel)); } catch (e) {}

@@ -241,15 +241,18 @@ PASOS = [
         'siguiente_ok': 230, 'siguiente_error': 900,
     },
     {
-        'id': 230, 'orden': 230, 'tipo': 'input_texto',
+        'id': 230, 'orden': 230, 'tipo': 'menu_botones',
         'codigo': 'pedir_provincia', 'nombre': 'Elegir provincia',
-        'mensaje': (
-            '📍 Elige tu *provincia* (escribe el ID):\n\n'
-            '{% for p in variables.provincias %}'
-            '*{{p.id}}* — {{p.nombre}}\n'
-            '{% endfor %}'
-        ),
+        'mensaje': '📍 Elige tu *provincia*:',
         'guardar_en': 'provincia_id',
+        'opciones': [],
+        'opciones_fuente': {
+            'variable': 'variables.provincias',
+            'campo_id': 'id',
+            'campo_etiqueta': 'nombre',
+            'salida': '',
+            'limite': 30,  # 24+ provincias EC, sin tope WhatsApp en preview
+        },
         'siguiente': 240,
     },
 
@@ -270,15 +273,18 @@ PASOS = [
         'siguiente_ok': 260, 'siguiente_error': 900,
     },
     {
-        'id': 260, 'orden': 260, 'tipo': 'input_texto',
+        'id': 260, 'orden': 260, 'tipo': 'menu_botones',
         'codigo': 'pedir_canton', 'nombre': 'Elegir cantón',
-        'mensaje': (
-            '🏙️ Elige tu *cantón* (escribe el ID):\n\n'
-            '{% for c in variables.cantones %}'
-            '*{{c.id}}* — {{c.nombre}}\n'
-            '{% endfor %}'
-        ),
+        'mensaje': '🏙️ Elige tu *cantón*:',
         'guardar_en': 'canton_id',
+        'opciones': [],
+        'opciones_fuente': {
+            'variable': 'variables.cantones',
+            'campo_id': 'id',
+            'campo_etiqueta': 'nombre',
+            'salida': '',
+            'limite': 50,
+        },
         'siguiente': 300,
     },
 
@@ -547,6 +553,61 @@ def _normalizar_extraer(extrae_variables):
     return out
 
 
+def _parse_literal(s):
+    """Convierte 'true'/'false'/'null'/'123'/'\"foo\"' a su tipo Python."""
+    s = (s or '').strip()
+    if s == '':
+        return ''
+    if (s.startswith("'") and s.endswith("'")) or (s.startswith('"') and s.endswith('"')):
+        return s[1:-1]
+    low = s.lower()
+    if low == 'true':
+        return True
+    if low == 'false':
+        return False
+    if low == 'null' or low == 'none':
+        return None
+    try:
+        return int(s)
+    except ValueError:
+        try:
+            return float(s)
+        except ValueError:
+            return s
+
+
+def _parse_condicion(expr):
+    """Parsea 'LHS OP RHS [&& LHS OP RHS]' al formato del motor.
+
+    Retorna (condiciones, operador). Soporta: ==, !=, >=, <=, >, <, &&, ||.
+    """
+    expr = (expr or '').strip()
+    if not expr:
+        return [], 'and'
+
+    if '||' in expr:
+        partes = [p.strip() for p in expr.split('||')]
+        operador = 'or'
+    elif '&&' in expr:
+        partes = [p.strip() for p in expr.split('&&')]
+        operador = 'and'
+    else:
+        partes, operador = [expr], 'and'
+
+    conds = []
+    for p in partes:
+        for op in ('==', '!=', '>=', '<=', '>', '<'):
+            if op in p:
+                izq, der = p.split(op, 1)
+                conds.append({
+                    'izq': izq.strip(),
+                    'op': op,
+                    'der': _parse_literal(der.strip()),
+                })
+                break
+    return conds, operador
+
+
 class Command(BaseCommand):
     help = 'Crea el flujo del cotizador ARIA v2 (REST stateless).'
 
@@ -618,7 +679,8 @@ class Command(BaseCommand):
                 cfg['opciones_fuente'] = paso['opciones_fuente']
             return cfg
         if t == 'decision':
-            return {'expresion': paso.get('condicion', '')}
+            conds, operador = _parse_condicion(paso.get('condicion', ''))
+            return {'condiciones': conds, 'operador': operador}
         if t == 'asignar_variable':
             return {'asignaciones': [
                 {'variable': k, 'expresion': v}
