@@ -391,16 +391,21 @@ PASOS = [
                 'valor_comercial':   '{{variables.valor_vehiculo}}',
                 'precio_accesorios': 0,
             },
+            # `all=true` cotiza todas las aseguradoras del tenant. El resto
+            # se manda explícitamente en false para que el webhook NO levante
+            # un OR ambiguo si decide ignorar `all` y mirar solo las banderas
+            # individuales. Si en el futuro querés cotizar solo un subset,
+            # poné `all=False` y marcá las aseguradoras específicas en true.
             'aseguradoras': {
-                'all':                 False,
-                'zurich':              True,
-                'aig':                 True,
+                'all':                 True,
+                'zurich':              False,
+                'aig':                 False,
                 'generali':            False,
                 'mapfre':              False,
                 'latina':              False,
                 'alianza':             False,
                 'condor':              False,
-                'chubb':               True,
+                'chubb':               False,
                 'aseguradora_del_sur': False,
                 'atlantida':           False,
             },
