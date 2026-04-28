@@ -1,25 +1,25 @@
 """
-Seed del flujo "ARIA — Cotizador de seguros" (tenant fguerrero).
+Seed del cotizador ARIA v2 (API REST stateless).
 
-Asistente conversacional que cotiza seguros vehiculares contra la API de
-fguerrero.mgaseguros.ec. Todo el backend del cotizador vive en un solo
-endpoint POST /aria/ con un parámetro `action` que distingue iniciar / paso /
-listar_planes / detalle_plan / seleccionar_plan / etc.
+Reemplaza la versión anterior basada en /aria/ con `action=paso` (stateful por
+sesión Django). La API v2 vive en /aria-api/v1/* y es:
+  - REST stateless: cada llamada lleva todos los datos.
+  - Pública (AllowAny + CSRF-exempt).
+  - Solo soporta cotización CON PLACA.
 
-Modelo del flujo:
-  - 1 DepartamentoChatBot "ARIA — Cotizador de seguros".
-  - 1 CredencialApiChatbot tipo none (la API es AllowAny por sesión Django).
-  - 1 EndpointApiChatbot apuntando a https://fguerrero.mgaseguros.ec/aria/.
-  - Nodos del flujo creados desde el descriptor PASOS en este archivo.
-  - Conexiones según `siguiente` / `siguiente_ok` / `siguiente_error` /
-    `siguiente_si` / `siguiente_no` y `opciones[].siguiente`.
+Flujo del bot (resumido):
+  /info/ → placa → /vehiculo/?placa= → confirmar →
+  cédula → /cliente/?cedula= → (si no encontrado: pedir nombres/apellidos/email/teléfono) →
+  catálogos (tipos-vehiculo, provincias, [cantones si requiere], colores) →
+  pedir valor + accesorios → POST /cotizar/ →
+  /planes/?cotpk= → elegir → /plan/?detalle_id= → confirmar → POST /seleccionar/
 
 Uso:
     python manage.py seed_cotizador
     python manage.py seed_cotizador --reset
     python manage.py seed_cotizador --delete
     python manage.py seed_cotizador --sesion 5
-    python manage.py seed_cotizador --base-url https://otro.dominio.ec/aria/
+    python manage.py seed_cotizador --base-url https://otro.dominio.ec/aria-api/v1/
 """
 
 from django.core.management.base import BaseCommand
@@ -32,649 +32,485 @@ from crm.models import (
 
 
 NOMBRE_DEPTO = 'ARIA — Cotizador de seguros'
-BASE_URL_DEFAULT = 'https://fguerrero.mgaseguros.ec/aria/'
+BASE_URL_DEFAULT = 'https://fguerrero.mgaseguros.ec/aria-api/v1/'
+
+# Nombres canónicos del seed v1 (legacy) — se borran en --reset para evitar
+# que queden colgados credenciales/endpoints obsoletos del flujo /aria/.
+LEGACY_CREDENCIAL = 'ARIA - AllowAny'
+LEGACY_ENDPOINT = 'Cotizador ARIA'
+
+# Nombres del seed v2 (REST).
+CREDENCIAL_NOMBRE = 'ARIA REST - AllowAny'
+ENDPOINT_NOMBRE = 'Cotizador ARIA REST v1'
 
 
-# Provincias EC (códigos INEC). Si el broker usa otra tabla, ajustar valor.
-PROVINCIAS_EC = [
-    ('01', 'Azuay'),            ('02', 'Bolívar'),
-    ('03', 'Cañar'),            ('04', 'Carchi'),
-    ('05', 'Cotopaxi'),         ('06', 'Chimborazo'),
-    ('07', 'El Oro'),           ('08', 'Esmeraldas'),
-    ('09', 'Guayas'),           ('10', 'Imbabura'),
-    ('11', 'Loja'),             ('12', 'Los Ríos'),
-    ('13', 'Manabí'),           ('14', 'Morona Santiago'),
-    ('15', 'Napo'),             ('16', 'Pastaza'),
-    ('17', 'Pichincha'),        ('18', 'Tungurahua'),
-    ('19', 'Zamora Chinchipe'), ('20', 'Galápagos'),
-    ('21', 'Sucumbíos'),        ('22', 'Orellana'),
-    ('23', 'Santo Domingo'),    ('24', 'Santa Elena'),
-]
-
-
-def _opciones_provincia(siguiente_id):
-    """Genera el array `opciones` del menú de provincias EC."""
-    return [
-        {'etiqueta': nombre, 'valor': cod, 'siguiente': siguiente_id}
-        for cod, nombre in PROVINCIAS_EC
-    ]
-
-
-# ─────────────────────────────────────────────────────────────────
-# Bot config (= DepartamentoChatBot)
-# ─────────────────────────────────────────────────────────────────
 BOT = {
     'codigo': 'aria',
     'nombre': NOMBRE_DEPTO,
     'descripcion': (
-        'Asistente virtual que cotiza seguros vehiculares ante Zurich, AIG, '
-        'Generali, Aseguradora del Sur, Chubb, Atlántida y aseguradoras locales. '
-        'Conduce al usuario por una conversación guiada hasta elegir un plan.'
+        'Asistente virtual que cotiza seguros vehiculares contra Zurich, AIG, '
+        'Generali y aseguradoras locales. Versión REST stateless.'
     ),
-    'mensaje_inicial': '¡Hola! 👋 Soy ARIA 🤖, tu asistente para cotizar tu seguro vehicular. ¿Comenzamos? 🚗',
-    'mensaje_identificacion': '🪪 Para empezar necesito tu cédula o RUC.',
-    'mensaje_sin_datos': '🔎 No encontré tus datos en el sistema. Tranquilo, los registramos juntos.',
-    'mensaje_despedida': '¡Gracias por usar ARIA! 💜 Cuando quieras volver a cotizar, aquí estaré.',
-    'avatar': 'https://fguerrero.mgaseguros.ec/static/img/aria.png',
+    'mensaje_inicial': (
+        '¡Hola! 👋 Soy ARIA 🤖, tu asistente para cotizar tu seguro vehicular. '
+        'Vamos a generar tu cotización en pocos pasos. 🚗'
+    ),
     'color_primario': '#6f42c1',
     'palabras_clave': 'aria\ncotizar\nseguro\nseguros\nplaca\nvehiculo\nvehículo\ncarro\nauto',
-    'configuracion_extra': {
-        'url_aria': 'https://fguerrero.mgaseguros.ec/aria/',
-        'url_cotizador': 'https://fguerrero.mgaseguros.ec/cotizar/',
-        'url_elegir_plan': 'https://fguerrero.mgaseguros.ec/elegir-plan/',
-        'url_pdf_plan': 'https://fguerrero.mgaseguros.ec/cotizacion/cotizacion-enviada/',
-        'session_key': 'cotichat_datos',
-        'timeout_seg': 15,
-    },
 }
 
 
 # ─────────────────────────────────────────────────────────────────
-# Descriptor del flujo (id JSON → conexiones)
+# Descriptor del flujo
+#   - tipo: respuesta_texto | input_texto | llamada_http | decision |
+#           menu_botones | asignar_variable | fin_conversacion
+#   - llamada_http: url completa NO se usa; en su lugar `path` relativo al
+#     endpoint base. `query` (GET) o `body` (POST). `extrae_variables` con
+#     formato '$nombre': '$.data.foo.bar'.
 # ─────────────────────────────────────────────────────────────────
 PASOS = [
-    # ── Saludo + identificación ─────────────────────────────────
+    # ── 10 — Saludo + lectura de flags del tenant ────────────────
     {
         'id': 10, 'orden': 10, 'tipo': 'respuesta_texto',
         'codigo': 'saludo_inicial', 'nombre': 'Saludo de bienvenida',
         'es_inicio': True,
-        'mensaje': '¡Hola! 👋 Soy ARIA 🤖, tu asistente para cotizar tu seguro vehicular. ¿Comenzamos? 🚗',
+        'mensaje': BOT['mensaje_inicial'],
         'siguiente': 20,
     },
     {
-        'id': 20, 'orden': 20, 'tipo': 'input_texto',
-        'codigo': 'pedir_cedula', 'nombre': 'Pedir cédula / RUC',
-        'mensaje': '🪪 Para empezar necesito tu cédula o RUC. (10 dígitos cédula · 13 dígitos RUC)',
-        'guardar_en': 'cedula',
-        'validacion': r'^[0-9]{10}([0-9]{3})?$',
-        'siguiente': 30,
-    },
-    {
-        'id': 30, 'orden': 30, 'tipo': 'llamada_http',
-        'codigo': 'http_iniciar', 'nombre': 'API POST /aria/ (action=iniciar)',
-        'metodo': 'POST', 'body': {'action': 'iniciar'},
+        'id': 20, 'orden': 20, 'tipo': 'llamada_http',
+        'codigo': 'http_info', 'nombre': 'GET /info/ — flags del tenant',
+        'metodo': 'GET', 'path': 'info/',
         'extrae_variables': {
-            '$paso': '$.paso', '$bot_msg': '$.bot',
-            '$tipo': '$.tipo', '$opciones': '$.opciones',
+            '$requiere_canton': '$.data.features.requiere_canton',
+            '$solo_con_placa':  '$.data.features.solo_con_placa',
+            '$tenant_nombre':   '$.data.tenant.name',
         },
-        'siguiente_ok': 40, 'siguiente_error': 900,
+        'siguiente_ok': 30, 'siguiente_error': 900,
+    },
+
+    # ── 30/40 — Placa + lookup vehículo ─────────────────────────
+    {
+        'id': 30, 'orden': 30, 'tipo': 'input_texto',
+        'codigo': 'pedir_placa', 'nombre': 'Pedir placa',
+        'mensaje': '🚗 Empecemos por el vehículo. Escríbeme la *placa* (ej: ABC-1234):',
+        'guardar_en': 'placa',
+        'validacion': r'^[A-Za-z0-9-]{5,8}$',
+        'siguiente': 40,
     },
     {
         'id': 40, 'orden': 40, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_cedula', 'nombre': 'API POST /aria/ (paso=cedula)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'cedula', 'valor': '{{variables.cedula}}'},
+        'codigo': 'http_vehiculo',
+        'nombre': 'GET /vehiculo/?placa= — lookup en Zurich',
+        'metodo': 'GET', 'path': 'vehiculo/',
+        'query': {'placa': '{{variables.placa}}'},
+        'timeout_seg': 20,
         'extrae_variables': {
-            '$paso': '$.paso', '$bot_msg': '$.bot', '$tipo': '$.tipo',
-            '$opciones': '$.opciones', '$error': '$.error',
+            '$encontrado_veh':      '$.data.encontrado',
+            '$marca':               '$.data.vehiculo.marca',
+            '$modelo':              '$.data.vehiculo.modelo',
+            '$anio':                '$.data.vehiculo.anio',
+            '$tipo_vehiculo_id':    '$.data.vehiculo.tipo_sugerido.id',
+            '$tipo_vehiculo_nombre': '$.data.vehiculo.tipo_sugerido.nombre',
+            '$color_id':            '$.data.vehiculo.color_id',
+            '$color_name':          '$.data.vehiculo.color_name',
         },
         'siguiente_ok': 50, 'siguiente_error': 900,
     },
     {
         'id': 50, 'orden': 50, 'tipo': 'decision',
-        'codigo': 'cliente_encontrado',
-        'nombre': '¿La API Zurich encontró cliente con esa cédula?',
-        'condicion': "{{variables.paso}} == 'confirmar_cliente'",
-        'siguiente_si': 60, 'siguiente_no': 70,
+        'codigo': 'vehiculo_encontrado', 'nombre': '¿Vehículo encontrado?',
+        'condicion': '{{variables.encontrado_veh}} == true',
+        'siguiente_si': 60, 'siguiente_no': 901,
     },
     {
-        'id': 60, 'orden': 60, 'tipo': 'menu_botones',
-        'codigo': 'menu_confirmar_cliente', 'nombre': 'Confirmar datos del cliente',
-        'mensaje': '{{variables.bot_msg}}',
-        'guardar_en': 'confirmar_cliente_resp',
-        'opciones': [
-            {'etiqueta': '✅ Sí, son mis datos',     'valor': 'si', 'siguiente': 65},
-            {'etiqueta': '✏️ Quiero actualizarlos', 'valor': 'no', 'siguiente': 70},
-        ],
-    },
-    {
-        'id': 65, 'orden': 65, 'tipo': 'llamada_http',
-        'codigo': 'http_confirmar_cliente',
-        'nombre': 'API POST /aria/ (paso=confirmar_cliente)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'confirmar_cliente',
-                 'valor': '{{variables.confirmar_cliente_resp}}'},
-        'extrae_variables': {
-            '$paso': '$.paso', '$bot_msg': '$.bot',
-            '$tipo': '$.tipo', '$opciones': '$.opciones',
-        },
-        'siguiente_ok': 200, 'siguiente_error': 900,
+        'id': 60, 'orden': 60, 'tipo': 'respuesta_texto',
+        'codigo': 'mostrar_vehiculo', 'nombre': 'Mostrar datos del vehículo',
+        'mensaje': (
+            '✅ Encontré el vehículo:\n'
+            '• Marca: *{{variables.marca}}*\n'
+            '• Modelo: *{{variables.modelo}}*\n'
+            '• Año: *{{variables.anio}}*\n'
+            '• Tipo: *{{variables.tipo_vehiculo_nombre}}*\n'
+            '• Color sugerido: *{{variables.color_name}}*'
+        ),
+        'siguiente': 70,
     },
 
-    # ── Datos personales (alta de cliente) ──────────────────────
+    # ── 70/80/90 — Cédula + lookup cliente ─────────────────────
     {
         'id': 70, 'orden': 70, 'tipo': 'input_texto',
+        'codigo': 'pedir_cedula', 'nombre': 'Pedir cédula / RUC',
+        'mensaje': '🪪 Ahora dame tu *cédula o RUC* (10 dígitos cédula · 13 dígitos RUC):',
+        'guardar_en': 'cedula',
+        'validacion': r'^[0-9]{10}([0-9]{3})?$',
+        'siguiente': 80,
+    },
+    {
+        'id': 80, 'orden': 80, 'tipo': 'llamada_http',
+        'codigo': 'http_cliente',
+        'nombre': 'GET /cliente/?cedula= — lookup en Zurich',
+        'metodo': 'GET', 'path': 'cliente/',
+        'query': {'cedula': '{{variables.cedula}}'},
+        'timeout_seg': 20,
+        'extrae_variables': {
+            '$encontrado_cli': '$.data.encontrado',
+            '$nombres':        '$.data.cliente.nombres',
+            '$apellidos':      '$.data.cliente.apellidos',
+            '$email':          '$.data.cliente.email',
+            '$telefono':       '$.data.cliente.telefono',
+            '$driver_age':     '$.data.cliente.edad',
+            '$civil_status':   '$.data.cliente.civil_status',
+            '$gender':         '$.data.cliente.gender',
+        },
+        'siguiente_ok': 90, 'siguiente_error': 900,
+    },
+    {
+        'id': 90, 'orden': 90, 'tipo': 'decision',
+        'codigo': 'cliente_encontrado', 'nombre': '¿Cliente encontrado?',
+        'condicion': '{{variables.encontrado_cli}} == true',
+        'siguiente_si': 200, 'siguiente_no': 100,
+    },
+
+    # ── 100..130 — Datos del cliente (si no estaba en BD) ──────
+    {
+        'id': 100, 'orden': 100, 'tipo': 'input_texto',
         'codigo': 'pedir_nombres', 'nombre': 'Pedir nombres',
-        'mensaje': '¿Cuál es tu nombre? (primer y segundo nombre)',
+        'mensaje': 'No te encontré en el sistema. ¿Cuál es tu *nombre*?',
         'guardar_en': 'nombres',
         'validacion': r'^[A-Za-zÁÉÍÓÚáéíóúüÜñÑ\s\-]{2,}$',
-        'siguiente': 71,
+        'siguiente': 110,
     },
     {
-        'id': 71, 'orden': 71, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_nombres', 'nombre': 'API POST /aria/ (paso=nombres)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'nombres', 'valor': '{{variables.nombres}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot', '$tipo': '$.tipo'},
-        'siguiente_ok': 72, 'siguiente_error': 900,
-    },
-    {
-        'id': 72, 'orden': 72, 'tipo': 'input_texto',
+        'id': 110, 'orden': 110, 'tipo': 'input_texto',
         'codigo': 'pedir_apellidos', 'nombre': 'Pedir apellidos',
-        'mensaje': '¿Y tus apellidos? (primer y segundo apellido)',
+        'mensaje': '¿Y tus *apellidos*?',
         'guardar_en': 'apellidos',
         'validacion': r'^[A-Za-zÁÉÍÓÚáéíóúüÜñÑ\s\-]{2,}$',
-        'siguiente': 73,
+        'siguiente': 120,
     },
     {
-        'id': 73, 'orden': 73, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_apellidos', 'nombre': 'API POST /aria/ (paso=apellidos)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'apellidos', 'valor': '{{variables.apellidos}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot'},
-        'siguiente_ok': 74, 'siguiente_error': 900,
-    },
-    {
-        'id': 74, 'orden': 74, 'tipo': 'input_texto',
+        'id': 120, 'orden': 120, 'tipo': 'input_texto',
         'codigo': 'pedir_email', 'nombre': 'Pedir email',
-        'mensaje': '¿A qué correo te mando la cotización?',
+        'mensaje': '¿A qué *correo* te mando la cotización?',
         'guardar_en': 'email',
         'validacion': r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$',
-        'siguiente': 75,
+        'siguiente': 130,
     },
     {
-        'id': 75, 'orden': 75, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_email', 'nombre': 'API POST /aria/ (paso=email)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'email', 'valor': '{{variables.email}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot'},
-        'siguiente_ok': 76, 'siguiente_error': 900,
-    },
-    {
-        'id': 76, 'orden': 76, 'tipo': 'input_texto',
-        'codigo': 'pedir_telefono', 'nombre': 'Pedir celular',
-        'mensaje': '¿Y tu número de celular? (10 dígitos, empieza con 0)',
+        'id': 130, 'orden': 130, 'tipo': 'input_texto',
+        'codigo': 'pedir_telefono', 'nombre': 'Pedir teléfono',
+        'mensaje': '¿Y tu *celular*? (10 dígitos, empieza con 0)',
         'guardar_en': 'telefono',
         'validacion': r'^0[0-9]{9}$',
-        'siguiente': 77,
-    },
-    {
-        'id': 77, 'orden': 77, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_telefono', 'nombre': 'API POST /aria/ (paso=telefono)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'telefono', 'valor': '{{variables.telefono}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot'},
-        'siguiente_ok': 78, 'siguiente_error': 900,
-    },
-    {
-        'id': 78, 'orden': 78, 'tipo': 'input_texto',
-        'codigo': 'pedir_edad', 'nombre': 'Pedir edad',
-        'mensaje': '¿Cuántos años tienes? (18 a 100)',
-        'guardar_en': 'edad',
-        'validacion': r'^[1-9][0-9]?$',
-        'siguiente': 79,
-    },
-    {
-        'id': 79, 'orden': 79, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_edad', 'nombre': 'API POST /aria/ (paso=edad)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'edad', 'valor': '{{variables.edad}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot'},
-        'siguiente_ok': 80, 'siguiente_error': 900,
-    },
-    {
-        'id': 80, 'orden': 80, 'tipo': 'menu_botones',
-        'codigo': 'menu_civil_status', 'nombre': 'Pedir estado civil',
-        'mensaje': '¿Cuál es tu estado civil?',
-        'guardar_en': 'civil_status',
-        'opciones': [
-            {'etiqueta': 'Soltero/a',     'valor': 'SOLTERO',     'siguiente': 81},
-            {'etiqueta': 'Casado/a',      'valor': 'CASADO',      'siguiente': 81},
-            {'etiqueta': 'Unión libre',   'valor': 'UNION LIBRE', 'siguiente': 81},
-            {'etiqueta': 'Divorciado/a',  'valor': 'DIVORCIADO',  'siguiente': 81},
-            {'etiqueta': 'Viudo/a',       'valor': 'VIUDO',       'siguiente': 81},
-        ],
-    },
-    {
-        'id': 81, 'orden': 81, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_civil', 'nombre': 'API POST /aria/ (paso=civil_status)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'civil_status', 'valor': '{{variables.civil_status}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot'},
-        'siguiente_ok': 82, 'siguiente_error': 900,
-    },
-    {
-        'id': 82, 'orden': 82, 'tipo': 'menu_botones',
-        'codigo': 'menu_genero', 'nombre': 'Pedir género',
-        'mensaje': '¡Último dato personal! ¿Cuál es tu género?',
-        'guardar_en': 'genero',
-        'opciones': [
-            {'etiqueta': 'Masculino', 'valor': 'M', 'siguiente': 83},
-            {'etiqueta': 'Femenino',  'valor': 'F', 'siguiente': 83},
-        ],
-    },
-    {
-        'id': 83, 'orden': 83, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_genero', 'nombre': 'API POST /aria/ (paso=genero)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'genero', 'valor': '{{variables.genero}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot'},
-        'siguiente_ok': 200, 'siguiente_error': 900,
+        'siguiente': 200,
     },
 
-    # ── Vehículo: con o sin placa ───────────────────────────────
+    # ── 200/210 — Catálogo tipos vehículo ──────────────────────
     {
-        'id': 200, 'orden': 200, 'tipo': 'menu_botones',
-        'codigo': 'menu_tiene_placa', 'nombre': '¿Tienes la placa a mano?',
-        'mensaje': '🚗 Ahora cuéntame sobre tu vehículo. ¿Tienes la placa?',
-        'guardar_en': 'tiene_placa',
-        'opciones': [
-            {'etiqueta': '✅ Sí, la tengo',          'valor': '1', 'siguiente': 210},
-            {'etiqueta': '🔍 No, busquemos sin placa', 'valor': '0', 'siguiente': 310},
-        ],
+        'id': 200, 'orden': 200, 'tipo': 'llamada_http',
+        'codigo': 'http_tipos_vehiculo',
+        'nombre': 'GET /catalogos/tipos-vehiculo/',
+        'metodo': 'GET', 'path': 'catalogos/tipos-vehiculo/',
+        'extrae_variables': {'$tipos': '$.data.tipos'},
+        'siguiente_ok': 210, 'siguiente_error': 900,
     },
-
-    # Rama CON placa
     {
         'id': 210, 'orden': 210, 'tipo': 'input_texto',
-        'codigo': 'pedir_placa', 'nombre': 'Pedir placa',
-        'mensaje': '¡Genial! Escríbeme la placa (ej: ABC-1234).',
-        'guardar_en': 'placa',
-        'validacion': r'^[A-Za-z0-9-]{5,8}$',
-        'siguiente': 211,
-    },
-    {
-        'id': 211, 'orden': 211, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_placa',
-        'nombre': 'API POST /aria/ (paso=placa) — lookup Zurich Vehículo',
-        'metodo': 'POST', 'timeout_seg': 20,
-        'body': {'action': 'paso', 'paso': 'placa', 'valor': '{{variables.placa}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot', '$tipo': '$.tipo'},
-        'siguiente_ok': 212, 'siguiente_error': 900,
-    },
-    {
-        'id': 212, 'orden': 212, 'tipo': 'decision',
-        'codigo': 'vehiculo_encontrado',
-        'nombre': '¿La API devolvió datos del vehículo?',
-        'condicion': "{{variables.paso}} == 'confirmar_vehiculo_placa'",
-        'siguiente_si': 213, 'siguiente_no': 215,
-    },
-    {
-        'id': 213, 'orden': 213, 'tipo': 'menu_botones',
-        'codigo': 'menu_confirmar_vehiculo', 'nombre': 'Confirmar datos del vehículo',
-        'mensaje': '{{variables.bot_msg}}',
-        'guardar_en': 'confirmar_vehiculo_resp',
-        'opciones': [
-            {'etiqueta': '✅ Sí, son correctos',  'valor': 'si', 'siguiente': 214},
-            {'etiqueta': '✏️ Quiero modificarlos', 'valor': 'no', 'siguiente': 215},
-        ],
-    },
-    {
-        'id': 214, 'orden': 214, 'tipo': 'llamada_http',
-        'codigo': 'http_confirmar_vehiculo',
-        'nombre': 'API POST /aria/ (paso=confirmar_vehiculo_placa)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'confirmar_vehiculo_placa',
-                 'valor': '{{variables.confirmar_vehiculo_resp}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot'},
-        'siguiente_ok': 216, 'siguiente_error': 900,
-    },
-    {
-        'id': 215, 'orden': 215, 'tipo': 'input_texto',
-        'codigo': 'pedir_color_placa', 'nombre': 'Pedir color (con placa)',
-        'mensaje': '¿De qué color es el carro? (escribe el ID de /ajaxrequest/listarcolores)',
-        'guardar_en': 'color_placa',
-        'siguiente': 2151,
-    },
-    {
-        'id': 2151, 'orden': 2151, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_color_placa',
-        'nombre': 'API POST /aria/ (paso=color_placa)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'color_placa', 'valor': '{{variables.color_placa}}'},
-        'extrae_variables': {'$paso': '$.paso'},
-        'siguiente_ok': 216, 'siguiente_error': 900,
-    },
-    {
-        'id': 216, 'orden': 216, 'tipo': 'menu_botones',
-        'codigo': 'pedir_provincia_placa', 'nombre': 'Pedir provincia',
-        'mensaje': '¿En qué provincia circula el vehículo?',
-        'guardar_en': 'provincia_placa',
-        'opciones': _opciones_provincia(217),
-    },
-    {
-        'id': 217, 'orden': 217, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_provincia_placa',
-        'nombre': 'API POST /aria/ (paso=provincia_placa)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'provincia_placa',
-                 'valor': '{{variables.provincia_placa}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot'},
-        'siguiente_ok': 218, 'siguiente_error': 900,
-    },
-    {
-        'id': 218, 'orden': 218, 'tipo': 'input_texto',
-        'codigo': 'pedir_valor_placa', 'nombre': 'Pedir valor del vehículo',
-        'mensaje': '¿Cuánto vale el vehículo hoy? (USD, solo números, entre 1.000 y 500.000)',
-        'guardar_en': 'valor_placa',
-        'validacion': r'^[0-9]{4,6}$',
-        'siguiente': 219,
-    },
-    {
-        'id': 219, 'orden': 219, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_valor_placa',
-        'nombre': 'API POST /aria/ (paso=valor_placa)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'valor_placa', 'valor': '{{variables.valor_placa}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot'},
-        'siguiente_ok': 220, 'siguiente_error': 900,
-    },
-    {
-        'id': 220, 'orden': 220, 'tipo': 'input_texto',
-        'codigo': 'pedir_accesorios_placa', 'nombre': 'Pedir valor de accesorios',
-        'mensaje': '¿Tiene accesorios extras? (USD, 0 si nada). Máximo 20% del valor.',
-        'guardar_en': 'accesorios_placa',
-        'validacion': r'^[0-9]+$',
-        'siguiente': 221,
-    },
-    {
-        'id': 221, 'orden': 221, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_accesorios_placa',
-        'nombre': 'API POST /aria/ (paso=accesorios_placa) — DISPARA cotización',
-        'metodo': 'POST', 'timeout_seg': 60,
-        'body': {'action': 'paso', 'paso': 'accesorios_placa',
-                 'valor': '{{variables.accesorios_placa}}'},
-        'extrae_variables': {
-            '$paso': '$.paso', '$ok': '$.ok', '$cotpk': '$.cotpk',
-            '$redirect': '$.redirect', '$bot_msg': '$.bot',
-            '$resumen': '$.resumen', '$tipo_error': '$.tipo_error',
-            '$error': '$.error',
-        },
-        'siguiente_ok': 400, 'siguiente_error': 900,
+        'codigo': 'pedir_tipo_vehiculo', 'nombre': 'Elegir tipo de vehículo',
+        'mensaje': (
+            '🚙 Elige el *tipo de vehículo* (escribe el ID):\n\n'
+            '{% for t in variables.tipos %}'
+            '*{{t.id}}* — {{t.nombre}}\n'
+            '{% endfor %}'
+        ),
+        'guardar_en': 'tipo_vehiculo_id',
+        'siguiente': 220,
     },
 
-    # Rama SIN placa
+    # ── 220/230 — Catálogo provincias ──────────────────────────
+    {
+        'id': 220, 'orden': 220, 'tipo': 'llamada_http',
+        'codigo': 'http_provincias',
+        'nombre': 'GET /catalogos/provincias/',
+        'metodo': 'GET', 'path': 'catalogos/provincias/',
+        'extrae_variables': {'$provincias': '$.data.provincias'},
+        'siguiente_ok': 230, 'siguiente_error': 900,
+    },
+    {
+        'id': 230, 'orden': 230, 'tipo': 'input_texto',
+        'codigo': 'pedir_provincia', 'nombre': 'Elegir provincia',
+        'mensaje': (
+            '📍 Elige tu *provincia* (escribe el ID):\n\n'
+            '{% for p in variables.provincias %}'
+            '*{{p.id}}* — {{p.nombre}}\n'
+            '{% endfor %}'
+        ),
+        'guardar_en': 'provincia_id',
+        'siguiente': 240,
+    },
+
+    # ── 240..260 — Cantones (solo si requiere_canton) ──────────
+    {
+        'id': 240, 'orden': 240, 'tipo': 'decision',
+        'codigo': 'requiere_canton', 'nombre': '¿El tenant requiere cantón?',
+        'condicion': '{{variables.requiere_canton}} == true',
+        'siguiente_si': 250, 'siguiente_no': 300,
+    },
+    {
+        'id': 250, 'orden': 250, 'tipo': 'llamada_http',
+        'codigo': 'http_cantones',
+        'nombre': 'GET /catalogos/cantones/?provincia_id=',
+        'metodo': 'GET', 'path': 'catalogos/cantones/',
+        'query': {'provincia_id': '{{variables.provincia_id}}'},
+        'extrae_variables': {'$cantones': '$.data.cantones'},
+        'siguiente_ok': 260, 'siguiente_error': 900,
+    },
+    {
+        'id': 260, 'orden': 260, 'tipo': 'input_texto',
+        'codigo': 'pedir_canton', 'nombre': 'Elegir cantón',
+        'mensaje': (
+            '🏙️ Elige tu *cantón* (escribe el ID):\n\n'
+            '{% for c in variables.cantones %}'
+            '*{{c.id}}* — {{c.nombre}}\n'
+            '{% endfor %}'
+        ),
+        'guardar_en': 'canton_id',
+        'siguiente': 300,
+    },
+
+    # ── 300/310 — Catálogo colores ─────────────────────────────
+    {
+        'id': 300, 'orden': 300, 'tipo': 'llamada_http',
+        'codigo': 'http_colores',
+        'nombre': 'GET /catalogos/colores/',
+        'metodo': 'GET', 'path': 'catalogos/colores/',
+        'extrae_variables': {'$colores': '$.data.colores'},
+        'siguiente_ok': 310, 'siguiente_error': 900,
+    },
     {
         'id': 310, 'orden': 310, 'tipo': 'input_texto',
-        'codigo': 'pedir_marca', 'nombre': 'Pedir marca',
-        'mensaje': '¿Cuál es la marca del vehículo? (texto, mínimo 2 letras)',
-        'guardar_en': 'marca',
-        'siguiente': 311,
-    },
-    {
-        'id': 311, 'orden': 311, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_marca', 'nombre': 'API POST /aria/ (paso=marca)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'marca', 'valor': '{{variables.marca}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot'},
-        'siguiente_ok': 312, 'siguiente_error': 900,
-    },
-    {
-        'id': 312, 'orden': 312, 'tipo': 'input_texto',
-        'codigo': 'pedir_modelo', 'nombre': 'Pedir modelo',
-        'mensaje': '¿Y el modelo?',
-        'guardar_en': 'modelo',
-        'siguiente': 313,
-    },
-    {
-        'id': 313, 'orden': 313, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_modelo', 'nombre': 'API POST /aria/ (paso=modelo)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'modelo', 'valor': '{{variables.modelo}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot'},
-        'siguiente_ok': 314, 'siguiente_error': 900,
-    },
-    {
-        'id': 314, 'orden': 314, 'tipo': 'input_texto',
-        'codigo': 'pedir_anio', 'nombre': 'Pedir año',
-        'mensaje': '¿De qué año es el vehículo? (1990 al año en curso + 1)',
-        'guardar_en': 'anio',
-        'validacion': r'^(19[9][0-9]|20[0-9]{2})$',
-        'siguiente': 315,
-    },
-    {
-        'id': 315, 'orden': 315, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_anio', 'nombre': 'API POST /aria/ (paso=anio)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'anio', 'valor': '{{variables.anio}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot'},
-        'siguiente_ok': 316, 'siguiente_error': 900,
-    },
-    {
-        'id': 316, 'orden': 316, 'tipo': 'input_texto',
-        'codigo': 'pedir_color_sin_placa', 'nombre': 'Pedir color',
-        'mensaje': '¿Color del vehículo? (ID de /ajaxrequest/listarcolores)',
-        'guardar_en': 'color',
-        'siguiente': 317,
-    },
-    {
-        'id': 317, 'orden': 317, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_color_sin_placa',
-        'nombre': 'API POST /aria/ (paso=color)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'color', 'valor': '{{variables.color}}'},
-        'extrae_variables': {'$paso': '$.paso'},
-        'siguiente_ok': 318, 'siguiente_error': 900,
-    },
-    {
-        'id': 318, 'orden': 318, 'tipo': 'menu_botones',
-        'codigo': 'pedir_provincia_sin_placa', 'nombre': 'Pedir provincia',
-        'mensaje': '¿En qué provincia circula?',
-        'guardar_en': 'provincia',
-        'opciones': _opciones_provincia(319),
-    },
-    {
-        'id': 319, 'orden': 319, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_provincia_sin_placa',
-        'nombre': 'API POST /aria/ (paso=provincia)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'provincia', 'valor': '{{variables.provincia}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot'},
-        'siguiente_ok': 320, 'siguiente_error': 900,
-    },
-    {
-        'id': 320, 'orden': 320, 'tipo': 'input_texto',
-        'codigo': 'pedir_valor_sin_placa', 'nombre': 'Pedir valor del vehículo',
-        'mensaje': '¿Cuánto vale el vehículo? (USD, 1.000 a 500.000)',
-        'guardar_en': 'valor',
-        'validacion': r'^[0-9]{4,6}$',
-        'siguiente': 321,
-    },
-    {
-        'id': 321, 'orden': 321, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_valor_sin_placa',
-        'nombre': 'API POST /aria/ (paso=valor)',
-        'metodo': 'POST',
-        'body': {'action': 'paso', 'paso': 'valor', 'valor': '{{variables.valor}}'},
-        'extrae_variables': {'$paso': '$.paso', '$bot_msg': '$.bot'},
-        'siguiente_ok': 322, 'siguiente_error': 900,
-    },
-    {
-        'id': 322, 'orden': 322, 'tipo': 'input_texto',
-        'codigo': 'pedir_accesorios_sin_placa', 'nombre': 'Pedir accesorios',
-        'mensaje': '¿Accesorios extras? (USD, 0 si no tiene). Máx 20% del valor.',
-        'guardar_en': 'accesorios',
-        'validacion': r'^[0-9]+$',
-        'siguiente': 323,
-    },
-    {
-        'id': 323, 'orden': 323, 'tipo': 'llamada_http',
-        'codigo': 'http_paso_accesorios_sin_placa',
-        'nombre': 'API POST /aria/ (paso=accesorios) — DISPARA cotización',
-        'metodo': 'POST', 'timeout_seg': 60,
-        'body': {'action': 'paso', 'paso': 'accesorios', 'valor': '{{variables.accesorios}}'},
-        'extrae_variables': {
-            '$paso': '$.paso', '$ok': '$.ok', '$cotpk': '$.cotpk',
-            '$redirect': '$.redirect', '$bot_msg': '$.bot',
-            '$resumen': '$.resumen', '$tipo_error': '$.tipo_error',
-            '$error': '$.error',
-        },
-        'siguiente_ok': 400, 'siguiente_error': 900,
+        'codigo': 'pedir_color', 'nombre': 'Elegir color',
+        'mensaje': (
+            '🎨 Elige el *color* (escribe el ID; sugerido: '
+            '*{{variables.color_id}}* — {{variables.color_name}}):\n\n'
+            '{% for c in variables.colores %}'
+            '*{{c.id}}* — {{c.nombre}}\n'
+            '{% endfor %}'
+        ),
+        'guardar_en': 'color_id',
+        'siguiente': 320,
     },
 
-    # ── Cotización lista, listar planes, detalle, seleccionar ───
+    # ── 320/330 — Valor + accesorios ───────────────────────────
     {
-        'id': 400, 'orden': 400, 'tipo': 'decision',
-        'codigo': 'cotizacion_ok', 'nombre': '¿La cotización fue exitosa?',
-        'condicion': '{{variables.ok}} == true && {{variables.cotpk}} != null',
-        'siguiente_si': 410, 'siguiente_no': 405,
+        'id': 320, 'orden': 320, 'tipo': 'input_texto',
+        'codigo': 'pedir_valor_vehiculo', 'nombre': 'Pedir valor del vehículo',
+        'mensaje': '💵 ¿Cuánto vale el vehículo hoy? (USD, entre 1.000 y 500.000)',
+        'guardar_en': 'valor_vehiculo',
+        'validacion': r'^[0-9]{4,6}$',
+        'siguiente': 330,
     },
     {
-        'id': 405, 'orden': 405, 'tipo': 'menu_botones',
-        'codigo': 'menu_reintentar', 'nombre': 'Cotización falló',
-        'mensaje': '⚠️ {{variables.error}} — ¿quieres reintentar?',
-        'guardar_en': 'reintentar_resp',
-        'opciones': [
-            {'etiqueta': '🔁 Reintentar', 'valor': 'reintentar', 'siguiente': 406},
-            {'etiqueta': '👋 Terminar',   'valor': 'fin',        'siguiente': 999},
-        ],
+        'id': 330, 'orden': 330, 'tipo': 'input_texto',
+        'codigo': 'pedir_accesorios', 'nombre': 'Pedir accesorios',
+        'mensaje': '🔧 Valor de accesorios extras (USD, 0 si nada). Máximo 20% del valor.',
+        'guardar_en': 'accesorios',
+        'validacion': r'^[0-9]+$',
+        'siguiente': 340,
+    },
+
+    # ── 340 — POST /cotizar/ ───────────────────────────────────
+    {
+        'id': 340, 'orden': 340, 'tipo': 'llamada_http',
+        'codigo': 'http_cotizar',
+        'nombre': 'POST /cotizar/ — DISPARA cotización',
+        'metodo': 'POST', 'path': 'cotizar/',
+        'timeout_seg': 60,
+        'body': {
+            'placa':            '{{variables.placa}}',
+            'cedula':           '{{variables.cedula}}',
+            'nombres':          '{{variables.nombres}}',
+            'apellidos':        '{{variables.apellidos}}',
+            'email':            '{{variables.email}}',
+            'telefono':         '{{variables.telefono}}',
+            'tipo_vehiculo_id': '{{variables.tipo_vehiculo_id}}',
+            'provincia_id':     '{{variables.provincia_id}}',
+            'canton_id':        '{{variables.canton_id}}',
+            'color_id':         '{{variables.color_id}}',
+            'valor_vehiculo':   '{{variables.valor_vehiculo}}',
+            'accesorios':       '{{variables.accesorios}}',
+            'civil_status':     '{{variables.civil_status}}',
+            'gender':           '{{variables.gender}}',
+            'driver_age':       '{{variables.driver_age}}',
+        },
+        'extrae_variables': {
+            '$cotpk':      '$.data.cotpk',
+            '$cliente_id': '$.data.cliente_id',
+            '$avaluo':     '$.data.avaluo',
+        },
+        'siguiente_ok': 350, 'siguiente_error': 902,
     },
     {
-        'id': 406, 'orden': 406, 'tipo': 'llamada_http',
-        'codigo': 'http_reintentar',
-        'nombre': 'API POST /aria/ (action=reintentar_cotizacion)',
-        'metodo': 'POST', 'timeout_seg': 60,
-        'body': {'action': 'reintentar_cotizacion'},
-        'extrae_variables': {'$ok': '$.ok', '$cotpk': '$.cotpk', '$error': '$.error'},
-        'siguiente_ok': 400, 'siguiente_error': 900,
-    },
-    {
-        'id': 410, 'orden': 410, 'tipo': 'respuesta_texto',
-        'codigo': 'mostrar_resumen', 'nombre': 'Mostrar resumen de la cotización',
+        'id': 350, 'orden': 350, 'tipo': 'respuesta_texto',
+        'codigo': 'cotizacion_creada', 'nombre': 'Cotización creada',
         'mensaje': (
-            '✅ ¡Listo! Cotización generada (ID *{{variables.cotpk}}*).\n\n'
-            '📋 *Resumen:*\n{{variables.resumen}}\n\n'
-            'Buscando planes disponibles…'
+            '✅ ¡Listo! Cotización generada (ID *{{variables.cotpk}}*).\n'
+            '💰 Avalúo: *${{variables.avaluo}}*\n\n'
+            'Buscando los planes disponibles…'
         ),
-        'siguiente': 430,
+        'siguiente': 360,
+    },
+
+    # ── 360/370 — GET /planes/ + mostrar ───────────────────────
+    {
+        'id': 360, 'orden': 360, 'tipo': 'llamada_http',
+        'codigo': 'http_planes',
+        'nombre': 'GET /planes/?cotpk=',
+        'metodo': 'GET', 'path': 'planes/',
+        'query': {'cotpk': '{{variables.cotpk}}'},
+        'timeout_seg': 60,
+        'extrae_variables': {
+            '$planes':       '$.data.planes',
+            '$total_planes': '$.data.total',
+        },
+        'siguiente_ok': 370, 'siguiente_error': 900,
     },
     {
-        'id': 430, 'orden': 430, 'tipo': 'llamada_http',
-        'codigo': 'http_listar_planes',
-        'nombre': 'API POST /aria/ (action=listar_planes)',
-        'metodo': 'POST', 'timeout_seg': 60,
-        'body': {'action': 'listar_planes', 'cotpk': '{{variables.cotpk}}'},
-        'extrae_variables': {'$planes': '$.planes', '$ok': '$.ok'},
-        'siguiente_ok': 450, 'siguiente_error': 900,
-    },
-    {
-        'id': 450, 'orden': 450, 'tipo': 'respuesta_texto',
+        'id': 370, 'orden': 370, 'tipo': 'respuesta_texto',
         'codigo': 'mostrar_planes', 'nombre': 'Mostrar planes',
         'mensaje': (
-            '🛒 *Planes disponibles:*\n\n'
+            '🛒 *Planes disponibles ({{variables.total_planes}}):*\n\n'
             '{% for p in variables.planes %}'
             '*ID {{p.id}}* · _{{p.aseguradora}}_ — {{p.plan}}\n'
             '  Anual: ${{p.anual}} · Mensual: ${{p.mensual}}\n\n'
             '{% endfor %}'
             'Escribe el *ID* del plan que te interesa para ver el detalle.'
         ),
-        'siguiente': 460,
+        'siguiente': 380,
     },
     {
-        'id': 460, 'orden': 460, 'tipo': 'input_texto',
-        'codigo': 'pedir_detalle_id', 'nombre': 'Pedir ID del plan a detallar',
-        'mensaje': 'Pega el ID del plan que te interesa:',
+        'id': 380, 'orden': 380, 'tipo': 'input_texto',
+        'codigo': 'pedir_detalle_id', 'nombre': 'Pedir ID del plan',
+        'mensaje': 'Pega el *ID* del plan:',
         'guardar_en': 'detalle_id',
         'validacion': r'^[0-9]+$',
-        'siguiente': 470,
+        'siguiente': 390,
     },
+
+    # ── 390/400 — GET /plan/ detalle ───────────────────────────
     {
-        'id': 470, 'orden': 470, 'tipo': 'llamada_http',
-        'codigo': 'http_detalle_plan',
-        'nombre': 'API POST /aria/ (action=detalle_plan)',
-        'metodo': 'POST', 'timeout_seg': 20,
-        'body': {'action': 'detalle_plan', 'detalle_id': '{{variables.detalle_id}}'},
+        'id': 390, 'orden': 390, 'tipo': 'llamada_http',
+        'codigo': 'http_plan_detalle',
+        'nombre': 'GET /plan/?detalle_id=',
+        'metodo': 'GET', 'path': 'plan/',
+        'query': {'detalle_id': '{{variables.detalle_id}}'},
+        'timeout_seg': 20,
         'extrae_variables': {
-            '$ok': '$.ok', '$plan': '$.plan', '$aseg': '$.aseguradora',
-            '$tasa': '$.tasa', '$total': '$.total',
-            '$anual': '$.anual', '$mensual': '$.mensual',
-            '$coberturas': '$.coberturas', '$deducibles': '$.deducibles',
+            '$plan_aseguradora': '$.data.aseguradora',
+            '$plan_nombre':      '$.data.plan',
+            '$plan_anual':       '$.data.anual',
+            '$plan_mensual':     '$.data.mensual',
+            '$plan_total':       '$.data.total',
+            '$plan_tasa':        '$.data.tasa',
+            '$plan_coberturas':  '$.data.coberturas',
+            '$plan_deducibles':  '$.data.deducibles',
         },
-        'siguiente_ok': 475, 'siguiente_error': 900,
+        'siguiente_ok': 400, 'siguiente_error': 900,
     },
     {
-        'id': 475, 'orden': 475, 'tipo': 'menu_botones',
-        'codigo': 'menu_detalle_plan', 'nombre': 'Plan detallado',
+        'id': 400, 'orden': 400, 'tipo': 'menu_botones',
+        'codigo': 'menu_confirmar_plan', 'nombre': 'Confirmar plan',
         'mensaje': (
-            '*{{variables.aseg}} — {{variables.plan}}*\n'
-            'Anual: ${{variables.anual}} · Mensual: ${{variables.mensual}}\n'
+            '*{{variables.plan_aseguradora}} — {{variables.plan_nombre}}*\n'
+            '💵 Anual: ${{variables.plan_anual}} · Mensual: ${{variables.plan_mensual}}\n'
+            '📊 Tasa: {{variables.plan_tasa}}%\n\n'
+            '*Coberturas:*\n'
+            '{% for c in variables.plan_coberturas %}• {{c.nombre}}: ${{c.valor}}\n{% endfor %}\n'
+            '*Deducibles:*\n'
+            '{% for d in variables.plan_deducibles %}• {{d.nombre}}\n{% endfor %}\n'
             '¿Lo seleccionas?'
         ),
         'guardar_en': 'confirmar_seleccion',
         'opciones': [
-            {'etiqueta': '✅ Sí, este plan',   'valor': 'si',    'siguiente': 480},
-            {'etiqueta': '🔍 Ver otro plan',   'valor': 'otro',  'siguiente': 460},
-            {'etiqueta': '📋 Ver lista',       'valor': 'lista', 'siguiente': 450},
+            {'etiqueta': '✅ Sí, este plan',  'valor': 'si',    'siguiente': 410},
+            {'etiqueta': '🔍 Ver otro plan',  'valor': 'otro',  'siguiente': 380},
+            {'etiqueta': '📋 Ver lista',      'valor': 'lista', 'siguiente': 370},
         ],
     },
+
+    # ── 410/420 — POST /seleccionar/ + entrega PDF ─────────────
     {
-        'id': 480, 'orden': 480, 'tipo': 'llamada_http',
-        'codigo': 'http_seleccionar_plan',
-        'nombre': 'API POST /aria/ (action=seleccionar_plan)',
-        'metodo': 'POST', 'timeout_seg': 30,
-        'body': {'action': 'seleccionar_plan',
-                 'detalle_id': '{{variables.detalle_id}}',
-                 'cliente_id': '{{variables.cliente_id}}'},
-        'extrae_variables': {
-            '$ok': '$.ok', '$pdf_url': '$.pdf_url',
-            '$cliente_email': '$.cliente_email',
-            '$cliente_nombre': '$.cliente_nombre',
+        'id': 410, 'orden': 410, 'tipo': 'llamada_http',
+        'codigo': 'http_seleccionar',
+        'nombre': 'POST /seleccionar/ — confirmar + generar PDF',
+        'metodo': 'POST', 'path': 'seleccionar/',
+        'timeout_seg': 30,
+        'body': {
+            'detalle_id': '{{variables.detalle_id}}',
+            'cliente_id': '{{variables.cliente_id}}',
         },
-        'siguiente_ok': 490, 'siguiente_error': 900,
+        'extrae_variables': {
+            '$pdf_url':         '$.data.pdf_url',
+            '$cliente_email':   '$.data.cliente_email',
+            '$cliente_nombre':  '$.data.cliente_nombre',
+            '$confirmado':      '$.data.confirmado',
+        },
+        'siguiente_ok': 420, 'siguiente_error': 900,
     },
     {
-        'id': 490, 'orden': 490, 'tipo': 'respuesta_texto',
-        'codigo': 'plan_seleccionado', 'nombre': 'Confirmación final',
+        'id': 420, 'orden': 420, 'tipo': 'respuesta_texto',
+        'codigo': 'pdf_listo', 'nombre': 'Confirmación final',
         'mensaje': (
-            '🎉 ¡Plan seleccionado, {{variables.cliente_nombre}}!\n'
-            'Te enviamos la cotización en PDF a *{{variables.cliente_email}}*.\n'
-            'PDF: {{variables.pdf_url}}'
+            '🎉 ¡Plan seleccionado, {{variables.cliente_nombre}}!\n\n'
+            '📧 Te enviamos la cotización en PDF a *{{variables.cliente_email}}*.\n'
+            '📄 PDF: {{variables.pdf_url}}\n\n'
+            '¡Gracias por usar ARIA! 💜'
         ),
         'siguiente': 998,
     },
 
-    # ── Salidas terminales ──────────────────────────────────────
+    # ── Salidas terminales ─────────────────────────────────────
     {
         'id': 900, 'orden': 900, 'tipo': 'respuesta_texto',
-        'codigo': 'error_api', 'nombre': 'Error en API',
+        'codigo': 'error_api', 'nombre': 'Error genérico de API',
         'mensaje': '⚠️ Hubo un problema al hablar con el servidor. Intenta más tarde.',
         'siguiente': 999,
     },
     {
+        'id': 901, 'orden': 901, 'tipo': 'respuesta_texto',
+        'codigo': 'placa_no_encontrada', 'nombre': 'Placa no encontrada',
+        'mensaje': (
+            '🔎 No encontré información para esa placa en la base de Zurich. '
+            'Verifica que esté bien escrita; el cotizador solo soporta vehículos con placa.'
+        ),
+        'siguiente': 999,
+    },
+    {
+        'id': 902, 'orden': 902, 'tipo': 'respuesta_texto',
+        'codigo': 'cotizar_error', 'nombre': 'Error al cotizar',
+        'mensaje': (
+            '⚠️ No pude generar la cotización. Verifica que los datos sean correctos '
+            'y vuelve a intentarlo más tarde.'
+        ),
+        'siguiente': 999,
+    },
+    {
         'id': 998, 'orden': 998, 'tipo': 'asignar_variable',
-        'codigo': 'reset_sesion', 'nombre': 'Reset de variables de sesión',
+        'codigo': 'reset_sesion', 'nombre': 'Reset de variables',
         'asigna': {
-            'cedula': '', 'nombres': '', 'apellidos': '',
-            'email': '', 'telefono': '', 'edad': '',
-            'civil_status': '', 'genero': '', 'tiene_placa': '',
-            'placa': '', 'cotpk': '', 'detalle_id': '',
+            'cedula': '', 'placa': '', 'cotpk': '', 'detalle_id': '',
+            'nombres': '', 'apellidos': '', 'email': '', 'telefono': '',
+            'tipo_vehiculo_id': '', 'provincia_id': '', 'canton_id': '',
+            'color_id': '', 'valor_vehiculo': '', 'accesorios': '',
+            'civil_status': '', 'gender': '', 'driver_age': '',
         },
         'siguiente': 999,
     },
     {
         'id': 999, 'orden': 999, 'tipo': 'fin_conversacion',
-        'codigo': 'despedida', 'nombre': 'Fin de conversación',
-        'mensaje': '¡Gracias por usar ARIA! 💜 Cuando quieras volver a cotizar, aquí estaré.',
+        'codigo': 'despedida', 'nombre': 'Fin',
+        'mensaje': '¡Hasta pronto! 👋 Cuando quieras volver a cotizar, aquí estaré.',
     },
 ]
 
@@ -692,7 +528,7 @@ TIPO_MAP = {
 
 
 def _normalizar_extraer(extrae_variables):
-    """Convierte {'$paso': '$.paso', ...} a [{'variable':'paso','jsonpath':'paso'}]."""
+    """Convierte {'$paso': '$.data.foo'} a [{variable:'paso', jsonpath:'data.foo'}]."""
     if not extrae_variables:
         return []
     out = []
@@ -704,11 +540,11 @@ def _normalizar_extraer(extrae_variables):
 
 
 class Command(BaseCommand):
-    help = 'Crea el flujo del cotizador ARIA (fguerrero.mgaseguros.ec).'
+    help = 'Crea el flujo del cotizador ARIA v2 (REST stateless).'
 
     def add_arguments(self, parser):
         parser.add_argument('--reset', action='store_true',
-                            help='Borra el depto previo y lo recrea.')
+                            help='Borra el depto previo (y legacy) y lo recrea.')
         parser.add_argument('--delete', action='store_true',
                             help='Solo borra el depto y sale.')
         parser.add_argument('--sesion', type=int, default=None,
@@ -721,6 +557,8 @@ class Command(BaseCommand):
     # ─────────────────────────────────────────────────────────
 
     def _eliminar_depto(self):
+        """Borra depto, nodos, conexiones, estados runtime y credencial/endpoint
+        legacy del cotizador v1 que ya no se usan."""
         from crm.models import EstadoFlujoChatbot
         viejos = DepartamentoChatBot.objects.filter(nombre=NOMBRE_DEPTO)
         n_deptos = viejos.count()
@@ -736,13 +574,21 @@ class Command(BaseCommand):
         if n_huerf:
             huerfanos.delete()
 
+        # Limpieza legacy: credencial+endpoint del seed v1.
+        legacy_eps = EndpointApiChatbot.objects.filter(nombre=LEGACY_ENDPOINT)
+        n_legacy_ep = legacy_eps.count()
+        legacy_eps.delete()
+        legacy_creds = CredencialApiChatbot.objects.filter(nombre=LEGACY_CREDENCIAL)
+        n_legacy_cred = legacy_creds.count()
+        legacy_creds.delete()
+
         return {
             'deptos': n_deptos, 'nodos': n_nodos, 'conexiones': n_conn,
             'estados': n_estados, 'huerfanos': n_huerf,
+            'legacy_ep': n_legacy_ep, 'legacy_cred': n_legacy_cred,
         }
 
     def _config_para(self, paso):
-        """Arma el dict `config` del nodo según el tipo del paso."""
         t = paso['tipo']
         if t == 'respuesta_texto' or t == 'fin_conversacion':
             return {'mensaje': paso.get('mensaje', '')}
@@ -765,8 +611,9 @@ class Command(BaseCommand):
             ]}
         if t == 'llamada_http':
             return {
-                'metodo': paso.get('metodo', 'POST'),
-                'path': '',  # El endpoint base ya tiene la URL completa
+                'metodo': paso.get('metodo', 'GET'),
+                'path': paso.get('path', ''),
+                'query': paso.get('query') or {},
                 'headers': paso.get('headers') or {},
                 'body': paso.get('body') or {},
                 'extraer': _normalizar_extraer(paso.get('extrae_variables')),
@@ -776,8 +623,6 @@ class Command(BaseCommand):
 
     def _crear_nodo(self, depto, ep, paso):
         t = paso['tipo']
-        tipo_nodo = TIPO_MAP[t]
-        # Validación: si paso tiene `validacion` (regex), aplicar.
         validacion_tipo = 'none'
         validacion_expr = ''
         if paso.get('validacion'):
@@ -787,7 +632,7 @@ class Command(BaseCommand):
         return OpcionDepartamentoChatBot.objects.create(
             departamento=depto,
             nombre=paso.get('nombre') or paso.get('codigo', ''),
-            tipo_nodo=tipo_nodo,
+            tipo_nodo=TIPO_MAP[t],
             config=self._config_para(paso),
             es_inicio=bool(paso.get('es_inicio')),
             endpoint=ep if t == 'llamada_http' else None,
@@ -800,62 +645,48 @@ class Command(BaseCommand):
         )
 
     def _crear_conexiones(self, mapa, paso):
-        """Crea aristas saliendo del nodo creado para `paso`."""
         origen = mapa[paso['id']]
         t = paso['tipo']
-        orden = 1
 
-        # menu → una arista por opción, etiquetada con `valor`.
         if t == 'menu_botones':
-            for o in paso.get('opciones', []):
+            for i, o in enumerate(paso.get('opciones', []), start=1):
                 destino_id = o.get('siguiente')
                 if destino_id and destino_id in mapa:
                     ConexionNodoChatbot.objects.create(
-                        nodo_origen=origen,
-                        nodo_destino=mapa[destino_id],
-                        etiqueta=o['valor'],
-                        orden=orden,
+                        nodo_origen=origen, nodo_destino=mapa[destino_id],
+                        etiqueta=o['valor'], orden=i,
                     )
-                    orden += 1
             return
 
-        # decision → ramas 'true' / 'false'.
         if t == 'decision':
             if paso.get('siguiente_si') in mapa:
                 ConexionNodoChatbot.objects.create(
-                    nodo_origen=origen,
-                    nodo_destino=mapa[paso['siguiente_si']],
+                    nodo_origen=origen, nodo_destino=mapa[paso['siguiente_si']],
                     etiqueta='true', orden=1,
                 )
             if paso.get('siguiente_no') in mapa:
                 ConexionNodoChatbot.objects.create(
-                    nodo_origen=origen,
-                    nodo_destino=mapa[paso['siguiente_no']],
+                    nodo_origen=origen, nodo_destino=mapa[paso['siguiente_no']],
                     etiqueta='false', orden=2,
                 )
             return
 
-        # http → ramas 'ok' / 'error'.
         if t == 'llamada_http':
             if paso.get('siguiente_ok') in mapa:
                 ConexionNodoChatbot.objects.create(
-                    nodo_origen=origen,
-                    nodo_destino=mapa[paso['siguiente_ok']],
+                    nodo_origen=origen, nodo_destino=mapa[paso['siguiente_ok']],
                     etiqueta='ok', orden=1,
                 )
             if paso.get('siguiente_error') in mapa:
                 ConexionNodoChatbot.objects.create(
-                    nodo_origen=origen,
-                    nodo_destino=mapa[paso['siguiente_error']],
+                    nodo_origen=origen, nodo_destino=mapa[paso['siguiente_error']],
                     etiqueta='error', orden=2,
                 )
             return
 
-        # respuesta / pregunta / set_variable → arista default por `siguiente`.
         if paso.get('siguiente') in mapa:
             ConexionNodoChatbot.objects.create(
-                nodo_origen=origen,
-                nodo_destino=mapa[paso['siguiente']],
+                nodo_origen=origen, nodo_destino=mapa[paso['siguiente']],
                 etiqueta='', orden=1,
             )
 
@@ -875,15 +706,19 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(
                     f'[DELETE OK] "{NOMBRE_DEPTO}" eliminado.\n'
                     f'   Deptos: {res["deptos"]} | Nodos: {res["nodos"]} | '
-                    f'Conexiones: {res["conexiones"]} | Estados: {res["estados"]}'
+                    f'Conexiones: {res["conexiones"]}\n'
+                    f'   Legacy borrado: {res["legacy_ep"]} endpoints + '
+                    f'{res["legacy_cred"]} credenciales.'
                 ))
             return
 
         if opts['reset']:
             res = self._eliminar_depto()
             self.stdout.write(self.style.WARNING(
-                f'Depto "{NOMBRE_DEPTO}" previo eliminado '
-                f'({res["nodos"]} nodos, {res["conexiones"]} conexiones).'
+                f'Reset: borrado depto "{NOMBRE_DEPTO}" '
+                f'({res["nodos"]} nodos, {res["conexiones"]} conexiones) '
+                f'+ {res["legacy_ep"]} endpoints legacy + '
+                f'{res["legacy_cred"]} credenciales legacy.'
             ))
 
         depto, creado = DepartamentoChatBot.objects.get_or_create(
@@ -898,25 +733,39 @@ class Command(BaseCommand):
         )
         if not creado:
             self.stdout.write(self.style.WARNING(
-                'El depto ya existía. Usa --reset para recrearlo desde cero.'
+                'El depto ya existía. Usa --reset para recrearlo.'
             ))
             return
 
-        # ── Credencial + endpoint ───────────────────────────
-        credencial = CredencialApiChatbot.objects.create(
-            nombre='ARIA - AllowAny', tipo='none', secretos={},
-            descripcion='APIs del cotizador ARIA (sesión Django, AllowAny).',
+        # ── Credencial + endpoint (idempotente) ─────────────
+        credencial, _ = CredencialApiChatbot.objects.get_or_create(
+            nombre=CREDENCIAL_NOMBRE,
+            tipo='none',
+            status=True,
+            defaults={
+                'secretos': {},
+                'descripcion': 'API REST pública del cotizador ARIA v2 (CSRF-exempt).',
+            },
         )
-        ep = EndpointApiChatbot.objects.create(
-            nombre='Cotizador ARIA',
+        ep, _ = EndpointApiChatbot.objects.get_or_create(
+            nombre=ENDPOINT_NOMBRE,
             base_url=opts['base_url'].rstrip('/'),
-            credencial=credencial,
-            headers_default={'Content-Type': 'application/x-www-form-urlencoded'},
-            timeout_seg=BOT['configuracion_extra']['timeout_seg'],
-            descripcion='Endpoint base del cotizador conversacional ARIA (fguerrero).',
+            status=True,
+            defaults={
+                'credencial': credencial,
+                'headers_default': {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                'timeout_seg': 30,
+                'descripcion': 'Endpoint base REST del cotizador ARIA v2.',
+            },
         )
+        if ep.credencial_id != credencial.id:
+            ep.credencial = credencial
+            ep.save()
 
-        # ── Pase 1: crear todos los nodos (id_json → instancia) ──
+        # ── Pase 1: nodos ───────────────────────────────────
         mapa = {}
         for paso in PASOS:
             mapa[paso['id']] = self._crear_nodo(depto, ep, paso)
@@ -932,7 +781,7 @@ class Command(BaseCommand):
                 s = SesionWhatsApp.objects.get(pk=opts['sesion'])
             except SesionWhatsApp.DoesNotExist:
                 self.stdout.write(self.style.ERROR(
-                    f'Sesión #{opts["sesion"]} no existe. Asocia el depto manualmente.'
+                    f'Sesión #{opts["sesion"]} no existe.'
                 ))
             else:
                 s.departamentos.add(depto)
@@ -949,7 +798,7 @@ class Command(BaseCommand):
         total_nodos = depto.opciondepartamentochatbot_set.count()
         total_conns = ConexionNodoChatbot.objects.filter(nodo_origen__departamento=depto).count()
         self.stdout.write(self.style.SUCCESS(
-            f'\n[OK] Flujo creado: "{depto.nombre}"\n'
+            f'\n[OK] Flujo creado: "{depto.nombre}" (REST v2)\n'
             f'   Nodos: {total_nodos}  |  Conexiones: {total_conns}\n'
             f'   Endpoint: {ep.nombre} -> {ep.base_url}\n'
             f'   Credencial: {credencial.nombre} ({credencial.get_tipo_display()})\n'

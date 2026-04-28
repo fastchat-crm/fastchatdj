@@ -24,7 +24,7 @@ from core.custom_models import FormError
 from core.funciones import addData, paginador, secure_module, log
 
 from .forms import EndpointApiChatbotForm, CredencialApiChatbotForm
-from .models import EndpointApiChatbot, CredencialApiChatbot
+from .models import EndpointApiChatbot, CredencialApiChatbot, OpcionDepartamentoChatBot
 
 
 def _fusionar_duplicados(request):
@@ -238,6 +238,29 @@ def endpoint_api_view(request):
                 data['action'] = 'credencial_change'
                 template = get_template('crm/endpoints_api/form_credencial.html')
                 return JsonResponse({'result': True, 'data': template.render(data)})
+            except Exception as ex:
+                return JsonResponse({'result': False, 'message': str(ex)})
+
+        elif action == 'nodos':
+            try:
+                pk = int(request.GET['id'])
+                ep = model.objects.get(pk=pk)
+                tipos = dict(OpcionDepartamentoChatBot.TIPOS_NODO)
+                nodos = ep.nodos.filter(status=True).select_related('departamento').order_by(
+                    'departamento__nombre', 'orden', 'id'
+                )
+                data_nodos = [{
+                    'id': n.id,
+                    'nombre': n.nombre,
+                    'tipo': tipos.get(n.tipo_nodo, n.tipo_nodo),
+                    'departamento': n.departamento.nombre if n.departamento_id else '—',
+                    'departamento_id': n.departamento_id,
+                } for n in nodos]
+                return JsonResponse({
+                    'result': True,
+                    'endpoint': ep.nombre,
+                    'nodos': data_nodos,
+                })
             except Exception as ex:
                 return JsonResponse({'result': False, 'message': str(ex)})
 

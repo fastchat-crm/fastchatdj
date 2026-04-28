@@ -934,6 +934,7 @@ class MotorFlujo:
         cfg = nodo.config or {}
         if nodo.tipo_nodo == 'menu':
             mensaje = cfg.get('mensaje') or nodo.respuesta or 'Elige una opción:'
+            mensaje = resolver_expresion(mensaje, self.contexto()) or mensaje
             opciones = self._opciones_menu(nodo)
             if not opciones:
                 self.enviar(mensaje + '\n_(este menú no tiene opciones configuradas — contacta al administrador)_')
@@ -959,7 +960,8 @@ class MotorFlujo:
                 opciones_meta.append({'id': bid[:256], 'title': titulo[:24]})
             self.enviar_menu_interactivo(mensaje, opciones_meta)
         elif nodo.tipo_nodo == 'pregunta':
-            self.enviar(cfg.get('pregunta') or nodo.respuesta or '¿Puedes indicarme el dato?')
+            pregunta = cfg.get('pregunta') or nodo.respuesta or '¿Puedes indicarme el dato?'
+            self.enviar(pregunta)
 
     # ── Procesamiento por tipo ───────────────────────────────────────
 

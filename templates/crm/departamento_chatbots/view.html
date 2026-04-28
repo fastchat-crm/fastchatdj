@@ -1,4 +1,8 @@
 {% extends 'base.html' %}
+{% load static %}
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/dpto_a_agente_ia.css' %}">
+{% endblock %}
 {% block content %}
 
     <div class="card mb-3">
@@ -99,6 +103,12 @@
                                         </li>
                                         <li>
                                             <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="abrirModalGenerarAgente({{ l.pk }}, '{{ l.nombre|escapejs }}')">
+                                                <i class="fa fa-robot me-2 text-info"></i>Generar Agente IA
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
                                                onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'delete')">
                                                 <i class="fas fa-trash me-2 text-danger"></i>Eliminar
                                             </a>
@@ -187,6 +197,88 @@
         </div>
     </div>
     {% endif %}
+
+    {# ───────── Modal: Generar Agente IA desde un departamento ───────── #}
+    <div class="modal fade" id="modalGenerarAgente" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header py-2 dpto-agente-header">
+                    <h5 class="modal-title">
+                        <i class="fa fa-robot me-2"></i>
+                        Generar Agente IA desde departamento
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                            aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="fa fa-circle-info me-1"></i>
+                        Vamos a crear un <b>Agente IA nuevo</b> con los datos del departamento
+                        <b id="dpto_agente_nombre">—</b>: saludo, opciones del menú, endpoints y perfil
+                        de empresa. El departamento sigue funcionando como flujo tradicional;
+                        el agente IA queda independiente y editable desde Entrenamiento IA.
+                    </div>
+
+                    {% if not tiene_perfil_ia %}
+                        <div class="alert alert-warning py-2 small mb-0">
+                            <i class="fa fa-triangle-exclamation me-1"></i>
+                            Antes de generar un agente necesitás configurar tu
+                            <a href="/crm/perfil_empresa/" class="alert-link">Perfil de Empresa</a>.
+                        </div>
+                    {% elif not apikeys_ia %}
+                        <div class="alert alert-warning py-2 small mb-0">
+                            <i class="fa fa-triangle-exclamation me-1"></i>
+                            No tenés API Keys IA cargadas. Creá una en
+                            <a href="/crm/entrenamiento/" class="alert-link">Entrenamiento IA</a>
+                            antes de generar el agente.
+                        </div>
+                    {% else %}
+                        <input type="hidden" id="dpto_agente_id" value="">
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Nombre del agente</label>
+                            <input type="text" class="form-control form-control-sm" id="ag_nombre"
+                                   placeholder="Ej: Agente · Ventas">
+                            <small class="text-muted">Si lo dejás vacío usamos «Agente · {nombre del depto}».</small>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">API Key IA <span class="text-danger">*</span></label>
+                                <select class="form-select form-select-sm" id="ag_apikey">
+                                    {% for k in apikeys_ia %}
+                                        <option value="{{ k.id }}">
+                                            {{ k.alias|default:'(sin alias)' }} · {{ k.modelo|default:'default' }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Personalidad</label>
+                                <select class="form-select form-select-sm" id="ag_preset">
+                                    <option value="amable" selected>Amable</option>
+                                    <option value="directo">Directo</option>
+                                    <option value="formal">Formal</option>
+                                    <option value="vendedor">Vendedor</option>
+                                    <option value="personalizado">Personalizado (configurar luego)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="ag_resultado" class="alert d-none mt-3 mb-0"></div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    {% if tiene_perfil_ia and apikeys_ia %}
+                        <button type="button" class="btn btn-primary btn-sm" id="btnGenerarAgenteIA">
+                            <i class="fa fa-wand-magic-sparkles me-1"></i> Generar Agente IA
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block jscript %}
@@ -343,6 +435,106 @@
                 $('#arbolOpciones').empty();
             });
         });
+
+        // ───── Generar Agente IA desde un departamento ─────
+        let _modalAgenteInstance = null;
+        function abrirModalGenerarAgente(dptoId, dptoNombre) {
+            const el = document.getElementById('modalGenerarAgente');
+            if (!el) return;
+            if (!_modalAgenteInstance) _modalAgenteInstance = new bootstrap.Modal(el);
+            const $id = document.getElementById('dpto_agente_id');
+            if ($id) $id.value = dptoId;
+            const $nom = document.getElementById('dpto_agente_nombre');
+            if ($nom) $nom.textContent = dptoNombre || '—';
+            const $name = document.getElementById('ag_nombre');
+            if ($name) $name.value = '';
+            const res = document.getElementById('ag_resultado');
+            if (res) {
+                res.classList.add('d-none');
+                res.innerHTML = '';
+            }
+            _modalAgenteInstance.show();
+        }
+
+        const _btnGenAg = document.getElementById('btnGenerarAgenteIA');
+        if (_btnGenAg) {
+            _btnGenAg.addEventListener('click', async function () {
+                const dptoId = (document.getElementById('dpto_agente_id') || {}).value;
+                const apikey = (document.getElementById('ag_apikey') || {}).value;
+                const nombre = ((document.getElementById('ag_nombre') || {}).value || '').trim();
+                const preset = (document.getElementById('ag_preset') || {}).value || 'amable';
+                const res = document.getElementById('ag_resultado');
+                const btn = this;
+
+                if (!dptoId) {
+                    res.classList.remove('d-none', 'alert-success', 'alert-info');
+                    res.classList.add('alert-danger');
+                    res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Departamento no detectado, recargá la página.';
+                    return;
+                }
+                if (!apikey) {
+                    res.classList.remove('d-none', 'alert-success', 'alert-info');
+                    res.classList.add('alert-danger');
+                    res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Elegí una API Key IA.';
+                    return;
+                }
+
+                const orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Creando agente...';
+                res.classList.remove('d-none', 'alert-danger', 'alert-success');
+                res.classList.add('alert-info');
+                res.innerHTML = '<i class="fa fa-cog fa-spin me-1"></i> Generando agente IA con los datos del departamento...';
+
+                const fd = new FormData();
+                fd.append('action', 'crear_agente_desde_dpto');
+                fd.append('csrfmiddlewaretoken', document.querySelector('input[name=csrfmiddlewaretoken]').value);
+                fd.append('departamento_id', dptoId);
+                fd.append('apikey_id', apikey);
+                fd.append('nombre', nombre);
+                fd.append('personalidad_preset', preset);
+
+                try {
+                    const r = await fetch('{{ request.path }}', {
+                        method: 'POST',
+                        body: fd,
+                        headers: {'X-Requested-With': 'XMLHttpRequest'},
+                        credentials: 'same-origin',
+                    });
+                    const data = await r.json();
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+
+                    if (data.error) {
+                        res.classList.remove('alert-info', 'alert-success');
+                        res.classList.add('alert-danger');
+                        res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> ' + (data.message || 'No se pudo crear el agente.');
+                        return;
+                    }
+
+                    res.classList.remove('alert-info', 'alert-danger');
+                    res.classList.add('alert-success');
+                    res.innerHTML =
+                        '<i class="fa fa-circle-check me-1"></i> <b>Agente creado:</b> ' +
+                        (data.agente_nombre || '') +
+                        '. Te llevamos al editor...';
+                    setTimeout(() => {
+                        if (data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            window.location.reload();
+                        }
+                    }, 1100);
+
+                } catch (ex) {
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+                    res.classList.remove('alert-info', 'alert-success');
+                    res.classList.add('alert-danger');
+                    res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Error de red: ' + ex.message;
+                }
+            });
+        }
 
         {% if ia_disponible %}
         // ───── Crear con IA ─────

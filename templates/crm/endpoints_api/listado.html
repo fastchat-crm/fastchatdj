@@ -149,7 +149,19 @@
                                     {% endif %}
                                 </td>
                                 <td class="text-center">{{ l.timeout_seg }}s</td>
-                                <td class="text-center">{{ l.nodos.count }}</td>
+                                <td class="text-center">
+                                    {% with n=l.nodos.count %}
+                                        {% if n %}
+                                            <a href="javascript:void(0);" class="badge bg-success-subtle text-success badge-nodos"
+                                               onclick="verNodos({{ l.pk }}, '{{ l.nombre|escapejs }}')"
+                                               title="Ver nodos que usan este endpoint">
+                                                <i class="fa fa-diagram-project me-1"></i>{{ n }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">0</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                </td>
                                 <td class="text-center">
                                     <a href="javascript:void(0);" class="btn btn-sm btn-outline-primary"
                                        onclick="formModal({{ l.pk }}, 'Editar endpoint', 'change')"
@@ -192,6 +204,23 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="modalNodos" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fa fa-diagram-project text-success me-2"></i>
+                        Nodos que usan: <span id="nodosEndpointNombre"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="nodosBody">
+                    <div class="text-center py-4 text-muted">Cargando…</div>
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block jscript %}
@@ -222,6 +251,57 @@
     }
     function formModalCredencial(id, text, action) {
         formModal(id, text, action);  // reusa el mismo flujo
+    }
+
+    function verNodos(id, nombreEndpoint) {
+        $('#nodosEndpointNombre').text(nombreEndpoint);
+        $('#nodosBody').html('<div class="text-center py-4 text-muted">Cargando…</div>');
+        const modal = new bootstrap.Modal(document.getElementById('modalNodos'));
+        modal.show();
+        $.ajax({
+            type: 'GET',
+            url: '{{ request.path }}',
+            data: {action: 'nodos', id: id},
+            dataType: 'json',
+            success: function (data) {
+                if (data.result !== true) {
+                    $('#nodosBody').html(
+                        '<div class="alert alert-warning mb-0">' + (data.message || 'No se pudo cargar') + '</div>'
+                    );
+                    return;
+                }
+                if (!data.nodos.length) {
+                    $('#nodosBody').html(
+                        '<div class="text-center py-4 text-muted"><i class="fa fa-circle-info me-1"></i>Sin nodos asociados.</div>'
+                    );
+                    return;
+                }
+                const grupos = {};
+                data.nodos.forEach(function (n) {
+                    if (!grupos[n.departamento]) grupos[n.departamento] = [];
+                    grupos[n.departamento].push(n);
+                });
+                let html = '';
+                Object.keys(grupos).forEach(function (depto) {
+                    html += '<div class="mb-3">';
+                    html += '<h6 class="text-success border-bottom pb-1 mb-2">';
+                    html += '<i class="fa fa-folder me-1"></i>' + $('<div>').text(depto).html();
+                    html += ' <span class="badge bg-secondary ms-1">' + grupos[depto].length + '</span></h6>';
+                    html += '<ul class="list-group list-group-flush">';
+                    grupos[depto].forEach(function (n) {
+                        html += '<li class="list-group-item d-flex justify-content-between align-items-center py-2">';
+                        html += '<span><i class="fa fa-circle-nodes text-muted me-2"></i>' + $('<div>').text(n.nombre).html() + '</span>';
+                        html += '<span class="badge bg-info-subtle text-info">' + $('<div>').text(n.tipo).html() + '</span>';
+                        html += '</li>';
+                    });
+                    html += '</ul></div>';
+                });
+                $('#nodosBody').html(html);
+            },
+            error: function () {
+                $('#nodosBody').html('<div class="alert alert-danger mb-0">Error de conexión.</div>');
+            }
+        });
     }
 
     function fusionarDuplicados() {

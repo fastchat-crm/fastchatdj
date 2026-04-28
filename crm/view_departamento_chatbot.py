@@ -118,6 +118,8 @@ def departamentoChatbotsView(request):
                     res_json={"error":False}
                 elif action == 'generar_con_ia':
                     return _generar_departamento_con_ia(request)
+                elif action == 'crear_agente_desde_dpto':
+                    return _crear_agente_desde_dpto(request)
                 elif action == 'guardar_meta':
                     return _guardar_meta(request)
                 elif action == 'guardar_opcion':
@@ -379,6 +381,20 @@ def departamentoChatbotsView(request):
             and getattr(_confi, 'ia_features_activas', False)
             and getattr(_confi, 'token_ia_id', None)
         )
+
+        # API Keys del usuario para el modal "Generar Agente IA desde depto".
+        # Si no hay perfil o no hay keys, el modal muestra un aviso amable.
+        from .models import ApiKeyIA, PerfilNegocioIA
+        _perfil = PerfilNegocioIA.objects.filter(usuario=request.user).first()
+        if _perfil:
+            data["apikeys_ia"] = list(
+                ApiKeyIA.objects.filter(perfil=_perfil, status=True)
+                .order_by('alias').values('id', 'alias', 'proveedor', 'modelo')
+            )
+            data["tiene_perfil_ia"] = True
+        else:
+            data["apikeys_ia"] = []
+            data["tiene_perfil_ia"] = False
         return render(request, 'crm/departamento_chatbots/view.html', data)
 
 
@@ -506,6 +522,148 @@ def _generar_departamento_con_ia(request):
         'nombre': resultado['nombre'],
         'departamento_id': resultado['departamento_id'],
         'opciones_count': resultado['opciones_count'],
+    })
+
+
+# ============================================================================
+# Generar AgentesIA (snapshot) a partir de un DepartamentoChatBot. Operación
+# determinista, no llama a LLM: vuelca saludo, árbol de opciones, endpoints
+# y perfil de empresa al `contexto_estatico` del agente. Mantiene los dos
+# módulos (departamentos vs agentes IA) totalmente desacoplados — el agente
+# generado vive aparte y se edita en el editor estándar de IA.
+# ============================================================================
+def _arbol_opciones_a_markdown(nodos, nivel=0):
+    """Recorre el árbol devuelto por `obtener_arbol_opciones()` y produce
+    una lista jerárquica en Markdown apta para inyectar en el prompt."""
+    sangria = '  ' * nivel
+    lineas = []
+    for n in nodos:
+        nombre = (n.get('nombre') or '(sin nombre)').strip()
+        tipo = n.get('tipo_nodo') or 'respuesta'
+        respuesta = (n.get('respuesta') or '').strip()
+        cfg = n.get('config') or {}
+        lineas.append(f"{sangria}- **{nombre}** _[{tipo}]_")
+        if respuesta:
+            lineas.append(f"{sangria}  · Respuesta: {respuesta[:300]}")
+        if tipo == 'pregunta':
+            preg = (cfg.get('pregunta') or '').strip()
+            if preg:
+                lineas.append(f"{sangria}  · Pregunta: {preg[:300]}")
+            if n.get('variable_destino'):
+                lineas.append(f"{sangria}  · Guarda en variable `{n['variable_destino']}`")
+        elif tipo == 'http':
+            lineas.append(f"{sangria}  · Llamada HTTP a un endpoint API configurado")
+        elif tipo == 'menu':
+            mensaje = (cfg.get('mensaje') or '').strip()
+            if mensaje:
+                lineas.append(f"{sangria}  · Mensaje del menú: {mensaje[:300]}")
+        elif tipo == 'cta_url':
+            url = (cfg.get('url') or '').strip()
+            if url:
+                lineas.append(f"{sangria}  · URL: {url}")
+        elif tipo == 'handoff':
+            lineas.append(f"{sangria}  · Transfiere a un asesor humano")
+        hijos = n.get('hijos') or []
+        if hijos:
+            lineas.append(_arbol_opciones_a_markdown(hijos, nivel + 1))
+    return '\n'.join(lineas)
+
+
+def _serializar_dpto_para_agente(dpto):
+    """Convierte un `DepartamentoChatBot` en texto plano (Markdown ligero)
+    apto para `AgentesIA.contexto_estatico`. Incluye saludo, palabras clave,
+    árbol de opciones y endpoints API vinculados a sus nodos HTTP."""
+    partes = [f"# Departamento de origen: {dpto.nombre}"]
+
+    saludo = (dpto.mensaje_saludo or '').strip()
+    if saludo:
+        partes.append(f"\n## Saludo inicial sugerido\n{saludo}")
+
+    palabras = dpto.get_palabras_clave()
+    if palabras:
+        partes.append("\n## Palabras clave que activan este flujo")
+        partes.append('\n'.join(f"- {p}" for p in palabras))
+
+    arbol = dpto.obtener_arbol_opciones()
+    if arbol:
+        partes.append("\n## Flujo y opciones del menú")
+        partes.append(_arbol_opciones_a_markdown(arbol, nivel=0))
+
+    endpoints_ids = OpcionDepartamentoChatBot.objects.filter(
+        departamento=dpto, status=True, tipo_nodo='http', endpoint__isnull=False,
+    ).values_list('endpoint_id', flat=True).distinct()
+    if endpoints_ids:
+        eps = EndpointApiChatbot.objects.filter(id__in=list(endpoints_ids), status=True)
+        if eps.exists():
+            partes.append("\n## APIs disponibles para este flujo")
+            for ep in eps:
+                linea = f"- **{ep.nombre}** — {ep.base_url}"
+                if (ep.descripcion or '').strip():
+                    linea += f": {ep.descripcion.strip()}"
+                partes.append(linea)
+
+    return '\n'.join(partes).strip()
+
+
+def _crear_agente_desde_dpto(request):
+    """Action: crear_agente_desde_dpto. Crea un AgentesIA snapshot del
+    departamento elegido. Sin llamadas a LLM: vuelca datos del depto +
+    perfil empresa a `contexto_estatico` y delega afinamiento al editor."""
+    from .models import AgentesIA, ApiKeyIA, PerfilNegocioIA
+
+    perfil = PerfilNegocioIA.objects.filter(usuario=request.user).first()
+    if not perfil:
+        return JsonResponse({
+            'error': True,
+            'message': 'Configurá tu Perfil de Empresa antes de generar un agente IA.',
+        })
+
+    try:
+        dpto_id = int(request.POST.get('departamento_id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'error': True, 'message': 'Departamento inválido.'})
+
+    dpto = DepartamentoChatBot.objects.filter(pk=dpto_id, status=True).first()
+    if not dpto:
+        return JsonResponse({'error': True, 'message': 'Departamento no encontrado.'})
+
+    apikey_id = request.POST.get('apikey_id') or ''
+    apikey_obj = ApiKeyIA.objects.filter(
+        pk=apikey_id, perfil=perfil, status=True,
+    ).first() if apikey_id else None
+    if not apikey_obj:
+        return JsonResponse({
+            'error': True,
+            'message': 'Seleccioná una API Key IA válida (podés crearla en Entrenamiento IA).',
+        })
+
+    nombre = (request.POST.get('nombre') or '').strip() or f"Agente · {dpto.nombre}"
+    preset = (request.POST.get('personalidad_preset') or 'amable').strip()
+
+    contexto_dpto = _serializar_dpto_para_agente(dpto)
+    perfil_txt = perfil.resumen_contexto_ia()
+    contexto_full = f"## Empresa\n{perfil_txt}\n\n{contexto_dpto}"
+
+    agente = AgentesIA(
+        perfil=perfil,
+        nombre=nombre,
+        personalidad_preset=preset,
+        contexto_estatico=contexto_full,
+    )
+    agente.save()
+    agente.apikey.add(apikey_obj)
+
+    log(
+        f"Generó Agente IA '{agente.nombre}' desde departamento '{dpto.nombre}'",
+        request, "add", obj=agente.id,
+    )
+    return JsonResponse({
+        'error': False,
+        'agente_id': agente.id,
+        'agente_nombre': agente.nombre,
+        'departamento_nombre': dpto.nombre,
+        'redirect': f'/crm/entrenamiento/?action=procedimiento&id={agente.id}',
+        'mensaje': f"Agente '{agente.nombre}' creado desde el departamento '{dpto.nombre}'.",
     })
 
 

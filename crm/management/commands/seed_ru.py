@@ -501,26 +501,42 @@ class Command(BaseCommand):
             ))
             return
 
-        # ── Credencial + endpoint único ─────────────────────────
+        # ── Credencial + endpoint único (idempotente por nombre+tipo) ─
         if opts.get('bearer'):
-            credencial = CredencialApiChatbot.objects.create(
-                nombre='Bot RU - Bearer', tipo='bearer',
-                secretos={'token': opts['bearer']},
-                descripcion='Token Bearer del bot RU.',
+            credencial, _ = CredencialApiChatbot.objects.get_or_create(
+                nombre='Bot RU - Bearer', tipo='bearer', status=True,
+                defaults={
+                    'secretos': {'token': opts['bearer']},
+                    'descripcion': 'Token Bearer del bot RU.',
+                },
             )
+            # Si ya existía, actualizar el token por si el usuario pasó otro
+            if credencial.secretos.get('token') != opts['bearer']:
+                credencial.secretos = {'token': opts['bearer']}
+                credencial.save()
         else:
-            credencial = CredencialApiChatbot.objects.create(
-                nombre='Bot RU - AllowAny', tipo='none', secretos={},
-                descripcion='APIs del bot RU actualmente públicas (AllowAny).',
+            credencial, _ = CredencialApiChatbot.objects.get_or_create(
+                nombre='Bot RU - AllowAny', tipo='none', status=True,
+                defaults={
+                    'secretos': {},
+                    'descripcion': 'APIs del bot RU actualmente públicas (AllowAny).',
+                },
             )
-        ep_ru = EndpointApiChatbot.objects.create(
+        ep_ru, _ = EndpointApiChatbot.objects.get_or_create(
             nombre='Bot RU Lucía',
             base_url=opts['base_url'].rstrip('/'),
-            credencial=credencial,
-            headers_default={'Accept': 'application/json'},
-            timeout_seg=15,
-            descripcion='Endpoint base del bot RU del ISTER.',
+            status=True,
+            defaults={
+                'credencial': credencial,
+                'headers_default': {'Accept': 'application/json'},
+                'timeout_seg': 15,
+                'descripcion': 'Endpoint base del bot RU del ISTER.',
+            },
         )
+        # Asegurar que el endpoint apunte a la credencial canónica si ya existía
+        if ep_ru.credencial_id != credencial.id:
+            ep_ru.credencial = credencial
+            ep_ru.save()
 
         # ─────────────────────────────────────────────────────────
         # FLUJO UPFRONT: cédula → buscar estudiante → menú
