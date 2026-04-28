@@ -284,6 +284,10 @@
 
             <div class="chat-box-right">
                 <div class="p-3 d-flex justify-content-between align-items-center card-bg rounded" id="chat-header">
+                    <button type="button" class="btn btn-sm btn-link text-dark me-2 d-md-none chat-back-btn" id="chat-back-btn"
+                            title="Volver a la lista">
+                        <i class="fa fa-arrow-left"></i>
+                    </button>
                     <a href="javascript:void(0);" class="d-flex align-self-center">
                         <div class="flex-shrink-0">
                             <img src="/static/assets/img/avatar.png" alt="user" class="rounded-circle thumb-lg" id="contacto-foto">
@@ -612,24 +616,19 @@
                         (ej. cuando termine un job en background). Despacha automáticamente por Baileys o Meta
                         según el proveedor de la sesión.
                     </p>
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="fa fa-circle-info me-1"></i>
+                        <b>Sin autenticación.</b> Lo único que valida es que la conversación
+                        no esté finalizada. Si se cierra, devuelve <code>409</code>.
+                    </div>
 
                     <h6 class="mt-3 mb-1"><i class="fa fa-link me-1"></i> URL</h6>
-                    <div class="input-group input-group-sm mb-2">
+                    <div class="input-group input-group-sm mb-3">
                         <input type="text" class="form-control font-monospace" id="webhook-url" readonly>
                         <button class="btn btn-outline-success" type="button" onclick="copiarTexto('webhook-url')">
                             <i class="fa fa-copy"></i> Copiar
                         </button>
                     </div>
-
-                    <h6 class="mt-3 mb-1"><i class="fa fa-key me-1"></i> Header de autenticación</h6>
-                    <div class="input-group input-group-sm mb-1">
-                        <span class="input-group-text">X-API-Key:</span>
-                        <input type="text" class="form-control font-monospace" value="<NODE_SECRET_KEY>" readonly>
-                    </div>
-                    <small class="text-muted d-block mb-3">
-                        Usa el valor de <code>NODE_SECRET_KEY</code> definido en <code>credenciales.json</code>.
-                        No lo compartas — quien lo tenga puede mandar mensajes a cualquier conversación.
-                    </small>
 
                     <h6 class="mt-3 mb-1"><i class="fa fa-cube me-1"></i> Body</h6>
                     <ul class="small mb-2">
@@ -650,17 +649,25 @@
                         <i class="fa fa-copy"></i> Copiar comando
                     </button>
 
+                    <h6 class="mt-3 mb-1"><i class="fa-brands fa-python me-1"></i> Ejemplo: Python (con <code>requests</code>)</h6>
+                    <pre class="bg-dark text-light p-2 rounded small mb-2" style="white-space:pre-wrap;"><code id="webhook-py-text"></code></pre>
+                    <button class="btn btn-sm btn-outline-secondary mb-3" type="button" onclick="copiarTexto('webhook-py-text')">
+                        <i class="fa fa-copy"></i> Copiar Python (solo texto)
+                    </button>
+
+                    <pre class="bg-dark text-light p-2 rounded small mb-2" style="white-space:pre-wrap;"><code id="webhook-py-multipart"></code></pre>
+                    <button class="btn btn-sm btn-outline-secondary mb-3" type="button" onclick="copiarTexto('webhook-py-multipart')">
+                        <i class="fa fa-copy"></i> Copiar Python (texto + archivo)
+                    </button>
+
                     <h6 class="mt-3 mb-1"><i class="fa fa-triangle-exclamation me-1"></i> Errores</h6>
                     <table class="table table-sm small mb-0">
                         <thead><tr><th style="width:80px;">Status</th><th>Caso</th></tr></thead>
                         <tbody>
-                            <tr><td><code>401</code></td><td>X-API-Key faltante o inválida</td></tr>
                             <tr><td><code>404</code></td><td>Conversación no existe</td></tr>
                             <tr><td><code>409</code></td><td>Conversación finalizada</td></tr>
-                            <tr><td><code>423</code></td><td>Sesión pausada (<code>activo=false</code>)</td></tr>
                             <tr><td><code>400</code></td><td>Sin <code>texto</code> ni <code>archivo</code></td></tr>
                             <tr><td><code>502</code></td><td>Baileys/Meta rechazó el envío</td></tr>
-                            <tr><td><code>429</code></td><td>Rate limit (120 req/min por API key)</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -850,13 +857,24 @@
             sessionSocket.onmessage = function(e) {
                 const data = JSON.parse(e.data);
 
-                if ((data.type === 'new_message' || data.type === 'messages_update') && data.html) {
-                    const conversacion = $(`#lista-conversaciones div[data-id=${data.conversacion_id}]`);
-                    if (conversacion.length) {
-                        conversacion.replaceWith(data.html);
+                if ((data.type === 'new_message' || data.type === 'messages_update')) {
+                    if (!data.html) {
+                        // Backend no nos dió html (ej. conversación huérfana o
+                        // permiso): forzar refresh completo de la lista para
+                        // que el usuario vea la nueva conversación igual.
+                        cargarConversaciones($('#sesion-selector').val(), $('#search-conversacion').val(), filtroActivo);
                     } else {
-                        // Nueva conversación: insertar al principio de la lista
-                        $(`#lista-conversaciones`).prepend(data.html);
+                        const conversacion = $(`#lista-conversaciones .conversacion-item[data-id="${data.conversacion_id}"]`);
+                        if (conversacion.length) {
+                            conversacion.replaceWith(data.html);
+                        } else {
+                            // Nueva conversación: insertar al principio +
+                            // animación para que llame la atención.
+                            const $nueva = $(data.html);
+                            $nueva.addClass('conv-nueva-flash');
+                            $(`#lista-conversaciones`).prepend($nueva);
+                            setTimeout(function() { $nueva.removeClass('conv-nueva-flash'); }, 2400);
+                        }
                     }
                     // Re-marcar la conv activa (replaceWith pierde la clase)
                     if (conversacionActiva) {
@@ -937,16 +955,42 @@
             $('#webhook-url').val(url);
             var curlJson =
                 'curl -X POST "' + url + '" \\\n' +
-                '  -H "X-API-Key: $NODE_SECRET_KEY" \\\n' +
                 '  -H "Content-Type: application/json" \\\n' +
                 '  -d \'{"texto":"Tu reporte está listo ✅"}\'';
             var curlMulti =
                 'curl -X POST "' + url + '" \\\n' +
-                '  -H "X-API-Key: $NODE_SECRET_KEY" \\\n' +
                 '  -F "texto=Reporte adjunto" \\\n' +
                 '  -F "archivo=@reporte.pdf"';
             $('#webhook-curl-json').text(curlJson);
             $('#webhook-curl-multipart').text(curlMulti);
+
+            var pyText =
+                'import requests\n\n' +
+                'URL = "' + url + '"\n\n' +
+                'r = requests.post(\n' +
+                '    URL,\n' +
+                '    json={"texto": "Tu reporte está listo ✅"},\n' +
+                '    timeout=15,\n' +
+                ')\n' +
+                'r.raise_for_status()\n' +
+                'print(r.json())  # {"success": true, "enviados": [...]}';
+
+            var pyMulti =
+                'import requests\n\n' +
+                'URL = "' + url + '"\n\n' +
+                'with open("reporte.pdf", "rb") as f:\n' +
+                '    r = requests.post(\n' +
+                '        URL,\n' +
+                '        data={"texto": "Reporte adjunto", "caption": "Listo"},\n' +
+                '        files={"archivo": ("reporte.pdf", f, "application/pdf")},\n' +
+                '        timeout=30,\n' +
+                '    )\n' +
+                'r.raise_for_status()\n' +
+                'print(r.json())';
+
+            $('#webhook-py-text').text(pyText);
+            $('#webhook-py-multipart').text(pyMulti);
+
             new bootstrap.Modal(document.getElementById('modalWebhookConv')).show();
         };
 
@@ -1013,6 +1057,14 @@
             // Marcar como activa
             $('.conversacion-item').removeClass('active');
             $(this).closest('.conversacion-item').addClass('active');
+
+            // Mobile: ocultar lista y mostrar chat (estilo WhatsApp)
+            document.body.classList.add('chat-mobile-open');
+        });
+
+        // Mobile back button: volver a la lista de conversaciones
+        $(document).on('click', '#chat-back-btn', function() {
+            document.body.classList.remove('chat-mobile-open');
         });
 
         $('form input[name="mensaje"]').keyup(function(e) {

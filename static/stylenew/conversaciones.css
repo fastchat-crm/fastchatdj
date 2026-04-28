@@ -152,6 +152,85 @@
 }
 .alert-sp-cta:hover { background: #78350f; }
 
+/* ─── Conversación nueva: flash de bienvenida al prepend ─── */
+@keyframes conv-nueva-pulse {
+    0%   { background-color: #d1fae5; box-shadow: 0 0 0 0 rgba(16, 185, 129, .55); }
+    50%  { background-color: #a7f3d0; box-shadow: 0 0 0 .55rem rgba(16, 185, 129, 0); }
+    100% { background-color: #fff;     box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+.conv-nueva-flash {
+    animation: conv-nueva-pulse 2.4s ease-out;
+    border-color: #10b981 !important;
+}
+
+/* ─── Mobile UX estilo WhatsApp: cards primero, chat al toque ─── */
+@media (max-width: 767.98px) {
+    /* Por defecto: solo se ve la lista. El chat queda oculto fuera de pantalla. */
+    .chat-box-left,
+    .chat-box-right {
+        width: 100%;
+        max-width: 100%;
+        flex: 0 0 100%;
+    }
+    .chat-box-right {
+        position: fixed !important;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 100vh !important;
+        background: #fff;
+        z-index: 1040;
+        transform: translateX(100%);
+        transition: transform .25s ease-out;
+        border-radius: 0 !important;
+    }
+    /* Al abrir conversación: el chat entra deslizándose desde la derecha */
+    body.chat-mobile-open .chat-box-right {
+        transform: translateX(0);
+    }
+    /* Y la lista se oculta para liberar espacio (no scroll fantasma) */
+    body.chat-mobile-open .chat-box-left {
+        display: none;
+    }
+    /* Los modales de Bootstrap deben ir por encima del chat fullscreen */
+    .modal { z-index: 1060; }
+    .modal-backdrop { z-index: 1055; }
+
+    /* Card más cómoda al toque: padding mayor + texto más grande */
+    .conversacion-item {
+        padding: .85rem !important;
+    }
+    .conversacion-item h6 {
+        font-size: 1rem !important;
+    }
+    .conversacion-item .conversacion-fecha {
+        font-size: .7rem !important;
+    }
+
+    /* Header del chat más alto en mobile + botón back visible */
+    #chat-header {
+        padding-top: env(safe-area-inset-top, .75rem) !important;
+        padding-bottom: .75rem !important;
+    }
+}
+
+.chat-back-btn {
+    border: 0;
+    padding: .25rem .55rem;
+    font-size: 1.05rem;
+}
+.chat-back-btn:hover, .chat-back-btn:focus {
+    color: #0d6efd !important;
+}
+
+/* Desktop: nunca mostrar el back (md+) */
+@media (min-width: 768px) {
+    .chat-back-btn { display: none !important; }
+    body.chat-mobile-open .chat-box-left { display: block !important; }
+    body.chat-mobile-open .chat-box-right { transform: none !important; position: relative !important; }
+}
+
 /* Combo de sesión cuando la actual está pausada */
 .sesion-selector-pausada {
     border-color: #f59e0b !important;

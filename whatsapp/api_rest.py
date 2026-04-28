@@ -259,7 +259,6 @@ def conversacion_etapa(request, pk):
 # Envío de mensajes
 # ---------------------------------------------------------------------------
 
-@api_endpoint
 @csrf_exempt
 @require_POST
 def conversacion_enviar(request, pk):
@@ -274,19 +273,21 @@ def conversacion_enviar(request, pk):
         archivo  : file  (opcional, multipart)
         caption  : str   (opcional, va con el archivo)
 
-    Auth: header `X-API-Key: <NODE_SECRET_KEY>`.
+    Sin auth — endpoint público intencionalmente. Lo único que valida es que
+    la conversación exista y NO esté finalizada.
     """
     from django.utils import timezone
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
 
-    conv = ConversacionWhatsApp.objects.select_related('contacto', 'contacto__sesion').get(pk=pk)
+    try:
+        conv = ConversacionWhatsApp.objects.select_related('contacto', 'contacto__sesion').get(pk=pk)
+    except ConversacionWhatsApp.DoesNotExist:
+        return JsonResponse({'error': 'not_found'}, status=404)
     if conv.conversacion_finalizada:
         return JsonResponse({'error': 'conversation_closed'}, status=409)
 
     sesion = conv.contacto.sesion
-    if not sesion or not getattr(sesion, 'activo', True):
-        return JsonResponse({'error': 'session_paused'}, status=423)
 
     texto = (request.POST.get('texto') or '').strip()
     caption = (request.POST.get('caption') or '').strip()
