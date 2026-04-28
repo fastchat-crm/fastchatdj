@@ -291,6 +291,13 @@ def endpoint_api_view(request):
     )
     data['list_count'] = listado.count()
     data['url_vars'] = url_vars
-    data['credenciales'] = CredencialApiChatbot.objects.filter(status=True).order_by('nombre')
+    # Credenciales activas + conteo de endpoints activos que las usan
+    # (toda la cadena en status=True). Endpoints inactivos no inflan el contador.
+    data['credenciales'] = (
+        CredencialApiChatbot.objects
+        .filter(status=True)
+        .annotate(endpoints_activos=Count('endpoints', filter=Q(endpoints__status=True)))
+        .order_by('nombre')
+    )
     paginador(request, listado, 20, data, url_vars)
     return render(request, 'crm/endpoints_api/listado.html', data)
