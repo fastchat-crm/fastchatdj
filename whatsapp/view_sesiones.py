@@ -235,6 +235,36 @@ def _accion_meta_plantilla_prueba(request):
     })
 
 
+def _accion_toggle_activo(request):
+    """Activa o pausa la sesión a nivel servicio.
+
+    Cuando `activo=False`:
+    - `process_incoming_message` corta de inmediato (no IA, no respuesta).
+    - Cron de despedidas, programados, reconexión y campañas filtran fuera
+      esta sesión.
+
+    No toca el estado del socket Baileys/Meta — la sesión sigue conectada
+    pero no procesa. Útil para suspender el servicio a un cliente sin
+    romper la integración ni borrar datos.
+    """
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesion no encontrada.'})
+    sesion.activo = not bool(sesion.activo)
+    sesion.save(update_fields=['activo'])
+    accion_log = 'activada' if sesion.activo else 'pausada'
+    log(f"Sesion {sesion.id} {accion_log}", request, "change", obj=sesion.id)
+    return JsonResponse({
+        'error': False,
+        'activo': sesion.activo,
+        'message': (
+            'Sesión activada — vuelve a procesar mensajes y enviar respuestas.'
+            if sesion.activo else
+            'Sesión pausada — no procesa mensajes ni consume API hasta reactivarla.'
+        ),
+    })
+
+
 def _accion_editar(request):
     """Guarda cambios del modal "Modificar": campos basicos de la sesion.
 
@@ -306,6 +336,7 @@ _ACCIONES = {
     'meta_validar':                _accion_meta_validar,
     'meta_plantilla_prueba':       _accion_meta_plantilla_prueba,
     'editar':                      _accion_editar,
+    'toggle_activo':               _accion_toggle_activo,
 }
 
 

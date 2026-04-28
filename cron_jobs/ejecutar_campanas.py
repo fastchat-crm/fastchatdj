@@ -145,9 +145,12 @@ def main():
     ahora = timezone.now()
 
     # 1. Arrancar campañas que ya tocaba correr
+    # Sesión pausada (activo=False): no arrancamos campañas para no consumir
+    # API mientras el cliente tiene el servicio suspendido.
     por_arrancar = Campana.objects.filter(
         status=True,
         estado='programada',
+        sesion__activo=True,
     ).filter(
         Q(programada_para__isnull=True) | Q(programada_para__lte=ahora),
     )
@@ -160,7 +163,9 @@ def main():
             logCron('Campañas', f'Arrancada {campana.id} "{campana.nombre}" con {creados} envíos.', True)
 
     # 2. Despachar campañas en progreso
-    en_progreso = Campana.objects.filter(status=True, estado='enviando')
+    # También pausamos despachos en curso si el operador desactivó la sesión
+    # (suspensión de servicio). Al reactivar, retoma desde donde quedó.
+    en_progreso = Campana.objects.filter(status=True, estado='enviando', sesion__activo=True)
     total = 0
     for campana in en_progreso:
         try:

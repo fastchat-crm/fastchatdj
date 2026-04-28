@@ -23,6 +23,7 @@ mensajes_programados = MensajeWhatsAppProgramado.objects.filter(
     status=True,
     enviado=False,
     contacto__sesion__proveedor='baileys',
+    contacto__sesion__activo=True,
 ).filter(Q(fecha__lt=hoy) | Q(fecha=hoy, hora__lte=hora_actual))
 
 try:

@@ -1000,10 +1000,62 @@
         }
     }
 
+    // ---------- Toggle Activa/Pausada (corta procesamiento + consumo API) ----------
+    document.addEventListener('change', function (e) {
+        var input = e.target;
+        if (!input.matches || !input.matches('[data-action="toggle-activo"]')) return;
+        var card = input.closest('.conex-card');
+        if (!card) return;
+        var sesionId = card.getAttribute('data-sesion-id');
+        var nombre = card.getAttribute('data-sesion-nombre') || '';
+        var nuevoEstado = input.checked; // true = activar, false = pausar
+        var prevChecked = !nuevoEstado;
+
+        var confirmar = function (cb) {
+            if (!nuevoEstado && window.Swal) {
+                Swal.fire({
+                    title: '¿Pausar ' + nombre + '?',
+                    text: 'La sesión dejará de procesar mensajes y de consumir API/IA. ' +
+                          'El socket sigue conectado; podés reactivarla cuando quieras.',
+                    type: 'warning', showCancelButton: true, allowOutsideClick: false,
+                    confirmButtonText: 'Sí, pausar', cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#d97706',
+                }).then(function (res) {
+                    if (!res.value) {
+                        input.checked = prevChecked;
+                        return;
+                    }
+                    cb();
+                });
+            } else {
+                cb();
+            }
+        };
+
+        confirmar(function () {
+            input.disabled = true;
+            postAccion({action: 'toggle_activo', id: sesionId}).then(function (r) {
+                input.disabled = false;
+                if (r.error) {
+                    input.checked = prevChecked;
+                    return mostrarToast(r.message || 'No se pudo cambiar el estado.', 'err');
+                }
+                mostrarToast(r.message, 'ok');
+                refrescarCard(sesionId);
+            }).catch(function () {
+                input.disabled = false;
+                input.checked = prevChecked;
+                mostrarToast('Error de red al cambiar el estado.', 'err');
+            });
+        });
+    });
+
     // ---------- Acciones del kebab y botones rápidos ----------
     document.addEventListener('click', function (e) {
         var btn = e.target.closest('[data-action]');
         if (!btn) return;
+        // Ignorar el toggle activa/pausa — lo maneja el listener `change`.
+        if (btn.getAttribute('data-action') === 'toggle-activo') return;
         var card = btn.closest('.conex-card');
         if (!card) return;
         var sesionId = card.getAttribute('data-sesion-id');

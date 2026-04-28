@@ -72,7 +72,7 @@
                     <select id="sesion-selector" class="form-select form-select-sm">
                         {% for sesion in sesiones %}
                             <option value="{{ sesion.id }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
-                                {% if sesion.es_meta %}☁️ Meta{% elif sesion.es_baileys %}📱 Baileys{% elif sesion.es_instagram %}📸 IG{% elif sesion.es_messenger %}💬 FB{% endif %} · {{ sesion.numero }} | {{ sesion.nombre }} ({{ sesion.get_estado_display }})
+                                {% if sesion.es_meta %}☁️ Meta{% elif sesion.es_baileys %}📱 Baileys{% elif sesion.es_instagram %}📸 IG{% elif sesion.es_messenger %}💬 FB{% endif %} · {{ sesion.numero }} | {{ sesion.nombre }} ({{ sesion.get_estado_display }}{% if not sesion.activo %} · ⏸ PAUSADA{% endif %})
                             </option>
                         {% endfor %}
                     </select>

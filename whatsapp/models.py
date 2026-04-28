@@ -109,6 +109,10 @@ class SesionWhatsApp(ModeloBase):
         related_name='sesiones_vinculadas', verbose_name='Pixel Meta (CAPI)',
         help_text='Pixel al que se reportan conversiones de esta sesión.'
     )
+    activo = models.BooleanField(
+        'Sesión activa', default=True, db_index=True,
+        help_text='Si está apagada, la sesión no procesa mensajes entrantes ni envía respuestas (corta consumo de API y costos del modelo IA). Útil para suspender el servicio de un cliente sin eliminar la sesión.'
+    )
 
     @property
     def es_meta(self):

@@ -28,6 +28,7 @@ conversaciones = ConversacionWhatsApp.objects.filter(
     despedida_enviado=False,
     conversacion_finalizada=False,
     fecha_hora_expira__lt=timezone.now(),
+    contacto__sesion__activo=True,
 ).select_related(
     'contacto',
     'contacto__sesion',

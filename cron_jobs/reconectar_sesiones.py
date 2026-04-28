@@ -46,6 +46,7 @@ def run():
     # access_token + phone_number_id sean validos.
     sesiones = SesionWhatsApp.objects.filter(
         status=True,
+        activo=True,
         proveedor='baileys',
         estado__in=['desconectado', 'error'],
         config_baileys__desconectado_manualmente=False,

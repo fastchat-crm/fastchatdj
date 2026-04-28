@@ -1,8 +1,9 @@
 {% load templatefunctions %}
 {# Card individual de sesion en el tablero. Reusable como partial (AJAX poll). #}
-<div class="conex-card" data-sesion-id="{{ sesion.id }}"
+<div class="conex-card{% if not sesion.activo %} conex-card-pausada{% endif %}" data-sesion-id="{{ sesion.id }}"
      data-sesion-nombre="{{ sesion.nombre|default:sesion.numero|escape }}"
      data-estado="{{ sesion.estado }}"
+     data-activo="{{ sesion.activo|yesno:'1,0' }}"
      data-proveedor="{{ sesion.proveedor }}">
 
     <div class="card-top">
@@ -21,7 +22,14 @@
         </div>
 
         <div class="card-head">
-            <div class="card-nombre">{{ sesion.nombre|default:'Sesión sin nombre' }}</div>
+            <div class="card-nombre">
+                {{ sesion.nombre|default:'Sesión sin nombre' }}
+                {% if not sesion.activo %}
+                    <span class="badge-pausada" title="Sesión pausada — no procesa mensajes ni consume API">
+                        <i class="fa fa-pause-circle"></i> PAUSADA
+                    </span>
+                {% endif %}
+            </div>
             <div class="card-num">
                 {% if sesion.es_meta and sesion.config_meta and sesion.config_meta.display_phone_number %}
                     {{ sesion.config_meta.display_phone_number }}
@@ -32,6 +40,13 @@
                 {% endif %}
             </div>
         </div>
+
+        <label class="conex-toggle" title="{% if sesion.activo %}Pausar la sesión (corta procesamiento de mensajes y consumo de API){% else %}Reactivar la sesión{% endif %}">
+            <input type="checkbox" class="conex-toggle-input" data-action="toggle-activo"
+                   {% if sesion.activo %}checked{% endif %}>
+            <span class="conex-toggle-slider"></span>
+            <span class="conex-toggle-label">{% if sesion.activo %}Activa{% else %}Pausada{% endif %}</span>
+        </label>
 
         <div class="card-kebab-wrap">
             <button type="button" class="btn-kebab" aria-label="Opciones" data-kebab-toggle>

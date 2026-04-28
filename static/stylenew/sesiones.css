@@ -2703,3 +2703,98 @@
 }
 .foto-upload-result.is-err { background: #fee2e2; color: #991b1b; }
 .foto-upload-result.is-ok  { background: #ecfdf5; color: #065f46; }
+
+/* ─── Toggle Activa / Pausada ─── */
+.conex-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    cursor: pointer;
+    user-select: none;
+    margin-right: .35rem;
+}
+.conex-toggle-input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+.conex-toggle-slider {
+    position: relative;
+    display: inline-block;
+    width: 34px;
+    height: 18px;
+    border-radius: 999px;
+    background: #d1d5db;
+    transition: background .18s ease;
+    flex-shrink: 0;
+}
+.conex-toggle-slider::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+    transition: transform .18s ease;
+}
+.conex-toggle-input:checked + .conex-toggle-slider { background: #16a34a; }
+.conex-toggle-input:checked + .conex-toggle-slider::after { transform: translateX(16px); }
+.conex-toggle-input:disabled + .conex-toggle-slider { opacity: .55; cursor: wait; }
+.conex-toggle-label {
+    font-size: .72rem;
+    font-weight: 600;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: .02em;
+}
+.conex-toggle:hover .conex-toggle-slider { box-shadow: 0 0 0 4px rgba(22, 163, 74, .12); }
+
+/* ─── Badge "PAUSADA" en card ─── */
+.badge-pausada {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+    border-radius: 999px;
+    padding: 1px .55rem;
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    margin-left: .35rem;
+    vertical-align: middle;
+}
+.badge-pausada i { font-size: .7rem; }
+
+/* ─── Card en estado pausado ─── */
+.conex-card-pausada {
+    background: repeating-linear-gradient(
+        135deg,
+        #fffdf5,
+        #fffdf5 14px,
+        #fef9e7 14px,
+        #fef9e7 28px
+    );
+    border-color: #fcd34d !important;
+    position: relative;
+}
+.conex-card-pausada::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: rgba(255, 255, 255, .35);
+    pointer-events: none;
+}
+.conex-card-pausada > * { position: relative; z-index: 1; }
+.conex-card-pausada .card-avatar img,
+.conex-card-pausada .card-avatar .avatar-fallback {
+    filter: grayscale(.55);
+}
+

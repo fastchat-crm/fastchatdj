@@ -45,6 +45,12 @@ def process_incoming_message(session, event_data, channel_layer):
     Procesa un mensaje entrante de WhatsApp
     """
     try:
+        # Sesión pausada por el cliente/operador: no consumir API ni IA.
+        # Cortamos antes de cualquier escritura/envío. Idempotente: webhooks
+        # repetidos durante el período de pausa siempre devuelven 200 OK.
+        if not getattr(session, 'activo', True):
+            return JsonResponse({'status': 'ok', 'session_inactive': True})
+
         print('process_incoming_message', event_data)
         # Extraer datos del mensaje
         message_id = event_data.get('id')
