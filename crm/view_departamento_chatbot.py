@@ -770,6 +770,43 @@ def _exportar_flujo_completo(departamento):
         nodo_origen__departamento=departamento, status=True,
     ).select_related('nodo_origen', 'nodo_destino').order_by('nodo_origen', 'orden')
 
+    # Recetas de cómo cada tipo de credencial inyecta auth en la request.
+    # Útil como documentación cuando alguien arma un seed nuevo.
+    USO_AUTH = {
+        'none': {
+            'descripcion': 'Sin autenticación. El motor no agrega headers extra.',
+            'ejemplo': 'Endpoint público (AllowAny).',
+            'secretos_esperados': {},
+        },
+        'bearer': {
+            'descripcion': 'Inyecta header Authorization: Bearer <token> en cada request.',
+            'ejemplo': '{"token": "eyJhbGciOiJIUzI1NiIs..."}',
+            'secretos_esperados': {'token': '<jwt o bearer token>'},
+        },
+        'basic': {
+            'descripcion': 'Inyecta Authorization: Basic base64(usuario:password).',
+            'ejemplo': '{"usuario": "api_user", "password": "secret123"}',
+            'secretos_esperados': {'usuario': '<user>', 'password': '<pass>'},
+        },
+        'apikey_header': {
+            'descripcion': 'Agrega un header custom con la API key.',
+            'ejemplo': '{"nombre_header": "X-API-Key", "valor": "abc123"}',
+            'secretos_esperados': {'nombre_header': '<nombre del header>',
+                                   'valor': '<api key>'},
+        },
+        'apikey_query': {
+            'descripcion': 'Agrega un query param con la API key.',
+            'ejemplo': '{"nombre_param": "api_key", "valor": "abc123"}',
+            'secretos_esperados': {'nombre_param': '<nombre del param>',
+                                   'valor': '<api key>'},
+        },
+        'custom_header': {
+            'descripcion': 'Mergea un dict de headers personalizados en la request.',
+            'ejemplo': '{"headers": {"X-Tenant": "ru", "X-Trace": "abc"}}',
+            'secretos_esperados': {'headers': '<dict de headers>'},
+        },
+    }
+
     # Endpoints únicos referenciados por nodos http
     endpoints_usados = {}
     creds_usadas = {}
@@ -791,6 +828,7 @@ def _exportar_flujo_completo(departamento):
                 secretos_redacted = {
                     k: '***REDACTED***' for k in (cr.secretos or {})
                 }
+                receta = USO_AUTH.get(cr.tipo, USO_AUTH['none'])
                 creds_usadas[cr.id] = {
                     'id': cr.id,
                     'nombre': cr.nombre,
@@ -798,6 +836,9 @@ def _exportar_flujo_completo(departamento):
                     'tipo_display': cr.get_tipo_display(),
                     'secretos': secretos_redacted,
                     'descripcion': cr.descripcion or '',
+                    'uso_auth': receta['descripcion'],
+                    'secretos_esperados': receta['secretos_esperados'],
+                    'ejemplo_secretos': receta['ejemplo'],
                 }
 
     # Stats agregadas
@@ -816,6 +857,58 @@ def _exportar_flujo_completo(departamento):
             'exportado_en': datetime.now().isoformat(timespec='seconds'),
             'version_schema': '1.0',
             'nota': 'Secretos de credenciales aparecen como ***REDACTED***',
+        },
+        '_help': {
+            'cookbook': 'Cómo replicar este flujo en un seed Python (estilo seed_ru.py).',
+            'imports': (
+                "from crm.models import (DepartamentoChatBot, OpcionDepartamentoChatBot,"
+                " ConexionNodoChatbot, CredencialApiChatbot, EndpointApiChatbot)"
+            ),
+            'pasos': [
+                '1. Crear DepartamentoChatBot con `nombre`, `color`, `mensaje_saludo`, `palabras_clave`.',
+                '2. Crear CredencialApiChatbot con `tipo` y `secretos` (ver `secretos_esperados` por tipo).',
+                '3. Crear EndpointApiChatbot con `base_url`, `credencial`, `headers_default`, `timeout_seg`.',
+                '4. Crear OpcionDepartamentoChatBot por nodo (tipo + config). Setear `es_inicio=True` en el primero.',
+                '5. Crear ConexionNodoChatbot por arista. Etiqueta vacía = default; "ok"/"error" para http; "true"/"false" para condicional; "<salida>" para opciones de menú.',
+            ],
+            'snippet_endpoint': (
+                "credencial = CredencialApiChatbot.objects.create(\n"
+                "    nombre='Mi API', tipo='bearer',\n"
+                "    secretos={'token': 'eyJhbGc...'},\n"
+                ")\n"
+                "endpoint = EndpointApiChatbot.objects.create(\n"
+                "    nombre='Mi API', base_url='https://api.x.com',\n"
+                "    credencial=credencial,\n"
+                "    headers_default={'Accept': 'application/json'},\n"
+                "    timeout_seg=15,\n"
+                ")"
+            ),
+            'snippet_nodo_http': (
+                "OpcionDepartamentoChatBot.objects.create(\n"
+                "    departamento=depto, tipo_nodo='http', endpoint=endpoint,\n"
+                "    config={\n"
+                "        'metodo': 'POST', 'path': '/buscar/',\n"
+                "        'body': {'cedula': '{{variables.cedula}}'},\n"
+                "        'extraer': [\n"
+                "            {'variable': 'nombre', 'jsonpath': 'data.nombre'},\n"
+                "            {'variable': 'lista',  'jsonpath': 'data.items'},\n"
+                "        ],\n"
+                "        'plantilla_respuesta': (\n"
+                "            'Hola {{variables.nombre}}\\n'\n"
+                "            '{% for it in variables.lista %}'\n"
+                "            '• {{it.titulo}}\\n'\n"
+                "            '{% endfor %}'\n"
+                "        ),\n"
+                "    },\n"
+                ")"
+            ),
+            'tips_template': [
+                "{{variables.X}} para sustitución escalar.",
+                "{{var.objeto.campo}} y {{var.lista[0].campo}} para navegar paths.",
+                "{% for x in variables.lista %}...{% endfor %} para iterar listas.",
+                "Si la API responde {success: false} el motor enruta por etiqueta 'error' (mostrar mensaje de error en vez de plantilla_respuesta).",
+            ],
+            'tipos_auth_disponibles': USO_AUTH,
         },
         'departamento': {
             'id': departamento.id,

@@ -156,30 +156,30 @@
             <div class="modal-body">
                 <ul class="nav nav-tabs nav-tabs-sm small mb-2" id="dpJsonTabs">
                     <li class="nav-item">
-                        <button class="nav-link active" data-tab="ficha">
-                            <i class="fa fa-clipboard-list me-1"></i> Ficha resumida
+                        <button class="nav-link active" data-tab="json">
+                            <i class="fa fa-code me-1"></i> JSON completo
                         </button>
                     </li>
                     <li class="nav-item">
-                        <button class="nav-link" data-tab="json">
-                            <i class="fa fa-code me-1"></i> JSON completo
+                        <button class="nav-link" data-tab="ficha">
+                            <i class="fa fa-clipboard-list me-1"></i> Ficha visual
                         </button>
                     </li>
                 </ul>
                 <div class="tab-content">
-                    <div class="tab-pane active" data-pane="ficha">
-                        <div id="dp-ficha-content"
-                             class="dp-ficha-content small">Cargando…</div>
-                    </div>
-                    <div class="tab-pane" data-pane="json" style="display:none;">
+                    <div class="tab-pane active" data-pane="json">
                         <div class="alert alert-light border py-2 small mb-2">
                             <i class="fa fa-circle-info me-1"></i>
-                            Snapshot del depto: cabecera, nodos con su
-                            <code>config</code>, endpoints, credenciales
-                            (secretos REDACTED) y conexiones. Útil para
-                            versionar o exportar entre ambientes.
+                            Snapshot del depto: cabecera, todos los nodos, endpoints,
+                            credenciales (secretos REDACTED) y conexiones. Bajo
+                            <code>_help</code> tenés snippets listos para armar un
+                            seed nuevo desde cero (estilo <code>seed_ru.py</code>).
                         </div>
                         <pre id="dp-meta-json-pre" class="dp-json-pre">Cargando…</pre>
+                    </div>
+                    <div class="tab-pane" data-pane="ficha" style="display:none;">
+                        <div id="dp-ficha-content"
+                             class="dp-ficha-content small">Cargando…</div>
                     </div>
                 </div>
             </div>
@@ -224,5 +224,5 @@
 
 {% block jscript %}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="{% static 'js/dpchat_editor.js' %}?v=9"></script>
+    <script src="{% static 'js/dpchat_editor.js' %}?v=10"></script>
 {% endblock %}
