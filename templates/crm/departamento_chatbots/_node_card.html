@@ -56,6 +56,22 @@
                 {% endif %}
             </div>
 
+            {# Predecesores del grafo: nodo(s) que apuntan a este vía ConexionNodoChatbot. #}
+            {# Permite trazar el flujo viendo "viene de #X". Si no hay grafo, no se muestra. #}
+            {% if op.predecesores_grafo %}
+                <div class="dp-node-preds">
+                    <i class="fa fa-arrow-left text-muted me-1" title="Viene de"></i>
+                    <span class="text-muted small">viene de:</span>
+                    {% for c in op.predecesores_grafo %}
+                        <span class="dp-tag dp-tag-pred"
+                              title="Nodo origen: {{ c.nodo_origen.nombre|default:'(sin nombre)' }} ({{ c.nodo_origen.get_tipo_nodo_display }}){% if c.etiqueta %} · etiqueta {{ c.etiqueta }}{% endif %}">
+                            #{{ c.nodo_origen_id }}
+                            {% if c.etiqueta %}<span class="text-muted">[{{ c.etiqueta }}]</span>{% endif %}
+                        </span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
             {# ── HTTP: URL completa, método, request body, extraer ── #}
             {% if op.tipo_nodo == 'http' %}
                 <div class="dp-node-http">

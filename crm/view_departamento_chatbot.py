@@ -224,11 +224,27 @@ def departamentoChatbotsView(request):
                         .values('id', 'nombre', 'base_url')
                     ))
                     if full_page:
+                        # Anexa la lista de predecesores del grafo a cada opción del
+                        # árbol, así cada card en el listado puede mostrar de qué
+                        # nodo(s) viene. Una sola query agrupada por nodo_destino.
+                        from collections import defaultdict
+                        arbol_plano = _serializar_arbol_opciones(filtro)
+                        preds_por_nodo = defaultdict(list)
+                        conexiones = (
+                            ConexionNodoChatbot.objects
+                            .filter(nodo_origen__departamento=filtro, status=True)
+                            .select_related('nodo_origen')
+                            .order_by('nodo_origen__orden', 'nodo_origen__id')
+                        )
+                        for c in conexiones:
+                            preds_por_nodo[c.nodo_destino_id].append(c)
+                        for item in arbol_plano:
+                            item['opcion'].predecesores_grafo = preds_por_nodo.get(item['opcion'].id, [])
                         data.update({
                             'pagina_completa': True,
                             'titulo_pagina': f'Editar {filtro}',
                             'ruta_post': request.path,
-                            'arbol_plano': _serializar_arbol_opciones(filtro),
+                            'arbol_plano': arbol_plano,
                             'arbol_anidado': _serializar_arbol_anidado(filtro),
                             'tipos_nodo_choices': OpcionDepartamentoChatBot.TIPOS_NODO,
                             'validaciones_choices': OpcionDepartamentoChatBot.VALIDACIONES,
