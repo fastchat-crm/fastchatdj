@@ -343,7 +343,31 @@
     // ── menu ────────────────────────────────────────────────────
     function renderMenu(node) {
         var cfg = node.config || {};
-        var opciones = cfg.opciones || [];
+        var opciones = (cfg.opciones || []).slice();
+
+        // Opciones dinámicas desde una variable del contexto (catálogos).
+        var fuente = cfg.opciones_fuente || null;
+        if (fuente && fuente.variable) {
+            var ctx = { variables: STATE.vars };
+            var items = pathGet(ctx, fuente.variable);
+            var limite = parseInt(fuente.limite || 10, 10);
+            var campoId = fuente.campo_id || 'id';
+            var campoEtq = fuente.campo_etiqueta || 'nombre';
+            var salida = fuente.salida || '';
+            if (Array.isArray(items)) {
+                items.slice(0, limite).forEach(function (it) {
+                    var valor, etq;
+                    if (it && typeof it === 'object') {
+                        valor = String(it[campoId] != null ? it[campoId] : '');
+                        etq = String(it[campoEtq] != null ? it[campoEtq] : valor);
+                    } else {
+                        valor = String(it); etq = valor;
+                    }
+                    if (valor) opciones.push({ etiqueta: etq, valor: valor, salida: salida });
+                });
+            }
+        }
+
         if (!opciones.length) {
             // Fallback: hijos legacy via opcion_padre
             (node.hijos_legacy || []).forEach(function (hid) {
