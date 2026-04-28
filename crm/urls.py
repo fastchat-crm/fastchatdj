@@ -1,5 +1,6 @@
 from django.urls import path, re_path
 
+from . import api_cotizar_proxy
 from .view_actividad_economica import actividadEconomicaView
 from .view_agente_wizard import agente_wizard_view
 from .view_chat_agente import chat_agente_view
@@ -62,4 +63,11 @@ urlpatterns.append(
 urlpatterns.append(
     path('departamentos_chatbots/prueba/<str:sesion_enc_id>/',
          probar_chatbot_view, name='probar_chatbot')
+)
+
+# Proxy interno del flujo ARIA: el motor del chatbot pega acá → este endpoint
+# llama al webhook externo de cotización y notifica a los asesores por correo.
+urlpatterns.append(
+    path('api/cotizar/<int:conv_id>/', api_cotizar_proxy.cotizar_proxy,
+         name='crm_api_cotizar_proxy')
 )

@@ -17,6 +17,18 @@
                 <i class="fa fa-rotate-left text-muted ms-1" title="Vuelve a un nodo ya visitado"></i>
             {% endif %}
         </div>
+        <div class="dp-tree-card-flags">
+            {% if nodo.opcion.tipo_nodo == 'fin' %}
+                <span class="dp-flag-pill dp-flag-fin" title="Finaliza la conversación">
+                    <i class="fa fa-flag-checkered"></i> Termina
+                </span>
+            {% endif %}
+            {% if nodo.opcion.config.envia_correo %}
+                <span class="dp-flag-pill dp-flag-email" title="Envía correo">
+                    <i class="fa fa-envelope"></i> Correo
+                </span>
+            {% endif %}
+        </div>
         {% if nodo.opcion.boton_id %}
             <div class="dp-tree-card-btnid">id: <code>{{ nodo.opcion.boton_id }}</code></div>
         {% endif %}

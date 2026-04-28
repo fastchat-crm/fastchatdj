@@ -981,6 +981,19 @@
             sessionWebSocket(_sesionInicialId, filtroActivo);
         }
 
+        {% if auto_open_conv_id %}
+            // Deep-link `?conv=<token>` — auto-abrir la conversación una vez
+            // que la lista cargó. Damos un pequeño margen para que el WS
+            // pinte las cards. Si la card aún no está, cargarMensajes maneja
+            // la carga directa de mensajes igual.
+            setTimeout(function() {
+                if (typeof cargarMensajes === 'function') {
+                    cargarMensajes({{ auto_open_conv_id }});
+                    document.body.classList.add('chat-mobile-open');
+                }
+            }, 600);
+        {% endif %}
+
         function scrollToBottom(smooth = false) {
             const cw = document.getElementById('chat-messages')?.querySelector('.simplebar-content-wrapper');
             if (cw) cw.scrollTop = cw.scrollHeight;

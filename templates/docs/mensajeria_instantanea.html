@@ -1,0 +1,235 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/docs.css' %}">
+    <link rel="stylesheet" href="{% static 'stylenew/dpchat_editor.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="docs-page">
+
+    {# ───────── Sidebar izquierdo ───────── #}
+    <aside class="docs-sidebar">
+        <div class="docs-sidebar-search">
+            <i class="fa fa-search"></i>
+            <input type="text" placeholder="Buscar en la documentación...">
+        </div>
+        {% for seccion in sidebar %}
+            <div class="docs-sb-group">
+                <h6 class="docs-sb-title">{{ seccion.titulo }}</h6>
+                {% if seccion.items %}
+                    <ul class="docs-sb-list">
+                        {% for item in seccion.items %}
+                            <li>
+                                <a href="/seguridad/documentacion/?pagina={{ item.slug }}"
+                                   class="docs-sb-item {% if item.slug == slug_actual %}active{% endif %}">
+                                    {{ item.nombre }}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <span class="docs-sb-empty">Próximamente</span>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </aside>
+
+    {# ───────── Contenido principal ───────── #}
+    <main class="docs-main">
+
+        <nav class="docs-breadcrumb" aria-label="breadcrumb">
+            {% for crumb in breadcrumb %}
+                {% if crumb.url %}
+                    <a href="{{ crumb.url }}">{{ crumb.nombre }}</a>
+                {% else %}
+                    <span>{{ crumb.nombre }}</span>
+                {% endif %}
+                {% if not forloop.last %}<i class="fa fa-chevron-right docs-bc-sep"></i>{% endif %}
+            {% endfor %}
+        </nav>
+
+        <article class="docs-article">
+
+            <header class="docs-hero">
+                <h1><i class="fa fa-comments-dollar me-2 text-primary"></i> Mensajería Instantánea</h1>
+                <p class="docs-hero-lead">
+                    Cómo construir un flujo de chatbot — desde el saludo inicial hasta una integración
+                    avanzada con APIs externas + envío de correos. La guía está organizada por niveles:
+                    arrancá por el básico y avanzá cuando tengas claros los conceptos previos.
+                </p>
+            </header>
+
+            {# Glosario #}
+            <section class="docs-section">
+                <h2>Glosario rápido</h2>
+                <table class="table table-sm small mb-3">
+                    <thead><tr><th style="width:200px;">Concepto</th><th>Qué es</th></tr></thead>
+                    <tbody>
+                        <tr><td><b>Departamento</b></td><td>Unidad ejecutable del chatbot. Contiene el flujo completo.</td></tr>
+                        <tr><td><b>Nodo</b></td><td>Paso individual del flujo. Cada uno tiene un tipo (menú, pregunta, HTTP…).</td></tr>
+                        <tr><td><b>Conexión</b></td><td>Une un nodo con el siguiente según una etiqueta (<code>ok</code>, <code>error</code>, valor del menú, <code>true</code>/<code>false</code>).</td></tr>
+                        <tr><td><b>Variable</b></td><td>Dato capturado durante la conversación. Disponible vía <code>{% verbatim %}{{variables.nombre}}{% endverbatim %}</code>.</td></tr>
+                        <tr><td><b>Endpoint</b></td><td>URL externa registrada en <a href="/crm/endpoints_api/">Endpoints API</a> que un nodo HTTP puede llamar.</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            {# Indicadores visuales #}
+            <section class="docs-section">
+                <h2>Indicadores visuales por nodo</h2>
+                <p>En el editor y el diagrama, cada nodo puede mostrar:</p>
+                <ul>
+                    <li>
+                        <span class="dp-flag-pill dp-flag-fin"><i class="fa fa-flag-checkered"></i> Termina flujo</span>
+                        — el nodo es de tipo <code>fin</code>. Cierra la conversación.
+                    </li>
+                    <li>
+                        <span class="dp-flag-pill dp-flag-email"><i class="fa fa-envelope"></i> Envía correo</span>
+                        — el nodo dispara una notificación por email como side-effect (configurado con
+                        <code>config.envia_correo: true</code>).
+                    </li>
+                </ul>
+                <p class="small text-muted">
+                    Ejemplo: en el flujo <i>ARIA — Cotizador de seguros</i>, el nodo <b>340 (POST proxy →
+                    webhook ARIA + email asesores)</b> está marcado con ambos indicadores porque dispara
+                    una notificación a los asesores del depto.
+                </p>
+            </section>
+
+            {# Nivel Básico #}
+            <section class="docs-section">
+                <h2><i class="fa fa-seedling text-success me-1"></i> Nivel 1 — Básico (lo mínimo para arrancar)</h2>
+                <ol>
+                    <li><b>Crear el departamento</b>: nombre, color, mensaje de saludo. El primer guardado lo persiste.</li>
+                    <li><b>Agregar un nodo raíz</b>: botón <i>Agregar opción raíz</i> en el editor.</li>
+                    <li><b>Marcar el inicio</b>: <code>es_inicio=true</code> en el nodo desde donde arranca el flujo. Solo uno por depto.</li>
+                    <li><b>Encadenar nodos</b>: en el modal de cada nodo, sección "Conexiones" → elegí el nodo siguiente. Etiqueta vacía es la conexión default.</li>
+                    <li><b>Terminar</b>: usá un nodo tipo <code>fin</code> con un mensaje de despedida. El editor lo marca con <span class="dp-flag-pill dp-flag-fin"><i class="fa fa-flag-checkered"></i> Termina flujo</span>.</li>
+                    <li><b>Probar</b>: botón <i>Preview</i> simula el chat sin tocar WhatsApp.</li>
+                </ol>
+            </section>
+
+            {# Nivel Intermedio #}
+            <section class="docs-section">
+                <h2><i class="fa fa-tree text-primary me-1"></i> Nivel 2 — Intermedio (variables, validaciones, menús)</h2>
+                <ul>
+                    <li><b>Capturar respuestas</b>: nodo tipo <code>pregunta</code> con <i>variable_destino</i> (ej. <code>cedula</code>) → el contenido del cliente queda en <code>{% verbatim %}{{variables.cedula}}{% endverbatim %}</code>.</li>
+                    <li><b>Validaciones</b>: regex (<code>^\d{10}$</code>), email, teléfono — el bot reintenta hasta <i>reintentos_max</i> y luego salta a la rama de error.</li>
+                    <li><b>Menús</b>: nodo tipo <code>menu</code> → opciones estáticas (<i>etiqueta → siguiente</i>) o dinámicas (<i>opciones_fuente</i> = lista cargada desde una variable JSON-array).</li>
+                    <li><b>Condicionales</b>: nodo tipo <code>condicional</code> con expresiones tipo <code>{% verbatim %}{{variables.encontrado}} == true{% endverbatim %}</code> → ramas <code>true</code>/<code>false</code>.</li>
+                    <li><b>Asignar variables</b>: <code>set_variable</code> permite calcular o resetear valores. El último paso suele resetear todo antes del <code>fin</code>.</li>
+                    <li>
+                        <b>Plantillas en mensajes</b>: cualquier texto puede interpolar:
+                        <ul>
+                            <li><code>{% verbatim %}{{contacto.nombre}}{% endverbatim %}</code> — nombre del contacto.</li>
+                            <li><code>{% verbatim %}{{contacto.numero}}{% endverbatim %}</code> — número WhatsApp.</li>
+                            <li><code>{% verbatim %}{{conversacion.id}}{% endverbatim %}</code> — id de la conversación actual.</li>
+                            <li><code>{% verbatim %}{{sesion.nombre}}{% endverbatim %}</code> — nombre de la sesión.</li>
+                            <li><code>{% verbatim %}{{variables.foo}}{% endverbatim %}</code> — cualquier variable capturada.</li>
+                        </ul>
+                    </li>
+                </ul>
+            </section>
+
+            {# Nivel Avanzado #}
+            <section class="docs-section">
+                <h2><i class="fa fa-rocket me-1" style="color:#7c3aed"></i> Nivel 3 — Avanzado (HTTP, side-effects, integración)</h2>
+                <ul>
+                    <li><b>Llamadas HTTP</b>: tipo <code>http</code> con un endpoint registrado. El path soporta templates: <code>api/cotizar/{% verbatim %}{{conversacion.id}}{% endverbatim %}/</code>.</li>
+                    <li>
+                        <b>Extraer variables del response</b>:
+<pre style="background:#1f2937; color:#e5e7eb; padding:.65rem; border-radius:6px; font-size:.85em;"><code>"extraer": [
+  {"variable": "cotpk",    "jsonpath": "data.cotpk"},
+  {"variable": "cliente",  "jsonpath": "data.cliente_id"}
+]</code></pre>
+                        JSONPath relativo al body de respuesta.
+                    </li>
+                    <li>
+                        <b>Ramificación ok / error</b>:
+                        <ul>
+                            <li>Status <code>2xx</code> con <code>success: true</code> (o sin ese campo) → rama <code>ok</code>.</li>
+                            <li>Status <code>4xx</code>/<code>5xx</code>, <code>success: false</code>, o timeout → rama <code>error</code>.</li>
+                        </ul>
+                    </li>
+                    <li><b>Envío de correo</b>: marcá el nodo con <code>config.envia_correo: true</code> y el sistema lo identificará con <span class="dp-flag-pill dp-flag-email"><i class="fa fa-envelope"></i> Envía correo</span>.</li>
+                    <li><b>Proxy interno</b>: para side-effects con lógica Django (DB lookup + envío de email + log), apuntá el nodo HTTP a un endpoint propio (<code>/crm/api/cotizar/&lt;conv&gt;/</code>) que orquesta todo.</li>
+                    <li><b>Handoff humano</b>: tipo <code>handoff</code> pausa la IA. La conv queda abierta para que un asesor responda manualmente.</li>
+                    <li><b>Deep-links a conversaciones</b>: en un correo o CTA podés generar <code>/whatsapp/conversaciones/?conv=&lt;token&gt;</code> con <code>encrypt_sesion_id(conv.id)</code>. La URL abre la conv si está activa, o redirige a la página de finalizadas si ya cerró.</li>
+                </ul>
+            </section>
+
+            {# Tipos de nodo - tabla referencia #}
+            <section class="docs-section">
+                <h2><i class="fa fa-cubes text-muted me-1"></i> Referencia rápida — tipos de nodo</h2>
+                <div class="dp-tutorial-tipos">
+                    <div class="dp-tutorial-tipo"><span class="t-tag">respuesta</span><b>Respuesta de texto</b>Manda un mensaje y avanza al siguiente nodo (sin esperar al cliente).</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">pregunta</span><b>Pregunta al cliente</b>Espera la respuesta del cliente y la guarda en <code>variable_destino</code>.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">menu</span><b>Menú con botones</b>Lista de opciones. Cada opción tiene su propio nodo destino.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">http</span><b>Llamada HTTP</b>POST/GET a una API. Extrae datos de la respuesta a variables.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">condicional</span><b>If/else</b>Evalúa una expresión sobre variables y bifurca.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">set_variable</span><b>Asignar variable</b>Setea o limpia variables del contexto.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">cta_url</span><b>Botón con URL</b>Envía un botón que abre una URL externa al cliente.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">ubicacion</span><b>Ubicación / Mapa</b>Manda lat/lng como pin de WhatsApp.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">handoff</span><b>Transferir a humano</b>Pausa la IA. Un asesor toma la conversación.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">fin</span><b>Fin de conversación</b>Cierra la conversación. Marcado con <span class="dp-flag-pill dp-flag-fin"><i class="fa fa-flag-checkered"></i> Termina</span>.</div>
+                </div>
+            </section>
+
+            {# Buenas prácticas #}
+            <section class="docs-section">
+                <h2><i class="fa fa-circle-check text-success me-1"></i> Buenas prácticas</h2>
+                <ul>
+                    <li>Numerá los nodos en saltos de 10 (10, 20, 30…) para insertar pasos intermedios sin renumerar.</li>
+                    <li>Toda rama de error debería desembocar en un <code>fin</code> con un mensaje claro tipo <i>"Inténtalo más tarde"</i>.</li>
+                    <li>Antes del <code>fin</code>, usá <code>set_variable</code> para limpiar las variables temporales (cedula, placa, etc.) por si el cliente reabre la conv.</li>
+                    <li>En nodos HTTP, configurá <code>timeout_seg</code> realista — un POST a un cotizador puede tardar 30-60s.</li>
+                    <li>Las URLs externas y los mensajes con <code>{% verbatim %}{{variables.foo}}{% endverbatim %}</code> se resuelven en runtime — probá con <i>Preview</i> antes de exponerlo.</li>
+                    <li>Si un nodo dispara correos / notificaciones / webhooks externos, marcá <code>config.envia_correo = true</code> para que el operador lo vea como tal en el editor.</li>
+                </ul>
+            </section>
+
+            {# Caso completo #}
+            <section class="docs-section">
+                <h2><i class="fa fa-flask me-1 text-primary"></i> Caso completo: ARIA Cotizador</h2>
+                <p>
+                    El flujo <code>ARIA — Cotizador de seguros</code> (creado con
+                    <code>python manage.py seed_cotizador</code>) ilustra los tres niveles:
+                </p>
+                <ol>
+                    <li><b>Básico</b>: saludo → pedir placa → pedir cédula → confirmar.</li>
+                    <li><b>Intermedio</b>: catálogos (tipos, provincias) en menús dinámicos construidos desde variables JSON traídas con HTTP.</li>
+                    <li>
+                        <b>Avanzado</b>: nodo final <code>340</code> que llama a un proxy Django interno
+                        (<code>/crm/api/cotizar/&lt;conv&gt;/</code>). Ese proxy:
+                        <ul>
+                            <li>POSTea al webhook externo <code>https://fguerrero.mgaseguros.ec/webhook/cotizar/</code>.</li>
+                            <li>Si <code>202</code> → envía email a los asesores del departamento (<a href="/crm/departamentos_chatbots/">PerfilDepartamentoChatBot</a>).</li>
+                            <li>Devuelve <code>{success: true|false}</code> para que el flujo elija rama <code>ok</code> o <code>error</code>.</li>
+                        </ul>
+                    </li>
+                </ol>
+                <p class="small text-muted">
+                    El nodo <code>340</code> está marcado con
+                    <span class="dp-flag-pill dp-flag-email"><i class="fa fa-envelope"></i> Envía correo</span>
+                    y los nodos terminales (<code>998</code>/<code>999</code>) con
+                    <span class="dp-flag-pill dp-flag-fin"><i class="fa fa-flag-checkered"></i> Termina flujo</span>.
+                </p>
+            </section>
+
+            {# Links útiles #}
+            <section class="docs-section">
+                <h2><i class="fa fa-link me-1 text-info"></i> Enlaces útiles</h2>
+                <ul>
+                    <li><a href="/crm/departamentos_chatbots/">/crm/departamentos_chatbots/</a> — listar y crear departamentos.</li>
+                    <li><a href="/crm/endpoints_api/">/crm/endpoints_api/</a> — registrar endpoints externos para nodos HTTP.</li>
+                    <li><a href="/whatsapp/conversaciones/">/whatsapp/conversaciones/</a> — operar conversaciones en vivo.</li>
+                    <li><a href="/whatsapp/sesiones/">/whatsapp/sesiones/</a> — gestionar las sesiones de WhatsApp (Baileys / Meta).</li>
+                </ul>
+            </section>
+
+        </article>
+    </main>
+</div>
+{% endblock %}

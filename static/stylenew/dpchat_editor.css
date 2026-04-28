@@ -663,3 +663,95 @@ body.dp-diag-page .dp-diag-card {
     50%  { box-shadow: 0 0 0 14px rgba(59, 130, 246, 0); transform: scale(1.05); }
     100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); transform: scale(1); }
 }
+
+/* ─── Flags visuales por nodo: termina flujo · envía correo ───────────── */
+.dp-flag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    border-radius: 999px;
+    padding: 1px .55rem;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .03em;
+    margin-left: .35rem;
+    vertical-align: middle;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+.dp-flag-pill i { font-size: .7rem; }
+.dp-flag-fin {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+}
+.dp-flag-email {
+    background: #ecfeff;
+    color: #155e75;
+    border: 1px solid #67e8f9;
+}
+.dp-tree-card-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+    margin-top: .25rem;
+}
+
+/* ─── Tutorial modal ──────────────────────────────────────────────────── */
+.dp-tutorial-nivel {
+    border-left: 4px solid #6c757d;
+    background: #f8f9fa;
+    padding: .9rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+.dp-tutorial-nivel.nivel-basico     { border-color: #16a34a; background: #f0fdf4; }
+.dp-tutorial-nivel.nivel-intermedio { border-color: #2563eb; background: #eff6ff; }
+.dp-tutorial-nivel.nivel-avanzado   { border-color: #7c3aed; background: #f5f3ff; }
+.dp-tutorial-nivel h6 {
+    font-weight: 700;
+    margin-bottom: .55rem;
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+}
+.dp-tutorial-nivel ul {
+    margin-bottom: 0;
+    padding-left: 1.2rem;
+}
+.dp-tutorial-nivel li {
+    margin-bottom: .35rem;
+    line-height: 1.45;
+}
+.dp-tutorial-nivel code {
+    background: #1f2937;
+    color: #e5e7eb;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: .85em;
+}
+.dp-tutorial-tipos {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: .65rem;
+    margin: .6rem 0 0;
+}
+.dp-tutorial-tipo {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: .6rem .75rem;
+    font-size: .82rem;
+}
+.dp-tutorial-tipo b { color: #111827; display: block; margin-bottom: .15rem; }
+.dp-tutorial-tipo span.t-tag {
+    display: inline-block;
+    background: #f3f4f6;
+    color: #374151;
+    border-radius: 4px;
+    font-size: .7rem;
+    padding: 1px 5px;
+    margin-bottom: .3rem;
+    font-family: monospace;
+}
+

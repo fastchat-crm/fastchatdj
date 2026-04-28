@@ -1,18 +1,24 @@
 """
-Seed del cotizador ARIA v2 (API REST stateless).
+Seed del cotizador ARIA v3 (Webhook fire-and-forget).
 
-Reemplaza la versión anterior basada en /aria/ con `action=paso` (stateful por
-sesión Django). La API v2 vive en /aria-api/v1/* y es:
-  - REST stateless: cada llamada lleva todos los datos.
-  - Pública (AllowAny + CSRF-exempt).
-  - Solo soporta cotización CON PLACA.
+Cambio respecto a v2: el flujo NO selecciona plan ni descarga PDF dentro del
+chat. Recolecta los datos del cliente y vehículo, los manda a un proxy Django
+interno (`/crm/api/cotizar/<conv_id>/`) que orquesta dos cosas:
+
+  1. POST al webhook externo `https://fguerrero.mgaseguros.ec/webhook/cotizar/`
+     con id_conversacion + cliente + vehiculo + aseguradoras.
+  2. Si ARIA acepta (HTTP 202), envía un correo a los asesores del depto del
+     flujo con un link a la conversación.
+
+El cliente recibe en WhatsApp solo el mensaje "estamos procesando, te
+contactamos por correo" (éxito) o "intenta más tarde" (error). Toda la
+selección de plan / PDF la maneja ARIA en background.
 
 Flujo del bot (resumido):
   /info/ → placa → /vehiculo/?placa= → confirmar →
-  cédula → /cliente/?cedula= → (si no encontrado: pedir nombres/apellidos/email/teléfono) →
-  catálogos (tipos-vehiculo, provincias, [cantones si requiere], colores) →
-  pedir valor + accesorios → POST /cotizar/ →
-  /planes/?cotpk= → elegir → /plan/?detalle_id= → confirmar → POST /seleccionar/
+  cédula → /cliente/?cedula= → (si no encontrado: pedir datos básicos) →
+  catálogos (tipos-vehiculo, provincias) → pedir valor →
+  POST proxy interno → mensaje de cierre (éxito o error)
 
 Uso:
     python manage.py seed_cotizador
@@ -22,6 +28,7 @@ Uso:
     python manage.py seed_cotizador --base-url https://otro.dominio.ec/aria-api/v1/
 """
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -39,9 +46,16 @@ BASE_URL_DEFAULT = 'https://fguerrero.mgaseguros.ec/aria-api/v1/'
 LEGACY_CREDENCIAL = 'ARIA - AllowAny'
 LEGACY_ENDPOINT = 'Cotizador ARIA'
 
-# Nombres del seed v2 (REST).
+# Nombres del seed v2 (REST stateless — se mantiene para los catálogos /info/,
+# /vehiculo/, /cliente/, /catalogos/...).
 CREDENCIAL_NOMBRE = 'ARIA REST - AllowAny'
 ENDPOINT_NOMBRE = 'Cotizador ARIA REST v1'
+
+# Endpoint nuevo v3: proxy interno Django. base_url derivado del DOMINIO_GENERAL
+# de settings (URL_GENERAL). El nodo 340 lo usa con path
+# `api/cotizar/{{conversacion.id}}/` para invocar al proxy.
+PROXY_CREDENCIAL_NOMBRE = 'FastChat - Interno (sin auth)'
+PROXY_ENDPOINT_NOMBRE = 'FastChat — Cotizar Webhook (proxy interno)'
 
 
 BOT = {
@@ -255,222 +269,86 @@ PASOS = [
             'salida': '',
             'limite': 30,  # 24+ provincias EC, sin tope WhatsApp en preview
         },
-        'siguiente': 240,
-    },
-
-    # ── 240..260 — Cantones (solo si requiere_canton) ──────────
-    # Color: NO se pregunta. /vehiculo/ ya devuelve `color_id` en el formato
-    # opaco que /cotizar/ espera (JSON-string). Se reenvía tal cual.
-    {
-        'id': 240, 'orden': 240, 'tipo': 'decision',
-        'codigo': 'requiere_canton', 'nombre': '¿El tenant requiere cantón?',
-        'condicion': '{{variables.requiere_canton}} == true',
-        'siguiente_si': 250, 'siguiente_no': 320,
-    },
-    {
-        'id': 250, 'orden': 250, 'tipo': 'llamada_http',
-        'codigo': 'http_cantones',
-        'nombre': 'GET /catalogos/cantones/?provincia_id=',
-        'metodo': 'GET', 'path': 'catalogos/cantones/',
-        'query': {'provincia_id': '{{variables.provincia_id}}'},
-        'extrae_variables': {'$cantones': '$.data.cantones'},
-        'siguiente_ok': 260, 'siguiente_error': 900,
-    },
-    {
-        'id': 260, 'orden': 260, 'tipo': 'menu_botones',
-        'codigo': 'pedir_canton', 'nombre': 'Elegir cantón',
-        'mensaje': '🏙️ Elige tu *cantón*:',
-        'guardar_en': 'canton_id',
-        'opciones': [],
-        'opciones_fuente': {
-            'variable': 'variables.cantones',
-            'campo_id': 'id',
-            'campo_etiqueta': 'nombre',
-            'salida': '',
-            'limite': 50,
-        },
         'siguiente': 320,
     },
 
-    # ── 320/330 — Valor + accesorios ───────────────────────────
+    # ── (eliminado en v3) — pasos 240/250/260 de cantón. El webhook nuevo
+    #     no necesita canton_id, así que saltamos directo a pedir el valor.
+
+    # ── 320 — Valor del vehículo ───────────────────────────────
+    # En v3 ya no preguntamos accesorios (el webhook no los pide).
     {
         'id': 320, 'orden': 320, 'tipo': 'input_texto',
         'codigo': 'pedir_valor_vehiculo', 'nombre': 'Pedir valor del vehículo',
         'mensaje': '💵 ¿Cuánto vale el vehículo hoy? (USD, entre 1.000 y 500.000)',
         'guardar_en': 'valor_vehiculo',
         'validacion': r'^[0-9]{4,6}$',
-        'siguiente': 330,
-    },
-    {
-        'id': 330, 'orden': 330, 'tipo': 'input_texto',
-        'codigo': 'pedir_accesorios', 'nombre': 'Pedir accesorios',
-        'mensaje': '🔧 Valor de accesorios extras (USD, 0 si nada). Máximo 20% del valor.',
-        'guardar_en': 'accesorios',
-        'validacion': r'^[0-9]+$',
         'siguiente': 340,
     },
 
-    # ── 340 — POST /cotizar/ ───────────────────────────────────
+    # ── 340 — POST proxy interno → webhook ARIA + email asesores ────
+    # Un único nodo HTTP. El proxy Django (`/crm/api/cotizar/<conv_id>/`)
+    # se encarga de:
+    #   1. POST a https://fguerrero.mgaseguros.ec/webhook/cotizar/
+    #   2. Si 202: enviar correo a asesores del depto con link a la conv.
+    # Devuelve {success: true|false, message: str}. El motor del flujo
+    # ramifica en `siguiente_ok` (success=true) o `siguiente_error`.
     {
         'id': 340, 'orden': 340, 'tipo': 'llamada_http',
-        'codigo': 'http_cotizar',
-        'nombre': 'POST /cotizar/ — DISPARA cotización',
-        'metodo': 'POST', 'path': 'cotizar/',
-        'timeout_seg': 90,  # consulta múltiples aseguradoras, puede tardar
+        'codigo': 'http_cotizar_proxy',
+        'nombre': 'POST proxy → webhook ARIA + email asesores',
+        'endpoint_key': 'proxy',
+        'envia_correo': True,
+        'metodo': 'POST',
+        'path': 'crm/api/cotizar/{{conversacion.id}}/',
+        'timeout_seg': 45,
         'body': {
-            'placa':            '{{variables.placa}}',
-            'cedula':           '{{variables.cedula}}',
-            'nombres':          '{{variables.nombres}}',
-            'apellidos':        '{{variables.apellidos}}',
-            'email':            '{{variables.email}}',
-            'telefono':         '{{variables.telefono}}',
-            'tipo_vehiculo_id': '{{variables.tipo_vehiculo_id}}',
-            'provincia_id':     '{{variables.provincia_id}}',
-            'canton_id':        '{{variables.canton_id}}',
-            'color_id':         '{{variables.color_id}}',
-            'valor_vehiculo':   '{{variables.valor_vehiculo}}',
-            'accesorios':       '{{variables.accesorios}}',
-            'civil_status':     '{{variables.civil_status}}',
-            'gender':           '{{variables.gender}}',
-            'driver_age':       '{{variables.driver_age}}',
+            'cliente': {
+                'cedula':        '{{variables.cedula}}',
+                'email':         '{{variables.email}}',
+                'telefono':      '{{variables.telefono}}',
+                'edad':          '{{variables.driver_age}}',
+                'civil_status':  '{{variables.civil_status}}',
+                'genero':        '{{variables.gender}}',
+            },
+            'vehiculo': {
+                'placa':           '{{variables.placa}}',
+                'tipo_vehiculo':   '{{variables.tipo_vehiculo_id}}',
+                'color':           '{{variables.color_id}}',
+                'provincia':       '{{variables.provincia_id}}',
+                'valor_comercial': '{{variables.valor_vehiculo}}',
+            },
+            'aseguradoras': {'all': True},
         },
         'extrae_variables': {
-            '$cotpk':      '$.data.cotpk',
-            '$cliente_id': '$.data.cliente_id',
-            '$avaluo':     '$.data.avaluo',
+            '$cotizacion_status':  '$.status',
+            '$cotizacion_mensaje': '$.message',
         },
-        'siguiente_ok': 350, 'siguiente_error': 902,
+        'siguiente_ok': 350, 'siguiente_error': 360,
     },
+
+    # ── 350 — Cliente: cotización en proceso ───────────────────
     {
         'id': 350, 'orden': 350, 'tipo': 'respuesta_texto',
-        'codigo': 'cotizacion_creada', 'nombre': 'Cotización creada',
+        'codigo': 'cotizacion_encolada', 'nombre': 'Cotización en proceso',
         'mensaje': (
-            '✅ ¡Listo! Cotización generada (ID *{{variables.cotpk}}*).\n'
-            '💰 Avalúo: *${{variables.avaluo}}*\n\n'
-            'Buscando los planes de Zurich…'
-        ),
-        'siguiente': 365,
-    },
-
-    # ── 365/370 — Planes Zurich (único proveedor, rápido) ──────
-    # Llamamos directo a /planes/zurich/ (5-10s) en vez de /planes/all/
-    # (30-60s). Si en el futuro quieres ofrecer más aseguradoras, vuelve
-    # a meter un menú antes de este nodo y cambia el path por
-    # 'planes/{{variables.aseguradora}}/'.
-    {
-        'id': 365, 'orden': 365, 'tipo': 'llamada_http',
-        'codigo': 'http_planes_zurich',
-        'nombre': 'GET /planes/zurich/?cotpk= — solo Zurich',
-        'metodo': 'GET', 'path': 'planes/zurich/',
-        'query': {'cotpk': '{{variables.cotpk}}'},
-        'timeout_seg': 30,
-        'extrae_variables': {
-            '$planes':       '$.data.planes',
-            '$total_planes': '$.data.total',
-        },
-        'siguiente_ok': 370, 'siguiente_error': 900,
-    },
-    {
-        'id': 370, 'orden': 370, 'tipo': 'respuesta_texto',
-        'codigo': 'mostrar_planes', 'nombre': 'Mostrar planes Zurich',
-        'mensaje': (
-            '🛒 *Planes Zurich disponibles ({{variables.total_planes}}):*\n\n'
-            '{% for p in variables.planes %}'
-            '*ID {{p.id}}* — {{p.plan}}\n'
-            '  Anual: ${{p.anual}} · Mensual: ${{p.mensual}}\n\n'
-            '{% endfor %}'
-        ),
-        'siguiente': 375,
-    },
-    {
-        'id': 375, 'orden': 375, 'tipo': 'menu_botones',
-        'codigo': 'menu_post_planes', 'nombre': '¿Qué hacer con los planes?',
-        'mensaje': '👇 Elige una opción:',
-        'guardar_en': 'post_planes_resp',
-        'opciones': [
-            {'etiqueta': '📝 Ver detalle de un plan', 'valor': 'detalle', 'siguiente': 380},
-            {'etiqueta': '👋 Terminar',               'valor': 'fin',     'siguiente': 998},
-        ],
-    },
-    {
-        'id': 380, 'orden': 380, 'tipo': 'input_texto',
-        'codigo': 'pedir_detalle_id', 'nombre': 'Pedir ID del plan',
-        'mensaje': 'Pega el *ID* del plan que te interesa:',
-        'guardar_en': 'detalle_id',
-        'validacion': r'^[0-9]+$',
-        'siguiente': 390,
-    },
-
-    # ── 390/400 — GET /plan/ detalle ───────────────────────────
-    {
-        'id': 390, 'orden': 390, 'tipo': 'llamada_http',
-        'codigo': 'http_plan_detalle',
-        'nombre': 'GET /plan/?detalle_id=',
-        'metodo': 'GET', 'path': 'plan/',
-        'query': {'detalle_id': '{{variables.detalle_id}}'},
-        'timeout_seg': 20,
-        'extrae_variables': {
-            '$plan_aseguradora': '$.data.aseguradora',
-            '$plan_nombre':      '$.data.plan',
-            '$plan_anual':       '$.data.anual',
-            '$plan_mensual':     '$.data.mensual',
-            '$plan_total':       '$.data.total',
-            '$plan_tasa':        '$.data.tasa',
-            '$plan_coberturas':  '$.data.coberturas',
-            '$plan_deducibles':  '$.data.deducibles',
-        },
-        'siguiente_ok': 400, 'siguiente_error': 900,
-    },
-    {
-        'id': 400, 'orden': 400, 'tipo': 'menu_botones',
-        'codigo': 'menu_confirmar_plan', 'nombre': 'Confirmar plan',
-        'mensaje': (
-            '*{{variables.plan_aseguradora}} — {{variables.plan_nombre}}*\n'
-            '💵 Anual: ${{variables.plan_anual}} · Mensual: ${{variables.plan_mensual}}\n'
-            '📊 Tasa: {{variables.plan_tasa}}%\n\n'
-            '*Coberturas:*\n'
-            '{% for c in variables.plan_coberturas %}• {{c.nombre}}: ${{c.valor}}\n{% endfor %}\n'
-            '*Deducibles:*\n'
-            '{% for d in variables.plan_deducibles %}• {{d.nombre}}\n{% endfor %}\n'
-            '¿Lo seleccionas?'
-        ),
-        'guardar_en': 'confirmar_seleccion',
-        'opciones': [
-            {'etiqueta': '✅ Sí, este plan',  'valor': 'si',    'siguiente': 410},
-            {'etiqueta': '🔍 Ver otro plan',  'valor': 'otro',  'siguiente': 380},
-            {'etiqueta': '📋 Ver lista',      'valor': 'lista', 'siguiente': 370},
-        ],
-    },
-
-    # ── 410/420 — POST /seleccionar/ + entrega PDF ─────────────
-    {
-        'id': 410, 'orden': 410, 'tipo': 'llamada_http',
-        'codigo': 'http_seleccionar',
-        'nombre': 'POST /seleccionar/ — confirmar + generar PDF',
-        'metodo': 'POST', 'path': 'seleccionar/',
-        'timeout_seg': 30,
-        'body': {
-            'detalle_id': '{{variables.detalle_id}}',
-            'cliente_id': '{{variables.cliente_id}}',
-        },
-        'extrae_variables': {
-            '$pdf_url':         '$.data.pdf_url',
-            '$cliente_email':   '$.data.cliente_email',
-            '$cliente_nombre':  '$.data.cliente_nombre',
-            '$confirmado':      '$.data.confirmado',
-        },
-        'siguiente_ok': 420, 'siguiente_error': 900,
-    },
-    {
-        'id': 420, 'orden': 420, 'tipo': 'respuesta_texto',
-        'codigo': 'pdf_listo', 'nombre': 'Confirmación final',
-        'mensaje': (
-            '🎉 ¡Plan seleccionado, {{variables.cliente_nombre}}!\n\n'
-            '📧 Te enviamos la cotización en PDF a *{{variables.cliente_email}}*.\n'
-            '📄 PDF: {{variables.pdf_url}}\n\n'
-            '¡Gracias por usar ARIA! 💜'
+            '✅ ¡Listo! Tu cotización está siendo procesada.\n\n'
+            'Recibirás los planes disponibles por *correo* en los próximos minutos. '
+            'Un asesor también fue notificado y se comunicará contigo si hace falta. '
+            '🚗💜'
         ),
         'siguiente': 998,
+    },
+
+    # ── 360 — Cliente: error, intenta más tarde ─────────────────
+    {
+        'id': 360, 'orden': 360, 'tipo': 'respuesta_texto',
+        'codigo': 'cotizacion_error_intentar_luego', 'nombre': 'Error — intenta más tarde',
+        'mensaje': (
+            '⚠️ No pudimos procesar tu cotización en este momento. '
+            'Por favor inténtalo más tarde. Disculpa las molestias. 🙏'
+        ),
+        'siguiente': 999,
     },
 
     # ── Salidas terminales ─────────────────────────────────────
@@ -505,11 +383,12 @@ PASOS = [
         'id': 998, 'orden': 998, 'tipo': 'asignar_variable',
         'codigo': 'reset_sesion', 'nombre': 'Reset de variables',
         'asigna': {
-            'cedula': '', 'placa': '', 'cotpk': '', 'detalle_id': '',
+            'cedula': '', 'placa': '',
             'nombres': '', 'apellidos': '', 'email': '', 'telefono': '',
-            'tipo_vehiculo_id': '', 'provincia_id': '', 'canton_id': '',
-            'color_id': '', 'valor_vehiculo': '', 'accesorios': '',
+            'tipo_vehiculo_id': '', 'provincia_id': '',
+            'color_id': '', 'valor_vehiculo': '',
             'civil_status': '', 'gender': '', 'driver_age': '',
+            'cotizacion_status': '', 'cotizacion_mensaje': '',
         },
         'siguiente': 999,
     },
@@ -679,7 +558,7 @@ class Command(BaseCommand):
                 for k, v in (paso.get('asigna') or {}).items()
             ]}
         if t == 'llamada_http':
-            return {
+            cfg = {
                 'metodo': paso.get('metodo', 'GET'),
                 'path': paso.get('path', ''),
                 'query': paso.get('query') or {},
@@ -688,9 +567,17 @@ class Command(BaseCommand):
                 'extraer': _normalizar_extraer(paso.get('extrae_variables')),
                 'timeout_seg': paso.get('timeout_seg', 15),
             }
+            # Flag opcional: marca el nodo como "envía correo" (side-effect)
+            # → el editor lo pinta con un badge para que el operador sepa que
+            # este paso dispara una notificación además de la llamada HTTP.
+            if paso.get('envia_correo'):
+                cfg['envia_correo'] = True
+            return cfg
         return {}
 
-    def _crear_nodo(self, depto, ep, paso):
+    def _crear_nodo(self, depto, eps, paso):
+        """`eps` es un dict {clave: EndpointApiChatbot}. Cada paso `llamada_http`
+        elige el endpoint con `paso['endpoint_key']` (default: 'aria')."""
         t = paso['tipo']
         validacion_tipo = 'none'
         validacion_expr = ''
@@ -698,13 +585,17 @@ class Command(BaseCommand):
             validacion_tipo = 'regex'
             validacion_expr = paso['validacion']
 
+        endpoint_obj = None
+        if t == 'llamada_http':
+            endpoint_obj = eps.get(paso.get('endpoint_key') or 'aria')
+
         return OpcionDepartamentoChatBot.objects.create(
             departamento=depto,
             nombre=paso.get('nombre') or paso.get('codigo', ''),
             tipo_nodo=TIPO_MAP[t],
             config=self._config_para(paso),
             es_inicio=bool(paso.get('es_inicio')),
-            endpoint=ep if t == 'llamada_http' else None,
+            endpoint=endpoint_obj,
             variable_destino=paso.get('guardar_en', '') or '',
             validacion_tipo=validacion_tipo,
             validacion_expresion=validacion_expr,
@@ -836,17 +727,60 @@ class Command(BaseCommand):
                     'Accept': 'application/json',
                 },
                 'timeout_seg': 60,  # default amplio; nodos pueden subir a 90s
-                'descripcion': 'Endpoint base REST del cotizador ARIA v2.',
+                'descripcion': 'Endpoint base REST del cotizador ARIA v2 (lectura + catálogos).',
             },
         )
         if ep.credencial_id != credencial.id:
             ep.credencial = credencial
             ep.save()
 
+        # ── Endpoint proxy interno (v3) ─────────────────────
+        # base_url derivado de settings.URL_GENERAL (o DOMINIO_GENERAL +
+        # USE_SSL). El nodo 340 lo usa con path
+        # `crm/api/cotizar/{{conversacion.id}}/`.
+        proxy_base = (
+            getattr(settings, 'URL_GENERAL', '')
+            or ('https://' if getattr(settings, 'USE_SSL', False) else 'http://')
+              + getattr(settings, 'DOMINIO_GENERAL', 'localhost:8000')
+        ).rstrip('/')
+        proxy_credencial, _ = CredencialApiChatbot.objects.get_or_create(
+            nombre=PROXY_CREDENCIAL_NOMBRE,
+            tipo='none',
+            status=True,
+            defaults={
+                'secretos': {},
+                'descripcion': 'Credencial dummy para llamadas internas Django (sin auth).',
+            },
+        )
+        proxy_ep, _ = EndpointApiChatbot.objects.get_or_create(
+            nombre=PROXY_ENDPOINT_NOMBRE,
+            defaults={
+                'base_url': proxy_base,
+                'status': True,
+                'credencial': proxy_credencial,
+                'headers_default': {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                'timeout_seg': 60,
+                'descripcion': (
+                    'Proxy interno Django para el flujo de cotización. '
+                    'Recibe cliente+vehiculo, llama al webhook ARIA externo y '
+                    'notifica a los asesores del depto por correo.'
+                ),
+            },
+        )
+        # Si el dominio cambió entre corridas (dev → prod), actualizamos.
+        if proxy_ep.base_url != proxy_base:
+            proxy_ep.base_url = proxy_base
+            proxy_ep.save(update_fields=['base_url'])
+
+        eps = {'aria': ep, 'proxy': proxy_ep}
+
         # ── Pase 1: nodos ───────────────────────────────────
         mapa = {}
         for paso in PASOS:
-            mapa[paso['id']] = self._crear_nodo(depto, ep, paso)
+            mapa[paso['id']] = self._crear_nodo(depto, eps, paso)
 
         # ── Pase 2: conexiones ──────────────────────────────
         for paso in PASOS:
@@ -876,8 +810,9 @@ class Command(BaseCommand):
         total_nodos = depto.opciondepartamentochatbot_set.count()
         total_conns = ConexionNodoChatbot.objects.filter(nodo_origen__departamento=depto).count()
         self.stdout.write(self.style.SUCCESS(
-            f'\n[OK] Flujo creado: "{depto.nombre}" (REST v2)\n'
+            f'\n[OK] Flujo creado: "{depto.nombre}" (Webhook v3)\n'
             f'   Nodos: {total_nodos}  |  Conexiones: {total_conns}\n'
-            f'   Endpoint: {ep.nombre} -> {ep.base_url}\n'
-            f'   Credencial: {credencial.nombre} ({credencial.get_tipo_display()})\n'
+            f'   Endpoint ARIA   : {ep.nombre} -> {ep.base_url}\n'
+            f'   Endpoint Proxy  : {proxy_ep.nombre} -> {proxy_ep.base_url}\n'
+            f'   Credencial      : {credencial.nombre} ({credencial.get_tipo_display()})\n'
         ))

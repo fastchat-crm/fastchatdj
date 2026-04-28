@@ -707,6 +707,15 @@ $(document).ready(function() {
     cargarMensajes('{{ conversacion_selected.id }}');
     {% endif %}
 
+    {% if auto_open_conv_id %}
+    // Deep-link `?conv=<token>` — auto-abrir la conv (correo del asesor de cotización).
+    setTimeout(function() {
+        if (typeof cargarMensajes === 'function') {
+            cargarMensajes('{{ auto_open_conv_id }}');
+        }
+    }, 600);
+    {% endif %}
+
     // ====================== PLANTILLAS META (finalizadas → reactivar) =========================
     const _convPath = '{{ request.path }}';
     {% verbatim %}

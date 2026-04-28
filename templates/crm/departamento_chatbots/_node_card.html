@@ -38,6 +38,17 @@
                 {% if op.es_inicio %}<i class="fa fa-play text-success me-1" title="Nodo de inicio"></i>{% endif %}
                 {{ op.nombre|default:'(sin nombre)' }}
                 <span class="dp-node-id-badge">#{{ op.id }}</span>
+                {% if op.tipo_nodo == 'fin' %}
+                    <span class="dp-flag-pill dp-flag-fin" title="Este nodo finaliza la conversación">
+                        <i class="fa fa-flag-checkered"></i> Termina flujo
+                    </span>
+                {% endif %}
+                {% if op.config.envia_correo %}
+                    <span class="dp-flag-pill dp-flag-email"
+                          title="Este nodo dispara el envío de un correo (configurado en config.envia_correo)">
+                        <i class="fa fa-envelope"></i> Envía correo
+                    </span>
+                {% endif %}
             </div>
 
             {# ── HTTP: URL completa, método, request body, extraer ── #}

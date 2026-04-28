@@ -24,6 +24,12 @@ DOCS_SIDEBAR = [
         'items': [],
     },
     {
+        'titulo': 'Mensajería Instantánea',
+        'items': [
+            {'nombre': 'Crear y operar un flujo', 'slug': 'mensajeria-instantanea'},
+        ],
+    },
+    {
         'titulo': 'Estadísticas',
         'items': [],
     },
@@ -82,9 +88,21 @@ def _hoja_conectar_whatsapp_business(request):
     return render(request, 'whatsapp/docs/conectar_whatsapp_business.html', data)
 
 
+def _hoja_mensajeria_instantanea(request):
+    """Tutorial de cómo crear y operar un flujo del chatbot tradicional
+    (Mensajería Instantánea). Replica la guía del modal in-app del editor."""
+    data = _ctx_sidebar(
+        request,
+        slug_actual='mensajeria-instantanea',
+        titulo_pagina='Mensajería Instantánea — Crear y operar un flujo',
+    )
+    return render(request, 'docs/mensajeria_instantanea.html', data)
+
+
 HOJAS = {
     'plataforma': _hoja_plataforma,
     'conectar-whatsapp-business': _hoja_conectar_whatsapp_business,
+    'mensajeria-instantanea': _hoja_mensajeria_instantanea,
 }
 
 

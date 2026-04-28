@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.http import JsonResponse
 
 from autenticacion.models import Usuario
-from core.funciones import addData, paginador, secure_module, log, leer_sesion_id, encrypt_sesion_id
+from core.funciones import addData, paginador, secure_module, log, leer_sesion_id, encrypt_sesion_id, decrypt_sesion_id
 from seguridad.templatetags.templatefunctions import encrypt
 from .forms import CambiarClasificacionForm, CambiarNombreContactoForm, AsignarAgenteForm
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp, SENTIMIENTO_CHOICES
@@ -160,6 +160,25 @@ def conversacionesView(request):
             sesion_id = conversacion_selected.sesion.id
         except Exception as ex:
             raise NameError(f'No se encontró la conversación: {ex}')
+
+    # Soporte deep-link `?conv=<token>` (usado por el correo del asesor de
+    # cotización). Si la conversación está finalizada → redirigir a la página
+    # de finalizadas con el mismo token. Si está activa → la marcamos para
+    # auto-abrir vía JS y forzamos la sesión correcta en el combo.
+    conv_token = (request.GET.get('conv') or '').strip()
+    auto_open_conv_id = None
+    if conv_token:
+        conv_id_pedido = decrypt_sesion_id(conv_token, default=None)
+        if conv_id_pedido:
+            conv_obj = ConversacionWhatsApp.objects.filter(pk=conv_id_pedido).select_related(
+                'contacto', 'contacto__sesion'
+            ).first()
+            if conv_obj:
+                if conv_obj.conversacion_finalizada:
+                    return redirect(f'/whatsapp/conversaciones-finalizadas/?conv={conv_token}')
+                auto_open_conv_id = conv_obj.id
+                if conv_obj.contacto and conv_obj.contacto.sesion:
+                    sesion_id = conv_obj.contacto.sesion.id
     if sesion_id:
         sesion_seleccionada = get_object_or_404(SesionWhatsApp, id=sesion_id)
     elif sesiones.exists():
@@ -168,6 +187,7 @@ def conversacionesView(request):
         sesion_seleccionada = None
 
     data['sesion_seleccionada'] = sesion_seleccionada
+    data['auto_open_conv_id'] = auto_open_conv_id
 
     # ====================== VER MENSAJES =========================
     if request.method == 'GET' and 'action' in request.GET:
