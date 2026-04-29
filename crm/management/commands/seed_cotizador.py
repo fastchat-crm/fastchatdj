@@ -140,6 +140,10 @@ PASOS = [
         'metodo': 'GET', 'path': 'vehiculo/',
         'query': {'placa': '{{variables.placa}}'},
         'timeout_seg': 20,
+        # `tipo_sugerido` puede venir null aun con `encontrado: true` — en ese
+        # caso usamos `tipo_name` (siempre presente cuando hay vehículo) para
+        # el mensaje al cliente. El id sugerido se intenta igual: si falta, el
+        # cliente elige tipo en el nodo 210.
         'extrae_variables': {
             '$encontrado_veh':      '$.data.encontrado',
             '$marca':               '$.data.vehiculo.marca',
@@ -147,6 +151,7 @@ PASOS = [
             '$anio':                '$.data.vehiculo.anio',
             '$tipo_vehiculo_id':    '$.data.vehiculo.tipo_sugerido.id',
             '$tipo_vehiculo_nombre': '$.data.vehiculo.tipo_sugerido.nombre',
+            '$tipo_name':           '$.data.vehiculo.tipo_name',
             '$color_id':            '$.data.vehiculo.color_id',
             '$color_name':          '$.data.vehiculo.color_name',
         },
@@ -168,7 +173,7 @@ PASOS = [
             '• Marca: *{{variables.marca}}*\n'
             '• Modelo: *{{variables.modelo}}*\n'
             '• Año: *{{variables.anio}}*\n'
-            '• Tipo: *{{variables.tipo_vehiculo_nombre}}*\n'
+            '• Tipo: *{{variables.tipo_name}}*\n'
             '• Color sugerido: *{{variables.color_name}}*'
         ),
         'siguiente': 65,
