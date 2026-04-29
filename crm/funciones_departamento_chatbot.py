@@ -311,8 +311,29 @@ def _crear_agente_desde_dpto(request):
     agente.save()
     agente.apikey.add(apikey_obj)
 
+    # Migración nodos del flujo → HerramientaAgente del agente IA. Cierra el
+    # gap de "el flujo tradicional pide datos pero la IA no". Convierte:
+    #   - nodo `pregunta` → tool de captura (con schema Pydantic).
+    #   - nodo `http`     → tool tipado de llamada HTTP.
+    # Idempotente: si se vuelve a correr, actualiza en lugar de duplicar.
+    from .migrar_nodos_a_tools import migrar_depto_a_tools
+    try:
+        stats_tools = migrar_depto_a_tools(agente, dpto)
+    except Exception as ex:
+        # Si la migración falla, NO rompemos la creación del agente — el
+        # operador igual tiene un agente funcional con `contexto_estatico`.
+        # Logueamos para diagnosticar y devolvemos stats vacío.
+        import logging
+        logging.getLogger(__name__).exception(
+            'Migración nodos→tools falló para agente=%s dpto=%s: %s',
+            agente.id, dpto.id, ex,
+        )
+        stats_tools = {'creadas': 0, 'actualizadas': 0, 'omitidas': 0, 'total': 0,
+                       'error': str(ex)[:200]}
+
     log(
-        f"Generó Agente IA '{agente.nombre}' desde departamento '{dpto.nombre}'",
+        f"Generó Agente IA '{agente.nombre}' desde departamento '{dpto.nombre}' "
+        f"({stats_tools.get('total', 0)} tools migradas)",
         request, "add", obj=agente.id,
     )
     return JsonResponse({
@@ -320,8 +341,15 @@ def _crear_agente_desde_dpto(request):
         'agente_id': agente.id,
         'agente_nombre': agente.nombre,
         'departamento_nombre': dpto.nombre,
+        'tools_migradas': stats_tools,
         'redirect': f'/crm/entrenamiento/?action=procedimiento&id={agente.id}',
-        'mensaje': f"Agente '{agente.nombre}' creado desde el departamento '{dpto.nombre}'.",
+        'mensaje': (
+            f"Agente '{agente.nombre}' creado desde '{dpto.nombre}'. "
+            f"Herramientas IA: {stats_tools.get('total', 0)} migradas "
+            f"({stats_tools.get('creadas', 0)} nuevas, "
+            f"{stats_tools.get('actualizadas', 0)} actualizadas, "
+            f"{stats_tools.get('omitidas', 0)} nodos omitidos)."
+        ),
     })
 
 
@@ -1488,6 +1516,23 @@ def _guardar_opcion(request):
             cfg['opciones_fuente'] = fuente
         else:
             cfg.pop('opciones_fuente', None)
+
+        # Atajo "valor por defecto": el menú muestra solo Sí/Otra. Si todos
+        # los campos relevantes están vacíos, removemos la key entera para
+        # que el motor caiga al menú normal sin marcador residual.
+        default_valor = (request.POST.get('menu_default_valor') or '').strip()
+        if default_valor:
+            cfg['opcion_default'] = {
+                'valor':           default_valor,
+                'etiqueta':        (request.POST.get('menu_default_etiqueta') or '').strip(),
+                'pregunta':        (request.POST.get('menu_default_pregunta') or '').strip(),
+                'etiqueta_si':     (request.POST.get('menu_default_etiqueta_si') or '').strip(),
+                'etiqueta_otra':   (request.POST.get('menu_default_etiqueta_otra') or '').strip(),
+                'salida_si':       (request.POST.get('menu_default_salida_si') or '').strip(),
+                'salida_otra':     (request.POST.get('menu_default_salida_otra') or '').strip(),
+            }
+        else:
+            cfg.pop('opcion_default', None)
         # Limpiar fields heredados de otro tipo (texto plano vive en
         # `opcion.respuesta`, no en config.mensaje/pregunta).
         for k in ('mensaje', 'pregunta', 'url', 'display_text',
@@ -1668,7 +1713,13 @@ def _es_descendiente(ancestro, candidato):
 
 def _mover_opcion(request):
     """action=mover_opcion. Reordena un nodo y/o cambia su padre.
-    parent_id puede venir vacio para nodo raiz."""
+    parent_id puede venir vacio para nodo raiz.
+
+    Audita cada movimiento en `HistorialMovimientoNodo` con snapshot
+    de hermanos antes/después para reconstruir el estado en la UI.
+    """
+    from .models import HistorialMovimientoNodo
+
     try:
         op_id = int(request.POST['opcion_id'])
     except (KeyError, ValueError):
@@ -1677,6 +1728,17 @@ def _mover_opcion(request):
     opcion = OpcionDepartamentoChatBot.objects.filter(pk=op_id, status=True).first()
     if not opcion:
         return JsonResponse({'ok': False, 'error': 'Nodo no encontrado'})
+
+    # ── Snapshot ANTES del movimiento ─────────────────────────
+    padre_anterior = opcion.opcion_padre
+    orden_anterior = opcion.orden
+    siblings_qs_antes = OpcionDepartamentoChatBot.objects.filter(
+        departamento=opcion.departamento, opcion_padre=padre_anterior, status=True,
+    ).order_by('orden', 'id').values('id', 'nombre', 'orden')
+    siblings_antes = [
+        {'id': s['id'], 'nombre': s['nombre'], 'orden': s['orden']}
+        for s in siblings_qs_antes
+    ]
 
     parent_id = request.POST.get('parent_id') or ''
     if parent_id and parent_id not in ('0', 'null', 'none'):
@@ -1704,6 +1766,40 @@ def _mover_opcion(request):
         opcion.orden = 0
 
     opcion.save(request)
+
+    # ── Snapshot DESPUÉS y persistencia del historial ─────────
+    padre_nuevo = opcion.opcion_padre
+    siblings_qs_despues = OpcionDepartamentoChatBot.objects.filter(
+        departamento=opcion.departamento, opcion_padre=padre_nuevo, status=True,
+    ).order_by('orden', 'id').values('id', 'nombre', 'orden')
+    siblings_despues = [
+        {'id': s['id'], 'nombre': s['nombre'], 'orden': s['orden']}
+        for s in siblings_qs_despues
+    ]
+
+    motivo = (request.POST.get('motivo') or '').strip()[:200]
+
+    sin_cambio = (
+        padre_anterior == padre_nuevo
+        and orden_anterior == opcion.orden
+        and siblings_antes == siblings_despues
+    )
+    if not sin_cambio:
+        try:
+            HistorialMovimientoNodo.objects.create(
+                departamento=opcion.departamento,
+                nodo=opcion,
+                padre_anterior=padre_anterior,
+                padre_nuevo=padre_nuevo,
+                orden_anterior=orden_anterior,
+                orden_nuevo=opcion.orden,
+                siblings_anterior_json=siblings_antes,
+                siblings_nuevo_json=siblings_despues,
+                motivo=motivo,
+            )
+        except Exception as ex:  # noqa: BLE001 — auditoría no debe romper el move
+            log(f'No se pudo persistir HistorialMovimientoNodo: {ex}')
+
     return JsonResponse({'ok': True, 'opcion_id': opcion.id})
 
 

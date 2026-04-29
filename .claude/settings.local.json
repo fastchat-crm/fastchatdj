@@ -70,7 +70,9 @@
       "Bash(PYTHONIOENCODING=utf-8 python manage.py seed_ru --delete)",
       "Bash(PYTHONIOENCODING=utf-8 python manage.py seed_ru)",
       "Bash(node -e ' *)",
-      "Bash(node -c static/js/dpchat_editor.js)"
+      "Bash(node -c static/js/dpchat_editor.js)",
+      "Bash(node -e \"new Function\\(require\\('fs'\\).readFileSync\\('static/js/dpchat_editor.js','utf8'\\)\\)\")",
+      "Bash(node -e \"new Function\\(require\\('fs'\\).readFileSync\\('static/js/dpchat_preview.js','utf8'\\)\\)\")"
     ]
   },
   "hooks": {

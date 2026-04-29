@@ -191,6 +191,29 @@
                 {% endverbatim %}
             </div>
         </div>
+
+        {# ── Reset configurable (genérico para cualquier flujo) ── #}
+        <div class="col-12 mt-3 p-2 rounded" style="background:#fef3c7;border:1px dashed #f59e0b;">
+            <div class="small fw-bold text-warning-emphasis mb-1">
+                <i class="fa fa-rotate-left me-1"></i>
+                Reset del flujo
+            </div>
+            <div class="row g-2">
+                <div class="col-lg-6">
+                    <label class="form-label small mb-1">{{ form.reset_triggers_lineas.label }}</label>
+                    {{ form.reset_triggers_lineas }}
+                    <div class="form-text">{{ form.reset_triggers_lineas.help_text }}</div>
+                </div>
+                <div class="col-lg-6">
+                    <label class="form-label small mb-1">Mensaje al reiniciar</label>
+                    {{ form.mensaje_reset }}
+                    <div class="form-text">
+                        Texto que el bot envía justo antes del saludo, cuando el cliente dispara un reset.
+                        Vacío = solo vuelve al saludo, sin mensaje extra.
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 

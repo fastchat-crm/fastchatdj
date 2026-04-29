@@ -111,3 +111,27 @@ def cotizar_proxy(request, conv_id: int):
         'message': resp_json.get('mensaje') or 'Cotización en proceso.',
         'status': resp_json.get('status') or 'encolado',
     })
+
+
+@csrf_exempt
+@require_POST
+def captura_local(request):
+    """Endpoint stub usado por las herramientas de captura del agente IA.
+
+    Cuando una `HerramientaAgente` generada por `migrar_depto_a_tools` se
+    invoca (ej. capturar_cedula), el LLM hace POST acá con el dato. El
+    endpoint solo hace echo: confirma que recibió el dato y se lo devuelve
+    al LLM para que lo use en el contexto de la conversación.
+
+    No persiste nada — el contexto vive en la memoria del agente
+    (`DjangoChatMessageHistory`).
+    """
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        payload = {}
+    return JsonResponse({
+        'ok': True,
+        'registrado': payload,
+        'message': 'Dato capturado. Continuá la conversación con este valor en mente.',
+    })

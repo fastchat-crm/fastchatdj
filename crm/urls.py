@@ -71,3 +71,10 @@ urlpatterns.append(
     path('api/cotizar/<int:conv_id>/', api_cotizar_proxy.cotizar_proxy,
          name='crm_api_cotizar_proxy')
 )
+# Endpoint stub para tools de captura del agente IA (ver migrar_nodos_a_tools).
+# El LLM hace POST acá con el dato capturado y este endpoint le hace echo
+# para cerrar el ciclo de function-calling.
+urlpatterns.append(
+    path('api/captura_local/', api_cotizar_proxy.captura_local,
+         name='crm_api_captura_local')
+)

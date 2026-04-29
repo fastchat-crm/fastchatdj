@@ -109,14 +109,35 @@ class RespuestaEntrenadaIAForm(ModelFormBase):
 
 
 class DepartamentoChatBotForm(ModelFormBase):
+    # Campo virtual: el operador edita una línea por trigger (más cómodo que
+    # un JSON crudo). Se serializa a lista al guardar.
+    reset_triggers_lineas = forms.CharField(
+        required=False,
+        label='Triggers de reset',
+        help_text='Una palabra/frase por línea. Si el cliente envía cualquiera, '
+                  'el flujo se reinicia desde el saludo. Aplica a este depto solamente.',
+        widget=forms.Textarea(attrs={
+            'rows': 4, 'col': '12',
+            'placeholder': 'reiniciar\ncancelar\nvolver al inicio\notra placa',
+        }),
+    )
+
     class Meta:
         model = DepartamentoChatBot
         fields = ('nombre', 'color', 'mensaje_saludo',
-                  'palabras_clave', 'es_default', 'activo_tradicional')
+                  'palabras_clave', 'es_default', 'activo_tradicional',
+                  'mensaje_reset')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
         super(DepartamentoChatBotForm, self).__init__(*args, **kwargs)
+        # Pre-cargar triggers existentes en formato textarea.
+        if self.instance and self.instance.pk:
+            triggers = self.instance.reset_triggers or []
+            if isinstance(triggers, list):
+                self.fields['reset_triggers_lineas'].initial = '\n'.join(
+                    str(t) for t in triggers if str(t or '').strip()
+                )
         for k, v in self.fields.items():
             self.fields[k].widget.attrs['class'] = 'form-control'
             if k in ('nombre',):
@@ -142,6 +163,13 @@ class DepartamentoChatBotForm(ModelFormBase):
                     'matricula\nmatrícula\ninscripción\npago\nsaldo'
                 )
                 self.fields[k].required = False
+            elif k == 'mensaje_reset':
+                self.fields[k].widget.attrs['rows'] = 2
+                self.fields[k].widget.attrs['col'] = '12'
+                self.fields[k].widget.attrs['placeholder'] = (
+                    '🔄 Empezamos de nuevo. ¿En qué te ayudo?'
+                )
+                self.fields[k].required = False
             elif k in ('es_default', 'activo_tradicional'):
                 self.fields[k].widget.attrs['class'] = 'form-check-input'
                 self.fields[k].widget.attrs['col'] = '6'
@@ -149,6 +177,16 @@ class DepartamentoChatBotForm(ModelFormBase):
 
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        raw = self.cleaned_data.get('reset_triggers_lineas') or ''
+        instance.reset_triggers = [
+            line.strip().lower() for line in raw.splitlines() if line.strip()
+        ]
+        if commit:
+            instance.save()
+        return instance
 
 
 class AddPerfilDepartamentoChatBotForm(FormModeloBase):

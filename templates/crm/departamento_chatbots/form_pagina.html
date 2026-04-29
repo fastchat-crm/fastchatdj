@@ -85,6 +85,10 @@
                    class="btn btn-sm btn-outline-success" title="Simular como WhatsApp">
                     <i class="fab fa-whatsapp"></i><span class="d-none d-md-inline ms-1">Preview</span>
                 </a>
+                <a href="?action=historial_movimientos&id={{ filtro.pk }}"
+                   class="btn btn-sm btn-outline-warning" title="Auditoría de drag-drop (orden y padre)">
+                    <i class="fa fa-clock-rotate-left"></i><span class="d-none d-md-inline ms-1">Historial</span>
+                </a>
                 <button type="button" class="btn btn-sm btn-outline-success"
                         data-act="ver-json" title="JSON completo + cookbook para seed">
                     <i class="fa fa-code"></i><span class="d-none d-md-inline ms-1">JSON</span>
@@ -359,5 +363,5 @@
 
 {% block jscript %}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="{% static 'js/dpchat_editor.js' %}?v=14"></script>
+    <script src="{% static 'js/dpchat_editor.js' %}?v=15"></script>
 {% endblock %}

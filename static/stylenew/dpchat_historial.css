@@ -1,0 +1,45 @@
+.dphist-toolbar {
+    background: #f8fafc;
+    border-radius: 6px;
+}
+
+.dphist-timeline {
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.dphist-item {
+    border-left: 3px solid #e2e8f0;
+    transition: border-color 0.2s;
+}
+
+.dphist-item:hover {
+    border-left-color: #6366f1;
+}
+
+.dphist-siblings {
+    padding-left: 1.2rem;
+    line-height: 1.4;
+    color: #475569;
+}
+
+.dphist-siblings li {
+    margin-bottom: 0.15rem;
+}
+
+.dphist-siblings code {
+    font-size: 0.78rem;
+}
+
+/* Comparador antes/ahora — fondos sutiles */
+.dphist-item .row > .col-md-6:first-child {
+    background: #fafafa;
+    border-radius: 4px;
+    padding: 0.5rem !important;
+}
+
+.dphist-item .row > .col-md-6:last-child {
+    background: #f0fdf4;
+    border-radius: 4px;
+    padding: 0.5rem !important;
+}

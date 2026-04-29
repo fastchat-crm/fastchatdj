@@ -274,7 +274,11 @@
 
         // Render del cuerpo según tipo
         if (node.tipo === 'menu') {
-            if (cfg.mensaje) botBubble(cfg.mensaje);
+            // Si hay opcion_default con `pregunta`, esa pregunta gana sobre cfg.mensaje.
+            var defCfg = cfg.opcion_default || null;
+            var pregDef = (defCfg && defCfg.valor && (defCfg.pregunta || '').trim()) ? defCfg.pregunta : '';
+            if (pregDef) botBubble(pregDef);
+            else if (cfg.mensaje) botBubble(cfg.mensaje);
             else if (node.respuesta) botBubble(node.respuesta);
             renderMenu(node);
             return;
@@ -358,10 +362,31 @@
     // ── menu ────────────────────────────────────────────────────
     function renderMenu(node) {
         var cfg = node.config || {};
-        var opciones = (cfg.opciones || []).slice();
+        var opciones = [];
+
+        // Atajo (valor por defecto): si está configurado, el menú muestra
+        // SOLO los 2 botones Sí/Otra y NO carga opciones estáticas/dinámicas.
+        var defCfg = cfg.opcion_default || null;
+        if (defCfg && defCfg.valor) {
+            var etqSi = (defCfg.etiqueta_si || '').trim()
+                || ('✅ Sí, ' + (defCfg.etiqueta || 'continuar'));
+            var etqOtra = (defCfg.etiqueta_otra || '').trim() || '📍 Otra';
+            opciones.push({
+                etiqueta: etqSi, valor: '__default_si__',
+                salida: defCfg.salida_si || '', _is_default_si: true,
+                _default_valor: defCfg.valor,
+            });
+            opciones.push({
+                etiqueta: etqOtra, valor: '__default_otra__',
+                salida: defCfg.salida_otra || '', _is_default_otra: true,
+            });
+        } else {
+            opciones = (cfg.opciones || []).slice();
+        }
 
         // Opciones dinámicas desde una variable del contexto (catálogos).
-        var fuente = cfg.opciones_fuente || null;
+        // Solo si NO hay atajo default activo.
+        var fuente = (defCfg && defCfg.valor) ? null : (cfg.opciones_fuente || null);
         if (fuente && fuente.variable) {
             var ctx = { variables: STATE.vars };
             var items = pathGet(ctx, fuente.variable);
@@ -406,8 +431,18 @@
                 deshabilitar(box);
                 userBubble(opt.etiqueta || '');
                 if (node.variable_destino) {
-                    STATE.vars[node.variable_destino] = opt.valor || opt.etiqueta || '';
-                    refreshVars();
+                    var valGuardar;
+                    if (opt._is_default_si) {
+                        valGuardar = opt._default_valor;  // valor configurado, no marcador
+                    } else if (opt._is_default_otra) {
+                        valGuardar = null;  // no asignar, lo hará el catálogo siguiente
+                    } else {
+                        valGuardar = opt.valor || opt.etiqueta || '';
+                    }
+                    if (valGuardar !== null) {
+                        STATE.vars[node.variable_destino] = valGuardar;
+                        refreshVars();
+                    }
                 }
                 logEvt('info', 'Menú: opción "' + (opt.etiqueta || opt.valor) + '"');
                 var salida = opt.salida || '';

@@ -992,6 +992,44 @@ class HistorialAsignacion(models.Model):
         return f"{self.conversacion_id} → {self.asignado_a} ({self.fecha:%d/%m/%Y %H:%M})"
 
 
+class MenuRapidoSesion(ModeloBase):
+    """Menú de respuesta rápida configurable por sesión.
+
+    El operador define menús reutilizables (ej. "Catálogo", "Horarios",
+    "Pago"). Cuando está atendiendo una conversación, hace click en el chip
+    del menú y se envía como Meta interactive button-list (≤3 botones) o
+    interactive list (≤10 ítems). En Baileys cae a texto numerado.
+
+    Cada `MenuRapidoSesion.opciones` es una lista de dicts:
+        [{"etiqueta": "Ver precios", "valor": "ver_precios"}, ...]
+    El `valor` es lo que llega como `button_reply.id` cuando el cliente toca.
+    """
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='menus_rapidos', verbose_name='Sesión',
+    )
+    nombre = models.CharField('Nombre del menú', max_length=80,
+                              help_text='Etiqueta del chip que ve el operador (ej. Catálogo, Horarios).')
+    color = models.CharField('Color del chip', max_length=20, default='#16a34a',
+                             help_text='Hex del badge en la barra (ej. #16a34a).')
+    cuerpo = models.TextField('Cuerpo del mensaje', default='',
+                              help_text='Texto que acompaña los botones (≤1024 chars en Meta).')
+    header = models.CharField('Header (opcional)', max_length=60, blank=True, default='',
+                              help_text='Línea superior del menú interactivo (≤60 chars Meta).')
+    footer = models.CharField('Footer (opcional)', max_length=60, blank=True, default='',
+                              help_text='Línea inferior del menú interactivo (≤60 chars Meta).')
+    opciones = models.JSONField('Opciones (lista de botones)', default=list, blank=True,
+                                help_text='[{"etiqueta": "Texto botón", "valor": "id_opt"}, ...]. Máx 10.')
+
+    class Meta:
+        verbose_name = 'Menú rápido de sesión'
+        verbose_name_plural = 'Menús rápidos de sesión'
+        ordering = ['nombre']
+
+    def __str__(self):
+        return f'{self.sesion_id} · {self.nombre}'
+
+
 class MensajeWhatsAppProgramado(ModeloBase):
     contacto = models.ForeignKey(Contacto, on_delete=models.CASCADE, related_name='mensajes_programados')
     fecha = models.DateField(verbose_name='Fecha de envío programado', blank=True, null=True)

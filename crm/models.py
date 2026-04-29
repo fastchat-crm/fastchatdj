@@ -1087,6 +1087,27 @@ class DepartamentoChatBot(ModeloBase):
         help_text='Si está desactivado, el departamento no responde con flujo (sirve sólo para handoff humano).'
     )
 
+    # ── Reset genérico del flujo ──────────────────────────────────
+    # Triggers: si el cliente escribe (o toca un botón cuyo `valor` matchee)
+    # alguno de estos textos en CUALQUIER paso, el motor limpia las variables
+    # y vuelve al nodo `es_inicio`. Funciona igual en cualquier depto/negocio:
+    # cotizador, soporte, ventas — el comportamiento es siempre "reiniciar
+    # todo". Lo único que cambia entre deptos es el label visible al cliente
+    # (texto del botón) y los triggers configurados.
+    reset_triggers = models.JSONField(
+        default=list, blank=True,
+        verbose_name='Triggers de reset',
+        help_text='Lista de textos (case-insensitive). Si el cliente envía alguno, '
+                  'el flujo se reinicia desde el nodo de inicio. Ej: '
+                  '["reiniciar", "cancelar", "otra placa", "volver al inicio"].'
+    )
+    mensaje_reset = models.TextField(
+        blank=True, default='',
+        verbose_name='Mensaje al reiniciar',
+        help_text='Texto que se envía al cliente cuando se dispara un reset. '
+                  'Vacío = no envía mensaje, va directo al nodo de inicio.'
+    )
+
     class Meta:
         verbose_name = 'Departamento ChatBot'
         verbose_name_plural = 'Departamentos ChatBot'
@@ -1128,6 +1149,19 @@ class DepartamentoChatBot(ModeloBase):
 
     def get_palabras_clave(self) -> list:
         return [p.strip().lower() for p in (self.palabras_clave or '').splitlines() if p.strip()]
+
+    def get_reset_triggers(self) -> list:
+        """Lista normalizada (lowercase, sin vacíos) de triggers para chequear matches."""
+        triggers = self.reset_triggers if isinstance(self.reset_triggers, list) else []
+        return [str(t).strip().lower() for t in triggers if str(t or '').strip()]
+
+    def es_trigger_reset(self, texto: str) -> bool:
+        """True si el texto matchea alguno de los triggers de reset del depto.
+        Match exacto (case-insensitive). Si querés substring, cambialo aquí."""
+        if not texto:
+            return False
+        t = texto.strip().lower()
+        return t in self.get_reset_triggers()
 
 
 class OpcionDepartamentoChatBot(ModeloBase):
@@ -1325,6 +1359,56 @@ class ConexionNodoChatbot(ModeloBase):
     def __str__(self):
         etq = f"[{self.etiqueta}]" if self.etiqueta else ''
         return f"{self.nodo_origen_id} →{etq} {self.nodo_destino_id}"
+
+
+class HistorialMovimientoNodo(ModeloBase):
+    """
+    Auditoría de cambios de orden / padre de nodos del editor de flujo.
+    Una fila por cada drag-drop confirmado en la UI. `siblings_*_json`
+    guarda el snapshot del listado de hermanos para reconstruir el
+    estado antes/después sin tener que recorrer el árbol histórico.
+    """
+    departamento = models.ForeignKey(
+        DepartamentoChatBot, on_delete=models.CASCADE,
+        related_name='historial_movimientos', verbose_name='Departamento'
+    )
+    nodo = models.ForeignKey(
+        OpcionDepartamentoChatBot, on_delete=models.CASCADE,
+        related_name='historial_movimientos', verbose_name='Nodo movido'
+    )
+    padre_anterior = models.ForeignKey(
+        OpcionDepartamentoChatBot, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+', verbose_name='Padre anterior'
+    )
+    padre_nuevo = models.ForeignKey(
+        OpcionDepartamentoChatBot, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+', verbose_name='Padre nuevo'
+    )
+    orden_anterior = models.IntegerField(default=0, verbose_name='Orden anterior')
+    orden_nuevo = models.IntegerField(default=0, verbose_name='Orden nuevo')
+    siblings_anterior_json = models.JSONField(
+        default=list, blank=True,
+        verbose_name='Hermanos antes',
+        help_text='[{id, nombre, orden}, ...] del grupo de hermanos antes del drop.'
+    )
+    siblings_nuevo_json = models.JSONField(
+        default=list, blank=True,
+        verbose_name='Hermanos después',
+        help_text='[{id, nombre, orden}, ...] del grupo de hermanos después del drop.'
+    )
+    motivo = models.CharField(
+        max_length=200, blank=True, default='',
+        verbose_name='Motivo',
+        help_text='Texto opcional ingresado por el operador en el modal de confirmación.'
+    )
+
+    class Meta:
+        verbose_name = 'Historial de movimiento de nodo'
+        verbose_name_plural = 'Historial de movimientos de nodos'
+        ordering = ['-fecha_registro', '-id']
+
+    def __str__(self):
+        return f"#{self.id} · nodo {self.nodo_id} · {self.fecha_registro:%Y-%m-%d %H:%M}"
 
 
 class EstadoFlujoChatbot(ModeloBase):

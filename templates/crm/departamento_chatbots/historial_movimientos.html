@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/dpchat_historial.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="dphist-toolbar d-flex align-items-center justify-content-between p-2 mb-3 border-bottom">
+    <div class="d-flex align-items-center gap-2">
+        <a href="/crm/departamentos_chatbots/?action=change&id={{ filtro.pk }}&full=1"
+           class="btn btn-light btn-sm">
+            <i class="fa fa-arrow-left me-1"></i> Volver al editor
+        </a>
+        <h5 class="mb-0">Historial · {{ filtro.nombre }}</h5>
+    </div>
+    <div class="text-muted small">
+        <i class="fa fa-database me-1"></i>
+        {{ total_movimientos }} movimiento{{ total_movimientos|pluralize:"s" }} registrado{{ total_movimientos|pluralize:"s" }}
+        {% if total_movimientos > 200 %}
+            · mostrando los últimos 200
+        {% endif %}
+    </div>
+</div>
+
+{% if not movimientos %}
+    <div class="alert alert-light border text-center py-4">
+        <i class="fa fa-clock-rotate-left fa-2x text-muted mb-2"></i>
+        <div>Sin movimientos registrados todavía.</div>
+        <small class="text-muted">Cada vez que muevas un nodo en el editor, queda anotado aquí.</small>
+    </div>
+{% else %}
+    <div class="dphist-timeline">
+        {% for m in movimientos %}
+            <div class="dphist-item card mb-2 shadow-sm">
+                <div class="card-body py-2 px-3">
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                        <div>
+                            <strong>{{ m.nodo.nombre }}</strong>
+                            <small class="text-muted ms-1">#{{ m.nodo_id }}</small>
+                            {% if m.padre_anterior_id != m.padre_nuevo_id %}
+                                <span class="badge bg-warning text-dark ms-2">
+                                    <i class="fa fa-shuffle me-1"></i>cambió de padre
+                                </span>
+                            {% else %}
+                                <span class="badge bg-info ms-2">
+                                    <i class="fa fa-arrows-up-down me-1"></i>reorden
+                                </span>
+                            {% endif %}
+                        </div>
+                        <small class="text-muted">
+                            {{ m.fecha_registro|date:"Y-m-d H:i:s" }}
+                            {% if m.usuario_creacion %}
+                                · por {{ m.usuario_creacion.get_full_name|default:m.usuario_creacion.username }}
+                            {% endif %}
+                        </small>
+                    </div>
+
+                    <div class="row g-2 small">
+                        <div class="col-md-6">
+                            <div class="text-muted mb-1">
+                                <i class="fa fa-clock-rotate-left me-1"></i><strong>Antes:</strong>
+                                padre =
+                                {% if m.padre_anterior %}<code>{{ m.padre_anterior.nombre }}</code>{% else %}<em>raíz</em>{% endif %}
+                                · orden = <code>{{ m.orden_anterior }}</code>
+                            </div>
+                            <ol class="dphist-siblings mb-0">
+                                {% for s in m.siblings_anterior_json %}
+                                    <li class="{% if s.id == m.nodo_id %}fw-bold text-primary{% endif %}">
+                                        {{ s.nombre }} <small class="text-muted">(#{{ s.id }}, orden {{ s.orden }})</small>
+                                    </li>
+                                {% endfor %}
+                            </ol>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-success mb-1">
+                                <i class="fa fa-check me-1"></i><strong>Ahora:</strong>
+                                padre =
+                                {% if m.padre_nuevo %}<code>{{ m.padre_nuevo.nombre }}</code>{% else %}<em>raíz</em>{% endif %}
+                                · orden = <code>{{ m.orden_nuevo }}</code>
+                            </div>
+                            <ol class="dphist-siblings mb-0">
+                                {% for s in m.siblings_nuevo_json %}
+                                    <li class="{% if s.id == m.nodo_id %}fw-bold text-success{% endif %}">
+                                        {{ s.nombre }} <small class="text-muted">(#{{ s.id }}, orden {{ s.orden }})</small>
+                                    </li>
+                                {% endfor %}
+                            </ol>
+                        </div>
+                    </div>
+
+                    {% if m.motivo %}
+                        <div class="mt-2 small text-muted">
+                            <i class="fa fa-comment me-1"></i><em>{{ m.motivo }}</em>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+{% endblock %}

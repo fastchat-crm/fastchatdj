@@ -705,6 +705,45 @@ class MotorFlujo:
         conn_def = nodo.salidas.filter(status=True, etiqueta='').order_by('orden').first()
         return conn_def.nodo_destino if conn_def else None
 
+    # ── Reset configurable por depto ─────────────────────────────────
+
+    def _reiniciar_flujo_depto(self, depto):
+        """Limpia variables y vuelve al `nodo_inicio` del depto.
+        Si el depto tiene `mensaje_reset`, lo envía antes de procesar el inicio.
+        Genérico — aplica a cualquier flujo/negocio (cotizador, soporte, etc.).
+        """
+        nodo_anterior_id = getattr(self.estado.nodo_actual, 'id', None)
+        nodo_inicio = depto.nodo_inicio()
+
+        self._trace(
+            'reset_depto',
+            f'Reset por trigger ("{self.texto[:60]}") en depto "{depto.nombre}"',
+            True,
+            {'nodo_anterior_id': nodo_anterior_id,
+             'nodo_inicio_id': getattr(nodo_inicio, 'id', None)},
+        )
+
+        self.estado.departamento = depto
+        self.estado.nodo_actual = nodo_inicio
+        self.estado.intentos = 0
+        self.estado.variables = {}
+        self.estado.finalizado = False
+        self.estado.save()
+
+        # Mensaje de reset (opcional). Soporta {{variables.x}} y {{contacto.numero}}.
+        msg_reset = (depto.mensaje_reset or '').strip()
+        if msg_reset:
+            try:
+                msg_reset = resolver_expresion(msg_reset, self.contexto()) or msg_reset
+            except Exception:
+                pass
+            self.enviar(msg_reset)
+
+        # Procesar el nodo de inicio sin consumir el mensaje del cliente
+        # (el mensaje ya fue interpretado como trigger, no como respuesta).
+        if nodo_inicio:
+            self._run_loop(consumir_mensaje=False)
+
     # ── Loop principal ───────────────────────────────────────────────
 
     def ejecutar(self):
@@ -750,9 +789,27 @@ class MotorFlujo:
                 self._run_loop(consumir_mensaje=False)
                 return
 
-        # 0) Comando global de reset: si el usuario está atascado y escribe
-        #    una palabra reservada (menu/inicio/atras/...), reiniciamos el
-        #    flujo y re-enrutamos como si fuera el primer turno.
+        # 0) Comando de reset configurable POR DEPTO. Cualquier flujo (cotizador,
+        #    soporte, ventas) puede definir su propia lista de triggers en
+        #    `DepartamentoChatBot.reset_triggers`. Si el cliente envía uno
+        #    estando dentro del depto, el motor reinicia el flujo desde el
+        #    nodo de inicio del MISMO depto (no rerutea), limpia variables y
+        #    opcionalmente envía `mensaje_reset`. Funciona igual con texto
+        #    libre o con valor de botón (Meta interactive).
+        depto_actual_reset = self.estado.departamento or (
+            self.session.departamento_default if self.session else None
+        )
+        if (
+            self.estado.nodo_actual
+            and depto_actual_reset
+            and depto_actual_reset.es_trigger_reset(self.texto)
+        ):
+            self._reiniciar_flujo_depto(depto_actual_reset)
+            return
+
+        # 0.1) Reset GLOBAL legacy (palabras hardcoded, fuera del depto):
+        #      vuelve al meta-menú de deptos. Se mantiene para no romper UX
+        #      existente cuando no hay reset_triggers configurados.
         if (self.estado.nodo_actual or variables.get('__esperando_depto')) \
                 and self.texto.lower().strip() in RESET_KEYWORDS:
             self._trace('reset_keyword', f'Reset solicitado por "{self.texto}"', True,
@@ -933,8 +990,32 @@ class MotorFlujo:
         """
         Devuelve la lista de opciones del menú. Usa `config.opciones` si existe,
         y como fallback, los hijos del árbol legacy (subopciones).
+
+        Si `config.opcion_default` está presente, el menú actúa como atajo
+        Sí/Otra y NO se cargan ni opciones estáticas ni dinámicas: la lista
+        completa vive en otro nodo posterior conectado vía `salida_otra`.
         """
         cfg = nodo.config or {}
+
+        default_cfg = cfg.get('opcion_default') or {}
+        if isinstance(default_cfg, dict) and default_cfg.get('valor') is not None:
+            etq_si = (default_cfg.get('etiqueta_si') or '').strip()
+            if not etq_si:
+                etq_si = f"✅ Sí, {default_cfg.get('etiqueta', 'continuar')}"
+            etq_otra = (default_cfg.get('etiqueta_otra') or '').strip() or '📍 Otra'
+            return [
+                {
+                    'etiqueta': etq_si,
+                    'valor': '__default_si__',
+                    'salida': default_cfg.get('salida_si', '') or '',
+                },
+                {
+                    'etiqueta': etq_otra,
+                    'valor': '__default_otra__',
+                    'salida': default_cfg.get('salida_otra', '') or '',
+                },
+            ]
+
         opciones = list(cfg.get('opciones') or [])
 
         # Opciones dinámicas: se construyen desde una variable del contexto en
@@ -969,7 +1050,16 @@ class MotorFlujo:
     def _presentar_nodo_input(self, nodo):
         cfg = nodo.config or {}
         if nodo.tipo_nodo == 'menu':
-            mensaje = cfg.get('mensaje') or nodo.respuesta or 'Elige una opción:'
+            default_cfg = cfg.get('opcion_default') or {}
+            pregunta_default = (
+                default_cfg.get('pregunta') if isinstance(default_cfg, dict) else ''
+            ) or ''
+            mensaje = (
+                pregunta_default
+                or cfg.get('mensaje')
+                or nodo.respuesta
+                or 'Elige una opción:'
+            )
             mensaje = resolver_expresion(mensaje, self.contexto()) or mensaje
             opciones = self._opciones_menu(nodo)
             if not opciones:
@@ -1115,15 +1205,34 @@ class MotorFlujo:
                 self.estado.save()
                 self.enviar(nodo.mensaje_error or 'Opción no válida. Elige el número de la opción.')
                 return None
-            if nodo.variable_destino:
-                self.estado.set_variable(
-                    nodo.variable_destino,
-                    elegida.get('valor', elegida.get('etiqueta', '')),
-                )
+            valor_elegido = elegida.get('valor', elegida.get('etiqueta', ''))
+            # Atajo "valor por defecto": si el cliente eligió la opción Sí del
+            # opcion_default, el valor que guardamos no es el marcador interno
+            # sino el `valor` configurado (ej: provincia_id='19'). Si eligió
+            # "Otra" no asignamos nada — el siguiente nodo (catálogo) sobreescribe.
+            default_cfg = cfg.get('opcion_default') or {}
+            es_default_si = (
+                isinstance(default_cfg, dict)
+                and valor_elegido == '__default_si__'
+            )
+            es_default_otra = (
+                isinstance(default_cfg, dict)
+                and valor_elegido == '__default_otra__'
+            )
+            if es_default_si:
+                valor_a_guardar = default_cfg.get('valor', '')
+            elif es_default_otra:
+                valor_a_guardar = None  # no tocar variable
+            else:
+                valor_a_guardar = valor_elegido
+            if nodo.variable_destino and valor_a_guardar is not None:
+                self.estado.set_variable(nodo.variable_destino, valor_a_guardar)
                 self.estado.save()
             self._trace('menu_elegido', f'Opción "{elegida.get("etiqueta", "?")}" seleccionada',
                         True, {'salida': elegida.get('salida') or '(default)',
-                               'valor': elegida.get('valor', '')})
+                               'valor': valor_a_guardar if valor_a_guardar is not None else '(no asignado)',
+                               'es_default_si': es_default_si,
+                               'es_default_otra': es_default_otra})
             # Salida explícita o fallback por etiqueta del hijo legacy
             return elegida.get('salida') or ''
 

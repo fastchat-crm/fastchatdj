@@ -395,6 +395,17 @@
                     </div>
                 </div><!-- end chat-header -->
 
+                {# ── Barra de menús rápidos por sesión ── #}
+                <div id="menus-rapidos-bar" class="menus-rapidos-bar d-none">
+                    <div class="mr-bar-inner">
+                        <div class="mr-bar-chips" id="mr-bar-chips"></div>
+                        <button type="button" class="mr-bar-add" id="mr-bar-add"
+                                title="Crear o editar menús de esta sesión">
+                            <i class="fa fa-plus"></i> <span class="d-none d-md-inline">Nuevo menú</span>
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Panel Estadísticas -->
                 <div id="stats-panel" class="d-none border-bottom" style="background:#f0f4ff;font-size:.8rem;">
                     <div class="px-3 py-2">
@@ -598,6 +609,87 @@
                     <a href="/whatsapp/sesiones/" class="btn btn-primary">
                         <i class="fa fa-plus me-1"></i> Crear o conectar una sesión
                     </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Modal CRUD de menús rápidos de la sesión actual #}
+    <div class="modal fade" id="modalMenusRapidos" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2 bg-success bg-opacity-10">
+                    <h6 class="modal-title text-success">
+                        <i class="fa fa-list-check me-1"></i> Menús rápidos · <span id="mr-modal-sesion-nombre"></span>
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-2">
+                        Definí menús reutilizables que aparecen como chips arriba del chat.
+                        Click en un chip → se envía como botones interactivos al cliente
+                        (Meta) o texto numerado (Baileys).
+                    </p>
+
+                    {# Lista de menús ya creados #}
+                    <div id="mr-modal-lista" class="mb-3"></div>
+
+                    {# Form crear/editar #}
+                    <div class="border rounded p-2" id="mr-modal-form" style="background:#f8fafc;">
+                        <input type="hidden" id="mr-form-id">
+                        <div class="row g-2">
+                            <div class="col-md-7">
+                                <label class="form-label small fw-bold mb-1">Nombre del menú</label>
+                                <input type="text" id="mr-form-nombre" class="form-control form-control-sm"
+                                       maxlength="80" placeholder="Ej: Catálogo · Horarios · Pago">
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label small fw-bold mb-1">Color del chip</label>
+                                <input type="color" id="mr-form-color" class="form-control form-control-color form-control-sm w-100" value="#16a34a">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold mb-1">Cuerpo del mensaje</label>
+                                <textarea id="mr-form-cuerpo" class="form-control form-control-sm" rows="2"
+                                          maxlength="1024" placeholder="Texto que acompaña los botones"></textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold mb-1">Header (opcional, ≤60)</label>
+                                <input type="text" id="mr-form-header" class="form-control form-control-sm" maxlength="60">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold mb-1">Footer (opcional, ≤60)</label>
+                                <input type="text" id="mr-form-footer" class="form-control form-control-sm" maxlength="60">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold mb-1">
+                                    Botones (máx 10)
+                                    <small class="text-muted fw-normal">— ≤3 envía buttons, &gt;3 envía list</small>
+                                </label>
+                                <table class="table table-sm small mb-2" id="mr-form-tabla">
+                                    <thead>
+                                        <tr>
+                                            <th>Etiqueta del botón (≤24)</th>
+                                            <th>ID interno (button_reply.id)</th>
+                                            <th style="width:50px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="mr-form-opciones-body"></tbody>
+                                </table>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="mr-form-add-opcion">
+                                    <i class="fa fa-plus me-1"></i> Agregar botón
+                                </button>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-end gap-2 mt-3">
+                            <button type="button" class="btn btn-sm btn-secondary" id="mr-form-cancelar">Cancelar</button>
+                            <button type="button" class="btn btn-sm btn-success" id="mr-form-guardar">
+                                <i class="fa fa-save me-1"></i> Guardar menú
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
@@ -1005,6 +1097,236 @@
         let buscando = false;
 
         console.log("Inicializando chat de WhatsApp");
+
+        // ================ Menús rápidos por sesión ================
+        // Cargados al cambiar de sesión y al abrir conversación. Click en
+        // chip → confirma → POST a sesionesView que arma el envío y persiste.
+        var _menusCache = [];
+
+        function _mrPostSesionAction(action, params) {
+            var fd = new FormData();
+            fd.append('csrfmiddlewaretoken', $('input[name=csrfmiddlewaretoken]').first().val() || '');
+            fd.append('action', action);
+            Object.keys(params || {}).forEach(function (k) {
+                fd.append(k, params[k]);
+            });
+            return fetch('/whatsapp/sesiones/', {
+                method: 'POST', body: fd, credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            }).then(function (r) { return r.json(); });
+        }
+
+        function cargarMenusRapidos() {
+            var sesionId = $('#sesion-selector').val();
+            var bar = document.getElementById('menus-rapidos-bar');
+            if (!sesionId || !bar) {
+                if (bar) bar.classList.add('d-none');
+                return;
+            }
+            _mrPostSesionAction('menu_rapido_listar', {sesion_id: sesionId}).then(function (r) {
+                if (r.error) {
+                    bar.classList.add('d-none');
+                    return;
+                }
+                _menusCache = r.items || [];
+                renderMenusRapidos();
+            }).catch(function () {
+                bar.classList.add('d-none');
+            });
+        }
+
+        function renderMenusRapidos() {
+            var bar = document.getElementById('menus-rapidos-bar');
+            var chips = document.getElementById('mr-bar-chips');
+            if (!bar || !chips) return;
+            chips.innerHTML = '';
+            (_menusCache || []).forEach(function (m) {
+                var chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'mr-chip';
+                chip.style.background = m.color || '#16a34a';
+                chip.setAttribute('data-menu-id', m.id);
+                chip.title = (m.cuerpo || '') + ' · ' +
+                             ((m.opciones || []).map(function (o) { return o.etiqueta; }).join(' / '));
+                chip.innerHTML = '<i class="fa fa-paper-plane me-1"></i>' + escHtmlMr(m.nombre);
+                chips.appendChild(chip);
+            });
+            bar.classList.remove('d-none');
+        }
+
+        function escHtmlMr(s) {
+            return String(s || '').replace(/[&<>"]/g, function (c) {
+                return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c];
+            });
+        }
+
+        // Click en chip → confirma + envía
+        $(document).on('click', '#mr-bar-chips .mr-chip', function () {
+            if (!conversacionActiva) {
+                if (typeof toastr !== 'undefined') toastr.warning('Abrí una conversación primero.');
+                return;
+            }
+            var id = $(this).data('menu-id');
+            var menu = (_menusCache || []).find(function (m) { return String(m.id) === String(id); });
+            if (!menu) return;
+            var preview = menu.cuerpo + '\n— Botones: ' +
+                (menu.opciones || []).map(function (o) { return o.etiqueta; }).join(' · ');
+            if (window.Swal) {
+                Swal.fire({
+                    title: 'Enviar menú "' + menu.nombre + '"?',
+                    text: preview,
+                    type: 'question', showCancelButton: true,
+                    confirmButtonText: 'Enviar', cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#16a34a',
+                }).then(function (res) {
+                    if (!res.value) return;
+                    _enviarMenu(menu.id);
+                });
+            } else if (confirm('Enviar menú "' + menu.nombre + '"?')) {
+                _enviarMenu(menu.id);
+            }
+        });
+
+        function _enviarMenu(menuId) {
+            _mrPostSesionAction('menu_rapido_enviar', {
+                conversacion_id: conversacionActiva,
+                menu_id: menuId,
+            }).then(function (r) {
+                if (r.error) {
+                    if (typeof toastr !== 'undefined') toastr.error(r.message || 'Error');
+                    return;
+                }
+                if (typeof toastr !== 'undefined') toastr.success(r.message || 'Menú enviado');
+            });
+        }
+
+        // ================ Modal CRUD de menús ================
+        $('#mr-bar-add').on('click', function () { _abrirModalMenus(); });
+
+        function _abrirModalMenus(editId) {
+            var sesionId = $('#sesion-selector').val();
+            if (!sesionId) {
+                if (typeof toastr !== 'undefined') toastr.warning('Seleccioná una sesión.');
+                return;
+            }
+            var sel = $('#sesion-selector option:selected').text();
+            $('#mr-modal-sesion-nombre').text(sel);
+            _renderListaModalMenus();
+            _resetFormMenu();
+            new bootstrap.Modal(document.getElementById('modalMenusRapidos')).show();
+            if (editId) _editarMenu(editId);
+        }
+
+        function _renderListaModalMenus() {
+            var cont = document.getElementById('mr-modal-lista');
+            if (!cont) return;
+            if (!_menusCache.length) {
+                cont.innerHTML = '<div class="text-muted small text-center py-2">No hay menús aún. Creá el primero abajo.</div>';
+                return;
+            }
+            var html = '<table class="table table-sm small"><thead><tr>' +
+                '<th>Nombre</th><th>Color</th><th>Botones</th><th></th></tr></thead><tbody>';
+            _menusCache.forEach(function (m) {
+                html += '<tr>' +
+                    '<td><b>' + escHtmlMr(m.nombre) + '</b></td>' +
+                    '<td><span class="mr-color-dot" style="background:' + (m.color || '#16a34a') + '"></span></td>' +
+                    '<td><small class="text-muted">' +
+                        (m.opciones || []).slice(0, 3).map(function (o) { return escHtmlMr(o.etiqueta); }).join(' · ') +
+                        (m.opciones.length > 3 ? ' · +' + (m.opciones.length - 3) : '') +
+                    '</small></td>' +
+                    '<td class="text-end">' +
+                        '<button class="btn btn-sm btn-outline-primary mr-edit-btn" data-id="' + m.id + '"><i class="fa fa-pen"></i></button> ' +
+                        '<button class="btn btn-sm btn-outline-danger mr-del-btn" data-id="' + m.id + '"><i class="fa fa-trash"></i></button>' +
+                    '</td></tr>';
+            });
+            html += '</tbody></table>';
+            cont.innerHTML = html;
+        }
+
+        function _resetFormMenu() {
+            $('#mr-form-id').val('');
+            $('#mr-form-nombre').val('');
+            $('#mr-form-color').val('#16a34a');
+            $('#mr-form-cuerpo').val('');
+            $('#mr-form-header').val('');
+            $('#mr-form-footer').val('');
+            $('#mr-form-opciones-body').empty();
+            _addRowOpcion();
+        }
+
+        function _addRowOpcion(etq, valor) {
+            var tr = $('<tr>' +
+                '<td><input type="text" class="form-control form-control-sm mr-opt-etq" maxlength="24" value="' + escHtmlMr(etq || '') + '"></td>' +
+                '<td><input type="text" class="form-control form-control-sm mr-opt-val" maxlength="256" value="' + escHtmlMr(valor || '') + '"></td>' +
+                '<td><button type="button" class="btn btn-sm btn-outline-danger mr-opt-del"><i class="fa fa-trash"></i></button></td>' +
+                '</tr>');
+            $('#mr-form-opciones-body').append(tr);
+        }
+
+        $('#mr-form-add-opcion').on('click', function () { _addRowOpcion(); });
+        $(document).on('click', '.mr-opt-del', function () { $(this).closest('tr').remove(); });
+
+        $(document).on('click', '.mr-edit-btn', function () { _editarMenu($(this).data('id')); });
+
+        function _editarMenu(id) {
+            var menu = _menusCache.find(function (m) { return String(m.id) === String(id); });
+            if (!menu) return;
+            $('#mr-form-id').val(menu.id);
+            $('#mr-form-nombre').val(menu.nombre);
+            $('#mr-form-color').val(menu.color || '#16a34a');
+            $('#mr-form-cuerpo').val(menu.cuerpo || '');
+            $('#mr-form-header').val(menu.header || '');
+            $('#mr-form-footer').val(menu.footer || '');
+            $('#mr-form-opciones-body').empty();
+            (menu.opciones || []).forEach(function (o) { _addRowOpcion(o.etiqueta, o.valor); });
+            if (!menu.opciones || menu.opciones.length === 0) _addRowOpcion();
+        }
+
+        $(document).on('click', '.mr-del-btn', function () {
+            var id = $(this).data('id');
+            if (!confirm('¿Eliminar este menú?')) return;
+            _mrPostSesionAction('menu_rapido_eliminar', {
+                sesion_id: $('#sesion-selector').val(), id: id,
+            }).then(function (r) {
+                if (r.error) return;
+                cargarMenusRapidos();
+                setTimeout(_renderListaModalMenus, 250);
+            });
+        });
+
+        $('#mr-form-cancelar').on('click', _resetFormMenu);
+        $('#mr-form-guardar').on('click', function () {
+            var nombre = $('#mr-form-nombre').val().trim();
+            if (!nombre) { alert('Falta el nombre del menú'); return; }
+            var opciones = [];
+            $('#mr-form-opciones-body tr').each(function () {
+                var etq = $(this).find('.mr-opt-etq').val().trim();
+                var val = $(this).find('.mr-opt-val').val().trim() || etq;
+                if (etq) opciones.push({etiqueta: etq, valor: val});
+            });
+            if (!opciones.length) { alert('Agregá al menos un botón'); return; }
+            _mrPostSesionAction('menu_rapido_guardar', {
+                sesion_id: $('#sesion-selector').val(),
+                id: $('#mr-form-id').val() || '',
+                nombre: nombre,
+                color: $('#mr-form-color').val(),
+                cuerpo: $('#mr-form-cuerpo').val(),
+                header: $('#mr-form-header').val(),
+                footer: $('#mr-form-footer').val(),
+                opciones: JSON.stringify(opciones),
+            }).then(function (r) {
+                if (r.error) { alert(r.message || 'Error al guardar'); return; }
+                cargarMenusRapidos();
+                setTimeout(function () {
+                    _renderListaModalMenus();
+                    _resetFormMenu();
+                }, 250);
+            });
+        });
+
+        // Cargar menús al montar y al cambiar sesión.
+        cargarMenusRapidos();
+        $('#sesion-selector').on('change.menusrapidos', cargarMenusRapidos);
 
         // Webhook API modal (solo superuser — el botón ya viene oculto si no lo es)
         window.copiarTexto = function(elId) {

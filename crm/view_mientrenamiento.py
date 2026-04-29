@@ -1100,6 +1100,12 @@ def entrenamiento_ia_view(request):
                             data['regla_fin'] = getattr(filtro, 'regla_fin', None)
                             data['acciones_fin'] = data['regla_fin'].acciones.filter(status=True) if data['regla_fin'] else []
                             data['herramientas'] = filtro.herramientas.filter(status=True).order_by('nombre')
+                            # Catálogo de departamentos para el botón
+                            # "Regenerar desde depto" en el tab Herramientas.
+                            from crm.models import DepartamentoChatBot
+                            data['deptos_disponibles_regen'] = DepartamentoChatBot.objects.filter(
+                                status=True,
+                            ).order_by('nombre')
                             _faqs_qs = filtro.faqs.filter(status=True)
                             data['faqs_contadores'] = {
                                 'pendiente':   _faqs_qs.filter(estado='pendiente').count(),
@@ -1383,6 +1389,12 @@ def entrenamiento_ia_view(request):
                         data_ctx = dict(data)
                         data_ctx['agente'] = agente
                         data_ctx['herramientas'] = agente.herramientas.filter(status=True).order_by('nombre')
+                        # Catálogo de departamentos del usuario para el modal
+                        # "Regenerar desde depto" del editor de herramientas.
+                        from crm.models import DepartamentoChatBot
+                        data_ctx['deptos_disponibles_regen'] = DepartamentoChatBot.objects.filter(
+                            status=True,
+                        ).order_by('nombre')
                         template = get_template("crm/entrenamiento/herramienta/lista.html")
                         return JsonResponse({"result": True, 'data': template.render(data_ctx)})
                     except Exception as ex:

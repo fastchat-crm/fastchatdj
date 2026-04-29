@@ -327,6 +327,212 @@ def _accion_editar(request):
     }], safe=False)
 
 
+# ============================================================================
+# Menús rápidos por sesión (CRUD + envío)
+# ============================================================================
+
+def _accion_menu_rapido_listar(request):
+    """Lista menús rápidos de una sesión + cataloga sus opciones para el
+    chip-bar de /whatsapp/conversaciones/."""
+    from .models import MenuRapidoSesion
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
+    items = list(
+        MenuRapidoSesion.objects.filter(sesion=sesion, status=True).order_by('nombre')
+        .values('id', 'nombre', 'color', 'cuerpo', 'header', 'footer', 'opciones')
+    )
+    return JsonResponse({'error': False, 'sesion_id': sesion.id, 'items': items})
+
+
+def _accion_menu_rapido_guardar(request):
+    """Crea o actualiza un menú rápido. Si vino `id`, edita; si no, crea."""
+    from .models import MenuRapidoSesion
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
+    nombre = (request.POST.get('nombre') or '').strip()
+    if not nombre:
+        return JsonResponse({'error': True, 'message': 'El nombre es obligatorio.'})
+
+    raw_opciones = request.POST.get('opciones') or '[]'
+    try:
+        import json as _json
+        opciones = _json.loads(raw_opciones)
+        if not isinstance(opciones, list):
+            raise ValueError('Debe ser una lista.')
+        # Validar y limpiar cada opción.
+        clean = []
+        for o in opciones[:10]:  # Meta acepta máx 10 en lista, 3 en buttons
+            if not isinstance(o, dict):
+                continue
+            etq = (o.get('etiqueta') or '').strip()[:24]  # Meta ≤24 chars
+            valor = (o.get('valor') or etq).strip()[:256]
+            if etq and valor:
+                clean.append({'etiqueta': etq, 'valor': valor})
+        if not clean:
+            return JsonResponse({'error': True, 'message': 'Agregá al menos un botón válido.'})
+    except (ValueError, TypeError) as ex:
+        return JsonResponse({'error': True, 'message': f'Opciones inválidas: {ex}'})
+
+    menu_id = request.POST.get('id') or ''
+    defaults = {
+        'sesion':  sesion,
+        'nombre':  nombre[:80],
+        'color':   (request.POST.get('color') or '#16a34a')[:20],
+        'cuerpo':  (request.POST.get('cuerpo') or '').strip()[:1024],
+        'header':  (request.POST.get('header') or '').strip()[:60],
+        'footer':  (request.POST.get('footer') or '').strip()[:60],
+        'opciones': clean,
+    }
+    if menu_id.isdigit():
+        menu = MenuRapidoSesion.objects.filter(id=int(menu_id), sesion=sesion).first()
+        if not menu:
+            return JsonResponse({'error': True, 'message': 'Menú no encontrado.'})
+        for k, v in defaults.items():
+            setattr(menu, k, v)
+        menu.save()
+        creado = False
+    else:
+        menu = MenuRapidoSesion.objects.create(**defaults)
+        creado = True
+    log(f"Menú rápido {'creado' if creado else 'actualizado'}: sesion={sesion.id} menu={menu.id}",
+        request, "add" if creado else "change", obj=menu.id)
+    return JsonResponse({
+        'error': False, 'creado': creado, 'menu_id': menu.id,
+        'message': 'Menú guardado.',
+    })
+
+
+def _accion_menu_rapido_eliminar(request):
+    from .models import MenuRapidoSesion
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
+    menu = MenuRapidoSesion.objects.filter(id=request.POST.get('id'), sesion=sesion).first()
+    if not menu:
+        return JsonResponse({'error': True, 'message': 'Menú no encontrado.'})
+    menu.status = False
+    menu.save()
+    log(f"Menú rápido eliminado: {menu.id}", request, "del", obj=menu.id)
+    return JsonResponse({'error': False, 'message': 'Menú eliminado.'})
+
+
+def _accion_menu_rapido_enviar(request):
+    """Envía un menú rápido a una conversación activa. Auto-detecta canal:
+    Meta → interactive buttons (≤3) o list (>3). Baileys → texto numerado."""
+    from datetime import timedelta
+    from django.utils import timezone
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+    from .models import (
+        MenuRapidoSesion, ConversacionWhatsApp, MensajeWhatsApp,
+    )
+    from .services import get_whatsapp_service
+
+    try:
+        conv_id = int(request.POST.get('conversacion_id') or 0)
+        menu_id = int(request.POST.get('menu_id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'error': True, 'message': 'IDs inválidos.'})
+
+    conv = ConversacionWhatsApp.objects.select_related(
+        'contacto', 'contacto__sesion'
+    ).filter(pk=conv_id).first()
+    if not conv:
+        return JsonResponse({'error': True, 'message': 'Conversación no encontrada.'})
+    if conv.conversacion_finalizada:
+        return JsonResponse({'error': True, 'message': 'La conversación ya cerró.'})
+
+    sesion = conv.contacto.sesion
+    menu = MenuRapidoSesion.objects.filter(pk=menu_id, sesion=sesion, status=True).first()
+    if not menu:
+        return JsonResponse({'error': True, 'message': 'Menú no pertenece a esta sesión.'})
+
+    opciones = menu.opciones or []
+    if not opciones:
+        return JsonResponse({'error': True, 'message': 'El menú no tiene opciones.'})
+
+    destino = conv.contacto.from_number
+    service = get_whatsapp_service(sesion)
+    if sesion.es_baileys and '@' not in destino:
+        destino = service.format_phone_number(destino)
+
+    cuerpo = menu.cuerpo or ''
+    persistido_text = cuerpo
+    ahora = timezone.now()
+    success = False
+    err = ''
+
+    # Intentar interactive si Meta y service lo soporta.
+    if sesion.es_meta and hasattr(service, 'send_interactive_buttons'):
+        # Meta: ≤3 → buttons, >3 → list (hasta 10).
+        if len(opciones) <= 3:
+            buttons = [{'id': o['valor'][:256], 'title': o['etiqueta'][:20]} for o in opciones[:3]]
+            r = service.send_interactive_buttons(
+                sesion.session_id, destino, cuerpo or '👇 Elige una opción:',
+                buttons, header_text=(menu.header or None),
+                footer_text=(menu.footer or None), conversacion_id=conv.id,
+            )
+        else:
+            rows = [{'id': o['valor'][:200], 'title': o['etiqueta'][:24]}
+                    for o in opciones[:10]]
+            r = service.send_interactive_list(
+                sesion.session_id, destino,
+                cuerpo or '👇 Elige una opción:',
+                sections=[{'title': 'Opciones', 'rows': rows}],
+                button_text='Ver opciones',
+                header_text=(menu.header or None),
+                footer_text=(menu.footer or None),
+                conversacion_id=conv.id,
+            )
+        success = bool((r or {}).get('success'))
+        err = (r or {}).get('error', '')
+        persistido_text = cuerpo + '\n[Opciones: ' + ' · '.join(o['etiqueta'] for o in opciones[:5]) + ']'
+
+    # Fallback texto numerado (Baileys o si fallo Meta).
+    if not success:
+        lineas = [cuerpo or 'Elige una opción:']
+        for i, o in enumerate(opciones, start=1):
+            lineas.append(f'{i}. {o["etiqueta"]}')
+        texto_plano = '\n'.join(lineas)
+        r2 = service.send_text_message(
+            sesion.session_id, destino, texto_plano, conversacion_id=conv.id,
+        )
+        success = bool((r2 or {}).get('success'))
+        err = (r2 or {}).get('error', err)
+        persistido_text = texto_plano
+
+    if not success:
+        return JsonResponse({'error': True, 'message': err or 'No se pudo enviar el menú.'})
+
+    # Persistir como mensaje saliente del agente (no IA).
+    msg = MensajeWhatsApp.objects.create(
+        conversacion=conv, remitente=sesion.numero, mensaje=persistido_text,
+        tipo='texto', fecha=ahora, mensaje_id_externo='',
+        leido=True, fecha_leido=ahora, es_automatico=False,
+    )
+    # Broadcast al websocket del chat.
+    try:
+        cl = get_channel_layer()
+        if cl:
+            async_to_sync(cl.group_send)(
+                f'chat_{conv.id}',
+                {'type': 'whatsapp_message', 'event': 'new_message',
+                 'conversation_id': conv.id, 'sender': sesion.numero,
+                 'timestamp': ahora.isoformat()},
+            )
+    except Exception:
+        pass
+
+    log(f"Menú rápido '{menu.nombre}' enviado a conv {conv.id}",
+        request, "change", obj=conv.id)
+    return JsonResponse({
+        'error': False, 'message': f'Menú "{menu.nombre}" enviado.',
+        'mensaje_id': msg.id,
+    })
+
+
 _ACCIONES = {
     'baileys_start':               _accion_baileys_start,
     'baileys_status':              _accion_baileys_status,
@@ -337,6 +543,10 @@ _ACCIONES = {
     'meta_plantilla_prueba':       _accion_meta_plantilla_prueba,
     'editar':                      _accion_editar,
     'toggle_activo':               _accion_toggle_activo,
+    'menu_rapido_listar':          _accion_menu_rapido_listar,
+    'menu_rapido_guardar':         _accion_menu_rapido_guardar,
+    'menu_rapido_eliminar':        _accion_menu_rapido_eliminar,
+    'menu_rapido_enviar':          _accion_menu_rapido_enviar,
 }
 
 

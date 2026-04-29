@@ -162,6 +162,31 @@ def departamentoChatbotsView(request):
                     return _generar_departamento_con_ia(request)
                 elif action == 'crear_agente_desde_dpto':
                     return _crear_agente_desde_dpto(request)
+                elif action == 'regenerar_tools_agente':
+                    # Re-corre el conversor nodos→tools sobre un agente
+                    # existente. Útil cuando el flujo del depto cambió y el
+                    # operador quiere refrescar los tools sin recrear todo.
+                    from crm.migrar_nodos_a_tools import migrar_depto_a_tools
+                    from crm.models import AgentesIA
+                    try:
+                        agente_id = int(request.POST.get('agente_id') or 0)
+                        dpto_id_t = int(request.POST.get('departamento_id') or 0)
+                    except (TypeError, ValueError):
+                        return JsonResponse({'error': True, 'message': 'IDs inválidos.'})
+                    agente = AgentesIA.objects.filter(pk=agente_id).first()
+                    dpto_t = DepartamentoChatBot.objects.filter(pk=dpto_id_t, status=True).first()
+                    if not agente or not dpto_t:
+                        return JsonResponse({'error': True, 'message': 'Agente o depto no encontrado.'})
+                    stats = migrar_depto_a_tools(agente, dpto_t)
+                    return JsonResponse({
+                        'error': False,
+                        'stats': stats,
+                        'mensaje': (
+                            f"Tools regeneradas: {stats['total']} en total "
+                            f"({stats['creadas']} nuevas, {stats['actualizadas']} actualizadas, "
+                            f"{stats['omitidas']} nodos omitidos)."
+                        ),
+                    })
                 elif action == 'duplicar_info':
                     return _duplicar_info(request)
                 elif action == 'duplicar':
@@ -279,6 +304,27 @@ def departamentoChatbotsView(request):
                     data["filtro"] = filtro
                     data["preview_json"] = json.dumps(_serializar_para_preview(filtro), ensure_ascii=False)
                     return render(request, 'crm/departamento_chatbots/preview.html', data)
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
+
+            elif action == 'historial_movimientos':
+                # Timeline de drag-drop confirmados. Pagina por `fecha_registro` desc.
+                try:
+                    from .models import HistorialMovimientoNodo
+                    pk = int(request.GET['id'])
+                    filtro = model.objects.get(pk=pk)
+                    qs = (HistorialMovimientoNodo.objects
+                          .filter(departamento=filtro, status=True)
+                          .select_related('nodo', 'padre_anterior', 'padre_nuevo', 'usuario_creacion')
+                          .order_by('-fecha_registro', '-id'))
+                    data.update({
+                        'titulo': f'Historial de movimientos · {filtro.nombre}',
+                        'descripcion': 'Auditoría de cambios de orden y padre de nodos del flujo.',
+                        'filtro': filtro,
+                        'movimientos': qs[:200],  # tope razonable para evitar render gigante
+                        'total_movimientos': qs.count(),
+                    })
+                    return render(request, 'crm/departamento_chatbots/historial_movimientos.html', data)
                 except Exception as ex:
                     return JsonResponse({'result': False, 'message': str(ex)})
 

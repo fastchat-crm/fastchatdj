@@ -466,6 +466,71 @@
                 <small class="text-muted">Clave que se muestra al cliente.</small>
             </div>
         </div>
+
+        {# ── Atajo (valor por defecto) ── #}
+        {# Si está configurado, el menú muestra solo 2 botones (Sí/Otra). #}
+        {# "Sí" autoasigna `variable_destino` con `valor` y avanza por `salida_si`. #}
+        {# "Otra" avanza por `salida_otra` (que típicamente conecta al nodo HTTP de catálogo). #}
+        <div class="row g-2 p-2 mt-2" style="background:#fef3c7;border:1px dashed #f59e0b;border-radius:6px;">
+            <div class="col-12">
+                <div class="alert alert-warning py-2 small mb-1" style="background:#fff7ed;border-color:#fdba74;">
+                    <i class="fa fa-bolt me-1"></i>
+                    <strong>Atajo (valor por defecto):</strong>
+                    si la mayoría de clientes responde el mismo valor (ej: <em>Pichincha</em>),
+                    configurá un atajo Sí/Otra para evitar mostrar 25 botones del catálogo.
+                    <br>
+                    Dejá <strong>Valor por defecto vacío</strong> para desactivar el atajo y usar el menú normal.
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Valor por defecto</label>
+                <input type="text" name="menu_default_valor" class="form-control form-control-sm"
+                       value="{{ opcion.config.opcion_default.valor|default:'' }}"
+                       placeholder="ej: 19">
+                <small class="text-muted">Lo que se guarda en la variable si confirma.</small>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Etiqueta del valor</label>
+                <input type="text" name="menu_default_etiqueta" class="form-control form-control-sm"
+                       value="{{ opcion.config.opcion_default.etiqueta|default:'' }}"
+                       placeholder="ej: Pichincha">
+                <small class="text-muted">Nombre visible del valor preferido.</small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Pregunta del atajo</label>
+                <input type="text" name="menu_default_pregunta" class="form-control form-control-sm"
+                       value="{{ opcion.config.opcion_default.pregunta|default:'' }}"
+                       placeholder="📍 ¿Tu provincia es Pichincha?">
+                <small class="text-muted">Texto que se envía. Si vacío, usa el mensaje normal del menú.</small>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Etiqueta botón "Sí"</label>
+                <input type="text" name="menu_default_etiqueta_si" class="form-control form-control-sm"
+                       value="{{ opcion.config.opcion_default.etiqueta_si|default:'' }}"
+                       placeholder="✅ Sí, Pichincha">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Salida "Sí" (etiqueta arista)</label>
+                <input type="text" name="menu_default_salida_si" class="form-control form-control-sm"
+                       value="{{ opcion.config.opcion_default.salida_si|default:'' }}"
+                       placeholder="(vacío = arista default)">
+                <small class="text-muted">Conexión que se sigue al confirmar.</small>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Etiqueta botón "Otra"</label>
+                <input type="text" name="menu_default_etiqueta_otra" class="form-control form-control-sm"
+                       value="{{ opcion.config.opcion_default.etiqueta_otra|default:'' }}"
+                       placeholder="📍 Otra">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Salida "Otra" (etiqueta arista)</label>
+                <input type="text" name="menu_default_salida_otra" class="form-control form-control-sm"
+                       value="{{ opcion.config.opcion_default.salida_otra|default:'' }}"
+                       placeholder="otra">
+                <small class="text-muted">Conexión al nodo de catálogo completo.</small>
+            </div>
+        </div>
     </div>
 
     {# Bloque Condicional — visible solo cuando tipo=condicional #}

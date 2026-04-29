@@ -691,15 +691,75 @@
         if (!container) return;
         if (typeof Sortable === 'undefined') return;
         if (container._sortable) return;
+
+        function snapshotSiblings(parent) {
+            return $$('.dp-node-card[data-padre="' + (parent || '') + '"]', container)
+                .map(function (c) {
+                    return {
+                        id: parseInt(c.getAttribute('data-id'), 10) || 0,
+                        nombre: ((c.querySelector('.dp-node-title') || {}).textContent || '').trim(),
+                    };
+                });
+        }
+
+        function buildDiffHtml(antes, ahora, movedId) {
+            function row(s) {
+                var hi = (s.id === movedId) ? 'background:#fef9c3;font-weight:600;' : '';
+                return '<li style="' + hi + '">' +
+                       '<span>' + (s.nombre || '(sin nombre)') + '</span> ' +
+                       '<small style="color:#94a3b8;">#' + s.id + '</small></li>';
+            }
+            return '' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;text-align:left;">' +
+                  '<div>' +
+                    '<div style="color:#64748b;font-size:.85rem;margin-bottom:.25rem;">' +
+                      '<i class="fa fa-clock-rotate-left"></i> Antes' +
+                    '</div>' +
+                    '<ol style="padding-left:1.2rem;margin:0;font-size:.85rem;">' +
+                      antes.map(row).join('') +
+                    '</ol>' +
+                  '</div>' +
+                  '<div>' +
+                    '<div style="color:#16a34a;font-size:.85rem;margin-bottom:.25rem;">' +
+                      '<i class="fa fa-check"></i> Ahora' +
+                    '</div>' +
+                    '<ol style="padding-left:1.2rem;margin:0;font-size:.85rem;">' +
+                      ahora.map(row).join('') +
+                    '</ol>' +
+                  '</div>' +
+                '</div>';
+        }
+
+        function revertirDom(moved, oldNextSibling) {
+            // Vuelve el item a su posición original. oldNextSibling puede ser
+            // null si el item estaba al final; en ese caso lo apendeamos.
+            if (oldNextSibling && oldNextSibling.parentNode === container) {
+                container.insertBefore(moved, oldNextSibling);
+            } else {
+                container.appendChild(moved);
+            }
+        }
+
         container._sortable = new Sortable(container, {
             handle: '.dp-drag-handle',
             animation: 140,
             // Permitimos drops en cualquier posición; el padre se infiere por
             // la card anterior tras el drop (ver onEnd). El backend valida ciclos.
+            onStart: function (evt) {
+                // Snapshot DOM ANTES del drop para poder revertir si el operador cancela.
+                var moved = evt.item;
+                moved._dragSnap = {
+                    oldParent: moved.getAttribute('data-padre') || '',
+                    oldNextSibling: moved.nextElementSibling,
+                    siblingsAntes: snapshotSiblings(moved.getAttribute('data-padre') || ''),
+                };
+            },
             onEnd: function (evt) {
                 var moved = evt.item;
                 var movedId = parseInt(moved.getAttribute('data-id'), 10);
                 if (!movedId) return;
+
+                var snap = moved._dragSnap || { oldParent: '', oldNextSibling: null, siblingsAntes: [] };
 
                 // Nuevo padre = padre de la card anterior (ya que tras el drop,
                 // el nodo movido se inserta como sibling del que lo precede).
@@ -709,49 +769,110 @@
                     prev = prev.previousElementSibling;
                 }
                 var newParent = prev ? (prev.getAttribute('data-padre') || '') : '';
-                var oldParent = moved.getAttribute('data-padre') || '';
+                var oldParent = snap.oldParent;
+                // Provisionalmente actualizamos data-padre para que snapshot
+                // post-drop refleje el nuevo grupo. Si el operador cancela,
+                // lo revertimos junto con el DOM.
                 moved.setAttribute('data-padre', newParent);
 
-                // Calcula nuevo orden dentro del grupo de hermanos.
                 var hermanos = $$('.dp-node-card[data-padre="' + (newParent || '') + '"]', container);
                 var newOrden = hermanos.indexOf(moved);
+                var siblingsAhora = snapshotSiblings(newParent);
 
-                postAction('mover_opcion', {
-                    opcion_id: movedId,
-                    parent_id: newParent || 0,
-                    orden: newOrden,
-                }).then(function (resp) {
-                    if (!resp || !resp.ok) {
-                        // Backend rechazó (ej. ciclo). Revertir DOM y avisar.
+                var movioPadre = oldParent !== newParent;
+                var movioOrden = (newOrden !== hermanos.length ? true : false) || (
+                    JSON.stringify(snap.siblingsAntes.map(function (s) { return s.id; })) !==
+                    JSON.stringify(siblingsAhora.map(function (s) { return s.id; }))
+                );
+
+                if (!movioPadre && JSON.stringify(snap.siblingsAntes) === JSON.stringify(siblingsAhora)) {
+                    // No hubo cambio efectivo (drop en la misma posición).
+                    return;
+                }
+
+                var titulo = movioPadre
+                    ? '¿Confirmar cambio de padre?'
+                    : '¿Confirmar nuevo orden?';
+                var subtitulo = movioPadre
+                    ? 'El nodo cambiará de padre. Verificá la trazabilidad.'
+                    : 'Reordenamiento dentro del mismo grupo de hermanos.';
+
+                if (typeof Swal === 'undefined') {
+                    // Fallback sin SweetAlert: confirm nativo, sin trazabilidad rica.
+                    if (!confirm(titulo + '\n' + subtitulo)) {
                         moved.setAttribute('data-padre', oldParent);
-                        if (window.mensajeWarning) {
-                            mensajeWarning((resp && resp.error) || 'No se pudo mover el nodo.');
-                        } else {
-                            alert((resp && resp.error) || 'No se pudo mover el nodo.');
-                        }
-                        // Re-fetch del árbol para resincronizar.
-                        location.reload();
+                        revertirDom(moved, snap.oldNextSibling);
                         return;
                     }
-                    // Si cambió el padre, re-render para que la indentación
-                    // refleje el nuevo nivel; si solo fue reorden de hermanos,
-                    // los datos ya son consistentes.
-                    if (oldParent !== newParent) {
-                        location.reload();
-                    } else {
-                        // Solo reorden — actualiza órdenes de todos los hermanos
-                        // afectados para que el siguiente drag empiece limpio.
-                        hermanos.forEach(function (c, idx) {
-                            var hid = parseInt(c.getAttribute('data-id'), 10);
-                            if (!hid || hid === movedId) return;
-                            postAction('mover_opcion', {
-                                opcion_id: hid, parent_id: newParent || 0, orden: idx,
-                            });
-                        });
+                    enviarMover(moved, movedId, newParent, newOrden, oldParent, hermanos, '');
+                    return;
+                }
+
+                Swal.fire({
+                    title: titulo,
+                    html: '<div style="color:#475569;margin-bottom:.75rem;font-size:.9rem;">' + subtitulo + '</div>' +
+                          buildDiffHtml(snap.siblingsAntes, siblingsAhora, movedId) +
+                          '<div style="margin-top:1rem;text-align:left;">' +
+                          '<label style="font-size:.85rem;color:#64748b;">Motivo (opcional)</label>' +
+                          '<input id="dp-mover-motivo" class="swal2-input" placeholder="Ej: agrupar por catálogo"' +
+                          ' style="margin:.25rem 0 0;width:100%;font-size:.9rem;">' +
+                          '</div>',
+                    icon: movioPadre ? 'warning' : 'question',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fa fa-check me-1"></i> Confirmar',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#16a34a',
+                    cancelButtonColor: '#64748b',
+                    width: 720,
+                    focusConfirm: false,
+                    preConfirm: function () {
+                        var inp = document.getElementById('dp-mover-motivo');
+                        return (inp && inp.value || '').trim();
+                    },
+                }).then(function (res) {
+                    if (!res.isConfirmed) {
+                        moved.setAttribute('data-padre', oldParent);
+                        revertirDom(moved, snap.oldNextSibling);
+                        return;
                     }
+                    enviarMover(moved, movedId, newParent, newOrden, oldParent, hermanos, res.value || '');
                 });
             },
         });
+
+        function enviarMover(moved, movedId, newParent, newOrden, oldParent, hermanos, motivo) {
+            postAction('mover_opcion', {
+                opcion_id: movedId,
+                parent_id: newParent || 0,
+                orden: newOrden,
+                motivo: motivo || '',
+            }).then(function (resp) {
+                if (!resp || !resp.ok) {
+                    moved.setAttribute('data-padre', oldParent);
+                    if (window.mensajeWarning) {
+                        mensajeWarning((resp && resp.error) || 'No se pudo mover el nodo.');
+                    } else if (typeof Swal !== 'undefined') {
+                        Swal.fire('Error', (resp && resp.error) || 'No se pudo mover el nodo.', 'error');
+                    } else {
+                        alert((resp && resp.error) || 'No se pudo mover el nodo.');
+                    }
+                    location.reload();
+                    return;
+                }
+                if (oldParent !== newParent) {
+                    location.reload();
+                } else {
+                    hermanos.forEach(function (c, idx) {
+                        var hid = parseInt(c.getAttribute('data-id'), 10);
+                        if (!hid || hid === movedId) return;
+                        postAction('mover_opcion', {
+                            opcion_id: hid, parent_id: newParent || 0, orden: idx,
+                        });
+                    });
+                }
+            });
+        }
+
         // Guardar orden inicial
         $$('.dp-node-card', container).forEach(function (c, idx) {
             c._ordenInicial = idx;

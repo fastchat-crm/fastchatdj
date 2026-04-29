@@ -117,7 +117,12 @@
 
 <div class="d-flex align-items-center justify-content-between mb-2">
     <p class="section-header mb-0">Herramientas configuradas</p>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-outline-info btn-sm" id="btn-h-regen-dpto"
+                data-agente-id="{{ agente.id }}"
+                title="Crear/actualizar herramientas a partir de los nodos `pregunta` y `http` de un departamento del flujo tradicional">
+            <i class="fa fa-rotate me-1"></i> Regenerar desde depto
+        </button>
         <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-h-logs" data-agente-id="{{ agente.id }}"
                 title="Ver historial de consumo de todas las herramientas">
             <i class="fa fa-chart-line me-1"></i> Consumo
@@ -127,6 +132,115 @@
         </button>
     </div>
 </div>
+
+{# Modal: regenerar herramientas desde un departamento #}
+<div class="modal fade" id="modalRegenDpto" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-info bg-opacity-10">
+                <h6 class="modal-title text-info">
+                    <i class="fa fa-rotate me-1"></i>
+                    Regenerar herramientas desde un departamento
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-2">
+                    Recorre los nodos del depto que elijas y crea/actualiza herramientas
+                    de IA equivalentes:
+                </p>
+                <ul class="small mb-3">
+                    <li>Nodos <code>pregunta</code> → tools de captura (con schema Pydantic).</li>
+                    <li>Nodos <code>http</code> → tools tipados de llamada a API.</li>
+                    <li>Resto → omitidos.</li>
+                </ul>
+                <div class="alert alert-warning py-2 small mb-3">
+                    <i class="fa fa-circle-info me-1"></i>
+                    <b>Idempotente:</b> si la herramienta ya existe (mismo slug), se actualiza
+                    en vez de duplicar. NO borra herramientas custom que hayas creado a mano.
+                </div>
+                <label class="form-label small fw-bold mb-1">Departamento fuente</label>
+                <select id="regen-dpto-select" class="form-select form-select-sm">
+                    <option value="">— Selecciona un departamento —</option>
+                    {% for d in deptos_disponibles_regen %}
+                        <option value="{{ d.id }}">{{ d.nombre }} (#{{ d.id }})</option>
+                    {% endfor %}
+                </select>
+                <div id="regen-resultado" class="alert mt-3 small d-none" role="alert"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-info btn-sm" id="btn-regen-dpto-confirm">
+                    <i class="fa fa-rotate me-1"></i> Regenerar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var btn = document.getElementById('btn-h-regen-dpto');
+    var btnConfirm = document.getElementById('btn-regen-dpto-confirm');
+    if (!btn || !btnConfirm) return;
+    var modalEl = document.getElementById('modalRegenDpto');
+    var modalInstance = null;
+    function getModal() {
+        if (!modalInstance) modalInstance = new bootstrap.Modal(modalEl);
+        return modalInstance;
+    }
+    btn.addEventListener('click', function () {
+        var sel = document.getElementById('regen-dpto-select');
+        if (sel) sel.value = '';
+        var res = document.getElementById('regen-resultado');
+        if (res) { res.className = 'alert mt-3 small d-none'; res.innerHTML = ''; }
+        getModal().show();
+    });
+    btnConfirm.addEventListener('click', function () {
+        var dptoId = (document.getElementById('regen-dpto-select') || {}).value;
+        var res = document.getElementById('regen-resultado');
+        if (!dptoId) {
+            res.className = 'alert mt-3 small alert-danger';
+            res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Elegí un departamento.';
+            return;
+        }
+        var orig = btnConfirm.innerHTML;
+        btnConfirm.disabled = true;
+        btnConfirm.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Regenerando…';
+        res.className = 'alert mt-3 small alert-info';
+        res.innerHTML = '<i class="fa fa-cog fa-spin me-1"></i> Procesando nodos del depto…';
+
+        var fd = new FormData();
+        fd.append('action', 'regenerar_tools_agente');
+        fd.append('agente_id', btn.getAttribute('data-agente-id'));
+        fd.append('departamento_id', dptoId);
+        var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+        if (csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+
+        fetch('/crm/departamentos_chatbots/', {
+            method: 'POST', body: fd, credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            btnConfirm.disabled = false;
+            btnConfirm.innerHTML = orig;
+            if (data.error) {
+                res.className = 'alert mt-3 small alert-danger';
+                res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> ' + (data.message || 'No se pudo regenerar.');
+                return;
+            }
+            res.className = 'alert mt-3 small alert-success';
+            res.innerHTML = '<i class="fa fa-circle-check me-1"></i> ' + (data.mensaje || 'Listo.') +
+                            ' <br><small class="text-muted">Recargando lista…</small>';
+            setTimeout(function () { window.location.reload(); }, 1200);
+        }).catch(function (err) {
+            btnConfirm.disabled = false;
+            btnConfirm.innerHTML = orig;
+            res.className = 'alert mt-3 small alert-danger';
+            res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Error de red: ' + err.message;
+        });
+    });
+})();
+</script>
 
 <div id="h-contenedor">
     {% if herramientas %}

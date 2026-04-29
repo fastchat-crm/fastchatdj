@@ -41,6 +41,15 @@ from crm.models import (
 NOMBRE_DEPTO = 'ARIA — Cotizador de seguros'
 BASE_URL_DEFAULT = 'https://fguerrero.mgaseguros.ec/aria-api/v1/'
 
+# ─────────────────────────────────────────────────────────────────
+# Valores por defecto del flujo (semilla — TODOS editables desde la UI
+# del editor de pasos sin tener que tocar este archivo).
+# Cambia aquí si querés sembrar otro valor inicial; el operador igual
+# puede sobreescribirlo en `OpcionDepartamentoChatBot.config.opcion_default`.
+# ─────────────────────────────────────────────────────────────────
+PROVINCIA_DEFAULT_ID = '19'
+PROVINCIA_DEFAULT_ETIQUETA = 'Pichincha'
+
 # Nombres canónicos del seed v1 (legacy) — se borran en --reset para evitar
 # que queden colgados credenciales/endpoints obsoletos del flujo /aria/.
 LEGACY_CREDENCIAL = 'ARIA - AllowAny'
@@ -71,6 +80,15 @@ BOT = {
     ),
     'color_primario': '#6f42c1',
     'palabras_clave': 'aria\ncotizar\nseguro\nseguros\nplaca\nvehiculo\nvehículo\ncarro\nauto',
+    # Triggers de reset (genéricos del motor — válidos en cualquier paso).
+    # El operador puede tunear desde la UI sin tocar el seed.
+    'reset_triggers': [
+        'reiniciar', 'cancelar', 'volver al inicio', 'empezar de nuevo',
+        'otra placa', 'cotizar otra', 'no es mi placa', 'no es esta',
+    ],
+    'mensaje_reset': (
+        '🔄 Listo, empezamos de nuevo. Olvidé los datos anteriores.'
+    ),
 }
 
 
@@ -150,7 +168,24 @@ PASOS = [
             '• Tipo: *{{variables.tipo_vehiculo_nombre}}*\n'
             '• Color sugerido: *{{variables.color_name}}*'
         ),
-        'siguiente': 70,
+        'siguiente': 65,
+    },
+
+    # ── 65 — Confirmar vehículo (botón "no es mi placa" → reset) ─
+    # Pregunta opcional pero importante: si la placa devolvió un vehículo
+    # incorrecto, el cliente puede volver al inicio sin agotar el flujo.
+    # El botón "🔄 No es mi placa" envía el texto "no es mi placa" que
+    # matchea con `reset_triggers` del depto y dispara reset (genérico,
+    # mismo mecanismo que cualquier otro trigger de texto libre).
+    {
+        'id': 65, 'orden': 65, 'tipo': 'menu_botones',
+        'codigo': 'confirmar_vehiculo', 'nombre': '¿Es tu vehículo?',
+        'mensaje': '¿Es este tu vehículo?',
+        'guardar_en': 'confirma_vehiculo',
+        'opciones': [
+            {'etiqueta': '✅ Sí, continuar',     'valor': 'si',              'siguiente': 70},
+            {'etiqueta': '🔄 No es mi placa',    'valor': 'no es mi placa',  'siguiente': 30},
+        ],
     },
 
     # ── 70/80/90 — Cédula + lookup cliente ─────────────────────
@@ -282,10 +317,33 @@ PASOS = [
             'salida': '',  # arista default
             'limite': 10,
         },
-        'siguiente': 220,
+        'siguiente': 215,
     },
 
-    # ── 220/230 — Catálogo provincias ──────────────────────────
+    # ── 215 — Pre-selección de provincia (atajo Sí/Otra) ─────────
+    # Atajo configurable desde la UI: el motor solo muestra 2 botones.
+    # "Sí" autoasigna provincia_id = PROVINCIA_DEFAULT_ID y salta directo a
+    # cantón. "Otra" carga el catálogo completo (220 → 230). El operador
+    # puede cambiar el valor por defecto desde el editor sin tocar el seed.
+    {
+        'id': 215, 'orden': 215, 'tipo': 'menu_botones',
+        'codigo': 'pedir_provincia_default', 'nombre': 'Provincia (atajo)',
+        'guardar_en': 'provincia_id',
+        'opciones': [],  # ignoradas cuando hay opcion_default
+        'opcion_default': {
+            'valor':         PROVINCIA_DEFAULT_ID,
+            'etiqueta':      PROVINCIA_DEFAULT_ETIQUETA,
+            'pregunta':      f'📍 ¿Tu provincia es *{PROVINCIA_DEFAULT_ETIQUETA}*?',
+            'etiqueta_si':   f'✅ Sí, {PROVINCIA_DEFAULT_ETIQUETA}',
+            'etiqueta_otra': '📍 Otra',
+            'salida_si':     'si',
+            'salida_otra':   'otra',
+        },
+        'siguiente_si':   240,  # confirma → cantón
+        'siguiente_otra': 220,  # otra → catálogo HTTP
+    },
+
+    # ── 220/230 — Catálogo provincias (rama "otra") ─────────────
     {
         'id': 220, 'orden': 220, 'tipo': 'llamada_http',
         'codigo': 'http_provincias',
@@ -638,6 +696,10 @@ class Command(BaseCommand):
             }
             if paso.get('opciones_fuente'):
                 cfg['opciones_fuente'] = paso['opciones_fuente']
+            # Atajo Sí/Otra: el motor render solo 2 botones y autoasigna `valor`
+            # cuando se confirma. Las opciones estáticas/dinámicas son ignoradas.
+            if paso.get('opcion_default'):
+                cfg['opcion_default'] = paso['opcion_default']
             return cfg
         if t == 'decision':
             conds, operador = _parse_condicion(paso.get('condicion', ''))
@@ -699,6 +761,21 @@ class Command(BaseCommand):
         t = paso['tipo']
 
         if t == 'menu_botones':
+            # Atajo Sí/Otra: dos conexiones etiquetadas con `salida_si` / `salida_otra`.
+            opt_def = paso.get('opcion_default') or {}
+            if opt_def:
+                if paso.get('siguiente_si') in mapa:
+                    ConexionNodoChatbot.objects.create(
+                        nodo_origen=origen, nodo_destino=mapa[paso['siguiente_si']],
+                        etiqueta=opt_def.get('salida_si', '') or '', orden=1,
+                    )
+                if paso.get('siguiente_otra') in mapa:
+                    ConexionNodoChatbot.objects.create(
+                        nodo_origen=origen, nodo_destino=mapa[paso['siguiente_otra']],
+                        etiqueta=opt_def.get('salida_otra', '') or '', orden=2,
+                    )
+                return
+
             # Conexiones por opción estática (etiqueta = valor del botón).
             for i, o in enumerate(paso.get('opciones', []), start=1):
                 destino_id = o.get('siguiente')
@@ -788,6 +865,8 @@ class Command(BaseCommand):
                 'palabras_clave': BOT['palabras_clave'],
                 'es_default': False,
                 'activo_tradicional': True,
+                'reset_triggers': BOT['reset_triggers'],
+                'mensaje_reset': BOT['mensaje_reset'],
             },
         )
         if not creado:
