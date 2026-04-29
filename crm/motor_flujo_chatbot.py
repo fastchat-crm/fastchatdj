@@ -1501,6 +1501,10 @@ def reiniciar_flujo_tradicional(conversation, depto=None) -> ResultadoFlujo:
     indicado (o el del estado actual / `session.departamento_default`) y
     procesa ese nodo para que el cliente reciba el mensaje de bienvenida
     sin necesidad de que escriba un trigger.
+
+    Garantiza al menos un mensaje saliente: si el depto no tiene
+    `mensaje_reset` ni `mensaje_saludo` y el `nodo_inicio` no produce
+    respuesta visible, se envía un aviso genérico.
     """
     from crm.models import EstadoFlujoChatbot
     from whatsapp.services import get_whatsapp_service
@@ -1522,21 +1526,46 @@ def reiniciar_flujo_tradicional(conversation, depto=None) -> ResultadoFlujo:
             error='La sesión no tiene un departamento de entrada configurado.',
         )
 
-    # En handoff: el motor estaba pausado. El reset manual lo libera para
-    # que el flujo vuelva a responder.
+    # Reset duro: variables, nodo, handoff. Hacer en una sola escritura
+    # para que nada quede inconsistente si algo falla más adelante.
+    estado.departamento = depto_objetivo
+    estado.nodo_actual = depto_objetivo.nodo_inicio()
+    estado.variables = {}
+    estado.intentos = 0
+    estado.finalizado = False
     estado.en_handoff = False
-    estado.save(update_fields=['en_handoff'])
+    estado.save()
 
     motor = MotorFlujo(session, conversation, contacto, '', estado,
                       get_whatsapp_service(session))
-    try:
-        motor._reiniciar_flujo_depto(depto_objetivo)
-    except Exception as e:
-        logger.exception('Reinicio manual falló conv#%s: %s', conversation.id, e)
-        return ResultadoFlujo(manejado=False, error=str(e))
+
+    # Mensaje inicial: prioridad mensaje_reset > mensaje_saludo.
+    msg_inicial = (depto_objetivo.mensaje_reset or depto_objetivo.mensaje_saludo or '').strip()
+    if msg_inicial:
+        try:
+            msg_inicial = resolver_expresion(msg_inicial, motor.contexto()) or msg_inicial
+        except Exception:
+            logger.exception('Reset manual: error resolviendo plantilla')
+        motor.enviar(msg_inicial)
+
+    # Ejecutar el nodo de inicio para que el cliente reciba la primera
+    # pregunta/respuesta del flujo. Si falla, ya enviamos el mensaje
+    # inicial — no se rompe la operación completa.
+    if estado.nodo_actual:
+        try:
+            motor._run_loop(consumir_mensaje=False)
+        except Exception as e:
+            logger.exception('Reset manual: _run_loop falló conv#%s: %s',
+                             conversation.id, e)
+
+    # Garantizar al menos UN mensaje saliente. Si todo lo anterior no
+    # mandó nada (depto sin saludo + nodo_inicio inexistente o que solo
+    # avanza), avisar al cliente con un texto neutro.
+    if not motor.respuestas:
+        motor.enviar('🔄 Conversación reiniciada. Escribe cualquier mensaje para empezar de nuevo.')
 
     return ResultadoFlujo(
-        manejado=True,
+        manejado=bool(motor.respuestas),
         fallback_ia=False,
         handoff=motor.handoff,
         finalizado=motor.finalizado,

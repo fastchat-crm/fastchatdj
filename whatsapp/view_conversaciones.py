@@ -621,11 +621,14 @@ def conversacionesView(request):
                     resultado = reiniciar_flujo_tradicional(filtro)
                     if resultado.error:
                         return JsonResponse({'error': True, 'message': resultado.error})
-                    log(f"Flujo reiniciado manualmente en conversación {filtro.id}",
+                    n_respuestas = len(resultado.respuestas or [])
+                    log(f"Flujo reiniciado manualmente en conversación {filtro.id} "
+                        f"({n_respuestas} mensajes enviados)",
                         request, "change", obj=filtro.id)
                     return JsonResponse({
                         'error': False,
-                        'message': 'Flujo reiniciado. El cliente recibirá el mensaje inicial.',
+                        'message': f'Flujo reiniciado. {n_respuestas} mensaje(s) enviado(s) al cliente.',
+                        'respuestas_enviadas': n_respuestas,
                     })
                 elif action == 'marcar-resuelto':
                     try:
