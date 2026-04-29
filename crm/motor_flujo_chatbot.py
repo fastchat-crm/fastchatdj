@@ -1491,3 +1491,54 @@ def procesar_mensaje_tradicional(session, conversation, contacto, texto, boton_i
         finalizado=motor.finalizado,
         respuestas=motor.respuestas,
     )
+
+
+def reiniciar_flujo_tradicional(conversation, depto=None) -> ResultadoFlujo:
+    """Fuerza el reinicio del flujo tradicional de una conversación desde
+    fuera del webhook (botón del agente, comando admin, etc).
+
+    Limpia variables, libera handoff, vuelve al `nodo_inicio` del depto
+    indicado (o el del estado actual / `session.departamento_default`) y
+    procesa ese nodo para que el cliente reciba el mensaje de bienvenida
+    sin necesidad de que escriba un trigger.
+    """
+    from crm.models import EstadoFlujoChatbot
+    from whatsapp.services import get_whatsapp_service
+
+    session = conversation.sesion
+    if (session.modo_bot or 'ia') != 'tradicional':
+        return ResultadoFlujo(manejado=False, error='La sesión no es tradicional.')
+
+    contacto = conversation.contacto
+    if contacto is None:
+        return ResultadoFlujo(manejado=False, error='Conversación sin contacto.')
+
+    estado, _ = EstadoFlujoChatbot.objects.get_or_create(conversacion=conversation)
+
+    depto_objetivo = depto or estado.departamento or session.departamento_default
+    if depto_objetivo is None:
+        return ResultadoFlujo(
+            manejado=False,
+            error='La sesión no tiene un departamento de entrada configurado.',
+        )
+
+    # En handoff: el motor estaba pausado. El reset manual lo libera para
+    # que el flujo vuelva a responder.
+    estado.en_handoff = False
+    estado.save(update_fields=['en_handoff'])
+
+    motor = MotorFlujo(session, conversation, contacto, '', estado,
+                      get_whatsapp_service(session))
+    try:
+        motor._reiniciar_flujo_depto(depto_objetivo)
+    except Exception as e:
+        logger.exception('Reinicio manual falló conv#%s: %s', conversation.id, e)
+        return ResultadoFlujo(manejado=False, error=str(e))
+
+    return ResultadoFlujo(
+        manejado=True,
+        fallback_ia=False,
+        handoff=motor.handoff,
+        finalizado=motor.finalizado,
+        respuestas=motor.respuestas,
+    )

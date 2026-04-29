@@ -379,6 +379,11 @@
                                     <i class="fa fa-lock me-2 text-warning" id="icon-bloquear-cierre"></i>
                                     <span id="label-bloquear-cierre">Bloquear cierre automático</span>
                                 </a>
+                                <a class="dropdown-item d-none" href="javascript:void(0)" id="btn-reiniciar-flujo"
+                                   onclick="reiniciarFlujoChatbot()"
+                                   title="Reiniciar el flujo del chatbot tradicional desde el nodo de inicio">
+                                    <i class="fa fa-redo me-2 text-primary"></i> Reiniciar flujo del chatbot
+                                </a>
                                 {% if request.user.is_superuser %}
                                     <div class="dropdown-divider"></div>
                                     <a class="dropdown-item" href="javascript:void(0)" id="ver-webhook-conv"
@@ -962,6 +967,26 @@
                 _actualizarBloquearCierreUI(_bloquearCierreActual);
             })
             .fail(function(xhr) { console.error('[toggleBloquearCierre] ajax fail', xhr.status, xhr.responseText); });
+    }
+
+    function reiniciarFlujoChatbot() {
+        const id = $('#conversacion-id').val();
+        if (!id) return;
+        if (!confirm('¿Reiniciar el flujo del chatbot? El cliente recibirá nuevamente el mensaje inicial y se perderán las variables capturadas.')) return;
+        $.post('', { action: 'reiniciar-flujo', id: id, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
+            .done(function(r) {
+                if (r.error) {
+                    alert(r.message || 'No se pudo reiniciar el flujo.');
+                    return;
+                }
+                if (typeof toastr !== 'undefined') {
+                    toastr.success(r.message || 'Flujo reiniciado.');
+                }
+            })
+            .fail(function(xhr) {
+                console.error('[reiniciarFlujoChatbot] ajax fail', xhr.status, xhr.responseText);
+                alert('Error al reiniciar el flujo.');
+            });
     }
 
     function _actualizarBloquearCierreUI(bloqueado) {
@@ -1786,6 +1811,13 @@
                     // Bloquear cierre
                     _bloquearCierreActual = response.bloquear_cierre || false;
                     _actualizarBloquearCierreUI(_bloquearCierreActual);
+
+                    // Reiniciar flujo: solo visible cuando la sesión es 'tradicional'
+                    if (response.es_tradicional === true) {
+                        $('#btn-reiniciar-flujo').removeClass('d-none');
+                    } else {
+                        $('#btn-reiniciar-flujo').addClass('d-none');
+                    }
 
                     // Asignado a
                     if (response.asignado_a) {
