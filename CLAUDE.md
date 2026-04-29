@@ -1,167 +1,98 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+# CLAUDE.md — fastchat
 
 ## Project Overview
 
-FastChat DJ is a Django-based WhatsApp CRM platform with AI chatbot capabilities. It manages WhatsApp sessions, conversations, and contacts, and integrates AI agents (via LangChain + Google Generative AI) for automated customer interaction.
+**fastchat** is a Django 4.0 monolithic web application. It uses PostgreSQL 15 as its database.
 
-## Setup
+## Tech Stack
 
-**Prerequisites:** Python 3.8+, PostgreSQL, Redis, wkhtmltopdf
+- **Backend:** Python 3.9, Django 4.0, PostgreSQL 15
+- **Frontend:** Bootstrap 4, jQuery, DataTables, SweetAlert2 (legacy syntax)
+- **Auth:** Django session-based authentication
+- **Environment:** virtualenv (activated via PyCharm), development server via PyCharm debug runner
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+## How to Verify Your Changes
 
-# Create credentials file from template
-cp credenciales_template.json credenciales.json
-# Edit credenciales.json with real values (see below)
+1. Run `pycheck` for indentation and syntax validation
+2. The developer runs the server manually via PyCharm and reviews results
+3. If corrections are needed, the developer will communicate them explicitly
 
-# Database setup
-python manage.py migrate
+**Do not run the server or any Django management commands yourself.**
 
-# Run dev server (HTTP only)
-python manage.py runserver
+## Template Conventions
 
-# Run with WebSocket support (required for chat)
-daphne -b 0.0.0.0 -p 8000 fastchatdj.asgi:application
-```
-
-## Configuration
-
-All secrets live in `credenciales.json` (gitignored). Required keys:
-
-| Key | Purpose |
-|-----|---------|
-| `POSTGRES_HOST/PORT/DBNAME/PASSWORD` | Database |
-| `SECRET_KEY` | Django secret |
-| `DEBUG` | Boolean |
-| `USE_SSL` | Enables HTTPS redirect |
-| `DOMINIO_GENERAL` | Primary domain (no protocol) |
-| `WINDOWS` | Set `true` on Windows dev machines |
-| `REDIS_HOST/PORT` | Redis for channels and cache |
-| `WHATSAPP_API_URL` | External WhatsApp API endpoint |
-| `NODE_SECRET_KEY` | Shared secret with Node.js service |
-| `EMAIL_HOST_USER/PASSWORD`, `SENDGRID_API_KEY` | Email via SendGrid |
-| `WKHTMLTOPDF_CMD` | Absolute path to wkhtmltopdf binary |
-| `ID_GRUPO_CLIENTE` | Django auth Group ID for client users |
-| `CACHES_REDIS` | Boolean, enables Redis cache |
-
-Additional gitignored files: `private_key_enc.pem`, `public_key_enc.pem`, `api_google_key.json`, `vapid.json`
-
-## Running Tests
-
-```bash
-python manage.py test
-python manage.py test <app_name>         # e.g. autenticacion
-python manage.py test --keepdb           # reuse test DB
-```
-
-Note: Test files exist but are mostly empty stubs.
-
-## Architecture
-
-### Apps
-
-| App | Responsibility |
-|-----|----------------|
-| `autenticacion` | Custom `Usuario` model (extends `AbstractUser`), client/admin profiles, login/logout/password recovery |
-| `seguridad` | `Configuracion` singleton, role/module/URL access control (`Modulo`, `GroupModulo`), audit logs, companies, notifications, session tracking |
-| `area_geografica` | Hierarchical geodata: País → Provincia → Ciudad → Parroquia |
-| `whatsapp` | WhatsApp session management, contacts, conversations, messages, WebSocket consumers, webhook handler |
-| `crm` | Business profile (`PerfilNegocioIA`), AI agents (`AgentesIA`), training data, products/services, chatbot departments |
-| `agents_ai` | LangChain-based AI agents: `AgenteConsultor` (Q&A), `AgenteResumidor` (summarization), FAISS vector store management |
-| `core` | Shared base models, helper functions, AJAX handler (`ConsultasAjax`), middleware, encryption utilities |
-| `public` | Unauthenticated views: registration, login, password recovery |
-| `cron_jobs` | Background scheduled tasks (farewell messages, scheduled dispatch) |
-
-### Key Patterns
-
-**URL Registration:** URLs are defined as dicts in each app's `urls.py` and registered centrally in `fastchatdj/urls.py`. The `urls_sistema` tuple drives both Django URL routing and the `Modulo` database table (which controls sidebar navigation and role-based access). When adding a new view, add it to both the app's `urls.py` list and ensure a `Modulo` record exists.
-
-**AJAX API:** Most frontend interactions use the `ConsultasAjax` view at `/ajaxrequest/<accion>/` and the `consultas` view at `/consultas/`. These dispatch to handlers based on the `accion` parameter.
-
-**Permissions / Role Access:** Access control is done via `GroupModulo` (which groups relate to which `Modulo` URLs). The `seguridad` app middleware checks if the user's group has access to the current URL.
-
-**Singleton Config:** `Configuracion.get_instancia()` returns the single site-wide config row (company name, logos, email templates, etc.). It is accessed at module load time in `urls.py`.
-
-**WebSockets:** Django Channels handles three WebSocket consumers in `whatsapp/`:
-- `ChatConsumer` — real-time chat per conversation, broadcasts rendered HTML partials on new messages
-- `SessionConsumer` / `SessionRoomConsumer` — WhatsApp session status (QR code, connect/disconnect)
-
-**AI Pipeline:** `agents_ai` uses LangChain with Google Generative AI embeddings stored in FAISS vector stores. `AgentesIA` records in `crm` configure which agent handles each WhatsApp session. Training documents uploaded via `EntrenamientosIA` are embedded and stored per agent. The FAISS index is cached in-memory keyed by `mtime` to avoid reloads between messages (`agente_consultor.py:_faiss_cache`). Each agent can also have a `contexto_estatico` field (plain text injected directly into the prompt without embedding, for small documents like FAQs).
-
-**Base Models:** `core.custom_models.ModeloBase` (abstract) and `NormalModel` are the base classes for most models. `ModeloBase` adds `usuario_creacion`, `fecha_registro`, `usuario_modificacion`, `fecha_modificacion`, `status` (soft-delete flag). It auto-populates audit fields from the current request via `core.custom_middleware.get_current_request()`. `NormalModel` adds convenience attributes like `<field>_boolhtml`, `<field>_yesorno`, `<field>_money` dynamically on `__init__`.
-
-### WhatsApp Integration Flow
+Templates follow a strict inheritance and naming structure:
 
 ```
-External WhatsApp API (Node.js service)
-    ↓ webhook POST to /whatsapp/webhook_handler/
-    ↓ NODE_SECRET_KEY verified
-webhook_handler creates/updates:
-    MensajeWhatsApp, ConversacionWhatsApp, Contacto, EstadisticasConversacion
-    ↓
-async_to_sync → channel_layer.group_send → ChatConsumer broadcasts rendered HTML to frontend
-    ↓ (if AI enabled: SesionWhatsApp.agente_ia is set)
-AgenteConsultor.responder() → FAISS similarity search → LangChain prompt → Google Generative AI
-    ↓
-WhatsAppService.send_message() → WHATSAPP_API_URL (Node.js)
+templates/
+├── base.html        # Authenticated layout (Bootstrap 4) — use for internal views
+├── baseweb.html     # Public portal layout — use for public-facing views
+└── <app>/
+    ├── *_listado.html   # DataTables listing views
+    ├── *_form.html      # Create/edit forms (modal or full-page)
+    └── *_detalle.html   # Read-only detail views
 ```
 
-**Webhook event types handled:** `qr_code`, `ready`, `authenticated`, `auth_failure`, `disconnected`, `rate_limited`, `message`, `message_sent`, `message_reaction`, `message_revoked`, `message_ack`, `contact_changed`, `group_join`, `group_leave`.
+**Static files:** Always use absolute paths — never `{% load static %}` or `{% static '...' %}`.
 
-**Rate-limit handling:** When the Node.js service hits its per-session send cap, it emits a `rate_limited` event with `{count, max, windowMs, retryAfterMs, windowStart}`. Django stores a cache flag `wa_rate_limited_<session_id>` (TTL = `retryAfterMs`) and notifies superusers (throttled). While the flag is active, `process_incoming_message` short-circuits before bienvenida/IA/avisos to avoid amplifying saturation, and replies once per conversation per window with a soft "estamos saturados" message. The pause is logged as `node_rate_limited` traza.
+```html
+<!-- Correct -->
+<link rel="stylesheet" href="/static/css/file.css">
 
-### REST API Endpoint
+<!-- Never do this -->
+{% load static %}
+<link rel="stylesheet" href="{% static 'css/file.css' %}">
+```
 
-`POST /api/enviar-mensaje/` — sends a WhatsApp message. Rate limited to 30 req/min. Requires active session and valid contact. Defined in `seguridad/api_mensajeria.py`.
+**CSS — no inline styles in templates:** Never use `<style>` blocks inside templates. Instead, create a dedicated `.css` file under `static/css/<django-app>/` (where `<django-app>` is the Django app name the template belongs to, e.g. `regulated`, `seguridad`, `sitio`) and link it with an absolute path.
 
-### Reliability endpoints (Node → Django)
+```html
+<!-- Correct — template in the "estudiante" app -->
+<link rel="stylesheet" href="/static/css/estudiante/mi_vista.css">
 
-All require `X-API-Key: <NODE_SECRET_KEY>` header.
+<!-- Never do this -->
+<style>
+    .mi-clase { ... }
+</style>
+```
 
-- `POST /whatsapp/webhook_handler/batch/` (`webhook_batch_view.py`): drains Node's outbox. Body `{events: [{eventId, type, data}, ...]}` (or bare array). Returns per-item ACK array `{results: [{eventId, ok, status, error?}]}` so Node only deletes confirmed items. Idempotency in `process_incoming_message` (by `mensaje_id_externo`) makes retries safe. Max 200 events per batch.
-- `POST /whatsapp/heartbeat/` (`heartbeat_view.py`): Node pings every 30-60s with `{ts, host, sessions: [{sessionId, estado, queueDepth}]}`. Stored in cache for 180s. Helpers `node_esta_vivo(session_id=None)` and `estado_heartbeat_sesion(session_id)` let other code detect when Node is silent without crashing.
-- `POST /whatsapp/trace/` (`trace_receiver_view.py`): Node-side traces written to `TrazaMensajeIA` so the timeline at `/whatsapp/trazas/` shows both sides.
+Name the file after the template or feature it belongs to (e.g. `navbar.css`, `listado_servicio.css`). Run `git add static/css/<django-app>/<file>.css` immediately after creating it.
 
-### Multi-provider architecture (Baileys + Meta Cloud API)
+**CSS cache busting:** Every time you modify an existing `.css` file, increment the `?v` query string on its `<link>` tag in the template. Use a simple incremental version (`?v1.1`, `?v1.2`, `?v1.3`, …). If no version exists yet, add `?v1.0`.
 
-`SesionWhatsApp.proveedor` is a choice field (`'baileys'` | `'meta'`) that acts as the transport switch. Helpers `sesion.es_baileys` / `sesion.es_meta` are provided for readability.
+```html
+<link rel="stylesheet" href="/static/css/regulated/listado_servicio.css?v1.2">
+```
 
-- **Baileys (legacy, default)**: Session fields `qr_code`, `whatsapp_id`, `desconectado_manualmente`, `contacts_list`, `contacts_length` live directly on `SesionWhatsApp`. Transport goes through Node.js via `WhatsAppService`.
-- **Meta Cloud API**: Session has a `ConfigMeta` OneToOne extension (`sesion.config_meta`) holding `waba_id`, `phone_number_id`, `access_token`, `webhook_verify_token`, `quality_rating`, `messaging_limit_tier`, etc. All Meta-specific config is isolated here — the shared models (`Contacto`, `ConversacionWhatsApp`, `MensajeWhatsApp`, `AgenteIA`, etc.) are agnostic and don't change.
+Always check the current version in the template before incrementing.
 
-Meta-specific models (all in `whatsapp/models.py`):
-- `ConfigMeta` — per-session config (OneToOne).
-- `PlantillaWhatsApp` — message templates linked to `ConfigMeta`. Required for proactive messages outside the 24h window. Fields: `nombre`, `idioma`, `categoria` (`UTILITY`/`MARKETING`/`AUTHENTICATION`), `header_tipo`, `cuerpo`, `footer`, `botones_json`, `variables_json`, `estado_meta` (`BORRADOR`/`PENDING`/`APPROVED`/`REJECTED`/`PAUSED`/`DISABLED`).
-- `EventoMetaRecibido` — raw audit log of every webhook Meta posts (payload, HMAC validity, processed flag). Read-only from UI.
+**No comments in templates, CSS, or JS:** Never write comments in any file you create or modify. This applies to all comment syntaxes:
 
-When adding a feature that talks to WhatsApp, branch on `sesion.proveedor` and dispatch to the appropriate service. Do not access Baileys-specific fields (`qr_code`, `whatsapp_id`, etc.) without guarding `es_baileys`.
+- HTML: `<!-- comment -->`
+- Django templates: `{# comment #}`
+- CSS: `/* comment */`
+```
 
-**Parallel files per transport:**
-| Role | Baileys | Meta Cloud API |
-|---|---|---|
-| Receiver (webhook) | `whatsapp/webhook_baileys_view.py` → `/whatsapp/webhook_handler/` | `whatsapp/meta_webhook_view.py` → `/whatsapp/meta_webhook/` |
-| Sender (service) | `whatsapp/services.py` → `WhatsAppService` | `whatsapp/services_meta.py` → `MetaWhatsAppService` |
-| Dispatcher | — | `services.get_whatsapp_service(sesion)` returns the right instance |
+## Language & Copy
 
-The Meta receiver handles GET (Meta verification handshake using `ConfigMeta.webhook_verify_token`), POST with HMAC-SHA256 signed events (using `ConfigMeta.app_secret`), and translates Meta's payload shape to the internal Baileys-style format before calling the same `process_incoming_message()`. All raw Meta events are logged to `EventoMetaRecibido` for audit/replay.
+All visible text in views and templates must be in **English**: `titulo`, alert messages, button labels, column headers, log messages, `messages.success/error`, and exception strings. Backend variable names may remain in Spanish (`criterio`, `filtro`, `listado`) for consistency with the existing codebase.
 
-`MetaWhatsAppService` mirrors the public interface of `WhatsAppService` (`send_text_message`, `send_presence_update`, `send_media_message`, `close_session`) so existing call sites can migrate by switching to `get_whatsapp_service(sesion).send_text_message(...)`. Meta-only extras: `send_template()`, `crear_plantilla_en_meta()`, `sincronizar_plantillas()`, `descargar_media()`. Unsupported ops (presence, user image) return `{'success': True, 'skipped': '...'}`.
+## Soft Delete
 
-### AI Agent Configuration
+Models inherit from `ModeloBase` and use a `status` BooleanField for soft-delete. Deletions always set `filtro.status = False; filtro.save(request)` — never `.delete()`. List queries always filter by `Q(status=True)`. Never render `status` as a column, helper, or form field.
 
-`AgentesIA` (in `crm/models.py`) is the central config for each chatbot:
-- `perfil` → links to `PerfilNegocioIA` (business context: products, services, company description)
-- `vectorstore_path` → FAISS index on disk built from uploaded training documents
-- `contexto_estatico` → raw text injected directly into the LLM prompt (no embedding needed)
-- `prompt_template` → Jinja-style template; default Spanish template is in `core/constantes.py:PROMPT_TEMPLATES`
-- `apikey` (M2M) → `ApiKeyIA` with `provider` field (`"gemini"` or `"openai"`) and API key
+## File Uploads
 
-`VectorStoreManager` (`agents_ai/vectorstore_manager.py`) handles building FAISS indexes from PDF, CSV, JSON, or XLSX files. Supported embedding providers: `"gemini"` (default) and `"openai"`.
+Every `FileField`/`ImageField` uploaded via a form must be validated in the backend using `validar_archivo` from `core.funciones` (returns `(ok, archivo_or_msg)`). Apply in both `add` and `change` actions. Infer allowed extensions from the model's `FileExtensionValidator`.
 
-### Conversation Memory
+## Hard Rules
 
-`agents_ai/memoria_django.py` implements `DjangoChatMessageHistory`, a LangChain-compatible message history backend that persists conversation turns in the database (keyed by `ConversacionWhatsApp` ID). Only the last `_HISTORY_TURNS` (default: 4) turns are passed to the LLM prompt to control token usage.
+These apply to every task, no exceptions:
+
+- **Never modify existing migrations** — create new ones only if explicitly instructed
+- **Never run** `makemigrations`, `migrate`, `runserver`, or any management command
+- **Never execute** `git commit`, `git push`, or any destructive git operation
+- **Never read or modify** `credentials.json` or any secrets/credentials file
+- **Never auto-format or lint** — the developer handles code style verification
+- **Run** `git add <file>` immediately after creating a new `.html`, `.css`, or `.py` file — never for existing or modified files
+- **Grid** Always use Bootstrap 4 grid system (`row` + `col-*` classes) for any multi-column layout — never use CSS Grid or custom Flexbox for structural grids, unless otherwise specified.
