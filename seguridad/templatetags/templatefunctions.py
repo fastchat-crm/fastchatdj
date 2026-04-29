@@ -315,12 +315,50 @@ from django.utils.html import escape as _esc_wa
 from django.utils.safestring import mark_safe as _safe_wa
 
 
-_WA_CODE_BLOCK = _re_wa.compile(r'```([\s\S]+?)```')
-_WA_BOLD       = _re_wa.compile(r'(?<!\w)\*([^\*\n]+?)\*(?!\w)')
-_WA_ITALIC     = _re_wa.compile(r'(?<!\w)_([^_\n]+?)_(?!\w)')
-_WA_STRIKE     = _re_wa.compile(r'(?<!\w)~([^~\n]+?)~(?!\w)')
+_WA_CODE_BLOCK  = _re_wa.compile(r'```([\s\S]+?)```')
+_WA_BOLD        = _re_wa.compile(r'(?<!\w)\*([^\*\n]+?)\*(?!\w)')
+_WA_ITALIC      = _re_wa.compile(r'(?<!\w)_([^_\n]+?)_(?!\w)')
+_WA_STRIKE      = _re_wa.compile(r'(?<!\w)~([^~\n]+?)~(?!\w)')
 _WA_INLINE_CODE = _re_wa.compile(r'`([^`\n]+?)`')
-_WA_URL        = _re_wa.compile(r'(https?://[^\s<>"]+)')
+_WA_URL         = _re_wa.compile(r'(https?://[^\s<>"]+)')
+_WA_OPTION_LINE = _re_wa.compile(
+    r'^(?:\d+[\.\)]\s+|[➊➋➌➍➎➏➐➑➒➓①②③④⑤⑥⑦⑧⑨⑩1️⃣2️⃣3️⃣4️⃣5️⃣6️⃣7️⃣8️⃣9️⃣]\s*).+',
+    _re_wa.MULTILINE,
+)
+
+
+def _render_wa_options(value):
+    lines = value.split('\n')
+    option_lines = [l for l in lines if _WA_OPTION_LINE.match(l.strip())]
+    if len(option_lines) < 2:
+        return None
+    parts_before = []
+    parts_options = []
+    in_options = False
+    for line in lines:
+        stripped = line.strip()
+        if _WA_OPTION_LINE.match(stripped):
+            in_options = True
+            parts_options.append(stripped)
+        elif in_options:
+            parts_options.append(stripped)
+        else:
+            parts_before.append(stripped)
+    header_html = ''
+    if parts_before:
+        header_txt = _esc_wa('\n'.join(parts_before))
+        header_txt = _WA_BOLD.sub(r'<strong>\1</strong>', header_txt)
+        header_txt = _WA_ITALIC.sub(r'<em>\1</em>', header_txt)
+        header_txt = header_txt.replace('\n', '<br>')
+        header_html = f'<p class="mb-2 wa-msg">{header_txt}</p>'
+    buttons_html = ''
+    for opt in parts_options:
+        if not opt:
+            continue
+        opt_esc = _esc_wa(opt)
+        opt_esc = _WA_BOLD.sub(r'<strong>\1</strong>', opt_esc)
+        buttons_html += f'<div class="wa-option">{opt_esc}</div>'
+    return f'{header_html}<div class="wa-opciones">{buttons_html}</div>'
 
 
 @register.filter(is_safe=True)
@@ -328,11 +366,13 @@ _WA_URL        = _re_wa.compile(r'(https?://[^\s<>"]+)')
 def whatsapp_format(value):
     """Renderiza texto plano con formato estilo WhatsApp:
     *negrita*, _cursiva_, ~tachado~, ```código```, `inline`, URLs y
-    saltos de línea. Escape HTML primero para prevenir XSS, después
-    aplica los reemplazos sobre el HTML escapado.
+    saltos de línea. Detecta menús numerados y los muestra como botones.
     """
     if not value:
         return ''
+    options_html = _render_wa_options(value)
+    if options_html is not None:
+        return _safe_wa(options_html)
     txt = _esc_wa(value)
     txt = _WA_CODE_BLOCK.sub(
         lambda m: f'<pre class="wa-code">{m.group(1)}</pre>', txt
