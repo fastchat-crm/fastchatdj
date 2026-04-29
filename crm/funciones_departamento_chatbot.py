@@ -263,94 +263,9 @@ def _serializar_dpto_para_agente(dpto):
     return '\n'.join(partes).strip()
 
 
-def _crear_agente_desde_dpto(request):
-    """Action: crear_agente_desde_dpto. Crea un AgentesIA snapshot del
-    departamento elegido. Sin llamadas a LLM: vuelca datos del depto +
-    perfil empresa a `contexto_estatico` y delega afinamiento al editor."""
-    from .models import AgentesIA, ApiKeyIA, PerfilNegocioIA
-
-    perfil = PerfilNegocioIA.objects.filter(usuario=request.user).first()
-    if not perfil:
-        return JsonResponse({
-            'error': True,
-            'message': 'Configurá tu Perfil de Empresa antes de generar un agente IA.',
-        })
-
-    try:
-        dpto_id = int(request.POST.get('departamento_id') or 0)
-    except (TypeError, ValueError):
-        return JsonResponse({'error': True, 'message': 'Departamento inválido.'})
-
-    dpto = DepartamentoChatBot.objects.filter(pk=dpto_id, status=True).first()
-    if not dpto:
-        return JsonResponse({'error': True, 'message': 'Departamento no encontrado.'})
-
-    apikey_id = request.POST.get('apikey_id') or ''
-    apikey_obj = ApiKeyIA.objects.filter(
-        pk=apikey_id, perfil=perfil, status=True,
-    ).first() if apikey_id else None
-    if not apikey_obj:
-        return JsonResponse({
-            'error': True,
-            'message': 'Seleccioná una API Key IA válida (podés crearla en Entrenamiento IA).',
-        })
-
-    nombre = (request.POST.get('nombre') or '').strip() or f"Agente · {dpto.nombre}"
-    preset = (request.POST.get('personalidad_preset') or 'amable').strip()
-
-    contexto_dpto = _serializar_dpto_para_agente(dpto)
-    perfil_txt = perfil.resumen_contexto_ia()
-    contexto_full = f"## Empresa\n{perfil_txt}\n\n{contexto_dpto}"
-
-    agente = AgentesIA(
-        perfil=perfil,
-        nombre=nombre,
-        personalidad_preset=preset,
-        contexto_estatico=contexto_full,
-    )
-    agente.save()
-    agente.apikey.add(apikey_obj)
-
-    # Migración nodos del flujo → HerramientaAgente del agente IA. Cierra el
-    # gap de "el flujo tradicional pide datos pero la IA no". Convierte:
-    #   - nodo `pregunta` → tool de captura (con schema Pydantic).
-    #   - nodo `http`     → tool tipado de llamada HTTP.
-    # Idempotente: si se vuelve a correr, actualiza en lugar de duplicar.
-    from .migrar_nodos_a_tools import migrar_depto_a_tools
-    try:
-        stats_tools = migrar_depto_a_tools(agente, dpto)
-    except Exception as ex:
-        # Si la migración falla, NO rompemos la creación del agente — el
-        # operador igual tiene un agente funcional con `contexto_estatico`.
-        # Logueamos para diagnosticar y devolvemos stats vacío.
-        import logging
-        logging.getLogger(__name__).exception(
-            'Migración nodos→tools falló para agente=%s dpto=%s: %s',
-            agente.id, dpto.id, ex,
-        )
-        stats_tools = {'creadas': 0, 'actualizadas': 0, 'omitidas': 0, 'total': 0,
-                       'error': str(ex)[:200]}
-
-    log(
-        f"Generó Agente IA '{agente.nombre}' desde departamento '{dpto.nombre}' "
-        f"({stats_tools.get('total', 0)} tools migradas)",
-        request, "add", obj=agente.id,
-    )
-    return JsonResponse({
-        'error': False,
-        'agente_id': agente.id,
-        'agente_nombre': agente.nombre,
-        'departamento_nombre': dpto.nombre,
-        'tools_migradas': stats_tools,
-        'redirect': f'/crm/entrenamiento/?action=procedimiento&id={agente.id}',
-        'mensaje': (
-            f"Agente '{agente.nombre}' creado desde '{dpto.nombre}'. "
-            f"Herramientas IA: {stats_tools.get('total', 0)} migradas "
-            f"({stats_tools.get('creadas', 0)} nuevas, "
-            f"{stats_tools.get('actualizadas', 0)} actualizadas, "
-            f"{stats_tools.get('omitidas', 0)} nodos omitidos)."
-        ),
-    })
+# `_crear_agente_desde_dpto` se movió a
+# `agents_ai/ai_actions/agentes_crm.py:crear_desde_depto`. La view importa
+# desde ahí. Esta función ya no existe en este módulo.
 
 
 # ============================================================================

@@ -1,11 +1,20 @@
-"""Generador IA de AgentesIA (asistente "crear agente").
+"""Acciones IA sobre AgentesIA (crear agente).
 
-Punto de entrada: `generar(descripcion, tono, idioma, apikey_obj, perfil, request)`.
+Puntos de entrada:
+  - `generar(descripcion, tono, idioma, apikey_obj, perfil, request)` →
+    crea un agente desde una descripción libre, **con LLM**.
+  - `crear_desde_depto(request)` → crea un agente snapshot de un
+    `DepartamentoChatBot`, **sin LLM**: vuelca el árbol + perfil de empresa
+    al `contexto_estatico` y migra nodos `pregunta`/`http` a herramientas
+    tipadas (`HerramientaAgente`).
+
 La logica HTTP / extraccion de POST se queda en la view; aca solo vive la
 construccion del prompt, llamada al LLM, validacion de placeholders criticos,
 y persistencia del AgentesIA + asignacion de la apikey.
 """
 import logging
+
+from django.http import JsonResponse
 
 from .base import IAActionError, invocar_json
 from .prompts import get_prompt
@@ -130,3 +139,101 @@ def generar(*, descripcion: str, tono: str, idioma: str,
         'tokens': tokens,
         'modelo': modelo,
     }
+
+
+# ============================================================================
+# Crear agente desde un DepartamentoChatBot existente (operación determinista)
+# ============================================================================
+def crear_desde_depto(request):
+    """Action: `crear_agente_desde_dpto`. Crea un AgentesIA snapshot del
+    departamento elegido. SIN llamadas al LLM — vuelca al `contexto_estatico`
+    el resumen del depto + perfil de empresa, y migra los nodos del flujo
+    (`pregunta`, `http`) a `HerramientaAgente` tipadas via el conversor
+    `crm.migrar_nodos_a_tools`.
+
+    Esta función vive aquí (no en `crm/`) por convención del proyecto:
+    toda creación de agentes IA pasa por `agents_ai/ai_actions/agentes_crm.py`,
+    aunque sea determinista. Los helpers de serialización del depto y el
+    conversor de nodos siguen viviendo en `crm/` porque son específicos de
+    la app crm y operan sobre sus modelos.
+    """
+    # Imports perezosos para evitar ciclos crm ↔ agents_ai.
+    from crm.models import AgentesIA, ApiKeyIA, DepartamentoChatBot, PerfilNegocioIA
+    from crm.funciones_departamento_chatbot import _serializar_dpto_para_agente
+    from crm.migrar_nodos_a_tools import migrar_depto_a_tools
+    from core.funciones import log
+
+    perfil = PerfilNegocioIA.objects.filter(usuario=request.user).first()
+    if not perfil:
+        return JsonResponse({
+            'error': True,
+            'message': 'Configurá tu Perfil de Empresa antes de generar un agente IA.',
+        })
+
+    try:
+        dpto_id = int(request.POST.get('departamento_id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'error': True, 'message': 'Departamento inválido.'})
+
+    dpto = DepartamentoChatBot.objects.filter(pk=dpto_id, status=True).first()
+    if not dpto:
+        return JsonResponse({'error': True, 'message': 'Departamento no encontrado.'})
+
+    apikey_id = request.POST.get('apikey_id') or ''
+    apikey_obj = ApiKeyIA.objects.filter(
+        pk=apikey_id, perfil=perfil, status=True,
+    ).first() if apikey_id else None
+    if not apikey_obj:
+        return JsonResponse({
+            'error': True,
+            'message': 'Seleccioná una API Key IA válida (podés crearla en Entrenamiento IA).',
+        })
+
+    nombre = (request.POST.get('nombre') or '').strip() or f"Agente · {dpto.nombre}"
+    preset = (request.POST.get('personalidad_preset') or 'amable').strip()
+
+    contexto_dpto = _serializar_dpto_para_agente(dpto)
+    perfil_txt = perfil.resumen_contexto_ia()
+    contexto_full = f"## Empresa\n{perfil_txt}\n\n{contexto_dpto}"
+
+    agente = AgentesIA(
+        perfil=perfil,
+        nombre=nombre,
+        personalidad_preset=preset,
+        contexto_estatico=contexto_full,
+    )
+    agente.save()
+    agente.apikey.add(apikey_obj)
+
+    # Migrar nodos del flujo → HerramientaAgente. Si falla, no rompemos la
+    # creación del agente — solo logueamos y devolvemos stats vacíos.
+    try:
+        stats_tools = migrar_depto_a_tools(agente, dpto)
+    except Exception as ex:
+        logger.exception(
+            'Migración nodos→tools falló para agente=%s dpto=%s: %s',
+            agente.id, dpto.id, ex,
+        )
+        stats_tools = {'creadas': 0, 'actualizadas': 0, 'omitidas': 0, 'total': 0,
+                       'error': str(ex)[:200]}
+
+    log(
+        f"Generó Agente IA '{agente.nombre}' desde departamento '{dpto.nombre}' "
+        f"({stats_tools.get('total', 0)} tools migradas)",
+        request, "add", obj=agente.id,
+    )
+    return JsonResponse({
+        'error': False,
+        'agente_id': agente.id,
+        'agente_nombre': agente.nombre,
+        'departamento_nombre': dpto.nombre,
+        'tools_migradas': stats_tools,
+        'redirect': f'/crm/entrenamiento/?action=procedimiento&id={agente.id}',
+        'mensaje': (
+            f"Agente '{agente.nombre}' creado desde '{dpto.nombre}'. "
+            f"Herramientas IA: {stats_tools.get('total', 0)} migradas "
+            f"({stats_tools.get('creadas', 0)} nuevas, "
+            f"{stats_tools.get('actualizadas', 0)} actualizadas, "
+            f"{stats_tools.get('omitidas', 0)} nodos omitidos)."
+        ),
+    })

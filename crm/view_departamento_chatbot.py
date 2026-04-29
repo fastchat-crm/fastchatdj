@@ -16,7 +16,6 @@ from .forms import IndustriaForm, ActividadEconomicaForm, DepartamentoChatBotFor
 from .funciones_departamento_chatbot import (
     sincronizar_opciones,
     _generar_departamento_con_ia,
-    _crear_agente_desde_dpto,
     _duplicar_info,
     _duplicar_departamento,
     _guardar_meta,
@@ -161,7 +160,8 @@ def departamentoChatbotsView(request):
                 elif action == 'generar_con_ia':
                     return _generar_departamento_con_ia(request)
                 elif action == 'crear_agente_desde_dpto':
-                    return _crear_agente_desde_dpto(request)
+                    from agents_ai.ai_actions.agentes_crm import crear_desde_depto
+                    return crear_desde_depto(request)
                 elif action == 'explicar_flujo_ia':
                     # Devuelve la explicación cacheada del flujo (o regenera
                     # si el operador pide actualizar). El frontend muestra un
