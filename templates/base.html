@@ -95,7 +95,8 @@
                         </div>
                         {% for notif in listnotification %}
                             <a href="{% if notif.url %}{{ notif.url }}{% else %}/notificaciones/{% endif %}"
-                               class="dropdown-item d-flex align-items-start py-2 border-bottom"
+                               class="dropdown-item d-flex align-items-start py-2 border-bottom dp-notif-item"
+                               data-notif-id="{{ notif.id }}"
                                style="white-space:normal;">
                                 <div class="me-2 flex-shrink-0">
                                     <span class="badge rounded-circle d-inline-flex align-items-center justify-content-center"
@@ -1619,6 +1620,51 @@ $(function() {
 </script>
 {% block jscript %}
 {% endblock %}
+
+<script>
+    // Notificaciones del topbar: al hacer click en una entry, se marca como leída
+    // en BD vía sendBeacon (fire-and-forget). El navigate al destino sigue normal,
+    // así no agrega latencia perceptible. Al recargar la siguiente vista, el
+    // contador y la lista vienen ya sin esta notificación.
+    (function () {
+        var CSRF = '{{ csrf_token }}';
+        if (!CSRF) return;
+        document.addEventListener('click', function (ev) {
+            var a = ev.target && ev.target.closest && ev.target.closest('a[data-notif-id]');
+            if (!a) return;
+            var id = a.getAttribute('data-notif-id');
+            if (!id) return;
+            var fd = new FormData();
+            fd.append('csrfmiddlewaretoken', CSRF);
+            fd.append('action', 'check');
+            fd.append('id', id);
+            try {
+                if (navigator.sendBeacon) {
+                    navigator.sendBeacon('/notificaciones/', fd);
+                } else {
+                    fetch('/notificaciones/', {
+                        method: 'POST', body: fd, credentials: 'same-origin',
+                        headers: {'X-Requested-With': 'XMLHttpRequest'},
+                        keepalive: true,
+                    });
+                }
+            } catch (e) { /* no rompemos el navigate por un error de marcado */ }
+            // Feedback visual inmediato (por si el usuario abre en pestaña nueva
+            // y no recarga la actual): atenúa el item y decrementa el badge.
+            a.style.opacity = '.5';
+            a.style.pointerEvents = 'none';
+            var badge = document.querySelector('.icofont-bell-alt + .badge');
+            if (badge) {
+                var n = parseInt((badge.textContent || '').replace(/\D/g, ''), 10);
+                if (!isNaN(n) && n > 0) {
+                    var nuevo = n - 1;
+                    badge.textContent = nuevo > 99 ? '99+' : String(nuevo);
+                    if (nuevo <= 0) badge.remove();
+                }
+            }
+        }, true);
+    })();
+</script>
 
 </body>
 </html>
