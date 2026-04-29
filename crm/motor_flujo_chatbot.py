@@ -1302,6 +1302,91 @@ class MotorFlujo:
                 logger.warning('Nodo http %s falló: %s', nodo.id, err)
             return etq
 
+        if tipo == 'funcion':
+            # Función Python registrada en `crm.funciones_chatbot`. Reemplaza
+            # un nodo HTTP cuando la lógica vive dentro de Django (no tiene
+            # sentido el roundtrip a sí mismo). El operador elige el código
+            # registrado vía `config.funcion_codigo`. Branching ok/error y
+            # `extraer` funcionan igual que en HTTP.
+            from .funciones_chatbot import obtener_funcion
+
+            codigo = (cfg.get('funcion_codigo') or '').strip()
+            t0 = _time.time()
+            if not codigo:
+                etq, body, status, err = (
+                    'error', {}, 0,
+                    f'Nodo "{nodo.nombre}" sin `funcion_codigo` configurado.',
+                )
+            else:
+                fn = obtener_funcion(codigo)
+                if not fn:
+                    etq, body, status, err = (
+                        'error', {}, 0,
+                        f'Función "{codigo}" no registrada.',
+                    )
+                else:
+                    try:
+                        resultado = fn(
+                            self.conversation,
+                            (self.estado.variables or {}),
+                            cfg,
+                            endpoint=nodo.endpoint,
+                        ) or {}
+                    except Exception as ex:  # noqa: BLE001 — la función no debe romper el flujo
+                        logger.exception('Función %s nodo %s lanzó: %s', codigo, nodo.id, ex)
+                        resultado = {
+                            'etiqueta': 'error', 'body': {}, 'status': 0,
+                            'error': f'{ex.__class__.__name__}: {str(ex)[:200]}',
+                        }
+                    etq = resultado.get('etiqueta') or 'error'
+                    body = resultado.get('body') or {}
+                    status = resultado.get('status') or 0
+                    err = resultado.get('error') or ''
+            latencia_ms = int((_time.time() - t0) * 1000)
+
+            self._trace(
+                'funcion', f'Función "{codigo}" → {etq}',
+                etq == 'ok', {'codigo': codigo, 'status': status,
+                              'error': err[:200] if err else ''},
+            )
+            self._traza_db(
+                etapa_db='chatbot_funcion',
+                label=f'fn:{codigo} → {etq} (status {status})',
+                ok=(etq == 'ok'),
+                detalle={'nodo': nodo.nombre, 'codigo': codigo,
+                         'response_body': body, 'error': err},
+                latencia_ms=latencia_ms,
+            )
+            self.estado.set_variable('_last_http', {'status': status, 'error': err})
+            for ex in (cfg.get('extraer') or []):
+                if etq == 'ok' and ex.get('variable'):
+                    raw_path = (ex.get('jsonpath') or '').lstrip('$').lstrip('.')
+                    self.estado.set_variable(ex['variable'], _get_path(body, raw_path))
+            self.estado.save()
+            plantilla = cfg.get('plantilla_respuesta')
+            if plantilla and (etq == 'ok' or cfg.get('enviar_respuesta_en_error')):
+                self.enviar(plantilla)
+            # Side-effect: correo a asesores (mismo patrón que el nodo http).
+            if etq == 'ok' and cfg.get('envia_correo'):
+                if self.skip_side_effects:
+                    self._trace('side_effect_skipped',
+                                'Correo a asesores OMITIDO (dry-run)', True,
+                                {'nodo_id': nodo.id})
+                else:
+                    try:
+                        from crm.helpers_correo_flujo import notificar_asesores_depto
+                        notificar_asesores_depto(
+                            conv=self.conversation,
+                            nodo=nodo,
+                            request_body=cfg.get('body'),
+                            response_body=body,
+                        )
+                    except Exception:
+                        logger.exception('Error enviando correo (nodo %s)', nodo.id)
+            if etq == 'error' and err:
+                logger.warning('Nodo funcion %s [%s] falló: %s', nodo.id, codigo, err)
+            return etq
+
         if tipo == 'condicional':
             conds = cfg.get('condiciones') or []
             operador = (cfg.get('operador') or 'and').lower()

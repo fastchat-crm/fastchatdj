@@ -18,10 +18,50 @@
         <i class="fa fa-diagram-project me-1 text-info"></i>
         Árbol de decisiones · {{ filtro.nombre }}
     </h5>
+    <button type="button" class="btn btn-outline-info btn-sm"
+            id="btn-explicar-ia"
+            data-depto-id="{{ filtro.pk }}"
+            data-bs-toggle="modal" data-bs-target="#modalExplicarIA"
+            title="Explicación narrativa del flujo generada por IA">
+        <i class="fa fa-robot me-1"></i> Explicar con IA
+    </button>
     <a href="/crm/departamentos_chatbots/?action=preview&id={{ filtro.pk }}"
        class="btn btn-outline-success btn-sm">
         <i class="fab fa-whatsapp me-1"></i> Ver preview
     </a>
+</div>
+
+{# Modal: explicación del flujo generada por IA #}
+<div class="modal fade" id="modalExplicarIA" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-info bg-opacity-10">
+                <h6 class="modal-title text-info">
+                    <i class="fa fa-robot me-1"></i>
+                    Explicación del flujo · <span class="text-dark">{{ filtro.nombre }}</span>
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="explicar-meta" class="small text-muted mb-2"></div>
+                <div id="explicar-content" class="dp-explicar-content">
+                    <div class="text-center py-4 text-muted">
+                        <i class="fa fa-spinner fa-spin"></i> Cargando explicación…
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-2 d-flex justify-content-between">
+                <small class="text-muted" id="explicar-status"></small>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-warning btn-sm d-none" id="btn-explicar-actualizar"
+                            title="Algún nodo se modificó después de la última generación">
+                        <i class="fa fa-rotate me-1"></i> Actualizar (hay cambios)
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 {% if filtro.mensaje_saludo %}
@@ -383,4 +423,101 @@
     }
 })();
 </script>
+
+{# ── Explicar con IA: cargar al abrir modal + handler "Actualizar" ── #}
+<script>
+(function () {
+    var btnAbrir = document.getElementById('btn-explicar-ia');
+    var btnUpdate = document.getElementById('btn-explicar-actualizar');
+    var contentEl = document.getElementById('explicar-content');
+    var statusEl = document.getElementById('explicar-status');
+    var metaEl = document.getElementById('explicar-meta');
+    if (!btnAbrir) return;
+    var deptoId = btnAbrir.getAttribute('data-depto-id');
+
+    function escapeHtmlBasico(s) {
+        return String(s || '').replace(/[&<>]/g, function (c) {
+            return {'&': '&amp;', '<': '&lt;', '>': '&gt;'}[c];
+        });
+    }
+    // Markdown ligero → HTML: **negrita**, *cursiva*, listas y saltos.
+    function md(s) {
+        s = escapeHtmlBasico(s);
+        s = s.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+        s = s.replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
+        s = s.replace(/`([^`\n]+?)`/g, '<code>$1</code>');
+        // Listas: líneas que empiezan con "- " o "* " → <li>
+        var lines = s.split('\n');
+        var out = [];
+        var inList = false;
+        for (var i = 0; i < lines.length; i++) {
+            var l = lines[i];
+            var m = l.match(/^\s*[-*]\s+(.+)/);
+            if (m) {
+                if (!inList) { out.push('<ul class="dp-explicar-ul">'); inList = true; }
+                out.push('<li>' + m[1] + '</li>');
+            } else {
+                if (inList) { out.push('</ul>'); inList = false; }
+                out.push(l);
+            }
+        }
+        if (inList) out.push('</ul>');
+        return out.join('\n').replace(/\n/g, '<br>');
+    }
+
+    function fmtFecha(iso) {
+        if (!iso) return '';
+        try {
+            var d = new Date(iso);
+            return d.toLocaleString();
+        } catch (e) { return iso; }
+    }
+
+    function cargar(force) {
+        contentEl.innerHTML = '<div class="text-center py-4 text-muted">'
+            + '<i class="fa fa-spinner fa-spin"></i> '
+            + (force ? 'Regenerando con IA…' : 'Cargando explicación…')
+            + '</div>';
+        statusEl.textContent = '';
+        btnUpdate.classList.add('d-none');
+        var fd = new FormData();
+        fd.append('action', 'explicar_flujo_ia');
+        fd.append('id', deptoId);
+        if (force) fd.append('force', '1');
+        var csrf = document.querySelector('input[name=csrfmiddlewaretoken]')
+                || document.querySelector('[name=csrfmiddlewaretoken]');
+        if (csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+        fetch('/crm/departamentos_chatbots/', {
+            method: 'POST', body: fd, credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            if (data.error) {
+                contentEl.innerHTML = '<div class="alert alert-danger small">'
+                    + '<i class="fa fa-circle-xmark me-1"></i> '
+                    + escapeHtmlBasico(data.message || 'Error') + '</div>';
+                return;
+            }
+            contentEl.innerHTML = md(data.explicacion || '');
+            metaEl.innerHTML = data.cached
+                ? '<i class="fa fa-database text-success me-1"></i> Explicación cacheada · generada el <b>' + fmtFecha(data.generada_en) + '</b>'
+                : '<i class="fa fa-bolt text-warning me-1"></i> Recién generada · <b>' + fmtFecha(data.generada_en) + '</b>';
+            // Mostrar "Actualizar" solo si el caché está desactualizado.
+            if (data.cached && data.actualizada === false) {
+                btnUpdate.classList.remove('d-none');
+            }
+            statusEl.textContent = data.cached ? 'Sin cargo de tokens (caché).' : '';
+        }).catch(function (err) {
+            contentEl.innerHTML = '<div class="alert alert-danger small">Error de red: '
+                + escapeHtmlBasico(err.message) + '</div>';
+        });
+    }
+
+    // Cargar al abrir el modal.
+    document.getElementById('modalExplicarIA').addEventListener('shown.bs.modal', function () {
+        cargar(false);
+    });
+    btnUpdate.addEventListener('click', function () { cargar(true); });
+})();
+</script>
+
 {% endblock %}

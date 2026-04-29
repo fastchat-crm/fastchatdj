@@ -137,7 +137,8 @@
             <section class="docs-section">
                 <h2><i class="fa fa-rocket me-1" style="color:#7c3aed"></i> Nivel 3 — Avanzado (HTTP, side-effects, integración)</h2>
                 <ul>
-                    <li><b>Llamadas HTTP</b>: tipo <code>http</code> con un endpoint registrado. El path soporta templates: <code>api/cotizar/{% verbatim %}{{conversacion.id}}{% endverbatim %}/</code>.</li>
+                    <li><b>Llamadas HTTP</b>: tipo <code>http</code> con un endpoint registrado. El path soporta templates: <code>buscar/{% verbatim %}{{variables.cedula}}{% endverbatim %}/</code>.</li>
+                    <li><b>Funciones internas</b>: tipo <code>funcion</code> ejecuta código Python registrado con <code>@registrar_funcion('codigo')</code> en <code>crm/funciones_chatbot.py</code>. Reemplaza un nodo HTTP cuando la lógica vive dentro de Django (orquestar webhooks externos, DB lookups, side-effects). El operador asocia un <code>EndpointApiChatbot</code> opcional → la URL externa queda 100% configurable sin tocar código.</li>
                     <li>
                         <b>Extraer variables del response</b>:
 <pre style="background:#1f2937; color:#e5e7eb; padding:.65rem; border-radius:6px; font-size:.85em;"><code>"extraer": [
@@ -154,7 +155,7 @@
                         </ul>
                     </li>
                     <li><b>Envío de correo</b>: marcá el nodo con <code>config.envia_correo: true</code> y el sistema lo identificará con <span class="dp-flag-pill dp-flag-email"><i class="fa fa-envelope"></i> Envía correo</span>.</li>
-                    <li><b>Proxy interno</b>: para side-effects con lógica Django (DB lookup + envío de email + log), apuntá el nodo HTTP a un endpoint propio (<code>/crm/api/cotizar/&lt;conv&gt;/</code>) que orquesta todo.</li>
+                    <li><b>Side-effects con lógica Django</b>: cuando necesités orquestar DB lookup + email + log + webhook externo, usá un nodo <code>funcion</code> apuntando a una función registrada propia (no hace falta crear un proxy HTTP intermedio).</li>
                     <li><b>Handoff humano</b>: tipo <code>handoff</code> pausa la IA. La conv queda abierta para que un asesor responda manualmente.</li>
                     <li><b>Deep-links a conversaciones</b>: en un correo o CTA podés generar <code>/whatsapp/conversaciones/?conv=&lt;token&gt;</code> con <code>encrypt_sesion_id(conv.id)</code>. La URL abre la conv si está activa, o redirige a la página de finalizadas si ya cerró.</li>
                 </ul>
@@ -168,6 +169,7 @@
                     <div class="dp-tutorial-tipo"><span class="t-tag">pregunta</span><b>Pregunta al cliente</b>Espera la respuesta del cliente y la guarda en <code>variable_destino</code>.</div>
                     <div class="dp-tutorial-tipo"><span class="t-tag">menu</span><b>Menú con botones</b>Lista de opciones. Cada opción tiene su propio nodo destino.</div>
                     <div class="dp-tutorial-tipo"><span class="t-tag">http</span><b>Llamada HTTP</b>POST/GET a una API. Extrae datos de la respuesta a variables.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">funcion</span><b>Función interna</b>Ejecuta código Python registrado (sin loop HTTP). Útil para orquestar DB+email+webhook externo.</div>
                     <div class="dp-tutorial-tipo"><span class="t-tag">condicional</span><b>If/else</b>Evalúa una expresión sobre variables y bifurca.</div>
                     <div class="dp-tutorial-tipo"><span class="t-tag">set_variable</span><b>Asignar variable</b>Setea o limpia variables del contexto.</div>
                     <div class="dp-tutorial-tipo"><span class="t-tag">cta_url</span><b>Botón con URL</b>Envía un botón que abre una URL externa al cliente.</div>
@@ -201,12 +203,13 @@
                     <li><b>Básico</b>: saludo → pedir placa → pedir cédula → confirmar.</li>
                     <li><b>Intermedio</b>: catálogos (tipos, provincias) en menús dinámicos construidos desde variables JSON traídas con HTTP.</li>
                     <li>
-                        <b>Avanzado</b>: nodo final <code>340</code> que llama a un proxy Django interno
-                        (<code>/crm/api/cotizar/&lt;conv&gt;/</code>). Ese proxy:
+                        <b>Avanzado</b>: nodo final <code>340</code> tipo <code>funcion</code>
+                        que ejecuta la función Python registrada <code>cotizar_aria</code>
+                        (en <code>crm/funciones_chatbot.py</code>). La función:
                         <ul>
-                            <li>POSTea al webhook externo <code>https://fguerrero.mgaseguros.ec/webhook/cotizar/</code>.</li>
-                            <li>Si <code>202</code> → envía email a los asesores del departamento (<a href="/crm/departamentos_chatbots/">PerfilDepartamentoChatBot</a>).</li>
-                            <li>Devuelve <code>{success: true|false}</code> para que el flujo elija rama <code>ok</code> o <code>error</code>.</li>
+                            <li>POSTea al webhook externo (URL leída desde el <code>EndpointApiChatbot</code> asociado al nodo — editable desde <a href="/crm/endpoints_api/">/crm/endpoints_api/</a>).</li>
+                            <li>El motor del flujo, viendo <code>config.envia_correo=true</code>, dispara email a los asesores del depto (<a href="/crm/departamentos_chatbots/">PerfilDepartamentoChatBot</a>) cuando la función retorna <code>ok</code>.</li>
+                            <li>La función devuelve <code>{etiqueta: 'ok'|'error', body, status, error}</code> para que el flujo elija rama <code>ok</code> o <code>error</code>.</li>
                         </ul>
                     </li>
                 </ol>

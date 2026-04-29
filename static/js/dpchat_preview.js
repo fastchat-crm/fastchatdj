@@ -341,6 +341,23 @@
             ejecutarHttp(node);
             return;
         }
+        if (node.tipo === 'funcion') {
+            // Preview: no ejecuta la función Python real; muestra info y avanza
+            // por la rama `ok` por convención (en runtime puede ramificar a
+            // `error` según resultado, pero el simulador asume happy-path).
+            var fnCodigo = cfg.funcion_codigo || '(sin código)';
+            systemBubble('⚡ [Función interna · ' + fnCodigo + ']', 'http');
+            logEvt('info', 'Función "' + fnCodigo + '" ejecutada (preview)',
+                   { endpoint_id: node.endpoint_id || null });
+            // Si tiene plantilla de respuesta, simulamos que devuelve ok.
+            if (cfg.plantilla_respuesta) {
+                botBubble(resolverExpr(cfg.plantilla_respuesta));
+            }
+            var destOk = buscarSalida(node, 'ok') || siguienteDefault(node);
+            if (destOk) avanzarA(destOk);
+            else systemBubble('— Sin destino "ok" para función —', 'warn');
+            return;
+        }
         if (node.tipo === 'handoff') {
             if (cfg.mensaje) botBubble(cfg.mensaje);
             systemBubble('🤝 [Bot derivó la conversación a un humano]', 'handoff');

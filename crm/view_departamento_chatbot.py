@@ -162,6 +162,72 @@ def departamentoChatbotsView(request):
                     return _generar_departamento_con_ia(request)
                 elif action == 'crear_agente_desde_dpto':
                     return _crear_agente_desde_dpto(request)
+                elif action == 'explicar_flujo_ia':
+                    # Devuelve la explicación cacheada del flujo (o regenera
+                    # si el operador pide actualizar). El frontend muestra un
+                    # botón "Actualizar" cuando algún nodo cambió desde la
+                    # última generación.
+                    from crm.explicar_flujo_ia import (
+                        explicacion_esta_actualizada,
+                        generar_explicacion_flujo,
+                    )
+                    from agents_ai.ai_actions import IAActionError
+                    from seguridad.models import Configuracion as _Conf
+                    from crm.models import PerfilNegocioIA
+                    try:
+                        dep_id = int(request.POST.get('id') or 0)
+                    except (TypeError, ValueError):
+                        return JsonResponse({'error': True, 'message': 'ID inválido.'})
+                    depto = DepartamentoChatBot.objects.filter(pk=dep_id, status=True).first()
+                    if not depto:
+                        return JsonResponse({'error': True, 'message': 'Depto no encontrado.'})
+
+                    forzar = request.POST.get('force') == '1'
+                    actualizada = explicacion_esta_actualizada(depto)
+
+                    # Si NO forzamos y hay caché válido → devolverlo.
+                    if not forzar and depto.explicacion_ia and actualizada:
+                        return JsonResponse({
+                            'error': False,
+                            'cached': True,
+                            'actualizada': True,
+                            'explicacion': depto.explicacion_ia,
+                            'generada_en': depto.explicacion_ia_generada_en.isoformat() if depto.explicacion_ia_generada_en else None,
+                        })
+
+                    # Resolver apikey: primero la del Configuracion (token IA del
+                    # sistema); si no, la del PerfilNegocioIA del usuario.
+                    confi = _Conf.get_instancia()
+                    apikey_obj = None
+                    if confi and getattr(confi, 'ia_features_activas', False) and confi.token_ia_id:
+                        apikey_obj = confi.token_ia
+                    if not apikey_obj:
+                        perfil = PerfilNegocioIA.objects.filter(usuario=request.user).first()
+                        if perfil:
+                            from crm.models import ApiKeyIA
+                            apikey_obj = ApiKeyIA.objects.filter(perfil=perfil, status=True).first()
+                    if not apikey_obj:
+                        return JsonResponse({
+                            'error': True,
+                            'message': 'No hay API key IA configurada (ni en sistema ni en tu perfil).',
+                        })
+
+                    try:
+                        texto = generar_explicacion_flujo(depto, apikey_obj, usuario=request.user)
+                    except IAActionError as ex:
+                        return JsonResponse({'error': True, 'message': str(ex)})
+                    except Exception as ex:
+                        return JsonResponse({'error': True, 'message': f'Error: {ex}'})
+
+                    log(f"Explicación IA regenerada depto {depto.id}", request, "change", obj=depto.id)
+                    return JsonResponse({
+                        'error': False,
+                        'cached': False,
+                        'actualizada': True,
+                        'explicacion': texto,
+                        'generada_en': depto.explicacion_ia_generada_en.isoformat() if depto.explicacion_ia_generada_en else None,
+                    })
+
                 elif action == 'regenerar_tools_agente':
                     # Re-corre el conversor nodos→tools sobre un agente
                     # existente. Útil cuando el flujo del depto cambió y el
@@ -423,6 +489,9 @@ def departamentoChatbotsView(request):
                             # Condicional / set_variable: JSON serializado para el textarea.
                             'cond_condiciones_json_str':    json.dumps(cfg.get('condiciones') or [], indent=2, ensure_ascii=False) if cfg.get('condiciones') else '',
                             'setvar_asignaciones_json_str': json.dumps(cfg.get('asignaciones') or [], indent=2, ensure_ascii=False) if cfg.get('asignaciones') else '',
+                            # Función interna (tipo nodo `funcion`): body+extraer JSON.
+                            'funcion_body_json_str':    json.dumps(cfg.get('body') or {}, indent=2, ensure_ascii=False) if cfg.get('body') else '',
+                            'funcion_extraer_json_str': json.dumps(cfg.get('extraer') or [], indent=2, ensure_ascii=False) if cfg.get('extraer') else '',
                         })
                     else:
                         padres_disponibles = OpcionDepartamentoChatBot.objects.filter(
@@ -443,6 +512,8 @@ def departamentoChatbotsView(request):
                             'http_extraer_json_str': '',
                             'cond_condiciones_json_str': '',
                             'setvar_asignaciones_json_str': '',
+                            'funcion_body_json_str': '',
+                            'funcion_extraer_json_str': '',
                         })
                     template = get_template('crm/departamento_chatbots/_form_opcion.html')
                     return JsonResponse({'result': True, 'data': template.render(contexto)})

@@ -321,6 +321,7 @@
 .dp-method-put    { background: #d97706; }
 .dp-method-patch  { background: #ca8a04; }
 .dp-method-delete { background: #dc2626; }
+.dp-method-fn     { background: #7c3aed; }
 .dp-http-url {
     font-family: ui-monospace, Menlo, monospace;
     font-size: .72rem;
@@ -732,6 +733,11 @@ body.dp-diag-page .dp-diag-card {
     color: #155e75;
     border: 1px solid #67e8f9;
 }
+.dp-flag-default {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+}
 .dp-tree-card-flags {
     display: flex;
     flex-wrap: wrap;
@@ -796,4 +802,21 @@ body.dp-diag-page .dp-diag-card {
     margin-bottom: .3rem;
     font-family: monospace;
 }
+
+/* ─── Modal "Explicar con IA" en /diagrama ─── */
+.dp-explicar-content {
+    line-height: 1.55;
+    font-size: .92rem;
+    color: #1f2937;
+}
+.dp-explicar-content strong { color: #0f172a; }
+.dp-explicar-content code {
+    background: #f1f5f9; color: #0f172a;
+    padding: 1px 5px; border-radius: 4px;
+    font-size: .88em;
+}
+.dp-explicar-ul {
+    padding-left: 1.3rem; margin: .35rem 0;
+}
+.dp-explicar-ul li { margin-bottom: .25rem; }
 

@@ -73,7 +73,13 @@ Lo que necesitas para tener un flujo corriendo:
 ## Nivel 3 — Avanzado (HTTP, side-effects, integraciones)
 
 - **Llamadas HTTP**: Tipo `http` con un endpoint registrado. El path soporta
-  templates: `api/cotizar/{{conversacion.id}}/`.
+  templates: `buscar/{{variables.cedula}}/`.
+- **Funciones internas**: Tipo `funcion` ejecuta código Python registrado
+  con `@registrar_funcion('codigo')` en `crm/funciones_chatbot.py`. Reemplaza
+  un nodo HTTP cuando la lógica vive dentro de Django (orquestar webhooks
+  externos, DB lookups, side-effects). El operador asocia un
+  `EndpointApiChatbot` opcional → la URL externa queda 100% configurable
+  sin tocar código.
 - **Extraer variables del response**:
   ```json
   "extraer": [
@@ -86,12 +92,11 @@ Lo que necesitas para tener un flujo corriendo:
   - Status `2xx` con `success: true` (o sin ese campo) → rama `ok`.
   - Status `4xx` / `5xx`, `success: false`, o timeout → rama `error`.
 - **Envío de correo**: Marca el nodo con `config.envia_correo: true` para
-  que aparezca con el badge **📧 Envía correo** en el editor. El sistema
-  no envía el correo automáticamente — la lógica de envío vive en el
-  endpoint Django interno al que apunta el nodo HTTP.
-- **Proxy interno**: Para side-effects con lógica Django (DB lookup +
-  envío de email + log), apunta el nodo HTTP a un endpoint propio
-  (ejemplo: `/crm/api/cotizar/<conv>/`) que orquesta todo.
+  que aparezca con el badge **📧 Envía correo** en el editor. El motor
+  dispara el correo a los asesores del depto cuando el nodo retorna `ok`.
+- **Side-effects con lógica Django**: cuando necesités orquestar DB lookup
+  + email + log + webhook externo, usá un nodo `funcion` apuntando a una
+  función registrada propia (no hace falta crear un proxy HTTP intermedio).
 - **Handoff humano**: Tipo `handoff` pausa la IA. La conv queda abierta
   para que un asesor responda manualmente.
 - **Deep-links a conversaciones**: En un correo o CTA podés generar

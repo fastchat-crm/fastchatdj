@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 def _resolver_departamento(conv):
-    """Mismo orden que `cotizar_proxy._resolver_departamento`:
+    """Resuelve el depto al que pertenece la conversación, en orden:
     1. EstadoFlujoChatbot.departamento (depto activo del flujo).
     2. SesionWhatsApp.departamento_default.
     3. Fallback: depto con `codigo='aria'` (legacy del seed).

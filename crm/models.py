@@ -1108,6 +1108,21 @@ class DepartamentoChatBot(ModeloBase):
                   'Vacío = no envía mensaje, va directo al nodo de inicio.'
     )
 
+    # ── Explicación del flujo generada por IA (cache) ────────────────
+    # Se genera una sola vez con LLM y se guarda. Solo se regenera cuando
+    # algún nodo del depto fue modificado después de `explicacion_ia_generada_en`
+    # (el frontend muestra botón "Actualizar" si hay drift).
+    explicacion_ia = models.TextField(
+        blank=True, default='',
+        verbose_name='Explicación del flujo (IA)',
+        help_text='Resumen narrativo del flujo generado por LLM. Cacheado: solo se '
+                  'regenera cuando algún nodo cambia después de la última generación.'
+    )
+    explicacion_ia_generada_en = models.DateTimeField(
+        blank=True, null=True,
+        verbose_name='Última generación de explicación IA',
+    )
+
     class Meta:
         verbose_name = 'Departamento ChatBot'
         verbose_name_plural = 'Departamentos ChatBot'
@@ -1180,6 +1195,7 @@ class OpcionDepartamentoChatBot(ModeloBase):
         ('respuesta',    'Respuesta de texto'),
         ('pregunta',     'Pregunta al usuario'),
         ('http',         'Llamada HTTP'),
+        ('funcion',      'Función interna'),
         ('condicional',  'Condicional / If'),
         ('set_variable', 'Asignar variable'),
         ('cta_url',      'Botón con URL externa'),

@@ -431,6 +431,11 @@ def _duplicar_departamento(request):
             palabras_clave=dpto.palabras_clave,
             es_default=False,  # nunca duplicar el default; evita conflicto de ruteo
             activo_tradicional=dpto.activo_tradicional,
+            # Reset configurable: viaja igual al clon. Lo único que no se copia
+            # es el HistorialMovimientoNodo (auditoría del original; el clon
+            # arranca con historial vacío).
+            reset_triggers=list(dpto.reset_triggers or []),
+            mensaje_reset=dpto.mensaje_reset or '',
         )
         nuevo.save(request)
 
@@ -926,6 +931,8 @@ def _exportar_flujo_completo(departamento):
             'palabras_clave': departamento.get_palabras_clave(),
             'es_default': bool(departamento.es_default),
             'activo_tradicional': bool(departamento.activo_tradicional),
+            'reset_triggers': departamento.get_reset_triggers(),
+            'mensaje_reset': departamento.mensaje_reset or '',
         },
         'estadisticas': {
             'total_nodos': nodos_qs.count(),
@@ -1569,6 +1576,56 @@ def _guardar_opcion(request):
             cfg['asignaciones'] = asigs
         opcion.config = cfg
         opcion.endpoint = None
+    elif opcion.tipo_nodo == 'funcion':
+        # Función Python registrada — análogo a HTTP pero sin URL: el código
+        # registrado se invoca directo. `endpoint` es opcional (algunas
+        # funciones lo necesitan para outbound HTTP, otras no).
+        codigo = (request.POST.get('funcion_codigo') or '').strip()
+        if not codigo:
+            return JsonResponse({'ok': False, 'error': 'funcion_codigo es requerido para tipo Función'})
+
+        cfg = {'funcion_codigo': codigo}
+
+        # Body opcional como JSON con templates.
+        body_raw = (request.POST.get('funcion_body') or '').strip()
+        if body_raw:
+            try:
+                body = json.loads(body_raw)
+            except (TypeError, ValueError) as ex:
+                return JsonResponse({'ok': False, 'error': f'Body JSON inválido: {str(ex)[:120]}'})
+            cfg['body'] = body
+
+        # Extraer (variable + jsonpath) — mismo formato que http.
+        extr_raw = (request.POST.get('funcion_extraer') or '').strip()
+        if extr_raw:
+            try:
+                extr = json.loads(extr_raw)
+            except (TypeError, ValueError) as ex:
+                return JsonResponse({'ok': False, 'error': f'Extraer JSON inválido: {str(ex)[:120]}'})
+            if not isinstance(extr, list):
+                return JsonResponse({'ok': False, 'error': 'Extraer debe ser array JSON'})
+            cfg['extraer'] = extr
+
+        try:
+            cfg['timeout_seg'] = int(request.POST.get('funcion_timeout') or 30)
+        except (TypeError, ValueError):
+            cfg['timeout_seg'] = 30
+
+        if request.POST.get('funcion_envia_correo'):
+            cfg['envia_correo'] = True
+
+        opcion.config = cfg
+        # endpoint es FK ya tomado del select del form (se asigna en el bloque
+        # general de guardado del form, no acá). Aceptar 0/empty como None.
+        ep_raw = (request.POST.get('endpoint') or '').strip()
+        if ep_raw and ep_raw not in ('0', '', 'null'):
+            try:
+                ep = EndpointApiChatbot.objects.filter(pk=int(ep_raw), status=True).first()
+                opcion.endpoint = ep
+            except (TypeError, ValueError):
+                opcion.endpoint = None
+        else:
+            opcion.endpoint = None
     else:
         # Tipos sin form específico → limpiar config si era de otro tipo (cta_url/
         # ubicacion/http) para evitar dejar fields obsoletos.

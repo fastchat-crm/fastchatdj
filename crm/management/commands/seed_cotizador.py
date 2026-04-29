@@ -1,24 +1,23 @@
 """
-Seed del cotizador ARIA v3 (Webhook fire-and-forget).
+Seed del cotizador ARIA v4 (función Python + webhook configurable).
 
-Cambio respecto a v2: el flujo NO selecciona plan ni descarga PDF dentro del
-chat. Recolecta los datos del cliente y vehículo, los manda a un proxy Django
-interno (`/crm/api/cotizar/<conv_id>/`) que orquesta dos cosas:
+El flujo recolecta cliente + vehículo, y al final dispara la **función
+interna** `cotizar_aria` registrada en `crm.funciones_chatbot`. Esa función:
 
-  1. POST al webhook externo `https://fguerrero.mgaseguros.ec/webhook/cotizar/`
-     con id_conversacion + cliente + vehiculo + aseguradoras.
-  2. Si ARIA acepta (HTTP 202), envía un correo a los asesores del depto del
-     flujo con un link a la conversación.
+  1. Hace POST al webhook externo (URL leída desde el `EndpointApiChatbot`
+     'ARIA — Webhook Cotizador (externo)' — editable desde
+     /crm/endpoints_api/ sin tocar este archivo ni el código).
+  2. El motor del flujo, viendo `config.envia_correo=True`, dispara correo
+     a los asesores del depto al recibir `ok`.
 
-El cliente recibe en WhatsApp solo el mensaje "estamos procesando, te
-contactamos por correo" (éxito) o "intenta más tarde" (error). Toda la
-selección de plan / PDF la maneja ARIA en background.
+El cliente recibe en WhatsApp solo "estamos procesando" (ok) o
+"intentá más tarde" (error). El plan/PDF lo maneja ARIA en background.
 
 Flujo del bot (resumido):
   /info/ → placa → /vehiculo/?placa= → confirmar →
   cédula → /cliente/?cedula= → (si no encontrado: pedir datos básicos) →
   catálogos (tipos-vehiculo, provincias, [cantones si requiere]) → pedir valor →
-  POST proxy interno → mensaje de cierre (éxito o error)
+  función cotizar_aria → mensaje de cierre (éxito o error)
 
 Uso:
     python manage.py seed_cotizador
@@ -60,11 +59,15 @@ LEGACY_ENDPOINT = 'Cotizador ARIA'
 CREDENCIAL_NOMBRE = 'ARIA REST - AllowAny'
 ENDPOINT_NOMBRE = 'Cotizador ARIA REST v1'
 
-# Endpoint nuevo v3: proxy interno Django. base_url derivado del DOMINIO_GENERAL
-# de settings (URL_GENERAL). El nodo 340 lo usa con path
-# `api/cotizar/{{conversacion.id}}/` para invocar al proxy.
-PROXY_CREDENCIAL_NOMBRE = 'FastChat - Interno (sin auth)'
-PROXY_ENDPOINT_NOMBRE = 'FastChat — Cotizar Webhook (proxy interno)'
+# Endpoint v4: webhook EXTERNO del cotizador. La URL no vive en el código —
+# se siembra acá pero el operador la edita desde /crm/endpoints_api/ sin
+# tocar nada. Si mañana hay otro cotizador (otra empresa, otro broker),
+# se crea un endpoint nuevo con otro nombre + nodo `funcion` que lo use,
+# todo desde la UI.
+WEBHOOK_EXTERNO_CREDENCIAL_NOMBRE = 'ARIA Webhook Externo (sin auth)'
+WEBHOOK_EXTERNO_ENDPOINT_NOMBRE = 'ARIA — Webhook Cotizador (externo)'
+WEBHOOK_EXTERNO_URL_DEFAULT = 'https://fguerrero.mgaseguros.ec/webhook/cotizar/'
+WEBHOOK_EXTERNO_TIMEOUT_DEFAULT = 45
 
 
 BOT = {
@@ -413,21 +416,22 @@ PASOS = [
         'siguiente': 340,
     },
 
-    # ── 340 — POST proxy interno → webhook ARIA + email asesores ────
-    # Un único nodo HTTP. El proxy Django (`/crm/api/cotizar/<conv_id>/`)
-    # se encarga de:
-    #   1. POST a https://fguerrero.mgaseguros.ec/webhook/cotizar/
-    #   2. Si 202: enviar correo a asesores del depto con link a la conv.
-    # Devuelve {success: true|false, message: str}. El motor del flujo
-    # ramifica en `siguiente_ok` (success=true) o `siguiente_error`.
+    # ── 340 — Función interna `cotizar_aria` ────────────────────────
+    # Antes: nodo HTTP que pegaba al proxy interno Django, que a su vez
+    # pegaba al webhook externo ARIA → 2 saltos HTTP innecesarios para
+    # un orquestador interno.
+    # Ahora: nodo `funcion` que ejecuta la función Python registrada
+    # `cotizar_aria` directamente. Solo se hace HTTP al webhook externo
+    # (que sí es remoto y tiene su URL configurable vía EndpointApiChatbot).
+    # El motor también dispara el correo a asesores si `envia_correo=True`.
     {
-        'id': 340, 'orden': 340, 'tipo': 'llamada_http',
-        'codigo': 'http_cotizar_proxy',
-        'nombre': 'POST proxy → webhook ARIA + email asesores',
-        'endpoint_key': 'proxy',
+        'id': 340, 'orden': 340, 'tipo': 'llamada_funcion',
+        'codigo': 'fn_cotizar_aria',
+        'nombre': 'Función → Cotizar ARIA + email asesores',
+        'funcion_codigo': 'cotizar_aria',
+        'endpoint_key': 'webhook_externo',
         'envia_correo': True,
         'metodo': 'POST',
-        'path': 'crm/api/cotizar/{{conversacion.id}}/',
         'timeout_seg': 45,
         'body': {
             'cliente': {
@@ -553,6 +557,7 @@ TIPO_MAP = {
     'respuesta_texto':  'respuesta',
     'input_texto':      'pregunta',
     'llamada_http':     'http',
+    'llamada_funcion':  'funcion',
     'decision':         'condicional',
     'menu_botones':     'menu',
     'asignar_variable': 'set_variable',
@@ -725,11 +730,23 @@ class Command(BaseCommand):
             if paso.get('envia_correo'):
                 cfg['envia_correo'] = True
             return cfg
+        if t == 'llamada_funcion':
+            cfg = {
+                'funcion_codigo': paso.get('funcion_codigo', ''),
+                'metodo': paso.get('metodo', 'POST'),
+                'body': paso.get('body') or {},
+                'extraer': _normalizar_extraer(paso.get('extrae_variables')),
+                'timeout_seg': paso.get('timeout_seg', 30),
+            }
+            if paso.get('envia_correo'):
+                cfg['envia_correo'] = True
+            return cfg
         return {}
 
     def _crear_nodo(self, depto, eps, paso):
-        """`eps` es un dict {clave: EndpointApiChatbot}. Cada paso `llamada_http`
-        elige el endpoint con `paso['endpoint_key']` (default: 'aria')."""
+        """`eps` es un dict {clave: EndpointApiChatbot}. Los pasos http/funcion
+        eligen el endpoint con `paso['endpoint_key']` (default: 'aria' para
+        http, sin default para funcion)."""
         t = paso['tipo']
         validacion_tipo = 'none'
         validacion_expr = ''
@@ -740,6 +757,10 @@ class Command(BaseCommand):
         endpoint_obj = None
         if t == 'llamada_http':
             endpoint_obj = eps.get(paso.get('endpoint_key') or 'aria')
+        elif t == 'llamada_funcion':
+            ep_key = paso.get('endpoint_key')
+            if ep_key:
+                endpoint_obj = eps.get(ep_key)
 
         return OpcionDepartamentoChatBot.objects.create(
             departamento=depto,
@@ -807,7 +828,7 @@ class Command(BaseCommand):
                 )
             return
 
-        if t == 'llamada_http':
+        if t in ('llamada_http', 'llamada_funcion'):
             if paso.get('siguiente_ok') in mapa:
                 ConexionNodoChatbot.objects.create(
                     nodo_origen=origen, nodo_destino=mapa[paso['siguiente_ok']],
@@ -903,48 +924,41 @@ class Command(BaseCommand):
             ep.credencial = credencial
             ep.save()
 
-        # ── Endpoint proxy interno (v3) ─────────────────────
-        # base_url derivado de settings.URL_GENERAL (o DOMINIO_GENERAL +
-        # USE_SSL). El nodo 340 lo usa con path
-        # `crm/api/cotizar/{{conversacion.id}}/`.
-        proxy_base = (
-            getattr(settings, 'URL_GENERAL', '')
-            or ('https://' if getattr(settings, 'USE_SSL', False) else 'http://')
-              + getattr(settings, 'DOMINIO_GENERAL', 'localhost:8000')
-        ).rstrip('/')
-        proxy_credencial, _ = CredencialApiChatbot.objects.get_or_create(
-            nombre=PROXY_CREDENCIAL_NOMBRE,
+        # ── Endpoint externo: webhook real del cotizador (configurable) ─
+        # Lo usa el nodo 340 (`funcion=cotizar_aria`) para hacer el POST
+        # outbound. La URL queda persistida en BD; cualquier cambio
+        # (otro broker, otro cotizador, otra empresa) se hace desde
+        # /crm/endpoints_api/ sin tocar este seed ni el código.
+        webhook_ext_credencial, _ = CredencialApiChatbot.objects.get_or_create(
+            nombre=WEBHOOK_EXTERNO_CREDENCIAL_NOMBRE,
             tipo='none',
             status=True,
             defaults={
                 'secretos': {},
-                'descripcion': 'Credencial dummy para llamadas internas Django (sin auth).',
+                'descripcion': 'Credencial dummy para webhook externo (sin auth).',
             },
         )
-        proxy_ep, _ = EndpointApiChatbot.objects.get_or_create(
-            nombre=PROXY_ENDPOINT_NOMBRE,
+        webhook_ext_ep, _ = EndpointApiChatbot.objects.get_or_create(
+            nombre=WEBHOOK_EXTERNO_ENDPOINT_NOMBRE,
             defaults={
-                'base_url': proxy_base,
+                'base_url': WEBHOOK_EXTERNO_URL_DEFAULT,
                 'status': True,
-                'credencial': proxy_credencial,
+                'credencial': webhook_ext_credencial,
                 'headers_default': {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                 },
-                'timeout_seg': 60,
+                'timeout_seg': WEBHOOK_EXTERNO_TIMEOUT_DEFAULT,
                 'descripcion': (
-                    'Proxy interno Django para el flujo de cotización. '
-                    'Recibe cliente+vehiculo, llama al webhook ARIA externo y '
-                    'notifica a los asesores del depto por correo.'
+                    'Webhook EXTERNO del cotizador. La función '
+                    '`cotizar_aria` (registry crm.funciones_chatbot) usa '
+                    'este endpoint para hacer el POST outbound. Editá la '
+                    'base_url acá para cambiar de proveedor sin tocar código.'
                 ),
             },
         )
-        # Si el dominio cambió entre corridas (dev → prod), actualizamos.
-        if proxy_ep.base_url != proxy_base:
-            proxy_ep.base_url = proxy_base
-            proxy_ep.save(update_fields=['base_url'])
 
-        eps = {'aria': ep, 'proxy': proxy_ep}
+        eps = {'aria': ep, 'webhook_externo': webhook_ext_ep}
 
         # ── Pase 1: nodos ───────────────────────────────────
         mapa = {}
@@ -979,9 +993,10 @@ class Command(BaseCommand):
         total_nodos = depto.opciondepartamentochatbot_set.count()
         total_conns = ConexionNodoChatbot.objects.filter(nodo_origen__departamento=depto).count()
         self.stdout.write(self.style.SUCCESS(
-            f'\n[OK] Flujo creado: "{depto.nombre}" (Webhook v3)\n'
+            f'\n[OK] Flujo creado: "{depto.nombre}" (función Python v4)\n'
             f'   Nodos: {total_nodos}  |  Conexiones: {total_conns}\n'
-            f'   Endpoint ARIA   : {ep.nombre} -> {ep.base_url}\n'
-            f'   Endpoint Proxy  : {proxy_ep.nombre} -> {proxy_ep.base_url}\n'
-            f'   Credencial      : {credencial.nombre} ({credencial.get_tipo_display()})\n'
+            f'   Endpoint ARIA REST   : {ep.nombre} -> {ep.base_url}\n'
+            f'   Endpoint Webhook ext : {webhook_ext_ep.nombre} -> {webhook_ext_ep.base_url}\n'
+            f'   Credencial REST      : {credencial.nombre} ({credencial.get_tipo_display()})\n'
+            f'   Función registrada   : cotizar_aria (crm.funciones_chatbot)\n'
         ))

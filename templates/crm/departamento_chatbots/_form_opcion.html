@@ -105,10 +105,6 @@
     {% endif %}
 
     {# ── Editor de Salidas / Siguientes ──────────────────────────────── #}
-    {# Conexiones salientes de este nodo. Cada una tiene una etiqueta que el
-       motor usa para enrutar (vacío=default, ok/error para http,
-       true/false para condicional, valor de la opción para menu) y un
-       nodo destino. El form persiste como `salidas_json` (JSON array). #}
     <div class="col-12">
         <label class="form-label small fw-bold mb-1">
             <i class="fa fa-arrow-right-from-bracket text-primary me-1"></i>
@@ -353,7 +349,7 @@
                         <i class="fa fa-circle-info me-1"></i>
                         <b>Tip — pasar id de la conversación a la API</b>: usa
                         <code>&#123;&#123;conversacion.id&#125;&#125;</code> en el path o el body.
-                        Ejemplo path: <code>api/cotizar/&#123;&#123;conversacion.id&#125;&#125;/</code>.
+                        Ejemplo path: <code>buscar/&#123;&#123;conversacion.id&#125;&#125;/</code>.
                         Ejemplo body: <code>{"id_conversacion": "&#123;&#123;conversacion.id&#125;&#125;"}</code>.
                     </small>
                 </div>
@@ -558,6 +554,87 @@
                     <option value="or"  {% if op_actual == 'or' %}selected{% endif %}>OR (cualquiera)</option>
                 </select>
             {% endwith %}
+        </div>
+    </div>
+
+    {# Bloque Función — visible solo cuando tipo=funcion #}
+    {# Ejecuta código Python registrado en `crm.funciones_chatbot.FUNCIONES_REGISTRADAS`. #}
+    {# A diferencia de HTTP, no hace loop de red a Django — invoca la función directo. #}
+    <div class="col-12 dp-tipo-block" data-show-when="funcion" style="display:none;">
+        <div class="alert alert-secondary py-2 small mb-2" style="background:#f5f3ff;border-color:#ddd6fe;">
+            <i class="fa fa-bolt me-1" style="color:#7c3aed;"></i>
+            <strong>Función interna:</strong>
+            ejecuta código Python registrado (sin saltos HTTP). Útil cuando la lógica
+            vive dentro de Django (orquestación, DB lookups, side-effects).
+            Branching <code>ok</code>/<code>error</code> y <code>extraer</code> funcionan igual que en HTTP.
+        </div>
+        <div class="row g-2 p-2" style="background:#faf5ff;border-radius:6px;">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">
+                    Código de la función <span class="text-danger">*</span>
+                </label>
+                <input type="text" name="funcion_codigo" class="form-control form-control-sm font-monospace"
+                       value="{{ opcion.config.funcion_codigo|default:'' }}"
+                       placeholder="ej: cotizar_aria">
+                <small class="text-muted">
+                    Slug registrado en <code>crm/funciones_chatbot.py</code> con <code>@registrar_funcion('...')</code>.
+                </small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Endpoint asociado <small class="text-muted">(opcional)</small></label>
+                {% with eps=endpoints_disponibles %}
+                <select name="endpoint" class="form-select form-select-sm">
+                    <option value="">— sin endpoint —</option>
+                    {% for ep in eps %}
+                        <option value="{{ ep.id }}" {% if opcion.endpoint_id == ep.id %}selected{% endif %}>
+                            {{ ep.nombre }} ({{ ep.base_url|truncatechars:60 }})
+                        </option>
+                    {% endfor %}
+                </select>
+                {% endwith %}
+                <small class="text-muted">
+                    URL externa que la función puede usar. La función recibe esto como <code>endpoint</code>.
+                </small>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Timeout (seg)</label>
+                <input type="number" name="funcion_timeout" class="form-control form-control-sm"
+                       value="{{ opcion.config.timeout_seg|default:'30' }}"
+                       min="1" max="300">
+            </div>
+            <div class="col-md-9 d-flex align-items-end">
+                <div class="form-check form-switch">
+                    <input type="checkbox" name="funcion_envia_correo" class="form-check-input" id="fnEnviaCorreo-{{ opcion.id|default:'new' }}"
+                           value="1" {% if opcion.config.envia_correo %}checked{% endif %}>
+                    <label class="form-check-label small" for="fnEnviaCorreo-{{ opcion.id|default:'new' }}">
+                        <i class="fa fa-envelope me-1"></i>
+                        Notificar a asesores por correo cuando la función retorna <code>ok</code>
+                    </label>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <label class="form-label small fw-bold mb-1">Body (JSON, soporta templates)</label>
+                <textarea name="funcion_body" class="form-control form-control-sm font-monospace"
+                          rows="4"
+                          placeholder='{"cliente": {"cedula": "{{variables.cedula}}"}}'
+                >{{ funcion_body_json_str|default:'' }}</textarea>
+                <small class="text-muted">
+                    JSON que se pasa a la función (resuelve <code>{% verbatim %}{{variables.x}}{% endverbatim %}</code>).
+                </small>
+            </div>
+
+            <div class="col-12">
+                <label class="form-label small fw-bold mb-1">Extraer variables del resultado (JSON array)</label>
+                <textarea name="funcion_extraer" class="form-control form-control-sm font-monospace"
+                          rows="3"
+                          placeholder='[{"variable": "cotizacion_status", "jsonpath": "status"}]'
+                >{{ funcion_extraer_json_str|default:'' }}</textarea>
+                <small class="text-muted">
+                    Cada item: <code>{variable: "nombre", jsonpath: "ruta.dentro.del.body"}</code>.
+                </small>
+            </div>
         </div>
     </div>
 

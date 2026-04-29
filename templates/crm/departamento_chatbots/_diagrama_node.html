@@ -28,6 +28,20 @@
                     <i class="fa fa-envelope"></i> Correo
                 </span>
             {% endif %}
+            {% if nodo.opcion.tipo_nodo == 'menu' and nodo.opcion.config.opcion_default and nodo.opcion.config.opcion_default.valor %}
+                <span class="dp-flag-pill dp-flag-default"
+                      title="Atajo Sí/Otra: autoasigna ${{ nodo.opcion.variable_destino }}={{ nodo.opcion.config.opcion_default.valor }} al confirmar">
+                    <i class="fa fa-bolt"></i>
+                    Atajo {{ nodo.opcion.config.opcion_default.etiqueta|default:nodo.opcion.config.opcion_default.valor|truncatechars:18 }}
+                </span>
+            {% endif %}
+            {% if nodo.opcion.tipo_nodo == 'funcion' %}
+                <span class="dp-flag-pill" style="background:#f5f3ff;color:#6d28d9;border:1px solid #ddd6fe;"
+                      title="Función Python registrada: {{ nodo.opcion.config.funcion_codigo|default:'(sin código)' }}">
+                    <i class="fa fa-bolt"></i>
+                    fn:{{ nodo.opcion.config.funcion_codigo|default:'?'|truncatechars:18 }}
+                </span>
+            {% endif %}
         </div>
         {% if nodo.opcion.boton_id %}
             <div class="dp-tree-card-btnid">id: <code>{{ nodo.opcion.boton_id }}</code></div>
