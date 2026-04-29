@@ -1564,6 +1564,29 @@ def reiniciar_flujo_tradicional(conversation, depto=None) -> ResultadoFlujo:
     if not motor.respuestas:
         motor.enviar('🔄 Conversación reiniciada. Escribe cualquier mensaje para empezar de nuevo.')
 
+    # Notificar a las pestañas abiertas (ChatConsumer) para que el panel
+    # de la conversación re-renderice los mensajes recién persistidos sin
+    # necesidad de refrescar manualmente. Sin esto el agente solo ve el
+    # cambio cuando llega el siguiente turno entrante.
+    if motor.respuestas:
+        try:
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+            cl = get_channel_layer()
+            if cl is not None:
+                async_to_sync(cl.group_send)(
+                    f'chat_{conversation.id}',
+                    {
+                        'type': 'whatsapp_message',
+                        'event': 'new_message',
+                        'conversation_id': conversation.id,
+                        'sender': session.numero or '',
+                        'from_me': True,
+                    },
+                )
+        except Exception:
+            logger.exception('Reset manual: error notificando ChatConsumer')
+
     return ResultadoFlujo(
         manejado=bool(motor.respuestas),
         fallback_ia=False,

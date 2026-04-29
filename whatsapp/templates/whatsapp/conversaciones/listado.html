@@ -1019,20 +1019,16 @@
             .done(function(r) {
                 bootstrap.Modal.getInstance(modalEl)?.hide();
                 if (r.error) {
-                    if (typeof toastr !== 'undefined') toastr.error(r.message || 'No se pudo reiniciar el flujo.');
-                    else alert(r.message || 'No se pudo reiniciar el flujo.');
+                    mensajeDanger(r.message || 'No se pudo reiniciar el flujo.');
                     return;
                 }
-                const msg = r.message || 'Flujo reiniciado.';
-                if (typeof toastr !== 'undefined') toastr.success(msg);
-                else alert(msg);
+                mensajeSuccess(r.message || 'Flujo reiniciado.');
                 console.info('[reiniciarFlujoChatbot] respuestas enviadas:', r.respuestas_enviadas);
             })
             .fail(function(xhr) {
                 bootstrap.Modal.getInstance(modalEl)?.hide();
                 console.error('[reiniciarFlujoChatbot] ajax fail', xhr.status, xhr.responseText);
-                if (typeof toastr !== 'undefined') toastr.error('Error al reiniciar el flujo (' + xhr.status + ').');
-                else alert('Error al reiniciar el flujo: ' + xhr.status);
+                mensajeDanger('Error al reiniciar el flujo (' + xhr.status + ').');
             })
             .always(function() {
                 $btn.prop('disabled', false).html('<i class="fa fa-redo me-1"></i> Sí, reiniciar');
