@@ -56,6 +56,7 @@
 .tipo-menu         { background: #cfe2ff; color: #084298; }
 .tipo-pregunta     { background: #fff3cd; color: #664d03; }
 .tipo-http         { background: #f8d7da; color: #842029; }
+.tipo-funcion      { background: #ede9fe; color: #5b21b6; }
 .tipo-condicional  { background: #e2d9f3; color: #432874; }
 .tipo-switch       { background: #fde2e4; color: #6c2a2a; }
 .tipo-set_variable { background: #d3f9d8; color: #2b8a3e; }
@@ -163,6 +164,39 @@
     border: 1px solid #e9ecef;
 }
 .dp-filter-resumen { font-size: .72rem; }
+
+.dp-tipo-legend {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    align-items: center;
+    padding-top: .5rem;
+    border-top: 1px dashed #e2e8f0;
+}
+.dp-legend-chip {
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform .1s, box-shadow .12s, opacity .15s;
+    display: inline-flex; align-items: center; gap: 4px;
+}
+.dp-legend-chip:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0,0,0,.12);
+}
+.dp-legend-chip.dp-legend-active {
+    box-shadow: 0 0 0 2px rgba(124,58,237,.45);
+    transform: translateY(-1px);
+}
+.dp-legend-chip[data-count="0"] {
+    opacity: .35;
+}
+.dp-legend-count {
+    background: rgba(0,0,0,.08);
+    color: inherit;
+    border-radius: 7px;
+    padding: 1px 6px;
+    font-size: .65rem;
+    font-weight: 700;
+    margin-left: 2px;
+}
 
 .dp-node-card.dp-hidden { display: none; }
 

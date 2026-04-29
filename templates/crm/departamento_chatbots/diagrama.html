@@ -31,6 +31,11 @@
     </a>
 </div>
 
+{# Hidden form solo para que el middleware CSRF setee la cookie. La página
+   de diagrama es GET pura y no incluye otros forms, así que sin esto la
+   cookie podría no existir y el POST de "Explicar con IA" fallaría. #}
+<form style="display:none">{% csrf_token %}</form>
+
 {# Modal: explicación del flujo generada por IA #}
 <div class="modal fade" id="modalExplicarIA" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
@@ -473,6 +478,18 @@
         } catch (e) { return iso; }
     }
 
+    // Lee el token CSRF desde la cookie (la página /diagrama no tiene <form>
+    // visible, así que el input estándar no existe).
+    function getCsrfCookie() {
+        var name = 'csrftoken=';
+        var parts = document.cookie.split(';');
+        for (var i = 0; i < parts.length; i++) {
+            var c = parts[i].trim();
+            if (c.indexOf(name) === 0) return decodeURIComponent(c.slice(name.length));
+        }
+        return '';
+    }
+
     function cargar(force) {
         contentEl.innerHTML = '<div class="text-center py-4 text-muted">'
             + '<i class="fa fa-spinner fa-spin"></i> '
@@ -484,13 +501,26 @@
         fd.append('action', 'explicar_flujo_ia');
         fd.append('id', deptoId);
         if (force) fd.append('force', '1');
-        var csrf = document.querySelector('input[name=csrfmiddlewaretoken]')
-                || document.querySelector('[name=csrfmiddlewaretoken]');
-        if (csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+        var csrfInput = document.querySelector('input[name=csrfmiddlewaretoken]');
+        var csrfVal = csrfInput ? csrfInput.value : getCsrfCookie();
+        if (csrfVal) fd.append('csrfmiddlewaretoken', csrfVal);
         fetch('/crm/departamentos_chatbots/', {
             method: 'POST', body: fd, credentials: 'same-origin',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        }).then(function (r) { return r.json(); }).then(function (data) {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': csrfVal,
+            },
+        }).then(function (r) {
+            // Si la respuesta no es JSON (CSRF/login redirige a HTML), capturamos
+            // el error con un mensaje claro en lugar de "Unexpected token <".
+            var ct = r.headers.get('content-type') || '';
+            if (!ct.includes('application/json')) {
+                return r.text().then(function (txt) {
+                    throw new Error('Respuesta no-JSON (status ' + r.status + '). Posible CSRF o sesión expirada.');
+                });
+            }
+            return r.json();
+        }).then(function (data) {
             if (data.error) {
                 contentEl.innerHTML = '<div class="alert alert-danger small">'
                     + '<i class="fa fa-circle-xmark me-1"></i> '

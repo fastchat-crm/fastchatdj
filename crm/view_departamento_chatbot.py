@@ -373,6 +373,18 @@ def departamentoChatbotsView(request):
                 except Exception as ex:
                     return JsonResponse({'result': False, 'message': str(ex)})
 
+            elif action == 'funciones_disponibles':
+                # Devuelve la lista de funciones registradas con su metadata.
+                # Lo consume el modal "Funciones disponibles" del editor.
+                try:
+                    from .funciones_chatbot import listar_metadata
+                    return JsonResponse({
+                        'result': True,
+                        'funciones': listar_metadata(),
+                    })
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
+
             elif action == 'historial_movimientos':
                 # Timeline de drag-drop confirmados. Pagina por `fecha_registro` desc.
                 try:

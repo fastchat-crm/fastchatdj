@@ -8,7 +8,16 @@ directo (con DB, modelos, helpers, etc.) manteniendo el flujo configurable.
 
 Contrato de las funciones registradas:
 
-    @registrar_funcion('mi_codigo')
+    @registrar_funcion(
+        codigo='mi_codigo',
+        descripcion='Qué hace, en una línea',
+        parametros={
+            'cliente.cedula': 'string requerido — cédula EC',
+            'vehiculo.placa': 'string requerido — placa del auto',
+        },
+        requiere_endpoint=True,
+        ejemplo_body={'cliente': {'cedula': '{{variables.cedula}}'}},
+    )
     def mi_funcion(conversacion, variables, config, endpoint=None) -> dict:
         return {
             'etiqueta':  'ok' | 'error',  # define la rama del flujo
@@ -26,6 +35,9 @@ Contrato de las funciones registradas:
 Nada de URLs hardcoded en este módulo: las funciones que necesiten servicios
 externos leen la URL desde el `endpoint` que el nodo tiene asociado, y el
 operador puede cambiarla desde `/crm/endpoints_api/` sin tocar código.
+
+La metadata del registry alimenta el panel "Funciones disponibles" del editor
+de flujo, para que el operador sepa qué códigos puede usar y qué espera cada uno.
 """
 from __future__ import annotations
 
@@ -38,30 +50,60 @@ import requests
 logger = logging.getLogger(__name__)
 
 
-# Registry global. Llave: código (string corto), valor: callable.
-# Se popula con el decorator `registrar_funcion`.
-FUNCIONES_REGISTRADAS: dict[str, Callable] = {}
+# Registry global. Llave: código (string corto). Valor: dict con la callable
+# y metadata (descripcion, parametros, requiere_endpoint, ejemplo_body).
+FUNCIONES_REGISTRADAS: dict[str, dict] = {}
 
 
-def registrar_funcion(codigo: str):
-    """Decorator que registra una función para uso desde nodos `funcion`.
+def registrar_funcion(
+    codigo: str,
+    descripcion: str = '',
+    parametros: Optional[dict] = None,
+    requiere_endpoint: bool = False,
+    ejemplo_body: Optional[dict] = None,
+):
+    """Decorator que registra una función con su metadata para nodos `funcion`.
 
-    Uso:
-        @registrar_funcion('cotizar_aria')
-        def cotizar_aria(conversacion, variables, config, endpoint=None):
-            ...
+    El operador ve esta metadata en el modal "Funciones disponibles" del editor
+    para entender qué hace cada código y qué espera.
+
+    Args:
+        codigo: identificador único usado en `config.funcion_codigo`.
+        descripcion: una línea humana de qué hace la función.
+        parametros: dict {nombre: descripcion} de los keys esperados en `config.body`.
+        requiere_endpoint: si True, la función necesita un EndpointApiChatbot
+            asociado al nodo (para URL externa). El editor lo señala visualmente.
+        ejemplo_body: dict de ejemplo del body que el operador puede copiar.
     """
     def deco(fn: Callable) -> Callable:
         if codigo in FUNCIONES_REGISTRADAS:
             logger.warning('Sobrescribiendo función registrada con código "%s".', codigo)
-        FUNCIONES_REGISTRADAS[codigo] = fn
+        FUNCIONES_REGISTRADAS[codigo] = {
+            'callable': fn,
+            'codigo': codigo,
+            'descripcion': descripcion or '',
+            'parametros': dict(parametros or {}),
+            'requiere_endpoint': bool(requiere_endpoint),
+            'ejemplo_body': dict(ejemplo_body or {}),
+            'modulo': fn.__module__,
+            'nombre': fn.__name__,
+        }
         return fn
     return deco
 
 
 def obtener_funcion(codigo: str) -> Optional[Callable]:
-    """Devuelve la función registrada o None si no existe."""
-    return FUNCIONES_REGISTRADAS.get(codigo)
+    """Devuelve la callable registrada o None si no existe."""
+    item = FUNCIONES_REGISTRADAS.get(codigo)
+    return item['callable'] if item else None
+
+
+def obtener_metadata(codigo: str) -> Optional[dict]:
+    """Devuelve la metadata registrada (sin la callable) o None."""
+    item = FUNCIONES_REGISTRADAS.get(codigo)
+    if not item:
+        return None
+    return {k: v for k, v in item.items() if k != 'callable'}
 
 
 def listar_codigos() -> list[str]:
@@ -69,11 +111,57 @@ def listar_codigos() -> list[str]:
     return sorted(FUNCIONES_REGISTRADAS.keys())
 
 
+def listar_metadata() -> list[dict]:
+    """Lista [{codigo, descripcion, parametros, ...}] sin las callables.
+    Usado por el modal "Funciones disponibles" del editor."""
+    return [
+        {k: v for k, v in item.items() if k != 'callable'}
+        for codigo, item in sorted(FUNCIONES_REGISTRADAS.items())
+    ]
+
+
 # ────────────────────────────────────────────────────────────────────
 # Funciones registradas
 # ────────────────────────────────────────────────────────────────────
 
-@registrar_funcion('cotizar_aria')
+@registrar_funcion(
+    codigo='cotizar_aria',
+    descripcion='Envía cliente+vehículo+aseguradoras al webhook externo del cotizador y notifica a asesores.',
+    parametros={
+        'cliente.cedula':         'string · cédula/RUC del cliente',
+        'cliente.email':          'string · correo de contacto',
+        'cliente.nombres':        'string · nombre(s)',
+        'cliente.apellidos':      'string · apellido(s)',
+        'cliente.telefono':       'string · celular EC (10 dígitos)',
+        'vehiculo.placa':         'string · placa (5-8 chars alfanum)',
+        'vehiculo.tipo_vehiculo': 'string · id del catálogo de tipos',
+        'vehiculo.color':         'string · id del catálogo de colores',
+        'vehiculo.provincia':     'string · id provincia',
+        'vehiculo.canton':        'string · id cantón (si tenant lo requiere)',
+        'vehiculo.valor_comercial': 'number · valor USD',
+        'aseguradoras':           'objeto bool · {all, zurich, aig, ...}',
+    },
+    requiere_endpoint=True,
+    ejemplo_body={
+        'cliente': {
+            'cedula': '{{variables.cedula}}',
+            'email': '{{variables.email}}',
+            'nombres': '{{variables.nombres}}',
+            'apellidos': '{{variables.apellidos}}',
+            'telefono': '{{variables.telefono}}',
+        },
+        'vehiculo': {
+            'placa': '{{variables.placa}}',
+            'tipo_vehiculo': '{{variables.tipo_vehiculo_id}}',
+            'color': '{{variables.color_id}}',
+            'provincia': '{{variables.provincia_id}}',
+            'canton': '{{variables.canton_id}}',
+            'valor_comercial': '{{variables.valor_vehiculo}}',
+            'precio_accesorios': 0,
+        },
+        'aseguradoras': {'all': True},
+    },
+)
 def cotizar_aria(conversacion, variables, config, endpoint=None) -> dict:
     """Llama al webhook ARIA externo + (opcional) notifica asesores.
 

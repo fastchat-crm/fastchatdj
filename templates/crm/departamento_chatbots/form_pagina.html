@@ -89,6 +89,11 @@
                    class="btn btn-sm btn-outline-warning" title="Auditoría de drag-drop (orden y padre)">
                     <i class="fa fa-clock-rotate-left"></i><span class="d-none d-md-inline ms-1">Historial</span>
                 </a>
+                <button type="button" class="btn btn-sm btn-outline-purple"
+                        id="dp-btn-funciones"
+                        title="Catálogo de funciones internas registradas (tipo nodo `funcion`)">
+                    <i class="fa fa-bolt"></i><span class="d-none d-md-inline ms-1">Funciones</span>
+                </button>
                 <button type="button" class="btn btn-sm btn-outline-success"
                         data-act="ver-json" title="JSON completo + cookbook para seed">
                     <i class="fa fa-code"></i><span class="d-none d-md-inline ms-1">JSON</span>
@@ -137,6 +142,25 @@
                             <i class="fa fa-eraser me-1"></i> Limpiar
                         </button>
                     </div>
+                </div>
+
+                {# Semáforo: chips clickeables que filtran por tipo. Cada chip       #}
+                {# muestra el color del tipo + cantidad de nodos con ese tipo en el  #}
+                {# depto. Click → setea el filtro Tipo. Click otra vez → limpia.    #}
+                <div class="dp-tipo-legend mt-2" id="dp-tipo-legend">
+                    <span class="text-muted small me-1 align-self-center">
+                        <i class="fa fa-traffic-light me-1"></i>
+                        Filtrar por tipo:
+                    </span>
+                    {% for v, lbl in tipos_nodo_choices %}
+                        <button type="button"
+                                class="dp-tipo-pill tipo-{{ v }} dp-legend-chip"
+                                data-tipo="{{ v }}"
+                                title="Click para filtrar nodos tipo {{ lbl }}">
+                            {{ lbl }}
+                            <span class="dp-legend-count" data-count-for="{{ v }}">0</span>
+                        </button>
+                    {% endfor %}
                 </div>
             </div>
 
@@ -207,6 +231,40 @@
             </div>
             <div class="modal-body">
                 <div id="dp-ficha-content" class="dp-ficha-content small">Cargando…</div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal Funciones disponibles — catálogo de codigos registrados con metadata #}
+<div class="modal fade" id="dpModalFunciones" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2" style="background:#f5f3ff;">
+                <h6 class="modal-title">
+                    <i class="fa fa-bolt me-1" style="color:#7c3aed;"></i>
+                    Funciones disponibles
+                    <small class="text-muted ms-2">(tipo nodo <code>funcion</code>)</small>
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border py-2 small mb-3">
+                    <i class="fa fa-circle-info me-1 text-purple"></i>
+                    Estas son las funciones Python registradas en
+                    <code>crm/funciones_chatbot.py</code> con
+                    <code>@registrar_funcion(...)</code>. Para usarlas, creá un
+                    nodo tipo <strong>Función interna</strong> y pegá el
+                    <em>código</em> exacto en <code>funcion_codigo</code>.
+                </div>
+                <div id="dp-funciones-content">
+                    <div class="text-center text-muted py-4">
+                        <i class="fa fa-spinner fa-spin"></i> Cargando…
+                    </div>
+                </div>
             </div>
             <div class="modal-footer py-2">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
@@ -366,5 +424,5 @@
 
 {% block jscript %}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="{% static 'js/dpchat_editor.js' %}?v=15"></script>
+    <script src="{% static 'js/dpchat_editor.js' %}?v=17"></script>
 {% endblock %}

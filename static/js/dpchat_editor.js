@@ -933,6 +933,26 @@
         }
     }
 
+    function refrescarLegendCounts() {
+        // Cuenta nodos por tipo (todos, no solo visibles) y actualiza los chips
+        // del semáforo. Resalta el chip activo según el valor del select.
+        var counts = {};
+        $$('.dp-node-card').forEach(function (c) {
+            var t = c.getAttribute('data-tipo') || '';
+            counts[t] = (counts[t] || 0) + 1;
+        });
+        var tipoEl = $('#dp-filter-tipo');
+        var tipoActivo = (tipoEl && tipoEl.value) || '';
+        $$('.dp-legend-chip').forEach(function (chip) {
+            var t = chip.getAttribute('data-tipo') || '';
+            var n = counts[t] || 0;
+            var label = chip.querySelector('.dp-legend-count');
+            if (label) label.textContent = n;
+            chip.setAttribute('data-count', String(n));
+            chip.classList.toggle('dp-legend-active', tipoActivo === t);
+        });
+    }
+
     function wireFiltros() {
         var q = $('#dp-filter-q');
         var ft = $('#dp-filter-fulltext');
@@ -940,14 +960,129 @@
         var clear = $('#dp-filter-clear');
         if (q) q.addEventListener('input', aplicarFiltros);
         if (ft) ft.addEventListener('input', aplicarFiltros);
-        if (tipo) tipo.addEventListener('change', aplicarFiltros);
+        if (tipo) tipo.addEventListener('change', function () {
+            aplicarFiltros();
+            refrescarLegendCounts();
+        });
         if (clear) clear.addEventListener('click', function () {
             if (q) q.value = '';
             if (ft) ft.value = '';
             if (tipo) tipo.value = '';
             aplicarFiltros();
+            refrescarLegendCounts();
+        });
+        // Click en chip del semáforo → setea el filtro de tipo (toggle).
+        $$('.dp-legend-chip').forEach(function (chip) {
+            chip.addEventListener('click', function () {
+                var t = chip.getAttribute('data-tipo') || '';
+                if (!tipo) return;
+                tipo.value = (tipo.value === t) ? '' : t;
+                aplicarFiltros();
+                refrescarLegendCounts();
+            });
         });
         aplicarFiltros();
+        refrescarLegendCounts();
+    }
+
+    /* ────────────── Catálogo de funciones registradas ────────────── */
+    function escapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function wireBotonFunciones() {
+        var btn = $('#dp-btn-funciones');
+        var modalEl = document.getElementById('dpModalFunciones');
+        var content = $('#dp-funciones-content');
+        if (!btn || !modalEl || !content) return;
+        btn.addEventListener('click', function () {
+            var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+            content.innerHTML = '<div class="text-center text-muted py-4"><i class="fa fa-spinner fa-spin"></i> Cargando…</div>';
+            getJson({ action: 'funciones_disponibles', id: STATE.departamentoId }).then(function (resp) {
+                if (!resp || !resp.result) {
+                    content.innerHTML = '<div class="alert alert-danger">' +
+                        ((resp && resp.message) || 'Error al cargar funciones.') + '</div>';
+                    return;
+                }
+                var lista = resp.funciones || [];
+                if (!lista.length) {
+                    content.innerHTML = '<div class="alert alert-light border text-center">' +
+                        'Sin funciones registradas. Crealas con ' +
+                        '<code>@registrar_funcion(...)</code> en ' +
+                        '<code>crm/funciones_chatbot.py</code>.</div>';
+                    return;
+                }
+                content.innerHTML = lista.map(renderFuncionItem).join('');
+                // Botones "copiar código"
+                $$('.dp-fn-copy', content).forEach(function (b) {
+                    b.addEventListener('click', function () {
+                        var txt = b.getAttribute('data-codigo') || '';
+                        if (navigator.clipboard) navigator.clipboard.writeText(txt);
+                        b.innerHTML = '<i class="fa fa-check"></i> Copiado';
+                        setTimeout(function () {
+                            b.innerHTML = '<i class="fa fa-copy"></i> Copiar código';
+                        }, 1200);
+                    });
+                });
+                $$('.dp-fn-copy-body', content).forEach(function (b) {
+                    b.addEventListener('click', function () {
+                        var txt = b.getAttribute('data-body') || '';
+                        if (navigator.clipboard) navigator.clipboard.writeText(txt);
+                        b.innerHTML = '<i class="fa fa-check"></i> Copiado';
+                        setTimeout(function () {
+                            b.innerHTML = '<i class="fa fa-copy"></i> Copiar body ejemplo';
+                        }, 1200);
+                    });
+                });
+            });
+        });
+    }
+
+    function renderFuncionItem(fn) {
+        var params = '';
+        var entradas = Object.entries(fn.parametros || {});
+        if (entradas.length) {
+            params = '<div class="mt-2"><strong class="small">Parámetros esperados:</strong>' +
+                '<ul class="small mb-0 mt-1" style="font-size:.8rem;">' +
+                entradas.map(function (e) {
+                    return '<li><code>' + escapeHtml(e[0]) + '</code> — ' + escapeHtml(e[1]) + '</li>';
+                }).join('') + '</ul></div>';
+        }
+        var ejemplo = '';
+        if (fn.ejemplo_body && Object.keys(fn.ejemplo_body).length) {
+            var bodyStr = JSON.stringify(fn.ejemplo_body, null, 2);
+            ejemplo = '<div class="mt-2"><strong class="small">Ejemplo body:</strong>' +
+                '<pre class="mb-1 mt-1" style="background:#1f2937;color:#e5e7eb;padding:.5rem;border-radius:5px;font-size:.72rem;max-height:200px;overflow:auto;">' +
+                escapeHtml(bodyStr) + '</pre>' +
+                '<button type="button" class="btn btn-xs btn-outline-secondary dp-fn-copy-body" data-body=\'' +
+                bodyStr.replace(/'/g, '&#39;') + '\'>' +
+                '<i class="fa fa-copy"></i> Copiar body ejemplo</button></div>';
+        }
+        var endpointBadge = fn.requiere_endpoint
+            ? '<span class="badge bg-warning text-dark ms-1" title="Esta función requiere un EndpointApiChatbot asociado">' +
+              '<i class="fa fa-link me-1"></i>Endpoint requerido</span>'
+            : '<span class="badge bg-light text-muted border ms-1">Endpoint opcional</span>';
+
+        return '<div class="dp-fn-item p-3 mb-3" style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;">' +
+            '<div class="d-flex align-items-start gap-2 mb-2">' +
+            '<span class="dp-tipo-pill tipo-funcion">FN</span>' +
+            '<div class="flex-grow-1">' +
+                '<strong>' + escapeHtml(fn.codigo) + '</strong>' + endpointBadge +
+                '<div class="small text-muted mt-1">' + escapeHtml(fn.descripcion || '— sin descripción —') + '</div>' +
+                '<div class="small text-muted mt-1" style="font-size:.7rem;">' +
+                '<i class="fa fa-code me-1"></i>' + escapeHtml(fn.modulo || '') + '.' + escapeHtml(fn.nombre || '') +
+                '</div>' +
+            '</div>' +
+            '<button type="button" class="btn btn-xs btn-outline-primary dp-fn-copy" data-codigo="' +
+            escapeHtml(fn.codigo) + '">' +
+            '<i class="fa fa-copy"></i> Copiar código</button>' +
+            '</div>' +
+            params +
+            ejemplo +
+            '</div>';
     }
 
     /* ────────────── Init ────────────── */
@@ -958,6 +1093,7 @@
         wireTreeActions();
         wireSortable();
         wireFiltros();
+        wireBotonFunciones();
         setupBeforeUnload();
         manejarHashNodo();
         console.log('[dpchat_editor] init OK · dep_id=' + STATE.departamentoId);
