@@ -333,7 +333,7 @@ def contactoView(request):
                 'sesion__config_baileys',
             )
             .annotate(
-                _msj_prog_count=Count(
+                msj_prog_count=Count(
                     'mensajes_programados',
                     filter=Q(mensajes_programados__status=True,
                              mensajes_programados__enviado=False),

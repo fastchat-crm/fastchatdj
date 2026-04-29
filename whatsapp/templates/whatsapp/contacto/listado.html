@@ -162,9 +162,9 @@
                             <i class="far fa-clock"></i> {{ l.fecha_ultimo_mensaje|date:'d/m H:i' }}
                         </span>
                     {% endif %}
-                    {% if l._msj_prog_count %}
+                    {% if l.msj_prog_count %}
                         <span class="cont-meta" title="Mensajes programados">
-                            <i class="far fa-paper-plane"></i> <b>{{ l._msj_prog_count }}</b> prog.
+                            <i class="far fa-paper-plane"></i> <b>{{ l.msj_prog_count }}</b> prog.
                         </span>
                     {% endif %}
                     {% if l.from_number %}
