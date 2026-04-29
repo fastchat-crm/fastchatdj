@@ -1504,7 +1504,9 @@ def reiniciar_flujo_tradicional(conversation, depto=None) -> ResultadoFlujo:
 
     Garantiza al menos un mensaje saliente: si el depto no tiene
     `mensaje_reset` ni `mensaje_saludo` y el `nodo_inicio` no produce
-    respuesta visible, se envía un aviso genérico.
+    respuesta visible, se envía un aviso genérico. Detecta fallas del
+    servicio WhatsApp (Node caído, ventana 24h Meta, sesión rate-limited,
+    etc.) y las propaga como `error` en el `ResultadoFlujo`.
     """
     from crm.models import EstadoFlujoChatbot
     from whatsapp.services import get_whatsapp_service
@@ -1539,6 +1541,38 @@ def reiniciar_flujo_tradicional(conversation, depto=None) -> ResultadoFlujo:
     motor = MotorFlujo(session, conversation, contacto, '', estado,
                       get_whatsapp_service(session))
 
+    # Wrap motor.enviar para capturar fallas reales del transporte.
+    # `WhatsAppService.send_text_message` y `MetaWhatsAppService.send_text_message`
+    # nunca lanzan: devuelven `{'success': False, 'error': ...}`. Sin este
+    # wrapper, motor.enviar persiste el mensaje en BD aunque el cliente
+    # nunca lo reciba. Acá interceptamos para reportar la verdad al usuario.
+    fallas_transporte: list[str] = []
+    enviar_original = motor.enviar
+
+    def enviar_con_seguimiento(texto: str):
+        if not texto:
+            return
+        resuelto = resolver_expresion(texto, motor.contexto())
+        try:
+            r = motor.ws.send_text_message(
+                session.session_id,
+                contacto.from_number,
+                resuelto,
+                conversation.id,
+                True,
+            ) or {}
+        except Exception as e:
+            logger.exception('Reset manual: send_text_message lanzó: %s', e)
+            fallas_transporte.append(f'{type(e).__name__}: {str(e)[:200]}')
+            return
+        if not r.get('success'):
+            fallas_transporte.append(r.get('error', 'transporte rechazó el mensaje'))
+            return
+        motor.respuestas.append(resuelto)
+        motor._persistir_mensaje_saliente(resuelto, r)
+
+    motor.enviar = enviar_con_seguimiento
+
     # Mensaje inicial: prioridad mensaje_reset > mensaje_saludo.
     msg_inicial = (depto_objetivo.mensaje_reset or depto_objetivo.mensaje_saludo or '').strip()
     if msg_inicial:
@@ -1558,34 +1592,42 @@ def reiniciar_flujo_tradicional(conversation, depto=None) -> ResultadoFlujo:
             logger.exception('Reset manual: _run_loop falló conv#%s: %s',
                              conversation.id, e)
 
-    # Garantizar al menos UN mensaje saliente. Si todo lo anterior no
-    # mandó nada (depto sin saludo + nodo_inicio inexistente o que solo
-    # avanza), avisar al cliente con un texto neutro.
+    # Restaurar enviar original por si algún lugar guardó referencia al motor.
+    motor.enviar = enviar_original
+
+    # Si todo el ciclo falló (nada llegó al cliente), reportar el primer
+    # error del transporte para que el agente sepa el motivo real.
     if not motor.respuestas:
-        motor.enviar('🔄 Conversación reiniciada. Escribe cualquier mensaje para empezar de nuevo.')
+        if fallas_transporte:
+            return ResultadoFlujo(
+                manejado=False,
+                error=f'WhatsApp rechazó el mensaje: {fallas_transporte[0]}',
+            )
+        return ResultadoFlujo(
+            manejado=False,
+            error='No se pudo enviar ningún mensaje. Revisa el estado de la sesión.',
+        )
 
     # Notificar a las pestañas abiertas (ChatConsumer) para que el panel
     # de la conversación re-renderice los mensajes recién persistidos sin
-    # necesidad de refrescar manualmente. Sin esto el agente solo ve el
-    # cambio cuando llega el siguiente turno entrante.
-    if motor.respuestas:
-        try:
-            from asgiref.sync import async_to_sync
-            from channels.layers import get_channel_layer
-            cl = get_channel_layer()
-            if cl is not None:
-                async_to_sync(cl.group_send)(
-                    f'chat_{conversation.id}',
-                    {
-                        'type': 'whatsapp_message',
-                        'event': 'new_message',
-                        'conversation_id': conversation.id,
-                        'sender': session.numero or '',
-                        'from_me': True,
-                    },
-                )
-        except Exception:
-            logger.exception('Reset manual: error notificando ChatConsumer')
+    # necesidad de refrescar manualmente.
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        cl = get_channel_layer()
+        if cl is not None:
+            async_to_sync(cl.group_send)(
+                f'chat_{conversation.id}',
+                {
+                    'type': 'whatsapp_message',
+                    'event': 'new_message',
+                    'conversation_id': conversation.id,
+                    'sender': session.numero or '',
+                    'from_me': True,
+                },
+            )
+    except Exception:
+        logger.exception('Reset manual: error notificando ChatConsumer')
 
     return ResultadoFlujo(
         manejado=bool(motor.respuestas),
