@@ -31,9 +31,6 @@
     </a>
 </div>
 
-{# Hidden form solo para que el middleware CSRF setee la cookie. La página
-   de diagrama es GET pura y no incluye otros forms, así que sin esto la
-   cookie podría no existir y el POST de "Explicar con IA" fallaría. #}
 <form style="display:none">{% csrf_token %}</form>
 
 {# Modal: explicación del flujo generada por IA #}
