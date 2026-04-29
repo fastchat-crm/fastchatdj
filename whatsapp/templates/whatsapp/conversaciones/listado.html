@@ -379,6 +379,11 @@
                                     <i class="fa fa-lock me-2 text-warning" id="icon-bloquear-cierre"></i>
                                     <span id="label-bloquear-cierre">Bloquear cierre automático</span>
                                 </a>
+                                <a class="dropdown-item d-none" href="javascript:void(0)" id="btn-reiniciar-flujo"
+                                   onclick="reiniciarFlujoChatbot()"
+                                   title="Reiniciar el flujo del chatbot tradicional desde el nodo de inicio">
+                                    <i class="fa fa-redo me-2 text-primary"></i> Reiniciar flujo del chatbot
+                                </a>
                                 {% if request.user.is_superuser %}
                                     <div class="dropdown-divider"></div>
                                     <a class="dropdown-item" href="javascript:void(0)" id="ver-webhook-conv"
@@ -609,6 +614,38 @@
                     <a href="/whatsapp/sesiones/" class="btn btn-primary">
                         <i class="fa fa-plus me-1"></i> Crear o conectar una sesión
                     </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Modal: confirmar reinicio del flujo del chatbot tradicional #}
+    <div class="modal fade" id="modalReiniciarFlujo" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2 bg-primary bg-opacity-10">
+                    <h6 class="modal-title text-primary">
+                        <i class="fa fa-redo me-1"></i> Reiniciar flujo del chatbot
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body py-3">
+                    <p class="mb-2">
+                        ¿Deseas reenviar el mensaje de inicio de conversación reiniciando
+                        la conversación?
+                    </p>
+                    <p class="text-muted small mb-0">
+                        Se limpiarán las variables capturadas y el cliente recibirá
+                        nuevamente el mensaje inicial del flujo.
+                    </p>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+                    <button type="button" class="btn btn-sm btn-primary" id="btn-confirmar-reiniciar-flujo">
+                        <i class="fa fa-redo me-1"></i> Sí, reiniciar
+                    </button>
                 </div>
             </div>
         </div>
@@ -963,6 +1000,40 @@
             })
             .fail(function(xhr) { console.error('[toggleBloquearCierre] ajax fail', xhr.status, xhr.responseText); });
     }
+
+    function reiniciarFlujoChatbot() {
+        const id = $('#conversacion-id').val();
+        if (!id) return;
+        const modalEl = document.getElementById('modalReiniciarFlujo');
+        if (!modalEl) return;
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+
+    $(document).on('click', '#btn-confirmar-reiniciar-flujo', function() {
+        const id = $('#conversacion-id').val();
+        if (!id) return;
+        const $btn = $(this);
+        const modalEl = document.getElementById('modalReiniciarFlujo');
+        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Reiniciando...');
+        $.post('', { action: 'reiniciar-flujo', id: id, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
+            .done(function(r) {
+                bootstrap.Modal.getInstance(modalEl)?.hide();
+                if (r.error) {
+                    mensajeDanger(r.message || 'No se pudo reiniciar el flujo.');
+                    return;
+                }
+                mensajeSuccess(r.message || 'Flujo reiniciado.');
+                console.info('[reiniciarFlujoChatbot] respuestas enviadas:', r.respuestas_enviadas);
+            })
+            .fail(function(xhr) {
+                bootstrap.Modal.getInstance(modalEl)?.hide();
+                console.error('[reiniciarFlujoChatbot] ajax fail', xhr.status, xhr.responseText);
+                mensajeDanger('Error al reiniciar el flujo (' + xhr.status + ').');
+            })
+            .always(function() {
+                $btn.prop('disabled', false).html('<i class="fa fa-redo me-1"></i> Sí, reiniciar');
+            });
+    });
 
     function _actualizarBloquearCierreUI(bloqueado) {
         if (bloqueado) {
@@ -1786,6 +1857,13 @@
                     // Bloquear cierre
                     _bloquearCierreActual = response.bloquear_cierre || false;
                     _actualizarBloquearCierreUI(_bloquearCierreActual);
+
+                    // Reiniciar flujo: solo visible cuando la sesión es 'tradicional'
+                    if (response.es_tradicional === true) {
+                        $('#btn-reiniciar-flujo').removeClass('d-none');
+                    } else {
+                        $('#btn-reiniciar-flujo').addClass('d-none');
+                    }
 
                     // Asignado a
                     if (response.asignado_a) {

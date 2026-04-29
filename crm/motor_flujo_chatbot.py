@@ -1491,3 +1491,148 @@ def procesar_mensaje_tradicional(session, conversation, contacto, texto, boton_i
         finalizado=motor.finalizado,
         respuestas=motor.respuestas,
     )
+
+
+def reiniciar_flujo_tradicional(conversation, depto=None) -> ResultadoFlujo:
+    """Fuerza el reinicio del flujo tradicional de una conversación desde
+    fuera del webhook (botón del agente, comando admin, etc).
+
+    Limpia variables, libera handoff, vuelve al `nodo_inicio` del depto
+    indicado (o el del estado actual / `session.departamento_default`) y
+    procesa ese nodo para que el cliente reciba el mensaje de bienvenida
+    sin necesidad de que escriba un trigger.
+
+    Garantiza al menos un mensaje saliente: si el depto no tiene
+    `mensaje_reset` ni `mensaje_saludo` y el `nodo_inicio` no produce
+    respuesta visible, se envía un aviso genérico. Detecta fallas del
+    servicio WhatsApp (Node caído, ventana 24h Meta, sesión rate-limited,
+    etc.) y las propaga como `error` en el `ResultadoFlujo`.
+    """
+    from crm.models import EstadoFlujoChatbot
+    from whatsapp.services import get_whatsapp_service
+
+    session = conversation.sesion
+    if (session.modo_bot or 'ia') != 'tradicional':
+        return ResultadoFlujo(manejado=False, error='La sesión no es tradicional.')
+
+    contacto = conversation.contacto
+    if contacto is None:
+        return ResultadoFlujo(manejado=False, error='Conversación sin contacto.')
+
+    estado, _ = EstadoFlujoChatbot.objects.get_or_create(conversacion=conversation)
+
+    depto_objetivo = depto or estado.departamento or session.departamento_default
+    if depto_objetivo is None:
+        return ResultadoFlujo(
+            manejado=False,
+            error='La sesión no tiene un departamento de entrada configurado.',
+        )
+
+    # Reset duro: variables, nodo, handoff. Hacer en una sola escritura
+    # para que nada quede inconsistente si algo falla más adelante.
+    estado.departamento = depto_objetivo
+    estado.nodo_actual = depto_objetivo.nodo_inicio()
+    estado.variables = {}
+    estado.intentos = 0
+    estado.finalizado = False
+    estado.en_handoff = False
+    estado.save()
+
+    motor = MotorFlujo(session, conversation, contacto, '', estado,
+                      get_whatsapp_service(session))
+
+    # Wrap motor.enviar para capturar fallas reales del transporte.
+    # `WhatsAppService.send_text_message` y `MetaWhatsAppService.send_text_message`
+    # nunca lanzan: devuelven `{'success': False, 'error': ...}`. Sin este
+    # wrapper, motor.enviar persiste el mensaje en BD aunque el cliente
+    # nunca lo reciba. Acá interceptamos para reportar la verdad al usuario.
+    fallas_transporte: list[str] = []
+    enviar_original = motor.enviar
+
+    def enviar_con_seguimiento(texto: str):
+        if not texto:
+            return
+        resuelto = resolver_expresion(texto, motor.contexto())
+        try:
+            r = motor.ws.send_text_message(
+                session.session_id,
+                contacto.from_number,
+                resuelto,
+                conversation.id,
+                True,
+            ) or {}
+        except Exception as e:
+            logger.exception('Reset manual: send_text_message lanzó: %s', e)
+            fallas_transporte.append(f'{type(e).__name__}: {str(e)[:200]}')
+            return
+        if not r.get('success'):
+            fallas_transporte.append(r.get('error', 'transporte rechazó el mensaje'))
+            return
+        motor.respuestas.append(resuelto)
+        motor._persistir_mensaje_saliente(resuelto, r)
+
+    motor.enviar = enviar_con_seguimiento
+
+    # Mensaje inicial: prioridad mensaje_reset > mensaje_saludo.
+    msg_inicial = (depto_objetivo.mensaje_reset or depto_objetivo.mensaje_saludo or '').strip()
+    if msg_inicial:
+        try:
+            msg_inicial = resolver_expresion(msg_inicial, motor.contexto()) or msg_inicial
+        except Exception:
+            logger.exception('Reset manual: error resolviendo plantilla')
+        motor.enviar(msg_inicial)
+
+    # Ejecutar el nodo de inicio para que el cliente reciba la primera
+    # pregunta/respuesta del flujo. Si falla, ya enviamos el mensaje
+    # inicial — no se rompe la operación completa.
+    if estado.nodo_actual:
+        try:
+            motor._run_loop(consumir_mensaje=False)
+        except Exception as e:
+            logger.exception('Reset manual: _run_loop falló conv#%s: %s',
+                             conversation.id, e)
+
+    # Restaurar enviar original por si algún lugar guardó referencia al motor.
+    motor.enviar = enviar_original
+
+    # Si todo el ciclo falló (nada llegó al cliente), reportar el primer
+    # error del transporte para que el agente sepa el motivo real.
+    if not motor.respuestas:
+        if fallas_transporte:
+            return ResultadoFlujo(
+                manejado=False,
+                error=f'WhatsApp rechazó el mensaje: {fallas_transporte[0]}',
+            )
+        return ResultadoFlujo(
+            manejado=False,
+            error='No se pudo enviar ningún mensaje. Revisa el estado de la sesión.',
+        )
+
+    # Notificar a las pestañas abiertas (ChatConsumer) para que el panel
+    # de la conversación re-renderice los mensajes recién persistidos sin
+    # necesidad de refrescar manualmente.
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        cl = get_channel_layer()
+        if cl is not None:
+            async_to_sync(cl.group_send)(
+                f'chat_{conversation.id}',
+                {
+                    'type': 'whatsapp_message',
+                    'event': 'new_message',
+                    'conversation_id': conversation.id,
+                    'sender': session.numero or '',
+                    'from_me': True,
+                },
+            )
+    except Exception:
+        logger.exception('Reset manual: error notificando ChatConsumer')
+
+    return ResultadoFlujo(
+        manejado=bool(motor.respuestas),
+        fallback_ia=False,
+        handoff=motor.handoff,
+        finalizado=motor.finalizado,
+        respuestas=motor.respuestas,
+    )

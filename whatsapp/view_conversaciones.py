@@ -234,6 +234,7 @@ def conversacionesView(request):
                 'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_registro else '',
                 'bloquear_cierre': conversacion.bloquear_cierre,
                 'es_meta': bool(getattr(conversacion.sesion, 'es_meta', False)),
+                'es_tradicional': (conversacion.sesion.modo_bot or '') == 'tradicional',
                 'referral': referral_data,
                 **_estadisticas_conversacion(conversacion),
             })
@@ -604,6 +605,31 @@ def conversacionesView(request):
                     estado = 'bloqueado' if filtro.bloquear_cierre else 'desbloqueado'
                     log(f"Cierre automático {estado} para conversación {filtro.id}", request, "change", obj=filtro.id)
                     return JsonResponse({'error': False, 'bloquear_cierre': filtro.bloquear_cierre})
+                elif action == 'reiniciar-flujo':
+                    # Solo aplica a sesiones con chatbot tradicional. Limpia el
+                    # estado del flujo, vuelve al nodo_inicio del depto y dispara
+                    # el primer mensaje hacia el cliente.
+                    from crm.motor_flujo_chatbot import reiniciar_flujo_tradicional
+                    filtro = ConversacionWhatsApp.objects.select_related(
+                        'sesion', 'contacto'
+                    ).get(pk=int(request.POST['id']))
+                    if (filtro.sesion.modo_bot or '') != 'tradicional':
+                        return JsonResponse({
+                            'error': True,
+                            'message': 'Esta acción solo aplica a sesiones con chatbot tradicional.',
+                        })
+                    resultado = reiniciar_flujo_tradicional(filtro)
+                    if resultado.error:
+                        return JsonResponse({'error': True, 'message': resultado.error})
+                    n_respuestas = len(resultado.respuestas or [])
+                    log(f"Flujo reiniciado manualmente en conversación {filtro.id} "
+                        f"({n_respuestas} mensajes enviados)",
+                        request, "change", obj=filtro.id)
+                    return JsonResponse({
+                        'error': False,
+                        'message': f'Flujo reiniciado. {n_respuestas} mensaje(s) enviado(s) al cliente.',
+                        'respuestas_enviadas': n_respuestas,
+                    })
                 elif action == 'marcar-resuelto':
                     try:
                         filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))

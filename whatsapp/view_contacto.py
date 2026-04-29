@@ -321,7 +321,7 @@ def contactoView(request):
             data["solo_duplicados"] = True
 
         # Optimización del listado: el template itera 20 contactos y por cada
-        # uno acceder a `l.sesion.*`, `l.referral_meta` y `l.get_mensajes_programados.count`
+        # uno acceder a `l.sesion.*` y `l.get_mensajes_programados.count`
         # disparaba 3-4 queries extra → 60-80 queries por página. Con
         # select_related + annotate las llevamos a 1 sola query agregada.
         listado = (
@@ -331,10 +331,9 @@ def contactoView(request):
                 'sesion',
                 'sesion__config_meta',
                 'sesion__config_baileys',
-                'referral_meta',
             )
             .annotate(
-                _msj_prog_count=Count(
+                msj_prog_count=Count(
                     'mensajes_programados',
                     filter=Q(mensajes_programados__status=True,
                              mensajes_programados__enviado=False),

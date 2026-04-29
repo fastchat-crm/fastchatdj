@@ -16,15 +16,19 @@ from .services import WhatsAppService, get_whatsapp_service
 from .forms import CambiarClasificacionForm
 from .view_conversaciones import _control_respuestas, _tokens_conversacion, _estadisticas_conversacion
 
-HORAS_BLOQUEO_REACTIVAR_FINALIZADA = 20
+HORAS_VENTANA_REACTIVAR = 6
 
 
 def _bloqueo_reactivar(conversacion):
-    """Bloquea reactivar/enviar mientras la conversacion tenga menos de 20h desde fecha_registro."""
+    """Permite reactivar/enviar solo dentro de las primeras N horas desde fecha_registro.
+
+    Retorna (bloqueada, vence_en). `bloqueada=True` cuando la conversación tiene
+    más de N horas — fuera de la ventana de gracia ya no se puede revivir.
+    """
     if not conversacion.fecha_registro:
         return False, None
-    disponible = conversacion.fecha_registro + timedelta(hours=HORAS_BLOQUEO_REACTIVAR_FINALIZADA)
-    return timezone.now() < disponible, disponible
+    vence_en = conversacion.fecha_registro + timedelta(hours=HORAS_VENTANA_REACTIVAR)
+    return timezone.now() > vence_en, vence_en
 
 @login_required
 @secure_module
@@ -86,7 +90,7 @@ def conversacionesFinalizadasView(request):
                 mensajes = MensajeWhatsApp.objects.filter(conversacion=conversacion).order_by('fecha')
                 data['conversacion'] = conversacion
                 data['mensajes'] = mensajes
-                bloqueada, disponible_en = _bloqueo_reactivar(conversacion)
+                bloqueada, vence_en = _bloqueo_reactivar(conversacion)
                 return JsonResponse({
                     'html': render_to_string('whatsapp/conversaciones/mensajes_partial.html', data, request=request),
                     'conversacion_id': conversacion.id,
@@ -100,8 +104,8 @@ def conversacionesFinalizadasView(request):
                     'fecha_fin': conversacion.fecha_fin_conversacion.strftime('%d/%m/%Y') if conversacion.fecha_fin_conversacion else '',
                     'es_meta': bool(getattr(conversacion.sesion, 'es_meta', False)),
                     'reactivar_bloqueada': bloqueada,
-                    'reactivar_disponible_en': disponible_en.isoformat() if disponible_en else None,
-                    'reactivar_horas_bloqueo': HORAS_BLOQUEO_REACTIVAR_FINALIZADA,
+                    'reactivar_vence_en': vence_en.isoformat() if vence_en else None,
+                    'reactivar_horas_ventana': HORAS_VENTANA_REACTIVAR,
                     **_estadisticas_conversacion(conversacion),
                 })
             except Exception as ex:
@@ -181,11 +185,11 @@ def conversacionesFinalizadasView(request):
                     archivo = request.FILES.get('archivo')  # Obtener archivo si existe
                     conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
 
-                    bloqueada, disponible_en = _bloqueo_reactivar(conversacion)
+                    bloqueada, vence_en = _bloqueo_reactivar(conversacion)
                     if bloqueada:
                         return JsonResponse({
                             'error': True,
-                            'message': f'No se puede enviar mensajes hasta que la conversacion tenga {HORAS_BLOQUEO_REACTIVAR_FINALIZADA}h de creada. Disponible: {disponible_en.strftime("%d/%m/%Y %H:%M")}.',
+                            'message': f'No se puede enviar mensajes: la ventana de {HORAS_VENTANA_REACTIVAR}h desde la creación venció el {vence_en.strftime("%d/%m/%Y %H:%M")}.',
                         })
 
                     # Crear instancia del servicio segun proveedor de la sesion
@@ -265,11 +269,11 @@ def conversacionesFinalizadasView(request):
 
                     conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
 
-                    bloqueada, disponible_en = _bloqueo_reactivar(conversacion)
+                    bloqueada, vence_en = _bloqueo_reactivar(conversacion)
                     if bloqueada:
                         return JsonResponse({
                             'error': True,
-                            'message': f'No se puede reactivar hasta que la conversacion tenga {HORAS_BLOQUEO_REACTIVAR_FINALIZADA}h de creada. Disponible: {disponible_en.strftime("%d/%m/%Y %H:%M")}.',
+                            'message': f'No se puede reactivar: la ventana de {HORAS_VENTANA_REACTIVAR}h desde la creación venció el {vence_en.strftime("%d/%m/%Y %H:%M")}.',
                         })
 
                     sesion = conversacion.sesion
@@ -377,11 +381,11 @@ def conversacionesFinalizadasView(request):
                         filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))
                     except Exception as ex:
                         raise NameError(f'No se encontró la conversación: {ex}')
-                    bloqueada, disponible_en = _bloqueo_reactivar(filtro)
+                    bloqueada, vence_en = _bloqueo_reactivar(filtro)
                     if bloqueada:
                         res_json.append({
                             'error': True,
-                            'message': f'No se puede reactivar hasta que la conversacion tenga {HORAS_BLOQUEO_REACTIVAR_FINALIZADA}h de creada. Disponible: {disponible_en.strftime("%d/%m/%Y %H:%M")}.',
+                            'message': f'No se puede reactivar: la ventana de {HORAS_VENTANA_REACTIVAR}h desde la creación venció el {vence_en.strftime("%d/%m/%Y %H:%M")}.',
                         })
                         return JsonResponse(res_json, safe=False)
                     filtro.estado_conversacion = 0
