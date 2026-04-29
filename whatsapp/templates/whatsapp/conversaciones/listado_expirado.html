@@ -1,371 +1,283 @@
-{% extends 'base.html' %}
+{% extends 'base_chat.html' %}
+{% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css">
-<style>
-    /* ── Layout flexbox: anula el position:absolute del tema ── */
-    .chat-box-right {
-        display: flex !important;
-        flex-direction: column;
-        height: calc(100vh - 120px) !important;
-        position: relative;
-    }
-    #chat-header { flex-shrink: 0; }
-    .chat-box-right .chat-body {
-        flex: 1 1 auto !important;
-        height: 105% !important;
-        min-height: 0;
-        overflow-y: auto;
-    }
-    .chat-box-right .chat-footer {
-        position: static !important;
-        flex-shrink: 0;
-        width: 100% !important;
-        background: #f0f2f5 !important;
-        border-top: 1px solid #dde1e7;
-        box-shadow: 0 -2px 8px rgba(0,0,0,.07);
-        border-radius: 0 0 8px 8px;
-        padding: 10px 14px !important;
-    }
-
-    .chat-body-left {
-        {#height: calc(100vh - 520px) !important;#}
-        overflow-y: auto;
-    }
-    .conversacion-item {
-        cursor: pointer;
-        transition: background .2s;
-    }
-    .conversacion-item:hover  { background-color: rgba(0,0,0,0.04); }
-    .conversacion-item.active { background-color: rgba(13,110,253,.08); border-color: #0d6efd !important; }
-
-    /* Chat background — finalizadas usa gris más apagado */
-    #chat-messages {
-        background-color: #ece5dd;
-    }
-    #chat-messages .simplebar-content { padding: 16px 0 !important; }
-
-    .btn-xs {
-        font-size: .75rem;
-        padding: .2rem .55rem;
-        border-radius: 20px;
-        border: 1px solid #dee2e6;
-        background: #fff;
-        color: #6c757d;
-        cursor: pointer;
-    }
-    .btn-xs:hover { background: #0d6efd; color: #fff; border-color: #0d6efd; }
-
-    /* filtros colapsables */
-    #filtros-panel { font-size: .83rem; }
-    #filtros-panel .form-control,
-    #filtros-panel .form-select { font-size: .8rem; }
-</style>
+<link rel="stylesheet" href="/static/stylenew/conversaciones.css">
 {% endblock %}
 
 {% block content %}
-    <div class="row">
-        <div class="col-12">
-            <div class="chat-box-left">
 
-                <!-- Selector de sesiones -->
-                <div class="p-3 pb-1">
-                    <select id="sesion-selector" class="form-select form-select-sm">
-                        {% for sesion in sesiones %}
-                            <option value="{{ sesion.id }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
-                                {% if sesion.es_meta %}☁️ Meta{% elif sesion.es_baileys %}📱 Baileys{% elif sesion.es_instagram %}📸 IG{% elif sesion.es_messenger %}💬 FB{% endif %} · {{ sesion.numero }} | {{ sesion.nombre }} ({{ sesion.get_estado_display }}{% if not sesion.activo %} · ⏸ PAUSADA{% endif %})
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
+<div class="chat-layout">
 
-                <!-- Tabs -->
-                <ul class="nav nav-tabs nav-justified" id="myTab" role="tablist">
-                    <li class="nav-item">
-                        <a href="/whatsapp/conversaciones/" class="nav-link py-2 bloqueo_pantalla">Abiertas</a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="javascript:void(0)" class="nav-link py-2 active">Finalizadas</a>
-                    </li>
-                </ul>
+    <aside class="chat-sidebar" id="chat-sidebar">
 
-                <!-- Filtros colapsables -->
-                <div class="px-3 pt-2">
-                    <button class="btn btn-xs btn-light border w-100 mb-1 text-start" type="button"
-                            data-bs-toggle="collapse" data-bs-target="#filtros-panel">
-                        <i class="fa fa-filter me-1 text-secondary"></i> Filtrar
-                        {% if fecha_desde or fecha_hasta or filtro_sentimiento or filtro_clasificacion %}
-                            <span class="badge bg-primary ms-1">●</span>
-                        {% endif %}
-                    </button>
-                    <div class="collapse {% if fecha_desde or fecha_hasta or filtro_sentimiento or filtro_clasificacion %}show{% endif %}" id="filtros-panel">
-                        <div class="border rounded p-2 mb-2 bg-light">
-                            <div class="mb-1">
-                                <label class="text-muted mb-0" style="font-size:.72rem;">Desde</label>
-                                <input type="date" id="filtro-fecha-desde" class="form-control form-control-sm"
-                                       value="{{ fecha_desde }}">
-                            </div>
-                            <div class="mb-1">
-                                <label class="text-muted mb-0" style="font-size:.72rem;">Hasta</label>
-                                <input type="date" id="filtro-fecha-hasta" class="form-control form-control-sm"
-                                       value="{{ fecha_hasta }}">
-                            </div>
-                            <div class="mb-1">
-                                <label class="text-muted mb-0" style="font-size:.72rem;">Sentimiento</label>
-                                <select id="filtro-sentimiento" class="form-select form-select-sm">
-                                    <option value="">Todos</option>
-                                    <option value="positivo" {% if filtro_sentimiento == 'positivo' %}selected{% endif %}>😊 Positivo</option>
-                                    <option value="neutral"  {% if filtro_sentimiento == 'neutral'  %}selected{% endif %}>😐 Neutral</option>
-                                    <option value="negativo" {% if filtro_sentimiento == 'negativo' %}selected{% endif %}>😟 Negativo</option>
-                                </select>
-                            </div>
-                            <div class="mb-1">
-                                <label class="text-muted mb-0" style="font-size:.72rem;">Etapa / Clasificación</label>
-                                <select id="filtro-clasificacion" class="form-select form-select-sm">
-                                    <option value="">Todas</option>
-                                    {% for val, label in ESTADOS_CLASIFICACION %}
-                                        <option value="{{ val }}" {% if filtro_clasificacion == val %}selected{% endif %}>{{ label }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="d-flex gap-1">
-                                <button class="btn btn-xs btn-primary flex-grow-1" id="btn-aplicar-filtros">
-                                    <i class="fa fa-search me-1"></i>Aplicar
-                                </button>
-                                <button class="btn btn-xs btn-light border" id="btn-limpiar-filtros" title="Limpiar filtros">
-                                    <i class="fa fa-times"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        <div class="cs-top-zone">
 
-                <!-- Búsqueda por contacto -->
-                <div class="chat-search px-3 pb-2">
-                    <div class="p-1 bg-light rounded rounded-pill">
-                        <div class="input-group">
-                            <div class="input-group-prepend">
-                                <button type="button" class="btn btn-link text-secondary"><i class="fa fa-search"></i></button>
-                            </div>
-                            <input type="search" id="search-conversacion" placeholder="Buscar contacto..."
-                                   class="form-control border-0 bg-light" value="{{ criterio }}">
-                        </div>
-                    </div>
-                </div>
+            <div class="cs-session-wrap">
+                <div class="cs-session-indicator {% if sesion_seleccionada.activo %}si-active{% else %}si-paused{% endif %}"></div>
+                <select id="sesion-selector" class="cs-session-select{% if sesion_seleccionada and not sesion_seleccionada.activo %} sesion-selector-pausada{% endif %}">
+                    {% for sesion in sesiones %}
+                        <option value="{{ sesion.id }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
+                            {% if sesion.es_meta %}☁️ Meta{% elif sesion.es_baileys %}📱 Baileys{% elif sesion.es_instagram %}📸 IG{% elif sesion.es_messenger %}💬 FB{% endif %} · {{ sesion.numero }} | {{ sesion.nombre }} ({{ sesion.get_estado_display }}{% if not sesion.activo %} · ⏸ PAUSADA{% endif %})
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
 
-                <div class="chat-body-left px-3" data-simplebar id="conversaciones-container">
-                    <div class="col" id="lista-conversaciones" style="display:flex;flex-direction:column;"></div>
-                </div>
-            </div><!--end chat-box-left -->
+            <div class="cs-tabs">
+                <a href="/whatsapp/conversaciones/" class="cs-tab-btn cs-tab-link bloqueo_pantalla">
+                    <i class="fa fa-comment-dots me-1"></i>Abiertas
+                </a>
+                <a href="javascript:void(0)" class="cs-tab-btn active">
+                    <i class="fa fa-check-circle me-1"></i>Finalizadas
+                </a>
+            </div>
 
-            <div class="chat-box-right">
-                <!-- Header -->
-                <div class="p-3 d-flex justify-content-between align-items-center card-bg rounded" id="chat-header">
-                    <a href="javascript:void(0);" class="d-flex align-self-center">
-                        <div class="flex-shrink-0">
-                            <img src="/static/assets/img/avatar.png" alt="user"
-                                 class="rounded-circle thumb-lg" id="contacto-foto">
+            <div class="cs-exp-filter-zone">
+                <button class="cs-exp-filter-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#filtros-panel" aria-expanded="{% if fecha_desde or fecha_hasta or filtro_sentimiento or filtro_clasificacion %}true{% else %}false{% endif %}">
+                    <i class="fa fa-sliders me-1"></i>
+                    Filtros avanzados
+                    {% if fecha_desde or fecha_hasta or filtro_sentimiento or filtro_clasificacion %}
+                        <span class="cs-filter-dot"></span>
+                    {% endif %}
+                    <i class="fa fa-chevron-down ms-auto cs-filter-arrow"></i>
+                </button>
+                <div class="collapse {% if fecha_desde or fecha_hasta or filtro_sentimiento or filtro_clasificacion %}show{% endif %}" id="filtros-panel">
+                    <div class="cs-exp-filter-body">
+                        <div class="cs-field-group">
+                            <label class="cs-field-label">Desde</label>
+                            <input type="date" id="filtro-fecha-desde" class="cs-field-input" value="{{ fecha_desde }}">
                         </div>
-                        <div class="flex-grow-1 ms-2 align-self-center">
-                            <h6 class="my-0 fw-medium text-dark fs-14">
-                                <span id="contacto-nombre">Selecciona una conversación</span>
-                                <span id="conv-id-badge" class="badge bg-light text-dark border ms-1" style="font-size:.7rem;display:none;"></span>
-                            </h6>
-                            <p class="text-muted mb-0" id="contacto-numero"></p>
-                            <p class="text-muted mb-0 d-none d-sm-block">
-                                <span id="contacto-hashedId"></span>
-                                <small id="conv-fechas" class="ms-2 text-muted" style="font-size:.75rem;display:none;"></small>
-                            </p>
+                        <div class="cs-field-group">
+                            <label class="cs-field-label">Hasta</label>
+                            <input type="date" id="filtro-fecha-hasta" class="cs-field-input" value="{{ fecha_hasta }}">
                         </div>
-                    </a>
-                    <div class="d-flex align-items-center gap-2">
-                        <div class="btn-group d-none" id="ver-resumen-btn">
-                            <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" id="ver-resumen"
-                               title="Ver resumen de la conversación">
-                                <i class="fa fa-file-alt me-1"></i>Resumen
-                            </a>
+                        <div class="cs-field-group">
+                            <label class="cs-field-label">Sentimiento</label>
+                            <select id="filtro-sentimiento" class="cs-field-input">
+                                <option value="">Todos</option>
+                                <option value="positivo" {% if filtro_sentimiento == 'positivo' %}selected{% endif %}>😊 Positivo</option>
+                                <option value="neutral"  {% if filtro_sentimiento == 'neutral'  %}selected{% endif %}>😐 Neutral</option>
+                                <option value="negativo" {% if filtro_sentimiento == 'negativo' %}selected{% endif %}>😟 Negativo</option>
+                            </select>
                         </div>
-                        <button class="btn btn-sm btn-light border d-none" id="btn-estadisticas"
-                                onclick="$('#stats-panel').toggleClass('d-none');if(!$('#stats-panel').hasClass('d-none'))_renderEstExpired();" title="Estadísticas">
-                            <i class="fa fa-chart-line text-primary"></i>
-                        </button>
-                        <button class="btn btn-sm btn-light border d-none" id="btn-control-respuestas"
-                                onclick="$('#control-respuestas-panel').toggleClass('d-none')" title="Control de Respuestas">
-                            <i class="fa fa-chart-bar text-info"></i>
-                        </button>
-                        <div class="btn-group d-none" id="reactivar-btn">
-                            <a href="javascript:void(0)" class="btn btn-sm btn-success" id="marcar-reactivar"
-                               title="Reactivar conversación">
-                                <i class="fa fa-redo me-1"></i>Reactivar
-                            </a>
+                        <div class="cs-field-group">
+                            <label class="cs-field-label">Etapa</label>
+                            <select id="filtro-clasificacion" class="cs-field-input">
+                                <option value="">Todas</option>
+                                {% for val, label in ESTADOS_CLASIFICACION %}
+                                    <option value="{{ val }}" {% if filtro_clasificacion == val %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
-                        <div class="dropdown d-inline d-none" id="dropdowns-btn">
-                            <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" data-bs-toggle="dropdown">
-                                <i class="fa fa-ellipsis-v"></i>
-                            </a>
-                            <div class="dropdown-menu dropdown-menu-end">
-                                <a href="javascript:void(0)" class="dropdown-item form_modal" id="cambiar-clasificacion" title="Cambiar clasificacion">
-                                    <i class="fa fa-sync me-2"></i> Cambiar clasificación
-                                </a>
-                                <a class="dropdown-item" href="javascript:void(0)" onclick="abrirModalAsignarPipeline()" title="Asignar esta conversacion a un pipeline de ventas">
-                                    <i class="fa fa-columns me-2 text-primary"></i> Asignar a pipeline
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Panel Estadísticas -->
-                <div id="stats-panel" class="d-none border-bottom" style="background:#f0f4ff;font-size:.8rem;">
-                    <div class="px-3 py-2">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <strong class="text-primary"><i class="fa fa-chart-line me-1"></i>Estadísticas</strong>
-                            <span id="stat-estado"></span>
-                            <span class="ms-auto text-muted"><i class="fa fa-clock me-1"></i><span id="stat-duracion">—</span></span>
-                        </div>
-                        <div class="row g-1">
-                            <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold text-dark" id="stat-msgs-total">0</div><div class="text-muted" style="font-size:.7rem;">Total</div></div></div>
-                            <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold text-warning" id="stat-msgs-cliente">0</div><div class="text-muted" style="font-size:.7rem;">Cliente</div></div></div>
-                            <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold text-success" id="stat-msgs-agente">0</div><div class="text-muted" style="font-size:.7rem;">Agente</div></div></div>
-                            <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold" style="color:#5c6bc0" id="stat-msgs-ia">0</div><div class="text-muted" style="font-size:.7rem;">IA</div></div></div>
-                            <div class="col-auto ms-2"><div class="border rounded px-2 py-1 bg-white" style="min-width:160px;">
-                                <div class="d-flex gap-1 align-items-center"><i class="fa fa-microchip" style="color:#5c35d4;font-size:.75rem;"></i><span class="fw-bold" id="stat-tokens-total">0</span><small class="text-muted">tokens</small></div>
-                                <div class="text-muted" style="font-size:.7rem;">↑<span id="stat-tokens-entrada">0</span> &nbsp;·&nbsp; ↓<span id="stat-tokens-salida">0</span></div>
-                                <div class="text-muted mt-1" style="font-size:.7rem;"><i class="fa fa-robot me-1"></i><span id="stat-modelo">—</span></div>
-                            </div></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Panel Control de Respuestas -->
-                <div id="control-respuestas-panel" class="d-none px-3 py-2 border-bottom"
-                     style="background:#f8f9fa;font-size:.82rem;">
-                    <div class="d-flex align-items-center gap-3 flex-wrap">
-                        <strong><i class="fa fa-chart-bar me-1 text-info"></i>Control de Respuestas</strong>
-                        <span class="badge" style="background:#5c6bc0;color:#fff;">
-                            <i class="fa fa-robot me-1"></i><span id="cr-ia-count">0</span> IA
-                        </span>
-                        <span class="badge bg-success">
-                            <i class="fa fa-headset me-1"></i><span id="cr-agent-count">0</span> Agente
-                        </span>
-                        <div id="cr-agentes-list" class="d-flex flex-wrap gap-2"></div>
-                    </div>
-                </div>
-
-                <!-- Mensajes -->
-                <div class="chat-body" data-simplebar id="chat-messages">
-                    <div class="chat-detail" id="mensajes-container">
-                        <div class="text-center p-5">
-                            <i class="fa fa-comments fa-4x text-muted mb-3"></i>
-                            <p class="text-muted">Selecciona una conversación para ver los mensajes</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Footer: solo permite enviar plantillas Meta para reactivar la conversacion -->
-                <div class="chat-footer" id="chat-footer" style="display:none;">
-                    {% csrf_token %}
-                    <input type="hidden" id="conversacion-id" value="">
-                    <div id="bloqueo-reactivar-aviso" class="small text-warning mb-2" style="display:none;">
-                        <i class="fa fa-hourglass-half me-1"></i><span id="bloqueo-reactivar-msg"></span>
-                    </div>
-                    <div class="d-flex align-items-center gap-2" id="footer-plantillas-row" style="position:relative;">
-                        <div class="flex-grow-1 small text-muted">
-                            <i class="fa fa-lock me-1"></i>Conversación finalizada. Solo puedes reenganchar enviando una plantilla Meta aprobada.
-                        </div>
-                        <div style="position:relative;flex-shrink:0;">
-                            <button type="button" id="plantillas-btn" title="Enviar plantilla para reactivar">
-                                <i class="fa fa-layer-group"></i>
-                                <span class="badge-count" id="plantillas-badge" style="display:none;">0</span>
+                        <div class="cs-filter-actions">
+                            <button class="cs-btn-apply" id="btn-aplicar-filtros">
+                                <i class="fa fa-search me-1"></i>Apply
                             </button>
-                            <div id="plantillas-panel">
-                                <div class="pp-header">
-                                    <span><i class="fa fa-layer-group me-1"></i>Plantillas aprobadas</span>
-                                    <span>
-                                        <button type="button" class="pp-close" id="plantillas-refresh" title="Refrescar plantillas">
-                                            <i class="fa fa-rotate"></i>
-                                        </button>
-                                        <button type="button" class="pp-close" id="plantillas-close" title="Cerrar">&times;</button>
-                                    </span>
-                                </div>
-                                <div class="pp-search">
-                                    <input type="search" id="plantillas-search" placeholder="Buscar plantilla...">
-                                </div>
-                                <div class="pp-list" id="plantillas-list">
-                                    <div class="pp-empty">Cargando...</div>
-                                </div>
-                                <div class="pp-form" id="plantillas-form">
-                                    <div class="pp-form-title">
-                                        <button type="button" class="pp-back" id="plantillas-form-back">
-                                            <i class="fa fa-arrow-left"></i>
-                                        </button>
-                                        <span id="plantillas-form-nombre"></span>
-                                    </div>
-                                    <div id="plantillas-form-vars"></div>
-                                    <div class="pp-form-actions">
-                                        <button type="button" class="pp-btn-cancelar" id="plantillas-form-cancelar">Cancelar</button>
-                                        <button type="button" class="pp-btn-enviar" id="plantillas-form-enviar">Enviar y reactivar</button>
-                                    </div>
-                                </div>
+                            <button class="cs-btn-clear" id="btn-limpiar-filtros" title="Clear filters">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cs-search-wrap">
+                <i class="fa fa-search cs-search-icon"></i>
+                <input type="search" id="search-conversacion" class="cs-search-input" placeholder="Search contact..." value="{{ criterio }}">
+            </div>
+
+        </div>
+
+        <div class="cs-conv-list" id="conversaciones-container">
+            <div id="lista-conversaciones"></div>
+        </div>
+
+    </aside>
+
+    <main class="chat-main" id="chat-main">
+
+        <div class="cm-header" id="chat-header">
+            <div class="cm-header-left">
+                <button type="button" class="btn btn-sm btn-link text-muted p-1 me-1 d-md-none chat-back-btn" id="chat-back-btn" title="Back">
+                    <i class="fa fa-arrow-left"></i>
+                </button>
+                <img src="/static/assets/img/avatar.png" alt="" class="cm-contact-avatar" id="contacto-foto">
+                <div class="cm-contact-info">
+                    <div class="cm-contact-name">
+                        <span id="contacto-nombre">Select a conversation</span>
+                        <span id="conv-id-badge" class="badge bg-light text-dark border ms-1" style="font-size:.7rem;display:none;"></span>
+                    </div>
+                    <div class="cm-contact-sub">
+                        <span id="contacto-numero"></span>
+                        <span id="contacto-hashedId" class="ms-1" style="font-size:.75rem;"></span>
+                        <small id="conv-fechas" class="ms-2 text-muted" style="display:none;font-size:.75rem;"></small>
+                    </div>
+                </div>
+            </div>
+            <div class="cm-header-right">
+                <div class="btn-group d-none" id="ver-resumen-btn">
+                    <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" id="ver-resumen" title="View conversation summary">
+                        <i class="fa fa-file-alt me-1"></i>Summary
+                    </a>
+                </div>
+                <button class="btn btn-sm btn-default text-muted d-none" id="btn-estadisticas"
+                        onclick="$('#stats-panel').toggleClass('d-none');if(!$('#stats-panel').hasClass('d-none'))_renderEstExpired();" title="Statistics">
+                    <i class="fa fa-chart-line"></i>
+                </button>
+                <button class="btn btn-sm btn-default text-muted d-none" id="btn-control-respuestas"
+                        onclick="$('#control-respuestas-panel').toggleClass('d-none')" title="Response Control">
+                    <i class="fa fa-chart-bar"></i>
+                </button>
+                <div class="btn-group d-none" id="reactivar-btn">
+                    <a href="javascript:void(0)" class="btn btn-sm btn-success" id="marcar-reactivar" title="Reactivate conversation">
+                        <i class="fa fa-redo me-1"></i>Reactivar
+                    </a>
+                </div>
+                <div class="dropdown d-inline d-none" id="dropdowns-btn">
+                    <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" data-bs-toggle="dropdown" data-bs-strategy="fixed">
+                        <i class="fa fa-ellipsis-v"></i>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-end">
+                        <a href="javascript:void(0)" class="dropdown-item form_modal" id="cambiar-clasificacion" title="Change classification">
+                            <i class="fa fa-sync me-2"></i>Cambiar clasificación
+                        </a>
+                        <a class="dropdown-item" href="javascript:void(0)" onclick="abrirModalAsignarPipeline()" title="Assign to pipeline">
+                            <i class="fa fa-columns me-2 text-primary"></i>Asignar a pipeline
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="stats-panel" class="d-none border-bottom" style="background:#f0f4ff;font-size:.8rem;">
+            <div class="px-3 py-2">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <strong class="text-primary"><i class="fa fa-chart-line me-1"></i>Statistics</strong>
+                    <span id="stat-estado"></span>
+                    <span class="ms-auto text-muted"><i class="fa fa-clock me-1"></i><span id="stat-duracion">—</span></span>
+                </div>
+                <div class="row g-1">
+                    <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold text-dark" id="stat-msgs-total">0</div><div class="text-muted" style="font-size:.7rem;">Total</div></div></div>
+                    <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold text-warning" id="stat-msgs-cliente">0</div><div class="text-muted" style="font-size:.7rem;">Client</div></div></div>
+                    <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold text-success" id="stat-msgs-agente">0</div><div class="text-muted" style="font-size:.7rem;">Agent</div></div></div>
+                    <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold" style="color:#5c6bc0" id="stat-msgs-ia">0</div><div class="text-muted" style="font-size:.7rem;">AI</div></div></div>
+                    <div class="col-auto ms-2"><div class="border rounded px-2 py-1 bg-white" style="min-width:160px;">
+                        <div class="d-flex gap-1 align-items-center"><i class="fa fa-microchip" style="color:#5c35d4;font-size:.75rem;"></i><span class="fw-bold" id="stat-tokens-total">0</span><small class="text-muted">tokens</small></div>
+                        <div class="text-muted" style="font-size:.7rem;">↑<span id="stat-tokens-entrada">0</span> &nbsp;·&nbsp; ↓<span id="stat-tokens-salida">0</span></div>
+                        <div class="text-muted mt-1" style="font-size:.7rem;"><i class="fa fa-robot me-1"></i><span id="stat-modelo">—</span></div>
+                    </div></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="control-respuestas-panel" class="d-none px-3 py-2 border-bottom" style="background:#f8f9fa;font-size:.82rem;">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <strong><i class="fa fa-chart-bar me-1 text-info"></i>Response Control</strong>
+                <span class="badge" style="background:#5c6bc0;color:#fff;"><i class="fa fa-robot me-1"></i><span id="cr-ia-count">0</span> AI</span>
+                <span class="badge bg-success"><i class="fa fa-headset me-1"></i><span id="cr-agent-count">0</span> Agent</span>
+                <div id="cr-agentes-list" class="d-flex flex-wrap gap-2"></div>
+            </div>
+        </div>
+
+        <div class="cm-messages" id="chat-messages">
+            <div class="cm-empty-state" id="cm-empty-state">
+                <div class="cm-empty-icon"><i class="fa fa-archive"></i></div>
+                <h5 class="cm-empty-title">Select a conversation</h5>
+                <p class="cm-empty-sub">Choose a finished conversation to view its history.</p>
+            </div>
+            <div class="chat-detail" id="mensajes-container"></div>
+        </div>
+
+        <div class="cm-composer" id="chat-footer" style="display:none;">
+            {% csrf_token %}
+            <input type="hidden" id="conversacion-id" value="">
+            <div id="bloqueo-reactivar-aviso" class="d-flex align-items-center gap-2 px-2 py-2 mb-2 rounded" style="background:#FEF9C3;border:1px solid #FDE68A;display:none!important;">
+                <i class="fa fa-hourglass-half text-warning"></i>
+                <span class="small text-warning fw-medium" id="bloqueo-reactivar-msg"></span>
+            </div>
+            <div class="d-flex align-items-center gap-2" id="footer-plantillas-row">
+                <div class="flex-grow-1" style="font-size:.8rem;color:var(--chat-text-secondary);">
+                    <i class="fa fa-lock me-1 text-muted"></i>Conversation closed — re-engage by sending an approved Meta template.
+                </div>
+                <div style="position:relative;flex-shrink:0;">
+                    <button type="button" id="plantillas-btn" title="Send template to reactivate">
+                        <i class="fa fa-layer-group"></i>
+                        <span class="badge-count" id="plantillas-badge" style="display:none;">0</span>
+                    </button>
+                    <div id="plantillas-panel">
+                        <div class="pp-header">
+                            <span><i class="fa fa-layer-group me-1"></i>Approved templates</span>
+                            <span>
+                                <button type="button" class="pp-close" id="plantillas-refresh" title="Refresh"><i class="fa fa-rotate"></i></button>
+                                <button type="button" class="pp-close" id="plantillas-close" title="Close">&times;</button>
+                            </span>
+                        </div>
+                        <div class="pp-search"><input type="search" id="plantillas-search" placeholder="Search template..."></div>
+                        <div class="pp-list" id="plantillas-list"><div class="pp-empty">Loading...</div></div>
+                        <div class="pp-form" id="plantillas-form">
+                            <div class="pp-form-title">
+                                <button type="button" class="pp-back" id="plantillas-form-back"><i class="fa fa-arrow-left"></i></button>
+                                <span id="plantillas-form-nombre"></span>
+                            </div>
+                            <div id="plantillas-form-vars"></div>
+                            <div class="pp-form-actions">
+                                <button type="button" class="pp-btn-cancelar" id="plantillas-form-cancelar">Cancel</button>
+                                <button type="button" class="pp-btn-enviar" id="plantillas-form-enviar">Send &amp; Reactivate</button>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div><!--end chat-box-right -->
+            </div>
+        </div>
+
+    </main>
+
+</div>
+
+{% csrf_token %}
+<div class="modal fade" id="modalDetalle" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalNombre">Conversation Summary</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body detalleProdModal"></div>
         </div>
     </div>
+</div>
 
-    {% csrf_token %}
-    <!-- Modal resumen -->
-    <div class="modal fade" id="modalDetalle" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content">
+<div class="modal fade" id="modalForm" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
+                {% csrf_token %}
                 <div class="modal-header">
-                    <h5 class="modal-title" id="modalNombre">Resumen de Conversación</h5>
+                    <h5 class="modal-title" id="modalFormTitle"></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body detalleProdModal"></div>
-            </div>
+                <div class="modal-body detalleProd"></div>
+            </form>
         </div>
     </div>
+</div>
 
-    <!-- Modal acciones (clasificación, etc.) -->
-    <div class="modal fade" id="modalForm" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content">
-                <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
-                    {% csrf_token %}
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="modalFormTitle"></h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body detalleProd"></div>
-                </form>
-            </div>
-        </div>
-    </div>
-    {# Modal compartido para asignar la conversacion seleccionada a un pipeline #}
-    {% include 'whatsapp/conversaciones/_modal_asignar_pipeline.html' %}
+{% include 'whatsapp/conversaciones/_modal_asignar_pipeline.html' %}
 
-    {# Modal: no hay sesiones de WhatsApp configuradas #}
-    <div class="modal fade" id="modalSinSesiones" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-body text-center py-4 px-4">
-                    <div class="mb-3">
-                        <i class="fa fa-satellite-dish fa-3x text-primary"></i>
-                    </div>
-                    <h5 class="mb-2">Aún no hay sesiones de WhatsApp</h5>
-                    <p class="text-muted mb-4">
-                        Para ver conversaciones finalizadas primero necesitás conectar
-                        al menos un canal (WhatsApp, Instagram o Messenger).
-                    </p>
-                    <a href="/whatsapp/sesiones/" class="btn btn-primary">
-                        <i class="fa fa-plus me-1"></i> Crear o conectar una sesión
-                    </a>
-                </div>
+<div class="modal fade" id="modalSinSesiones" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center py-4 px-4">
+                <div class="mb-3"><i class="fa fa-satellite-dish fa-3x text-primary"></i></div>
+                <h5 class="mb-2">No WhatsApp sessions yet</h5>
+                <p class="text-muted mb-4">Connect at least one channel to view finished conversations.</p>
+                <a href="/whatsapp/sesiones/" class="btn btn-primary"><i class="fa fa-plus me-1"></i>Connect a session</a>
             </div>
         </div>
     </div>
+</div>
+
 {% endblock %}
 
 {% block jscript %}
@@ -451,8 +363,8 @@ $(document).ready(function() {
 
     // ── Scroll ─────────────────────────────────────────────────────────
     function scrollToBottom() {
-        const cw = document.getElementById('chat-messages')?.querySelector('.simplebar-content-wrapper');
-        if (cw) cw.scrollTop = cw.scrollHeight;
+        const el = document.getElementById('chat-messages');
+        if (el) el.scrollTop = el.scrollHeight;
     }
 
     // ── Estadísticas ────────────────────────────────────────────────────
@@ -493,12 +405,16 @@ $(document).ready(function() {
         _cargandoMensajes = false;
         $.unblockUI();
         if (chatSocket) { chatSocket.close(); chatSocket = null; }
-        $('#mensajes-container').html('<div class="text-center p-5"><i class="fa fa-comments fa-4x text-muted mb-3"></i><p class="text-muted">Selecciona una conversación</p></div>');
-        $('#reactivar-btn, #ver-resumen-btn, #chat-footer, #dropdowns-btn').addClass('d-none').hide();
-        $('#contacto-nombre').text('Selecciona una conversación');
+        $('#mensajes-container').html('');
+        $('#cm-empty-state').show();
+        $('#reactivar-btn, #ver-resumen-btn, #chat-footer, #dropdowns-btn, #btn-estadisticas, #btn-control-respuestas').addClass('d-none').hide();
+        $('#stats-panel, #control-respuestas-panel').addClass('d-none');
+        $('#contacto-nombre').text('Select a conversation');
+        $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
         $('#contacto-numero, #contacto-hashedId').text('');
         $('#conv-id-badge').hide();
         $('#conv-fechas').hide();
+        $('.conversacion-item').removeClass('active');
         conversacionActiva = null;
     }
 
@@ -542,6 +458,7 @@ $(document).ready(function() {
             success: function(r) {
                 $.unblockUI();
                 _cargandoMensajes = false;
+                $('#cm-empty-state').hide();
 
                 $('#mensajes-container').html(r.html);
                 $('#contacto-nombre').text(r.contacto_nombre || r.contacto_numero);

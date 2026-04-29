@@ -1,0 +1,427 @@
+{% load templatefunctions %}
+<!DOCTYPE html>
+<html lang="es" dir="ltr" data-bs-theme="light">
+<head>
+    <meta charset="utf-8"/>
+    <title>{{ titulo|default:"Chat" }} | {{ nombreempresa }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta content="{{ confi.descripcion }}" name="description"/>
+    <link href="{{ favicon }}" rel="shortcut icon"/>
+    <meta name="theme-color" content="#22C55E">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+    <link href="/static/assets_riz/css/bootstrap.min.css?1.5" rel="stylesheet" type="text/css"/>
+    <link href="/static/assets_riz/css/icons.min.css" rel="stylesheet" type="text/css"/>
+    <link href="/static/fontawesome-6.6.0/css/all.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap"
+          rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/whatsapp/chat_layout.css?v2.1">
+    <link rel="stylesheet" href="/static/sweetalert2/sweetalert2.css">
+    <link href="/static/select2/select2.min.css?1.3" rel="stylesheet">
+    <link rel="stylesheet" href="/static/snackbar/dist/snackbar.min.css">
+    <link href="/static/assets_riz/libs/simplebar/simplebar.min.css" rel="stylesheet" type="text/css"/>
+    <link rel="stylesheet" href="/static/dropify/css/dropify.min.css">
+    <link href="/static/lib/tempusdominus-bootstrap-4/tempusdominus-bootstrap-4.min.css" rel="stylesheet"/>
+    <meta name="vapid-key" content="{{ vapid_key }}">
+    <meta name="islogged" content="{{ request.user.is_authenticated }}">
+    {% block head %}{% endblock %}
+    <script>
+        {% if activar_cambio_clave %}
+            window.location.href = "/changepass/";
+        {% endif %}
+    </script>
+</head>
+<body class="chat-app-body">
+
+<nav class="chat-navbar">
+    <div class="chat-navbar-inner">
+        <div class="chat-navbar-left">
+            <a href="/panel/" class="chat-back-circle" title="Back to dashboard">
+                <i class="fa fa-chevron-left"></i>
+            </a>
+            <a href="/panel/" class="chat-navbar-brand">
+                <div class="chat-brand-icon">
+                    {% if confi.logo_sistema %}
+                        <img src="/media/{{ confi.logo_sistema }}" alt="" style="width:22px;height:22px;object-fit:contain;border-radius:4px;">
+                    {% else %}
+                        <i class="fa fa-comments"></i>
+                    {% endif %}
+                </div>
+                <div class="chat-brand-text">
+                    <span class="chat-brand-name">{{ alias|default:nombreempresa }}</span>
+                    <span class="chat-brand-sub">WhatsApp Workspace</span>
+                </div>
+            </a>
+        </div>
+        <div class="chat-navbar-actions">
+            <div class="dropdown">
+                <button type="button" class="chat-nav-btn" data-bs-toggle="dropdown" aria-expanded="false"
+                        title="Notificaciones">
+                    <i class="icofont-bell-alt{% if totalnot %} text-warning{% endif %}"></i>
+                    {% if totalnot %}
+                        <span class="chat-nav-badge">{% if totalnot > 99 %}99+{% else %}{{ totalnot }}{% endif %}</span>
+                    {% endif %}
+                </button>
+                <div class="dropdown-menu dropdown-menu-end py-0 shadow-sm" style="min-width:300px;max-width:360px;">
+                    <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
+                        <strong style="font-size:.85rem;">Notificaciones</strong>
+                        {% if totalnot %}<small class="text-muted">{{ totalnot }} sin leer</small>{% endif %}
+                    </div>
+                    {% for notif in listnotification %}
+                        <a href="{% if notif.url %}{{ notif.url }}{% else %}/notificaciones/{% endif %}"
+                           class="dropdown-item d-flex align-items-start py-2 border-bottom dp-notif-item"
+                           data-notif-id="{{ notif.id }}"
+                           style="white-space:normal;">
+                            <div class="me-2 flex-shrink-0">
+                                <span class="badge rounded-circle d-inline-flex align-items-center justify-content-center"
+                                      style="width:28px;height:28px;background:{% if notif.tipo == 4 %}#dc3545{% elif notif.tipo == 3 %}#198754{% elif notif.tipo == 2 %}#0d6efd{% else %}#0dcaf0{% endif %};color:#fff;font-size:.65rem;">
+                                    <i class="fa fa-{% if notif.tipo == 4 %}triangle-exclamation{% elif notif.tipo == 3 %}circle-check{% elif notif.tipo == 2 %}bullhorn{% else %}circle-info{% endif %}"></i>
+                                </span>
+                            </div>
+                            <div class="flex-grow-1" style="min-width:0;">
+                                <div style="font-size:.8rem;font-weight:600;"
+                                     class="text-dark text-truncate">{{ notif.titulo|default:"(sin título)" }}</div>
+                                <div class="text-muted"
+                                     style="font-size:.75rem;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">{{ notif.cuerpo|striptags|truncatechars:70 }}</div>
+                                <small class="text-muted" style="font-size:.7rem;"><i
+                                        class="fa fa-clock me-1"></i>{{ notif.fecha_registro|date:"d/m/Y H:i" }}</small>
+                            </div>
+                        </a>
+                    {% empty %}
+                        <div class="text-center py-3 px-3">
+                            <img src="/static/iconos/notificacion.svg" style="width:80px;" alt="">
+                            <p class="mb-0 mt-2 text-muted" style="font-size:.82rem;">Sin notificaciones nuevas</p>
+                        </div>
+                    {% endfor %}
+                    <a href="/notificaciones/" class="dropdown-item text-center py-2"
+                       style="font-size:.8rem;color:#22C55E;font-weight:500;">
+                        Ver todas las notificaciones
+                    </a>
+                </div>
+            </div>
+            {% if request.user.is_authenticated %}
+                <div class="chat-nav-sep"></div>
+                <div class="dropdown">
+                    <button type="button" class="chat-user-btn" data-bs-toggle="dropdown" aria-expanded="false">
+                        <div class="chat-user-avatar-wrap">
+                            {% if request.user.get_foto_gris %}
+                                <img src="{{ request.user.get_foto_gris }}" alt="" class="chat-user-avatar">
+                            {% else %}
+                                <div class="chat-user-initials">{{ request.user.first_name|first|upper }}{{ request.user.last_name|first|upper }}</div>
+                            {% endif %}
+                            <span class="chat-user-online-dot"></span>
+                        </div>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end py-0 shadow-sm" style="min-width:220px;">
+                        <div class="d-flex align-items-center px-3 py-2 border-bottom bg-light">
+                            <div class="flex-shrink-0 me-2">
+                                {% if request.user.get_foto_gris %}
+                                    <img src="{{ request.user.get_foto_gris }}" alt=""
+                                         style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
+                                {% else %}
+                                    <div class="chat-user-initials" style="width:36px;height:36px;font-size:.85rem;">
+                                        {{ request.user.first_name|first|upper }}{{ request.user.last_name|first|upper }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="flex-grow-1 min-w-0">
+                                <div style="font-size:.82rem;font-weight:600;color:#111827;"
+                                     class="text-truncate">{{ request.user.get_full_name }}</div>
+                                <small class="text-muted"
+                                       style="font-size:.72rem;">{{ request.user.groups_str }}</small>
+                            </div>
+                        </div>
+                        <div class="dropdown-divider mt-0"></div>
+                        <a class="dropdown-item" href="/perfilpanel/" style="font-size:.82rem;"><i
+                                class="fa fa-user me-2"></i>Profile</a>
+                        <a class="dropdown-item" href="/panel/" style="font-size:.82rem;"><i
+                                class="fa fa-home me-2"></i>Dashboard</a>
+                        {% if request.user.is_superuser %}
+                            <a class="dropdown-item" href="/admin" style="font-size:.82rem;"><i
+                                    class="fa fa-cogs me-2"></i>Admin</a>
+                        {% endif %}
+                        <div class="dropdown-divider mb-0"></div>
+                        <a class="dropdown-item text-danger" href="{% url 'logout_url' %}" style="font-size:.82rem;"><i
+                                class="fa fa-power-off me-2"></i>Sign out</a>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</nav>
+
+<div class="chat-app-shell">
+    {% block content %}{% endblock %}
+</div>
+
+<div class="modal fade static" id="modalPost" aria-labelledby="modalPostLabel" aria-hidden="true" role="dialog">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalPostLabel"><i class="fas fa-eye icono"></i> <strong
+                        class="accion"></strong></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="excluirFormAjax" action="{{ ruta }}" method="POST" class="form-horizontal form-modal"
+                      autocomplete="off" enctype="multipart/form-data">{% csrf_token %}
+                    <div class="tablaaqui"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalGet" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-eye"></i> <strong class="accion"></strong></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form action="{{ ruta }}" method="GET" enctype="multipart/form-data">{% csrf_token %}
+                    <div class="tablaaqui"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalConsulta" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="frmConsulta" method="post" enctype="multipart/form-data">{% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title"><b id="nombre"></b></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body tablaaqui"></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="/static/fontawesome-6.6.0/js/all.js"></script>
+<script src="/static/assets_riz/libs/bootstrap/js/bootstrap.bundle.min.js?1"></script>
+<script src="/static/assets_riz/libs/simplebar/simplebar.min.js"></script>
+<script src="/static/assets_riz/js/app.js"></script>
+<script src="/static/jquery-3.7.1.min.js"></script>
+<script src="/static/lib/moment-2.25.3/moment-with-locales.js"></script>
+<script src="/static/lib/tempusdominus-bootstrap-4/tempusdominus-bootstrap-4.min.js"></script>
+<script src="/static/sweetalert2/sweetalert2.js"></script>
+<script src="/static/jquery.blockUI.js"></script>
+<script>
+    $(function () {
+        if (typeof $.blockUI !== 'undefined') {
+            $.blockUI.defaults.overlayCSS = {backgroundColor: 'transparent', opacity: 0, cursor: 'default'};
+            $.blockUI.defaults.message = null;
+        }
+    });
+</script>
+<script src="/static/select2/select2.min.js?1"></script>
+<script src="/static/select2/i18n/es.js"></script>
+<script src="/static/dropify/js/dropify.min.js"></script>
+<script src="/static/js/base-admin.js?v=2"></script>
+<script src="/static/js/errors_meta.js?v=1"></script>
+<script src="/static/validaciones/funciones.js?v=2.2"></script>
+<script src="/static/js/dfp.min.js"></script>
+<script>
+    function pantallaespera(titulo = 'Procesando', mensaje = 'Por favor espere...') {
+        const logoUrl = '/media/{{ confi.logo_sistema }}';
+        const blockMsg = `
+        <div style="text-align:center;">
+            <img src="${logoUrl}" style="height:45px; margin-bottom:15px;">
+            <div class="spinner-border text-light" style="width:1.5rem; height:1.5rem;"></div>
+            <div style="margin-top:10px; font-weight:500; color:white;">${titulo}</div>
+            <div style="margin-top:5px; font-size:14px; color:rgba(255,255,255,0.8);">${mensaje}</div>
+        </div>
+        `;
+        $.blockUI({
+            message: blockMsg,
+            css: {
+                padding: '20px',
+                backgroundColor: 'rgba(33, 37, 41, 0.85)',
+                border: 'none',
+                borderRadius: '8px',
+                width: '280px',
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)',
+                zIndex: 9999999
+            },
+            overlayCSS: {
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                zIndex: 9999990
+            }
+        });
+    }
+
+    function alertaSuccess(mensaje) {
+        console.log(mensaje);
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            type: 'success',
+            title: mensaje,
+            showConfirmButton: false,
+            timer: 6000
+        })
+    }
+
+    function alertaInfo(mensaje) {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            type: 'info',
+            title: mensaje,
+            showConfirmButton: false,
+            timer: 6000
+        })
+    }
+
+    function alertaWarning(mensaje) {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            type: 'warning',
+            title: mensaje,
+            showConfirmButton: false,
+            timer: 6000
+        })
+    }
+
+    function alertaDanger(mensaje, timer = 1000) {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            type: 'error',
+            title: mensaje,
+            showConfirmButton: false,
+            timer: timer
+        })
+    }
+
+    function mensajeSuccess(mensaje) {
+        Swal.fire(mensaje, '{{ nombreempresa }}', 'success')
+    }
+
+    function mensajeWarning(mensaje) {
+        Swal.fire(mensaje, '{{ nombreempresa }}', 'warning')
+    }
+
+    function mensajeDanger(mensaje) {
+        Swal.fire(mensaje, '{{ nombreempresa }}', 'error')
+    }
+
+    function mensajeInfo(mensaje) {
+        Swal.fire(mensaje, '{{ nombreempresa }}', 'error')
+    }
+</script>
+<script src="/static/snackbar/dist/snackbar.min.js"></script>
+<script src="/static/js/sysend.js"></script>
+<script>
+    function redondear(numero, decimales = 0) {
+        var s = parseInt("1" + "0".repeat(decimales));
+        return Math.round(numero * s) / s;
+    }
+
+    function copiarTextoPortapapeles(texto, mensaje = "¡Copiado al portapapeles!") {
+        navigator.clipboard.writeText(texto).then(function () {
+            Snackbar.show({text: `<b>${texto}</b> ${mensaje}`, pos: 'top-center', showAction: false});
+        }, function (err) {
+        });
+    }
+
+    function debounceFunction(func, wait, immediate) {
+        var timeout;
+        return function () {
+            var context = this, args = arguments;
+            var later = function () {
+                timeout = null;
+                if (!immediate) func.apply(context, args);
+            };
+            var callNow = immediate && !timeout;
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+            if (callNow) func.apply(context, args);
+        };
+    }
+
+    function consultar(pk, nombre, accion, ocultar = false) {
+        $.ajax({
+            type: "GET",
+            url: "{{ ruta }}",
+            data: {'action': accion, 'id': pk},
+            success: function (data) {
+                if (data.result === true) {
+                    if (ocultar) {
+                        $('#modalconsultacerrar').hide();
+                    }
+                    $('.tablaaqui').html(data.data);
+                    if (typeof functionModalConsultar === "function") {
+                        functionModalConsultar();
+                    }
+                    $('#frmConsulta #nombre').html(nombre);
+                    $('#modalConsulta').modal({backdrop: 'static'}).modal('show');
+                } else {
+                    mensajeWarning(data.mensaje);
+                }
+            },
+            error: function () {
+                mensajeWarning("Error de conexión.");
+            },
+            dataType: "json"
+        });
+    }
+    {% if request.user.is_authenticated %}
+        const logoutTimeout = setTimeout(
+            window.setInterval(() => location = window.location.href.replaceAll(window.location.origin, ""), ({{ fecha_session_expira|default:'0' }} + 2) * 1000, 500)
+        );
+    {% endif %}
+    window.onload = function () {
+        {% if messages %}
+            {% for message in messages %}
+                Swal.fire({
+                    toast: true, position: 'top-end',
+                    type: '{% if message.tags %}{{ message.tags }}{% endif %}',
+                    title: '{{ message }}',
+                    showConfirmButton: false, timer: 6000
+                })
+            {% endfor %}
+        {% endif %}
+    }
+</script>
+<script>
+    (function () {
+        var CSRF = '{{ csrf_token }}';
+        if (!CSRF) return;
+        document.addEventListener('click', function (ev) {
+            var a = ev.target && ev.target.closest && ev.target.closest('a[data-notif-id]');
+            if (!a) return;
+            var id = a.getAttribute('data-notif-id');
+            if (!id) return;
+            var fd = new FormData();
+            fd.append('csrfmiddlewaretoken', CSRF);
+            fd.append('action', 'check');
+            fd.append('id', id);
+            try {
+                if (navigator.sendBeacon) {
+                    navigator.sendBeacon('/notificaciones/', fd);
+                } else {
+                    fetch('/notificaciones/', {
+                        method: 'POST',
+                        body: fd,
+                        credentials: 'same-origin',
+                        headers: {'X-Requested-With': 'XMLHttpRequest'},
+                        keepalive: true
+                    });
+                }
+            } catch (e) {
+            }
+            a.style.opacity = '.5';
+            a.style.pointerEvents = 'none';
+        });
+    })();
+</script>
+{% block jscript %}{% endblock %}
+</body>
+</html>

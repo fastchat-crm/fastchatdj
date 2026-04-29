@@ -1,159 +1,8 @@
-{% extends 'base.html' %}
+{% extends 'base_chat.html' %}
 {% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css">
 <link rel="stylesheet" href="/static/stylenew/conversaciones.css">
-<style>
-    /* ── Layout flexbox: anula el position:absolute del tema ── */
-    .chat-box-right {
-        display: flex !important;
-        flex-direction: column;
-        height: calc(100vh - 120px) !important;
-        position: relative;
-    }
-    #chat-header { flex-shrink: 0; }
-
-    /* Anula position:absolute del tema para que el footer entre en el flujo */
-    .chat-box-right .chat-body {
-        flex: 1 1 auto !important;
-        height: 105% !important;
-        min-height: 0;
-        overflow-y: auto;
-        padding-bottom: 0 !important;
-    }
-    .chat-box-right .chat-footer {
-        position: static !important;   /* cancela el absolute del tema */
-        flex-shrink: 0;
-        width: 100% !important;
-        background: #f0f2f5 !important;
-        border-top: 1px solid #dde1e7;
-        box-shadow: 0 -2px 8px rgba(0,0,0,.07);
-        border-radius: 0 0 8px 8px;
-        padding: 10px 14px !important;
-    }
-
-    .chat-body-left {
-        {#height: calc(100vh - 500px) !important;#}
-        overflow-y: auto;
-    }
-
-    /* Badge de atribución (CTWA ad) en chat header */
-    .attrib-badge {
-        background: linear-gradient(135deg, #1877f2, #166fe5);
-        color: #fff !important;
-        border: none;
-        font-size: .72rem;
-        font-weight: 600;
-        padding: .35em .65em;
-        text-decoration: none !important;
-        cursor: pointer;
-    }
-    .attrib-badge:hover {
-        background: linear-gradient(135deg, #166fe5, #0d5dcb);
-        color: #fff !important;
-    }
-    .attrib-badge .fa-bullhorn { font-size: .7rem; }
-
-    .conversacion-item {
-        cursor: pointer;
-        transition: all 0.3s;
-    }
-    .conversacion-item:hover {
-        background-color: rgba(0,0,0,0.05);
-    }
-    .conversacion-item.active {
-        background-color: rgba(0,123,255,0.1);
-        border-color: #007bff !important;
-    }
-    /* Filtros rápidos */
-    .btn-xs {
-        font-size: .75rem;
-        padding: .2rem .55rem;
-        border-radius: 20px;
-        border: 1px solid #dee2e6;
-        background: #fff;
-        color: #6c757d;
-        cursor: pointer;
-        white-space: nowrap;
-    }
-    .btn-xs:hover, .btn-xs.active {
-        background: #0d6efd;
-        color: #fff;
-        border-color: #0d6efd;
-    }
-    .btn-xs.active.sin-responder { background: #dc3545; border-color: #dc3545; }
-    /* Bot toggle */
-    #btn-toggle-bot.bot-on  { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
-    #btn-toggle-bot.bot-off { background: #fce4ec; color: #c62828; border: 1px solid #ef9a9a; }
-
-    /* Chat background */
-    #chat-messages {
-        background-color: #e5ddd5;
-        background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8b8a2' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-    }
-    /* Anclar mensajes al fondo como WhatsApp Web */
-    #chat-messages .simplebar-content-wrapper { display: flex; flex-direction: column; }
-    #chat-messages .simplebar-content {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-end;
-        padding: 8px 0 4px !important;
-        min-height: 100%;
-    }
-
-    /* ── Emoji picker ── */
-    #emoji-picker-popup {
-        position: absolute;
-        bottom: calc(100% + 6px);
-        left: 0;
-        width: 320px;
-        max-height: 260px;
-        background: #fff;
-        border: 1px solid #dde1e7;
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0,0,0,.18);
-        overflow-y: auto;
-        z-index: 999;
-        padding: 8px;
-        display: none;
-    }
-    #emoji-picker-popup .emoji-cat-title {
-        font-size: .68rem;
-        font-weight: 600;
-        color: #888;
-        padding: 4px 2px 2px;
-        letter-spacing: .04em;
-        text-transform: uppercase;
-    }
-    #emoji-picker-popup .emoji-grid {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 2px;
-        margin-bottom: 4px;
-    }
-    #emoji-picker-popup .e {
-        font-size: 1.35rem;
-        width: 36px;
-        height: 36px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        border-radius: 6px;
-        transition: background .12s;
-        user-select: none;
-    }
-    #emoji-picker-popup .e:hover { background: #f0f0f0; }
-    #emoji-btn {
-        width: 38px; height: 38px; border-radius: 50%;
-        background: none; border: none; font-size: 1.25rem;
-        cursor: pointer; color: #6c757d; flex-shrink: 0;
-        display: flex; align-items: center; justify-content: center;
-        transition: background .15s;
-    }
-    #emoji-btn:hover { background: rgba(0,0,0,.07); }
-</style>
 {% endblock %}
 
 {% block content %}
@@ -195,118 +44,87 @@
         </div>
     {% endif %}
 
-    <div class="row">
-        <div class="col-12">
-            <div class="chat-box-left">
+<div class="chat-layout">
 
-                <!-- Selector de sesiones -->
-                <div class="p-3">
-                    <div class="d-flex">
-                        <select id="sesion-selector" class="form-select{% if sesion_seleccionada and not sesion_seleccionada.activo %} sesion-selector-pausada{% endif %}">
-                                {% for sesion in sesiones %}
-                                    <option value="{{ sesion.id }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
-                                        {% if sesion.es_meta %}☁️ Meta{% elif sesion.es_baileys %}📱 Baileys{% elif sesion.es_instagram %}📸 IG{% elif sesion.es_messenger %}💬 FB{% endif %} · {{ sesion.numero }} | {{ sesion.nombre }} ({{ sesion.get_estado_display }}{% if not sesion.activo %} · ⏸ PAUSADA{% endif %})
-                                    </option>
-                                {% endfor %}
-                            </select>
+    <aside class="chat-sidebar" id="chat-sidebar">
+
+        <div class="cs-top-zone">
+            <div class="cs-session-wrap">
+                <div class="cs-session-indicator {% if sesion_seleccionada.activo %}si-active{% else %}si-paused{% endif %}"></div>
+                <select id="sesion-selector" class="cs-session-select{% if sesion_seleccionada and not sesion_seleccionada.activo %} sesion-selector-pausada{% endif %}">
+                    {% for sesion in sesiones %}
+                        <option value="{{ sesion.id }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
+                            {% if sesion.es_meta %}☁️ Meta{% elif sesion.es_baileys %}📱 Baileys{% elif sesion.es_instagram %}📸 IG{% elif sesion.es_messenger %}💬 FB{% endif %} · {{ sesion.numero }} | {{ sesion.nombre }} ({{ sesion.get_estado_display }}{% if not sesion.activo %} · ⏸ PAUSADA{% endif %})
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="cs-tabs">
+                <button class="cs-tab-btn active" id="open_chats_tab" data-bs-toggle="tab" data-bs-target="#open_chats_content" type="button" role="tab">
+                    <i class="fa fa-comment-dots me-1"></i>Abiertas
+                    {% if total_sin_leer %}<span class="cs-tab-count">{{ total_sin_leer }}</span>{% endif %}
+                </button>
+                <a href="/whatsapp/conversaciones-finalizadas/" class="cs-tab-btn cs-tab-link bloqueo_pantalla" id="resolved_chats_tab">
+                    <i class="fa fa-check-circle me-1"></i>Finalizadas
+                </a>
+            </div>
+
+            <div class="cs-filter-bar" id="filtros-rapidos">
+                <button class="cs-chip filter-btn {% if not filtro_sin_responder and not filtro_mis_conv and not filtro_clasificacion %}active{% endif %}" data-filter="" title="Todas las conversaciones">
+                    <i class="fa fa-inbox"></i><span>Todas</span>
+                </button>
+                <button class="cs-chip filter-btn {% if filtro_sin_responder %}active cs-chip-alert{% endif %}" data-filter="sin_responder=1" title="Último mensaje es del cliente">
+                    <i class="fa fa-clock"></i><span>Pendientes</span>
+                </button>
+                <button class="cs-chip filter-btn {% if filtro_mis_conv %}active{% endif %}" data-filter="mis_conv=1" title="Mis conversaciones">
+                    <i class="fa fa-user-circle"></i><span>Mías</span>
+                </button>
+                <div class="dropdown">
+                    <button class="cs-chip filter-btn dropdown-toggle {% if filtro_clasificacion %}active{% endif %}" data-bs-toggle="dropdown" data-bs-strategy="fixed" title="Filtrar por etapa">
+                        <i class="fa fa-layer-group"></i><span>Etapa</span>
+                    </button>
+                    <ul class="dropdown-menu">
+                        {% for val, label in ESTADOS_CLASIFICACION %}
+                        <li><a class="dropdown-item filter-link" href="#" data-filter="clasificacion={{ val }}">{{ label }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            <div class="cs-search-wrap">
+                <i class="fa fa-search cs-search-icon"></i>
+                <input type="search" id="search-conversacion" class="cs-search-input" placeholder="Buscar conversación...">
+            </div>
+        </div>
+
+        <div class="cs-conv-list" data-simplebar id="conversaciones-container">
+            <div id="lista-conversaciones"></div>
+        </div>
+
+    </aside>
+
+    <main class="chat-main" id="chat-main">
+
+        <div class="cm-header" id="chat-header">
+            <div class="cm-header-left">
+                <button type="button" class="btn btn-sm btn-link text-muted p-1 me-1 d-md-none chat-back-btn" id="chat-back-btn" title="Volver a la lista">
+                    <i class="fa fa-arrow-left"></i>
+                </button>
+                <img src="/static/assets/img/avatar.png" alt="" class="cm-contact-avatar" id="contacto-foto">
+                <div class="cm-contact-info">
+                    <div class="cm-contact-name">
+                        <span id="contacto-nombre">Select a conversation</span>
+                        <span id="conv-id-badge" class="badge bg-light text-dark border ms-1" style="font-size:.7rem;display:none;"></span>
+                    </div>
+                    <div class="cm-contact-sub">
+                        <span id="contacto-numero"></span>
+                        <span id="contacto-hashedId" class="ms-1" style="font-size:.75rem;"></span>
+                        <small id="conv-fecha-inicio" class="ms-2 text-muted" style="display:none;font-size:.75rem;"></small>
                     </div>
                 </div>
-
-                <!-- Tabs principales -->
-                <ul class="nav nav-tabs nav-justified" id="myTab" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link py-2 active" id="open_chats_tab" data-bs-toggle="tab"
-                               data-bs-target="#open_chats_content" type="button" role="tab">
-                            Abiertas
-                            {% if total_sin_leer %}<span class="badge bg-danger ms-1">{{ total_sin_leer }}</span>{% endif %}
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <a href="/whatsapp/conversaciones-finalizadas/" class="nav-link py-2 bloqueo_pantalla" id="resolved_chats_tab">Finalizadas</a>
-                    </li>
-                </ul>
-                <!-- Filtros rápidos -->
-                <div class="px-3 pt-2 pb-1 d-flex flex-wrap gap-1" id="filtros-rapidos">
-                    <button class="btn btn-xs filter-btn {% if not filtro_sin_responder and not filtro_mis_conv and not filtro_clasificacion %}active{% endif %}"
-                            data-filter="">
-                        <i class="fa fa-th-list me-1"></i>Todas
-                    </button>
-                    <button class="btn btn-xs filter-btn {% if filtro_sin_responder %}active{% endif %}"
-                            data-filter="sin_responder=1"
-                            title="Último mensaje es del cliente">
-                        <i class="fa fa-reply me-1"></i>Sin responder
-                    </button>
-                    <button class="btn btn-xs filter-btn {% if filtro_mis_conv %}active{% endif %}"
-                            data-filter="mis_conv=1">
-                        <i class="fa fa-user me-1"></i>Mis conv.
-                    </button>
-                    <div class="dropdown">
-                        <button class="btn btn-xs filter-btn dropdown-toggle {% if filtro_clasificacion %}active{% endif %}" data-bs-toggle="dropdown">
-                            <i class="fa fa-tag me-1"></i>Etapa
-                        </button>
-                        <ul class="dropdown-menu">
-                            {% for val, label in ESTADOS_CLASIFICACION %}
-                            <li>
-                                <a class="dropdown-item filter-link" href="#"
-                                   data-filter="clasificacion={{ val }}">{{ label }}</a>
-                            </li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </div>
-
-
-                <div class="chat-search p-3">
-                    <div class="p-1 bg-light rounded rounded-pill">
-                        <div class="input-group">
-                            <div class="input-group-prepend">
-                                <button id="button-search" type="button" class="btn btn-link text-secondary">
-                                    <i class="fa fa-search"></i>
-                                </button>
-                            </div>
-                            <input type="search" id="search-conversacion" placeholder="Buscar conversación..."
-                                   aria-describedby="button-search" class="form-control border-0 bg-light">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="chat-body-left px-3" data-simplebar id="conversaciones-container">
-                    <div class="tab-content" id="pills-tabContent">
-                        <div class="tab-pane fade show active" id="messages_chat">
-                            <div class="row">
-                                <div class="col" id="lista-conversaciones" style="display: flex; flex-direction: column;">
-                                </div><!--end col-->
-                            </div><!--end row-->
-                        </div><!--end general chat-->
-                    </div><!--end tab-content-->
-                </div>
-            </div><!--end chat-box-left -->
-
-            <div class="chat-box-right">
-                <div class="p-3 d-flex justify-content-between align-items-center card-bg rounded" id="chat-header">
-                    <button type="button" class="btn btn-sm btn-link text-dark me-2 d-md-none chat-back-btn" id="chat-back-btn"
-                            title="Volver a la lista">
-                        <i class="fa fa-arrow-left"></i>
-                    </button>
-                    <a href="javascript:void(0);" class="d-flex align-self-center">
-                        <div class="flex-shrink-0">
-                            <img src="/static/assets/img/avatar.png" alt="user" class="rounded-circle thumb-lg" id="contacto-foto">
-                        </div><!-- media-left -->
-                        <div class="flex-grow-1 ms-2 align-self-center">
-                            <div>
-                                <h6 class="my-0 fw-medium text-dark fs-14">
-                                    <span id="contacto-nombre">Selecciona una conversación</span>
-                                    <span id="conv-id-badge" class="badge bg-light text-dark border ms-1" style="font-size:.7rem;display:none;"></span>
-                                </h6>
-                                <p class="text-muted mb-0" id="contacto-numero"></p>
-                                <p class="text-muted mb-0 d-none d-sm-block">
-                                    <span id="contacto-hashedId"></span>
-                                    <small id="conv-fecha-inicio" class="ms-2 text-muted" style="display:none;font-size:.75rem;"></small>
-                                </p>
-                            </div>
-                        </div><!-- end media-body -->
-                    </a><!--end media-->
-                    <div class="d-sm-inline-block align-self-center d-flex align-items-center gap-2 flex-wrap">
+            </div>
+            <div class="cm-header-right">
                         <!-- Atribución (referral CTWA / IG ad) -->
                         <div class="d-none" id="referral-container">
                             <a id="referral-badge"
@@ -349,7 +167,7 @@
                             </a>
                         </div>
                         <div class="dropdown d-inline d-none" id="dropdowns-btn">
-                            <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" data-bs-toggle="dropdown">
+                            <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" data-bs-toggle="dropdown" data-bs-strategy="fixed">
                                 <i class="fa fa-ellipsis-v"></i>
                             </a>
                             <div class="dropdown-menu dropdown-menu-end">
@@ -397,8 +215,8 @@
                                 </a>
                             </div>
                         </div>
-                    </div>
-                </div><!-- end chat-header -->
+            </div>
+        </div>
 
                 {# ── Barra de menús rápidos por sesión ── #}
                 <div id="menus-rapidos-bar" class="menus-rapidos-bar d-none">
@@ -482,55 +300,47 @@
                     </div>
                 </div>
 
-                <div class="chat-body" data-simplebar id="chat-messages">
-                    <div class="chat-detail" id="mensajes-container">
-                        <!-- Aquí se cargarán los mensajes dinámicamente -->
-                        <div class="text-center p-5">
-                            <i class="fa fa-comments fa-4x text-muted mb-3"></i>
-                            <p>Selecciona una conversación para ver los mensajes</p>
-                        </div>
-                    </div>  <!-- end chat-detail -->
-                </div><!-- end chat-body -->
+        <div class="cm-messages" id="chat-messages">
+            <div class="cm-empty-state" id="cm-empty-state">
+                <div class="cm-empty-icon"><i class="fa fa-comments"></i></div>
+                <h5 class="cm-empty-title">Select a conversation</h5>
+                <p class="cm-empty-sub">Choose from the list to start managing messages.</p>
+            </div>
+            <div class="chat-detail" id="mensajes-container"></div>
+        </div>
 
-                <!-- Formulario para enviar mensajes -->
-                <div class="chat-footer" id="chat-footer" style="display:none;">
-                    <form id="form-enviar-mensaje" enctype="multipart/form-data">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="send">
-                        <input type="hidden" name="pk" id="conversacion-id" value="">
+        <div class="cm-composer" id="chat-footer" style="display:none;">
+            <form id="form-enviar-mensaje" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="send">
+                <input type="hidden" name="pk" id="conversacion-id" value="">
 
-                        <!-- Preview archivo -->
-                        <div id="footer-file-preview" class="d-none mb-2 d-flex align-items-center gap-2"
-                             style="font-size:.82rem;background:#e9f5ff;border-radius:8px;padding:6px 10px;">
-                            <i class="fa fa-file-alt text-primary" id="footer-file-icon"></i>
-                            <span id="footer-file-name" class="text-truncate flex-grow-1"></span>
-                            <button type="button" class="btn btn-sm btn-link text-danger p-0" id="footer-file-remove">
-                                <i class="fa fa-times"></i>
-                            </button>
-                        </div>
+                <div id="footer-file-preview" class="d-none mb-2 d-flex align-items-center gap-2"
+                     style="font-size:.82rem;background:#e9f5ff;border-radius:8px;padding:6px 10px;">
+                    <i class="fa fa-file-alt text-primary" id="footer-file-icon"></i>
+                    <span id="footer-file-name" class="text-truncate flex-grow-1"></span>
+                    <button type="button" class="btn btn-sm btn-link text-danger p-0" id="footer-file-remove">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
 
-                        <div class="d-flex align-items-center gap-2" style="position:relative;">
-                            <!-- Emoji -->
-                            <div style="position:relative;flex-shrink:0;">
-                                <button type="button" id="emoji-btn" title="Emojis">😊</button>
-                                <div id="emoji-picker-popup"></div>
-                            </div>
+                <div class="cm-composer-row">
+                    <div style="position:relative;flex-shrink:0;">
+                        <button type="button" id="emoji-btn" title="Emojis">😊</button>
+                        <div id="emoji-picker-popup"></div>
+                    </div>
 
-                            <!-- Adjuntar -->
-                            <label for="archivo" class="mb-0 d-flex align-items-center justify-content-center"
-                                   title="Adjuntar archivo"
-                                   style="width:38px;height:38px;border-radius:50%;background:#f0f2f5;cursor:pointer;color:#6c757d;flex-shrink:0;border:none;">
-                                <i class="fa fa-paperclip"></i>
-                            </label>
-                            <input type="file" id="archivo" name="archivo" style="display:none;"
-                                   accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar">
+                    <label for="archivo" class="cm-attach-label" title="Adjuntar archivo">
+                        <i class="fa fa-paperclip"></i>
+                    </label>
+                    <input type="file" id="archivo" name="archivo" style="display:none;"
+                           accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar">
 
-                            <!-- Plantillas Meta (solo visible si sesion.es_meta) -->
-                            <div style="position:relative;flex-shrink:0;">
-                                <button type="button" id="plantillas-btn" title="Enviar plantilla Meta pre-aprobada">
-                                    <i class="fa fa-layer-group"></i>
-                                    <span class="badge-count" id="plantillas-badge" style="display:none;">0</span>
-                                </button>
+                    <div style="position:relative;flex-shrink:0;">
+                        <button type="button" id="plantillas-btn" title="Enviar plantilla Meta pre-aprobada">
+                            <i class="fa fa-layer-group"></i>
+                            <span class="badge-count" id="plantillas-badge" style="display:none;">0</span>
+                        </button>
                                 <div id="plantillas-panel">
                                     <div class="pp-header">
                                         <span><i class="fa fa-layer-group me-1"></i>Plantillas aprobadas</span>
@@ -563,22 +373,19 @@
                                 </div>
                             </div>
 
-                            <!-- Texto -->
-                            <input type="text" class="form-control border-0 rounded-pill" name="mensaje" id="footer-mensaje-input"
-                                   placeholder="Escribe un mensaje..."
-                                   style="background:#fff;box-shadow:none;min-height:40px;">
+                    <input type="text" class="form-control border-0 cm-text-input" name="mensaje" id="footer-mensaje-input"
+                           placeholder="Write a message...">
 
-                            <!-- Enviar -->
-                            <button type="submit" id="footer-send-btn"
-                                    style="width:42px;height:42px;border-radius:50%;background:#25d366;color:#fff;border:none;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem;transition:background .15s;">
-                                <i class="fa fa-paper-plane"></i>
-                            </button>
-                        </div>
-                    </form>
+                    <button type="submit" id="footer-send-btn" class="cm-send-btn">
+                        <i class="fa fa-paper-plane"></i>
+                    </button>
                 </div>
-            </div><!--end chat-box-right -->
-        </div> <!-- end col -->
-    </div><!-- end row -->
+            </form>
+        </div>
+
+    </main>
+
+</div>
 
     <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -1221,8 +1028,10 @@
         {% endif %}
 
         function scrollToBottom(smooth = false) {
-            const cw = document.getElementById('chat-messages')?.querySelector('.simplebar-content-wrapper');
-            if (cw) cw.scrollTop = cw.scrollHeight;
+            const el = document.getElementById('chat-messages');
+            if (!el) return;
+            if (smooth) { el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); }
+            else { el.scrollTop = el.scrollHeight; }
         }
 
         // Variables globales
@@ -1594,7 +1403,8 @@
 
             // Marcar como activa
             $('.conversacion-item').removeClass('active');
-            $(this).closest('.conversacion-item').addClass('active');
+            const $active = $(this).closest('.conversacion-item').addClass('active');
+            $active[0]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 
             // Mobile: ocultar lista y mostrar chat (estilo WhatsApp)
             document.body.classList.add('chat-mobile-open');
@@ -1603,6 +1413,31 @@
         // Mobile back button: volver a la lista de conversaciones
         $(document).on('click', '#chat-back-btn', function() {
             document.body.classList.remove('chat-mobile-open');
+        });
+
+        function resetearChat() {
+            if (chatSocket) { chatSocket.close(); chatSocket = null; }
+            conversacionActiva = null;
+            _cargandoMensajes = false;
+            document.body.classList.remove('chat-mobile-open');
+            $('.conversacion-item').removeClass('active');
+            $('#mensajes-container').html('');
+            $('#cm-empty-state').show();
+            $('#contacto-nombre').text('Select a conversation');
+            $('#contacto-numero').text('');
+            $('#contacto-hashedId').text('');
+            $('#conv-id-badge').hide();
+            $('#conv-fecha-inicio').hide();
+            $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container').addClass('d-none').hide();
+            $('#stats-panel, #control-respuestas-panel, #menus-rapidos-bar').addClass('d-none');
+            $('#chat-footer').addClass('d-none').hide();
+        }
+
+        $(document).on('keydown', function(e) {
+            if (e.key !== 'Escape' || !conversacionActiva) return;
+            if ($('#footer-mensaje-input').is(':focus')) return;
+            resetearChat();
         });
 
         $('form input[name="mensaje"]').keyup(function(e) {
@@ -1782,7 +1617,8 @@
 
                     // Si hay una conversación activa, marcarla
                     if (conversacionActiva) {
-                        $(`.conversacion-item[data-id="${conversacionActiva}"]`).addClass('active');
+                        const $reactivated = $(`.conversacion-item[data-id="${conversacionActiva}"]`).addClass('active');
+                        $reactivated[0]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
                     }
 
                     // Si no hay conversaciones, mostrar mensaje
@@ -1826,6 +1662,7 @@
                 success: function(response) {
                     $.unblockUI();
                     _cargandoMensajes = false;
+                    $('#cm-empty-state').hide();
 
                     // Actualizar mensajes
                     $('#mensajes-container').html(response.html);
@@ -1957,11 +1794,9 @@
         }
 
         $('.filter-btn').on('click', function() {
-            // Ignorar dropdown-toggle: solo abre/cierra el menú, el filtro lo
-            // aplica el <a.filter-link> dentro del dropdown.
             if ($(this).hasClass('dropdown-toggle')) return;
             const f = $(this).data('filter');
-            if (!f) return;
+            if (f === undefined) return;
             aplicarFiltro(f);
         });
 
