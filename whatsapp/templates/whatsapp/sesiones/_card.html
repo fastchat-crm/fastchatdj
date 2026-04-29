@@ -1,0 +1,219 @@
+{% load templatefunctions %}
+{# Card individual de sesion en el tablero. Reusable como partial (AJAX poll). #}
+<div class="conex-card{% if not sesion.activo %} conex-card-pausada{% endif %}" data-sesion-id="{{ sesion.id }}"
+     data-sesion-nombre="{{ sesion.nombre|default:sesion.numero|escape }}"
+     data-estado="{{ sesion.estado }}"
+     data-activo="{{ sesion.activo|yesno:'1,0' }}"
+     data-proveedor="{{ sesion.proveedor }}">
+
+    <div class="card-top">
+        <div class="card-avatar">
+            {% if sesion.es_baileys and sesion.config_baileys.foto %}
+                <img src="{{ sesion.config_baileys.foto }}" alt="avatar">
+            {% elif sesion.es_meta and sesion.config_meta.foto %}
+                <img src="{{ sesion.config_meta.foto }}" alt="avatar">
+            {% else %}
+                <span class="avatar-fallback">
+          <i class="fab fa-whatsapp"></i>
+        </span>
+            {% endif %}
+            <span class="avatar-status status-{{ sesion.estado }}"
+                  title="{{ sesion.get_estado_display|default:sesion.estado }}"></span>
+        </div>
+
+        <div class="card-head">
+            <div class="card-nombre">
+                {{ sesion.nombre|default:'Sesión sin nombre' }}
+                {% if not sesion.activo %}
+                    <span class="badge-pausada" title="Sesión pausada — no procesa mensajes ni consume API">
+                        <i class="fa fa-pause-circle"></i> PAUSADA
+                    </span>
+                {% endif %}
+            </div>
+            <div class="card-num">
+                {% if sesion.es_meta and sesion.config_meta and sesion.config_meta.display_phone_number %}
+                    {{ sesion.config_meta.display_phone_number }}
+                {% elif sesion.numero %}
+                    +{{ sesion.numero }}
+                {% else %}
+                    <span class="muted">Pendiente de número</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <label class="conex-toggle" title="{% if sesion.activo %}Pausar la sesión (corta procesamiento de mensajes y consumo de API){% else %}Reactivar la sesión{% endif %}">
+            <input type="checkbox" class="conex-toggle-input" data-action="toggle-activo"
+                   {% if sesion.activo %}checked{% endif %}>
+            <span class="conex-toggle-slider"></span>
+            <span class="conex-toggle-label">{% if sesion.activo %}Activa{% else %}Pausada{% endif %}</span>
+        </label>
+
+        <div class="card-kebab-wrap">
+            <button type="button" class="btn-kebab" aria-label="Opciones" data-kebab-toggle>
+                <i class="fa fa-ellipsis-vertical"></i>
+            </button>
+            <div class="kebab-menu" data-kebab-menu>
+                <div class="kebab-heading">Acciones de Sesión</div>
+                <button type="button" class="kebab-item" data-action="editar"><i class="fa fa-pen"></i> Modificar
+                </button>
+                <button type="button" class="kebab-item" data-action="cambiar-foto"><i class="fa fa-image"></i>
+                    Cambiar foto de perfil
+                </button>
+                <a href="/whatsapp/horarios/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
+                        class="fa fa-business-time"></i> Horarios</a>
+                {% if sesion.es_meta %}
+                    <div class="kebab-sep"></div>
+                    <div class="kebab-heading">Meta Cloud API</div>
+                    <button type="button" class="kebab-item" data-action="resumen"><i class="fa fa-clipboard-check"></i>
+                        Resumen y pasos siguientes
+                    </button>
+                    <button type="button" class="kebab-item" data-action="meta-validar"><i
+                            class="fa fa-satellite-dish text-success"></i> Revalidar número con Meta
+                    </button>
+                    <button type="button" class="kebab-item" data-action="datos-transporte"><i
+                            class="fa fa-id-card"></i> Datos del transporte (Meta)
+                    </button>
+                    {% if sesion.config_meta and sesion.config_meta.waba_id %}
+                        <a href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers?asset_id={{ sesion.config_meta.waba_id }}{% if sesion.config_meta.business_account_id %}&business_id={{ sesion.config_meta.business_account_id }}{% endif %}&ir_qe_exposed=1"
+                           target="_blank" rel="noopener" class="kebab-item">
+                            <i class="fa-brands fa-meta"></i> Editar número en Meta Business
+                        </a>
+                    {% endif %}
+                    <a href="/whatsapp/sesiones/{{ sesion.id }}/diagnostico/" class="kebab-item"><i
+                            class="fa fa-stethoscope text-primary"></i> Diagnóstico de la sesión</a>
+                    <a href="/whatsapp/sesiones/{{ sesion.id }}/webhook-log/" class="kebab-item"><i
+                            class="fa fa-list-check"></i> Auditoría webhook (en vivo)</a>
+                    <button type="button" class="kebab-item" data-action="test-eco"><i class="fa fa-paper-plane"></i>
+                        Probar envío de mensaje
+                    </button>
+                    <div class="kebab-sep"></div>
+                    <div class="kebab-heading">Meta Administración</div>
+                    <button type="button" class="kebab-item" data-action="webhook-info"><i class="fa fa-link"></i> Datos
+                        del webhook (Meta)
+                    </button>
+                    <button type="button" class="kebab-item" data-action="plantilla-prueba"><i
+                            class="fa fa-file-lines"></i> Enviar plantilla de prueba
+                    </button>
+                    <a href="/whatsapp/plantillas/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
+                            class="fa fa-file-lines"></i> Ver plantillas</a>
+                    <a href="/whatsapp/campanas/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
+                            class="fa fa-bullhorn"></i> Ver campañas</a>
+                    <a href="/whatsapp/campanas/?action=add&sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
+                            class="fa fa-plus-circle"></i> Nueva campaña</a>
+                    <a href="/whatsapp/analytics/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
+                            class="fa fa-chart-line"></i> Analytics de esta sesión</a>
+                {% else %}
+                    <div class="kebab-sep"></div>
+                    <div class="kebab-heading">Baileys (Node.js)</div>
+                    <button type="button" class="kebab-item" data-action="baileys-verificar"><i
+                            class="fa fa-satellite-dish"></i> Verificar conexión
+                    </button>
+                    <button type="button" class="kebab-item" data-action="baileys-reconnect"><i
+                            class="fa fa-qrcode"></i> Reconectar / ver QR
+                    </button>
+                {% endif %}
+                <div class="kebab-sep"></div>
+                <div class="kebab-heading">Acciones de Criticas</div>
+                {% if sesion.estado == 'conectado' %}
+                    <button type="button" class="kebab-item kebab-warn" data-action="disconnect"><i
+                            class="fa fa-power-off"></i> Desconectar
+                    </button>
+                {% endif %}
+                <button type="button" class="kebab-item kebab-danger" data-action="eliminar"><i
+                        class="fa fa-trash"></i> Eliminar sesión
+                </button>
+                <button type="button" class="kebab-item" data-action="historial"><i
+                        class="fa fa-clock-rotate-left"></i> Historial de conexiones
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card-body">
+        <div class="card-tags">
+            {% if sesion.es_meta %}
+                <span class="canal-badge canal-wa-oficial"><i class="fab fa-whatsapp"></i> WhatsApp Cloud</span>
+            {% elif sesion.es_baileys %}
+                <span class="canal-badge canal-baileys"><i class="fab fa-whatsapp"></i> Baileys</span>
+            {% else %}
+                <span class="canal-badge">{{ sesion.proveedor }}</span>
+            {% endif %}
+
+            <span class="estado-badge estado-{{ sesion.estado }}">
+        <span class="dot"></span> {{ sesion.get_estado_display|default:sesion.estado }}
+      </span>
+
+            {% if sesion.es_meta and sesion.config_meta %}
+                {% if sesion.config_meta.quality_rating and sesion.config_meta.quality_rating != 'UNKNOWN' %}
+                    <span class="tag tag-quality-{{ sesion.config_meta.quality_rating|lower }}">
+            Calidad: {{ sesion.config_meta.get_quality_rating_display }}
+          </span>
+                {% endif %}
+                {% if sesion.config_meta.messaging_limit_tier %}
+                    <span class="tag">{{ sesion.config_meta.get_messaging_limit_tier_display }}</span>
+                {% endif %}
+            {% endif %}
+
+            {# Modo bot — siempre visible para que se vea de qué tipo es la sesión #}
+            {% if sesion.modo_bot == 'ia' %}
+                <span class="tag tag-modo-ia"><i class="fa fa-robot"></i> Agente IA</span>
+            {% elif sesion.modo_bot == 'tradicional' %}
+                <span class="tag tag-modo-tradicional"><i class="fa fa-list-tree"></i> Chatbot tradicional</span>
+            {% elif sesion.modo_bot == 'hibrido' %}
+                <span class="tag tag-modo-hibrido"><i class="fa fa-arrows-split-up-and-left"></i> Híbrido</span>
+            {% else %}
+                <span class="tag tag-modo-ninguno"><i class="fa fa-user"></i> Solo humanos</span>
+            {% endif %}
+        </div>
+        {% if sesion.es_baileys and sesion.config_baileys.error_mensaje %}
+            <div class="card-error" title="{{ sesion.config_baileys.error_mensaje }}">
+                <i class="fa fa-triangle-exclamation"></i> {{ sesion.config_baileys.error_mensaje|truncatechars:80 }}
+            </div>
+        {% endif %}
+        {# Mostrar agente IA si modo usa IA (ia o hibrido) #}
+        {% if sesion.agente_ia and sesion.modo_bot == 'ia' or sesion.modo_bot == 'hibrido' %}
+            {% if sesion.agente_ia %}
+                <div class="card-subinfo">
+                    <i class="fa fa-robot"></i> Agente IA: <b>{{ sesion.agente_ia.nombre }}</b>
+                </div>
+            {% endif %}
+        {% endif %}
+
+        {# Mostrar departamentos asignados si modo usa flujo (tradicional o hibrido) #}
+        {% if sesion.modo_bot == 'tradicional' or sesion.modo_bot == 'hibrido' %}
+            {% if sesion.departamento_default %}
+                <div class="card-subinfo">
+                    <i class="fa fa-list-tree"></i> Flujo principal: <b>{{ sesion.departamento_default.nombre }}</b>
+                </div>
+            {% endif %}
+            {% with deptos=sesion.departamentos.all %}
+                {% if deptos %}
+                    <div class="card-subinfo">
+                        <i class="fa fa-layer-group"></i> Departamentos:
+                        {% for d in deptos %}
+                            <span class="badge badge-primary">{{ d.nombre }}{% if d.id == sesion.departamento_default_id %} ★{% endif %}</span>{% if not forloop.last %} {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+        {% endif %}
+    </div>
+
+    <div class="card-footer">
+        <a href="/whatsapp/conversaciones/?sesion={{ sesion.id|encrypt_id }}" class="btn-quick">
+            <i class="fa fa-comments"></i> Conversaciones
+        </a>
+        {% if sesion.es_meta %}
+            <button type="button" class="btn-quick btn-quick-info" data-action="webhook-info"
+                    title="Ver URL del webhook + verify token para configurar en Meta">
+                <i class="fa fa-link"></i> Webhook
+            </button>
+        {% endif %}
+        {% if sesion.es_baileys and sesion.estado != 'conectado' %}
+            <button type="button" class="btn-quick btn-quick-warn" data-action="baileys-reconnect">
+                <i class="fa fa-qrcode"></i> Escanear QR
+            </button>
+        {% endif %}
+    </div>
+
+</div>

@@ -570,6 +570,19 @@ def addData(request, data):
     if 'user_anterior' in request.session:
         data["sesion_anterior"] = True
     if request.user.is_authenticated:
+        # Notificaciones para el dropdown del topbar (base.html). Sin esto el
+        # popup queda siempre vacío. Mostramos las 5 últimas no leídas y el
+        # total no leído para el badge.
+        try:
+            from seguridad.models import Notificacion as _Notif
+            _qs_not = _Notif.objects.filter(
+                destinatario=request.user, leido=False, status=True,
+            ).order_by('-fecha_registro')
+            data['totalnot'] = _qs_not.count()
+            data['listnotification'] = list(_qs_not[:5])
+        except Exception:
+            data['totalnot'] = 0
+            data['listnotification'] = []
         if request.user.cambio_clave and request.path != '/changepass/':
             data['activar_cambio_clave'] = request.user.cambio_clave
         if not 'perfilprincipal' in request.session:
@@ -679,6 +692,43 @@ def get_decrypt(cyphertxt):
         return True, signing.loads(cyphertxt)
     except Exception as ex:
         return False, str(ex)
+
+
+# --- Identificadores opacos para URLs (firmados, no cifrado fuerte) ---
+
+def encrypt_sesion_id(pk):
+    """Devuelve un token opaco a partir de un id entero. Uso en links /?sesion=<token>."""
+    if pk in (None, ''):
+        return ''
+    ok, token = get_encrypt(int(pk))
+    return token if ok else ''
+
+
+def decrypt_sesion_id(token, default=None):
+    """Inversa de encrypt_sesion_id. Si el token no parece firmado, intenta int() directo
+    (tolerante con tabs abiertas / links viejos en claro)."""
+    if token in (None, ''):
+        return default
+    if isinstance(token, int):
+        return token
+    ok, valor = get_decrypt(token)
+    if ok:
+        try:
+            return int(valor)
+        except (TypeError, ValueError):
+            return default
+    # Fallback: id crudo
+    try:
+        return int(token)
+    except (TypeError, ValueError):
+        return default
+
+
+def leer_sesion_id(request, default=None):
+    """Lee el id de sesión desde request.GET, probando 'sesion' y 'sesion_id'.
+    Soporta valor cifrado (nuevo) o crudo (legacy, durante rollout)."""
+    raw = request.GET.get('sesion') or request.GET.get('sesion_id') or ''
+    return decrypt_sesion_id(raw, default=default)
 
 
 def postFormJson(request, nombre_post_aud, Forms=(), link_listado='', varurl=""):

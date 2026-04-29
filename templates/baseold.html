@@ -904,13 +904,14 @@
     }
 
     function alertaSuccess(mensaje) {
+        console.log(mensaje);
         Swal.fire({
             toast: true,
             position: 'top-end',
             type: 'success',
             title: mensaje,
             showConfirmButton: false,
-            timer: 1000
+            timer: 6000
         })
     }
 
@@ -921,7 +922,7 @@
             type: 'info',
             title: mensaje,
             showConfirmButton: false,
-            timer: 1000
+            timer: 6000
         })
     }
 
@@ -932,7 +933,7 @@
             type: 'warning',
             title: mensaje,
             showConfirmButton: false,
-            timer: 1000
+            timer: 6000
         })
     }
 
@@ -943,7 +944,7 @@
             type: 'error',
             title: mensaje,
             showConfirmButton: false,
-            timer: 1000
+            timer: 6000
         })
     }
 

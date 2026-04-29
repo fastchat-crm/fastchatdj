@@ -16,6 +16,14 @@ from seguridad.models import ModuloGrupo, Modulo, GroupModulo
 register = template.Library()
 
 @register.filter
+def encrypt_id(value):
+    """Envuelve un id entero en un token firmado, apto para query strings.
+    Uso: ?sesion={{ sesion.id|encrypt_id }}"""
+    from core.funciones import encrypt_sesion_id
+    return encrypt_sesion_id(value)
+
+
+@register.filter
 def currency(value):
     """
     Convierte un valor en formato monetario con separadores de miles y dos decimales.
@@ -295,3 +303,47 @@ def fecha_natural(fecha=datetime.now().date()):
     return format_date(fecha, format=format_custom, locale='es')
 
 register.filter("fecha_natural", fecha_natural)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Formato WhatsApp: *negrita* _cursiva_ ~tachado~ ```código``` + URLs
+# Aplicar como `{{ mensaje.mensaje|whatsapp_format }}` en cualquier
+# template que muestre texto recibido/enviado por WhatsApp.
+# ─────────────────────────────────────────────────────────────────────
+import re as _re_wa
+from django.utils.html import escape as _esc_wa
+from django.utils.safestring import mark_safe as _safe_wa
+
+
+_WA_CODE_BLOCK = _re_wa.compile(r'```([\s\S]+?)```')
+_WA_BOLD       = _re_wa.compile(r'(?<!\w)\*([^\*\n]+?)\*(?!\w)')
+_WA_ITALIC     = _re_wa.compile(r'(?<!\w)_([^_\n]+?)_(?!\w)')
+_WA_STRIKE     = _re_wa.compile(r'(?<!\w)~([^~\n]+?)~(?!\w)')
+_WA_INLINE_CODE = _re_wa.compile(r'`([^`\n]+?)`')
+_WA_URL        = _re_wa.compile(r'(https?://[^\s<>"]+)')
+
+
+@register.filter(is_safe=True)
+@stringfilter
+def whatsapp_format(value):
+    """Renderiza texto plano con formato estilo WhatsApp:
+    *negrita*, _cursiva_, ~tachado~, ```código```, `inline`, URLs y
+    saltos de línea. Escape HTML primero para prevenir XSS, después
+    aplica los reemplazos sobre el HTML escapado.
+    """
+    if not value:
+        return ''
+    txt = _esc_wa(value)
+    txt = _WA_CODE_BLOCK.sub(
+        lambda m: f'<pre class="wa-code">{m.group(1)}</pre>', txt
+    )
+    txt = _WA_INLINE_CODE.sub(r'<code class="wa-inline-code">\1</code>', txt)
+    txt = _WA_BOLD.sub(r'<strong>\1</strong>', txt)
+    txt = _WA_ITALIC.sub(r'<em>\1</em>', txt)
+    txt = _WA_STRIKE.sub(r'<del>\1</del>', txt)
+    txt = _WA_URL.sub(
+        r'<a href="\1" target="_blank" rel="noopener" class="wa-link">\1</a>', txt
+    )
+    txt = txt.replace('\n', '<br>')
+    return _safe_wa(txt)
+

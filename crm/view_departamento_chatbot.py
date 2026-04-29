@@ -13,10 +13,25 @@ from core.custom_models import FormError
 from core.funciones import addData, paginador, salva_auditoria, secure_module, redirectAfterPostGet, log
 from core.funciones_adicionales import salva_logs, customgetattr
 from .forms import IndustriaForm, ActividadEconomicaForm, DepartamentoChatBotForm, AddPerfilDepartamentoChatBotForm
+from .funciones_departamento_chatbot import (
+    sincronizar_opciones,
+    _generar_departamento_con_ia,
+    _duplicar_info,
+    _duplicar_departamento,
+    _guardar_meta,
+    _guardar_opcion,
+    _eliminar_opcion,
+    _mover_opcion,
+    _probar_http,
+    _serializar_arbol_opciones,
+    _serializar_arbol_anidado,
+    _serializar_para_preview,
+    _build_meta_payload,
+    _exportar_flujo_completo,
+)
 from .models import Industria, ActividadEconomica, DepartamentoChatBot, OpcionDepartamentoChatBot, \
-    PerfilDepartamentoChatBot
+    PerfilDepartamentoChatBot, EndpointApiChatbot, EstadoFlujoChatbot, ConexionNodoChatbot
 from django.contrib import messages
-
 
 @login_required
 @secure_module
@@ -35,6 +50,14 @@ def departamentoChatbotsView(request):
         action = request.POST['action']
         try:
             with transaction.atomic():
+                # Cuando el form vino del render full-page, redirige al listado
+                # despues de guardar; si vino del modal, sigue con reload.
+                redirect_to = (request.POST.get('redirect_to') or '').strip()
+                ok_response = (
+                    {'error': False, 'to': redirect_to}
+                    if redirect_to else
+                    {'error': False, 'reload': True}
+                )
                 if action == 'add':
                     form = Formulario(request.POST, request=request)
                     if form.is_valid():
@@ -43,7 +66,7 @@ def departamentoChatbotsView(request):
                         if opciones_json:
                             sincronizar_opciones(form.instance, opciones_json)
                         log(f"Registro un departamento {form.instance.__str__()}", request, "add", obj=form.instance.id)
-                        res_json.append({'error': False, "reload": True})
+                        res_json.append(ok_response)
                     else:
                         raise FormError(form)
                 elif action == 'change':
@@ -65,15 +88,41 @@ def departamentoChatbotsView(request):
                                 OpcionDepartamentoChatBot.objects.filter(id__in=ids_eliminados).update(status=False)
 
                             log(f"Editó un departamento {form.instance}", request, "change", obj=form.instance.id)
-                            res_json.append({'error': False, "reload": True})
+                            res_json.append(ok_response)
                         else:
                             raise FormError(form)
                 elif action == 'delete':
+                    # Soft-delete con cascada manual a TODO lo que cuelgue del
+                    # departamento. Necesario porque varios FKs son SET_NULL en
+                    # BD (no borran realmente) y la UI filtra por status=True.
+                    # Sin esto quedan "huérfanos lógicos": referencias a un
+                    # departamento status=False que la UI no muestra pero el
+                    # motor del flujo sigue resolviendo.
+                    from whatsapp.models import SesionWhatsApp
                     filtro = model.objects.get(pk=int(request.POST['id']))
-                    filtro.status = False
-                    filtro.save(request)
-                    PerfilDepartamentoChatBot.objects.filter(status=True, departamento=filtro).update(status=False)
-                    OpcionDepartamentoChatBot.objects.filter(status=True, departamento=filtro).update(status=False)
+                    with transaction.atomic():
+                        filtro.status = False
+                        filtro.save(request)
+                        # Asesores asignados al depto.
+                        PerfilDepartamentoChatBot.objects.filter(
+                            status=True, departamento=filtro
+                        ).update(status=False)
+                        # Nodos del flujo del depto.
+                        OpcionDepartamentoChatBot.objects.filter(
+                            status=True, departamento=filtro
+                        ).update(status=False)
+                        # Estado runtime del flujo (en qué nodo quedó cada conversación).
+                        EstadoFlujoChatbot.objects.filter(
+                            status=True, departamento=filtro
+                        ).update(status=False, departamento=None, nodo_actual=None)
+                        # Sesiones que tenían este depto como entrada por defecto.
+                        SesionWhatsApp.objects.filter(
+                            departamento_default=filtro
+                        ).update(departamento_default=None)
+                        # M2M sesiones ↔ departamentos (la tabla intermedia no
+                        # tiene status, hay que limpiar la relación a mano).
+                        for sesion in SesionWhatsApp.objects.filter(departamentos=filtro):
+                            sesion.departamentos.remove(filtro)
                     log(f"Elimino un departamento {filtro.__str__()}", request, "del", obj=filtro.id)
                     messages.success(request, f"Registro Eliminado")
                     res_json={"error":False}
@@ -108,8 +157,116 @@ def departamentoChatbotsView(request):
                     filtro.save(request)
                     log(f"Elimino un usuario del departamento {filtro.__str__()}", request, "del", obj=filtro.id)
                     res_json={"error":False}
+                elif action == 'generar_con_ia':
+                    return _generar_departamento_con_ia(request)
+                elif action == 'crear_agente_desde_dpto':
+                    from agents_ai.ai_actions.agentes_crm import crear_desde_depto
+                    return crear_desde_depto(request)
+                elif action == 'explicar_flujo_ia':
+                    # Devuelve la explicación cacheada del flujo (o regenera
+                    # si el operador pide actualizar). El frontend muestra un
+                    # botón "Actualizar" cuando algún nodo cambió desde la
+                    # última generación.
+                    from agents_ai.ai_actions import IAActionError
+                    from agents_ai.ai_actions.dpchatbots_crm import (
+                        explicacion_esta_actualizada,
+                        explicar_flujo,
+                    )
+                    from seguridad.models import Configuracion as _Conf
+                    from crm.models import PerfilNegocioIA
+                    try:
+                        dep_id = int(request.POST.get('id') or 0)
+                    except (TypeError, ValueError):
+                        return JsonResponse({'error': True, 'message': 'ID inválido.'})
+                    depto = DepartamentoChatBot.objects.filter(pk=dep_id, status=True).first()
+                    if not depto:
+                        return JsonResponse({'error': True, 'message': 'Depto no encontrado.'})
 
+                    forzar = request.POST.get('force') == '1'
+                    actualizada = explicacion_esta_actualizada(depto)
 
+                    # Si NO forzamos y hay caché válido → devolverlo.
+                    if not forzar and depto.explicacion_ia and actualizada:
+                        return JsonResponse({
+                            'error': False,
+                            'cached': True,
+                            'actualizada': True,
+                            'explicacion': depto.explicacion_ia,
+                            'generada_en': depto.explicacion_ia_generada_en.isoformat() if depto.explicacion_ia_generada_en else None,
+                        })
+
+                    # Resolver apikey: primero la del Configuracion (token IA del
+                    # sistema); si no, la del PerfilNegocioIA del usuario.
+                    confi = _Conf.get_instancia()
+                    apikey_obj = None
+                    if confi and getattr(confi, 'ia_features_activas', False) and confi.token_ia_id:
+                        apikey_obj = confi.token_ia
+                    if not apikey_obj:
+                        perfil = PerfilNegocioIA.objects.filter(usuario=request.user).first()
+                        if perfil:
+                            from crm.models import ApiKeyIA
+                            apikey_obj = ApiKeyIA.objects.filter(perfil=perfil, status=True).first()
+                    if not apikey_obj:
+                        return JsonResponse({
+                            'error': True,
+                            'message': 'No hay API key IA configurada (ni en sistema ni en tu perfil).',
+                        })
+
+                    try:
+                        texto = explicar_flujo(depto=depto, apikey_obj=apikey_obj, usuario=request.user)
+                    except IAActionError as ex:
+                        return JsonResponse({'error': True, 'message': str(ex)})
+                    except Exception as ex:
+                        return JsonResponse({'error': True, 'message': f'Error: {ex}'})
+
+                    log(f"Explicación IA regenerada depto {depto.id}", request, "change", obj=depto.id)
+                    return JsonResponse({
+                        'error': False,
+                        'cached': False,
+                        'actualizada': True,
+                        'explicacion': texto,
+                        'generada_en': depto.explicacion_ia_generada_en.isoformat() if depto.explicacion_ia_generada_en else None,
+                    })
+
+                elif action == 'regenerar_tools_agente':
+                    # Re-corre el conversor nodos→tools sobre un agente
+                    # existente. Útil cuando el flujo del depto cambió y el
+                    # operador quiere refrescar los tools sin recrear todo.
+                    from crm.migrar_nodos_a_tools import migrar_depto_a_tools
+                    from crm.models import AgentesIA
+                    try:
+                        agente_id = int(request.POST.get('agente_id') or 0)
+                        dpto_id_t = int(request.POST.get('departamento_id') or 0)
+                    except (TypeError, ValueError):
+                        return JsonResponse({'error': True, 'message': 'IDs inválidos.'})
+                    agente = AgentesIA.objects.filter(pk=agente_id).first()
+                    dpto_t = DepartamentoChatBot.objects.filter(pk=dpto_id_t, status=True).first()
+                    if not agente or not dpto_t:
+                        return JsonResponse({'error': True, 'message': 'Agente o depto no encontrado.'})
+                    stats = migrar_depto_a_tools(agente, dpto_t)
+                    return JsonResponse({
+                        'error': False,
+                        'stats': stats,
+                        'mensaje': (
+                            f"Tools regeneradas: {stats['total']} en total "
+                            f"({stats['creadas']} nuevas, {stats['actualizadas']} actualizadas, "
+                            f"{stats['omitidas']} nodos omitidos)."
+                        ),
+                    })
+                elif action == 'duplicar_info':
+                    return _duplicar_info(request)
+                elif action == 'duplicar':
+                    return _duplicar_departamento(request)
+                elif action == 'guardar_meta':
+                    return _guardar_meta(request)
+                elif action == 'guardar_opcion':
+                    return _guardar_opcion(request)
+                elif action == 'eliminar_opcion':
+                    return _eliminar_opcion(request)
+                elif action == 'mover_opcion':
+                    return _mover_opcion(request)
+                elif action == 'probar_http':
+                    return _probar_http(request)
         except ValueError as ex:
             res_json.append({'error': True, "message": str(ex)})
         except FormError as ex:
@@ -123,9 +280,24 @@ def departamentoChatbotsView(request):
         addData(request, data)
         if 'action' in request.GET:
             data["action"] = action = request.GET['action']
+            # full=1 → render full page (extends base.html); modo legacy = JSON modal.
+            full_page = request.GET.get('full') == '1'
+
             if action == 'add':
                 try:
                     data["form"] = Formulario()
+                    data["endpoints_json"] = json.dumps(list(
+                        EndpointApiChatbot.objects.filter(status=True).order_by('nombre')
+                        .values('id', 'nombre', 'base_url')
+                    ))
+                    if full_page:
+                        data.update({
+                            'pagina_completa': True,
+                            'titulo_pagina': f'Agregar {data["titulo"]}',
+                            'ruta_post': request.path,
+                            'filtro': None,
+                        })
+                        return render(request, 'crm/departamento_chatbots/form_pagina.html', data)
                     template = get_template("crm/departamento_chatbots/form.html")
                     return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:
@@ -138,10 +310,267 @@ def departamentoChatbotsView(request):
                     data["filtro"] = filtro
                     data["form"] = Formulario(instance=filtro)
                     data["opciones_json"] = json.dumps(filtro.obtener_arbol_opciones())
+                    data["endpoints_json"] = json.dumps(list(
+                        EndpointApiChatbot.objects.filter(status=True).order_by('nombre')
+                        .values('id', 'nombre', 'base_url')
+                    ))
+                    if full_page:
+                        # Anexa la lista de predecesores del grafo a cada opción del
+                        # árbol, así cada card en el listado puede mostrar de qué
+                        # nodo(s) viene. Una sola query agrupada por nodo_destino.
+                        from collections import defaultdict
+                        arbol_plano = _serializar_arbol_opciones(filtro)
+                        preds_por_nodo = defaultdict(list)
+                        salidas_por_nodo = defaultdict(list)
+                        conexiones = (
+                            ConexionNodoChatbot.objects
+                            .filter(nodo_origen__departamento=filtro, status=True)
+                            .select_related('nodo_origen', 'nodo_destino')
+                            .order_by('nodo_origen__orden', 'nodo_origen__id', 'orden', 'id')
+                        )
+                        for c in conexiones:
+                            preds_por_nodo[c.nodo_destino_id].append(c)
+                            salidas_por_nodo[c.nodo_origen_id].append(c)
+                        for item in arbol_plano:
+                            item['opcion'].predecesores_grafo = preds_por_nodo.get(item['opcion'].id, [])
+                            item['opcion'].salidas_grafo = salidas_por_nodo.get(item['opcion'].id, [])
+                        data.update({
+                            'pagina_completa': True,
+                            'titulo_pagina': f'Editar {filtro}',
+                            'ruta_post': request.path,
+                            'arbol_plano': arbol_plano,
+                            'arbol_anidado': _serializar_arbol_anidado(filtro),
+                            'tipos_nodo_choices': OpcionDepartamentoChatBot.TIPOS_NODO,
+                            'validaciones_choices': OpcionDepartamentoChatBot.VALIDACIONES,
+                            'endpoints_disponibles': EndpointApiChatbot.objects.filter(status=True).order_by('nombre'),
+                        })
+                        return render(request, 'crm/departamento_chatbots/form_pagina.html', data)
                     template = get_template("crm/departamento_chatbots/form.html")
                     return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:
                     return JsonResponse({"result": False, 'message': str(ex)})
+
+            elif action == 'diagrama':
+                # Diagrama del árbol de decisiones, full-page (no modal).
+                try:
+                    pk = int(request.GET['id'])
+                    filtro = model.objects.get(pk=pk)
+                    data["filtro"] = filtro
+                    data["arbol_anidado"] = _serializar_arbol_anidado(filtro)
+                    return render(request, 'crm/departamento_chatbots/diagrama.html', data)
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
+
+            elif action == 'preview':
+                # Simulador WhatsApp-like del flujo. Renderiza pagina full con
+                # arbol serializado en JSON para que el JS del cliente lo recorra.
+                try:
+                    pk = int(request.GET['id'])
+                    filtro = model.objects.get(pk=pk)
+                    data["filtro"] = filtro
+                    data["preview_json"] = json.dumps(_serializar_para_preview(filtro), ensure_ascii=False)
+                    return render(request, 'crm/departamento_chatbots/preview.html', data)
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
+
+            elif action == 'funciones_disponibles':
+                # Devuelve la lista de funciones registradas con su metadata.
+                # Lo consume el modal "Funciones disponibles" del editor.
+                try:
+                    from .funciones_chatbot import listar_metadata
+                    return JsonResponse({
+                        'result': True,
+                        'funciones': listar_metadata(),
+                    })
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
+
+            elif action == 'historial_movimientos':
+                # Timeline de drag-drop confirmados. Pagina por `fecha_registro` desc.
+                try:
+                    from .models import HistorialMovimientoNodo
+                    pk = int(request.GET['id'])
+                    filtro = model.objects.get(pk=pk)
+                    qs = (HistorialMovimientoNodo.objects
+                          .filter(departamento=filtro, status=True)
+                          .select_related('nodo', 'padre_anterior', 'padre_nuevo', 'usuario_creacion')
+                          .order_by('-fecha_registro', '-id'))
+                    data.update({
+                        'titulo': f'Historial de movimientos · {filtro.nombre}',
+                        'descripcion': 'Auditoría de cambios de orden y padre de nodos del flujo.',
+                        'filtro': filtro,
+                        'movimientos': qs[:200],  # tope razonable para evitar render gigante
+                        'total_movimientos': qs.count(),
+                    })
+                    return render(request, 'crm/departamento_chatbots/historial_movimientos.html', data)
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
+
+            elif action == 'exportar_meta_payload':
+                # Devuelve el JSON Meta Cloud API (interactive button/list) construido
+                # desde el saludo del depto + sus opciones raíz/primeras hijas.
+                try:
+                    dep_id = int(request.GET.get('id') or 0)
+                    filtro = model.objects.filter(pk=dep_id, status=True).first()
+                    if not filtro:
+                        return JsonResponse({'result': False, 'message': 'Departamento no encontrado'})
+                    payload = _build_meta_payload(filtro)
+                    return JsonResponse({'result': True, 'payload': payload})
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
+
+            elif action == 'exportar_flujo_json':
+                # Devuelve el snapshot COMPLETO del flujo: depto + nodos +
+                # conexiones + endpoints/credenciales referenciados. Sirve
+                # para auditar configuración, exportar/importar entre
+                # ambientes, y como "ficha técnica" del bot.
+                try:
+                    dep_id = int(request.GET.get('id') or 0)
+                    filtro = model.objects.filter(pk=dep_id, status=True).first()
+                    if not filtro:
+                        return JsonResponse({'result': False, 'message': 'Departamento no encontrado'})
+                    payload = _exportar_flujo_completo(filtro)
+                    return JsonResponse({'result': True, 'data': payload})
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
+
+            elif action == 'editar_opcion':
+                # Devuelve HTML del form de un nodo (modal en form_pagina).
+                try:
+                    op_id = int(request.GET.get('id') or 0)
+                    parent_id = int(request.GET.get('parent_id') or 0)
+                    dep_id = int(request.GET.get('departamento_id') or 0)
+                    contexto = {
+                        'tipos_nodo_choices': OpcionDepartamentoChatBot.TIPOS_NODO,
+                        'validaciones_choices': OpcionDepartamentoChatBot.VALIDACIONES,
+                        'endpoints_disponibles': EndpointApiChatbot.objects.filter(status=True).order_by('nombre'),
+                    }
+                    if op_id:
+                        opcion = OpcionDepartamentoChatBot.objects.filter(pk=op_id, status=True).first()
+                        if not opcion:
+                            return JsonResponse({'result': False, 'message': 'Nodo no encontrado'})
+                        cfg = opcion.config or {}
+                        # Padres posibles: nodos del mismo depto excluyendo self
+                        # y todo el sub-árbol (anti-ciclo).
+                        descendientes_ids = set()
+                        pendientes = [opcion]
+                        while pendientes:
+                            n = pendientes.pop()
+                            descendientes_ids.add(n.pk)
+                            for h in n.subopciones.filter(status=True):
+                                pendientes.append(h)
+                        padres_disponibles = OpcionDepartamentoChatBot.objects.filter(
+                            departamento=opcion.departamento, status=True,
+                        ).exclude(pk__in=descendientes_ids).order_by('orden', 'nombre')
+                        predecesores_grafo = (
+                            ConexionNodoChatbot.objects
+                            .filter(nodo_destino=opcion, status=True)
+                            .select_related('nodo_origen')
+                            .order_by('nodo_origen__orden', 'nodo_origen__nombre')
+                        )
+                        # Salidas del grafo (editable): conexiones que parten
+                        # de este nodo hacia otros. El form permite agregar /
+                        # editar / borrar; al guardar, se reescriben.
+                        salidas_grafo = (
+                            ConexionNodoChatbot.objects
+                            .filter(nodo_origen=opcion, status=True)
+                            .select_related('nodo_destino')
+                            .order_by('orden', 'id')
+                        )
+                        # Catálogo de nodos del depto para el dropdown de destino.
+                        nodos_destino_disponibles = (
+                            OpcionDepartamentoChatBot.objects
+                            .filter(departamento=opcion.departamento, status=True)
+                            .order_by('orden', 'nombre')
+                        )
+                        contexto.update({
+                            'opcion': opcion,
+                            'es_nuevo': False,
+                            'departamento_id': opcion.departamento_id,
+                            'parent_id': opcion.opcion_padre_id or 0,
+                            'padres_disponibles': padres_disponibles,
+                            'predecesores_grafo': predecesores_grafo,
+                            'salidas_grafo': salidas_grafo,
+                            'nodos_destino_disponibles': nodos_destino_disponibles,
+                            'config_json_str': json.dumps(cfg, indent=2, ensure_ascii=False),
+                            # Sub-piezas serializadas para los inputs específicos del form HTTP.
+                            'http_query_json_str':   json.dumps(cfg.get('query') or {}, indent=2, ensure_ascii=False) if cfg.get('query') else '',
+                            'http_body_json_str':    json.dumps(cfg.get('body') or {}, indent=2, ensure_ascii=False) if cfg.get('body') else '',
+                            'http_headers_json_str': json.dumps(cfg.get('headers') or {}, indent=2, ensure_ascii=False) if cfg.get('headers') else '',
+                            'http_extraer_json_str': json.dumps(cfg.get('extraer') or [], indent=2, ensure_ascii=False) if cfg.get('extraer') else '',
+                            # Condicional / set_variable: JSON serializado para el textarea.
+                            'cond_condiciones_json_str':    json.dumps(cfg.get('condiciones') or [], indent=2, ensure_ascii=False) if cfg.get('condiciones') else '',
+                            'setvar_asignaciones_json_str': json.dumps(cfg.get('asignaciones') or [], indent=2, ensure_ascii=False) if cfg.get('asignaciones') else '',
+                            # Función interna (tipo nodo `funcion`): body+extraer JSON.
+                            'funcion_body_json_str':    json.dumps(cfg.get('body') or {}, indent=2, ensure_ascii=False) if cfg.get('body') else '',
+                            'funcion_extraer_json_str': json.dumps(cfg.get('extraer') or [], indent=2, ensure_ascii=False) if cfg.get('extraer') else '',
+                        })
+                    else:
+                        padres_disponibles = OpcionDepartamentoChatBot.objects.filter(
+                            departamento_id=dep_id, status=True,
+                        ).order_by('orden', 'nombre')
+                        contexto.update({
+                            'opcion': None,
+                            'es_nuevo': True,
+                            'departamento_id': dep_id,
+                            'parent_id': parent_id,
+                            'padres_disponibles': padres_disponibles,
+                            'salidas_grafo': [],
+                            'nodos_destino_disponibles': padres_disponibles,
+                            'config_json_str': '{}',
+                            'http_query_json_str': '',
+                            'http_body_json_str': '',
+                            'http_headers_json_str': '',
+                            'http_extraer_json_str': '',
+                            'cond_condiciones_json_str': '',
+                            'setvar_asignaciones_json_str': '',
+                            'funcion_body_json_str': '',
+                            'funcion_extraer_json_str': '',
+                        })
+                    template = get_template('crm/departamento_chatbots/_form_opcion.html')
+                    return JsonResponse({'result': True, 'data': template.render(contexto)})
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
+
+            elif action == 'ficha_opcion':
+                # Devuelve la ficha read-only de un nodo: TODOS los campos
+                # registrados (modelo + config dinámico + endpoint + conexiones
+                # entrantes/salientes + auditoría). El front la muestra en
+                # un modal aparte del modal de edición.
+                try:
+                    op_id = int(request.GET.get('id') or 0)
+                    opcion = (
+                        OpcionDepartamentoChatBot.objects
+                        .select_related('endpoint', 'endpoint__credencial', 'opcion_padre',
+                                        'usuario_creacion', 'usuario_modificacion')
+                        .filter(pk=op_id, status=True).first()
+                    )
+                    if not opcion:
+                        return JsonResponse({'result': False, 'message': 'Nodo no encontrado'})
+                    cfg = opcion.config or {}
+                    salidas = (
+                        ConexionNodoChatbot.objects
+                        .filter(nodo_origen=opcion, status=True)
+                        .select_related('nodo_destino')
+                        .order_by('orden', 'id')
+                    )
+                    entradas = (
+                        ConexionNodoChatbot.objects
+                        .filter(nodo_destino=opcion, status=True)
+                        .select_related('nodo_origen')
+                        .order_by('orden', 'id')
+                    )
+                    contexto = {
+                        'opcion': opcion,
+                        'cfg': cfg,
+                        'config_json_str': json.dumps(cfg, indent=2, ensure_ascii=False),
+                        'salidas': salidas,
+                        'entradas': entradas,
+                    }
+                    template = get_template('crm/departamento_chatbots/_ficha_opcion.html')
+                    return JsonResponse({'result': True, 'data': template.render(contexto)})
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
 
             elif action == 'ver':
                 pk = int(request.GET['id'])
@@ -207,34 +636,28 @@ def departamentoChatbotsView(request):
         data["list_count"] = listado.count()
         data["url_vars"] = url_vars
         paginador(request, listado.order_by('nombre'), 20, data, url_vars)
-        return render(request, 'crm/departamento_chatbots/view.html', data)
 
+        # Flag para mostrar/esconder el botón "Crear con IA". Solo activo si
+        # Configuracion tiene token_ia cargado Y el switch ia_features_activas=True.
+        from seguridad.models import Configuracion
+        _confi = Configuracion.get_instancia()
+        data["ia_disponible"] = bool(
+            _confi and _confi.pk
+            and getattr(_confi, 'ia_features_activas', False)
+            and getattr(_confi, 'token_ia_id', None)
+        )
 
-def sincronizar_opciones(departamento, lista, padre=None):
-    nuevos_ids = []
-
-    for index, item in enumerate(lista, 1):
-        opcion_id = item.get('id', None)
-        if opcion_id and OpcionDepartamentoChatBot.objects.filter(id=opcion_id, departamento=departamento).exists():
-            opcion = OpcionDepartamentoChatBot.objects.get(id=opcion_id)
-            opcion.nombre = item.get('nombre', '').strip()
-            opcion.respuesta = item.get('respuesta', '').strip()
-            opcion.orden = index
-            opcion.opcion_padre = padre
-            opcion.save()
-        else:
-            opcion = OpcionDepartamentoChatBot.objects.create(
-                departamento=departamento,
-                nombre=item.get('nombre', '').strip(),
-                respuesta=item.get('respuesta', '').strip(),
-                orden=index,
-                opcion_padre=padre
+        # API Keys del usuario para el modal "Generar Agente IA desde depto".
+        # Si no hay perfil o no hay keys, el modal muestra un aviso amable.
+        from .models import ApiKeyIA, PerfilNegocioIA
+        _perfil = PerfilNegocioIA.objects.filter(usuario=request.user).first()
+        if _perfil:
+            data["apikeys_ia"] = list(
+                ApiKeyIA.objects.filter(perfil=_perfil, status=True)
+                .order_by('alias').values('id', 'alias', 'proveedor', 'modelo')
             )
-        nuevos_ids.append(opcion.id)
-
-        hijos = item.get('hijos', [])
-        if hijos:
-            nuevos_ids += sincronizar_opciones(departamento, hijos, padre=opcion)
-
-    return nuevos_ids
-
+            data["tiene_perfil_ia"] = True
+        else:
+            data["apikeys_ia"] = []
+            data["tiene_perfil_ia"] = False
+        return render(request, 'crm/departamento_chatbots/view.html', data)

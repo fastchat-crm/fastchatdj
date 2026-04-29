@@ -1,0 +1,772 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/sesiones.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="conex-page">
+
+        {# ───────── Header ───────── #}
+        <div class="conex-header">
+            <div class="conex-header-left">
+                <div>
+                    <h3 class="conex-title">Canales conectados</h3>
+                    <p class="conex-subtitle">Administra desde un solo lugar todas las cuentas de mensajería que
+                        atienden a tu negocio.</p>
+                </div>
+            </div>
+            <div class="conex-header-right">
+                <div class="conex-search">
+                    <i class="fa fa-search"></i>
+                    <input type="text" id="conex-search-input" placeholder="Buscar por nombre o número..."
+                           value="{{ criterio }}">
+                </div>
+                <button type="button" class="conex-btn conex-btn-primary" id="btn-abrir-modal">
+                    <i class="fa fa-plus me-1"></i> Nueva conexión
+                </button>
+            </div>
+        </div>
+
+        {# ───────── Filtros rápidos ───────── #}
+        <div class="conex-filtros">
+            <button class="conex-chip active" data-filtro="todas">
+                <i class="fa fa-layer-group"></i> Todas <span class="n">{{ total }}</span>
+            </button>
+            <button class="conex-chip" data-filtro="conectado">
+                <span class="dot dot-ok"></span> En línea <span class="n">{{ stats.conectadas }}</span>
+            </button>
+            <button class="conex-chip" data-filtro="pendiente">
+                <span class="dot dot-warn"></span> Por configurar <span class="n">{{ stats.pendientes }}</span>
+            </button>
+            <button class="conex-chip" data-filtro="desconectado">
+                <span class="dot dot-off"></span> Fuera de línea <span class="n">{{ stats.desconectadas }}</span>
+            </button>
+            <button class="conex-chip" data-filtro="error">
+                <span class="dot dot-err"></span> Con incidencias <span class="n">{{ stats.errores }}</span>
+            </button>
+        </div>
+
+        {# ───────── Grid de cards ───────── #}
+        <div class="conex-grid" id="conex-grid">
+            {% for sesion in sesiones %}
+                {% include 'whatsapp/sesiones/_card.html' with sesion=sesion %}
+            {% empty %}
+                <div class="conex-empty">
+                    <i class="fa fa-satellite-dish"></i>
+                    <h4>Aún no has enlazado ningún canal</h4>
+                    <p>Empieza con WhatsApp Cloud y luego suma los demás. Pulsa <b>Nueva conexión</b> para arrancar.</p>
+                </div>
+            {% endfor %}
+        </div>
+
+    </div>
+
+    {# ───────── Modal Nueva conexión ───────── #}
+    <div class="conex-modal-backdrop" id="conex-modal" aria-hidden="true">
+        <div class="conex-modal" role="dialog" aria-label="Nueva conexión">
+            <div class="conex-modal-header">
+                <h4>Enlazar un nuevo canal</h4>
+                <button type="button" class="conex-modal-close" id="btn-cerrar-modal" aria-label="Cerrar">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="conex-modal-body">
+                {# Sidebar canales — visibilidad controlada por flags de Configuracion #}
+                <aside class="conex-sidebar">
+                    {% if canales_activos.whatsapp_api %}
+                        <button class="conex-canal active" data-canal="whatsapp">
+          <span class="ic" style="background:#d4f5e3;color:#25d366;">
+            <i class="fab fa-whatsapp"></i>
+          </span>
+                            WhatsApp Business
+                        </button>
+                    {% endif %}
+                    {% if canales_activos.whatsapp_qr %}
+                        <button class="conex-canal {% if not canales_activos.whatsapp_api %}active{% endif %}"
+                                data-canal="baileys">
+          <span class="ic" style="background:#fff3d1;color:#b8860b;">
+            <i class="fa fa-qrcode"></i>
+          </span>
+                            QR Code <span class="badge-beta">Legacy</span>
+                        </button>
+                    {% endif %}
+                    {% if canales_activos.instagram %}
+                        <button class="conex-canal" data-canal="instagram">
+          <span class="ic ig-grad">
+            <i class="fab fa-instagram"></i>
+          </span>
+                            Instagram
+                        </button>
+                    {% endif %}
+                    {% if canales_activos.messenger %}
+                        <button class="conex-canal" data-canal="facebook">
+          <span class="ic" style="background:#e7f0ff;color:#1877f2;">
+            <i class="fab fa-facebook"></i>
+          </span>
+                            Messenger
+                        </button>
+                    {% endif %}
+                    {% if canales_activos.tiktok %}
+                        <button class="conex-canal" data-canal="tiktok">
+          <span class="ic" style="background:#000;color:#fff;">
+            <i class="fab fa-tiktok"></i>
+          </span>
+                            TikTok
+                        </button>
+                    {% endif %}
+                </aside>
+                {# Paneles a la derecha — JS muestra uno a la vez #}
+                <section class="conex-panel">
+
+                    {% if canales_activos.whatsapp_api %}
+                        {# ── Panel WhatsApp (Meta Cloud API) ── #}
+                        <div class="pane {% if not canales_activos.whatsapp_api %}pane-hidden{% endif %}"
+                             data-pane="whatsapp">
+                            <div class="pane-hero">
+                                <div class="pane-hero-icon">
+                                    <i class="fab fa-whatsapp"></i>
+                                </div>
+                                <div class="pane-hero-body">
+                                    <h5 class="pane-title mb-1">Conectar con la cuenta de WhatsApp Business API</h5>
+                                    <p class="pane-hero-text mb-0">
+                                        Aprovecha las herramientas de WhatsApp Business para maximizar los
+                                        ingresos y sincronizar los eventos de compra para optimizar automáticamente
+                                        los anuncios de Facebook con CAPI.
+                                    </p>
+                                </div>
+                            </div>
+                            <a href="/seguridad/documentacion/?pagina=conectar-whatsapp-business" class="pane-link">
+                                <i class="fa fa-book-open me-1"></i> Aprende cómo conectar
+                            </a>
+                            <div class="alert alert-warning">
+                                <i class="fa fa-shield-halved"></i>
+                                Conexión <b>oficial y verificada</b> con Meta. Sin riesgo de bloqueo, con soporte de
+                                plantillas,
+                                métricas reales y entrega garantizada.
+                            </div>
+
+                            <h6 class="pane-subtitle">Lo que necesitas tener listo</h6>
+                            <p class="pane-intro">
+                                Este checklist evita rechazos en el proceso de autorización con Meta.
+                            </p>
+
+                            <ul class="pane-requisitos">
+                                <li>
+                                    <i class="fa fa-briefcase"></i>
+                                    <div>
+                                        <b>Cuenta de Meta Business Suite</b>
+                                        <p>Con tu empresa registrada y preferiblemente verificada. Si aún no la tienes,
+                                            <a href="https://business.facebook.com" target="_blank">créala gratis
+                                                aquí</a>.
+                                        </p>
+                                    </div>
+                                </li>
+                                <li>
+                                    <i class="fa fa-globe"></i>
+                                    <div>
+                                        <b>Sitio web o página oficial</b>
+                                        <p>Una URL activa de tu negocio (web, Facebook Page o Instagram) para que Meta
+                                            valide tu identidad.</p>
+                                    </div>
+                                </li>
+                                <li>
+                                    <i class="fa fa-mobile-screen"></i>
+                                    <div>
+                                        <b>Un número de teléfono disponible</b>
+                                        <p>Sirve uno nuevo o el mismo de WhatsApp Business App.
+                                            <a href="https://www.facebook.com/business/help/2087193751603668"
+                                               target="_blank">Cómo elegirlo</a>.
+                                        </p>
+                                    </div>
+                                </li>
+                            </ul>
+
+                            <label class="pane-check">
+                                <input type="checkbox" id="chk-wa-requisitos">
+                                Confirmo que cumplo con todos los requisitos listados arriba
+                            </label>
+
+                            {% if meta_modo == 'sin_credenciales' %}
+                                <div class="alert alert-danger">
+                                    <i class="fa fa-xmark"></i>
+                                    Aún no configuraste las credenciales de Meta. Andá a
+                                    <a href="/seguridad/credencial-meta/" class="alert-link"><strong>Configuración →
+                                        Credenciales Meta App</strong></a>
+                                    y cargá <code>App ID</code> y <code>App Secret</code>.
+                                </div>
+                            {% elif meta_modo == 'manual' %}
+                                <div class="alert alert-info ">
+                                    <i class="fa fa-screwdriver-wrench"></i>
+                                    <b>Modo manual (onboarding 1×1).</b>
+                                    Mientras Meta no apruebe tu cuenta como <b>Tech Provider</b>, conectamos
+                                    las WABAs cargando los IDs a mano. Cuando Meta apruebe, activá la opción
+                                    <i>"Tech Provider"</i> en
+                                    <a href="/seguridad/credencial-meta/" class="alert-link">Credenciales Meta App</a>
+                                    y este modal cambia al popup de un solo clic.
+                                </div>
+                            {% endif %}
+
+                            {% if meta_modo == 'oauth' %}
+                                <div class="pane-actions">
+                                    <button type="button" class="conex-btn conex-btn-light" data-cerrar>Volver</button>
+                                    <button type="button" class="conex-btn conex-btn-primary" id="btn-wa-continuar">
+                                        Iniciar enlace con Meta <i class="fa fa-arrow-right ms-1"></i>
+                                    </button>
+                                </div>
+                            {% elif meta_modo == 'manual' %}
+                                {# ── Form de carga manual de la WABA ── #}
+                                <form id="form-wa-manual" class="pane-form-manual" novalidate>
+                                    {% csrf_token %}
+
+                                    <div class="man-form-header">
+                                        <div class="man-form-header-text">
+                                            <h6 class="man-form-title"><i class="fa fa-screwdriver-wrench"></i> Conectar
+                                                WhatsApp manualmente</h6>
+                                            <p class="man-form-sub">Pegá los IDs y el access token de la WABA del
+                                                cliente. Validamos contra Meta antes de guardar.</p>
+                                        </div>
+                                        <button type="button" class="man-help-btn" id="man-help-toggle"
+                                                aria-expanded="false" aria-controls="man-help-panel">
+                                            <i class="fa fa-circle-question"></i>
+                                            <span>¿Dónde saco cada dato?</span>
+                                            <i class="fa fa-chevron-down man-help-chev"></i>
+                                        </button>
+                                    </div>
+
+                                    {# ── Panel guía colapsable ── #}
+                                    <div class="man-help-panel" id="man-help-panel" hidden>
+                                        {% with bid=meta_business_id %}
+                                            {% if bid %}
+                                                {% with q="?business_id="|add:bid %}
+                                                    <p class="man-help-intro">
+                                                        Todos los datos se obtienen en Meta Business Suite con la cuenta
+                                                        de Facebook
+                                                        del admin. Detectamos tu Business ID
+                                                        (<code>{{ bid }}</code>) → los enlaces de abajo abren directo
+                                                        tu Business sin pasar por el selector.
+                                                    </p>
+                                                {% endwith %}
+                                            {% else %}
+                                                <p class="man-help-intro">
+                                                    Todos los datos se obtienen en Meta Business Suite con la cuenta de
+                                                    Facebook
+                                                    del admin. Si Meta te pide elegir un Business al abrir cada link,
+                                                    seleccioná el del cliente.
+                                                </p>
+                                            {% endif %}
+
+                                            {# Aviso anti-confusión #}
+                                            <div class="man-help-warn">
+                                                <i class="fa fa-triangle-exclamation"></i>
+                                                <div>
+                                                    <b>WABA ID y Phone Number ID son IDs diferentes</b> — ambos
+                                                    numéricos largos (~16 dígitos).
+                                                    <b>NUNCA</b> uses el número telefónico (ej. <code>0959843712</code>)
+                                                    como Phone Number ID.
+                                                    El Phone Number ID es un ID interno de Meta que vive dentro de la
+                                                    WABA.
+                                                </div>
+                                            </div>
+
+                                            <ol class="man-help-steps">
+                                                <li data-target="man-waba">
+                                                    <span class="man-help-num">1</span>
+                                                    <div>
+                                                        <b>WABA ID</b>
+                                                        <span class="man-help-fmt">~16 dígitos</span>
+                                                        <p>
+                                                            Abrí <b>WhatsApp Manager</b>. Cada cuenta WABA muestra su
+                                                            <code>ID</code> en la cabecera (ícono <i
+                                                                class="fa fa-copy"></i> al
+                                                            lado del nombre). Alternativa: <b>Business Settings →
+                                                            Cuentas → WhatsApp Accounts</b> → seleccionar la WABA → ID
+                                                            arriba.
+                                                        </p>
+                                                        <div class="man-help-actions">
+                                                            <a class="man-help-go"
+                                                               href="https://business.facebook.com/latest/whatsapp_manager{% if bid %}?business_id={{ bid }}{% endif %}"
+                                                               target="_blank" rel="noopener">
+                                                                <i class="fa fa-up-right-from-square"></i> Abrir
+                                                                WhatsApp Manager
+                                                            </a>
+                                                            <a class="man-help-go-alt"
+                                                               href="https://business.facebook.com/latest/settings/whatsapp_business_accounts{% if bid %}?business_id={{ bid }}{% endif %}"
+                                                               target="_blank" rel="noopener">
+                                                                <i class="fa fa-list"></i> Ver en Business Settings
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                                <li data-target="man-phone">
+                                                    <span class="man-help-num">2</span>
+                                                    <div>
+                                                        <b>Phone Number ID</b>
+                                                        <span class="man-help-fmt">~16 dígitos · ID interno</span>
+                                                        <p>
+                                                            Dentro del WhatsApp Manager → seleccioná tu WABA → pestaña
+                                                            <b>Phone Numbers</b>. Cada número tiene un ícono
+                                                            <i class="fa fa-copy"></i> al lado para copiar su Phone
+                                                            Number ID.
+                                                            Si abrís el detalle del número, también aparece arriba como
+                                                            <code>Phone number ID</code>.
+                                                        </p>
+                                                        <div class="man-help-actions">
+                                                            <a class="man-help-go"
+                                                               href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers{% if bid %}?business_id={{ bid }}{% endif %}"
+                                                               target="_blank" rel="noopener">
+                                                                <i class="fa fa-up-right-from-square"></i> Abrir números
+                                                                de WhatsApp
+                                                            </a>
+                                                            <a class="man-help-go-alt"
+                                                               href="https://business.facebook.com/latest/whatsapp_manager{% if bid %}?business_id={{ bid }}{% endif %}"
+                                                               target="_blank" rel="noopener">
+                                                                <i class="fa fa-up-right-from-square"></i> WhatsApp
+                                                                Manager
+                                                            </a>
+                                                        </div>
+                                                        <div class="man-help-mini-warn">
+                                                            <i class="fa fa-circle-exclamation"></i>
+                                                            Si pegás el número telefónico (<code>0959843712</code>),
+                                                            Meta responde
+                                                            <i>"Object does not exist"</i>. Es <b>otro</b> ID.
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                                <li data-target="man-display">
+                                                    <span class="man-help-num">3</span>
+                                                    <div>
+                                                        <b>Número visible</b>
+                                                        <span class="man-help-opt">opcional</span>
+                                                        <p>
+                                                            El número telefónico real, formateado para mostrar
+                                                            (ej. <code>+593 95 984 3712</code> o <code>0959843712</code>).
+                                                            Si lo dejás vacío, lo trae Meta al validar.
+                                                        </p>
+                                                    </div>
+                                                </li>
+                                                <li data-target="man-business">
+                                                    <span class="man-help-num">4</span>
+                                                    <div>
+                                                        <b>Business Account ID</b>
+                                                        <span class="man-help-opt">opcional</span>
+                                                        <span class="man-help-fmt">~15 dígitos</span>
+                                                        <p>
+                                                            En <b>Business Settings → Información del negocio</b>.
+                                                            Arriba aparece el
+                                                            <code>Business ID</code> debajo del nombre del Business.
+                                                            {% if bid %}
+                                                                <br><b>Ya lo tenés cargado en CredencialMetaApp:</b>
+                                                                <code>{{ bid }}</code> — pegá ese mismo valor.
+                                                            {% endif %}
+                                                        </p>
+                                                        <div class="man-help-actions">
+                                                            <a class="man-help-go"
+                                                               href="https://business.facebook.com/latest/settings/business_info{% if bid %}?business_id={{ bid }}{% endif %}"
+                                                               target="_blank" rel="noopener">
+                                                                <i class="fa fa-up-right-from-square"></i> Abrir
+                                                                Business Info
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                                <li data-target="man-token">
+                                                    <span class="man-help-num">5</span>
+                                                    <div>
+                                                        <b>Access Token (System User long-lived)</b>
+                                                        <span class="man-help-fmt">empieza con <code>EAAG</code> o <code>EAAB</code></span>
+                                                        <ol class="man-help-substeps">
+                                                            <li>
+                                                                Abrí <b>Business Settings → Users → System Users</b> y
+                                                                seleccioná
+                                                                uno tipo <b>Admin</b> (creálo si no existe).
+                                                                <a class="man-help-go-inline"
+                                                                   href="https://business.facebook.com/latest/settings/system_users{% if bid %}?business_id={{ bid }}{% endif %}"
+                                                                   target="_blank" rel="noopener">
+                                                                    <i class="fa fa-up-right-from-square"></i> Abrir
+                                                                    System Users
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                Click <b>Add Assets</b> → categoría <code>WhatsApp
+                                                                Accounts</code> →
+                                                                seleccioná la WABA → marcá <b>Full control</b> → Save
+                                                                Changes.
+                                                            </li>
+                                                            <li>
+                                                                Click <b>Generate New Token</b> → seleccioná tu Meta App
+                                                                →
+                                                                marcá los scopes:
+                                                                <ul class="man-help-scopes">
+                                                                    <li><code>whatsapp_business_management</code></li>
+                                                                    <li><code>whatsapp_business_messaging</code></li>
+                                                                    <li><code>business_management</code></li>
+                                                                </ul>
+                                                            </li>
+                                                            <li>
+                                                                Elegí <b>Never expires</b> → <b>Generate Token</b> →
+                                                                copiá el token <b>una sola vez</b> (Meta no lo vuelve a
+                                                                mostrar) →
+                                                                pegalo en el campo de abajo.
+                                                            </li>
+                                                        </ol>
+                                                        <div class="man-help-mini-warn">
+                                                            <i class="fa fa-shield-halved"></i>
+                                                            Lo guardamos cifrado con Fernet. Nunca lo pegues en Slack,
+                                                            mail ni issues.
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                            </ol>
+                                            <div class="man-help-tip">
+                                                <i class="fa fa-lightbulb"></i>
+                                                Antes de guardar, pulsá <b>Validar con Meta</b>: probamos los IDs contra
+                                                Graph API
+                                                y autorrellenamos lo que podamos detectar.
+                                            </div>
+                                        {% endwith %}
+                                    </div>
+
+                                    {# ── Sección: Identificación ── #}
+                                    <div class="man-form-section">
+                                        <div class="man-section-head">
+                                            <span class="man-section-num">1</span>
+                                            <div>
+                                                <h6 class="man-section-title">Identificación de la sesión</h6>
+                                                <p class="man-section-sub">Cómo aparecerá en el tablero del CRM.</p>
+                                            </div>
+                                        </div>
+                                        <div class="row g-2">
+                                            <div class="col-md-12">
+                                                <label class="man-label" for="man-nombre">
+                                                    Nombre de la sesión <span class="man-req">*</span>
+                                                    <a class="man-help-link" data-help-jump="man-nombre">¿qué pongo?</a>
+                                                </label>
+                                                <input type="text" id="man-nombre" name="nombre" class="form-control"
+                                                       placeholder="Ej. WhatsApp ISTER · Soporte" required>
+                                                <small class="man-hint">Solo para identificar la sesión internamente.
+                                                    Cambialo cuando quieras.</small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {# ── Sección: IDs de Meta ── #}
+                                    <div class="man-form-section">
+                                        <div class="man-section-head">
+                                            <span class="man-section-num">2</span>
+                                            <div>
+                                                <h6 class="man-section-title">IDs de la WhatsApp Business Account</h6>
+                                                <p class="man-section-sub">Identifican la WABA y el número específico
+                                                    dentro de Meta.</p>
+                                            </div>
+                                        </div>
+                                        <div class="row g-2">
+                                            <div class="col-md-6">
+                                                <label class="man-label" for="man-waba">
+                                                    <i class="fa fa-id-card man-label-icon"></i>
+                                                    WABA ID <span class="man-req">*</span>
+                                                    <a class="man-help-link" data-help-jump="man-waba">¿de dónde?</a>
+                                                </label>
+                                                <input type="text" id="man-waba" name="waba_id" class="form-control"
+                                                       placeholder="123456789012345" pattern="\d+" required>
+                                                <small class="man-hint">~15 dígitos. NO es el número de
+                                                    teléfono.</small>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="man-label" for="man-phone">
+                                                    <i class="fa fa-mobile-screen man-label-icon"></i>
+                                                    Phone Number ID <span class="man-req">*</span>
+                                                    <a class="man-help-link" data-help-jump="man-phone">¿de dónde?</a>
+                                                </label>
+                                                <input type="text" id="man-phone" name="phone_number_id"
+                                                       class="form-control"
+                                                       placeholder="987654321098765" pattern="\d+" required>
+                                                <small class="man-hint">ID interno de Meta del número
+                                                    específico.</small>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="man-label" for="man-display">
+                                                    <i class="fa fa-phone man-label-icon"></i>
+                                                    Número visible
+                                                    <span class="man-help-opt">opcional</span>
+                                                </label>
+                                                <input type="text" id="man-display" name="display_phone_number"
+                                                       class="form-control"
+                                                       placeholder="+593 99 999 9999">
+                                                <small class="man-hint">Si lo dejás vacío, lo trae Meta al
+                                                    validar.</small>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="man-label" for="man-business">
+                                                    <i class="fa fa-building man-label-icon"></i>
+                                                    Business Account ID
+                                                    <span class="man-help-opt">opcional</span>
+                                                    <a class="man-help-link" data-help-jump="man-business">¿de
+                                                        dónde?</a>
+                                                </label>
+                                                <input type="text" id="man-business" name="business_account_id"
+                                                       class="form-control"
+                                                       placeholder="(dejar vacío si no aplica)">
+                                                <small class="man-hint">Solo si la WABA está asociada a un Business
+                                                    Manager.</small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {# ── Sección: Acceso ── #}
+                                    <div class="man-form-section">
+                                        <div class="man-section-head">
+                                            <span class="man-section-num">3</span>
+                                            <div>
+                                                <h6 class="man-section-title">Acceso (token long-lived)</h6>
+                                                <p class="man-section-sub">Token permanente del System User. Lo
+                                                    guardamos cifrado con Fernet.</p>
+                                            </div>
+                                        </div>
+                                        <div class="row g-2">
+                                            <div class="col-md-12">
+                                                <label class="man-label" for="man-token">
+                                                    <i class="fa fa-key man-label-icon"></i>
+                                                    Access Token <span class="man-req">*</span>
+                                                    <a class="man-help-link" data-help-jump="man-token">¿cómo lo
+                                                        genero?</a>
+                                                </label>
+                                                <div class="cm-pwd-wrap position-relative">
+                                                    <input type="password" id="man-token" name="access_token"
+                                                           class="form-control" autocomplete="off"
+                                                           placeholder="EAAG..." required>
+                                                    <button type="button" class="cm-pwd-toggle" tabindex="-1"
+                                                            id="man-token-eye" aria-label="Mostrar/ocultar">
+                                                        <i class="fa fa-eye"></i>
+                                                    </button>
+                                                </div>
+                                                <small class="man-hint">
+                                                    Empieza con <code>EAAG</code> o <code>EAAB</code>. Generálo en
+                                                    <a href="https://business.facebook.com/settings/system-users"
+                                                       target="_blank" rel="noopener">Business Settings → System Users →
+                                                        Generate Token</a>.
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div id="man-resultado" class="alert d-none mt-3 mb-0"></div>
+
+                                    <div class="pane-actions">
+                                        <button type="button" class="conex-btn conex-btn-ghost" data-cerrar>
+                                            <i class="fa fa-arrow-left"></i> Volver
+                                        </button>
+                                        <button type="button" class="conex-btn conex-btn-secondary"
+                                                id="btn-wa-validar-manual">
+                                            <i class="fa fa-circle-check"></i> Validar con Meta
+                                        </button>
+                                        <button type="submit" class="conex-btn conex-btn-primary"
+                                                id="btn-wa-guardar-manual">
+                                            <i class="fa fa-plug"></i> Conectar sesión
+                                        </button>
+                                    </div>
+                                </form>
+                            {% else %}
+                                <div class="pane-actions">
+                                    <button type="button" class="conex-btn conex-btn-light" data-cerrar>Volver</button>
+                                    <button type="button" class="conex-btn conex-btn-primary" disabled>
+                                        Iniciar enlace con Meta <i class="fa fa-arrow-right ms-1"></i>
+                                    </button>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                    {% if canales_activos.whatsapp_qr %}
+                        {# ── Panel Baileys (QR legacy, WhatsApp Web) ── #}
+                        <div class="pane {% if canales_activos.whatsapp_api %}pane-hidden{% endif %}"
+                             data-pane="baileys">
+                            <h5 class="pane-title">Enlazar por QR (modo Baileys)</h5>
+                            <div class="pane-alert alert-warn">
+                                <i class="fa fa-triangle-exclamation"></i>
+                                <div>
+                                    Baileys usa el mismo método que WhatsApp Web, sin paso por Meta. Se conserva para
+                                    pruebas y casos especiales pero <b>no es oficial</b> y WhatsApp puede suspender el
+                                    número. Para producción elegí <b>WhatsApp Business API</b>.
+                                </div>
+                            </div>
+
+                            <p class="pane-intro">
+                                Desde tu teléfono abre <b>WhatsApp → Ajustes → Dispositivos vinculados → Vincular un
+                                dispositivo</b> y apunta la cámara al código.
+                            </p>
+
+                            <div class="qr-wrap" id="qr-wrap">
+                                <div class="qr-placeholder" id="qr-placeholder">
+                                    <i class="fa fa-qrcode"></i>
+                                    <span>El código aparecerá cuando pulses el botón</span>
+                                </div>
+                                <img id="qr-img" alt="Código QR" style="display:none">
+                                <div class="qr-success" id="qr-success" style="display:none">
+                                    <i class="fa fa-circle-check"></i>
+                                    <b>¡Listo! Sesión vinculada</b>
+                                    <p id="qr-success-num"></p>
+                                </div>
+                            </div>
+
+                            <div class="pane-actions">
+                                <button type="button" class="conex-btn conex-btn-light" data-cerrar>Volver</button>
+                                <button type="button" class="conex-btn conex-btn-warning" id="btn-baileys-start">
+                                    <i class="fa fa-qrcode me-1"></i> Generar código QR
+                                </button>
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    {% if canales_activos.instagram %}
+                        <div class="pane pane-hidden pane-proximamente" data-pane="instagram">
+                            {% include 'whatsapp/sesiones/_proximamente.html' with nombre='Instagram' icono='fab fa-instagram' color='#e1306c' %}
+                        </div>
+                    {% endif %}
+                    {% if canales_activos.messenger %}
+                        <div class="pane pane-hidden pane-proximamente" data-pane="facebook">
+                            {% include 'whatsapp/sesiones/_proximamente.html' with nombre='Facebook' icono='fab fa-facebook' color='#1877f2' %}
+                        </div>
+                    {% endif %}
+                    {% if canales_activos.tiktok %}
+                        <div class="pane pane-hidden pane-proximamente" data-pane="tiktok">
+                            {% include 'whatsapp/sesiones/_proximamente.html' with nombre='TikTok' icono='fab fa-tiktok' color='#000' %}
+                        </div>
+                    {% endif %}
+
+                </section>
+            </div>
+        </div>
+    </div>
+
+    {# ───────── Modal secundario (cargado por AJAX con los partials) ───────── #}
+    <div class="detail-backdrop" id="conex-detail-modal" aria-hidden="true">
+        <div class="detail-panel" id="conex-detail-content" role="dialog"></div>
+    </div>
+
+    {# ───────── Modal Webhook Info (Meta) ───────── #}
+    <div class="man-val-backdrop" id="webhook-info-modal" aria-hidden="true">
+        <div class="man-val-panel" role="dialog" aria-labelledby="webhook-info-title" style="max-width:640px">
+            <div class="man-val-header">
+                <div class="man-val-header-title">
+                    <i class="fa fa-link" style="color:#2563eb"></i>
+                    <h5 id="webhook-info-title">Datos del webhook</h5>
+                </div>
+                <button type="button" class="man-val-close" data-webhook-close aria-label="Cerrar">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="man-val-body" id="webhook-info-body">
+                <div class="man-val-loader">
+                    <i class="fa fa-spinner fa-spin"></i>
+                    <p>Cargando datos del webhook...</p>
+                </div>
+            </div>
+            <div class="man-val-footer">
+                <button type="button" class="conex-btn conex-btn-ghost" data-webhook-close>Cerrar</button>
+                <a href="#" target="_blank" rel="noopener" class="conex-btn conex-btn-primary"
+                   id="webhook-info-meta-link" style="display:none">
+                    <i class="fa fa-up-right-from-square"></i> Configurar en Meta
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {# ───────── Modal Eco / Test envío (Meta) ───────── #}
+    <div class="man-val-backdrop" id="eco-modal" aria-hidden="true">
+        <div class="man-val-panel" role="dialog" aria-labelledby="eco-modal-title" style="max-width:520px">
+            <div class="man-val-header">
+                <div class="man-val-header-title">
+                    <i class="fa fa-paper-plane" style="color:#2563eb"></i>
+                    <h5 id="eco-modal-title">Enviar mensaje de prueba</h5>
+                </div>
+                <button type="button" class="man-val-close" data-eco-close aria-label="Cerrar">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="man-val-body">
+                <p class="eco-intro">
+                    Enviá un mensaje desde
+                    <b id="eco-from-label">la sesión</b>
+                    a un número WhatsApp para verificar que la conexión funciona.
+                </p>
+
+                <div class="eco-warn">
+                    <i class="fa fa-circle-exclamation"></i>
+                    <div>
+                        <b>Restricción de Meta:</b> el número destino debe haber escrito en las últimas <b>24h</b>.
+                        Si no, Meta solo permite plantillas pre-aprobadas (usá <i>Enviar plantilla</i>).
+                        Para test inicial, mandá <i>"hola"</i> al número desde tu celular y luego probá el eco.
+                    </div>
+                </div>
+
+                <div class="row g-2">
+                    <div class="col-md-12">
+                        <label class="man-label" for="eco-numero">
+                            <i class="fa fa-phone man-label-icon"></i>
+                            Número destino <span class="man-req">*</span>
+                        </label>
+                        <input type="text" id="eco-numero" class="form-control"
+                               placeholder="593987654321 (sin + y sin 0 inicial)">
+                        <small class="man-hint">Formato E.164 sin <code>+</code>: código país + número. Ej: <code>593987654321</code></small>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="man-label" for="eco-mensaje">
+                            <i class="fa fa-comment man-label-icon"></i>
+                            Mensaje <span class="man-req">*</span>
+                        </label>
+                        <textarea id="eco-mensaje" class="form-control" rows="3"
+                                  placeholder="Hola! Este es un mensaje de prueba desde el CRM."></textarea>
+                    </div>
+                </div>
+
+                <div id="eco-resultado" class="alert d-none mt-3 mb-0"></div>
+            </div>
+            <div class="man-val-footer">
+                <button type="button" class="conex-btn conex-btn-ghost" data-eco-close>Cerrar</button>
+                <button type="button" class="conex-btn conex-btn-primary" id="eco-enviar">
+                    <i class="fa fa-paper-plane"></i> Enviar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ───────── Modal resultado validación Meta (modo manual) ───────── #}
+    <div class="man-val-backdrop" id="man-val-modal" aria-hidden="true">
+        <div class="man-val-panel" role="dialog" aria-labelledby="man-val-title">
+            <div class="man-val-header">
+                <div class="man-val-header-title">
+                    <span class="man-val-status-dot" id="man-val-status-dot"></span>
+                    <h5 id="man-val-title">Validación con Meta</h5>
+                </div>
+                <button type="button" class="man-val-close" id="man-val-close" aria-label="Cerrar">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="man-val-body" id="man-val-body">
+                <div class="man-val-loader">
+                    <i class="fa fa-spinner fa-spin"></i>
+                    <p>Consultando Graph API...</p>
+                </div>
+            </div>
+            <div class="man-val-footer">
+                <button type="button" class="conex-btn conex-btn-ghost" id="man-val-cerrar2">Cerrar</button>
+                <button type="button" class="conex-btn conex-btn-primary" id="man-val-conectar" disabled>
+                    <i class="fa fa-plug"></i> Conectar sesión
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {% csrf_token %}
+    <script>
+        window.CONEX_URL = "{{ request.path }}";
+        window.META_OAUTH_START_URL = "{% url 'whatsapp_meta_oauth_start' %}";
+        window.META_MANUAL_VALIDAR_URL = "{% url 'whatsapp_meta_manual_validar' %}";
+        window.META_MANUAL_CONECTAR_URL = "{% url 'whatsapp_meta_manual_conectar' %}";
+    </script>
+    <script src="{% static 'stylenew/sesiones.js' %}"></script>
+{% endblock %}
+{% block jscript %}
+    <script src="/static/js/forms.js?version=1"></script>
+{% endblock %}

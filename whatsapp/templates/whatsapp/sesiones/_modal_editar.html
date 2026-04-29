@@ -1,0 +1,254 @@
+{# Modal "Modificar sesion" — datos del transporte (read-only) + ajustes editables. #}
+<div class="detail-wrap">
+    <div class="detail-head">
+        <div>
+            {% if sesion.es_meta %}
+                <h5><i class="fa fa-cloud me-1 text-primary"></i> Editar Meta WS Conexión</h5>
+            {% elif sesion.es_baileys %}
+                <h5><i class="fa fa-mobile me-1 text-success"></i> Editar Baileys WS Conexión</h5>
+            {% elif sesion.es_instagram %}
+                <h5><i class="fa-brands fa-instagram me-1" style="color:#e1306c"></i> Editar Instagram</h5>
+            {% elif sesion.es_messenger %}
+                <h5><i class="fa-brands fa-facebook-messenger me-1 text-primary"></i> Editar Messenger</h5>
+            {% else %}
+                <h5>Modificar sesión</h5>
+            {% endif %}
+            <p class="muted">Sesión <b>{{ sesion.nombre|default:sesion.numero|default:sesion.id }}</b></p>
+        </div>
+        <button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>
+    </div>
+
+    <form id="form-editar-sesion" class="detail-body" method="post"
+          action="javascript:void(0)" onsubmit="return false;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="editar">
+        <input type="hidden" name="id" value="{{ sesion.id }}">
+
+        <div class="conex-data-block">
+            <div class="conex-data-head">
+                <i class="fa fa-pen text-primary me-1"></i>
+                <span>Configuración de la sesión</span>
+                <span class="conex-data-pill conex-data-pill-edit">editable</span>
+            </div>
+
+            <div class="form-row">
+                <label>Nombre interno</label>
+                <input type="text" name="nombre" value="{{ sesion.nombre|default:'' }}" required
+                       placeholder="ej. Soporte tienda">
+            </div>
+
+            <div class="form-row">
+                <label>Modo del bot</label>
+                <select name="modo_bot" id="sel-modo-bot">
+                    <option value="ninguno" {% if sesion.modo_bot == 'ninguno' %}selected{% endif %}>Sin bot (solo
+                        humanos)
+                    </option>
+                    <option value="tradicional" {% if sesion.modo_bot == 'tradicional' %}selected{% endif %}>Chatbot
+                        tradicional
+                    </option>
+                    <option value="ia" {% if sesion.modo_bot == 'ia' %}selected{% endif %}>Agente IA</option>
+                </select>
+                <small class="muted d-block mt-1" id="hint-modo-bot"></small>
+            </div>
+
+            {# Departamentos (solo visibles si modo = tradicional) #}
+            <div class="form-row" id="row-departamento">
+                <label>Departamentos del flujo tradicional</label>
+                <select name="departamentos" id="sel-departamentos" multiple class="jselect2" style="width:100%;">
+                    {% for d in departamentos_disponibles %}
+                        <option value="{{ d.id }}"
+                                {% if d.id in sesion_departamento_ids %}selected{% endif %}>
+                            {{ d.nombre }}{% if d.es_default %} · default{% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+                <small class="muted d-block mt-1">
+                    Todos los flujos a los que la sesión puede enrutar (palabras clave de cada departamento deciden cuál responde).
+                </small>
+            </div>
+
+            <div class="form-row" id="row-departamento-default">
+                <label>Departamento de entrada (default) <span class="text-danger">*</span></label>
+                <select name="departamento_default" id="sel-departamento-default">
+                    <option value="">— Sin departamento (no responde al flujo) —</option>
+                    {% for d in departamentos_disponibles %}
+                        <option value="{{ d.id }}"
+                                {% if sesion.departamento_default_id == d.id %}selected{% endif %}>
+                            {{ d.nombre }}{% if d.es_default %} · default{% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+                <small class="muted d-block mt-1">
+                    Flujo que se ejecuta cuando llega un mensaje y no hay match por palabras clave. Debe estar dentro de los seleccionados arriba.
+                    {% if not departamentos_disponibles %}
+                        <a href="/crm/departamentos_chatbots/" target="_blank" class="text-warning">
+                            <i class="fa fa-plus-circle"></i> Crear un departamento primero
+                        </a>
+                    {% endif %}
+                </small>
+            </div>
+
+            {# Agente IA (solo visible si modo = ia) #}
+            <div class="form-row" id="row-agente-ia">
+                <label>Agente IA {% if sesion.modo_bot == 'ia' %}<span class="text-danger">*</span>{% endif %}</label>
+                <select name="agente_ia">
+                    <option value="">— Sin agente —</option>
+                    {% for a in agentes_disponibles %}
+                        <option value="{{ a.id }}"
+                                {% if sesion.agente_ia_id == a.id %}selected{% endif %}>{{ a.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <script>
+                (function () {
+                    const sel = document.getElementById('sel-modo-bot');
+                    const rowDepto = document.getElementById('row-departamento');
+                    const rowDeptoDefault = document.getElementById('row-departamento-default');
+                    const rowAgente = document.getElementById('row-agente-ia');
+                    const selDeptos = document.getElementById('sel-departamentos');
+                    const selDefault = document.getElementById('sel-departamento-default');
+                    const hint = document.getElementById('hint-modo-bot');
+                    const HINTS = {
+                        'ninguno':     'No se invoca ningún bot. El operador humano contesta todo.',
+                        'tradicional': 'Solo se ejecuta el flujo del departamento (botones, opciones).',
+                        'ia':          'Solo IA libre. Cada respuesta la genera el LLM del agente.',
+                    };
+                    function actualizar() {
+                        const m = sel.value;
+                        const usaDepto = (m === 'tradicional');
+                        const usaIA    = (m === 'ia');
+                        rowDepto.style.display        = usaDepto ? '' : 'none';
+                        rowDeptoDefault.style.display = usaDepto ? '' : 'none';
+                        rowAgente.style.display       = usaIA    ? '' : 'none';
+                        if (hint) hint.textContent = HINTS[m] || '';
+                    }
+                    function sincronizarDefault() {
+                        // El default solo puede ser uno de los seleccionados en el M2M.
+                        if (!selDeptos || !selDefault) return;
+                        const seleccionados = new Set(
+                            Array.from(selDeptos.selectedOptions).map(o => o.value)
+                        );
+                        Array.from(selDefault.options).forEach(o => {
+                            if (!o.value) { o.disabled = false; return; } // mantiene "— Sin —"
+                            o.disabled = !seleccionados.has(o.value);
+                        });
+                        // Si el default actual ya no está en el M2M, lo limpia.
+                        const cur = selDefault.value;
+                        if (cur && !seleccionados.has(cur)) selDefault.value = '';
+                    }
+                    sel.addEventListener('change', actualizar);
+                    if (selDeptos) selDeptos.addEventListener('change', sincronizarDefault);
+                    actualizar();
+                    sincronizarDefault();
+                })();
+            </script>
+
+            <div class="form-row form-row-two">
+                <div>
+                    <label>Idioma</label>
+                    <select name="language">
+                        <option value="es" {% if sesion.language == 'es' %}selected{% endif %}>Español</option>
+                        <option value="en" {% if sesion.language == 'en' %}selected{% endif %}>English</option>
+                        <option value="pt" {% if sesion.language == 'pt' %}selected{% endif %}>Português</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Zona horaria</label>
+                    <input type="text" name="zona_horaria" value="{{ sesion.zona_horaria }}"
+                           placeholder="America/Guayaquil">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <label>Mensaje de bienvenida</label>
+                <textarea name="mensaje_bienvenida" rows="2"
+                          placeholder="Hola 👋, gracias por escribirnos...">{{ sesion.mensaje_bienvenida|default:'' }}</textarea>
+            </div>
+
+            <div class="form-row">
+                <label>Mensaje de despedida</label>
+                <textarea name="mensaje_despedida" rows="2"
+                          placeholder="Cerramos esta conversación. ¡Vuelve pronto!">{{ sesion.mensaje_despedida|default:'' }}</textarea>
+            </div>
+
+            <div class="form-row">
+                <label>Mensaje al transferir a humano</label>
+                <textarea name="mensaje_handoff" rows="2"
+                          placeholder="Te conectamos con un asesor...">{{ sesion.mensaje_handoff|default:'' }}</textarea>
+            </div>
+        </div>
+
+        <div class="detail-actions">
+            <button type="button" class="conex-btn conex-btn-light" data-cerrar-detail>Cancelar</button>
+            <button type="submit" id="submit" class="conex-btn conex-btn-primary">
+                <i class="fa fa-save me-1"></i> Guardar cambios
+            </button>
+        </div>
+    </form>
+</div>
+
+
+<script>
+    (function () {
+        // Resincronizar con Meta — ataca la accion `meta_validar` que ya existe.
+        const $btn = document.getElementById('btn-resync-meta');
+        if (!$btn) return;
+        $btn.addEventListener('click', function () {
+            const pk = $btn.dataset.pk;
+            if (!pk) return;
+            const orig = $btn.innerHTML;
+            $btn.disabled = true;
+            $btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Sincronizando...';
+            const fd = new FormData();
+            fd.append('action', 'meta_validar');
+            fd.append('id', pk);
+            const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+            if (csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+            fetch(window.location.pathname, {method: 'POST', body: fd, headers: {'X-Requested-With': 'XMLHttpRequest'}})
+                .then(r => r.json())
+                .then(data => {
+                    $btn.disabled = false;
+                    $btn.innerHTML = orig;
+                    if (data && (data.error === false || data.ok)) {
+                        if (window.Swal) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Sincronizado',
+                                text: data.message || 'Datos actualizados desde Meta.',
+                                timer: 1800,
+                                showConfirmButton: false
+                            });
+                        }
+                        // Refrescamos la card del tablero (badges, calidad, etc.)
+                        // y reinyectamos este modal con los datos recién traídos
+                        // de Meta — sin recargar la página completa.
+                        if (typeof window.refrescarCardSesion === 'function') {
+                            window.refrescarCardSesion(pk);
+                        }
+                        var modalUrl = (window.CONEX_URL || window.location.pathname)
+                            + '?action=editar_modal&pk=' + encodeURIComponent(pk);
+                        fetch(modalUrl, {
+                            headers: {'X-Requested-With': 'XMLHttpRequest'},
+                            credentials: 'same-origin'
+                        })
+                            .then(r => r.json())
+                            .then(j => {
+                                if (j && j.ok && j.html) {
+                                    var cont = document.getElementById('conex-detail-content');
+                                    if (cont) cont.innerHTML = j.html;
+                                }
+                            })
+                            .catch(() => { /* el toast de éxito ya se mostró */ });
+                    } else {
+                        alert((data && data.message) || 'No se pudo sincronizar.');
+                    }
+                })
+                .catch(() => {
+                    $btn.disabled = false;
+                    $btn.innerHTML = orig;
+                    alert('Error de red al sincronizar.');
+                });
+        });
+    })();
+</script>

@@ -53,7 +53,7 @@
                 </li>
                 <li class="mx-3 welcome-text">
                     {% if request.path == '/' or request.path == '/panel/' %}
-                        <h3 class="mb-0 fw-bold text-truncate">Bienvenido(a) {{ request.user.first_name }}!</h3>
+                        <h3 class="mb-0 fw-bold text-truncate">Panel Principal</h3>
                     {% else %}
                         <h3 class="mb-0 fw-bold text-truncate">{{ titulo }}</h3>
                         <h6 class="mb-0 fw-normal text-muted text-truncate fs-14">{{ descripcion }}</h6>
@@ -75,24 +75,51 @@
                     </a>
                 </li>
                 <li class="dropdown topbar-item">
-                    <a class="nav-link dropdown-toggle arrow-none nav-icon" data-bs-toggle="dropdown" href="#"
+                    <a class="nav-link dropdown-toggle arrow-none nav-icon position-relative" data-bs-toggle="dropdown" href="#"
                        role="button"
                        aria-haspopup="false" aria-expanded="false">
-                        <i class="icofont-bell-alt {% if listnotification %}text-warning{% endif %}"></i>
-                        <span class="alert-badge"></span>
+                        <i class="icofont-bell-alt {% if totalnot %}text-warning{% endif %}"></i>
+                        {% if totalnot %}
+                            <span class="badge bg-danger rounded-pill position-absolute top-0 start-100 translate-middle"
+                                  style="font-size:.6rem;">
+                                {% if totalnot > 99 %}99+{% else %}{{ totalnot }}{% endif %}
+                            </span>
+                        {% endif %}
                     </a>
-                    <div class="dropdown-menu stop dropdown-menu-end dropdown-lg py-0">
-                        {% for notificacion in listnotification %}
-                            asdasd
+                    <div class="dropdown-menu stop dropdown-menu-end dropdown-lg py-0" style="min-width:320px;max-width:380px;">
+                        <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
+                            <strong class="fs-14">Notificaciones</strong>
+                            {% if totalnot %}
+                                <small class="text-muted">{{ totalnot }} sin leer</small>
+                            {% endif %}
+                        </div>
+                        {% for notif in listnotification %}
+                            <a href="{% if notif.url %}{{ notif.url }}{% else %}/notificaciones/{% endif %}"
+                               class="dropdown-item d-flex align-items-start py-2 border-bottom dp-notif-item"
+                               data-notif-id="{{ notif.id }}"
+                               style="white-space:normal;">
+                                <div class="me-2 flex-shrink-0">
+                                    <span class="badge rounded-circle d-inline-flex align-items-center justify-content-center"
+                                          style="width:32px;height:32px;background:{% if notif.tipo == 4 %}#dc3545{% elif notif.tipo == 3 %}#198754{% elif notif.tipo == 2 %}#0d6efd{% else %}#0dcaf0{% endif %};color:#fff;">
+                                        <i class="fa fa-{% if notif.tipo == 4 %}triangle-exclamation{% elif notif.tipo == 3 %}circle-check{% elif notif.tipo == 2 %}bullhorn{% else %}circle-info{% endif %}"></i>
+                                    </span>
+                                </div>
+                                <div class="flex-grow-1" style="min-width:0;">
+                                    <div class="fw-medium fs-13 text-dark text-truncate">{{ notif.titulo|default:'(sin título)' }}</div>
+                                    <div class="text-muted fs-12" style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">{{ notif.cuerpo|striptags|truncatechars:80 }}</div>
+                                    <small class="text-muted fs-11">
+                                        <i class="fa fa-clock me-1"></i>{{ notif.fecha_registro|date:'d/m/Y H:i' }}
+                                    </small>
+                                </div>
+                            </a>
                         {% empty %}
-                            <div class="ms-3" style="text-align: center">
-                                <img src="/static/iconos/notificacion.svg" style="width: 150px">
-                                <p class="mb-3" style="color: #7C7C7C">Actualmente no tiene nuevas
-                                    notificaciones</p>
+                            <div class="ms-3 py-3" style="text-align: center">
+                                <img src="/static/iconos/notificacion.svg" style="width: 120px">
+                                <p class="mb-2 mt-2" style="color: #7C7C7C">Sin notificaciones nuevas</p>
                             </div>
                         {% endfor %}
-                        <a href="/notificaciones/" class="dropdown-item text-center text-dark fs-13 py-2">
-                            Ver mis notificaciones<i class="fi-arrow-right"></i>
+                        <a href="/notificaciones/" class="dropdown-item text-center text-primary fs-13 py-2 fw-medium">
+                            Ver todas las notificaciones <i class="fi-arrow-right ms-1"></i>
                         </a>
                     </div>
                 </li>
@@ -238,25 +265,25 @@
             {% endblock %}
         </div>
 
-        <footer class="footer text-center text-sm-start d-print-none">
-            <div class="container-xxl">
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card mb-0 rounded-bottom-0">
-                            <div class="card-body">
-                                <p class="text-muted mb-0">
-                                    ©
-                                    <script> document.write(new Date().getFullYear()) </script>
-                                    <span class="text-muted d-none d-sm-inline-block float-end">
-                                        {{ alias }}
-                                    </span>
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </footer>
+{#        <footer class="footer text-center text-sm-start d-print-none">#}
+{#            <div class="container-xxl">#}
+{#                <div class="row">#}
+{#                    <div class="col-12">#}
+{#                        <div class="card mb-0 rounded-bottom-0">#}
+{#                            <div class="card-body">#}
+{#                                <p class="text-muted mb-0">#}
+{#                                    ©#}
+{#                                    <script> document.write(new Date().getFullYear()) </script>#}
+{#                                    <span class="text-muted d-none d-sm-inline-block float-end">#}
+{#                                        {{ alias }}#}
+{#                                    </span>#}
+{#                                </p>#}
+{#                            </div>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{#        </footer>#}
     </div>
 </div>
 
@@ -429,6 +456,7 @@
 <link rel="stylesheet" href="/static/dropify/css/dropify.min.css">
 <script src="/static/dropify/js/dropify.min.js"></script>
 <script src="/static/js/base-admin.js?v=2"></script>
+<script src="/static/js/errors_meta.js?v=1"></script>
 <script src="/static/validaciones/funciones.js?v=2.2"></script>
 <script src="/static/js/dfp.min.js"></script>
 <link rel="stylesheet" href="/static/snackbar/dist/snackbar.min.css">
@@ -518,7 +546,7 @@
                     type: '{% if message.tags %}{{ message.tags }}{% endif %}',
                     title: '{{ message }}',
                     showConfirmButton: false,
-                    timer: 1700
+                    timer: 6000
                 })
                 console.log('{{ message }}')
             {% endfor %}
@@ -907,13 +935,14 @@
     }
 
     function alertaSuccess(mensaje) {
+        console.log(mensaje);
         Swal.fire({
             toast: true,
             position: 'top-end',
             type: 'success',
             title: mensaje,
             showConfirmButton: false,
-            timer: 1000
+            timer: 6000
         })
     }
 
@@ -924,7 +953,7 @@
             type: 'info',
             title: mensaje,
             showConfirmButton: false,
-            timer: 1000
+            timer: 6000
         })
     }
 
@@ -935,7 +964,7 @@
             type: 'warning',
             title: mensaje,
             showConfirmButton: false,
-            timer: 1000
+            timer: 6000
         })
     }
 
@@ -1591,6 +1620,51 @@ $(function() {
 </script>
 {% block jscript %}
 {% endblock %}
+
+<script>
+    // Notificaciones del topbar: al hacer click en una entry, se marca como leída
+    // en BD vía sendBeacon (fire-and-forget). El navigate al destino sigue normal,
+    // así no agrega latencia perceptible. Al recargar la siguiente vista, el
+    // contador y la lista vienen ya sin esta notificación.
+    (function () {
+        var CSRF = '{{ csrf_token }}';
+        if (!CSRF) return;
+        document.addEventListener('click', function (ev) {
+            var a = ev.target && ev.target.closest && ev.target.closest('a[data-notif-id]');
+            if (!a) return;
+            var id = a.getAttribute('data-notif-id');
+            if (!id) return;
+            var fd = new FormData();
+            fd.append('csrfmiddlewaretoken', CSRF);
+            fd.append('action', 'check');
+            fd.append('id', id);
+            try {
+                if (navigator.sendBeacon) {
+                    navigator.sendBeacon('/notificaciones/', fd);
+                } else {
+                    fetch('/notificaciones/', {
+                        method: 'POST', body: fd, credentials: 'same-origin',
+                        headers: {'X-Requested-With': 'XMLHttpRequest'},
+                        keepalive: true,
+                    });
+                }
+            } catch (e) { /* no rompemos el navigate por un error de marcado */ }
+            // Feedback visual inmediato (por si el usuario abre en pestaña nueva
+            // y no recarga la actual): atenúa el item y decrementa el badge.
+            a.style.opacity = '.5';
+            a.style.pointerEvents = 'none';
+            var badge = document.querySelector('.icofont-bell-alt + .badge');
+            if (badge) {
+                var n = parseInt((badge.textContent || '').replace(/\D/g, ''), 10);
+                if (!isNaN(n) && n > 0) {
+                    var nuevo = n - 1;
+                    badge.textContent = nuevo > 99 ? '99+' : String(nuevo);
+                    if (nuevo <= 0) badge.remove();
+                }
+            }
+        }, true);
+    })();
+</script>
 
 </body>
 </html>

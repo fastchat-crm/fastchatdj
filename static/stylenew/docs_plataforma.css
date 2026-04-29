@@ -1,0 +1,347 @@
+/* Pagina de documentacion: vision general de la plataforma.
+   Mismos tokens que docs.css para mantener coherencia con base.html. */
+
+.docs-plataforma {
+  --pf-bg:         #ffffff;
+  --pf-panel:      #f8fafc;
+  --pf-border:     #e5e7eb;
+  --pf-border-soft:#eef2f7;
+  --pf-ink:        #0f172a;
+  --pf-ink-muted:  #475569;
+  --pf-ink-soft:   #64748b;
+  --pf-accent:     #2563eb;
+  --pf-accent-50:  #eff6ff;
+  --pf-accent-100: #dbeafe;
+  --pf-accent-700: #1d4ed8;
+  --pf-success:    #16a34a;
+  --pf-success-50: #ecfdf5;
+  --pf-warning-50: #fffbeb;
+  --pf-warning:    #b45309;
+
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+  background: transparent;
+  color: var(--pf-ink);
+  font-family: inherit;
+  border-radius: 0;
+}
+
+/* Sidebar interno */
+.docs-plataforma .pf-sidebar {
+  position: sticky;
+  top: 80px;
+  align-self: start;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  background: var(--pf-bg);
+  border: 1px solid var(--pf-border);
+  border-radius: 12px;
+  padding: 1rem 0 1.25rem;
+}
+
+.docs-plataforma .pf-sidebar::-webkit-scrollbar { width: 8px; }
+.docs-plataforma .pf-sidebar::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 4px;
+}
+
+.docs-plataforma .pf-sidebar .brand {
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--pf-ink);
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  padding: 0 1rem 1rem;
+  border-bottom: 1px solid var(--pf-border-soft);
+  margin-bottom: .75rem;
+}
+.docs-plataforma .pf-sidebar .brand i { color: #25d366; }
+
+.docs-plataforma .pf-sidebar .nav-link {
+  position: relative;
+  display: block;
+  color: var(--pf-ink-muted);
+  font-size: .85rem;
+  padding: .5rem 1rem .5rem 1.25rem;
+  border-radius: 0;
+  text-decoration: none;
+  line-height: 1.35;
+  transition: background .12s, color .12s;
+}
+.docs-plataforma .pf-sidebar .nav-link::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0; bottom: 0;
+  width: 3px;
+  background: transparent;
+  transition: background .12s;
+}
+.docs-plataforma .pf-sidebar .nav-link:hover {
+  background: #f1f5f9;
+  color: var(--pf-ink);
+}
+.docs-plataforma .pf-sidebar .nav-link.active {
+  background: var(--pf-accent-50);
+  color: var(--pf-accent-700);
+  font-weight: 600;
+}
+.docs-plataforma .pf-sidebar .nav-link.active::before { background: var(--pf-accent); }
+
+.docs-plataforma .pf-sidebar .section-label {
+  font-size: .68rem;
+  font-weight: 700;
+  color: var(--pf-ink-soft);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 1rem 1rem .35rem;
+}
+
+/* Contenido */
+.docs-plataforma .pf-content {
+  min-width: 0;
+  background: var(--pf-bg);
+  border: 1px solid var(--pf-border);
+  border-radius: 12px;
+  padding: 1.75rem 2rem 2.5rem;
+  max-width: none;
+}
+
+.docs-plataforma h2.section-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--pf-ink);
+  margin-top: 2.25rem;
+  margin-bottom: .75rem;
+  padding-bottom: .5rem;
+  border-bottom: 1px solid var(--pf-border-soft);
+  scroll-margin-top: 90px;
+  letter-spacing: -.005em;
+}
+
+.docs-plataforma h3.sub-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--pf-ink);
+  margin-top: 1.5rem;
+  margin-bottom: .65rem;
+}
+
+.docs-plataforma p {
+  color: var(--pf-ink-muted);
+  line-height: 1.6;
+  font-size: .92rem;
+}
+
+.docs-plataforma .doc-card {
+  background: var(--pf-bg);
+  border: 1px solid var(--pf-border);
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.docs-plataforma .hero-section {
+  background: linear-gradient(135deg, var(--pf-accent-50) 0%, var(--pf-accent-100) 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  padding: 1.75rem 1.85rem;
+  margin-bottom: 1.5rem;
+}
+
+.docs-plataforma .hero-section h1 {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #1e3a8a;
+  margin: 0 0 .5rem;
+  letter-spacing: -.01em;
+}
+
+.docs-plataforma .hero-section p {
+  color: #1e40af;
+  font-size: .95rem;
+  margin-bottom: .75rem;
+}
+
+.docs-plataforma .badge-tech {
+  background: #fff;
+  color: var(--pf-accent-700);
+  border: 1px solid #bfdbfe;
+  font-size: .72rem;
+  font-weight: 600;
+  padding: .25em .65em;
+  border-radius: 6px;
+  display: inline-block;
+  margin: .15em;
+}
+
+/* Flow */
+.docs-plataforma .flow-step {
+  display: flex;
+  align-items: flex-start;
+  gap: .85rem;
+  margin-bottom: .35rem;
+}
+.docs-plataforma .flow-icon {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  background: var(--pf-accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .85rem;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, .25);
+}
+.docs-plataforma .flow-arrow {
+  margin-left: 15px;
+  width: 2px;
+  height: 18px;
+  background: linear-gradient(to bottom, var(--pf-accent), transparent);
+}
+.docs-plataforma .flow-text strong { color: var(--pf-ink); font-size: .9rem; }
+.docs-plataforma .flow-text small {
+  color: var(--pf-ink-soft);
+  display: block;
+  font-size: .8rem;
+  line-height: 1.5;
+  margin-top: .15rem;
+}
+
+/* Tablas */
+.docs-plataforma .docs-table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--pf-ink);
+  --bs-table-striped-bg: #f8fafc;
+  --bs-table-hover-bg: #f1f5f9;
+  color: var(--pf-ink);
+  font-size: .88rem;
+  margin-bottom: 0;
+}
+.docs-plataforma .docs-table th {
+  background: var(--pf-panel);
+  color: var(--pf-ink-soft);
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  border-color: var(--pf-border);
+  padding: .65rem .85rem;
+}
+.docs-plataforma .docs-table td {
+  background: transparent !important;
+  color: var(--pf-ink-muted);
+  border-color: var(--pf-border-soft);
+  font-size: .88rem;
+  vertical-align: top;
+  padding: .65rem .85rem;
+}
+.docs-plataforma .docs-table td strong { color: var(--pf-ink); }
+.docs-plataforma .docs-table td code { color: #be185d; }
+
+.docs-plataforma code {
+  background: var(--pf-panel);
+  color: #be185d;
+  border: 1px solid var(--pf-border-soft);
+  border-radius: 4px;
+  padding: .12em .4em;
+  font-size: .82em;
+}
+.docs-plataforma pre {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 1.1rem 1.25rem;
+  color: #e2e8f0;
+  font-size: .82rem;
+  line-height: 1.6;
+  overflow-x: auto;
+}
+.docs-plataforma pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+}
+
+.docs-plataforma .tip-box {
+  background: var(--pf-success-50);
+  border-left: 3px solid var(--pf-success);
+  padding: .7rem 1rem;
+  border-radius: 0 8px 8px 0;
+  font-size: .87rem;
+  color: #065f46;
+  margin: .85rem 0;
+}
+.docs-plataforma .warn-box {
+  background: var(--pf-warning-50);
+  border-left: 3px solid #f59e0b;
+  padding: .7rem 1rem;
+  border-radius: 0 8px 8px 0;
+  font-size: .87rem;
+  color: var(--pf-warning);
+  margin: .85rem 0;
+}
+
+.docs-plataforma .feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: .85rem;
+  margin: 1rem 0;
+}
+.docs-plataforma .feature-card {
+  background: var(--pf-bg);
+  border: 1px solid var(--pf-border);
+  border-radius: 10px;
+  padding: 1rem;
+  transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+.docs-plataforma .feature-card:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 4px 14px rgba(17, 24, 39, .06);
+  transform: translateY(-1px);
+}
+.docs-plataforma .feature-card .icon {
+  font-size: 1.35rem;
+  margin-bottom: .4rem;
+}
+.docs-plataforma .feature-card h5 {
+  font-size: .88rem;
+  font-weight: 700;
+  color: var(--pf-ink);
+  margin-bottom: .2rem;
+}
+.docs-plataforma .feature-card p {
+  font-size: .8rem;
+  color: var(--pf-ink-soft);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Mobile */
+@media (max-width: 991px) {
+  .docs-plataforma {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  .docs-plataforma .pf-sidebar {
+    position: static;
+    max-height: none;
+    top: auto;
+  }
+  .docs-plataforma .pf-content {
+    padding: 1.25rem 1.35rem 2rem;
+  }
+}
+
+@media (max-width: 575px) {
+  .docs-plataforma .pf-content { padding: 1rem 1.1rem 1.75rem; }
+  .docs-plataforma .hero-section { padding: 1.25rem; }
+  .docs-plataforma .hero-section h1 { font-size: 1.3rem; }
+}

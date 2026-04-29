@@ -1,0 +1,209 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/agente_wizard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container py-3">
+    <div class="wizard-header">
+        <h4 class="mb-1"><i class="fas fa-magic me-2 text-primary"></i>Crear agente IA — modo rápido</h4>
+        <p class="text-muted small mb-0">3 pasos · 1 minuto · podés afinar todo después</p>
+    </div>
+
+    {# Stepper #}
+    <ul class="wizard-steps" id="wizardSteps">
+        <li class="ws-item is-active" data-step="1">
+            <div class="ws-num">1</div>
+            <div class="ws-label">Personalidad</div>
+        </li>
+        <li class="ws-item" data-step="2">
+            <div class="ws-num">2</div>
+            <div class="ws-label">Contexto del negocio</div>
+        </li>
+        <li class="ws-item" data-step="3">
+            <div class="ws-num">3</div>
+            <div class="ws-label">API Key</div>
+        </li>
+    </ul>
+
+    <form id="wizardForm" class="wizard-form" autocomplete="off">
+        {% csrf_token %}
+        <input type="hidden" name="personalidad_preset" id="presetInput" value="amable">
+
+        {# ── Paso 1 ─────────────────────────────────────────────────── #}
+        <div class="wizard-pane is-active" data-pane="1">
+            <h5 class="wp-title">Decile cómo querés que escriba</h5>
+            <p class="wp-help">Cada opción configura un nombre, tono y estilo. Después podés cambiar todo.</p>
+
+            <div class="row g-2 mb-3">
+                <div class="col-12">
+                    <label class="form-label small fw-semibold">Nombre del agente</label>
+                    <input type="text" class="form-control" name="nombre" id="wizNombre"
+                           placeholder="Ej: Asistente de Ventas, Soporte Pizzería..." maxlength="120" required>
+                    <div class="form-text small">Sólo lo verás vos en el panel. El nombre que ve el cliente lo define el preset.</div>
+                </div>
+            </div>
+
+            <div class="row g-2 personalidad-presets-grid">
+                {% for key, p in personalidad_presets.items %}
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="personalidad-preset-card h-100 {% if key == 'amable' %}is-selected{% endif %}"
+                         data-preset="{{ key }}"
+                         style="--preset-color: {{ p.color|default:'#667eea' }}">
+                        <div class="ppc-icon"><i class="fas {{ p.icono|default:'fa-robot' }}"></i></div>
+                        <div class="ppc-name">{{ p.label }}</div>
+                        <div class="ppc-desc">{{ p.descripcion_corta }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="wizard-actions">
+                <span></span>
+                <button type="button" class="btn btn-primary" data-next="2">Siguiente <i class="fas fa-arrow-right ms-1"></i></button>
+            </div>
+        </div>
+
+        {# ── Paso 2 ─────────────────────────────────────────────────── #}
+        <div class="wizard-pane" data-pane="2">
+            <h5 class="wp-title">Contale qué hace tu negocio</h5>
+            <p class="wp-help">
+                Pegá lo que el agente necesita saber: productos, servicios, precios, horarios, FAQ, políticas.
+                Texto libre — se va directo al prompt. Después podés sumar PDFs, links y más.
+            </p>
+
+            <textarea class="form-control" name="contexto_negocio" id="wizContexto" rows="10"
+                      placeholder="Ej:
+Pizzería La Casa — horarios: lunes a sábado 18-23hs.
+Pizza muzzarella $5500, napolitana $6200, fugazzeta $5800.
+Delivery: Caballito y Almagro, $400 envío. Tiempo estimado 35 min.
+Aceptamos efectivo, MP y transferencia."></textarea>
+            <div class="form-text small mt-1">
+                Tip: si tenés mucho material (PDFs, Excel, catálogo), sumalo después en
+                la pestaña <em>Conocimiento</em>. Acá basta con lo esencial.
+            </div>
+
+            <div class="wizard-actions">
+                <button type="button" class="btn btn-light" data-prev="1"><i class="fas fa-arrow-left me-1"></i> Atrás</button>
+                <button type="button" class="btn btn-primary" data-next="3">Siguiente <i class="fas fa-arrow-right ms-1"></i></button>
+            </div>
+        </div>
+
+        {# ── Paso 3 ─────────────────────────────────────────────────── #}
+        <div class="wizard-pane" data-pane="3">
+            <h5 class="wp-title">Conectá una API Key</h5>
+            <p class="wp-help">El agente usa Gemini u OpenAI para responder. Si todavía no tenés una, agregala desde el panel principal.</p>
+
+            <label class="form-label small fw-semibold">API Key</label>
+            {% if apikeys %}
+                <select class="form-select" name="apikey_id" id="wizApikey" required>
+                    <option value="">Seleccioná una API Key</option>
+                    {% for k in apikeys %}
+                        <option value="{{ k.id }}">{{ k.alias|default:"(sin alias)" }} (proveedor #{{ k.proveedor }})</option>
+                    {% endfor %}
+                </select>
+            {% else %}
+                <div class="alert alert-warning small mb-2">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    No tenés ninguna API Key todavía.
+                    <a href="/crm/entrenamiento/?accion=addapi" class="alert-link">Crear una ahora</a>
+                    y volvé a este wizard.
+                </div>
+            {% endif %}
+
+            <div class="wizard-summary mt-3">
+                <p class="ws-title-summary">Resumen:</p>
+                <ul class="ws-list">
+                    <li><strong>Nombre:</strong> <span data-summary="nombre">—</span></li>
+                    <li><strong>Personalidad:</strong> <span data-summary="preset">amable</span></li>
+                    <li><strong>Contexto:</strong> <span data-summary="contexto">—</span> caracteres</li>
+                </ul>
+            </div>
+
+            <div class="wizard-actions">
+                <button type="button" class="btn btn-light" data-prev="2"><i class="fas fa-arrow-left me-1"></i> Atrás</button>
+                <button type="submit" class="btn btn-success"
+                        {% if not apikeys %}disabled title="Crea una API Key antes"{% endif %}>
+                    <i class="fas fa-check me-1"></i> Crear agente
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+// jQuery se carga al final de base.html, despues del bloque content.
+// Esperamos DOMContentLoaded para que `$` exista cuando ejecutamos.
+document.addEventListener('DOMContentLoaded', function() {
+    const $form   = $('#wizardForm');
+    const $steps  = $('#wizardSteps .ws-item');
+    const $panes  = $('.wizard-pane');
+    const $cards  = $('.personalidad-preset-card');
+    const $preset = $('#presetInput');
+
+    function irA(paso) {
+        $steps.removeClass('is-active is-done');
+        $steps.each(function() {
+            const n = parseInt($(this).data('step'));
+            if (n < paso) $(this).addClass('is-done');
+            if (n === paso) $(this).addClass('is-active');
+        });
+        $panes.removeClass('is-active');
+        $panes.filter(`[data-pane="${paso}"]`).addClass('is-active');
+        actualizarResumen();
+    }
+
+    function actualizarResumen() {
+        $('[data-summary="nombre"]').text($('#wizNombre').val() || '—');
+        $('[data-summary="preset"]').text($('.personalidad-preset-card.is-selected .ppc-name').text() || 'amable');
+        $('[data-summary="contexto"]').text(($('#wizContexto').val() || '').length);
+    }
+
+    $cards.on('click', function() {
+        $cards.removeClass('is-selected');
+        $(this).addClass('is-selected');
+        $preset.val($(this).data('preset'));
+    });
+
+    $('[data-next]').on('click', function() {
+        const target = parseInt($(this).data('next'));
+        // Validación blanda
+        if (target === 2 && !$('#wizNombre').val().trim()) {
+            $('#wizNombre').addClass('is-invalid').focus();
+            return;
+        }
+        $('#wizNombre').removeClass('is-invalid');
+        irA(target);
+    });
+    $('[data-prev]').on('click', function() { irA(parseInt($(this).data('prev'))); });
+
+    $form.on('submit', function(e) {
+        e.preventDefault();
+        const $btn = $(this).find('button[type="submit"]');
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i> Creando...');
+        $.ajax({
+            url: '',
+            type: 'POST',
+            data: $form.serialize(),
+            dataType: 'json',
+        }).done(function(res) {
+            if (res.result && res.redirect) {
+                window.location.href = res.redirect;
+            } else {
+                $btn.prop('disabled', false).html('<i class="fas fa-check me-1"></i> Crear agente');
+                alert(res.mensaje || 'No se pudo crear el agente.');
+            }
+        }).fail(function(xhr) {
+            $btn.prop('disabled', false).html('<i class="fas fa-check me-1"></i> Crear agente');
+            const errs = (xhr.responseJSON && xhr.responseJSON.errores) || {};
+            const lista = Object.values(errs).join('\n') || 'Error inesperado.';
+            alert(lista);
+        });
+    });
+
+    actualizarResumen();
+});
+</script>
+{% endblock %}

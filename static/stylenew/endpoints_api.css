@@ -1,0 +1,29 @@
+.card-credenciales {
+    border-left: 4px solid var(--bs-info, #0dcaf0);
+}
+
+.card-endpoints {
+    border-left: 4px solid var(--bs-success, #198754);
+}
+
+.card-credenciales .card-header,
+.card-endpoints .card-header {
+    border-bottom-width: 1px;
+    border-bottom-style: solid;
+}
+
+#tabla th.col-accion {
+    width: 120px;
+}
+
+.badge-nodos,
+.badge-endpoints-cred {
+    cursor: pointer;
+    font-size: 0.85em;
+    text-decoration: none;
+}
+
+.badge-nodos:hover,
+.badge-endpoints-cred:hover {
+    filter: brightness(0.92);
+}

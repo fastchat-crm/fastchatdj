@@ -1,0 +1,328 @@
+{# Card de un nodo del flujo. Vars: op (instancia), nivel. #}
+<div class="dp-node-card"
+     data-id="{{ op.id }}"
+     data-padre="{{ op.opcion_padre_id|default_if_none:'' }}"
+     data-nivel="{{ nivel }}"
+     data-tipo="{{ op.tipo_nodo }}"
+     style="margin-left: {{ nivel|add:nivel|add:nivel }}0px;">
+    <div class="dp-node-row">
+
+        <div class="dp-node-header">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fa fa-grip-vertical dp-drag-handle" title="Arrastrar para reordenar"></i>
+                <span class="dp-tipo-pill tipo-{{ op.tipo_nodo }}">
+                    {{ op.get_tipo_nodo_display }}
+                </span>
+            </div>
+            <div class="dp-node-actions">
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        data-act="add-child" data-parent-id="{{ op.id }}"
+                        title="Agregar sub-opción">
+                    <i class="fa fa-plus"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-info"
+                        data-act="view" data-id="{{ op.id }}"
+                        title="Ver ficha completa (read-only)">
+                    <i class="fa fa-eye"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        data-act="edit" data-id="{{ op.id }}"
+                        title="Editar">
+                    <i class="fa fa-pen"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                        data-act="delete" data-id="{{ op.id }}" data-nombre="{{ op.nombre|default:'' }}"
+                        title="Eliminar">
+                    <i class="fa fa-trash"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="dp-node-info">
+            <div class="dp-node-title">
+                {% if op.es_inicio %}<i class="fa fa-play text-success me-1" title="Nodo de inicio"></i>{% endif %}
+                {{ op.nombre|default:'(sin nombre)' }}
+                <span class="dp-node-id-badge">#{{ op.id }}</span>
+                {% if op.tipo_nodo == 'fin' %}
+                    <span class="dp-flag-pill dp-flag-fin" title="Este nodo finaliza la conversación">
+                        <i class="fa fa-flag-checkered"></i> Termina flujo
+                    </span>
+                {% endif %}
+                {% if op.config.envia_correo %}
+                    <span class="dp-flag-pill dp-flag-email"
+                          title="Este nodo dispara el envío de un correo (configurado en config.envia_correo)">
+                        <i class="fa fa-envelope"></i> Envía correo
+                    </span>
+                {% endif %}
+                {% if op.tipo_nodo == 'menu' and op.config.opcion_default and op.config.opcion_default.valor %}
+                    <span class="dp-flag-pill dp-flag-default"
+                          title="Atajo Sí/Otra activo. Si confirma, se autoasigna {{ op.variable_destino }}={{ op.config.opcion_default.valor }} y avanza por '{{ op.config.opcion_default.salida_si|default:'(default)' }}'.">
+                        <i class="fa fa-bolt"></i>
+                        Atajo: {{ op.config.opcion_default.etiqueta|default:op.config.opcion_default.valor }}
+                    </span>
+                {% endif %}
+            </div>
+
+            {# Predecesores del grafo: nodo(s) que apuntan a este vía ConexionNodoChatbot. #}
+            {# Permite trazar el flujo viendo "viene de #X". Si no hay grafo, no se muestra. #}
+            {% if op.predecesores_grafo %}
+                <div class="dp-node-preds">
+                    <i class="fa fa-arrow-left text-muted me-1" title="Viene de"></i>
+                    <span class="text-muted small">viene de:</span>
+                    {% for c in op.predecesores_grafo %}
+                        <span class="dp-tag dp-tag-pred"
+                              title="Nodo origen: {{ c.nodo_origen.nombre|default:'(sin nombre)' }} ({{ c.nodo_origen.get_tipo_nodo_display }}){% if c.etiqueta %} · etiqueta {{ c.etiqueta }}{% endif %}">
+                            #{{ c.nodo_origen_id }}
+                            {% if c.etiqueta %}<span class="text-muted">[{{ c.etiqueta }}]</span>{% endif %}
+                        </span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% if op.salidas_grafo %}
+                <div class="dp-node-preds">
+                    <i class="fa fa-arrow-right text-muted me-1" title="Va a"></i>
+                    <span class="text-muted small">va a:</span>
+                    {% for c in op.salidas_grafo %}
+                        <span class="dp-tag dp-tag-out"
+                              title="Destino: {{ c.nodo_destino.nombre|default:'(sin nombre)' }} ({{ c.nodo_destino.get_tipo_nodo_display }}){% if c.etiqueta %} · etiqueta {{ c.etiqueta }}{% endif %}">
+                            {% if c.etiqueta %}<span class="text-muted">[{{ c.etiqueta }}]</span> {% endif %}#{{ c.nodo_destino_id }}
+                        </span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {# ── HTTP: URL completa, método, request body, extraer ── #}
+            {% if op.tipo_nodo == 'http' %}
+                <div class="dp-node-http">
+                    <div class="dp-http-line">
+                        <span class="dp-http-method dp-method-{{ op.config.metodo|lower|default:'get' }}">
+                            {{ op.config.metodo|default:'GET' }}
+                        </span>
+                        {% if op.endpoint %}
+                            <code class="dp-http-url">{{ op.endpoint.base_url }}{{ op.config.path|default:'' }}</code>
+                        {% else %}
+                            <code class="dp-http-url text-danger">⚠️ Sin endpoint</code>
+                        {% endif %}
+                    </div>
+                    {% if op.endpoint %}
+                        <div class="dp-http-meta">
+                            <i class="fa fa-key text-info me-1" title="Credencial"></i>
+                            {% if op.endpoint.credencial %}
+                                {{ op.endpoint.credencial.nombre }}
+                                <span class="text-muted">({{ op.endpoint.credencial.get_tipo_display }})</span>
+                            {% else %}
+                                <span class="text-muted">— Sin auth —</span>
+                            {% endif %}
+                            · timeout {{ op.endpoint.timeout_seg }}s
+                        </div>
+                    {% endif %}
+                    {% if op.config.query %}
+                        <div class="dp-http-meta">
+                            <strong>query:</strong>
+                            {% for k, v in op.config.query.items %}
+                                <code class="dp-http-pair">{{ k }}={{ v|truncatechars:30 }}</code>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    {% if op.config.body %}
+                        <div class="dp-http-meta">
+                            <strong>body:</strong>
+                            <code class="dp-http-pair">{{ op.config.body|truncatechars:80 }}</code>
+                        </div>
+                    {% endif %}
+                    {% if op.config.extraer %}
+                        <div class="dp-http-meta">
+                            <strong>extrae {{ op.config.extraer|length }} var{{ op.config.extraer|length|pluralize }}:</strong>
+                            {% for ex in op.config.extraer %}
+                                <code class="dp-http-extract"
+                                      title="jsonpath: {{ ex.jsonpath }}">${{ ex.variable }}</code>{% if not forloop.last %} {% endif %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    {% if op.config.plantilla_respuesta %}
+                        <div class="dp-node-preview">
+                            <i class="fa fa-quote-left me-1"></i>
+                            {{ op.config.plantilla_respuesta|truncatechars:120 }}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            {# ── FUNCION: código + endpoint externo + extraer ── #}
+            {% if op.tipo_nodo == 'funcion' %}
+                <div class="dp-node-http">
+                    <div class="dp-http-line">
+                        <span class="dp-http-method dp-method-fn">FN</span>
+                        {% if op.config.funcion_codigo %}
+                            <code class="dp-http-url">{{ op.config.funcion_codigo }}</code>
+                        {% else %}
+                            <code class="dp-http-url text-danger">⚠️ Sin funcion_codigo</code>
+                        {% endif %}
+                    </div>
+                    {% if op.endpoint %}
+                        <div class="dp-http-meta">
+                            <i class="fa fa-link text-info me-1" title="Endpoint externo asociado"></i>
+                            <code class="dp-http-pair">{{ op.endpoint.nombre }}</code>
+                            <span class="text-muted">→ {{ op.endpoint.base_url|truncatechars:60 }}</span>
+                        </div>
+                    {% else %}
+                        <div class="dp-http-meta text-muted">
+                            <i class="fa fa-circle-info me-1"></i>
+                            Sin endpoint asociado (algunas funciones no lo necesitan).
+                        </div>
+                    {% endif %}
+                    {% if op.config.body %}
+                        <div class="dp-http-meta">
+                            <strong>body:</strong>
+                            <code class="dp-http-pair">{{ op.config.body|truncatechars:80 }}</code>
+                        </div>
+                    {% endif %}
+                    {% if op.config.extraer %}
+                        <div class="dp-http-meta">
+                            <strong>extrae {{ op.config.extraer|length }} var{{ op.config.extraer|length|pluralize }}:</strong>
+                            {% for ex in op.config.extraer %}
+                                <code class="dp-http-extract"
+                                      title="jsonpath: {{ ex.jsonpath }}">${{ ex.variable }}</code>{% if not forloop.last %} {% endif %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            {# ── PREGUNTA: pregunta + variable destino + validación ── #}
+            {% if op.tipo_nodo == 'pregunta' %}
+                <div class="dp-node-preview">
+                    <i class="fa fa-question-circle me-1"></i>
+                    {{ op.config.pregunta|default:op.respuesta|truncatechars:140 }}
+                </div>
+                <div class="dp-http-meta">
+                    {% if op.variable_destino %}
+                        <strong>captura en:</strong> <code>${{ op.variable_destino }}</code>
+                    {% endif %}
+                    {% if op.validacion_tipo and op.validacion_tipo != 'none' %}
+                        · valida: <span class="badge bg-warning text-dark">{{ op.get_validacion_tipo_display }}</span>
+                    {% endif %}
+                    · {{ op.reintentos_max }} reintentos
+                </div>
+            {% endif %}
+
+            {# ── CONDICIONAL: operador + condiciones ── #}
+            {% if op.tipo_nodo == 'condicional' %}
+                <div class="dp-http-meta">
+                    <strong>{{ op.config.operador|default:'and'|upper }}</strong>
+                    {% for c in op.config.condiciones %}
+                        <code class="dp-http-pair">{{ c.izq }} {{ c.op }} {{ c.der|default:'""' }}</code>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {# ── SET_VARIABLE: variables asignadas ── #}
+            {% if op.tipo_nodo == 'set_variable' %}
+                <div class="dp-http-meta">
+                    <strong>asigna:</strong>
+                    {% for a in op.config.asignaciones %}
+                        <code class="dp-http-pair">${{ a.variable }} = {{ a.expresion|default:'""'|truncatechars:30 }}</code>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {# ── MENU: cantidad de opciones + previa de las primeras 3 ── #}
+            {% if op.tipo_nodo == 'menu' and op.config.opciones %}
+                <div class="dp-http-meta">
+                    <strong>{{ op.config.opciones|length }} opcion{{ op.config.opciones|length|pluralize:"es" }}:</strong>
+                    {% for opt in op.config.opciones|slice:":4" %}
+                        <code class="dp-http-pair">{{ opt.etiqueta|truncatechars:24 }}→{{ opt.salida }}</code>
+                    {% endfor %}
+                    {% if op.config.opciones|length > 4 %}
+                        <span class="text-muted">· +{{ op.config.opciones|length|add:"-4" }} más</span>
+                    {% endif %}
+                </div>
+                {% if op.config.mensaje %}
+                    <div class="dp-node-preview">
+                        <i class="fa fa-quote-left me-1"></i>
+                        {{ op.config.mensaje|truncatechars:120 }}
+                    </div>
+                {% endif %}
+            {% endif %}
+
+            {# ── MENU con atajo (opcion_default) — resumen Sí/Otra ── #}
+            {% if op.tipo_nodo == 'menu' and op.config.opcion_default and op.config.opcion_default.valor %}
+                <div class="dp-http-meta">
+                    <i class="fa fa-bolt text-warning"></i>
+                    <strong>Atajo:</strong>
+                    <code class="dp-http-pair">{{ op.config.opcion_default.etiqueta_si|default:'✅ Sí' }} → {{ op.config.opcion_default.salida_si|default:'(default)' }}</code>
+                    <code class="dp-http-pair">{{ op.config.opcion_default.etiqueta_otra|default:'📍 Otra' }} → {{ op.config.opcion_default.salida_otra|default:'(default)' }}</code>
+                </div>
+                <div class="dp-http-meta">
+                    <span class="text-muted small">
+                        autoasigna <code>${{ op.variable_destino }}={{ op.config.opcion_default.valor }}</code> al confirmar
+                    </span>
+                </div>
+                {% if op.config.opcion_default.pregunta %}
+                    <div class="dp-node-preview">
+                        <i class="fa fa-quote-left me-1"></i>
+                        {{ op.config.opcion_default.pregunta|truncatechars:120 }}
+                    </div>
+                {% endif %}
+            {% endif %}
+
+            {# ── RESPUESTA: muestra mensaje (config.mensaje O respuesta) ── #}
+            {% if op.tipo_nodo == 'respuesta' %}
+                {% if op.config.mensaje %}
+                    <div class="dp-node-preview">
+                        <i class="fa fa-quote-left me-1"></i>
+                        {{ op.config.mensaje|truncatechars:160 }}
+                    </div>
+                {% elif op.respuesta %}
+                    <div class="dp-node-preview">
+                        <i class="fa fa-quote-left me-1"></i>
+                        {{ op.respuesta|truncatechars:160 }}
+                    </div>
+                {% endif %}
+            {% endif %}
+
+            {# ── FIN / HANDOFF: muestra mensaje del config ── #}
+            {% if op.tipo_nodo == 'fin' or op.tipo_nodo == 'handoff' %}
+                {% if op.config.mensaje %}
+                    <div class="dp-node-preview">
+                        <i class="fa fa-quote-left me-1"></i>
+                        {{ op.config.mensaje|truncatechars:140 }}
+                    </div>
+                {% endif %}
+            {% endif %}
+
+            {# ── Fallback genérico para tipos sin sección específica ── #}
+            {% if op.respuesta and op.tipo_nodo not in 'http,pregunta,condicional,set_variable,menu,respuesta,fin,handoff'|cut:',' %}
+                <div class="dp-node-preview">
+                    <i class="fa fa-quote-left me-1"></i>
+                    {{ op.respuesta|truncatechars:140 }}
+                </div>
+            {% endif %}
+
+            <div class="dp-node-tags">
+                {% if op.boton_id %}
+                    <span class="dp-tag dp-tag-id" title="ID que llega al webhook como button_reply.id">
+                        <i class="fa fa-fingerprint"></i> {{ op.boton_id }}
+                    </span>
+                {% endif %}
+                {% if op.tipo_nodo == 'cta_url' and op.config.url %}
+                    <a href="{{ op.config.url }}" target="_blank" rel="noopener"
+                       class="dp-tag dp-tag-url" title="Abre la URL en nueva pestaña">
+                        <i class="fa fa-link"></i> {{ op.config.display_text|default:'URL' }}
+                        →&nbsp;{{ op.config.url|truncatechars:40 }}
+                    </a>
+                {% endif %}
+                {% if op.tipo_nodo == 'ubicacion' and op.config.lat %}
+                    <span class="dp-tag dp-tag-loc" title="Ubicación configurada">
+                        <i class="fa fa-map-marker-alt"></i>
+                        {{ op.config.name|default:'Ubicación' }}
+                        ({{ op.config.lat }}, {{ op.config.lng }})
+                    </span>
+                {% endif %}
+                <span class="dp-tag dp-tag-orden">orden #{{ op.orden }}</span>
+            </div>
+        </div>
+
+    </div>
+</div>

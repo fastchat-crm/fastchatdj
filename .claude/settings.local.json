@@ -1,0 +1,92 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /e/DESARROLLO/FREELANCER/fastchat/fastchatdj log --oneline)",
+      "Bash(python -c ':*)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('agents_ai/agente_consultor.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(where py:*)",
+      "Bash(py --version)",
+      "Bash(py:*)",
+      "Read(//e/DESARROLLO/FREELANCER/fastchat//**)",
+      "Bash(ls venv* env* .venv*)",
+      "Read(//c/Users/USEROPC/miniconda3/**)",
+      "Bash(.venv/Scripts/python:*)",
+      "Bash(del:*)",
+      "Bash(pip list:*)",
+      "Bash(pip show:*)",
+      "Bash(pip3 show:*)",
+      "Bash(grep:*)",
+      "Bash(DJANGO_SETTINGS_MODULE=fastchatdj.settings python -c \"import django; django.setup\\(\\); from crm.forms import DepartamentoChatBotForm; from whatsapp.forms import SesionWhatsAppForm; f = DepartamentoChatBotForm\\(\\); print\\('depto fields:', list\\(f.fields.keys\\(\\)\\)\\); g = SesionWhatsAppForm\\(\\); print\\('sesion fields:', list\\(g.fields.keys\\(\\)\\)\\)\")",
+      "Bash(DJANGO_SETTINGS_MODULE=fastchatdj.settings python -c \"import django; django.setup\\(\\); from django.template.loader import get_template; t = get_template\\('crm/departamento_chatbots/form.html'\\); print\\('template parsea OK'\\)\")",
+      "Bash(DJANGO_SETTINGS_MODULE=fastchatdj.settings python -c \"import django; django.setup\\(\\); from django.template.loader import get_template; t = get_template\\('crm/departamento_chatbots/form.html'\\); print\\('OK'\\)\")",
+      "Bash(DJANGO_SETTINGS_MODULE=fastchatdj.settings python -c \"import django; django.setup\\(\\); from django.template.loader import get_template; get_template\\('crm/departamento_chatbots/form.html'\\); print\\('template OK'\\); from crm import view_departamento_chatbot; print\\('view OK'\\)\")",
+      "Bash(.venv/Scripts/pip show *)",
+      "Bash(awk '{print $NF}')",
+      "Bash(xargs ls *)",
+      "Bash(git show *)",
+      "Read(//tmp/**)",
+      "WebFetch(domain:www.zolutium-es.com)",
+      "WebFetch(domain:mensajeria.broktech.com.ec)",
+      "Bash(awk '/^def process_incoming_message/,/^def [a-z]/' whatsapp/view_webhook_handler.py)",
+      "Bash(ls *)",
+      "Bash(iconv -f UTF-16 -t UTF-8 requirements.txt)",
+      "Bash(.venv/Scripts/python.exe -c \"import markdown, pdfkit; print\\('markdown:', markdown.__version__\\); print\\('pdfkit:', pdfkit.__version__\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"import pdfkit; print\\(pdfkit.__version__\\)\")",
+      "Bash(.venv/Scripts/python.exe -m pip install markdown pdfkit)",
+      "Bash(where wkhtmltopdf *)",
+      "Read(//c/Program Files/wkhtmltopdf/**)",
+      "Bash(.venv/Scripts/python.exe -m pip install xhtml2pdf)",
+      "Bash(.venv/Scripts/python.exe -c \"from xhtml2pdf import pisa; print\\('xhtml2pdf OK'\\)\")",
+      "Bash(.venv/Scripts/python.exe docs/generar_pdfs.py)",
+      "Bash(.venv/Scripts/python.exe -X utf8 docs/generar_pdfs.py)",
+      "Bash(xxd)",
+      "Bash(.venv/Scripts/python.exe -m pip show xhtml2pdf markdown)",
+      "Bash(iconv -f UTF-16LE -t UTF-8)",
+      "PowerShell($path = 'E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\requirements.txt'; $lines = [System.IO.File]::ReadAllLines\\($path, [System.Text.Encoding]::Unicode\\); Write-Output \"Last 3 original lines:\"; $lines[-3..-1])",
+      "PowerShell($path = 'E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\requirements.txt'; $lines = [System.IO.File]::ReadAllLines\\($path, [System.Text.Encoding]::Unicode\\); $lines = $lines[0..\\($lines.Length-2\\)]; $lines += 'rank-bm25'; $lines += 'audioop-lts; python_version >= \"3.13\"'; [System.IO.File]::WriteAllLines\\($path, $lines, \\(New-Object System.Text.UnicodeEncoding\\($false, $true\\)\\)\\); Write-Output \"Fixed. Last 4 lines:\"; [System.IO.File]::ReadAllLines\\($path, [System.Text.Encoding]::Unicode\\)[-4..-1])",
+      "Read(//etc/nginx/**)",
+      "WebFetch(domain:docs.pancake.biz)",
+      "Bash(git add *)",
+      "Bash(git status *)",
+      "Bash(git check-ignore *)",
+      "Bash(git commit -m ' *)",
+      "Bash(pdftotext -layout docs/kommo/KOMMO.pdf docs/kommo/KOMMO.txt)",
+      "Bash(pdftotext -layout docs/kommo/ROTS.pdf docs/kommo/ROTS.txt)",
+      "Bash(pdfinfo docs/kommo/KOMMO.pdf)",
+      "Bash(pdfinfo docs/kommo/ROTS.pdf)",
+      "Bash(awk 'NR==206,NR==410' seguridad/view_credencial_meta.py)",
+      "Bash(awk *)",
+      "Bash(git update-index *)",
+      "Bash(node -c \"/e/DESARROLLO/FREELANCER/fastchat/fastchatdj/static/js/dpchat_editor.js\")",
+      "Bash(git mv *)",
+      "Bash(PYTHONIOENCODING=utf-8 python manage.py seed_centro_estudiantil --reset)",
+      "Bash(PYTHONIOENCODING=utf-8 python manage.py seed_ru --reset)",
+      "Bash(PYTHONIOENCODING=utf-8 python manage.py seed_modulos)",
+      "Bash(PYTHONIOENCODING=utf-8 python manage.py makemigrations whatsapp)",
+      "Bash(PYTHONIOENCODING=utf-8 python manage.py migrate whatsapp)",
+      "Bash(node -c static/js/dpchat_preview.js)",
+      "Bash(PYTHONIOENCODING=utf-8 python manage.py seed_ru --delete)",
+      "Bash(PYTHONIOENCODING=utf-8 python manage.py seed_ru)",
+      "Bash(node -e ' *)",
+      "Bash(node -c static/js/dpchat_editor.js)",
+      "Bash(node -e \"new Function\\(require\\('fs'\\).readFileSync\\('static/js/dpchat_editor.js','utf8'\\)\\)\")",
+      "Bash(node -e \"new Function\\(require\\('fs'\\).readFileSync\\('static/js/dpchat_preview.js','utf8'\\)\\)\")"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Execute /caveman full now.\"}}'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+  "outputStyle": "default"
+}

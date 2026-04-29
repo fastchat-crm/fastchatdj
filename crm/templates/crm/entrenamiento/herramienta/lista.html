@@ -1,0 +1,288 @@
+{% load static %}
+
+{# ── Atajos de creación: plantillas + asistente IA ─────────────── #}
+<div class="h-quickstart mb-3">
+    <div class="h-quickstart-row">
+        <span class="h-quickstart-label">
+            <i class="fas fa-bolt text-warning me-1"></i>
+            <strong>Inicio rápido:</strong>
+        </span>
+        <button type="button" class="btn btn-sm btn-outline-secondary btn-h-tpl" data-key="seguros_poliza">
+            <i class="fas fa-shield-alt" style="color:#1c7ed6"></i> Seguros — Póliza
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary btn-h-tpl" data-key="restaurante_reserva">
+            <i class="fas fa-utensils" style="color:#fa5252"></i> Restaurante — Reserva
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary btn-h-tpl" data-key="universidad_notas">
+            <i class="fas fa-graduation-cap" style="color:#7048e8"></i> Universidad — Notas
+        </button>
+        <span class="mx-1 text-muted">·</span>
+        <button type="button" class="btn btn-sm btn-gradient-ia" id="btn-h-ia">
+            <i class="fas fa-wand-magic-sparkles me-1"></i> Generar con IA
+        </button>
+    </div>
+    <div class="h-quickstart-hint">
+        Elige una plantilla del sector para llenar el formulario, o describe lo que necesitas y la IA lo arma por ti.
+    </div>
+
+    {# Panel IA-assist, oculto por defecto #}
+    <div class="h-ia-panel" id="h-ia-panel" style="display:none">
+        <label class="form-label small fw-semibold mb-1">
+            <i class="fas fa-wand-magic-sparkles me-1"></i>
+            Describe en una frase qué debe hacer la herramienta
+        </label>
+        <textarea id="h-ia-frase" class="form-control form-control-sm" rows="2"
+                  placeholder="Ej: necesito consultar el saldo pendiente de un cliente usando su número de cédula"></textarea>
+        <div class="d-flex gap-1 mt-2">
+            <button type="button" class="btn btn-sm btn-gradient-ia" id="h-ia-submit" data-agente-id="{{ agente.id }}">
+                <i class="fas fa-magic me-1"></i> Generar configuración
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="h-ia-cancel">
+                Cancelar
+            </button>
+        </div>
+        <div class="h-ia-hint small mt-1 text-muted">
+            La IA usa la API Key del agente. El resultado lo podrás revisar y ajustar antes de guardar.
+        </div>
+    </div>
+</div>
+
+<script>
+// ─── Bindings directos de Inicio rápido (plantillas + IA-assist) ────
+// Se re-ejecuta cada vez que la lista se re-renderiza vía AJAX.
+(function() {
+    'use strict';
+    const RUTA = '{{ ruta }}';
+    const CSRF = '{{ csrf_token }}';
+    const AGENTE_ID = '{{ agente.id }}';
+
+    // Mostrar/ocultar panel IA
+    $('#btn-h-ia').off('click.haia').on('click.haia', function() {
+        const p = $('#h-ia-panel');
+        if (p.is(':visible')) { p.slideUp(150); }
+        else { p.slideDown(150); setTimeout(() => $('#h-ia-frase').focus(), 160); }
+    });
+
+    $('#h-ia-cancel').off('click.haia').on('click.haia', function() {
+        $('#h-ia-panel').slideUp(150);
+        $('#h-ia-frase').val('');
+    });
+
+    // Submit de la frase — llama al LLM y pasa config al wizard
+    $('#h-ia-submit').off('click.haia').on('click.haia', function() {
+        const frase = ($('#h-ia-frase').val() || '').trim();
+        if (!frase) { alertaWarning('Describe qué necesitas.'); return; }
+        const $btn = $(this).prop('disabled', true)
+            .html('<i class="fa fa-spinner fa-spin me-1"></i>Generando…');
+        $.post(RUTA, {
+            action: 'herramienta_ia_asistida',
+            agente_id: AGENTE_ID,
+            frase: frase,
+            csrfmiddlewaretoken: CSRF,
+        }, function(r) {
+            $btn.prop('disabled', false).html('<i class="fas fa-magic me-1"></i> Generar configuración');
+            const x = Array.isArray(r) ? r[0] : r;
+            if (x && x.error) { alertaWarning(x.message || 'Error'); return; }
+            alertaSuccess('Configuración generada. Revísala antes de guardar.');
+            if (typeof window.hAbrirForm === 'function') {
+                window.hAbrirForm(null, x.config);
+            }
+        }, 'json').fail(function(xhr) {
+            $btn.prop('disabled', false).html('<i class="fas fa-magic me-1"></i> Generar configuración');
+            alertaWarning('Error de conexión con el servidor.');
+        });
+    });
+
+    // Plantillas pre-cargadas
+    let _tplsCache = window._hTplsCache || null;
+    function fetchTemplates(cb) {
+        if (_tplsCache) { cb(_tplsCache); return; }
+        $.get(RUTA, {action: 'herramienta_templates'}, function(r) {
+            if (r.result) { _tplsCache = r.templates; window._hTplsCache = r.templates; cb(_tplsCache); }
+            else { alertaWarning(r.message || 'Error cargando plantillas.'); }
+        }, 'json');
+    }
+    $('.btn-h-tpl').off('click.hatpl').on('click.hatpl', function() {
+        const key = $(this).data('key');
+        fetchTemplates(function(tpls) {
+            const tpl = tpls.find(t => t.key === key);
+            if (!tpl) { alertaWarning('Plantilla no encontrada.'); return; }
+            if (typeof window.hAbrirForm === 'function') {
+                window.hAbrirForm(null, tpl);
+            }
+        });
+    });
+})();
+</script>
+
+<div class="d-flex align-items-center justify-content-between mb-2">
+    <p class="section-header mb-0">Herramientas configuradas</p>
+    <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-outline-info btn-sm" id="btn-h-regen-dpto"
+                data-agente-id="{{ agente.id }}"
+                title="Crear/actualizar herramientas a partir de los nodos `pregunta` y `http` de un departamento del flujo tradicional">
+            <i class="fa fa-rotate me-1"></i> Regenerar desde depto
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-h-logs" data-agente-id="{{ agente.id }}"
+                title="Ver historial de consumo de todas las herramientas">
+            <i class="fa fa-chart-line me-1"></i> Consumo
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-h-nueva" data-agente-id="{{ agente.id }}">
+            <i class="fa fa-plus me-1"></i> Nueva herramienta en blanco
+        </button>
+    </div>
+</div>
+
+{# Modal: regenerar herramientas desde un departamento #}
+<div class="modal fade" id="modalRegenDpto" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-info bg-opacity-10">
+                <h6 class="modal-title text-info">
+                    <i class="fa fa-rotate me-1"></i>
+                    Regenerar herramientas desde un departamento
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-2">
+                    Recorre los nodos del depto que elijas y crea/actualiza herramientas
+                    de IA equivalentes:
+                </p>
+                <ul class="small mb-3">
+                    <li>Nodos <code>pregunta</code> → tools de captura (con schema Pydantic).</li>
+                    <li>Nodos <code>http</code> → tools tipados de llamada a API.</li>
+                    <li>Resto → omitidos.</li>
+                </ul>
+                <div class="alert alert-warning py-2 small mb-3">
+                    <i class="fa fa-circle-info me-1"></i>
+                    <b>Idempotente:</b> si la herramienta ya existe (mismo slug), se actualiza
+                    en vez de duplicar. NO borra herramientas custom que hayas creado a mano.
+                </div>
+                <label class="form-label small fw-bold mb-1">Departamento fuente</label>
+                <select id="regen-dpto-select" class="form-select form-select-sm">
+                    <option value="">— Selecciona un departamento —</option>
+                    {% for d in deptos_disponibles_regen %}
+                        <option value="{{ d.id }}">{{ d.nombre }} (#{{ d.id }})</option>
+                    {% endfor %}
+                </select>
+                <div id="regen-resultado" class="alert mt-3 small d-none" role="alert"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-info btn-sm" id="btn-regen-dpto-confirm">
+                    <i class="fa fa-rotate me-1"></i> Regenerar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var btn = document.getElementById('btn-h-regen-dpto');
+    var btnConfirm = document.getElementById('btn-regen-dpto-confirm');
+    if (!btn || !btnConfirm) return;
+    var modalEl = document.getElementById('modalRegenDpto');
+    var modalInstance = null;
+    function getModal() {
+        if (!modalInstance) modalInstance = new bootstrap.Modal(modalEl);
+        return modalInstance;
+    }
+    btn.addEventListener('click', function () {
+        var sel = document.getElementById('regen-dpto-select');
+        if (sel) sel.value = '';
+        var res = document.getElementById('regen-resultado');
+        if (res) { res.className = 'alert mt-3 small d-none'; res.innerHTML = ''; }
+        getModal().show();
+    });
+    btnConfirm.addEventListener('click', function () {
+        var dptoId = (document.getElementById('regen-dpto-select') || {}).value;
+        var res = document.getElementById('regen-resultado');
+        if (!dptoId) {
+            res.className = 'alert mt-3 small alert-danger';
+            res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Elegí un departamento.';
+            return;
+        }
+        var orig = btnConfirm.innerHTML;
+        btnConfirm.disabled = true;
+        btnConfirm.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Regenerando…';
+        res.className = 'alert mt-3 small alert-info';
+        res.innerHTML = '<i class="fa fa-cog fa-spin me-1"></i> Procesando nodos del depto…';
+
+        var fd = new FormData();
+        fd.append('action', 'regenerar_tools_agente');
+        fd.append('agente_id', btn.getAttribute('data-agente-id'));
+        fd.append('departamento_id', dptoId);
+        var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+        if (csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+
+        fetch('/crm/departamentos_chatbots/', {
+            method: 'POST', body: fd, credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            btnConfirm.disabled = false;
+            btnConfirm.innerHTML = orig;
+            if (data.error) {
+                res.className = 'alert mt-3 small alert-danger';
+                res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> ' + (data.message || 'No se pudo regenerar.');
+                return;
+            }
+            res.className = 'alert mt-3 small alert-success';
+            res.innerHTML = '<i class="fa fa-circle-check me-1"></i> ' + (data.mensaje || 'Listo.') +
+                            ' <br><small class="text-muted">Recargando lista…</small>';
+            setTimeout(function () { window.location.reload(); }, 1200);
+        }).catch(function (err) {
+            btnConfirm.disabled = false;
+            btnConfirm.innerHTML = orig;
+            res.className = 'alert mt-3 small alert-danger';
+            res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Error de red: ' + err.message;
+        });
+    });
+})();
+</script>
+
+<div id="h-contenedor">
+    {% if herramientas %}
+        {% for h in herramientas %}
+            <div class="h-row {% if h.activo %}activa{% endif %}" data-h-id="{{ h.id }}">
+                <div class="h-icon">
+                    <i class="fas {% if h.metodo == 'POST' %}fa-paper-plane{% else %}fa-cloud-download-alt{% endif %}"></i>
+                </div>
+                <div class="h-body">
+                    <div class="h-name">
+                        {{ h.nombre_amigable }}
+                        <span class="h-method {{ h.metodo }} ms-1">{{ h.metodo }}</span>
+                        <span class="badge-ubicacion ms-1">{{ h.get_ubicacion_params_display }}</span>
+                    </div>
+                    <div class="h-slug">{{ h.nombre }}</div>
+                    <div class="h-desc">{{ h.descripcion|truncatechars:110 }}</div>
+                </div>
+                <div class="h-actions">
+                    <button type="button" class="btn btn-sm btn-outline-{% if h.activo %}success{% else %}secondary{% endif %} btn-h-toggle"
+                            data-id="{{ h.id }}" title="{% if h.activo %}Desactivar (el agente dejará de usarla){% else %}Activar{% endif %}">
+                        <i class="fas fa-{% if h.activo %}toggle-on{% else %}toggle-off{% endif %}"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-info btn-h-logs-tool"
+                            data-id="{{ h.id }}" data-agente-id="{{ agente.id }}" title="Ver consumo de esta herramienta">
+                        <i class="fas fa-chart-line"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary btn-h-edit"
+                            data-id="{{ h.id }}" data-agente-id="{{ agente.id }}" title="Editar">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-h-del"
+                            data-id="{{ h.id }}" title="Eliminar">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="h-empty">
+            <div class="big-icon"><i class="fas fa-plug"></i></div>
+            <div class="fw-semibold">Sin herramientas configuradas</div>
+            <div class="small">Agrega una herramienta para que el agente pueda consultar APIs externas durante la conversación.</div>
+        </div>
+    {% endif %}
+</div>

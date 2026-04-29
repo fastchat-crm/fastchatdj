@@ -3,7 +3,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.template.loader import render_to_string
 from .models import ConversacionWhatsApp, MensajeWhatsApp
-from .services import WhatsAppService
+from .services import WhatsAppService, get_whatsapp_service
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -45,7 +45,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
         conversacion = ConversacionWhatsApp.objects.filter(
             contacto__sesion__usuario__id=self.user.id, id=conversacion_id
         ).first()
-        whatsapp_service = WhatsAppService()
+        if not conversacion:
+            return
+        whatsapp_service = get_whatsapp_service(conversacion.sesion)
         whatsapp_service.send_presence_update(conversacion.sesion.session_id, conversacion.from_number)
 
     @database_sync_to_async
@@ -53,7 +55,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
         conversacion = ConversacionWhatsApp.objects.filter(
             contacto__sesion__usuario__id=self.user.id, id=conversacion_id
         ).first()
-        whatsapp_service = WhatsAppService()
+        if not conversacion:
+            return
+        whatsapp_service = get_whatsapp_service(conversacion.sesion)
         whatsapp_service.quit_presence_update(conversacion.sesion.session_id, conversacion.from_number)
 
     @database_sync_to_async
@@ -138,23 +142,47 @@ class SessionRoomConsumer(AsyncWebsocketConsumer):
         )
 
     @database_sync_to_async
-    def get_conversacion_html(self, conversacion_id):
+    def get_conversacion_data(self, conversacion_id):
         try:
-            conversacion = ConversacionWhatsApp.objects.filter(contacto__sesion__usuario__id=self.user.id, id=conversacion_id).first()
-            conversacion_html = render_to_string('whatsapp/conversaciones/conversacion_item.html', {
+            conversacion = ConversacionWhatsApp.objects.filter(
+                contacto__sesion__usuario__id=self.user.id, id=conversacion_id
+            ).select_related('contacto').first()
+            if not conversacion:
+                return {'html': '', 'nombre': '', 'preview': ''}
+            html = render_to_string('whatsapp/conversaciones/conversacion_item.html', {
                 'conversacion': conversacion
             })
-            return conversacion_html
-        except Exception as ex:
-            ''
+            nombre = (
+                conversacion.contacto.contacto_nombre
+                or conversacion.contacto.from_number
+                or 'Contacto'
+            )
+            # Preview del último mensaje entrante (para notif nativa).
+            # Solo lo necesitamos para mostrar en el body de la Notification,
+            # así que truncamos ya acá para no mandar payload grande por WS.
+            ultimo = (
+                conversacion.mensajes
+                .exclude(remitente=conversacion.sesion.numero)
+                .order_by('-fecha')
+                .values_list('mensaje', flat=True)
+                .first()
+            )
+            preview = (ultimo or '')[:140]
+            return {'html': html, 'nombre': nombre, 'preview': preview}
+        except Exception:
+            return {'html': '', 'nombre': '', 'preview': ''}
 
     async def whatsapp_event(self, event):
-        text_data_json = event
-        conversacion_id = text_data_json['conversation_id']
+        conversacion_id = event['conversation_id']
+        from_me = event.get('from_me', False)
 
-        conversacion_html = await self.get_conversacion_html(conversacion_id)
+        data = await self.get_conversacion_data(conversacion_id)
 
         await self.send(text_data=json.dumps({
             'type': 'messages_update',
-            'html': conversacion_html, 'conversacion_id': conversacion_id
+            'html': data['html'],
+            'conversacion_id': conversacion_id,
+            'from_me': from_me,
+            'contacto_nombre': data['nombre'],
+            'preview': data['preview'],
         }))

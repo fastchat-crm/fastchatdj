@@ -11,7 +11,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'fastchatdj.settings')
 application = get_wsgi_application()
 
 from whatsapp.models import MensajeWhatsAppProgramado
-from whatsapp.services import WhatsAppService
+from whatsapp.services import get_whatsapp_service
 from core.funciones import logCron
 
 
@@ -21,18 +21,20 @@ hora_actual = ahora.time()
 
 mensajes_programados = MensajeWhatsAppProgramado.objects.filter(
     status=True,
-    enviado=False
+    enviado=False,
+    contacto__sesion__proveedor='baileys',
+    contacto__sesion__activo=True,
 ).filter(Q(fecha__lt=hoy) | Q(fecha=hoy, hora__lte=hora_actual))
-
-whatsapp_service = WhatsAppService()
 
 try:
     with transaction.atomic():
         for mensaje in mensajes_programados:
-            sesion_id = mensaje.sesion.session_id
+            sesion = mensaje.sesion
+            sesion_id = sesion.session_id
             from_number = mensaje.from_number
             archivo = mensaje.archivo
             texto = mensaje.mensaje
+            whatsapp_service = get_whatsapp_service(sesion)
             response = whatsapp_service.send_text_message(sesion_id, from_number, texto, simularEscritura=True)
             if not response.get('success', False):
                 logCron(f"Mensajes Programados", f"Error al enviar mensaje programado: {mensaje.__str__()}", False)

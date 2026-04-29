@@ -19,6 +19,7 @@ from fastchatdj.view_clearsitedata import clearSiteDataView
 from fastchatdj import settings
 from fastchatdj.view_redirect import redirectView, redirectToUrlView
 from seguridad.api_mensajeria import enviar_mensaje_view
+from crm.api_ia import consultar_ia_view
 from seguridad.models import Configuracion, Modulo
 from seguridad.urls import seguridad_urls
 from seguridad.view_index import index
@@ -95,6 +96,8 @@ urlpatterns = [
     # pwa
     path('', include('for_django_projects.pwa.urls')),
     path('api/enviar-mensaje/', enviar_mensaje_view, name='api_enviar_mensaje'),
+    path('api/ia/consultar/', consultar_ia_view, name='api_ia_consultar'),
+    path('voz/', include('voz.urls')),
 ]
 
 if settings.DEBUG:

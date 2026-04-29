@@ -4,13 +4,13 @@ import sys
 from datetime import date, datetime, timedelta
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Count, Prefetch
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.template.loader import get_template
 
 from core.custom_models import FormError
-from core.funciones import addData, paginador, secure_module, log, remover_caracteres_especiales_unicode, generar_nombre
+from core.funciones import addData, paginador, secure_module, log, remover_caracteres_especiales_unicode, generar_nombre, leer_sesion_id, encrypt_sesion_id
 from core.funciones_adicionales import convertir_archivo_a_base64
 from core.funciones_excel_panda import export_query_to_excel
 from seguridad.templatetags.templatefunctions import encrypt
@@ -18,7 +18,7 @@ from .forms import ContactoForm, MensajeWhatsAppProgramadoForm, AddContactoForm
 from .models import Contacto, SesionWhatsApp, MensajeWhatsAppProgramado
 from django.contrib import messages
 
-from .services import WhatsAppService
+from .services import get_whatsapp_service
 
 
 @login_required
@@ -31,7 +31,6 @@ def contactoView(request):
             }
     model = Contacto
     Formulario = ContactoForm
-    whatsapp_service = WhatsAppService()
 
     if request.method == 'POST':
         res_json = []
@@ -87,6 +86,8 @@ def contactoView(request):
                     res_json={"error":False}
                 elif action == 'addMensajeProgramado':
                     filtro = model.objects.get(pk=int(encrypt(request.POST['pk'])))
+                    if not filtro.sesion.es_baileys:
+                        raise ValueError("Los mensajes programados solo estan disponibles para sesiones Baileys. Las sesiones Meta requieren plantillas pre-aprobadas.")
                     form = MensajeWhatsAppProgramadoForm(request.POST, request.FILES, request=request)
                     if not form.is_valid():
                         raise FormError(form)
@@ -112,6 +113,8 @@ def contactoView(request):
                     messages.success(request, f"Mensaje agregado correctamente")
                 elif action == 'changeMensajeProgramado':
                     filtro = MensajeWhatsAppProgramado.objects.get(pk=int(encrypt(request.POST['pk'])))
+                    if not filtro.contacto.sesion.es_baileys:
+                        raise ValueError("Los mensajes programados solo estan disponibles para sesiones Baileys.")
                     form = MensajeWhatsAppProgramadoForm(request.POST, request.FILES, request=request, instance=filtro)
                     if not form.is_valid():
                         raise FormError(form)
@@ -139,11 +142,14 @@ def contactoView(request):
                     mensaje = MensajeWhatsAppProgramado.objects.get(pk=int(request.POST['id']))
                     if not mensaje:
                         raise ValueError("Mensaje programado no encontrado.")
+                    if not mensaje.contacto.sesion.es_baileys:
+                        raise ValueError("Los mensajes programados solo estan disponibles para sesiones Baileys.")
                     if not mensaje.enviado:
                         sesion_id = mensaje.sesion.session_id
                         from_number = mensaje.from_number
                         archivo = mensaje.archivo
                         texto = mensaje.mensaje
+                        whatsapp_service = get_whatsapp_service(mensaje.contacto.sesion)
                         response = whatsapp_service.send_text_message(sesion_id, from_number, texto,simularEscritura=True)
                         if not response.get('success', False):
                             raise ValueError(f"Error al enviar mensaje programado: {mensaje.__str__()}")
@@ -218,6 +224,9 @@ def contactoView(request):
             elif action == 'mensajes_programados':
                 try:
                     contacto = model.objects.get(pk=int(request.GET['id']))
+                    if not contacto.sesion.es_baileys:
+                        messages.error(request, "Los mensajes programados solo estan disponibles para sesiones Baileys. Las sesiones Meta requieren plantillas pre-aprobadas.")
+                        return redirect(request.path)
                     filtros, url_vars = Q(contacto=contacto, status=True), f'&action={action}&id={contacto.id}'
                     listado = MensajeWhatsAppProgramado.objects.filter(filtros).order_by('fecha')
                     data.update({
@@ -235,6 +244,9 @@ def contactoView(request):
                 try:
                     pk = int(request.GET['id'])
                     filtro = model.objects.get(pk=pk)
+                    if not filtro.sesion.es_baileys:
+                        messages.error(request, "Los mensajes programados solo estan disponibles para sesiones Baileys.")
+                        return redirect(request.path)
                     data["filtro"] = filtro
                     data["pk"] = pk
                     data["form"] = form = MensajeWhatsAppProgramadoForm()
@@ -256,10 +268,41 @@ def contactoView(request):
                 except Exception as ex:
                     return JsonResponse({"result": False, 'message': str(ex)})
 
-        criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, sesion__usuario=request.user), ''
+        from django.db.models import Count as DbCount
+        # Excluimos contactos cuya sesión esté soft-deleted (sesion.status=False).
+        # Sin esto, un contacto que vivía en 2 sesiones aparecía como "duplicado"
+        # incluso después de borrar lógicamente una de las sesiones.
+        criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, sesion__status=True, sesion__usuario=request.user), ''
         id = request.GET.get('id', '')
+        solo_duplicados = request.GET.get('solo_duplicados', '')
         mis_sesiones = SesionWhatsApp.objects.filter(status=True, usuario=request.user).distinct()
-        sesion_id = request.GET.get('sesion_id', str(mis_sesiones.first().id) if mis_sesiones.exists() else '')
+        sesion_id = leer_sesion_id(request)
+        if not sesion_id and mis_sesiones.exists():
+            sesion_id = mis_sesiones.first().id
+        sesion_id = str(sesion_id) if sesion_id else ''
+
+        # Números que aparecen en más de una sesión ACTIVA del usuario.
+        # Filtramos sesion__status=True para no contar sesiones soft-deleted.
+        numeros_duplicados = set(
+            model.objects.filter(status=True, sesion__status=True, sesion__usuario=request.user)
+            .values('contacto_numero')
+            .annotate(_n=DbCount('sesion', distinct=True))
+            .filter(_n__gt=1)
+            .values_list('contacto_numero', flat=True)
+        )
+        # Dict {numero: [nombre_sesion, ...]} para mostrar en qué sesiones duplica.
+        # Mismo filtro: solo sesiones activas.
+        dup_sesiones = {}
+        if numeros_duplicados:
+            for row in (
+                model.objects.filter(status=True, sesion__status=True, sesion__usuario=request.user, contacto_numero__in=numeros_duplicados)
+                .values('contacto_numero', 'sesion__nombre', 'sesion__numero')
+                .order_by('contacto_numero', 'sesion__nombre')
+            ):
+                num = row['contacto_numero']
+                label = row['sesion__nombre'] or row['sesion__numero'] or num
+                dup_sesiones.setdefault(num, []).append(label)
+
         if criterio:
             filtros = filtros & (Q(contacto_nombre__icontains=criterio) | Q(contacto_numero__icontains=criterio))
             data["criterio"] = criterio
@@ -272,8 +315,37 @@ def contactoView(request):
             filtros = filtros & (Q(sesion_id=sesion_id))
             data["sesion_id"] = int(sesion_id)
             url_vars += '&sesion_id=' + sesion_id
-        listado = model.objects.filter(filtros)
+        if solo_duplicados:
+            filtros = filtros & Q(contacto_numero__in=numeros_duplicados)
+            url_vars += '&solo_duplicados=1'
+            data["solo_duplicados"] = True
+
+        # Optimización del listado: el template itera 20 contactos y por cada
+        # uno acceder a `l.sesion.*`, `l.referral_meta` y `l.get_mensajes_programados.count`
+        # disparaba 3-4 queries extra → 60-80 queries por página. Con
+        # select_related + annotate las llevamos a 1 sola query agregada.
+        listado = (
+            model.objects
+            .filter(filtros)
+            .select_related(
+                'sesion',
+                'sesion__config_meta',
+                'sesion__config_baileys',
+                'referral_meta',
+            )
+            .annotate(
+                _msj_prog_count=Count(
+                    'mensajes_programados',
+                    filter=Q(mensajes_programados__status=True,
+                             mensajes_programados__enviado=False),
+                    distinct=True,
+                ),
+            )
+        )
         data["mis_sesiones"] = mis_sesiones
+        data["numeros_duplicados"] = numeros_duplicados
+        data["total_duplicados"] = len(numeros_duplicados)
+        data["dup_sesiones_json"] = json.dumps(dup_sesiones, ensure_ascii=False)
         data["list_count"] = listado.count()
         data["url_vars"] = url_vars
         paginador(request, listado.order_by('contacto_nombre'), 20, data, url_vars)

@@ -98,6 +98,17 @@ def modulo_grupo(request):
                 else:
                     raise FormError(form)
 
+            elif action == 'cambiar_prioridades':
+                import json as _json
+                cambios = _json.loads(request.POST.get('cambios', '[]'))
+                with transaction.atomic():
+                    for c in cambios:
+                        ModuloGrupo.objects.filter(pk=int(c['id']), status=True).update(
+                            prioridad=int(c.get('prioridad', 0))
+                        )
+                log(f"Prioridades actualizadas: {len(cambios)} grupo(s)", request, "change")
+                return JsonResponse({'error': False, 'message': f'{len(cambios)} prioridad(es) actualizada(s).'})
+
             elif action == 'delete':
 
                 modulo = ModuloGrupo.objects.get(pk=int(request.POST['id']))
@@ -160,6 +171,19 @@ def modulo_grupo(request):
                     modulo.modulos.all().values_list('url', flat=True))
                 ordenar_modulos_url(data, qs_modulos, modulos_seleccionados)
                 return render(request, 'seguridad/modulogrupo/form.html', data)
+
+            elif action == 'change_modal':
+
+                pk = int(request.GET['pk'])
+                modulo = ModuloGrupo.objects.get(pk=pk)
+                data["pk"] = pk
+                data["action"] = 'change'
+                data["form"] = form = Formulario(instance=modulo)
+                qs_modulos = form.fields["modulos"].queryset
+                data["modulos_seleccionados"] = modulos_seleccionados = list(
+                    modulo.modulos.all().values_list('url', flat=True))
+                ordenar_modulos_url(data, qs_modulos, modulos_seleccionados)
+                return render(request, 'seguridad/modulogrupo/form_modal.html', data)
 
             elif action == 'ver_modulos':
                 pk = int(request.GET['pk'])

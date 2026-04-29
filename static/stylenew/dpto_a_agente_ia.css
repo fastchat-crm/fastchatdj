@@ -1,0 +1,85 @@
+/* Modal "Generar Agente IA desde Departamento"
+   Vive en /crm/departamentos_chatbots/. Diferenciado del modal "Crear con IA"
+   (que crea departamentos) por color y header con icono robot. */
+
+#modalGenerarAgente .dpto-agente-header {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    color: #fff;
+    border-bottom: none;
+}
+
+#modalGenerarAgente .dpto-agente-header .modal-title {
+    font-weight: 600;
+    letter-spacing: .2px;
+}
+
+#modalGenerarAgente .modal-body label.form-label {
+    color: #1f2937;
+    margin-bottom: .35rem;
+}
+
+#modalGenerarAgente #dpto_agente_nombre {
+    color: #1d4ed8;
+}
+
+#modalGenerarAgente #ag_resultado {
+    font-size: .85rem;
+}
+
+#modalGenerarAgente #ag_resultado.alert-info {
+    background-color: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1e3a8a;
+}
+
+#modalGenerarAgente #ag_resultado.alert-success {
+    background-color: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #065f46;
+}
+
+#modalGenerarAgente #ag_resultado.alert-danger {
+    background-color: #fef2f2;
+    border-color: #fecaca;
+    color: #991b1b;
+}
+
+#modalGenerarAgente .modal-footer {
+    background-color: #f9fafb;
+}
+
+/* ─── Modal "Duplicar departamento" ─── */
+#modalDuplicarDpto .dup-dpto-header {
+    background: linear-gradient(135deg, #d97706 0%, #92400e 100%);
+    color: #fff;
+    border-bottom: none;
+}
+#modalDuplicarDpto .dup-dpto-header .modal-title {
+    font-weight: 600;
+    letter-spacing: .2px;
+}
+#modalDuplicarDpto .modal-footer {
+    background-color: #f9fafb;
+}
+#modalDuplicarDpto .card {
+    background-color: #f9fafb;
+    border: 1px solid #e5e7eb;
+}
+#modalDuplicarDpto #dup_dpto_resultado {
+    font-size: .85rem;
+}
+#modalDuplicarDpto #dup_dpto_resultado.alert-info {
+    background-color: #fef3c7;
+    border-color: #fde68a;
+    color: #92400e;
+}
+#modalDuplicarDpto #dup_dpto_resultado.alert-success {
+    background-color: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #065f46;
+}
+#modalDuplicarDpto #dup_dpto_resultado.alert-danger {
+    background-color: #fef2f2;
+    border-color: #fecaca;
+    color: #991b1b;
+}

@@ -68,7 +68,10 @@ class WhatsAppService:
 
                 # Actualizar la sesión con el código QR si está disponible
                 if 'qrCode' in result:
-                    session.qr_code = result['qrCode']
+                    from .models import ConfigBaileys
+                    cb, _ = ConfigBaileys.objects.get_or_create(sesion=session)
+                    cb.qr_code = result['qrCode']
+                    cb.save(update_fields=['qr_code'])
 
                 # Guardar los webhooks en la base de datos
                 for webhook_data in webhooks:
@@ -119,7 +122,8 @@ class WhatsAppService:
     def sync_contacts(self, session):
         from django.db import connection
         try:
-            contacts_list = json.loads(session.contacts_list or '[]')
+            cb = getattr(session, 'config_baileys', None)
+            contacts_list = json.loads((cb.contacts_list if cb else '[]') or '[]')
             for c in contacts_list:
                 print(c)
                 from_number = c.get('id') or ''
@@ -520,6 +524,35 @@ class WhatsAppService:
                 'error': f"Error de conexión: {str(e)}"
             }
 
+    def check_session_status(self, session_id):
+        """
+        Consulta al servidor Node el estado real de la sesión.
+        `connected` refleja el estado del socket en memoria (conexión viva con WhatsApp),
+        `isActive` es la bandera persistida en BD del lado Node.
+        """
+        try:
+            response = requests.get(
+                f"{self.base_url}/session/{session_id}",
+                headers=self.headers,
+                timeout=10,
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    'success': True,
+                    'is_active': bool(data.get('isActive')),
+                    'connected': bool(data.get('connected')),
+                    'last_activity': data.get('lastActivity'),
+                    'qr_code': data.get('qrCode'),
+                }
+            if response.status_code == 404:
+                return {'success': False, 'not_found': True, 'error': 'Sesión no encontrada en el servidor de WhatsApp'}
+            return {'success': False, 'error': f"Error {response.status_code}: {response.text}"}
+        except requests.exceptions.Timeout:
+            return {'success': False, 'error': 'Timeout al consultar el servidor de WhatsApp'}
+        except Exception as e:
+            return {'success': False, 'error': f"Error de conexión: {str(e)}"}
+
     def close_session(self, session_id):
         """
         Cierra una sesión de WhatsApp
@@ -566,3 +599,31 @@ class WhatsAppService:
 
         # Asegurarse de que tenga el formato correcto para WhatsApp
         return f"{clean_number}@s.whatsapp.net"
+
+
+def get_whatsapp_service(sesion=None, proveedor: str | None = None):
+    """Dispatcher agnostico al transporte.
+
+    Devuelve el servicio correspondiente segun `sesion.proveedor` o el argumento
+    `proveedor` explicito. Asi el resto del codigo escribe:
+
+        service = get_whatsapp_service(sesion)
+        service.send_text_message(sesion.session_id, to, text)
+
+    ...y no se entera si por debajo habla con Node/Baileys o con Meta Graph API.
+    """
+    prov = proveedor
+    if prov is None and sesion is not None:
+        prov = getattr(sesion, 'proveedor', 'baileys')
+    prov = (prov or 'baileys').lower()
+
+    if prov == 'meta':
+        from .services_meta import MetaWhatsAppService
+        return MetaWhatsAppService()
+    if prov == 'instagram':
+        from .services_instagram import InstagramService
+        return InstagramService()
+    if prov == 'messenger':
+        from .services_instagram import MessengerService
+        return MessengerService()
+    return WhatsAppService()

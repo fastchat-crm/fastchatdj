@@ -23,6 +23,15 @@ def sync_contacts_view(request):
 
         sesion = get_object_or_404(SesionWhatsApp, id=session_id)
 
+        # sync_contacts pide a Node la libreta de WhatsApp Web. En Meta no existe
+        # ese concepto: los contactos solo aparecen cuando te escriben (no hay
+        # "agenda" expuesta por la API).
+        if not sesion.es_baileys:
+            return JsonResponse({
+                'success': False,
+                'message': 'Sincronizar contactos solo esta disponible para sesiones Baileys. En Meta los contactos se registran cuando inician una conversacion.',
+            })
+
         # Llamar al servicio para sincronizar contactos
         service = WhatsAppService()
         response = service.sync_contacts(sesion)

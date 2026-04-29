@@ -23,20 +23,22 @@ def notificacionesView(request):
 
     if request.method == 'POST':
         data["action"] = action = request.POST["action"]
-        if action == 'ViewedNotification':
+        # 'check' es el nombre que manda el front (listado.html); 'ViewedNotification'
+        # es el nombre legacy. Aceptamos los dos para no romper integraciones viejas.
+        if action in ('check', 'ViewedNotification'):
             try:
                 id = request.POST['id'] if 'id' in request.POST and request.POST['id'] else 0
-                notificacion = Notificacion.objects.get(pk=id)
+                notificacion = Notificacion.objects.filter(pk=id, destinatario=persona).first()
                 if not notificacion:
-                    return JsonResponse({"result": False, "mensaje": u"Error al cargar los datos"})
+                    return JsonResponse({"error": True, "mensaje": u"Notificación no encontrada"})
                 notificacion.leido = True
-                notificacion.visible = False
                 notificacion.fecha_hora_leido = datetime.now()
                 notificacion.save(request)
                 log(u'Leo el mensaje: %s' % notificacion, request, "edit")
-                return JsonResponse({"result": True, 'mensaje': u'Notificación vista'})
+                # Devolvemos ambas keys (`error` para front nuevo, `result` para legacy).
+                return JsonResponse({"error": False, "result": True, 'mensaje': u'Notificación marcada como leída'})
             except Exception as ex:
-                return JsonResponse({"result": False, "mensaje": u"Error al cargar los datos %s"  % ex.__str__()})
+                return JsonResponse({"error": True, "result": False, "mensaje": u"Error: %s" % ex.__str__()})
         if action == 'ViewedNotificationModule':
             try:
                 idp = request.POST['idp'] if 'idp' in request.POST and request.POST['idp'] else 0

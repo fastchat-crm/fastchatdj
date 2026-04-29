@@ -1,0 +1,630 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/campanas.css' %}">
+    <style>
+        /* Modal etiqueta debe quedar por encima del modal campaña (y su backdrop) */
+        #modalEtiqueta { z-index: 1075; }
+        .modal-backdrop.etiqueta-backdrop { z-index: 1070; }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+
+    {# ===== EXPLICACIÓN — QUÉ ES UNA CAMPAÑA ===== #}
+    <div class="card border-info mb-3" id="cardGuiaCampanas">
+        <div class="card-body py-3">
+            <div class="d-flex align-items-start gap-3 flex-wrap">
+                <div class="flex-shrink-0 text-center" style="min-width:56px;">
+                    <i class="fa fa-bullhorn text-info" style="font-size:2rem;"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <h6 class="mb-1">¿Qué es una campaña y cómo se configura?</h6>
+                    <p class="small text-muted mb-2">
+                        Una <strong>campaña</strong> es un envío masivo segmentado de mensajes (WhatsApp, Instagram o Messenger)
+                        a varios contactos a la vez. Útil para promociones, avisos, recordatorios o reactivación de clientes.
+                    </p>
+                    <div class="d-flex gap-2 flex-wrap align-items-center">
+                        <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="collapse" data-bs-target="#guiaPasosCampana">
+                            <i class="fa fa-list-check me-1"></i> Ver los 5 pasos para configurar
+                        </button>
+                        <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalCampana">
+                            <i class="fa fa-plus me-1"></i> Crear mi primera campaña
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="collapse mt-3" id="guiaPasosCampana">
+                <ol class="small mb-0 ps-3">
+                    <li class="mb-2"><strong>Elige la sesión</strong> (canal de salida). Puede ser WhatsApp (Baileys), WhatsApp Cloud (Meta), Instagram o Messenger. Cada sesión tiene sus propias reglas (Meta exige plantilla aprobada fuera de ventana de 24h).</li>
+                    <li class="mb-2"><strong>Segmenta la audiencia</strong> con etiquetas: los contactos que tengan las <em>etiquetas a incluir</em> y NO tengan las <em>etiquetas a excluir</em>. Puedes crear etiquetas nuevas desde el mismo modal con el botón <em>+ Nueva</em>.</li>
+                    <li class="mb-2"><strong>Redacta el mensaje</strong>. Usa placeholders <code>{nombre}</code> y <code>{numero}</code> que se reemplazan por contacto. Tres tipos: <em>texto</em> (Baileys o ventana 24h Meta), <em>plantilla Meta</em> (requerida fuera de ventana 24h), <em>media</em> (imagen/video + caption).</li>
+                    <li class="mb-2"><strong>Configura throttle</strong> (mensajes por minuto). Default 20 — más alto sube el riesgo de bloqueos del proveedor. Mantenlo bajo en sesiones Baileys nuevas.</li>
+                    <li class="mb-2"><strong>Crea → Programa → Envía</strong>. La campaña nace en <em>Borrador</em>. Botón <i class="fa fa-paper-plane"></i> la encola y el cron la despacha en el siguiente tick. Puedes <em>pausar</em>, <em>reanudar</em> o <em>cancelar</em> en vivo.</li>
+                </ol>
+                <div class="alert alert-light border mt-3 small mb-0">
+                    <strong><i class="fa fa-wand-magic-sparkles text-primary me-1"></i>Asistente IA:</strong>
+                    Dentro del modal "Nueva campaña", cuando seleccionas una sesión aparece un botón para generar el contenido
+                    (nombre, descripción, mensaje, tipo, throttle) con una sola frase. Usa tu API Key activa y registra el consumo.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ===== SIN SESIONES ===== #}
+    {% if not sesiones %}
+        <div class="alert alert-warning d-flex align-items-center gap-3">
+            <i class="fa fa-exclamation-triangle fa-2x"></i>
+            <div>
+                <strong>Aún no tienes sesiones configuradas.</strong><br>
+                <small>
+                    Las campañas requieren al menos una sesión (WhatsApp, Instagram o Messenger) activa.
+                    Ve a <a href="/whatsapp/sesiones/">Sesiones</a> y configura la primera.
+                </small>
+            </div>
+        </div>
+    {% else %}
+
+        {# ===== FILTROS (patron plantillas) ===== #}
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Búsqueda general</label>
+                            <div class="input-group">
+                                <span class="input-group-text border-end-0">
+                                    <i class="fa fa-search text-muted"></i>
+                                </span>
+                                <input type="text" class="form-control border-start-0"
+                                       placeholder="Buscar por nombre, descripción o mensaje" name="criterio"
+                                       value="{{ criterio|default:'' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Sesión</label>
+                            <select class="form-control select2" name="sesion">
+                                <option value="">Todas las sesiones</option>
+                                {% for s in sesiones %}
+                                <option value="{{ s.id }}" {% if sesion_sel == s.id %}selected{% endif %}>
+                                    {{ s.nombre|default:s.numero }} · {{ s.get_proveedor_display }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Estado</label>
+                            <select class="form-select" name="estado">
+                                <option value="">Todos los estados</option>
+                                {% for code, nombre in estados_campana %}
+                                <option value="{{ code }}" {% if estado_sel == code %}selected{% endif %}>
+                                    {{ nombre }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tipo</label>
+                            <select class="form-select" name="tipo">
+                                <option value="">Todos los tipos</option>
+                                {% for code, nombre in tipos_campana %}
+                                <option value="{{ code }}" {% if tipo_sel == code %}selected{% endif %}>
+                                    {{ nombre }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i> Filtrar
+                                </button>
+                                {% if url_vars %}
+                                    <a href="{{ request.path }}" class="btn btn-default">
+                                        <i class="fas fa-times"></i> Limpiar
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {# ===== BOTONES DE ACCIÓN ===== #}
+        <div class="row align-items-center mb-3">
+            <div class="col-md-12">
+                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalCampana">
+                    <i class="fas fa-plus-circle me-2"></i> Nueva campaña
+                </button>
+                <span class="text-muted ms-3 small">
+                    <i class="fa fa-info-circle"></i>
+                    {{ list_count }} campaña{{ list_count|pluralize }} encontrada{{ list_count|pluralize }}
+                </span>
+            </div>
+        </div>
+
+        {# ===== TABLA ===== #}
+        <div class="card"><div class="card-body">
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Sesión</th>
+                            <th>Tipo</th>
+                            <th>Estado</th>
+                            <th class="text-center">Objetivo</th>
+                            <th class="text-center">Enviados</th>
+                            <th class="text-center">Fallidos</th>
+                            <th>Progreso</th>
+                            <th style="width:150px">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for c in listado %}
+                        <tr>
+                            <td>
+                                <strong>{{ c.nombre }}</strong>
+                                {% if c.descripcion %}<br><small class="text-muted">{{ c.descripcion|truncatechars:60 }}</small>{% endif %}
+                            </td>
+                            <td>
+                                <span class="d-block">{{ c.sesion.nombre|default:c.sesion.numero }}</span>
+                                <small class="badge bg-{% if c.sesion.proveedor == 'meta' %}warning{% elif c.sesion.proveedor == 'instagram' %}danger{% elif c.sesion.proveedor == 'messenger' %}primary{% else %}info{% endif %}">
+                                    {{ c.sesion.get_proveedor_display }}
+                                </small>
+                            </td>
+                            <td>{{ c.get_tipo_display }}</td>
+                            <td>
+                                <span class="badge bg-{% if c.estado == 'completada' %}success{% elif c.estado == 'enviando' %}primary{% elif c.estado == 'programada' %}info{% elif c.estado == 'error' or c.estado == 'cancelada' %}danger{% elif c.estado == 'pausada' %}warning{% else %}secondary{% endif %}">
+                                    {{ c.get_estado_display }}
+                                </span>
+                            </td>
+                            <td class="text-center">{{ c.total_objetivo }}</td>
+                            <td class="text-center text-success fw-bold">{{ c.total_enviados }}</td>
+                            <td class="text-center text-danger">{{ c.total_fallidos }}</td>
+                            <td>
+                                <div class="progress" style="height:8px">
+                                    <div class="progress-bar" role="progressbar" style="width:{{ c.progreso_pct }}%"></div>
+                                </div>
+                                <small>{{ c.progreso_pct }}%</small>
+                            </td>
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-outline-info" href="?action=detalle&pk={{ c.id }}" title="Ver detalle">
+                                    <i class="fa fa-list"></i>
+                                </a>
+                                {% if c.estado == 'borrador' or c.estado == 'pausada' %}
+                                    <button class="btn btn-sm btn-outline-success btn-send" data-id="{{ c.id }}" title="Enviar">
+                                        <i class="fa fa-paper-plane"></i>
+                                    </button>
+                                {% endif %}
+                                {% if c.estado == 'enviando' %}
+                                    <button class="btn btn-sm btn-outline-warning btn-pause" data-id="{{ c.id }}" title="Pausar">
+                                        <i class="fa fa-pause"></i>
+                                    </button>
+                                {% endif %}
+                                {% if c.estado == 'borrador' or c.estado == 'pausada' or c.estado == 'cancelada' %}
+                                    <button class="btn btn-sm btn-outline-danger btn-del" data-id="{{ c.id }}" data-nombre="{{ c.nombre }}" title="Eliminar">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="9" class="text-center text-muted py-4">
+                            <i class="fa fa-bullhorn fa-2x text-muted mb-2 d-block"></i>
+                            Aún no tienes campañas{% if url_vars %} que coincidan con el filtro{% endif %}.
+                            Crea la primera con el botón <strong>Nueva campaña</strong>.
+                        </td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% include 'paginacion.html' %}
+        </div></div>
+
+    {% endif %}
+</div>
+
+{# ========== MODAL NUEVA ETIQUETA ========== #}
+<div class="modal fade" id="modalEtiqueta" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <form class="modal-content" id="formEtiqueta" onsubmit="guardarEtiqueta(event)">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="fa fa-tag me-2 text-success"></i>Nueva etiqueta</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="etDestino" value="incluir">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Nombre *</label>
+                    <input id="etNombre" class="form-control" maxlength="80" required placeholder="Ej: Cliente frecuente">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Color</label>
+                    <div class="d-flex gap-2 align-items-center">
+                        <input id="etColor" type="color" class="form-control form-control-color" value="#0d6efd" title="Color de la etiqueta">
+                        <input id="etColorHex" class="form-control form-control-sm" maxlength="7" value="#0d6efd"
+                               pattern="^#[0-9A-Fa-f]{6}$" style="max-width:110px;font-family:monospace;">
+                    </div>
+                    <small class="text-muted">Se usará para badges del contacto.</small>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label small fw-semibold">Descripción (opcional)</label>
+                    <input id="etDescripcion" class="form-control" maxlength="255" placeholder="Breve descripción interna">
+                </div>
+                <div class="small mt-2" id="etMsg"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-sm btn-success" id="etBtnGuardar">
+                    <i class="fa fa-save me-1"></i>Guardar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ========== MODAL NUEVA CAMPAÑA ========== #}
+<div class="modal fade" id="modalCampana" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <form class="modal-content" id="formCampana" onsubmit="crearCampana(event)">
+            {% csrf_token %}
+            <input type="hidden" id="sesionPreselId" value="{{ sesion_preseleccionada.id|default:'' }}">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa fa-bullhorn me-2 text-success"></i>Nueva campaña</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                {# ===== Qué es una campaña ===== #}
+                <div class="alert alert-info d-flex gap-2 align-items-start py-2 small mb-3" role="button"
+                     data-bs-toggle="collapse" data-bs-target="#campInfo">
+                    <i class="fa fa-circle-question fs-5 mt-1"></i>
+                    <div class="flex-grow-1">
+                        <strong>¿Qué es una campaña?</strong> — Envío masivo segmentado de mensajes
+                        (WhatsApp, Instagram o Messenger) hacia varios contactos al mismo tiempo.
+                        <i class="fa fa-chevron-down ms-1"></i>
+                    </div>
+                </div>
+                <div class="collapse mb-3" id="campInfo">
+                    <div class="card card-body bg-light small">
+                        <ul class="mb-0 ps-3">
+                            <li><strong>Audiencia</strong>: se arma con <em>etiquetas a incluir</em> (contactos que las tengan) menos los de <em>etiquetas a excluir</em>.</li>
+                            <li><strong>Contenido</strong>: texto plano con placeholders <code>{nombre}</code> y <code>{numero}</code>, plantilla Meta aprobada, o media + caption.</li>
+                            <li><strong>Throttle</strong>: cuántos mensajes por minuto enviamos para no saturar el proveedor (default 20).</li>
+                            <li><strong>Ciclo de vida</strong>: Borrador → Programada → Enviando → Completada. Puedes pausar/reanudar/cancelar en cualquier momento.</li>
+                            <li><strong>Sesión</strong>: es el canal desde el que sale (Baileys, Meta Cloud, Instagram, Messenger).</li>
+                        </ul>
+                    </div>
+                </div>
+
+                {# ===== Asistente IA (solo con sesión seleccionada) ===== #}
+                <div class="card border-primary mb-3" id="iaCampanaCard" style="display:none;">
+                    <div class="card-body py-2 px-3">
+                        <div class="d-flex gap-2 align-items-center flex-wrap">
+                            <i class="fa fa-wand-magic-sparkles text-primary"></i>
+                            <strong class="small">Generar con IA</strong>
+                            <span class="text-muted small flex-grow-1">Describe la campaña y la IA llena los campos.</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btnToggleIa">
+                                <i class="fa fa-sparkles me-1"></i> Abrir asistente
+                            </button>
+                        </div>
+                        <div id="iaCampanaForm" class="mt-2" style="display:none;">
+                            <textarea id="iaCampanaDescripcion" class="form-control mb-2" rows="3"
+                                      placeholder="Ej: Promo 20% descuento en peluquería para clientes que no compran hace 30 días, dirigido a mujeres, tono cercano."></textarea>
+                            <div class="d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="toggleIaCampana(false)">Cancelar</button>
+                                <button type="button" class="btn btn-sm btn-primary" id="btnGenerarIaCampana">
+                                    <i class="fa fa-wand-magic-sparkles me-1"></i> Generar
+                                </button>
+                            </div>
+                            <div id="iaCampanaMsg" class="small mt-2 text-muted"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Nombre *</label>
+                        <input name="nombre" class="form-control" required placeholder="Ej: Promo Semana Santa">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Sesión * <small class="text-muted">(canal)</small></label>
+                        <select name="sesion" id="selSesionCampana" class="form-select" required
+                                data-preselected="{{ sesion_preseleccionada.id|default:'' }}">
+                            <option value="">Selecciona una sesión...</option>
+                            {% for s in sesiones %}
+                                <option value="{{ s.id }}"
+                                    {% if sesion_preseleccionada.id|stringformat:"s" == s.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ s.nombre|default:s.numero }} · {{ s.get_proveedor_display }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        {% if sesion_preseleccionada %}
+                        <small class="text-success mt-1 d-block">
+                            <i class="fa fa-check-circle me-1"></i>
+                            Sesión preseleccionada: <strong>{{ sesion_preseleccionada.nombre|default:sesion_preseleccionada.numero }}</strong>
+                        </small>
+                        {% endif %}
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Descripción</label>
+                        <input name="descripcion" class="form-control" placeholder="Breve descripción interna de la campaña">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Tipo</label>
+                        <select name="tipo" class="form-select" id="selTipoCampana">
+                            {% for code, nombre in tipos_campana %}
+                                <option value="{{ code }}">{{ nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Throttle (msg/min)</label>
+                        <input name="throttle_por_minuto" type="number" value="20" min="1" max="500" class="form-control" id="inpThrottle">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Plantilla Meta (si tipo=plantilla)</label>
+                        <select name="plantilla_id" class="form-select">
+                            <option value="">—</option>
+                            {% for p in plantillas %}
+                                <option value="{{ p.id }}">{{ p.nombre }} ({{ p.idioma }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Mensaje <small class="text-muted">(usa {nombre} y {numero} como placeholders)</small></label>
+                        <textarea name="mensaje_texto" rows="4" class="form-control" placeholder="Hola {nombre}, tenemos una oferta..."></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-between align-items-end mb-1">
+                            <label class="form-label mb-0">Etiquetas a incluir</label>
+                            <button type="button" class="btn btn-sm btn-outline-success py-0 px-2" onclick="crearEtiquetaDesdeCampana('incluir')" title="Crear nueva etiqueta">
+                                <i class="fa fa-plus"></i> Nueva
+                            </button>
+                        </div>
+                        <select name="etiquetas_incluir[]" id="selEtiquetasIncluir" multiple class="form-select" size="4">
+                            {% for e in etiquetas %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}
+                        </select>
+                        <small class="text-muted">Ctrl+click para seleccionar varias</small>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-between align-items-end mb-1">
+                            <label class="form-label mb-0">Etiquetas a excluir</label>
+                            <button type="button" class="btn btn-sm btn-outline-success py-0 px-2" onclick="crearEtiquetaDesdeCampana('excluir')" title="Crear nueva etiqueta">
+                                <i class="fa fa-plus"></i> Nueva
+                            </button>
+                        </div>
+                        <select name="etiquetas_excluir[]" id="selEtiquetasExcluir" multiple class="form-select" size="4">
+                            {% for e in etiquetas %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    {% if varios_canales %}
+                    <div class="col-12">
+                        <label class="form-label">Canales permitidos</label>
+                        <select name="canales[]" multiple class="form-select" size="{{ canales_disponibles|length }}">
+                            {% if 'whatsapp' in canales_disponibles %}<option value="whatsapp">WhatsApp</option>{% endif %}
+                            {% if 'instagram' in canales_disponibles %}<option value="instagram">Instagram</option>{% endif %}
+                            {% if 'messenger' in canales_disponibles %}<option value="messenger">Messenger</option>{% endif %}
+                        </select>
+                        <small class="text-muted">Vacío = todos los canales del contacto (solo se muestran los que tenés conectados).</small>
+                    </div>
+                    {% else %}
+                    {# Un solo canal: no tiene sentido el multi-select. Enviamos el canal como hidden
+                       para que el backend reciba el mismo dato sin friccion de UI. #}
+                    {% for canal in canales_disponibles %}
+                        <input type="hidden" name="canales[]" value="{{ canal }}">
+                    {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-success">
+                    <i class="fa fa-save me-1"></i> Crear (queda en borrador)
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+async function postForm(action, extras){
+    const fd = new FormData();
+    fd.append('csrfmiddlewaretoken', CSRF);
+    fd.append('action', action);
+    for (const k in extras) fd.append(k, extras[k]);
+    const r = await fetch('', {method:'POST', body: fd});
+    return r.json();
+}
+
+async function crearCampana(ev){
+    ev.preventDefault();
+    const fd = new FormData(ev.target);
+    fd.append('action','add');
+    const r = await fetch('', {method:'POST', body: fd});
+    const j = await r.json();
+    if(!j.error) location.reload();
+    else alert(j.message || 'Error al crear la campaña');
+}
+
+document.querySelectorAll('.btn-send').forEach(b => b.onclick = async () => {
+    if(!confirm('¿Enviar ahora? Los mensajes se despachan en el próximo tick del cron (máx 1 min).')) return;
+    const j = await postForm('enviar_ahora', {id: b.dataset.id});
+    if(!j.error) location.reload();
+    else alert(j.message);
+});
+
+document.querySelectorAll('.btn-pause').forEach(b => b.onclick = async () => {
+    const j = await postForm('pausar', {id: b.dataset.id});
+    if(!j.error) location.reload();
+});
+
+document.querySelectorAll('.btn-del').forEach(b => b.onclick = async () => {
+    if(!confirm(`¿Eliminar la campaña "${b.dataset.nombre}"?`)) return;
+    const j = await postForm('eliminar', {id: b.dataset.id});
+    if(!j.error) location.reload();
+    else alert(j.message);
+});
+
+/* ════════ Preselección de sesión al abrir el modal ════════ */
+function aplicarSesionPreselModal() {
+    const sel = document.getElementById('selSesionCampana');
+    if (!sel) return;
+    const preId = (sel.getAttribute('data-preselected') || '').trim()
+               || (document.getElementById('sesionPreselId') || {}).value
+               || '';
+    if (preId) {
+        // Marcar explícitamente la option correcta (atributo + prop)
+        Array.from(sel.options).forEach(o => {
+            const match = String(o.value) === String(preId);
+            o.selected = match;
+            if (match) o.setAttribute('selected', 'selected');
+            else o.removeAttribute('selected');
+        });
+        sel.value = String(preId);
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    actualizarEstadoIaCampana();
+}
+// Aplicar tan pronto como el DOM esté listo (antes de que abra el modal)
+document.addEventListener('DOMContentLoaded', aplicarSesionPreselModal);
+// Volver a aplicar después del transition de bootstrap (por si algo la pisó)
+document.getElementById('modalCampana').addEventListener('shown.bs.modal', aplicarSesionPreselModal);
+
+/* ════════ Mostrar tarjeta IA solo cuando hay sesión ════════ */
+function actualizarEstadoIaCampana() {
+    const sel = document.getElementById('selSesionCampana');
+    const card = document.getElementById('iaCampanaCard');
+    if (!sel || !card) return;
+    card.style.display = sel.value ? '' : 'none';
+}
+document.getElementById('selSesionCampana').addEventListener('change', actualizarEstadoIaCampana);
+
+function toggleIaCampana(abrir) {
+    const form = document.getElementById('iaCampanaForm');
+    form.style.display = abrir ? '' : 'none';
+    if (abrir) {
+        document.getElementById('iaCampanaDescripcion').focus();
+    }
+}
+document.getElementById('btnToggleIa').addEventListener('click', () => {
+    const form = document.getElementById('iaCampanaForm');
+    toggleIaCampana(form.style.display === 'none');
+});
+
+document.getElementById('btnGenerarIaCampana').addEventListener('click', async () => {
+    const sesionId = document.getElementById('selSesionCampana').value;
+    const descripcion = document.getElementById('iaCampanaDescripcion').value.trim();
+    const msgEl = document.getElementById('iaCampanaMsg');
+    if (!sesionId) { msgEl.innerHTML = '<span class="text-danger">Selecciona una sesión primero.</span>'; return; }
+    if (descripcion.length < 15) { msgEl.innerHTML = '<span class="text-danger">Describe con más detalle (mínimo 15 chars).</span>'; return; }
+    msgEl.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i>Generando…';
+    const j = await postForm('campana_ia', { sesion_id: sesionId, descripcion });
+    if (j.error) {
+        msgEl.innerHTML = '<span class="text-danger">' + (j.message || 'Error') + '</span>';
+        return;
+    }
+    const c = j.campana || {};
+    document.querySelector('[name=nombre]').value = c.nombre || '';
+    document.querySelector('[name=descripcion]').value = c.descripcion || '';
+    document.querySelector('[name=mensaje_texto]').value = c.mensaje_texto || '';
+    if (c.tipo) document.getElementById('selTipoCampana').value = c.tipo;
+    if (c.throttle_por_minuto) document.getElementById('inpThrottle').value = c.throttle_por_minuto;
+    msgEl.innerHTML = '<span class="text-success"><i class="fa fa-check me-1"></i>Campos rellenados (' + (j.latencia_ms || 0) + ' ms). Revisa y ajusta antes de crear.</span>';
+});
+
+/* ════════ Crear etiqueta con formulario (modal) ════════ */
+function crearEtiquetaDesdeCampana(destino) {
+    document.getElementById('etDestino').value = destino === 'excluir' ? 'excluir' : 'incluir';
+    document.getElementById('etNombre').value = '';
+    document.getElementById('etDescripcion').value = '';
+    document.getElementById('etColor').value = '#0d6efd';
+    document.getElementById('etColorHex').value = '#0d6efd';
+    document.getElementById('etMsg').innerHTML = '';
+    document.getElementById('etBtnGuardar').disabled = false;
+    new bootstrap.Modal(document.getElementById('modalEtiqueta')).show();
+    setTimeout(() => document.getElementById('etNombre').focus(), 200);
+}
+
+/* Al abrir etiqueta por encima de campaña: subir z-index del backdrop nuevo */
+document.getElementById('modalEtiqueta').addEventListener('shown.bs.modal', () => {
+    const backdrops = document.querySelectorAll('.modal-backdrop');
+    if (backdrops.length > 1) {
+        const last = backdrops[backdrops.length - 1];
+        last.classList.add('etiqueta-backdrop');
+    }
+});
+document.getElementById('modalEtiqueta').addEventListener('hidden.bs.modal', () => {
+    // Reabrir modalCampana como activo (bootstrap a veces pierde el foco body-scroll)
+    if (document.getElementById('modalCampana').classList.contains('show')) {
+        document.body.classList.add('modal-open');
+    }
+});
+
+/* Sincronizar color picker ↔ input hex */
+document.getElementById('etColor').addEventListener('input', (e) => {
+    document.getElementById('etColorHex').value = e.target.value;
+});
+document.getElementById('etColorHex').addEventListener('input', (e) => {
+    const v = e.target.value.trim();
+    if (/^#[0-9A-Fa-f]{6}$/.test(v)) {
+        document.getElementById('etColor').value = v;
+    }
+});
+
+async function guardarEtiqueta(ev) {
+    ev.preventDefault();
+    const nombre = document.getElementById('etNombre').value.trim();
+    const color = document.getElementById('etColorHex').value.trim() || '#0d6efd';
+    const descripcion = document.getElementById('etDescripcion').value.trim();
+    const destino = document.getElementById('etDestino').value;
+    const msgEl = document.getElementById('etMsg');
+    const btn = document.getElementById('etBtnGuardar');
+    if (!nombre) {
+        msgEl.innerHTML = '<span class="text-danger">Nombre requerido.</span>';
+        return;
+    }
+    btn.disabled = true;
+    msgEl.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i>Guardando…';
+    const j = await postForm('add_etiqueta', { nombre, color, descripcion });
+    btn.disabled = false;
+    if (j.error) {
+        msgEl.innerHTML = '<span class="text-danger">' + (j.message || 'No se pudo crear.') + '</span>';
+        return;
+    }
+    // Insertar nueva option en ambos selects
+    ['selEtiquetasIncluir', 'selEtiquetasExcluir'].forEach(function (selId) {
+        const sel = document.getElementById(selId);
+        if (!sel) return;
+        const existe = Array.from(sel.options).some(o => o.value == j.id);
+        if (!existe) {
+            const opt = new Option(j.nombre, j.id);
+            sel.add(opt);
+        }
+    });
+    // Auto-seleccionar en el destino pedido
+    const targetId = destino === 'excluir' ? 'selEtiquetasExcluir' : 'selEtiquetasIncluir';
+    const sel = document.getElementById(targetId);
+    Array.from(sel.options).forEach(o => { if (o.value == j.id) o.selected = true; });
+
+    msgEl.innerHTML = j.existia
+        ? '<span class="text-warning">La etiqueta ya existía — se seleccionó.</span>'
+        : '<span class="text-success"><i class="fa fa-check me-1"></i>Etiqueta creada y seleccionada.</span>';
+    setTimeout(() => {
+        const inst = bootstrap.Modal.getInstance(document.getElementById('modalEtiqueta'));
+        if (inst) inst.hide();
+    }, 700);
+}
+
+{% if abrir_modal_add %}
+document.addEventListener('DOMContentLoaded', () => {
+    new bootstrap.Modal(document.getElementById('modalCampana')).show();
+});
+{% endif %}
+</script>
+{% endblock %}

@@ -8,7 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from core.funciones import rate_limit
 from whatsapp.models import SesionWhatsApp, Contacto, ConversacionWhatsApp, MensajeWhatsApp
-from whatsapp.services import WhatsAppService
+from whatsapp.services import WhatsAppService, get_whatsapp_service
 
 @csrf_exempt
 @rate_limit(limit=30, seconds=60)
@@ -76,11 +76,12 @@ def enviar_mensaje_view(request):
             conversacion = ConversacionWhatsApp.objects.filter(contacto=contacto, status=True).first()
             if not conversacion:
                 conversacion = ConversacionWhatsApp.objects.create(
-                    contacto=contacto
+                    contacto=contacto,
+                    proveedor_atencion=getattr(contacto.sesion, 'proveedor', '') or '',
                 )
 
             # --- Envío del mensaje ---
-            service = WhatsAppService()
+            service = get_whatsapp_service(conversacion.sesion)
             response = service.send_text_message(
                 conversacion.sesion.session_id, conversacion.from_number, mensaje
             )

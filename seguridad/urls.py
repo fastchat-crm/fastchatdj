@@ -5,6 +5,7 @@ from .view_arbol_modulogrupo import arbol_modulo_grupo
 from .view_auditoria import auditoria
 from .view_configuracion import configuracion
 from .view_configuracion_terminos import confiTerminos
+from .view_credencial_meta import credencial_meta
 from .view_databasebackup import databaseBackupView
 from .view_empresa import empresaView
 from .view_grupo import grupo
@@ -12,12 +13,18 @@ from .view_grupourls import grupoUrlsView
 from .view_modulo import modulo
 from .view_modulogrupo import modulo_grupo
 from .view_modulos_sistema import modulossistemaView
+from .docs.documentacion import documentacionView
 
 seguridad_urls = (
     {
         "nombre": "Administración del Sitio",
         "url": 'configuracion/',
         "vista": configuracion,
+    },
+    {
+        "nombre": "Credenciales Meta App",
+        "url": 'credencial-meta/',
+        "vista": credencial_meta,
     },
     {
         "nombre": "Terminos y Condiciones",
@@ -63,6 +70,11 @@ seguridad_urls = (
         "nombre": "Database Backup",
         "url": 'databasebackup/',
         "vista": databaseBackupView,
+    },
+    {
+        "nombre": "Documentación",
+        "url": 'documentacion/',
+        "vista": documentacionView,
     },
 )
 

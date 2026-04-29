@@ -1,0 +1,180 @@
+{% load static %}
+
+{# ── Filtros por estado ────────────────────────────────────────── #}
+<div class="faq-filters mb-2">
+    <button type="button" class="btn btn-sm btn-outline-secondary faq-filter-btn {% if not estado_filtro %}active{% endif %}" data-estado="">
+        Todas <span class="badge bg-secondary">{{ contadores.pendiente|add:contadores.aprobada|add:contadores.desactivada }}</span>
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-warning faq-filter-btn {% if estado_filtro == 'pendiente' %}active{% endif %}" data-estado="pendiente">
+        <i class="fas fa-clock"></i> Pendientes <span class="badge bg-warning text-dark">{{ contadores.pendiente }}</span>
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-success faq-filter-btn {% if estado_filtro == 'aprobada' %}active{% endif %}" data-estado="aprobada">
+        <i class="fas fa-check-circle"></i> Aprobadas <span class="badge bg-success">{{ contadores.aprobada }}</span>
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-dark faq-filter-btn {% if estado_filtro == 'desactivada' %}active{% endif %}" data-estado="desactivada">
+        <i class="fas fa-ban"></i> Desactivadas <span class="badge bg-dark">{{ contadores.desactivada }}</span>
+    </button>
+    <div class="ms-auto d-flex gap-1">
+        {% if contadores.pendiente and estado_filtro == 'pendiente' %}
+        <button type="button" class="btn btn-sm btn-success" id="btn-faq-bulk-aprobar" data-agente-id="{{ agente.id }}">
+            <i class="fas fa-check-double me-1"></i> Aprobar todas pendientes ({{ contadores.pendiente }})
+        </button>
+        {% endif %}
+        <button type="button" class="btn btn-sm btn-primary" id="btn-faq-nueva" data-agente-id="{{ agente.id }}">
+            <i class="fa fa-plus me-1"></i> Nueva FAQ
+        </button>
+    </div>
+</div>
+
+{# ── Lista de FAQs ─────────────────────────────────────────────── #}
+<div id="faq-contenedor">
+    {% if faqs %}
+        {% for f in faqs %}
+        <div class="faq-row estado-{{ f.estado }} origen-{{ f.origen }}" data-faq-id="{{ f.id }}">
+            <div class="faq-badges">
+                <span class="faq-estado-badge estado-{{ f.estado }}">{{ f.get_estado_display }}</span>
+                <span class="faq-origen-badge origen-{{ f.origen }}">
+                    {% if f.origen == 'manual' %}<i class="fas fa-pencil-alt"></i>{% endif %}
+                    {% if f.origen == 'auditor' %}<i class="fas fa-wand-magic-sparkles"></i>{% endif %}
+                    {% if f.origen == 'conversacion' %}<i class="fas fa-comments"></i>{% endif %}
+                    {% if f.origen == 'feedback' %}<i class="fas fa-thumbs-up"></i>{% endif %}
+                    {{ f.get_origen_display }}
+                </span>
+                {% if f.hits %}
+                    <span class="faq-hits"><i class="fas fa-eye"></i> {{ f.hits }}</span>
+                {% endif %}
+            </div>
+            <div class="faq-q"><strong>Q:</strong> {{ f.pregunta|truncatechars:200 }}</div>
+            <div class="faq-a"><strong>A:</strong> {{ f.respuesta|truncatechars:280 }}</div>
+
+            <div class="faq-meta">
+                {% if f.estado == 'aprobada' %}
+                    <span class="faq-prio-label">Prioridad:</span>
+                    <input type="number" class="form-control form-control-sm faq-prio" min="0" max="100" value="{{ f.prioridad }}" data-id="{{ f.id }}">
+                {% endif %}
+                {% if f.conversacion_origen %}
+                    <span class="faq-traz"><i class="fas fa-link"></i> conv #{{ f.conversacion_origen_id }}</span>
+                {% endif %}
+                {% if f.auditoria_origen %}
+                    <span class="faq-traz"><i class="fas fa-link"></i> audit #{{ f.auditoria_origen_id }}</span>
+                {% endif %}
+            </div>
+
+            <div class="faq-actions">
+                {% if f.estado == 'pendiente' %}
+                    <button type="button" class="btn btn-sm btn-outline-success btn-faq-aprobar" data-id="{{ f.id }}" title="Aprobar">
+                        <i class="fas fa-check"></i>
+                    </button>
+                {% elif f.estado == 'aprobada' %}
+                    <button type="button" class="btn btn-sm btn-outline-dark btn-faq-desactivar" data-id="{{ f.id }}" title="Desactivar">
+                        <i class="fas fa-ban"></i>
+                    </button>
+                {% else %}
+                    <button type="button" class="btn btn-sm btn-outline-success btn-faq-aprobar" data-id="{{ f.id }}" title="Reactivar">
+                        <i class="fas fa-rotate-left"></i>
+                    </button>
+                {% endif %}
+                <button type="button" class="btn btn-sm btn-outline-primary btn-faq-edit" data-id="{{ f.id }}" data-agente-id="{{ agente.id }}" title="Editar">
+                    <i class="fas fa-pencil-alt"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger btn-faq-del" data-id="{{ f.id }}" title="Eliminar">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="faq-empty">
+            <i class="fas fa-comments big-icon"></i>
+            <div class="fw-semibold">
+                {% if estado_filtro == 'pendiente' %}No hay FAQs pendientes de revisión{% else %}
+                {% if estado_filtro == 'aprobada' %}No hay FAQs aprobadas todavía{% else %}
+                {% if estado_filtro == 'desactivada' %}No hay FAQs desactivadas{% else %}
+                Sin FAQs todavía{% endif %}{% endif %}{% endif %}
+            </div>
+            <div class="small text-muted mt-1">
+                Las conversaciones finalizadas con sentimiento positivo y las correcciones del auditor generarán FAQs pendientes aquí.
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+(function() {
+    'use strict';
+    const RUTA = '{{ ruta }}';
+    const CSRF = '{{ csrf_token }}';
+    const AGENTE_ID = '{{ agente.id }}';
+
+    function recargar(estado) {
+        const params = {action: 'faq_lista', agente_id: AGENTE_ID};
+        if (estado) params.estado = estado;
+        $.get(RUTA, params, function(r) {
+            if (r.result) { $('#faq-content').html(r.data); }
+        }, 'json');
+    }
+
+    // Filtros
+    $('.faq-filter-btn').off('click.faqf').on('click.faqf', function() {
+        recargar($(this).data('estado'));
+    });
+
+    // Aprobar individual
+    $('.btn-faq-aprobar').off('click.faqa').on('click.faqa', function() {
+        const id = $(this).data('id');
+        $.post(RUTA, {action: 'faq_aprobar', id: id, csrfmiddlewaretoken: CSRF}, function(r) {
+            if (!r.error) { alertaSuccess('FAQ aprobada.'); recargar($('.faq-filter-btn.active').data('estado')); }
+        }, 'json');
+    });
+
+    // Desactivar individual
+    $('.btn-faq-desactivar').off('click.faqd').on('click.faqd', function() {
+        const id = $(this).data('id');
+        $.post(RUTA, {action: 'faq_desactivar', id: id, csrfmiddlewaretoken: CSRF}, function(r) {
+            if (!r.error) { alertaSuccess('FAQ desactivada.'); recargar($('.faq-filter-btn.active').data('estado')); }
+        }, 'json');
+    });
+
+    // Eliminar
+    $('.btn-faq-del').off('click.faqx').on('click.faqx', function() {
+        const id = $(this).data('id');
+        if (!confirm('¿Eliminar esta FAQ? No se podrá recuperar.')) return;
+        $.post(RUTA, {action: 'faq_delete', id: id, csrfmiddlewaretoken: CSRF}, function(r) {
+            if (!r.error) { alertaSuccess('FAQ eliminada.'); recargar($('.faq-filter-btn.active').data('estado')); }
+        }, 'json');
+    });
+
+    // Bulk aprobar pendientes
+    $('#btn-faq-bulk-aprobar').off('click.faqb').on('click.faqb', function() {
+        if (!confirm('¿Aprobar TODAS las FAQs pendientes? Quedarán activas en el agente de inmediato.')) return;
+        const ids = $('.faq-row.estado-pendiente').map(function() { return $(this).data('faq-id'); }).get();
+        if (!ids.length) return;
+        $.post(RUTA, {
+            action: 'faq_bulk_aprobar', agente_id: AGENTE_ID, ids: ids.join(','), csrfmiddlewaretoken: CSRF,
+        }, function(r) {
+            if (!r.error) {
+                alertaSuccess((r.count || 0) + ' FAQ(s) aprobadas.');
+                recargar('aprobada');
+            }
+        }, 'json');
+    });
+
+    // Prioridad
+    $('.faq-prio').off('change.faqp').on('change.faqp', function() {
+        const id = $(this).data('id');
+        const prio = $(this).val();
+        $.post(RUTA, {action: 'faq_prioridad', id: id, prioridad: prio, csrfmiddlewaretoken: CSRF}, function(r) {
+            if (!r.error) { $('.faq-prio[data-id="'+id+'"]').addClass('saved'); setTimeout(() => $('.faq-prio').removeClass('saved'), 1000); }
+        }, 'json');
+    });
+
+    // Editar / Nueva — delegamos a handler global (definido en agente/form.html)
+    $('#btn-faq-nueva').off('click.faqn').on('click.faqn', function() {
+        if (typeof window.fAbrirForm === 'function') window.fAbrirForm(null);
+    });
+    $('.btn-faq-edit').off('click.faqe').on('click.faqe', function() {
+        const id = $(this).data('id');
+        if (typeof window.fAbrirForm === 'function') window.fAbrirForm(id);
+    });
+})();
+</script>

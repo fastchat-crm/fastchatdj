@@ -1,3 +1,40 @@
-<div class="text-justify">
-    {{ conversacion.resumen_conversacion|safe|default:'Sin resumen disponible' }}
+{% if conversacion.sentimiento %}
+<div class="d-flex align-items-center gap-3 mb-3 p-3 rounded" style="background: rgba(0,0,0,.04); border: 1px solid #e0e0e0;">
+    <div class="text-center">
+        <div style="font-size: 2rem; line-height:1;">{{ conversacion.get_sentimiento_emoji }}</div>
+        <span class="badge bg-{{ conversacion.get_sentimiento_color }} mt-1">{{ conversacion.get_sentimiento_display }}</span>
+    </div>
+    {% if conversacion.puntuacion_sentimiento %}
+    <div class="flex-grow-1">
+        <div class="d-flex justify-content-between mb-1">
+            <small class="text-muted fw-bold">Tono de la conversación</small>
+            <small class="text-muted">{{ conversacion.puntuacion_sentimiento }}/10</small>
+        </div>
+        <div class="progress" style="height:8px;">
+            <div class="progress-bar bg-{{ conversacion.get_sentimiento_color }}"
+                 role="progressbar"
+                 style="width: {{ conversacion.puntuacion_sentimiento }}0%"
+                 aria-valuenow="{{ conversacion.puntuacion_sentimiento }}"
+                 aria-valuemin="0" aria-valuemax="10"></div>
+        </div>
+        <div class="d-flex justify-content-between mt-1">
+            <small class="text-muted" style="font-size:.7rem;">Agresiva</small>
+            <small class="text-muted" style="font-size:.7rem;">Muy positiva</small>
+        </div>
+    </div>
+    {% endif %}
 </div>
+{% endif %}
+
+<div class="p-2">
+    <h6 class="text-muted mb-2"><i class="fa fa-file-alt me-2"></i>Resumen</h6>
+    <div class="text-justify" style="line-height: 1.7;">
+        {{ conversacion.resumen_conversacion|linebreaksbr|default:'Sin resumen disponible' }}
+    </div>
+</div>
+
+{% if conversacion.asignado_a %}
+<div class="mt-3 pt-2 border-top text-muted small">
+    <i class="fa fa-user me-1"></i> Atendido por: <strong>{{ conversacion.asignado_a.get_full_name }}</strong>
+</div>
+{% endif %}

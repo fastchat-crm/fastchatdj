@@ -1,0 +1,169 @@
+{% load static %}<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Webhook Meta Cloud API — FastChat</title>
+    <link rel="stylesheet" href="{% static 'stylenew/meta_webhook.css' %}">
+</head>
+<body>
+<main class="mw-wrap">
+
+    <header class="mw-header">
+        <div class="mw-logo"><span class="mw-emoji">📡</span></div>
+        <div>
+            <h1>Webhook Meta Cloud API</h1>
+            <p class="mw-sub">Endpoint receptor de eventos de WhatsApp Business — FastChat DJ.</p>
+        </div>
+    </header>
+
+    {% if estado == 'landing' %}
+        <div class="mw-badge mw-badge-ok">
+            <span class="mw-dot"></span> Endpoint operativo
+        </div>
+        <section class="mw-card">
+            <h2>Este endpoint es para Meta, no para navegadores</h2>
+            <p>Meta llama esta URL en dos situaciones:</p>
+            <ol class="mw-steps">
+                <li>
+                    <strong>Verificación</strong> <span class="mw-tag">GET</span><br>
+                    Una sola vez al configurar el webhook en Meta Developer Portal.
+                    Meta envía <code>?hub.mode=subscribe&amp;hub.verify_token=...&amp;hub.challenge=...</code>
+                    y esperamos el challenge en texto plano.
+                </li>
+                <li>
+                    <strong>Eventos en tiempo real</strong> <span class="mw-tag mw-tag-post">POST</span><br>
+                    Cada mensaje entrante, status (sent/delivered/read), cambio de plantilla, etc.
+                    Body JSON firmado con HMAC-SHA256 en <code>X-Hub-Signature-256</code>
+                    usando el <code>app_secret</code>.
+                </li>
+            </ol>
+            <p class="mw-hint">
+                <span class="mw-hint-icon">💡</span>
+                Si llegaste aquí desde un navegador verás este panel informativo.
+                Meta no lo verá — para Meta respondemos texto plano con el challenge
+                o un código HTTP apropiado.
+            </p>
+        </section>
+
+    {% elif estado == 'metodo_no_permitido' %}
+        <div class="mw-badge mw-badge-error">
+            <span class="mw-dot"></span> Método no permitido ({{ metodo }})
+        </div>
+        <section class="mw-card mw-card-error">
+            <h2>HTTP {{ metodo }} no está soportado aquí</h2>
+            <p>Este endpoint solo acepta <code>GET</code> (verificación) y <code>POST</code> (eventos).</p>
+        </section>
+    {% endif %}
+
+    <section>
+        <h3 class="mw-h3">Estado de configuración</h3>
+        <div class="mw-grid">
+            <div class="mw-tile">
+                <div class="mw-tile-k">Configs Meta</div>
+                <div class="mw-tile-v">{{ total_configs }}</div>
+                <div class="mw-tile-foot">Sesiones con proveedor Meta.</div>
+            </div>
+            <div class="mw-tile {% if verificados == 0 and total_configs > 0 %}mw-tile-warn{% elif verificados > 0 %}mw-tile-ok{% endif %}">
+                <div class="mw-tile-k">Webhooks verificados</div>
+                <div class="mw-tile-v">{{ verificados }}</div>
+                <div class="mw-tile-foot">Handshake OK desde Meta.</div>
+            </div>
+            <div class="mw-tile {% if sin_verificar > 0 %}mw-tile-warn{% endif %}">
+                <div class="mw-tile-k">Pendientes verificar</div>
+                <div class="mw-tile-v">{{ sin_verificar }}</div>
+                <div class="mw-tile-foot">Configs sin handshake completado.</div>
+            </div>
+            <div class="mw-tile {% if with_app_secret == 0 and total_configs > 0 %}mw-tile-warn{% endif %}">
+                <div class="mw-tile-k">Con app_secret</div>
+                <div class="mw-tile-v">{{ with_app_secret }}</div>
+                <div class="mw-tile-foot">HMAC validable en POST.</div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3 class="mw-h3">Eventos recibidos</h3>
+        <div class="mw-grid">
+            <div class="mw-tile">
+                <div class="mw-tile-k">Total</div>
+                <div class="mw-tile-v">{{ eventos_total }}</div>
+            </div>
+            <div class="mw-tile mw-tile-ok">
+                <div class="mw-tile-k">Procesados</div>
+                <div class="mw-tile-v">{{ eventos_procesados }}</div>
+            </div>
+            <div class="mw-tile {% if eventos_con_error > 0 %}mw-tile-warn{% endif %}">
+                <div class="mw-tile-k">Con error</div>
+                <div class="mw-tile-v">{{ eventos_con_error }}</div>
+            </div>
+        </div>
+
+        {% if ultimos_eventos %}
+            <h4 class="mw-h4">Últimos 5 eventos</h4>
+            <div class="mw-table-wrap">
+                <table class="mw-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Tipo</th>
+                            <th>Firma</th>
+                            <th>Procesado</th>
+                            <th>Error</th>
+                            <th>Fecha</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for ev in ultimos_eventos %}
+                        <tr>
+                            <td>{{ ev.id }}</td>
+                            <td><code>{{ ev.tipo_evento }}</code></td>
+                            <td>
+                                {% if ev.firma_valida %}
+                                    <span class="mw-pill mw-pill-ok">OK</span>
+                                {% else %}
+                                    <span class="mw-pill mw-pill-warn">Inválida</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if ev.procesado %}
+                                    <span class="mw-pill mw-pill-ok">✓</span>
+                                {% else %}
+                                    <span class="mw-pill mw-pill-muted">Pendiente</span>
+                                {% endif %}
+                            </td>
+                            <td class="mw-ellipsis">{{ ev.error_procesamiento|default:"—" }}</td>
+                            <td>{{ ev.fecha_registro|date:"d/m/Y H:i:s" }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="mw-empty">Aún no se han recibido eventos.</p>
+        {% endif %}
+    </section>
+
+    <section>
+        <h3 class="mw-h3">Datos de la petición actual</h3>
+        <div class="mw-kv">
+            <div class="mw-kv-row"><span class="mw-kv-k">URL</span><code class="mw-kv-v">{{ webhook_url }}</code></div>
+            <div class="mw-kv-row"><span class="mw-kv-k">Método</span><code class="mw-kv-v">{{ metodo }}</code></div>
+            <div class="mw-kv-row"><span class="mw-kv-k">Timestamp</span><code class="mw-kv-v">{{ ahora|date:"d/m/Y H:i:s" }}</code></div>
+            {% if query_string %}
+            <div class="mw-kv-row"><span class="mw-kv-k">Query string</span><code class="mw-kv-v">{{ query_string }}</code></div>
+            {% endif %}
+            {% if ua_resumido %}
+            <div class="mw-kv-row"><span class="mw-kv-k">User-Agent</span><code class="mw-kv-v mw-ellipsis">{{ ua_resumido }}</code></div>
+            {% endif %}
+        </div>
+    </section>
+
+    <footer class="mw-footer">
+        FastChat DJ · Webhook Meta Cloud API · Este endpoint NO requiere autenticación (las peticiones de Meta se validan con <code>webhook_verify_token</code> y HMAC <code>app_secret</code>).
+    </footer>
+
+</main>
+</body>
+</html>

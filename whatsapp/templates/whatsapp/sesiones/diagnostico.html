@@ -1,0 +1,622 @@
+{% extends 'base.html' %}
+{% load static templatefunctions %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/sesiones.css' %}">
+    <link rel="stylesheet" href="{% static 'stylenew/diagnostico.css' %}">
+    <link rel="stylesheet" href="{% static 'stylenew/json-pretty.css' %}">
+    <script src="{% static 'javascript/json-pretty.js' %}"></script>
+{% endblock %}
+
+{% block atras %}/whatsapp/sesiones/{% endblock %}
+
+{% block content %}
+    <div class="diag-page">
+
+        {# ───────── Header ───────── #}
+        <div class="diag-header">
+            <div class="diag-header-left">
+                <a href="/whatsapp/sesiones/" class="diag-back" title="Volver">
+                    <i class="fa fa-arrow-left"></i>
+                </a>
+                <div>
+                    <div class="diag-eyebrow">Diagnóstico de sesión Meta</div>
+                    <h2 class="diag-title">{{ sesion.nombre|default:'Sesión sin nombre' }}</h2>
+                    <div class="diag-sub">
+                        {% if config.display_phone_number %}
+                            <span><i class="fa fa-phone"></i> {{ config.display_phone_number }}</span>
+                        {% endif %}
+                        {% if config.waba_id %}
+                            <span><i class="fa fa-id-card"></i> WABA <code>{{ config.waba_id }}</code></span>
+                        {% endif %}
+                        {% if config.phone_number_id %}
+                            <span><i
+                                    class="fa fa-microchip"></i> Phone ID <code>{{ config.phone_number_id }}</code></span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="diag-header-right">
+                <a href="/whatsapp/sesiones/{{ sesion.id }}/diagnostico/" class="conex-btn conex-btn-secondary">
+                    <i class="fa fa-rotate"></i> Refrescar
+                </a>
+
+                {# ── Deep-links a Meta Business: Insights + Facturación ── #}
+                <div class="diag-meta-links">
+                    <a class="conex-btn conex-btn-secondary"
+                       href="https://business.facebook.com/latest/whatsapp_manager/insights{% if meta_business_id %}?business_id={{ meta_business_id }}{% if config.waba_id %}&waba_id={{ config.waba_id }}{% endif %}{% endif %}"
+                       target="_blank" rel="noopener"
+                       title="Conversaciones, mensajes y costos por categoría en WhatsApp Manager">
+                        <i class="fa fa-chart-pie"></i> Insights / Costos
+                    </a>
+                    <a class="conex-btn conex-btn-secondary"
+                       href="https://business.facebook.com/billing_hub/payment_settings{% if meta_business_id %}?business_id={{ meta_business_id }}{% endif %}"
+                       target="_blank" rel="noopener"
+                       title="Métodos de pago, facturas y configuración de cobro del Business">
+                        <i class="fa fa-credit-card"></i> Facturación
+                    </a>
+                    <a class="conex-btn conex-btn-secondary"
+                       href="https://business.facebook.com/latest/whatsapp_manager/payment_methods{% if meta_business_id %}?business_id={{ meta_business_id }}{% if config.waba_id %}&waba_id={{ config.waba_id }}{% endif %}{% endif %}"
+                       target="_blank" rel="noopener"
+                       title="Métodos de pago específicos de esta WABA">
+                        <i class="fa fa-receipt"></i> Pagos WABA
+                    </a>
+                </div>
+
+                <a href="/whatsapp/conversaciones/?sesion={{ sesion.id|encrypt_id }}"
+                   class="conex-btn conex-btn-primary">
+                    <i class="fa fa-comments"></i> Ver conversaciones
+                </a>
+            </div>
+        </div>
+
+        {# ───────── Score de salud ───────── #}
+        <div class="diag-score">
+            <div class="diag-score-circle"
+                 data-pct="{{ salud_pct }}"
+                 style="background:conic-gradient(
+                         {% if salud_pct == 100 %}#10b981{% elif salud_pct >= 60 %}#f59e0b{% else %}#ef4444{% endif %} {{ salud_pct }}%,
+                         #e5e7eb {{ salud_pct }}%);">
+                <div class="diag-score-inner">
+                    <div class="diag-score-num">{{ salud_pct }}<small>%</small></div>
+                    <div class="diag-score-label">{{ salud_total_ok }}/{{ salud_total }}</div>
+                </div>
+            </div>
+            <div class="diag-score-text">
+                <h4>
+                    {% if salud_pct == 100 %}
+                        Todo en verde
+                    {% elif salud_pct >= 60 %}
+                        Funciona con observaciones
+                    {% else %}
+                        Hay problemas que requieren atención
+                    {% endif %}
+                </h4>
+                <p>
+                    Verificamos {{ salud_total }} aspectos clave: conexión, suscripción WABA, webhook,
+                    firma HMAC, calidad del número y errores recientes.
+                </p>
+            </div>
+        </div>
+
+        {# ───────── Health checklist ───────── #}
+        <div class="diag-card">
+            <h5 class="diag-card-title"><i class="fa fa-list-check"></i> Estado de salud</h5>
+            <ul class="diag-checklist">
+                {% for item in salud %}
+                    <li class="diag-check {% if item.ok %}is-ok{% else %}is-warn{% endif %}">
+                        <div class="diag-check-icon">
+                            {% if item.ok %}
+                                <i class="fa fa-circle-check"></i>
+                            {% else %}
+                                <i class="fa fa-circle-exclamation"></i>
+                            {% endif %}
+                        </div>
+                        <div class="diag-check-body">
+                            <div class="diag-check-label">{{ item.label }}</div>
+                            <div class="diag-check-detail">{{ item.detalle }}</div>
+                            {% if not item.ok and item.fix %}
+                                <div class="diag-check-fix"><i class="fa fa-wrench"></i> {{ item.fix }}</div>
+                            {% endif %}
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        {# ───────── Grid 2 columnas ───────── #}
+        <div class="diag-grid">
+
+            {# Columna izquierda: Estado del número en Meta #}
+            <div class="diag-card">
+                <h5 class="diag-card-title">
+                    <i class="fa fa-mobile-screen"></i> Estado del número en Meta
+                    <small>(Graph API · live)</small>
+                </h5>
+                {% if phone_info.ok %}
+                    <table class="diag-kv">
+                        <tr>
+                            <td>Display</td>
+                            <td><code>{{ phone_info.data.display_phone_number|default:'—' }}</code></td>
+                        </tr>
+                        <tr>
+                            <td>Nombre verificado</td>
+                            <td>{{ phone_info.data.verified_name|default:'—' }}</td>
+                        </tr>
+                        <tr>
+                            <td>Status</td>
+                            <td>
+                            <span class="diag-pill diag-pill-{{ phone_info.data.status|default:'unknown'|lower }}">
+                                {{ phone_info.data.status|default:'—' }}
+                            </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Calidad</td>
+                            <td>
+                            <span class="diag-pill diag-pill-{{ phone_info.data.quality_rating|default:'unknown'|lower }}">
+                                {{ phone_info.data.quality_rating|default:'—' }}
+                            </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Tier mensajería</td>
+                            <td>{{ phone_info.data.messaging_limit_tier|default:'—' }}</td>
+                        </tr>
+                        <tr>
+                            <td>Throughput</td>
+                            <td>
+                                {% if phone_info.data.throughput %}
+                                    {{ phone_info.data.throughput.level|default:'—' }}
+                                {% else %}—{% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Name status</td>
+                            <td>{{ phone_info.data.name_status|default:'—' }}</td>
+                        </tr>
+                    </table>
+                {% else %}
+                    <div class="diag-error-box">
+                        <i class="fa fa-circle-xmark"></i>
+                        <div>
+                            <b>No pude consultar Graph.</b>
+                            <p>{{ phone_info.error }}</p>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+
+            {# Columna derecha: Suscripción WABA + Webhook #}
+            <div class="diag-card">
+                <h5 class="diag-card-title">
+                    <i class="fa fa-link"></i> Suscripción WABA + Webhook
+                </h5>
+                {% if subscribed.ok %}
+                    <p class="diag-text">
+                        <b>{{ subscribed.count }}</b> aplicación(es) suscrita(s) a esta WABA:
+                    </p>
+                    {% if subscribed.apps %}
+                        <ul class="diag-apps">
+                            {% for app in subscribed.apps %}
+                                <li>
+                                    <i class="fa fa-cube"></i>
+                                    <span><b>{{ app.whatsapp_business_api_data.name|default:'(sin nombre)' }}</b></span>
+                                    <code>{{ app.whatsapp_business_api_data.id|default:'—' }}</code>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="diag-warn-box">
+                            <i class="fa fa-triangle-exclamation"></i>
+                            <div>
+                                <b>WABA sin apps suscritas.</b>
+                                <p>Sin esto, los mensajes no llegan a tu CRM.
+                                    Pulsá el botón abajo para suscribirla automáticamente
+                                    (ahorra el curl manual).</p>
+                            </div>
+                        </div>
+                        <button type="button" class="conex-btn conex-btn-primary diag-action-btn" id="btn-suscribir-waba"
+                                data-sesion-id="{{ sesion.id }}">
+                            <i class="fa fa-bolt"></i> Suscribir WABA ahora
+                        </button>
+                        <div id="suscribir-waba-result" class="diag-action-result" hidden></div>
+                    {% endif %}
+                {% else %}
+                    <div class="diag-error-box">
+                        <i class="fa fa-circle-xmark"></i>
+                        <div>
+                            <b>No pude consultar suscripciones.</b>
+                            <p>{{ subscribed.error }}</p>
+                        </div>
+                    </div>
+                {% endif %}
+
+                <hr class="diag-sep">
+                <table class="diag-kv">
+                    <tr>
+                        <td>Verify token</td>
+                        <td>
+                            {% if config.webhook_verify_token %}
+                                <code class="diag-truncate"
+                                      title="{{ config.webhook_verify_token }}">{{ config.webhook_verify_token|slice:":12" }}…</code>
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Verificado en</td>
+                        <td>
+                            {% if config.webhook_verificado_en %}
+                                <span class="diag-pill diag-pill-green">{{ config.webhook_verificado_en|date:"Y-m-d H:i" }}</span>
+                            {% else %}
+                                <span class="diag-pill diag-pill-yellow">Pendiente</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Última sync Graph</td>
+                        <td>
+                            {% if config.ultima_sincronizacion %}
+                                {{ config.ultima_sincronizacion|date:"Y-m-d H:i" }}
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        {# ───────── Métricas tráfico ───────── #}
+        <div class="diag-card">
+            <h5 class="diag-card-title">
+                <i class="fa fa-chart-line"></i> Tráfico de mensajes
+                <small>· {{ now|date:"F Y" }}</small>
+            </h5>
+
+            {# Banner mes actual — destacado para control de costos #}
+            <div class="diag-mes-banner">
+                <div class="diag-mes-icon"><i class="fa fa-calendar"></i></div>
+                <div class="diag-mes-body">
+                    <div class="diag-mes-num">{{ counts.conversaciones_mes }}</div>
+                    <div class="diag-mes-lbl">Conversaciones este mes</div>
+                </div>
+                <div class="diag-mes-meta">
+                    {% if counts.conversaciones_mes_delta is not None %}
+                        {% if counts.conversaciones_mes_delta > 0 %}
+                            <span class="diag-mes-delta is-up">
+                                <i class="fa fa-arrow-trend-up"></i> +{{ counts.conversaciones_mes_delta }}%
+                            </span>
+                        {% elif counts.conversaciones_mes_delta < 0 %}
+                            <span class="diag-mes-delta is-down">
+                                <i class="fa fa-arrow-trend-down"></i> {{ counts.conversaciones_mes_delta }}%
+                            </span>
+                        {% else %}
+                            <span class="diag-mes-delta is-flat">
+                                <i class="fa fa-minus"></i> sin cambio
+                            </span>
+                        {% endif %}
+                        <small>vs mes anterior ({{ counts.conversaciones_mes_ant }})</small>
+                    {% else %}
+                        <small class="text-muted">Sin base de comparación</small>
+                    {% endif %}
+                </div>
+                <a href="https://business.facebook.com/latest/whatsapp_manager/insights{% if meta_business_id %}?business_id={{ meta_business_id }}{% if config.waba_id %}&waba_id={{ config.waba_id }}{% endif %}{% endif %}"
+                   target="_blank" rel="noopener" class="diag-mes-link"
+                   title="Ver costos detallados por categoría en Meta">
+                    <i class="fa fa-external-link"></i> Ver costos en Meta
+                </a>
+            </div>
+
+            <div class="diag-stats">
+                <div class="diag-stat">
+                    <div class="diag-stat-num">{{ counts.conversaciones_total }}</div>
+                    <div class="diag-stat-lbl">Conversaciones · total</div>
+                </div>
+                <div class="diag-stat">
+                    <div class="diag-stat-num">{{ counts.conversaciones_24h }}</div>
+                    <div class="diag-stat-lbl">Conversaciones · 24h</div>
+                </div>
+                <div class="diag-stat">
+                    <div class="diag-stat-num">{{ counts.mensajes_mes }}</div>
+                    <div class="diag-stat-lbl">Mensajes · mes</div>
+                </div>
+                <div class="diag-stat">
+                    <div class="diag-stat-num">{{ counts.mensajes_total }}</div>
+                    <div class="diag-stat-lbl">Mensajes · total</div>
+                </div>
+                <div class="diag-stat">
+                    <div class="diag-stat-num">{{ counts.mensajes_entrantes_24h }}</div>
+                    <div class="diag-stat-lbl"><i class="fa fa-arrow-down"></i> Entrantes · 24h</div>
+                </div>
+                <div class="diag-stat">
+                    <div class="diag-stat-num">{{ counts.mensajes_salientes_24h }}</div>
+                    <div class="diag-stat-lbl"><i class="fa fa-arrow-up"></i> Salientes · 24h</div>
+                </div>
+            </div>
+            <div class="diag-last-msgs">
+                <div>
+                    <span class="diag-last-lbl"><i class="fa fa-arrow-down"></i> Último entrante:</span>
+                    {% if ultimo_entrante %}
+                        <b>{{ ultimo_entrante.fecha|date:"Y-m-d H:i:s" }}</b>
+                        <span class="diag-last-from">de <code>{{ ultimo_entrante.remitente }}</code></span>
+                    {% else %}
+                        <i>nunca</i>
+                    {% endif %}
+                </div>
+                <div>
+                    <span class="diag-last-lbl"><i class="fa fa-arrow-up"></i> Último saliente:</span>
+                    {% if ultimo_saliente %}
+                        <b>{{ ultimo_saliente.fecha|date:"Y-m-d H:i:s" }}</b>
+                    {% else %}
+                        <i>nunca</i>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# ───────── Eventos Meta recibidos (resumen) ───────── #}
+        {# Detalle completo (tabla, payload, polling en vivo) en el botón →. #}
+        <div class="diag-card">
+            <h5 class="diag-card-title">
+                <i class="fa fa-inbox"></i> Eventos webhook (resumen)
+            </h5>
+            <div class="diag-evt-summary">
+                <div class="diag-evt-stat">
+                    <div class="diag-evt-num">{{ eventos_24h }}</div>
+                    <div class="diag-evt-lbl">en 24h</div>
+                </div>
+                <div class="diag-evt-stat {% if eventos_firma_invalida %}diag-evt-stat-warn{% endif %}">
+                    <div class="diag-evt-num">{{ eventos_firma_invalida }}</div>
+                    <div class="diag-evt-lbl">firma inválida (7d)</div>
+                </div>
+                <div class="diag-evt-stat {% if eventos_con_error_24h %}diag-evt-stat-err{% endif %}">
+                    <div class="diag-evt-num">{{ eventos_con_error_24h }}</div>
+                    <div class="diag-evt-lbl">con error (24h)</div>
+                </div>
+                <a href="/whatsapp/sesiones/{{ sesion.id }}/webhook-log/"
+                   class="conex-btn conex-btn-primary diag-evt-cta">
+                    <i class="fa fa-list-check"></i> Ver auditoría en vivo
+                </a>
+            </div>
+            {% if eventos_24h == 0 %}
+                <div class="diag-empty diag-empty-inline">
+                    <i class="fa fa-inbox"></i>
+                    Aún no llegó ningún evento en 24h. Si configuraste el webhook hace rato,
+                    probá enviar un mensaje al número desde tu celular.
+                </div>
+            {% endif %}
+
+            {# ── Herramientas de diagnóstico de webhook ── #}
+            <div class="diag-webhook-tools">
+                <a href="/whatsapp/meta/webhook-hits/"
+                   class="conex-btn conex-btn-secondary"
+                   title="Lista raw de cada hit HTTP al endpoint (incluye GETs, errores, body preview)">
+                    <i class="fa fa-network-wired"></i> Hits HTTP raw
+                </a>
+                <a href="https://developers.facebook.com/apps/{{ config.waba_id|default:'' }}/webhooks/"
+                   target="_blank" rel="noopener"
+                   class="conex-btn conex-btn-secondary"
+                   title="Recent Activity / Subscriptions del webhook en Meta for Developers">
+                    <i class="fa-brands fa-meta"></i> Webhooks en Meta
+                </a>
+                <span class="diag-tools-hint">
+                    <i class="fa fa-circle-info"></i>
+                    Si <b>Hits HTTP raw</b> está vacío y Meta dice que pegó →
+                    revisá Cloudflare/WAF. Si tiene 4xx → arreglá la respuesta.
+                </span>
+            </div>
+        </div>
+
+        {# ───────── Trazas IA ───────── #}
+        <div class="diag-card">
+            <h5 class="diag-card-title">
+                <i class="fa fa-clock-rotate-left"></i> Pipeline IA — últimas 30 trazas
+                <small>({{ trazas_error_24h }} error(es) en últimas 24h)</small>
+            </h5>
+            {% if trazas_recientes %}
+                <table class="diag-table">
+                    <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Etapa</th>
+                        <th>Nivel</th>
+                        <th>Latencia</th>
+                        <th>Detalle</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for tz in trazas_recientes %}
+                        <tr class="diag-row-{{ tz.nivel }} traza-row" style="cursor:pointer"
+                            data-traza-id="{{ tz.id }}"
+                            data-fecha="{{ tz.fecha|date:'Y-m-d H:i:s' }}"
+                            data-etapa="{{ tz.etapa }}"
+                            data-etapa-display="{{ tz.get_etapa_display }}"
+                            data-nivel="{{ tz.nivel }}"
+                            data-latencia="{{ tz.latencia_ms|default:'' }}"
+                            data-numero="{{ tz.numero|default:'' }}"
+                            data-conversacion="{{ tz.conversacion_id|default:'' }}"
+                            data-mensaje="{{ tz.mensaje_id|default:'' }}"
+                            data-apikey="{% if tz.apikey %}{{ tz.apikey.proveedor|default:'?' }}{% endif %}"
+                            data-detalle="{{ tz.detalle|default:''|escape }}">
+                            <td><span class="diag-mono">{{ tz.fecha|date:"m-d H:i:s" }}</span></td>
+                            <td><span class="diag-tag">{{ tz.etapa }}</span></td>
+                            <td>
+                                <span class="diag-pill diag-pill-{{ tz.nivel }}">{{ tz.nivel }}</span>
+                            </td>
+                            <td>
+                                {% if tz.latencia_ms %}
+                                    <span class="diag-mono">{{ tz.latencia_ms }} ms</span>
+                                {% else %}—{% endif %}
+                            </td>
+                            <td class="diag-detail-cell">
+                                {% if tz.detalle %}
+                                    {{ tz.detalle|truncatechars:120 }}
+                                    <i class="fa fa-expand text-muted" style="font-size:.7rem;margin-left:4px;color:#9ca3af" title="Ver detalle"></i>
+                                {% else %}—{% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <a href="/whatsapp/trazas/?sesion={{ sesion.id|encrypt_id }}" class="diag-link-ver-todas">
+                    <i class="fa fa-arrow-right"></i> Ver todas las trazas de esta sesión
+                </a>
+            {% else %}
+                <div class="diag-empty">
+                    <i class="fa fa-clock-rotate-left"></i>
+                    <p>No hay trazas IA registradas.</p>
+                    <small>Las trazas aparecen cuando hay actividad: mensajes entrantes, llamadas a LLM, envíos.</small>
+                </div>
+            {% endif %}
+        </div>
+
+    </div>
+
+    {# ───────── Modal detalle Traza IA ───────── #}
+    <div class="man-val-backdrop" id="traza-detail-modal" aria-hidden="true">
+        <div class="man-val-panel" role="dialog" style="max-width:680px">
+            <div class="man-val-header">
+                <div class="man-val-header-title">
+                    <i class="fa fa-clock-rotate-left" style="color:#2563eb"></i>
+                    <h5 id="traza-modal-title">Detalle de la traza</h5>
+                </div>
+                <button type="button" class="man-val-close" data-traza-close aria-label="Cerrar">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="man-val-body" id="traza-modal-body"></div>
+            <div class="man-val-footer">
+                <button type="button" class="conex-btn conex-btn-ghost" data-traza-close>Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var modal = document.getElementById('traza-detail-modal');
+            var body = document.getElementById('traza-modal-body');
+            var title = document.getElementById('traza-modal-title');
+
+            function cerrar() {
+                modal.classList.remove('open');
+                modal.setAttribute('aria-hidden', 'true');
+            }
+            document.querySelectorAll('[data-traza-close]').forEach(function (b) {
+                b.addEventListener('click', cerrar);
+            });
+            modal.addEventListener('click', function (e) {
+                if (e.target === modal) cerrar();
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && modal.classList.contains('open')) cerrar();
+            });
+
+            // Helpers con fallback inline si json-pretty.js no carga (404 en prod
+            // por collectstatic, o caché viejo). Garantiza que el modal nunca
+            // quede roto por un static missing.
+            function escapeHtml(s) {
+                if (window.JsonPretty && window.JsonPretty.escapeHtml) {
+                    return window.JsonPretty.escapeHtml(s);
+                }
+                return String(s == null ? '' : s)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+            }
+            function pretty(detalle) {
+                if (window.JsonPretty && window.JsonPretty.format) {
+                    return window.JsonPretty.format(detalle);
+                }
+                if (!detalle) return '<i class="text-muted">(vacío)</i>';
+                var t = String(detalle).trim();
+                if (t.startsWith('{') || t.startsWith('[')) {
+                    try {
+                        return '<pre class="traza-json">' +
+                            escapeHtml(JSON.stringify(JSON.parse(t), null, 2)) +
+                            '</pre>';
+                    } catch (e) {}
+                }
+                return '<pre class="traza-raw">' + escapeHtml(detalle) + '</pre>';
+            }
+
+            document.querySelectorAll('.traza-row').forEach(function (row) {
+                row.addEventListener('click', function () {
+                    var d = row.dataset;
+                    title.textContent = (d.etapaDisplay || d.etapa) + ' · ' + d.fecha;
+
+                    var rows = '';
+                    function addRow(label, val, mono) {
+                        if (val === undefined || val === null || val === '') return;
+                        rows += '<tr><td>' + label + '</td><td>' +
+                            (mono ? '<code>' + escapeHtml(val) + '</code>' : escapeHtml(val)) +
+                            '</td></tr>';
+                    }
+                    addRow('Fecha', d.fecha, true);
+                    addRow('Etapa', d.etapaDisplay || d.etapa);
+                    addRow('Etapa (clave)', d.etapa, true);
+                    addRow('Nivel', d.nivel);
+                    addRow('Latencia', d.latencia ? d.latencia + ' ms' : '');
+                    addRow('Número', d.numero, true);
+                    addRow('Conversación ID', d.conversacion, true);
+                    addRow('Mensaje ID', d.mensaje, true);
+                    addRow('API Key proveedor', d.apikey, true);
+                    addRow('Traza ID (interno)', d.trazaId, true);
+
+                    body.innerHTML =
+                        '<table class="diag-kv">' + rows + '</table>' +
+                        '<h6 class="json-section-title">Detalle / payload</h6>' +
+                        pretty(d.detalle);
+
+                    modal.classList.add('open');
+                    modal.setAttribute('aria-hidden', 'false');
+                });
+            });
+        })();
+    </script>
+
+    {% csrf_token %}
+    <script>
+        (function () {
+            var btn = document.getElementById('btn-suscribir-waba');
+            if (!btn) return;
+            var resultBox = document.getElementById('suscribir-waba-result');
+            var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+            btn.addEventListener('click', function () {
+                if (btn.disabled) return;
+                var orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Suscribiendo en Meta...';
+                resultBox.hidden = true;
+                var fd = new FormData();
+                fd.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+                fetch('/whatsapp/sesiones/' + btn.getAttribute('data-sesion-id') + '/suscribir-waba/', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'X-CSRFToken': csrf ? csrf.value : '', 'X-Requested-With': 'XMLHttpRequest'},
+                    credentials: 'same-origin',
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        if (data.ok) {
+                            resultBox.className = 'diag-action-result is-ok';
+                            resultBox.innerHTML = '<i class="fa fa-circle-check"></i> ' + (data.message || 'WABA suscrita.') +
+                                ' <small>Recargá la página para confirmar.</small>';
+                            setTimeout(function () { window.location.reload(); }, 1800);
+                        } else {
+                            resultBox.className = 'diag-action-result is-error';
+                            resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> ' + (data.error || 'Falló la suscripción.');
+                        }
+                    })
+                    .catch(function () {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        resultBox.className = 'diag-action-result is-error';
+                        resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> Error de red.';
+                    });
+            });
+        })();
+    </script>
+{% endblock %}

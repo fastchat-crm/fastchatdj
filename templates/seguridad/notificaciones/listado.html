@@ -1,4 +1,72 @@
 {% extends 'base.html' %}
+{% block head %}
+<style>
+    .notif-list { display: flex; flex-direction: column; gap: .75rem; }
+    .notif-card {
+        background: #fff;
+        border: 1px solid #e9ecef;
+        border-radius: 14px;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,.04);
+        transition: box-shadow .15s, transform .15s;
+        position: relative;
+        display: flex; align-items: stretch; gap: 1rem;
+    }
+    .notif-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+    .notif-card.no-leida { border-left: 4px solid #0d6efd; }
+    .notif-card.prio-1::before,
+    .notif-card.prio-2::before,
+    .notif-card.prio-3::before {
+        content:''; position:absolute; top:0; left:0; right:0; height:3px;
+        border-top-left-radius: 14px; border-top-right-radius: 14px;
+    }
+    .notif-card.prio-1::before { background:#dc3545; }
+    .notif-card.prio-2::before { background:#ffc107; }
+    .notif-card.prio-3::before { background:#198754; }
+
+    .notif-icono {
+        width: 48px; height: 48px; border-radius: 12px; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; font-size: 1.15rem;
+    }
+    .notif-icono.tipo-1 { background:#0dcaf0; }
+    .notif-icono.tipo-2 { background:#0d6efd; }
+    .notif-icono.tipo-3 { background:#198754; }
+    .notif-icono.tipo-4 { background:#dc3545; }
+    .notif-icono.tipo-default { background:#6c757d; }
+
+    .notif-body { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: .45rem; }
+    .notif-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; flex-wrap: wrap; }
+    .notif-titulo { font-weight: 600; font-size: 1rem; margin: 0; color: #212529; line-height: 1.3; }
+    .notif-tipo-label { font-size: .72rem; color: #6c757d; }
+    .notif-cuerpo { font-size: .9rem; color: #495057; line-height: 1.5; }
+    .notif-meta { display: flex; flex-wrap: wrap; gap: .4rem 1rem; font-size: .75rem; color: #6c757d; }
+    .notif-meta i { width: 14px; text-align: center; }
+
+    .notif-right {
+        display: flex; flex-direction: column; align-items: flex-end;
+        justify-content: space-between; gap: .5rem; flex-shrink: 0; min-width: 120px;
+    }
+    .notif-pills { display: flex; flex-direction: column; gap: .3rem; align-items: flex-end; }
+    .notif-actions { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: flex-end; }
+
+    .pill { padding: .22rem .6rem; border-radius: 999px; font-size: .65rem; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; white-space: nowrap; }
+    .pill-alta { background:#f8d7da; color:#842029; }
+    .pill-media { background:#fff3cd; color:#664d03; }
+    .pill-baja { background:#d1e7dd; color:#0f5132; }
+    .pill-leida { background:#d1e7dd; color:#0f5132; }
+    .pill-noleida { background:#cfe2ff; color:#084298; }
+
+    .empty-state { text-align: center; padding: 3rem 1rem; color: #6c757d; background:#fff; border-radius:14px; border:1px solid #e9ecef; }
+    .empty-state i { font-size: 3rem; opacity: .5; display: block; margin-bottom: 1rem; }
+
+    @media (max-width: 768px) {
+        .notif-card { flex-direction: column; }
+        .notif-right { align-items: flex-start; min-width: 0; }
+        .notif-pills { flex-direction: row; }
+    }
+</style>
+{% endblock %}
 {% block content %}
     <div class="card mb-3">
         <div class="card-body">
@@ -53,96 +121,97 @@
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header">
-            <div class="row align-items-center">
-                <div class="col-auto">
-                    <a href="javascript:void(0)" onclick="marcarvista()" class="btn btn-success btn-sm">
-                        <i class="fa fa-check-circle me-1"></i> Marcar todas como leídas
-                    </a>
-                </div>
-            </div>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div>
+            <h5 class="mb-0"><i class="fa fa-bell text-primary me-2"></i>Notificaciones</h5>
+            <small class="text-muted">{{ listado|length }} registro{{ listado|length|pluralize }} en esta página</small>
         </div>
+        <a href="javascript:void(0)" onclick="marcarvista()" class="btn btn-success btn-sm">
+            <i class="fa fa-check-circle me-1"></i> Marcar todas como leídas
+        </a>
+    </div>
 
-        <div class="card-body">
-            <div class="table-responsive">
-                <table id="tabla" class="table table-hover table-striped">
-                    <thead>
-                    <tr>
-                        <th class="text-center">Fecha</th>
-                        <th class="text-center">Tipo</th>
-                        <th class="text-center">Título</th>
-                        <th class="text-center">Notificación</th>
-                        <th class="text-center">Prioridad</th>
-                        <th class="text-center">URL</th>
-                        <th class="text-center">Estado</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {% for notificacion in listado %}
-                        <tr>
-                            <td class="text-center">
-                                <span class="fw-bold">{{ notificacion.fecha_registro|date:'d-m-Y' }}</span>
-                            </td>
-                            <td class="text-center">
-                                <span class="{{ notificacion.color_str|safe }}">{{ notificacion.get_tipo_display }}</span>
-                            </td>
-                            <td class="text-center">
-                                <span class="fw-bold">{{ notificacion.titulo }}</span>
-                            </td>
-                            <td>
-                                <div>{{ notificacion.cuerpo|safe }}</div>
-                                <div class="small text-muted mt-1">
-                                    {% if notificacion.leido %}
-                                        {{ notificacion.fecha_registro|date:'d-b-Y' }}
-                                        {{ notificacion.hora_registro|time:"h:i a" }}
-                                    {% else %}
-                                        Hace {{ notificacion.diasingresado }}.
-                                    {% endif %}
+    {% if listado %}
+        <div class="row g-3">
+            {% for notificacion in listado %}
+                <div class="col-lg-12">
+                    <div class="notif-card prio-{{ notificacion.prioridad }} {% if not notificacion.leido %}no-leida{% endif %}">
+                        <div class="notif-icono {% if notificacion.tipo == 1 %}tipo-1{% elif notificacion.tipo == 2 %}tipo-2{% elif notificacion.tipo == 3 %}tipo-3{% elif notificacion.tipo == 4 %}tipo-4{% else %}tipo-default{% endif %}">
+                            <i class="fa fa-{% if notificacion.tipo == 4 %}triangle-exclamation{% elif notificacion.tipo == 3 %}circle-check{% elif notificacion.tipo == 2 %}bullhorn{% else %}circle-info{% endif %}"></i>
+                        </div>
+
+                        <div class="notif-body">
+                            <div class="notif-head">
+                                <div style="min-width:0;">
+                                    <h6 class="notif-titulo">{{ notificacion.titulo }}</h6>
+                                    <span class="notif-tipo-label">{{ notificacion.get_tipo_display }}</span>
                                 </div>
-                            </td>
-                            <td class="text-center">
+                            </div>
+
+                            <div class="notif-cuerpo">{{ notificacion.cuerpo|safe }}</div>
+
+                            <div class="notif-meta">
+                                <span title="Fecha de registro">
+                                    <i class="fa fa-calendar me-1"></i>{{ notificacion.fecha_registro|date:'d/m/Y' }}
+                                </span>
+                                <span title="Hora de registro">
+                                    <i class="fa fa-clock me-1"></i>{{ notificacion.fecha_registro|date:'H:i:s' }}
+                                </span>
+                                {% if notificacion.leido and notificacion.fecha_hora_leido %}
+                                    <span title="Leída el" class="text-success">
+                                        <i class="fa fa-eye me-1"></i>{{ notificacion.fecha_hora_leido|date:'d/m/Y H:i' }}
+                                    </span>
+                                {% else %}
+                                    <span title="Tiempo desde el registro">
+                                        <i class="fa fa-hourglass-half me-1"></i>Hace {{ notificacion.diasingresado }}
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="notif-right">
+                            <div class="notif-pills">
                                 {% if notificacion.prioridad == 1 %}
-                                    <span class="badge bg-danger">ALTA</span>
+                                    <span class="pill pill-alta">ALTA</span>
                                 {% elif notificacion.prioridad == 2 %}
-                                    <span class="badge bg-warning text-dark">MEDIA</span>
+                                    <span class="pill pill-media">MEDIA</span>
                                 {% elif notificacion.prioridad == 3 %}
-                                    <span class="badge bg-success">BAJA</span>
+                                    <span class="pill pill-baja">BAJA</span>
                                 {% endif %}
-                            </td>
-                            <td class="text-center">
-                                {% if notificacion.url %}
-                                    <a href="{{ notificacion.url }}" class="btn btn-outline-primary btn-sm"
-                                       title="Ver Enlace" target="_blank">
-                                        <i class="fa fa-link"></i>
-                                    </a>
-                                {% else %}
-                                    <span class="badge bg-secondary">SIN URL</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
                                 {% if notificacion.leido %}
-                                    <div>
-                                        <i class="fa fa-check-circle text-success"></i>
-                                    </div>
-                                    <div class="small text-success">
-                                        {{ notificacion.fecha_hora_leido|date:'d-b-Y' }} {{ notificacion.fecha_hora_leido|time:"h:i a" }}
-                                    </div>
+                                    <span class="pill pill-leida"><i class="fa fa-check me-1"></i>Leída</span>
                                 {% else %}
+                                    <span class="pill pill-noleida">Nueva</span>
+                                {% endif %}
+                            </div>
+                            <div class="notif-actions">
+                                {% if notificacion.url %}
+                                    <a href="{{ notificacion.url }}" class="btn btn-outline-primary btn-sm" target="_blank" title="Abrir enlace">
+                                        <i class="fa fa-link me-1"></i>Abrir
+                                    </a>
+                                {% endif %}
+                                {% if not notificacion.leido %}
                                     <a class="btn btn-success btn-sm viewNotification" title="Marcar como leída"
                                        href="javascript:;" _href="{{ notificacion.url }}" id="{{ notificacion.id }}">
                                         <i class="fa fa-eye me-1"></i>Leer
                                     </a>
                                 {% endif %}
-                            </td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-                {% include 'paginacion.html' %}
-            </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
         </div>
-    </div>
+        <div class="mt-4">
+            {% include 'paginacion.html' %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <i class="fa fa-bell-slash"></i>
+            <h5>No hay notificaciones</h5>
+            <small>Las notificaciones aparecerán aquí cuando se generen.</small>
+        </div>
+    {% endif %}
 {% endblock %}
 
 {% block jscript %}

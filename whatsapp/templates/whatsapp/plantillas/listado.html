@@ -1,0 +1,581 @@
+{% extends 'base.html' %}
+{% load static templatefunctions %}
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/plantillas.css' %}">
+    <link rel="stylesheet" href="{% static 'stylenew/sesionws.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+
+    {# ===== AVISO: plantillas son exclusivas de WA Cloud ===== #}
+    <div class="alert alert-secondary d-flex align-items-center gap-2 mb-2 py-2 small">
+        <i class="fa fa-circle-info text-primary"></i>
+        <div>
+            <strong>Plantillas = solo WhatsApp Cloud API.</strong>
+            Instagram DM no tiene plantillas (solo respuesta dentro de 24h).
+            Messenger usa <strong>Message Tags</strong> en su lugar (categorias <code>CONFIRMED_EVENT_UPDATE</code>, <code>POST_PURCHASE_UPDATE</code>, <code>ACCOUNT_UPDATE</code>, <code>HUMAN_AGENT</code>).
+        </div>
+    </div>
+
+    {# ===== EXPLICACIÓN DEL MÓDULO ===== #}
+    <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
+        <i class="fa fa-file-lines fa-2x"></i>
+        <div>
+            <strong>¿Para qué sirven las plantillas de WhatsApp?</strong><br>
+            <small>
+                Meta exige que <strong>todo mensaje proactivo</strong> (iniciado por tu negocio) o
+                enviado <strong>fuera de la ventana de 24 horas</strong> use una <em>plantilla pre-aprobada</em>.
+                Cada plantilla pasa por un proceso de aprobación de Meta antes de poder enviarse.<br>
+                <strong>Categorías:</strong>
+                <code>UTILITY</code> (confirmaciones, recordatorios, tracking),
+                <code>MARKETING</code> (promos, ofertas, engagement),
+                <code>AUTHENTICATION</code> (códigos OTP / 2FA).<br>
+                <strong>Flujo:</strong> creas la plantilla aquí (queda en <em>BORRADOR</em>) → la sometes a Meta
+                → Meta la revisa (~minutos a 24h) → cuando queda <em>APPROVED</em> ya puedes usarla en
+                <a href="/whatsapp/campanas/">campañas masivas</a> o envíos individuales.
+            </small>
+        </div>
+    </div>
+
+    {# ===== SIN SESIONES META ===== #}
+    {% if not sesiones_meta %}
+        <div class="alert alert-warning d-flex align-items-center gap-3">
+            <i class="fa fa-exclamation-triangle fa-2x"></i>
+            <div>
+                <strong>No tienes ninguna sesion configurada con Meta Cloud API.</strong><br>
+                <small>
+                    Las plantillas solo aplican a sesiones con proveedor Meta.
+                    Ve a <a href="/whatsapp/sesiones/">Sesiones</a> &rarr; edita una sesion &rarr;
+                    cambia proveedor a "Meta Cloud API" y completa la configuracion.
+                </small>
+            </div>
+        </div>
+    {% else %}
+
+        {# ===== FILTROS (patron autenticacion/usuario) ===== #}
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Busqueda general</label>
+                            <div class="input-group">
+                                <span class="input-group-text border-end-0">
+                                    <i class="fa fa-search text-muted"></i>
+                                </span>
+                                <input type="text" class="form-control border-start-0"
+                                       placeholder="Buscar por nombre o contenido" name="criterio"
+                                       value="{{ criterio|default:'' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Sesion</label>
+                            <div class="input-group">
+                                <select class="form-control select2" name="sesion">
+                                    <option value="">Todas las sesiones</option>
+                                    {% for s in sesiones_meta %}
+                                    <option value="{{ s.id }}" {% if sesion_sel == s.id %}selected{% endif %}>
+                                        {{ s.nombre|default:s.numero }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Estado</label>
+                            <select class="form-select" name="estado">
+                                <option value="">Todos los estados</option>
+                                {% for code, nombre in estados_meta %}
+                                <option value="{{ code }}" {% if estado_sel == code %}selected{% endif %}>
+                                    {{ nombre }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Categoria</label>
+                            <select class="form-select" name="categoria">
+                                <option value="">Todas las categorias</option>
+                                {% for code, nombre in categorias %}
+                                <option value="{{ code }}" {% if categoria_sel == code %}selected{% endif %}>
+                                    {{ nombre }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Acciones</label>
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i>
+                                </button>
+                                {% if url_vars %}
+                                    <a href="{{ request.path }}" class="btn btn-default">
+                                        <i class="fas fa-times"></i>
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {# ===== BOTONES DE ACCION (patron autenticacion/usuario) ===== #}
+        <div class="row align-items-center mb-3">
+            <div class="col-md-12 mb-2 mb-md-0 d-flex flex-wrap gap-2">
+                <a href="?action=add{% if sesion_sel %}&sesion={{ sesion_sel|encrypt_id }}{% endif %}"
+                   class="btn btn-success">
+                    <i class="fas fa-plus-circle me-2"></i> Nueva Plantilla
+                </a>
+                {% if sesiones_meta %}
+                <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#modalGenerarPlantillasIA">
+                    <i class="fa fa-wand-magic-sparkles me-1"></i> Generar con IA
+                </button>
+                <div class="dropdown">
+                    <button class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="fa fa-sync me-1"></i> Sincronizar con Meta
+                    </button>
+                    <ul class="dropdown-menu shadow-sm">
+                        {% for s in sesiones_meta %}
+                        <li>
+                            <a class="dropdown-item" href="javascript:void(0);"
+                               onclick="sincronizarPlantillas({{ s.id }})">
+                                <i class="fa fa-satellite-dish me-1"></i> {{ s.nombre|default:s.numero }}
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# ===== TABLA ===== #}
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Sesion</th>
+                                <th>Nombre</th>
+                                <th>Categoria</th>
+                                <th>Idioma</th>
+                                <th>Estado</th>
+                                <th>Uso</th>
+                                <th>Modificada</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for p in listado %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="proveedor-badge proveedor-meta" style="font-size:.6rem;">
+                                            <i class="fab fa-facebook"></i>
+                                        </span>
+                                        <div>
+                                            <strong class="small">{{ p.config_meta.sesion.nombre|default:"Sin nombre" }}</strong>
+                                            <div class="text-muted" style="font-size:.7rem;">{{ p.config_meta.sesion.numero|default:"—" }}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <strong>{{ p.nombre }}</strong>
+                                    <div class="text-muted small text-truncate" style="max-width:280px;" title="{{ p.cuerpo }}">
+                                        {{ p.cuerpo|truncatechars:70 }}
+                                    </div>
+                                </td>
+                                <td><span class="badge bg-secondary">{{ p.get_categoria_display }}</span></td>
+                                <td class="small">{{ p.idioma }}</td>
+                                <td>
+                                    <span class="badge bg-{{ p.color_estado }}">
+                                        {{ p.get_estado_meta_display }}
+                                    </span>
+                                    {% if p.motivo_rechazo %}
+                                        <i class="fa fa-info-circle text-danger ms-1"
+                                           title="{{ p.motivo_rechazo }}"></i>
+                                    {% endif %}
+                                </td>
+                                <td class="small">
+                                    {{ p.veces_enviada }} envio{{ p.veces_enviada|pluralize }}
+                                </td>
+                                <td class="small text-muted">
+                                    {{ p.fecha_modificacion|date:"d/m/Y H:i" }}
+                                </td>
+                                <td class="text-end">
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-light border" data-bs-toggle="dropdown">
+                                            <i class="fa fa-ellipsis-v"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                            {% if p.estado_meta == 'BORRADOR' or p.estado_meta == 'REJECTED' %}
+                                            <li>
+                                                <a class="dropdown-item" href="?action=change&pk={{ p.id }}">
+                                                    <i class="fa fa-pen-to-square me-2 text-success"></i>Editar
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a class="dropdown-item" href="javascript:void(0);"
+                                                   onclick="someterAMeta({{ p.id }}, '{{ p.nombre|escapejs }}')">
+                                                    <i class="fa fa-paper-plane me-2 text-primary"></i>Someter a Meta
+                                                </a>
+                                            </li>
+                                            {% endif %}
+                                            <li>
+                                                <a class="dropdown-item" href="javascript:void(0);"
+                                                   onclick="eliminarPlantilla({{ p.id }}, '{{ p.nombre|escapejs }}')">
+                                                    <i class="fa fa-trash me-2 text-danger"></i>Eliminar
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center text-muted py-4">
+                                    <i class="fa fa-inbox fa-2x mb-2 d-block"></i>
+                                    No hay plantillas todavia.
+                                    <a href="?action=add{% if sesion_sel %}&sesion={{ sesion_sel|encrypt_id }}{% endif %}" class="d-block mt-2">Crea la primera</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="p-2">{% include "paginacion.html" %}</div>
+        </div>
+    {% endif %}
+</div>
+
+{# ===== MODAL UNICO (confirmar + loading + resultado) ===== #}
+<div class="modal fade" id="modalAccion" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-2" id="ma-header">
+                <h6 class="modal-title" id="ma-titulo"></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="ma-body"></div>
+            <div class="modal-footer py-2" id="ma-footer"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block jscript %}
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   Modal unico reutilizable: confirmar → loading → resultado.
+   Un solo modal = cero problemas de backdrop/z-index.
+   ══════════════════════════════════════════════════════════════════════ */
+var _modal = null;
+function _getModal() {
+    if (!_modal) _modal = new bootstrap.Modal($('#modalAccion')[0]);
+    return _modal;
+}
+
+function _setModal(headerClass, titulo, body, footerHtml) {
+    var h = $('#ma-header');
+    h.removeClass('bg-success bg-danger bg-warning bg-primary text-white text-dark');
+    h.addClass(headerClass);
+    $('#ma-titulo').html(titulo);
+    $('#ma-body').html(body);
+    $('#ma-footer').html(footerHtml || '');
+}
+
+var _btnCerrar = '<button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>';
+var _btnRecargar = '<button type="button" class="btn btn-primary btn-sm" onclick="location.reload()"><i class="fa fa-refresh me-1"></i> Recargar</button>';
+
+function _mostrarLoading(titulo, mensaje) {
+    _setModal('bg-primary text-white',
+        titulo,
+        '<div class="text-center py-3"><div class="spinner-border text-primary"></div>' +
+        '<p class="mt-2 small text-muted">' + mensaje + '</p></div>',
+        ''
+    );
+    _getModal().show();
+}
+
+function _mostrarExito(titulo, body) {
+    _setModal('bg-success text-white', titulo, body, _btnRecargar + _btnCerrar);
+    setTimeout(function() { location.reload(); }, 2500);
+}
+
+function _mostrarError(titulo, body) {
+    _setModal('bg-danger text-white', titulo, body, _btnCerrar);
+}
+
+function _mostrarConfirmacion(body, callbackSi) {
+    _setModal('bg-warning text-dark',
+        '<i class="fa fa-triangle-exclamation me-1"></i> Confirmar accion',
+        body,
+        '<button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>' +
+        '<button type="button" class="btn btn-primary btn-sm" id="ma-btn-ok">Si, continuar</button>'
+    );
+    _getModal().show();
+    $('#ma-btn-ok').off('click').on('click', function() {
+        callbackSi();
+    });
+}
+
+/* ── Sincronizar con Meta ── */
+function sincronizarPlantillas(sesionId) {
+    _mostrarLoading(
+        '<i class="fa fa-sync me-1"></i> Sincronizando',
+        'Consultando plantillas en Meta...'
+    );
+    $.post(window.location.pathname,
+        { action: 'sincronizar', sesion_id: sesionId },
+        function(r) {
+            if (r && r.error === false) {
+                _mostrarExito(
+                    '<i class="fa fa-check-circle me-1"></i> Sincronizacion completada',
+                    '<div class="text-center py-2">' +
+                        '<i class="fa fa-circle-check fa-3x text-success mb-2 d-block"></i>' +
+                        '<p class="mb-1"><strong>' + (r.actualizadas || 0) + '</strong> plantilla(s) actualizada(s)</p>' +
+                        '<p class="text-muted small mb-0">' + (r.total_remoto || 0) + ' encontradas en Meta</p>' +
+                    '</div>'
+                );
+            } else {
+                _mostrarError(
+                    '<i class="fa fa-times-circle me-1"></i> Error',
+                    '<p class="mb-0">' + ((r && r.message) || 'Error desconocido') + '</p>'
+                );
+            }
+        }
+    ).fail(function() {
+        _mostrarError('<i class="fa fa-times-circle me-1"></i> Error', '<p class="mb-0">No se pudo contactar al servidor.</p>');
+    });
+}
+
+/* ── Someter a Meta ── */
+function someterAMeta(id, nombre) {
+    _mostrarConfirmacion(
+        '<p class="mb-1">Enviar <strong>"' + nombre + '"</strong> a Meta para aprobacion?</p>' +
+        '<p class="small text-muted mb-0">Una vez enviada no podras editarla hasta que Meta decida.</p>',
+        function() {
+            _mostrarLoading('<i class="fa fa-paper-plane me-1"></i> Enviando', 'Registrando plantilla en Meta...');
+            $.post(window.location.pathname,
+                { action: 'someter_a_meta', id: id },
+                function(r) {
+                    if (r && r.error === false) {
+                        _mostrarExito(
+                            '<i class="fa fa-check-circle me-1"></i> Enviada',
+                            '<div class="text-center py-2">' +
+                                '<i class="fa fa-paper-plane fa-3x text-primary mb-2 d-block"></i>' +
+                                '<p class="mb-1"><strong>"' + nombre + '"</strong> enviada a Meta.</p>' +
+                                '<p class="text-muted small mb-0">El estado se actualiza automaticamente (horas a 1-2 dias).</p>' +
+                                (r.id_meta ? '<p class="mt-2 mb-0"><code>ID: ' + r.id_meta + '</code></p>' : '') +
+                            '</div>'
+                        );
+                    } else {
+                        _mostrarError(
+                            '<i class="fa fa-times-circle me-1"></i> Rechazado',
+                            '<p class="mb-0">' + ((r && r.message) || 'Error') + '</p>'
+                        );
+                    }
+                }
+            ).fail(function() {
+                _mostrarError('<i class="fa fa-times-circle me-1"></i> Error', '<p class="mb-0">No se pudo contactar al servidor.</p>');
+            });
+        }
+    );
+}
+
+/* ── Eliminar ── */
+function eliminarPlantilla(id, nombre) {
+    _mostrarConfirmacion(
+        '<p class="mb-1">Eliminar <strong>"' + nombre + '"</strong>?</p>' +
+        '<p class="small text-danger mb-0">Esta accion no se puede deshacer.</p>',
+        function() {
+            _mostrarLoading('<i class="fa fa-trash me-1"></i> Eliminando', 'Procesando...');
+            $.post(window.location.pathname,
+                { action: 'delete', id: id },
+                function(r) {
+                    if (r && r.error === false) {
+                        _mostrarExito(
+                            '<i class="fa fa-check-circle me-1"></i> Eliminada',
+                            '<p class="text-center mb-0"><strong>"' + nombre + '"</strong> fue eliminada.</p>'
+                        );
+                    } else {
+                        _mostrarError(
+                            '<i class="fa fa-times-circle me-1"></i> Error',
+                            '<p class="mb-0">' + ((r && r.message) || 'Error') + '</p>'
+                        );
+                    }
+                }
+            ).fail(function() {
+                _mostrarError('<i class="fa fa-times-circle me-1"></i> Error', '<p class="mb-0">No se pudo contactar al servidor.</p>');
+            });
+        }
+    );
+}
+
+/* ───────── Generar plantillas con IA (modal con preview) ───────── */
+function _genIA_csrf() { return $('input[name=csrfmiddlewaretoken]').first().val(); }
+let _genIA_borrador = []; // plantillas sugeridas pendientes de aceptar
+
+function generarPlantillasIA_preview(ev) {
+    ev.preventDefault();
+    const form = ev.target;
+    const sesionId = form.sesion_id.value;
+    const desc = form.descripcion.value.trim();
+    const n = form.n_plantillas.value;
+    if (!sesionId) { alertaWarning('Selecciona una sesion Meta.'); return; }
+    if (desc.length < 10) { alertaWarning('Describe en al menos 10 caracteres lo que necesitas.'); return; }
+
+    const $btn = $('#btnGenIA_preview');
+    const orig = $btn.html();
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Generando...');
+    $('#genIA_preview_wrap').html('<div class="text-muted small p-3"><i class="fa fa-spinner fa-spin me-1"></i>La IA esta armando las plantillas...</div>');
+
+    $.post('', {
+        action: 'preview_plantillas_ia',
+        csrfmiddlewaretoken: _genIA_csrf(),
+        sesion_id: sesionId,
+        descripcion: desc,
+        n_plantillas: n,
+    }).done(function(r) {
+        $btn.prop('disabled', false).html(orig);
+        if (r.error) {
+            $('#genIA_preview_wrap').html('<div class="alert alert-danger small">' + (r.message || 'Error') + '</div>');
+            return;
+        }
+        _genIA_borrador = r.plantillas || [];
+        if (!_genIA_borrador.length) {
+            $('#genIA_preview_wrap').html('<div class="alert alert-warning small">La IA no genero ninguna plantilla. Refina la descripcion.</div>');
+            return;
+        }
+        // Render tabla preview con checkbox por fila
+        let html = '<div class="alert alert-success py-2 small mb-2">' +
+            '<i class="fa fa-check-circle me-1"></i><strong>' + _genIA_borrador.length + ' plantilla(s) propuestas.</strong> ' +
+            'Revisa, deselecciona las que no te gustan, y click "Aceptar y crear".' +
+        '</div>' +
+        '<div class="table-responsive">' +
+            '<table class="table table-sm table-hover align-middle">' +
+                '<thead class="table-light">' +
+                    '<tr>' +
+                        '<th style="width:40px;"><input type="checkbox" id="genIA_all" checked onchange="$(\'.genIA_chk\').prop(\'checked\',this.checked)"></th>' +
+                        '<th>Nombre</th>' +
+                        '<th>Categoria</th>' +
+                        '<th>Idioma</th>' +
+                        '<th>Cuerpo (preview)</th>' +
+                    '</tr>' +
+                '</thead><tbody>';
+        _genIA_borrador.forEach(function(p, i) {
+            const cuerpoSafe = (p.cuerpo || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            html += '<tr>' +
+                '<td><input type="checkbox" class="genIA_chk" data-idx="' + i + '" checked></td>' +
+                '<td><code>' + (p.nombre || '?') + '</code></td>' +
+                '<td><span class="badge bg-secondary">' + (p.categoria || 'UTILITY') + '</span></td>' +
+                '<td>' + (p.idioma || 'es') + '</td>' +
+                '<td class="small text-muted" style="max-width:380px;">' +
+                    (p.header_contenido ? '<strong>HEADER:</strong> ' + p.header_contenido + '<br>' : '') +
+                    cuerpoSafe.substring(0, 200) + (cuerpoSafe.length > 200 ? '…' : '') +
+                    (p.footer ? '<br><strong>FOOTER:</strong> ' + p.footer : '') +
+                '</td>' +
+            '</tr>';
+        });
+        html += '</tbody></table></div>' +
+            '<div class="d-flex justify-content-end mt-2">' +
+                '<button type="button" class="btn btn-success btn-sm" onclick="generarPlantillasIA_aceptar()">' +
+                    '<i class="fa fa-check me-1"></i> Aceptar y crear seleccionadas' +
+                '</button>' +
+            '</div>';
+        $('#genIA_preview_wrap').html(html);
+    }).fail(function() {
+        $btn.prop('disabled', false).html(orig);
+        $('#genIA_preview_wrap').html('<div class="alert alert-danger small">Error de conexion.</div>');
+    });
+}
+
+function generarPlantillasIA_aceptar() {
+    const seleccionadas = [];
+    $('.genIA_chk:checked').each(function() {
+        const idx = parseInt($(this).data('idx'), 10);
+        if (_genIA_borrador[idx]) seleccionadas.push(_genIA_borrador[idx]);
+    });
+    if (!seleccionadas.length) { alertaWarning('Selecciona al menos una plantilla.'); return; }
+
+    const sesionId = $('#genIA_form input[name=sesion_id]').val() || $('#genIA_form select[name=sesion_id]').val();
+    $.post('', {
+        action: 'confirmar_plantillas_ia',
+        csrfmiddlewaretoken: _genIA_csrf(),
+        sesion_id: sesionId,
+        plantillas_json: JSON.stringify(seleccionadas),
+    }).done(function(r) {
+        if (r.error) {
+            alertaWarning(r.message || 'Error');
+            return;
+        }
+        alertaSuccess(r.message || 'Plantillas creadas.');
+        setTimeout(function() { location.reload(); }, 1200);
+    }).fail(function() {
+        alertaWarning('Error de conexion.');
+    });
+}
+</script>
+
+{# ===== MODAL: Generar plantillas con IA ===== #}
+<div class="modal fade" id="modalGenerarPlantillasIA" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <form class="modal-content" id="genIA_form" onsubmit="generarPlantillasIA_preview(event)">
+            {% csrf_token %}
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="fa fa-wand-magic-sparkles me-2"></i>Generar plantillas con IA</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info py-2 small mb-3">
+                    <i class="fa fa-circle-info me-1"></i>
+                    La IA propone N plantillas optimizadas para tu negocio (con nombre snake_case, cuerpo, header/footer, categoria).
+                    Verás un preview en tabla — selecciona las que te sirven y luego "Aceptar y crear" las guarda en estado <code>BORRADOR</code>.
+                    <br><strong class="text-muted">Trazabilidad:</strong> el consumo de tokens queda en CRM → Consumo IA.
+                </div>
+
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Sesion Meta *</label>
+                        <select name="sesion_id" class="form-select" required>
+                            <option value="">— Elige una sesion Meta —</option>
+                            {% for s in sesiones_meta %}
+                                <option value="{{ s.id }}" {% if sesion_sel == s.id %}selected{% endif %}>
+                                    {{ s.nombre|default:s.numero }}
+                                    {% if s.config_meta.display_phone_number %} · {{ s.config_meta.display_phone_number }}{% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text small">Solo aparecen sesiones Meta con ConfigMeta. Las plantillas son exclusivas de WhatsApp Cloud.</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold">Cuantas plantillas</label>
+                        <input type="number" name="n_plantillas" class="form-control" min="1" max="10" value="3">
+                    </div>
+                </div>
+                <div class="mb-3 mt-2">
+                    <label class="form-label small fw-semibold">¿Que tipo de plantillas necesitas?</label>
+                    <textarea name="descripcion" rows="3" class="form-control" required
+                              placeholder="Ej: Confirmacion de cita medica con fecha y doctor + recordatorio 24h antes + cancelacion. Tono profesional, idioma es-MX."></textarea>
+                    <div class="form-text small">
+                        Mencion: caso de uso, variables que necesitas (<code>{{1}}</code>, <code>{{2}}</code>...), tono e idioma.
+                    </div>
+                </div>
+                <div class="d-flex gap-2 mb-3">
+                    <button type="submit" class="btn btn-warning" id="btnGenIA_preview">
+                        <i class="fa fa-bolt me-1"></i> Vista previa
+                    </button>
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                </div>
+
+                <div id="genIA_preview_wrap"></div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

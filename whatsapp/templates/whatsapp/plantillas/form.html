@@ -1,0 +1,388 @@
+{% extends 'base.html' %}
+{% load static templatefunctions %}
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/plantillas.css' %}">
+    <style>
+        .whatsapp-bubble {
+            max-width: 340px;
+            background: #dcf8c6;
+            padding: 10px 14px 22px;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            position: relative;
+            font-size: 0.88rem;
+            color: #111;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .whatsapp-bubble .wa-header {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .whatsapp-bubble .wa-footer {
+            font-size: 0.75rem;
+            color: #667781;
+            margin-top: 6px;
+        }
+
+        .whatsapp-bubble .wa-time {
+            position: absolute;
+            bottom: 4px;
+            right: 8px;
+            font-size: 0.65rem;
+            color: #667781;
+        }
+    </style>
+{% endblock %}
+{% block atras %}{{ request.path }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h4 class="mb-0">
+                <i class="fab fa-whatsapp text-success me-2"></i>
+                {% if instance %}Editar plantilla{% else %}Nueva plantilla{% endif %}
+            </h4>
+            <small class="text-muted">
+                {% if instance %}
+                    {{ instance.nombre }} · {{ instance.get_estado_meta_display }}
+                {% else %}
+                    Se creara como BORRADOR. Luego podras someterla a Meta para aprobacion.
+                {% endif %}
+            </small>
+        </div>
+    </div>
+
+    <form id="plantilla-form" method="post" onsubmit="return false;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="{% if instance %}change{% else %}add{% endif %}">
+        {% if instance %}
+            <input type="hidden" name="pk" value="{{ instance.id }}">
+        {% endif %}
+
+        <div class="row g-3">
+
+            {# ================ COLUMNA IZQUIERDA: DATOS ================ #}
+            <div class="col-12 col-lg-7">
+                <div class="card">
+                    <div class="card-body">
+
+                        {# Sesion (solo al crear) #}
+                        {% if not instance %}
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">Sesion Meta *</label>
+                            <select name="sesion_id" class="form-control jselect2" required>
+                                <option value="">Selecciona una sesion Meta…</option>
+                                {% for s in sesiones_meta %}
+                                <option value="{{ s.id }}"
+                                    {% if config_meta_preseleccionada and config_meta_preseleccionada.sesion_id == s.id %}selected{% endif %}>
+                                    {{ s.nombre|default:s.numero }} · WABA {{ s.config_meta.waba_id }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="invalid-feedback" id="errorMessagesesion_id"></div>
+                        </div>
+                        {% else %}
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">Sesion</label>
+                            <input type="text" class="form-control" readonly
+                                   value="{{ instance.config_meta.sesion.nombre|default:instance.config_meta.sesion.numero }} · WABA {{ instance.config_meta.waba_id }}">
+                        </div>
+                        {% endif %}
+
+                        <div class="row g-2">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label small fw-semibold">{{ form.nombre.label }} *</label>
+                                {{ form.nombre }}
+                                <div class="form-text">{{ form.nombre.help_text }}</div>
+                                <div class="invalid-feedback" id="errorMessagenombre"></div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label small fw-semibold">{{ form.idioma.label }}</label>
+                                {{ form.idioma }}
+                                <div class="invalid-feedback" id="errorMessageidioma"></div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label small fw-semibold">{{ form.categoria.label }} *</label>
+                                {{ form.categoria }}
+                                <div class="invalid-feedback" id="errorMessagecategoria"></div>
+                            </div>
+
+                            <div class="col-6 col-md-4 mt-2">
+                                <label class="form-label small fw-semibold">Tipo de encabezado</label>
+                                {{ form.header_tipo }}
+                            </div>
+                            <div class="col-12 col-md-8 mt-2">
+                                <label class="form-label small fw-semibold">Contenido del encabezado</label>
+                                {{ form.header_contenido }}
+                            </div>
+
+                            <div class="col-12 mt-2">
+                                <label class="form-label small fw-semibold">Cuerpo *</label>
+                                {{ form.cuerpo }}
+                                <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
+                                    <span class="small text-muted">Insertar variable:</span>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 btn-insertar-var" data-var="1" style="font-size:.75rem;">{% verbatim %}{{1}}{% endverbatim %}</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 btn-insertar-var" data-var="2" style="font-size:.75rem;">{% verbatim %}{{2}}{% endverbatim %}</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 btn-insertar-var" data-var="3" style="font-size:.75rem;">{% verbatim %}{{3}}{% endverbatim %}</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 btn-insertar-var" data-var="4" style="font-size:.75rem;">{% verbatim %}{{4}}{% endverbatim %}</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 btn-insertar-var" data-var="5" style="font-size:.75rem;">{% verbatim %}{{5}}{% endverbatim %}</button>
+                                </div>
+                                <div class="invalid-feedback" id="errorMessagecuerpo"></div>
+                            </div>
+
+                            <div class="col-12 mt-2">
+                                <label class="form-label small fw-semibold">Pie (opcional, max 60 chars)</label>
+                                {{ form.footer }}
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="mt-3 d-flex gap-2">
+                    <button type="button" class="btn btn-success" onclick="guardarPlantilla()">
+                        <i class="fa fa-save me-1"></i>
+                        {% if instance %}Guardar cambios{% else %}Crear borrador{% endif %}
+                    </button>
+                    {% if instance and instance.estado_meta in 'BORRADOR,REJECTED' %}
+                    <button type="button" class="btn btn-primary"
+                            onclick="guardarYSometer({{ instance.id }}, '{{ instance.nombre|escapejs }}')">
+                        <i class="fa fa-paper-plane me-1"></i> Guardar y someter a Meta
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# ================ COLUMNA DERECHA: PREVIEW + IA ================ #}
+            <div class="col-12 col-lg-5">
+
+                {# ── Preview WhatsApp ── #}
+                <div class="card preview-card border-0 bg-light mb-3">
+                    <div class="card-body">
+                        <p class="small text-muted mb-1 fw-semibold">
+                            <i class="fa fa-mobile-screen me-1"></i> Asi se vera en WhatsApp
+                        </p>
+                        <p class="text-muted mb-2" style="font-size:.7rem;">
+                            Se actualiza en vivo mientras editas el cuerpo, header y footer.
+                        </p>
+                        <div id="preview-whatsapp" class="whatsapp-bubble">
+                            <div class="wa-header" id="preview-header" style="display:none;"></div>
+                            <div class="wa-body" id="preview-body"></div>
+                            <div class="wa-footer" id="preview-footer" style="display:none;"></div>
+                            <div class="wa-time">{% now "H:i" %}</div>
+                        </div>
+                        {% if instance.motivo_rechazo %}
+                            <div class="alert alert-danger mt-3 small mb-0">
+                                <strong><i class="fa fa-ban me-1"></i>Rechazada por Meta:</strong><br>
+                                {{ instance.motivo_rechazo }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# ── Generar con IA ── #}
+                <div class="card border-primary border-opacity-25 mb-3" id="card-generar-ia">
+                    <div class="card-header bg-primary bg-opacity-10 py-2 px-3">
+                        <i class="fa fa-robot me-1 text-primary"></i>
+                        <strong class="small">Generar plantilla con IA</strong>
+                    </div>
+                    <div class="card-body py-2 px-3">
+                        <p class="text-muted mb-2" style="font-size:.78rem;">
+                            Describe la plantilla que necesitas y la IA la generara usando el contexto del negocio de la sesion.
+                        </p>
+                        <textarea class="form-control form-control-sm mb-2" rows="3" id="ia-descripcion"
+                                  placeholder="Ej: plantilla de confirmacion de reserva para restaurante, con fecha, hora, numero de personas y direccion"></textarea>
+                        <button type="button" class="btn btn-primary btn-sm w-100" id="btn-generar-ia" onclick="generarConIA()">
+                            <i class="fa fa-wand-magic-sparkles me-1"></i> Generar con IA
+                        </button>
+                        <div id="ia-loading" class="text-center py-2" style="display:none;">
+                            <div class="spinner-border spinner-border-sm text-primary"></div>
+                            <span class="small ms-1">Generando plantilla...</span>
+                        </div>
+                        <div id="ia-error" class="alert alert-danger py-1 mt-2 small mb-0" style="display:none;"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </form>
+</div>
+
+{% endblock %}
+
+{% block jscript %}
+    <script>
+        $(document).ready(function () {
+            /* ── Selectores por name (mas confiable que por id en este FormBase) ── */
+            var $cuerpo = $('[name="cuerpo"]');
+            var $header = $('[name="header_contenido"]');
+            var $tipo = $('[name="header_tipo"]');
+            var $footer = $('[name="footer"]');
+
+            /* ── Preview en vivo ── */
+            function actualizarPreview() {
+                var cuerpo = $cuerpo.val() || '';
+                var header = $header.val() || '';
+                var tipo = $tipo.val() || 'NONE';
+                var footer = $footer.val() || '';
+
+                if (tipo === 'TEXT' && header) {
+                    $('#preview-header').text(header).show();
+                } else if (tipo && tipo !== 'NONE' && tipo !== 'TEXT' && tipo !== '') {
+                    $('#preview-header').html('<i class="fa fa-paperclip me-1"></i>[' + tipo + ' adjunto]').show();
+                } else {
+                    $('#preview-header').hide();
+                }
+
+                if (cuerpo) {
+                    var formateado = cuerpo
+                        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                        .replace(/\*(.*?)\*/g, '<strong>$1</strong>')
+                        .replace(/\n/g, '<br>');
+                    $('#preview-body').html(formateado);
+                } else {
+                    $('#preview-body').html('<span class="text-muted" style="font-size:.82rem;">Escribe el cuerpo...</span>');
+                }
+
+                if (footer) {
+                    $('#preview-footer').text(footer).show();
+                } else {
+                    $('#preview-footer').hide();
+                }
+            }
+
+            $cuerpo.on('input keyup change', actualizarPreview);
+            $header.on('input keyup change', actualizarPreview);
+            $footer.on('input keyup change', actualizarPreview);
+            $(document).on('change input', '[name="header_tipo"]', actualizarPreview);
+
+            setTimeout(actualizarPreview, 100);
+
+            /* ── Botones de insercion de variables ── */
+            $(document).on('click', '.btn-insertar-var', function () {
+                var num = $(this).data('var');
+                var txt = '\u007B\u007B' + num + '\u007D\u007D';
+                var ta = $cuerpo[0];
+                if (!ta) return;
+                var start = ta.selectionStart || 0;
+                var end = ta.selectionEnd || 0;
+                var val = ta.value;
+                ta.value = val.substring(0, start) + txt + val.substring(end);
+                ta.selectionStart = ta.selectionEnd = start + txt.length;
+                ta.focus();
+                $cuerpo.trigger('input');
+            });
+        });
+
+        function _post(extra, callback) {
+            var datos = {
+                csrfmiddlewaretoken: $('[name="csrfmiddlewaretoken"]').val(),
+            };
+            $('#plantilla-form').find('input, textarea, select').each(function () {
+                var n = $(this).attr('name');
+                if (n) datos[n] = $(this).val();
+            });
+            Object.assign(datos, extra || {});
+            $.post(window.location.pathname, datos, callback);
+        }
+
+        function guardarPlantilla() {
+            _post({}, function (r) {
+                if (Array.isArray(r)) r = r[0];
+                if (r && r.error === false) {
+                    if (typeof alertaSuccess === 'function') alertaSuccess('Plantilla guardada');
+                    if (r.to) window.location.href = r.to;
+                    else window.location.href = '/whatsapp/plantillas/';
+                } else if (r) {
+                    if (typeof alertaError === 'function') alertaError(r.message || 'Error al guardar');
+                    else alert(r.message || 'Error al guardar');
+                    if (r.errors) {
+                        $('.invalid-feedback').text('').hide();
+                        for (var k in r.errors) {
+                            $('#errorMessage' + k).text(r.errors[k]).show();
+                        }
+                    }
+                }
+            });
+        }
+
+        function generarConIA() {
+            var sesionId = $('[name="sesion_id"]').val();
+            if (!sesionId) {
+                alert('Selecciona una sesion primero.');
+                return;
+            }
+            var desc = $('#ia-descripcion').val();
+            if (!desc || !desc.trim()) {
+                alert('Escribe una descripcion de la plantilla que quieres generar.');
+                $('#ia-descripcion').focus();
+                return;
+            }
+            $('#btn-generar-ia').prop('disabled', true);
+            $('#ia-loading').show();
+            $('#ia-error').hide();
+
+            $.post(window.location.pathname, {
+                action: 'generar_con_ia',
+                sesion_id: sesionId,
+                descripcion_ia: desc,
+                csrfmiddlewaretoken: $('[name="csrfmiddlewaretoken"]').val()
+            }, function (r) {
+                $('#btn-generar-ia').prop('disabled', false);
+                $('#ia-loading').hide();
+                if (r && r.error === false && r.plantilla) {
+                    var p = r.plantilla;
+                    $('[name="nombre"]').val(p.nombre || '');
+                    $('[name="idioma"]').val(p.idioma || 'es');
+                    $('[name="cuerpo"]').val(p.cuerpo || '').trigger('input');
+                    $('[name="footer"]').val(p.footer || '').trigger('input');
+                    $('[name="header_contenido"]').val(p.header_contenido || '').trigger('input');
+                    // Actualizar selects (trigger change para select2)
+                    if (p.categoria) {
+                        $('[name="categoria"]').val(p.categoria).trigger('change');
+                    }
+                    if (p.header_tipo) {
+                        $('[name="header_tipo"]').val(p.header_tipo).trigger('change');
+                    }
+                    if (typeof alertaSuccess === 'function') alertaSuccess('Plantilla generada por IA. Revisa y ajusta antes de guardar.');
+                    else alert('Plantilla generada. Revisa los campos y ajusta si es necesario.');
+                } else {
+                    var msg = (r && r.message) || 'Error generando plantilla';
+                    $('#ia-error').text(msg).show();
+                }
+            }).fail(function () {
+                $('#btn-generar-ia').prop('disabled', false);
+                $('#ia-loading').hide();
+                $('#ia-error').text('Error de conexion al servidor.').show();
+            });
+        }
+
+        function guardarYSometer(id, nombre) {
+            _post({action: 'change', pk: id}, function (r) {
+                if (Array.isArray(r)) r = r[0];
+                if (r && r.error === false) {
+                    $.post(window.location.pathname,
+                        {
+                            action: 'someter_a_meta', id: id,
+                            csrfmiddlewaretoken: $('[name="csrfmiddlewaretoken"]').val()
+                        },
+                        function (r2) {
+                            if (r2 && r2.error === false) {
+                                alert('Plantilla enviada a Meta. El estado se actualizara cuando Meta decida.');
+                            } else {
+                                alert((r2 && r2.message) || 'Error al someter');
+                            }
+                            window.location.href = '/whatsapp/plantillas/';
+                        }
+                    );
+                } else {
+                    alert((r && r.message) || 'Error al guardar');
+                }
+            });
+        }
+    </script>
+{% endblock %}

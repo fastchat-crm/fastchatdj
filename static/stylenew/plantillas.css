@@ -1,0 +1,33 @@
+/* ========== plantillas.css — estilos de /whatsapp/plantillas/ ========== */
+
+.preview-card {
+    position: sticky;
+    top: 80px;
+}
+
+.preview-card .card-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Badges de estado con colores alineados al bootstrap color_estado */
+.badge.bg-secondary { background-color: #6c757d !important; }
+.badge.bg-warning   { background-color: #ffc107 !important; color: #212529 !important; }
+.badge.bg-success   { background-color: #198754 !important; }
+.badge.bg-danger    { background-color: #dc3545 !important; }
+.badge.bg-info      { background-color: #0dcaf0 !important; color: #212529 !important; }
+.badge.bg-dark      { background-color: #212529 !important; }
+
+/* Tabla mas compacta */
+.table th {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #6c757d;
+}
+
+.table td {
+    font-size: 0.88rem;
+    vertical-align: middle;
+}

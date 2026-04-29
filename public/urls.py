@@ -7,6 +7,7 @@ from .view_restaurar import restaurar
 from .view_login import login_tienda, logout_tienda
 from .view_recordarusername import recordarusername
 from .view_terminoscondiciones import terminosycondiciones
+from .view_quienessomos import quienessomos
 
 urlpatterns = [
     # path('', index),
@@ -17,6 +18,8 @@ urlpatterns = [
     re_path(r'^restorepass/', restaurar),
     re_path(r'^restoreusername/', recordarusername),
     re_path(r'^changepass/', changepass),
+    path('privacidad/', terminosycondiciones),
     path('terminosycondiciones/', terminosycondiciones),
+    path('quienes-somos/', quienessomos),
 
 ]

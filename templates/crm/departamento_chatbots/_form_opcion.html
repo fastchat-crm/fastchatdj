@@ -1,0 +1,695 @@
+<input type="hidden" name="opcion_id" value="{{ opcion.id|default:0 }}">
+<input type="hidden" name="departamento_id" value="{{ departamento_id }}">
+
+{% if es_nuevo %}
+    {% if parent_id and parent_id != 0 %}
+        <div class="alert alert-info py-2 small mb-2">
+            <i class="fa fa-info-circle me-1"></i>
+            <strong>Nueva sub-opción.</strong> Cuelga de un nodo padre.
+            Si el padre es <span class="badge bg-primary">Menú</span>, esta opción aparece
+            como botón interactive al cliente.
+        </div>
+    {% else %}
+        <div class="alert alert-info py-2 small mb-2">
+            <i class="fa fa-info-circle me-1"></i>
+            <strong>Nueva opción raíz.</strong> Punto de entrada del flujo.
+            Marcala como <em>"nodo de inicio"</em> si es la primera que el bot ejecuta.
+        </div>
+    {% endif %}
+{% endif %}
+
+<div class="alert alert-light border py-2 small mb-2">
+    <strong>Tipos disponibles:</strong>
+    <span class="badge bg-primary">Menú</span> sus hijos = botones interactive (≤3 button, &gt;3 list) ·
+    <span class="badge bg-success">Respuesta</span> texto plano ·
+    <span class="badge" style="background:#2563eb">cta_url</span> botón con link externo (1 sólo) ·
+    <span class="badge" style="background:#6b21a8">Ubicación</span> mapa pulsable ·
+    <span class="badge bg-info text-dark">Handoff</span> deriva a humano ·
+    <span class="badge bg-secondary">Fin</span> cierra flujo.
+</div>
+
+<div class="row g-2">
+    <div class="col-md-4">
+        <label class="form-label small fw-bold mb-1">Tipo de nodo</label>
+        <select name="tipo_nodo" id="dpFormTipo" class="form-select form-select-sm">
+            {% for v, lbl in tipos_nodo_choices %}
+                <option value="{{ v }}" {% if opcion.tipo_nodo == v %}selected{% endif %}>{{ lbl }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-8">
+        <label class="form-label small fw-bold mb-1">
+            Nombre / título del botón
+            <small class="text-muted fw-normal">(máx 20 chars en Meta)</small>
+        </label>
+        <input type="text" name="nombre" class="form-control form-control-sm"
+               value="{{ opcion.nombre|default:'' }}"
+               placeholder="Ej: 💪 Ver Precios" maxlength="100" required>
+    </div>
+
+    <div class="col-12">
+        <label class="form-label small fw-bold mb-1">
+            Mensaje al cliente / cuerpo del nodo
+        </label>
+        <textarea name="respuesta" class="form-control form-control-sm" rows="4"
+                  placeholder="Texto que envía el bot al activar este nodo.">{% firstof opcion.respuesta opcion.config.mensaje opcion.config.pregunta '' %}</textarea>
+        <small class="text-muted">
+            Variables: {% verbatim %}<code>{{contacto.nombre}}</code>
+            <code>{{contacto.numero}}</code>{% endverbatim %} · Soporta emojis y *negrita*.
+            Body Meta máx 1024 chars.
+        </small>
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label small fw-bold mb-1">
+            ID del botón Meta
+            <small class="text-muted fw-normal">(auto si vacío)</small>
+        </label>
+        <input type="text" name="boton_id" class="form-control form-control-sm"
+               value="{{ opcion.boton_id|default:'' }}"
+               placeholder="Ej: ver_precios · sede_garcia"
+               maxlength="64" pattern="[a-zA-Z0-9_\-]*">
+        <small class="text-muted">Solo letras/números/_-. Llega como <code>button_reply.id</code>.</small>
+    </div>
+    <div class="col-md-6 d-flex align-items-end">
+        <div class="form-check form-switch">
+            <input type="checkbox" name="es_inicio" class="form-check-input" id="esInicio-{{ opcion.id|default:'new' }}"
+                   value="1" {% if opcion.es_inicio %}checked{% endif %}>
+            <label class="form-check-label small" for="esInicio-{{ opcion.id|default:'new' }}">
+                Es nodo de inicio del flujo
+            </label>
+        </div>
+    </div>
+
+    {# Predecesores del grafo (read-only): nodos que apuntan a este vía ConexionNodoChatbot. #}
+    {# Un nodo puede tener varios predecesores en el grafo, por eso es lista informativa. #}
+    {% if predecesores_grafo %}
+    <div class="col-md-12">
+        <label class="form-label small fw-bold mb-1">
+            <i class="fa fa-arrow-right-to-bracket text-success me-1"></i>
+            Predecesores en el grafo (quién llega a este nodo)
+        </label>
+        <div class="border rounded p-2 bg-light small">
+            {% for c in predecesores_grafo %}
+                <span class="badge bg-success-subtle text-success border me-1 mb-1">
+                    #{{ c.nodo_origen_id }} · {{ c.nodo_origen.nombre|default:'(sin nombre)' }}
+                    {% if c.etiqueta %}<span class="text-muted">[{{ c.etiqueta }}]</span>{% endif %}
+                </span>
+            {% endfor %}
+        </div>
+        <small class="text-muted">
+            Read-only — se calcula desde las salidas de otros nodos. Para cambiar quién apunta acá,
+            editá el nodo origen y modificá su salida.
+        </small>
+    </div>
+    {% endif %}
+
+    {# ── Editor de Salidas / Siguientes ──────────────────────────────── #}
+    <div class="col-12">
+        <label class="form-label small fw-bold mb-1">
+            <i class="fa fa-arrow-right-from-bracket text-primary me-1"></i>
+            Salidas / Siguientes (a quién apunta este nodo)
+        </label>
+        <div class="border rounded p-2" style="background:#f8fafc;">
+            <table class="table table-sm small mb-2" id="dp-salidas-table">
+                <thead>
+                    <tr>
+                        <th style="width:130px;">Etiqueta</th>
+                        <th>Nodo destino</th>
+                        <th style="width:60px;"></th>
+                    </tr>
+                </thead>
+                <tbody id="dp-salidas-body">
+                {% for s in salidas_grafo %}
+                    <tr data-conex-id="{{ s.id }}">
+                        <td>
+                            <input type="text" class="form-control form-control-sm dp-salida-etq"
+                                   value="{{ s.etiqueta }}"
+                                   placeholder="ok / error / true / false / vacío">
+                        </td>
+                        <td>
+                            <select class="form-select form-select-sm dp-salida-dst">
+                                <option value="0">— Selecciona —</option>
+                                {% for n in nodos_destino_disponibles %}
+                                    <option value="{{ n.id }}" {% if n.id == s.nodo_destino_id %}selected{% endif %}>
+                                        #{{ n.id }} · {{ n.nombre|default:'(sin nombre)'|truncatechars:50 }} ({{ n.get_tipo_nodo_display }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td class="text-end">
+                            <button type="button" class="btn btn-sm btn-outline-danger" data-act="dp-salida-del">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="dp-salida-add">
+                <i class="fa fa-plus me-1"></i> Agregar salida
+            </button>
+            <input type="hidden" name="salidas_json" id="dp-salidas-json" value="">
+        </div>
+        <small class="text-muted">
+            Etiquetas comunes: <code>ok</code>/<code>error</code> (HTTP), <code>true</code>/<code>false</code>
+            (condicional), valor de la opción (menu), vacío (default). El motor matchea por etiqueta.
+        </small>
+    </div>
+
+    {# Template invisible para clonar al "Agregar salida". #}
+    <template id="dp-salida-row-tpl">
+        <tr data-conex-id="">
+            <td>
+                <input type="text" class="form-control form-control-sm dp-salida-etq" placeholder="ok / error / true / false / vacío">
+            </td>
+            <td>
+                <select class="form-select form-select-sm dp-salida-dst">
+                    <option value="0">— Selecciona —</option>
+                    {% for n in nodos_destino_disponibles %}
+                        <option value="{{ n.id }}">#{{ n.id }} · {{ n.nombre|default:'(sin nombre)'|truncatechars:50 }} ({{ n.get_tipo_nodo_display }})</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td class="text-end">
+                <button type="button" class="btn btn-sm btn-outline-danger" data-act="dp-salida-del">
+                    <i class="fa fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    </template>
+
+    {# Selector de padre — solo aplica al modo árbol legacy (opcion_padre). #}
+    {# Para flujos modernos basados en grafo, usar las conexiones (ver predecesores arriba). #}
+    <div class="col-md-12">
+        <label class="form-label small fw-bold mb-1">
+            <i class="fa fa-sitemap text-muted me-1"></i>
+            Padre legacy (árbol simple)
+        </label>
+        {# Comparación con stringformat para evitar mismatch int/str que   #}
+        {# en algunos contextos hace que la opción nunca quede seleccionada. #}
+        {% with parent_id_str=parent_id|stringformat:"s" %}
+        <select name="parent_id" class="form-select form-select-sm">
+            <option value="0" {% if parent_id_str == "0" or not parent_id %}selected{% endif %}>
+                — Sin padre (nodo raíz) —
+            </option>
+            {% for p in padres_disponibles %}
+                <option value="{{ p.id }}" {% if p.id|stringformat:"s" == parent_id_str %}selected{% endif %}>
+                    {{ p.nombre|default:'(sin nombre)' }} · #{{ p.id }} · {{ p.get_tipo_nodo_display }}
+                </option>
+            {% endfor %}
+        </select>
+        {% endwith %}
+        <small class="text-muted">
+            Mover este nodo bajo otro padre. Auto-excluye descendientes para evitar ciclos.
+            También podés arrastrar la card en el árbol — esto es un fallback explícito.
+        </small>
+    </div>
+
+    {# Bloque CTA URL — visible solo cuando tipo=cta_url #}
+    <div class="col-12 dp-tipo-block" data-show-when="cta_url" style="display:none;">
+        <div class="alert alert-primary py-2 small mb-2">
+            <i class="fa fa-link me-1"></i>
+            <strong>cta_url:</strong> WhatsApp envía un mensaje con UN botón que abre una URL externa.
+            Ideal para link de pago, formulario externo, sitio web. Solo permite 1 botón con URL.
+        </div>
+        <div class="row g-2 p-2" style="background:#eff6ff;border-radius:6px;">
+            <div class="col-md-5">
+                <label class="form-label small fw-bold mb-1">Texto del botón <span class="text-danger">*</span></label>
+                <input type="text" name="accion_display_text" class="form-control form-control-sm"
+                       value="{{ opcion.config.display_text|default:'' }}"
+                       placeholder="Ej: 💳 Pagar Membresía" maxlength="20">
+            </div>
+            <div class="col-md-7">
+                <label class="form-label small fw-bold mb-1">URL destino <span class="text-danger">*</span></label>
+                <input type="url" name="accion_url" class="form-control form-control-sm"
+                       value="{{ opcion.config.url|default:'' }}"
+                       placeholder="https://ejemplo.com/pagar">
+            </div>
+        </div>
+    </div>
+
+    {# Bloque HTTP — visible solo cuando tipo=http #}
+    <div class="col-12 dp-tipo-block" data-show-when="http" style="display:none;">
+        <div class="alert alert-info py-2 small mb-2">
+            <i class="fa fa-globe me-1"></i>
+            <strong>Llamada HTTP:</strong> el motor llama a una API externa, extrae datos
+            de la respuesta y los guarda en variables que pueden usarse en mensajes posteriores.
+            Salidas: <code>ok</code> (HTTP 2xx) y <code>error</code>.
+        </div>
+        <div class="row g-2 p-2" style="background:#eff6ff;border-radius:6px;">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">
+                    Endpoint (host + auth) <span class="text-danger">*</span>
+                </label>
+                <select name="http_endpoint_id" class="form-select form-select-sm">
+                    <option value="">— Selecciona un endpoint —</option>
+                    {% for ep in endpoints_disponibles %}
+                        <option value="{{ ep.id }}"
+                                {% if opcion.endpoint_id == ep.id %}selected{% endif %}>
+                            {{ ep.nombre }} · {{ ep.base_url }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <small class="text-muted">
+                    Define base URL + auth. Crea endpoints desde
+                    <a href="/admin/crm/endpointapichatbot/" target="_blank">admin</a>.
+                </small>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold mb-1">Método</label>
+                {% with metodo_actual=opcion.config.metodo|default:'GET' %}
+                    <select name="http_metodo" class="form-select form-select-sm">
+                        <option value="GET"    {% if metodo_actual == 'GET' %}selected{% endif %}>GET</option>
+                        <option value="POST"   {% if metodo_actual == 'POST' %}selected{% endif %}>POST</option>
+                        <option value="PUT"    {% if metodo_actual == 'PUT' %}selected{% endif %}>PUT</option>
+                        <option value="PATCH"  {% if metodo_actual == 'PATCH' %}selected{% endif %}>PATCH</option>
+                        <option value="DELETE" {% if metodo_actual == 'DELETE' %}selected{% endif %}>DELETE</option>
+                    </select>
+                {% endwith %}
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-bold mb-1">Path</label>
+                <input type="text" name="http_path" class="form-control form-control-sm"
+                       value="{{ opcion.config.path|default:'' }}"
+                       placeholder="/horarios/" maxlength="500">
+                <small class="text-muted">Se concatena al base_url.</small>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Query (JSON)</label>
+                <textarea name="http_query_json" class="form-control form-control-sm font-monospace"
+                          rows="3"
+                          placeholder='{"cedula": "&#123;&#123;variables.cedula&#125;&#125;"}'>{{ http_query_json_str|default:'' }}</textarea>
+                <small class="text-muted">
+                    Pares clave→valor para query string. Soporta
+                    <code>&#123;&#123;variables.x&#125;&#125;</code>.
+                </small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Body (JSON)</label>
+                <textarea name="http_body_json" class="form-control form-control-sm font-monospace"
+                          rows="3"
+                          placeholder='{"cedula": "&#123;&#123;variables.cedula&#125;&#125;"}'>{{ http_body_json_str|default:'' }}</textarea>
+                <small class="text-muted">Solo para POST/PUT/PATCH. Vacío = sin body.</small>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Headers extra (JSON, opcional)</label>
+                <textarea name="http_headers_json" class="form-control form-control-sm font-monospace"
+                          rows="2"
+                          placeholder='{"X-Custom": "valor"}'>{{ http_headers_json_str|default:'' }}</textarea>
+                <small class="text-muted">Se mergean con los headers del endpoint.</small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Extraer (JSON array)</label>
+                <textarea name="http_extraer_json" class="form-control form-control-sm font-monospace"
+                          rows="2"
+                          placeholder='[{"variable": "nombre", "jsonpath": "data.nombre"}]'>{{ http_extraer_json_str|default:'' }}</textarea>
+                <small class="text-muted">
+                    Mapea response → variables. <code>jsonpath</code> soporta
+                    <code>a.b.c</code> y <code>a[0].b</code>.
+                </small>
+            </div>
+
+            <div class="col-12">
+                <label class="form-label small fw-bold mb-1">
+                    Plantilla de respuesta al cliente
+                </label>
+                <textarea name="http_plantilla" class="form-control form-control-sm" rows="3"
+                          placeholder="Ej: Hola {variables.nombre}, encontré tu matrícula">{{ opcion.config.plantilla_respuesta|default:'' }}</textarea>
+                <small class="text-muted">
+                    Mensaje que se envía cuando el HTTP responde 2xx. Soporta
+                    <code>&#123;&#123;variables.x&#125;&#125;</code>.
+                    Vacío = no enviar nada (útil si quieres usar las variables en un nodo siguiente).
+                </small>
+            </div>
+
+            {# ── Side-effects del nodo HTTP ──────────────────────────── #}
+            <div class="col-12">
+                <div class="border rounded p-2 bg-light">
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="dp_envia_correo"
+                               name="envia_correo" value="1"
+                               {% if opcion.config.envia_correo %}checked{% endif %}>
+                        <label class="form-check-label small fw-bold" for="dp_envia_correo">
+                            <i class="fa fa-envelope text-info me-1"></i>
+                            Envía correo a asesores del departamento al ejecutar este paso
+                        </label>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        Cuando el HTTP responde 2xx, se manda automáticamente un correo a
+                        TODOS los usuarios activos asignados al departamento
+                        (<code>PerfilDepartamentoChatBot.status=True</code>) con un link a
+                        la conversación. Útil para notificar handoff, cotización terminada,
+                        cita agendada, etc. Si no hay asesores con email, el flujo del
+                        cliente sigue normal y solo queda log.
+                    </small>
+                    <small class="text-muted d-block mt-2">
+                        <i class="fa fa-circle-info me-1"></i>
+                        <b>Tip — pasar id de la conversación a la API</b>: usa
+                        <code>&#123;&#123;conversacion.id&#125;&#125;</code> en el path o el body.
+                        Ejemplo path: <code>buscar/&#123;&#123;conversacion.id&#125;&#125;/</code>.
+                        Ejemplo body: <code>{"id_conversacion": "&#123;&#123;conversacion.id&#125;&#125;"}</code>.
+                    </small>
+                </div>
+            </div>
+
+            {# Probar API: ejecuta la request con la config actual sin guardar #}
+            <div class="col-12 mt-2 p-2"
+                 style="background:#fef3c7;border-radius:6px;border:1px solid #fcd34d;">
+                <div class="d-flex align-items-start gap-2 mb-2">
+                    <i class="fa fa-flask text-warning mt-1"></i>
+                    <div class="flex-grow-1">
+                        <strong class="small">Probar API antes de guardar</strong>
+                        <div class="text-muted small">
+                            Ejecuta la llamada con la config actual. Si tu URL usa
+                            <code>&#123;&#123;variables.cedula&#125;&#125;</code>, ingresa abajo un valor de prueba.
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-warning btn-sm"
+                            id="dpBtnProbarHttp" data-action="probar-http">
+                        <i class="fa fa-paper-plane me-1"></i> Probar
+                    </button>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small mb-1">Variables de prueba (JSON)</label>
+                    <textarea id="dpVarsTest" class="form-control form-control-sm font-monospace"
+                              rows="2"
+                              placeholder='{"cedula": "0301818480", "matricula_id": 42}'></textarea>
+                </div>
+                <div id="dpProbarResultado" style="display:none;"
+                     class="mt-2 p-2 bg-white border rounded small font-monospace"
+                     style="max-height:300px;overflow:auto;"></div>
+            </div>
+        </div>
+    </div>
+
+    {# Bloque Menú con botones — visible solo cuando tipo=menu #}
+    {# Las opciones del menú pueden ser:                                 #}
+    {#   1. ESTÁTICAS: subnodos hijos (cada uno = botón). Las gestionas   #}
+    {#      desde el árbol arrastrando hijos bajo este nodo.              #}
+    {#   2. DINÁMICAS: vienen de una variable (catálogo HTTP previo).     #}
+    {#      Aquí editas la fuente: qué variable, qué campo es id, etc.    #}
+    <div class="col-12 dp-tipo-block" data-show-when="menu" style="display:none;">
+        <div class="alert alert-info py-2 small mb-2" style="background:#e0f2fe;border-color:#7dd3fc;">
+            <i class="fa fa-list-ul me-1"></i>
+            <strong>Menú con botones:</strong> envía un mensaje interactive (≤3 button, &gt;3 list).
+            Las opciones pueden venir de <em>subnodos hijos</em> (estáticas, gestiónalas desde el árbol)
+            o de una <em>variable</em> que un nodo HTTP previo llenó (dinámicas, abajo).
+        </div>
+        <div class="row g-2 p-2" style="background:#f0f9ff;border-radius:6px;">
+            {% if opcion.config.opciones_fuente %}
+                <div class="col-12">
+                    <div class="alert alert-success py-2 small mb-0">
+                        <i class="fa fa-database me-1"></i>
+                        Este menú lee de la variable
+                        <code>{{ opcion.config.opciones_fuente.variable|default:'(sin definir)' }}</code>.
+                        La variable la llena algún nodo <strong>Llamada HTTP</strong>
+                        previo en el flujo (ver el atributo <code>extraer</code> de ese nodo).
+                    </div>
+                </div>
+            {% else %}
+                <div class="col-12">
+                    <div class="alert alert-light border py-2 small mb-0">
+                        <i class="fa fa-circle-info me-1"></i>
+                        Sin <em>opciones_fuente</em> configuradas: el menú usa los <strong>subnodos hijos</strong>
+                        como botones. Si querés llenar las opciones dinámicamente desde una API,
+                        configurá los campos abajo.
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">
+                    Variable fuente
+                    <small class="text-muted fw-normal">(ej: <code>variables.tipos</code>)</small>
+                </label>
+                <input type="text" name="menu_fuente_variable" class="form-control form-control-sm"
+                       value="{{ opcion.config.opciones_fuente.variable|default:'' }}"
+                       placeholder="variables.tipos">
+                <small class="text-muted">
+                    Path a la lista. Vacío = usar subnodos hijos como botones estáticos.
+                </small>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold mb-1">Límite</label>
+                <input type="number" name="menu_fuente_limite" class="form-control form-control-sm"
+                       value="{{ opcion.config.opciones_fuente.limite|default:'' }}"
+                       placeholder="10" min="1" max="100">
+                <small class="text-muted">Máx items.</small>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-bold mb-1">Salida (etiqueta arista)</label>
+                <input type="text" name="menu_fuente_salida" class="form-control form-control-sm"
+                       value="{{ opcion.config.opciones_fuente.salida|default:'' }}"
+                       placeholder="(vacío = arista default)">
+                <small class="text-muted">Etiqueta de la conexión que se sigue.</small>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Campo id (de cada item)</label>
+                <input type="text" name="menu_fuente_campo_id" class="form-control form-control-sm"
+                       value="{{ opcion.config.opciones_fuente.campo_id|default:'' }}"
+                       placeholder="id">
+                <small class="text-muted">Clave que se guarda como respuesta del usuario.</small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Campo etiqueta (texto del botón)</label>
+                <input type="text" name="menu_fuente_campo_etiqueta" class="form-control form-control-sm"
+                       value="{{ opcion.config.opciones_fuente.campo_etiqueta|default:'' }}"
+                       placeholder="nombre">
+                <small class="text-muted">Clave que se muestra al cliente.</small>
+            </div>
+        </div>
+
+        {# ── Atajo (valor por defecto) ── #}
+        {# Si está configurado, el menú muestra solo 2 botones (Sí/Otra). #}
+        {# "Sí" autoasigna `variable_destino` con `valor` y avanza por `salida_si`. #}
+        {# "Otra" avanza por `salida_otra` (que típicamente conecta al nodo HTTP de catálogo). #}
+        <div class="row g-2 p-2 mt-2" style="background:#fef3c7;border:1px dashed #f59e0b;border-radius:6px;">
+            <div class="col-12">
+                <div class="alert alert-warning py-2 small mb-1" style="background:#fff7ed;border-color:#fdba74;">
+                    <i class="fa fa-bolt me-1"></i>
+                    <strong>Atajo (valor por defecto):</strong>
+                    si la mayoría de clientes responde el mismo valor (ej: <em>Pichincha</em>),
+                    configurá un atajo Sí/Otra para evitar mostrar 25 botones del catálogo.
+                    <br>
+                    Dejá <strong>Valor por defecto vacío</strong> para desactivar el atajo y usar el menú normal.
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Valor por defecto</label>
+                <input type="text" name="menu_default_valor" class="form-control form-control-sm"
+                       value="{{ opcion.config.opcion_default.valor|default:'' }}"
+                       placeholder="ej: 19">
+                <small class="text-muted">Lo que se guarda en la variable si confirma.</small>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Etiqueta del valor</label>
+                <input type="text" name="menu_default_etiqueta" class="form-control form-control-sm"
+                       value="{{ opcion.config.opcion_default.etiqueta|default:'' }}"
+                       placeholder="ej: Pichincha">
+                <small class="text-muted">Nombre visible del valor preferido.</small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Pregunta del atajo</label>
+                <input type="text" name="menu_default_pregunta" class="form-control form-control-sm"
+                       value="{{ opcion.config.opcion_default.pregunta|default:'' }}"
+                       placeholder="📍 ¿Tu provincia es Pichincha?">
+                <small class="text-muted">Texto que se envía. Si vacío, usa el mensaje normal del menú.</small>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Etiqueta botón "Sí"</label>
+                <input type="text" name="menu_default_etiqueta_si" class="form-control form-control-sm"
+                       value="{{ opcion.config.opcion_default.etiqueta_si|default:'' }}"
+                       placeholder="✅ Sí, Pichincha">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Salida "Sí" (etiqueta arista)</label>
+                <input type="text" name="menu_default_salida_si" class="form-control form-control-sm"
+                       value="{{ opcion.config.opcion_default.salida_si|default:'' }}"
+                       placeholder="(vacío = arista default)">
+                <small class="text-muted">Conexión que se sigue al confirmar.</small>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Etiqueta botón "Otra"</label>
+                <input type="text" name="menu_default_etiqueta_otra" class="form-control form-control-sm"
+                       value="{{ opcion.config.opcion_default.etiqueta_otra|default:'' }}"
+                       placeholder="📍 Otra">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Salida "Otra" (etiqueta arista)</label>
+                <input type="text" name="menu_default_salida_otra" class="form-control form-control-sm"
+                       value="{{ opcion.config.opcion_default.salida_otra|default:'' }}"
+                       placeholder="otra">
+                <small class="text-muted">Conexión al nodo de catálogo completo.</small>
+            </div>
+        </div>
+    </div>
+
+    {# Bloque Condicional — visible solo cuando tipo=condicional #}
+    <div class="col-12 dp-tipo-block" data-show-when="condicional" style="display:none;">
+        <div class="alert alert-warning py-2 small mb-2">
+            <i class="fa fa-code-branch me-1"></i>
+            <strong>Decisión:</strong> evalúa condiciones sobre las variables y ramifica
+            por aristas <code>true</code>/<code>false</code>. Edita el JSON crudo abajo.
+        </div>
+        <div class="col-12">
+            <label class="form-label small fw-bold mb-1">Condiciones (JSON array)</label>
+            <textarea name="cond_condiciones_json" class="form-control form-control-sm font-monospace"
+                      rows="3"
+                      placeholder='[{"izq": "variables.x", "op": "==", "der": true}]'
+            >{{ cond_condiciones_json_str|default:'' }}</textarea>
+            <small class="text-muted">
+                Operadores: <code>==</code>, <code>!=</code>, <code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code>.
+            </small>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label small fw-bold mb-1">Operador entre condiciones</label>
+            {% with op_actual=opcion.config.operador|default:'and' %}
+                <select name="cond_operador" class="form-select form-select-sm">
+                    <option value="and" {% if op_actual == 'and' %}selected{% endif %}>AND (todas)</option>
+                    <option value="or"  {% if op_actual == 'or' %}selected{% endif %}>OR (cualquiera)</option>
+                </select>
+            {% endwith %}
+        </div>
+    </div>
+
+    {# Bloque Función — visible solo cuando tipo=funcion #}
+    {# Ejecuta código Python registrado en `crm.funciones_chatbot.FUNCIONES_REGISTRADAS`. #}
+    {# A diferencia de HTTP, no hace loop de red a Django — invoca la función directo. #}
+    <div class="col-12 dp-tipo-block" data-show-when="funcion" style="display:none;">
+        <div class="alert alert-secondary py-2 small mb-2" style="background:#f5f3ff;border-color:#ddd6fe;">
+            <i class="fa fa-bolt me-1" style="color:#7c3aed;"></i>
+            <strong>Función interna:</strong>
+            ejecuta código Python registrado (sin saltos HTTP). Útil cuando la lógica
+            vive dentro de Django (orquestación, DB lookups, side-effects).
+            Branching <code>ok</code>/<code>error</code> y <code>extraer</code> funcionan igual que en HTTP.
+        </div>
+        <div class="row g-2 p-2" style="background:#faf5ff;border-radius:6px;">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">
+                    Código de la función <span class="text-danger">*</span>
+                </label>
+                <input type="text" name="funcion_codigo" class="form-control form-control-sm font-monospace"
+                       value="{{ opcion.config.funcion_codigo|default:'' }}"
+                       placeholder="ej: cotizar_aria">
+                <small class="text-muted">
+                    Slug registrado en <code>crm/funciones_chatbot.py</code> con <code>@registrar_funcion('...')</code>.
+                </small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Endpoint asociado <small class="text-muted">(opcional)</small></label>
+                {% with eps=endpoints_disponibles %}
+                <select name="endpoint" class="form-select form-select-sm">
+                    <option value="">— sin endpoint —</option>
+                    {% for ep in eps %}
+                        <option value="{{ ep.id }}" {% if opcion.endpoint_id == ep.id %}selected{% endif %}>
+                            {{ ep.nombre }} ({{ ep.base_url|truncatechars:60 }})
+                        </option>
+                    {% endfor %}
+                </select>
+                {% endwith %}
+                <small class="text-muted">
+                    URL externa que la función puede usar. La función recibe esto como <code>endpoint</code>.
+                </small>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Timeout (seg)</label>
+                <input type="number" name="funcion_timeout" class="form-control form-control-sm"
+                       value="{{ opcion.config.timeout_seg|default:'30' }}"
+                       min="1" max="300">
+            </div>
+            <div class="col-md-9 d-flex align-items-end">
+                <div class="form-check form-switch">
+                    <input type="checkbox" name="funcion_envia_correo" class="form-check-input" id="fnEnviaCorreo-{{ opcion.id|default:'new' }}"
+                           value="1" {% if opcion.config.envia_correo %}checked{% endif %}>
+                    <label class="form-check-label small" for="fnEnviaCorreo-{{ opcion.id|default:'new' }}">
+                        <i class="fa fa-envelope me-1"></i>
+                        Notificar a asesores por correo cuando la función retorna <code>ok</code>
+                    </label>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <label class="form-label small fw-bold mb-1">Body (JSON, soporta templates)</label>
+                <textarea name="funcion_body" class="form-control form-control-sm font-monospace"
+                          rows="4"
+                          placeholder='{"cliente": {"cedula": "{{variables.cedula}}"}}'
+                >{{ funcion_body_json_str|default:'' }}</textarea>
+                <small class="text-muted">
+                    JSON que se pasa a la función (resuelve <code>{% verbatim %}{{variables.x}}{% endverbatim %}</code>).
+                </small>
+            </div>
+
+            <div class="col-12">
+                <label class="form-label small fw-bold mb-1">Extraer variables del resultado (JSON array)</label>
+                <textarea name="funcion_extraer" class="form-control form-control-sm font-monospace"
+                          rows="3"
+                          placeholder='[{"variable": "cotizacion_status", "jsonpath": "status"}]'
+                >{{ funcion_extraer_json_str|default:'' }}</textarea>
+                <small class="text-muted">
+                    Cada item: <code>{variable: "nombre", jsonpath: "ruta.dentro.del.body"}</code>.
+                </small>
+            </div>
+        </div>
+    </div>
+
+    {# Bloque Set Variable — visible solo cuando tipo=set_variable #}
+    <div class="col-12 dp-tipo-block" data-show-when="set_variable" style="display:none;">
+        <div class="alert alert-secondary py-2 small mb-2">
+            <i class="fa fa-equals me-1"></i>
+            <strong>Asignar variables:</strong> aplica una lista de
+            <code>variable = expresion</code> y avanza por la arista default.
+        </div>
+        <div class="col-12">
+            <label class="form-label small fw-bold mb-1">Asignaciones (JSON array)</label>
+            <textarea name="setvar_asignaciones_json" class="form-control form-control-sm font-monospace"
+                      rows="4"
+                      placeholder='[{"variable": "x", "expresion": ""}]'
+            >{{ setvar_asignaciones_json_str|default:'' }}</textarea>
+            <small class="text-muted">
+                Cada item: <code>{variable: "nombre", expresion: "valor"}</code>.
+                Soporta {% verbatim %}<code>{{variables.x}}</code>{% endverbatim %} en <code>expresion</code>.
+            </small>
+        </div>
+    </div>
+
+    {# Bloque Ubicación — visible solo cuando tipo=ubicacion #}
+    <div class="col-12 dp-tipo-block" data-show-when="ubicacion" style="display:none;">
+        <div class="alert alert-secondary py-2 small mb-2" style="background:#f3e8ff;border-color:#d8b4fe">
+            <i class="fa fa-map-marker-alt me-1 text-primary"></i>
+            <strong>Ubicación:</strong> WhatsApp envía un mensaje tipo <code>location</code> que el cliente puede tocar para abrir su app de mapas.
+        </div>
+        <div class="row g-2 p-2" style="background:#faf5ff;border-radius:6px;">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Latitud <span class="text-danger">*</span></label>
+                <input type="number" step="any" name="ubicacion_lat" class="form-control form-control-sm"
+                       value="{{ opcion.config.lat|default:'' }}"
+                       placeholder="-2.1325">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Longitud <span class="text-danger">*</span></label>
+                <input type="number" step="any" name="ubicacion_lng" class="form-control form-control-sm"
+                       value="{{ opcion.config.lng|default:'' }}"
+                       placeholder="-79.5878">
+            </div>
+            <div class="col-md-5">
+                <label class="form-label small fw-bold mb-1">Nombre del lugar</label>
+                <input type="text" name="ubicacion_nombre" class="form-control form-control-sm"
+                       value="{{ opcion.config.name|default:'' }}"
+                       placeholder="Sandow Fitness · Sede 1" maxlength="120">
+            </div>
+            <div class="col-md-7">
+                <label class="form-label small fw-bold mb-1">Dirección</label>
+                <input type="text" name="ubicacion_direccion" class="form-control form-control-sm"
+                       value="{{ opcion.config.address|default:'' }}"
+                       placeholder="Av. García Moreno y 9 de Octubre" maxlength="200">
+            </div>
+        </div>
+    </div>
+</div>
+

@@ -1,0 +1,351 @@
+{% extends 'base.html' %}
+{% load static templatefunctions %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/sesiones.css' %}">
+    <link rel="stylesheet" href="{% static 'stylenew/webhook_log.css' %}">
+{% endblock %}
+
+{% block atras %}/whatsapp/sesiones/{% endblock %}
+
+{% block content %}
+<div class="wlog-page"
+     data-sesion-id="{{ sesion.id }}"
+     data-fecha="{{ fecha_str }}"
+     data-poll-url="/whatsapp/sesiones/{{ sesion.id }}/webhook-log/poll/"
+     data-detalle-url="/whatsapp/sesiones/{{ sesion.id }}/webhook-log/"
+     data-ultimo-id="{{ ultimo_id }}">
+
+    {# ───────── Header ───────── #}
+    <div class="wlog-header">
+        <div class="wlog-header-left">
+            <a href="/whatsapp/sesiones/" class="wlog-back" title="Volver">
+                <i class="fa fa-arrow-left"></i>
+            </a>
+            <div>
+                <div class="wlog-eyebrow">Auditoría webhook Meta</div>
+                <h2 class="wlog-title">{{ sesion.nombre|default:'Sesión sin nombre' }}</h2>
+                <div class="wlog-sub">
+                    {% if config.display_phone_number %}
+                        <span><i class="fa fa-phone"></i> {{ config.display_phone_number }}</span>
+                    {% endif %}
+                    {% if config.phone_number_id %}
+                        <span><i class="fa fa-microchip"></i> Phone ID <code>{{ config.phone_number_id }}</code></span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="wlog-header-right">
+            <div class="wlog-live" id="wlog-live-indicator">
+                <span class="wlog-live-dot"></span>
+                <span class="wlog-live-text">en vivo</span>
+                <span class="wlog-live-clock" id="wlog-clock">—</span>
+            </div>
+            <a href="/whatsapp/sesiones/{{ sesion.id }}/diagnostico/" class="conex-btn conex-btn-secondary">
+                <i class="fa fa-stethoscope"></i> Diagnóstico
+            </a>
+        </div>
+    </div>
+
+    {# ───────── Resumen del día ───────── #}
+    <div class="wlog-stats">
+        <div class="wlog-stat">
+            <div class="wlog-stat-num" id="wlog-stat-total">{{ total_dia }}</div>
+            <div class="wlog-stat-label">eventos {{ es_hoy|yesno:"hoy,en la fecha" }}</div>
+        </div>
+        <div class="wlog-stat wlog-stat-ok">
+            <div class="wlog-stat-num" id="wlog-stat-ok">{{ total_ok }}</div>
+            <div class="wlog-stat-label">procesados OK</div>
+        </div>
+        <div class="wlog-stat wlog-stat-warn">
+            <div class="wlog-stat-num" id="wlog-stat-firma">{{ total_firma_mal }}</div>
+            <div class="wlog-stat-label">firma inválida</div>
+        </div>
+        <div class="wlog-stat wlog-stat-err">
+            <div class="wlog-stat-num" id="wlog-stat-error">{{ total_error }}</div>
+            <div class="wlog-stat-label">con error</div>
+        </div>
+    </div>
+
+    {# ───────── Filtros ───────── #}
+    <form method="get" class="wlog-filtros">
+        <label>
+            <span class="wlog-flabel">Fecha</span>
+            <input type="date" name="fecha" value="{{ fecha_str }}" max="{% now 'Y-m-d' %}">
+        </label>
+        <label>
+            <span class="wlog-flabel">Tipo</span>
+            <select name="tipo">
+                <option value="">— todos —</option>
+                {% for t in tipos_disponibles %}
+                    <option value="{{ t }}" {% if filtro_tipo == t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>
+            <span class="wlog-flabel">Firma</span>
+            <select name="firma">
+                <option value=""    {% if not filtro_firma %}selected{% endif %}>— cualquiera —</option>
+                <option value="ok"  {% if filtro_firma == 'ok' %}selected{% endif %}>Válida</option>
+                <option value="mal" {% if filtro_firma == 'mal' %}selected{% endif %}>Inválida</option>
+            </select>
+        </label>
+        <label>
+            <span class="wlog-flabel">Estado</span>
+            <select name="proc">
+                <option value=""        {% if not filtro_proc %}selected{% endif %}>— cualquiera —</option>
+                <option value="si"      {% if filtro_proc == 'si' %}selected{% endif %}>Procesado</option>
+                <option value="no"      {% if filtro_proc == 'no' %}selected{% endif %}>Pendiente</option>
+                <option value="error"   {% if filtro_proc == 'error' %}selected{% endif %}>Con error</option>
+            </select>
+        </label>
+        <button type="submit" class="conex-btn conex-btn-primary">
+            <i class="fa fa-filter"></i> Aplicar
+        </button>
+        <a href="/whatsapp/sesiones/{{ sesion.id }}/webhook-log/" class="conex-btn conex-btn-secondary">
+            <i class="fa fa-rotate-left"></i> Reset
+        </a>
+    </form>
+
+    {# ───────── Tabla ───────── #}
+    <div class="wlog-table-wrap">
+        <table class="wlog-table">
+            <thead>
+                <tr>
+                    <th class="wlog-th-time">Hora</th>
+                    <th class="wlog-th-tipo">Tipo</th>
+                    <th class="wlog-th-firma">Firma</th>
+                    <th class="wlog-th-estado">Estado</th>
+                    <th class="wlog-th-preview">Preview</th>
+                    <th class="wlog-th-id">#</th>
+                </tr>
+            </thead>
+            <tbody id="wlog-tbody">
+                {% for ev in eventos %}
+                    <tr class="wlog-row" data-evento-id="{{ ev.id }}">
+                        <td class="wlog-td-time">
+                            <span title="{{ ev.recibido_en|date:'Y-m-d H:i:s' }}">
+                                {{ ev.recibido_en|date:'H:i:s' }}
+                            </span>
+                        </td>
+                        <td class="wlog-td-tipo">
+                            <span class="wlog-tag-tipo">{{ ev.tipo_evento }}</span>
+                        </td>
+                        <td>
+                            {% if ev.firma_valida %}
+                                <span class="wlog-pill wlog-pill-ok"><i class="fa fa-check"></i> OK</span>
+                            {% else %}
+                                <span class="wlog-pill wlog-pill-warn"><i class="fa fa-triangle-exclamation"></i> Inválida</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if ev.error_procesamiento %}
+                                <span class="wlog-pill wlog-pill-err" title="{{ ev.error_procesamiento|truncatechars:200 }}">
+                                    <i class="fa fa-circle-xmark"></i> Error
+                                </span>
+                            {% elif ev.procesado %}
+                                <span class="wlog-pill wlog-pill-ok"><i class="fa fa-check"></i> Procesado</span>
+                            {% else %}
+                                <span class="wlog-pill wlog-pill-muted"><i class="fa fa-hourglass-half"></i> Pendiente</span>
+                            {% endif %}
+                        </td>
+                        <td class="wlog-td-preview"><code>{{ ev.payload_json|stringformat:'s'|truncatechars:120 }}</code></td>
+                        <td class="wlog-td-id"><span class="wlog-id">{{ ev.id }}</span></td>
+                    </tr>
+                {% empty %}
+                    <tr id="wlog-empty">
+                        <td colspan="6" class="wlog-empty">
+                            <i class="fa fa-inbox"></i>
+                            Sin eventos para esta fecha. Si esperabas tráfico, revisá el diagnóstico.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {# ───────── Modal payload ───────── #}
+    <div id="wlog-modal" class="wlog-modal" hidden>
+        <div class="wlog-modal-box">
+            <div class="wlog-modal-head">
+                <div>
+                    <strong>Evento</strong>
+                    <span id="wlog-modal-id">—</span>
+                    <span class="wlog-modal-meta" id="wlog-modal-meta"></span>
+                </div>
+                <button type="button" id="wlog-modal-close" class="wlog-modal-close" aria-label="Cerrar">
+                    <i class="fa fa-xmark"></i>
+                </button>
+            </div>
+            <div class="wlog-modal-body">
+                <pre id="wlog-modal-json"><code>—</code></pre>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+(function () {
+    const root = document.querySelector('.wlog-page');
+    if (!root) return;
+
+    const sesionId   = root.dataset.sesionId;
+    const fecha      = root.dataset.fecha;
+    const pollUrl    = root.dataset.pollUrl;
+    const detalleUrl = root.dataset.detalleUrl;
+    let ultimoId     = parseInt(root.dataset.ultimoId || '0', 10);
+
+    const tbody    = document.getElementById('wlog-tbody');
+    const empty    = document.getElementById('wlog-empty');
+    const clock    = document.getElementById('wlog-clock');
+    const indic    = document.getElementById('wlog-live-indicator');
+    const stTotal  = document.getElementById('wlog-stat-total');
+    const stOk     = document.getElementById('wlog-stat-ok');
+    const stFirma  = document.getElementById('wlog-stat-firma');
+    const stError  = document.getElementById('wlog-stat-error');
+
+    // Mantenemos los filtros activos en el polling para que el "en vivo"
+    // respete lo que el usuario está mirando.
+    const params = new URLSearchParams(window.location.search);
+    function buildPollUrl () {
+        const u = new URL(pollUrl, window.location.origin);
+        u.searchParams.set('fecha', fecha);
+        u.searchParams.set('since_id', ultimoId);
+        for (const k of ['tipo', 'firma', 'proc']) {
+            const v = params.get(k);
+            if (v) u.searchParams.set(k, v);
+        }
+        return u.toString();
+    }
+
+    function escapeHtml (s) {
+        return String(s).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[c]));
+    }
+
+    function pillFirma (ok) {
+        return ok
+            ? '<span class="wlog-pill wlog-pill-ok"><i class="fa fa-check"></i> OK</span>'
+            : '<span class="wlog-pill wlog-pill-warn"><i class="fa fa-triangle-exclamation"></i> Inválida</span>';
+    }
+
+    function pillEstado (ev) {
+        if (ev.error_procesamiento) {
+            return `<span class="wlog-pill wlog-pill-err" title="${escapeHtml(ev.error_procesamiento)}"><i class="fa fa-circle-xmark"></i> Error</span>`;
+        }
+        if (ev.procesado) {
+            return '<span class="wlog-pill wlog-pill-ok"><i class="fa fa-check"></i> Procesado</span>';
+        }
+        return '<span class="wlog-pill wlog-pill-muted"><i class="fa fa-hourglass-half"></i> Pendiente</span>';
+    }
+
+    function renderRow (ev) {
+        const tr = document.createElement('tr');
+        tr.className = 'wlog-row wlog-row-new';
+        tr.dataset.eventoId = ev.id;
+        tr.innerHTML = `
+            <td class="wlog-td-time"><span title="${escapeHtml(ev.recibido_en_full)}">${escapeHtml(ev.recibido_en)}</span></td>
+            <td class="wlog-td-tipo"><span class="wlog-tag-tipo">${escapeHtml(ev.tipo_evento)}</span></td>
+            <td>${pillFirma(ev.firma_valida)}</td>
+            <td>${pillEstado(ev)}</td>
+            <td class="wlog-td-preview"><code>${escapeHtml(ev.payload_preview)}</code></td>
+            <td class="wlog-td-id"><span class="wlog-id">${ev.id}</span></td>
+        `;
+        return tr;
+    }
+
+    function aplicarPoll (data) {
+        if (data.now && clock) clock.textContent = data.now;
+        if (data.totales) {
+            if (stTotal) stTotal.textContent = data.totales.total;
+            if (stOk)    stOk.textContent    = data.totales.ok;
+            if (stFirma) stFirma.textContent = data.totales.firma_mal;
+            if (stError) stError.textContent = data.totales.con_error;
+        }
+        if (!data.eventos || !data.eventos.length) return;
+        if (empty && empty.parentNode) empty.remove();
+        // Insertar arriba (orden DESC), animar
+        for (const ev of data.eventos) {
+            tbody.insertBefore(renderRow(ev), tbody.firstChild);
+        }
+        ultimoId = data.ultimo_id;
+        // Limpia el highlight tras la animación CSS
+        setTimeout(() => {
+            tbody.querySelectorAll('.wlog-row-new').forEach(r => r.classList.remove('wlog-row-new'));
+        }, 2200);
+    }
+
+    // Polling: 10s, sólo cuando la pestaña está visible (no consume recursos
+    // de fondo y nada se "recarga" si el operador no está mirando). Usamos
+    // setTimeout encadenado en lugar de setInterval para no apilar requests
+    // si una respuesta tarda más que el intervalo.
+    let pollFails = 0;
+    let pollTimer = null;
+    const POLL_MS = 10000;
+
+    async function poll () {
+        if (document.hidden) { schedule(); return; }
+        try {
+            const r = await fetch(buildPollUrl(), { credentials: 'same-origin' });
+            if (!r.ok) throw new Error('http ' + r.status);
+            const data = await r.json();
+            aplicarPoll(data);
+            pollFails = 0;
+            indic.classList.remove('wlog-live-stale');
+        } catch (e) {
+            pollFails++;
+            if (pollFails >= 3) indic.classList.add('wlog-live-stale');
+        }
+        schedule();
+    }
+    function schedule () {
+        clearTimeout(pollTimer);
+        pollTimer = setTimeout(poll, POLL_MS);
+    }
+    schedule();
+    document.addEventListener('visibilitychange', () => {
+        // Cuando vuelve a ser visible, dispara un poll inmediato para
+        // ponerse al día sin esperar el ciclo completo.
+        if (!document.hidden) { clearTimeout(pollTimer); poll(); }
+    });
+
+    // ---- Modal payload ----
+    const modal     = document.getElementById('wlog-modal');
+    const modalId   = document.getElementById('wlog-modal-id');
+    const modalMeta = document.getElementById('wlog-modal-meta');
+    const modalJson = document.getElementById('wlog-modal-json').querySelector('code');
+    const modalCls  = document.getElementById('wlog-modal-close');
+
+    function abrirModal (eventoId) {
+        modalId.textContent = '#' + eventoId;
+        modalMeta.textContent = '';
+        modalJson.textContent = 'cargando…';
+        modal.hidden = false;
+        fetch(`${detalleUrl}${eventoId}/`, { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.ok) {
+                    modalJson.textContent = 'Error: ' + (data.error || 'desconocido');
+                    return;
+                }
+                const ev = data.evento;
+                modalMeta.textContent = `${ev.tipo_evento} · ${ev.recibido_en} · firma ${ev.firma_valida ? 'OK' : 'inválida'}`;
+                modalJson.textContent = JSON.stringify(ev.payload_json, null, 2);
+            })
+            .catch(() => { modalJson.textContent = 'Error de red'; });
+    }
+    function cerrarModal () { modal.hidden = true; }
+
+    tbody.addEventListener('click', (e) => {
+        const tr = e.target.closest('tr.wlog-row');
+        if (!tr) return;
+        abrirModal(tr.dataset.eventoId);
+    });
+    modalCls.addEventListener('click', cerrarModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) cerrarModal(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) cerrarModal(); });
+})();
+</script>
+{% endblock %}

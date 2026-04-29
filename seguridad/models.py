@@ -12,6 +12,7 @@ from django.utils.safestring import mark_safe
 
 from area_geografica.models import Ciudad
 from autenticacion.models import Usuario
+from core.crypto import EncryptedTextField
 from core.custom_models import ModeloBase, NormalModel
 from core.models_utils import FileNameUploadToPath
 from core.validadores import solo_numeros
@@ -135,8 +136,22 @@ class Notificacion(ModeloBase):
         return u'Notificación: %s - Para: %s' % (self.titulo, self.destinatario)
 
     def diasingresado(self):
-        fecha_hora_registro = datetime.combine(self.fecha_registro, self.hora_registro)
+        # fecha_registro es DateTimeField (ver ModeloBase). Antes se intentaba combinar
+        # con self.hora_registro, que no existe como campo → AttributeError.
+        fh = self.fecha_registro
+        if fh is None:
+            return ''
+        if isinstance(fh, datetime):
+            fecha_hora_registro = fh
+        else:
+            # En caso extremo de que sea un date, asume medianoche
+            fecha_hora_registro = datetime.combine(fh, datetime.min.time())
+        # Normalizar timezone para la resta
         tiempo_actual = timezone.now()
+        if timezone.is_aware(tiempo_actual) and timezone.is_naive(fecha_hora_registro):
+            fecha_hora_registro = timezone.make_aware(fecha_hora_registro, timezone.get_current_timezone())
+        elif timezone.is_naive(tiempo_actual) and timezone.is_aware(fecha_hora_registro):
+            tiempo_actual = timezone.make_aware(tiempo_actual, timezone.get_current_timezone())
         tiempo_transcurrido = tiempo_actual - fecha_hora_registro
         dias = tiempo_transcurrido.days
         segundos = tiempo_transcurrido.seconds
@@ -186,6 +201,39 @@ class Configuracion(ModeloBase):
     imagenprincipal = models.FileField(upload_to='configuracion/', validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])], blank=True, null=True, verbose_name='Imagen Sobre Nosotros')
     imagen_landing = models.FileField(upload_to='configuracion/', validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'tiff', 'svg', "jfif"])], blank=True, null=True, verbose_name='Imagen Landing')
 
+    # CANALES DE MENSAJERIA — activar/desactivar cada transporte desde la UI.
+    canal_whatsapp_qr_activo = models.BooleanField(
+        default=True, verbose_name='Canal WhatsApp (QR / Baileys) activo',
+        help_text='Si está OFF, la opción "QR Code" no aparece al agregar una nueva conexión.'
+    )
+    canal_whatsapp_api_activo = models.BooleanField(
+        default=True, verbose_name='Canal WhatsApp Business API (Meta) activo',
+        help_text='Requiere credenciales Meta App registradas.'
+    )
+    canal_instagram_activo = models.BooleanField(
+        default=False, verbose_name='Canal Instagram Direct activo'
+    )
+    canal_messenger_activo = models.BooleanField(
+        default=False, verbose_name='Canal Facebook Messenger activo'
+    )
+    canal_tiktok_activo = models.BooleanField(
+        default=False, verbose_name='Canal TikTok activo'
+    )
+
+    # ── IA del sistema (sirve para features tipo "Crear con IA" globales) ──
+    token_ia = models.ForeignKey(
+        'crm.ApiKeyIA', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='configuraciones_que_usan',
+        verbose_name='API Key IA del sistema',
+        help_text='Key que usan las features globales de IA del CRM (ej: "Crear con IA" '
+                  'en Departamentos Chatbot). Si está vacío, esas opciones quedan deshabilitadas.'
+    )
+    ia_features_activas = models.BooleanField(
+        default=False, verbose_name='Features de IA del sistema activas',
+        help_text='Switch maestro. Aunque haya token cargado, si esto está OFF las '
+                  'opciones "Crear con IA" no aparecen.'
+    )
+
     @staticmethod
     def get_instancia():
         from core.funciones import db_table_exists
@@ -203,6 +251,68 @@ class Configuracion(ModeloBase):
         permissions = (
             ("can_view_auditoria", "Puede ver auditorías"),
         )
+
+
+class CredencialMetaApp(ModeloBase):
+    """Credenciales de la Meta App (nivel organizacion).
+
+    Una misma Meta App puede administrar varias WABAs / IG Business / Pages.
+    Por eso `app_id` y `app_secret` viven aca (singleton via OneToOne con
+    Configuracion) y NO duplicados en cada ConfigMeta/ConfigInstagram/ConfigMessenger.
+    """
+    configuracion = models.OneToOneField(
+        Configuracion, on_delete=models.CASCADE,
+        related_name='credencial_meta', verbose_name='Configuración'
+    )
+    app_id = models.CharField(
+        max_length=50, verbose_name='Meta App ID',
+        help_text='ID de la aplicacion creada en Meta for Developers.'
+    )
+    app_secret = EncryptedTextField(
+        verbose_name='Meta App Secret',
+        help_text='Secret de la App. Se guarda cifrado.'
+    )
+    config_id = models.CharField(
+        max_length=50, blank=True, default='',
+        verbose_name='Embedded Signup Config ID',
+        help_text='Configuration ID del Embedded Signup de WhatsApp Business '
+                  '(Meta for Developers → Whatsapp → Configuration). Necesario '
+                  'para el flow de conexion guiada.'
+    )
+    business_id = models.CharField(
+        max_length=50, blank=True, default='',
+        verbose_name='Business Manager ID',
+        help_text='ID del Business Manager dueño de la App (opcional).'
+    )
+    system_user_id = models.CharField(
+        max_length=50, blank=True, default='',
+        verbose_name='System User ID',
+        help_text='ID del System User usado para emitir tokens long-lived.'
+    )
+    system_user_token = EncryptedTextField(
+        blank=True, null=True,
+        verbose_name='System User Token',
+        help_text='Token long-lived del System User. Se guarda cifrado.'
+    )
+    es_tech_provider = models.BooleanField(
+        default=False,
+        verbose_name='¿Aprobado como Tech Provider por Meta?',
+        help_text='Mientras esté en NO, las sesiones se conectan cargando '
+                  'WABA ID + Phone Number ID + access token a mano (modo manual). '
+                  'Activá esta opción cuando Meta apruebe tu acceso avanzado: '
+                  'recién ahí se habilita el popup Embedded Signup de un solo clic.'
+    )
+    ultima_sincronizacion = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Última sincronización'
+    )
+
+    class Meta:
+        verbose_name = 'Credencial Meta App'
+        verbose_name_plural = 'Credenciales Meta App'
+
+    def __str__(self):
+        return f"Meta App {self.app_id}"
 
 
 class Modulo(ModeloBase):

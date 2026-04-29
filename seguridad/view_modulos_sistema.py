@@ -123,6 +123,17 @@ def modulossistemaView(request):
                             res_json.append({"result": "ok"})
                     except Exception as ex:
                         res_json.append({"error": True, "mensaje": u"Error al guardar los datos."})
+                elif action == 'act_orden':
+                    try:
+                        filtro = model.objects.get(pk=int(request.POST['id']))
+                        filtro.orden = int(request.POST['valor'])
+                        filtro.save(request)
+                        log(f"Actualizo orden url {filtro.__str__()}", request, "change")
+                        return HttpResponse(json.dumps({'result': True, 'orden': filtro.orden}))
+                    except (ValueError, TypeError):
+                        return HttpResponse(json.dumps({'result': False, 'mensaje': 'Orden inválido'}))
+                    except Exception as ex:
+                        return HttpResponse(json.dumps({'result': False, 'mensaje': str(ex)}))
         except ValueError as ex:
             res_json.append({'error': True,
                              "message": str(ex)

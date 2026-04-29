@@ -1,0 +1,234 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+
+    {# ===== HEADER + FILTROS ===== #}
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="mb-0">
+                    <i class="fa fa-chart-bar text-primary me-2"></i>Analytics
+                    {% if sesion_actual %}
+                        <span class="badge bg-primary ms-2">{{ sesion_actual.nombre|default:sesion_actual.numero }}</span>
+                    {% endif %}
+                </h4>
+                <small class="text-muted">
+                    {% if rango_modo == 'custom' %}Del {{ fecha_desde }} al {{ fecha_hasta }}
+                    {% else %}Últimos {{ rango_dias }} días
+                    {% endif %}
+                </small>
+            </div>
+            <form method="GET" class="row g-2 align-items-end mb-0">
+                <div class="col-md-4">
+                    <label class="form-label small mb-1">Sesión</label>
+                    <select name="sesion" class="form-select select2">
+                        <option value="">Todas las sesiones</option>
+                        {% for s in sesiones %}
+                            <option value="{{ s.id }}" {% if sesion_sel == s.id %}selected{% endif %}>
+                                {{ s.nombre|default:s.numero }} · {{ s.get_proveedor_display }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Rango rápido</label>
+                    <select name="dias" class="form-select"
+                            onchange="if(this.value){document.getElementById('fDesde').value='';document.getElementById('fHasta').value='';this.form.submit();}">
+                        <option value="">— personalizado —</option>
+                        <option value="7"  {% if rango_modo == 'preset' and rango_dias == 7 %}selected{% endif %}>7 días</option>
+                        <option value="30" {% if rango_modo == 'preset' and rango_dias == 30 %}selected{% endif %}>30 días</option>
+                        <option value="60" {% if rango_modo == 'preset' and rango_dias == 60 %}selected{% endif %}>60 días</option>
+                        <option value="90" {% if rango_modo == 'preset' and rango_dias == 90 %}selected{% endif %}>90 días</option>
+                        <option value="180" {% if rango_modo == 'preset' and rango_dias == 180 %}selected{% endif %}>6 meses</option>
+                        <option value="365" {% if rango_modo == 'preset' and rango_dias == 365 %}selected{% endif %}>1 año</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Desde</label>
+                    <input type="date" name="desde" id="fDesde" class="form-control"
+                           value="{% if rango_modo == 'custom' %}{{ fecha_desde }}{% endif %}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Hasta</label>
+                    <input type="date" name="hasta" id="fHasta" class="form-control"
+                           value="{% if rango_modo == 'custom' %}{{ fecha_hasta }}{% endif %}">
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100">
+                        <i class="fa fa-filter me-1"></i> Aplicar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="kpis" class="row g-3 mb-3"></div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-6"><div class="card border-info">
+            <div class="card-body">
+                <h6 class="card-title"><i class="fa fa-inbox text-info me-1"></i>Recepción de mensajes</h6>
+                <div id="recepKpis" class="row text-center"></div>
+            </div>
+        </div></div>
+        <div class="col-md-6"><div class="card border-warning">
+            <div class="card-body">
+                <h6 class="card-title"><i class="fa-brands fa-meta text-warning me-1"></i>Consumo Meta Cloud API</h6>
+                <div id="metaKpis" class="row text-center"></div>
+            </div>
+        </div></div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12"><div class="card"><div class="card-body">
+            <h6>Consumo por sesión</h6>
+            <table class="table table-sm" id="tblConsumoSesion"><thead>
+                <tr><th>Sesión</th><th>Proveedor</th><th>Mensajes</th><th>Entrantes</th><th>Salientes</th><th>IA</th></tr>
+            </thead><tbody></tbody></table>
+        </div></div></div>
+        <div class="col-md-8"><div class="card"><div class="card-body">
+            <h6>Conversaciones por día</h6><canvas id="chartDia"></canvas>
+        </div></div></div>
+        <div class="col-md-4"><div class="card"><div class="card-body">
+            <h6>Por canal de origen</h6><canvas id="chartCanal"></canvas>
+        </div></div></div>
+        <div class="col-md-6"><div class="card"><div class="card-body">
+            <h6>Por clasificación</h6><canvas id="chartClas"></canvas>
+        </div></div></div>
+        <div class="col-md-6"><div class="card"><div class="card-body">
+            <h6>Sentimiento</h6><canvas id="chartSent"></canvas>
+        </div></div></div>
+        <div class="col-12"><div class="card"><div class="card-body">
+            <h6>Ranking de agentes (mensajes enviados)</h6><canvas id="chartAgentes"></canvas>
+        </div></div></div>
+        <div class="col-12"><div class="card"><div class="card-body">
+            <h6>ROI por campaña CTWA (atribución Meta Ads)</h6>
+            <table class="table table-sm" id="tblCtwa"><thead>
+                <tr><th>Campaign ID</th><th>Ad ID</th><th>Conversaciones</th><th>Leads</th><th>Clientes</th><th>Conv. %</th></tr>
+            </thead><tbody></tbody></table>
+        </div></div></div>
+        <div class="col-12"><div class="card"><div class="card-body">
+            <h6>Pipeline forecast</h6>
+            <table class="table table-sm" id="tblForecast"><thead>
+                <tr><th>Pipeline</th><th>Etapa</th><th>Cards</th><th>Probabilidad</th><th>Valor</th><th>Valor ponderado</th></tr>
+            </thead><tbody></tbody></table>
+        </div></div></div>
+    </div>
+</div>
+
+<script>
+const CLAS = {0:'Sin clasificar',1:'Lead',2:'Prospecto',3:'Oportunidad',4:'Cliente',5:'No interesado'};
+async function load(){
+    // Construir query string preservando filtros aplicados
+    const params = new URLSearchParams();
+    params.set('action', 'data');
+    {% if rango_modo == 'custom' %}
+        params.set('desde', '{{ fecha_desde }}');
+        params.set('hasta', '{{ fecha_hasta }}');
+    {% else %}
+        params.set('dias', '{{ rango_dias }}');
+    {% endif %}
+    {% if sesion_sel %}params.set('sesion', '{{ sesion_sel }}');{% endif %}
+
+    const r = await fetch('?' + params.toString());
+    if (!r.ok) {
+        document.getElementById('kpis').innerHTML =
+            '<div class="alert alert-danger">Error ' + r.status + ' cargando datos. Revisa la consola.</div>';
+        const t = await r.text();
+        console.error('Analytics error response:', t);
+        return;
+    }
+    const d = await r.json();
+    if (d.error) {
+        document.getElementById('kpis').innerHTML =
+            '<div class="alert alert-danger">Error: ' + (d.message || 'desconocido') + '</div>';
+        return;
+    }
+    // KPIs
+    const k = d.kpis;
+    document.getElementById('kpis').innerHTML = `
+      ${kpi('Conversaciones', k.total_conversaciones, 'primary')}
+      ${kpi('Abiertas', k.abiertas, 'warning')}
+      ${kpi('Leads', k.leads, 'info')}
+      ${kpi('Clientes', k.clientes, 'success')}
+      ${kpi('Mensajes IA', k.mensajes_ia + ' ('+k.pct_ia+'%)', 'secondary')}
+      ${kpi('CAPI enviados', d.capi.total + ' / OK '+d.capi.ok, 'dark')}
+    `;
+
+    document.getElementById('recepKpis').innerHTML = `
+      ${miniKpi('Entrantes', k.entrantes, 'info')}
+      ${miniKpi('Salientes', k.salientes, 'primary')}
+      ${miniKpi('Humanos', k.humanos, 'success')}
+      ${miniKpi('Automáticos', k.automaticos, 'secondary')}
+      ${miniKpi('% Recepción', k.pct_recepcion + '%', 'info')}
+      ${miniKpi('1ra respuesta', fmtSeg(k.tiempo_primera_respuesta_seg), 'warning')}
+    `;
+
+    document.getElementById('metaKpis').innerHTML = `
+      ${miniKpi('Conversaciones Meta', k.meta_conversaciones, 'warning')}
+      ${miniKpi('Mensajes Meta', k.meta_mensajes, 'warning')}
+      ${miniKpi('Plantillas enviadas', k.meta_plantillas, 'primary')}
+      ${miniKpi('Tiempo prom. resp.', fmtSeg(k.tiempo_respuesta_promedio_seg), 'info')}
+    `;
+
+    const tbs = document.querySelector('#tblConsumoSesion tbody');
+    (d.consumo_por_sesion || []).forEach(r => {
+        const nombre = r.sesion_nombre || r.sesion_numero || '—';
+        const prov = (r.sesion_proveedor || '').toUpperCase();
+        const provColor = prov==='META' ? 'warning'
+                       : prov==='INSTAGRAM' ? 'danger'
+                       : prov==='MESSENGER' ? 'primary'
+                       : 'secondary';
+        const link = r.sesion_id ? `<a href="?sesion=${r.sesion_id}&dias={{ rango_dias }}">${nombre}</a>` : nombre;
+        tbs.innerHTML += `<tr><td>${link}</td><td><span class="badge bg-${provColor}">${prov}</span></td><td>${r.mensajes}</td><td class="text-info">${r.entrantes}</td><td class="text-primary">${r.salientes}</td><td class="text-secondary">${r.ia}</td></tr>`;
+    });
+    if (!(d.consumo_por_sesion || []).length) tbs.innerHTML = '<tr><td colspan="6" class="text-muted text-center">Sin datos</td></tr>';
+    // Chart día
+    new Chart(document.getElementById('chartDia'), {
+        type:'line', data:{ labels:d.por_dia.map(x=>x.d), datasets:[{label:'Conversaciones', data:d.por_dia.map(x=>x.n), borderColor:'#0d6efd', tension:0.3}]},
+        options:{responsive:true, plugins:{legend:{display:false}}}
+    });
+    // Canal
+    new Chart(document.getElementById('chartCanal'), {
+        type:'doughnut', data:{ labels:d.por_canal.map(x=>x.origen_canal||'whatsapp'), datasets:[{data:d.por_canal.map(x=>x.n), backgroundColor:['#25d366','#e4405f','#1877f2','#888']}]}
+    });
+    // Clasificación
+    new Chart(document.getElementById('chartClas'), {
+        type:'bar', data:{ labels:d.por_clasificacion.map(x=>CLAS[x.clasificacion]||'?'), datasets:[{label:'Conv', data:d.por_clasificacion.map(x=>x.n), backgroundColor:'#0d6efd'}]},
+        options:{plugins:{legend:{display:false}}}
+    });
+    // Sentimiento
+    new Chart(document.getElementById('chartSent'), {
+        type:'pie', data:{ labels:d.por_sentimiento.map(x=>x.sentimiento), datasets:[{data:d.por_sentimiento.map(x=>x.n)}]}
+    });
+    // Agentes
+    new Chart(document.getElementById('chartAgentes'), {
+        type:'bar', data:{ labels:d.ranking_agentes.map(x=>(x.agente__first_name||x.agente__username)), datasets:[{label:'Mensajes', data:d.ranking_agentes.map(x=>x.n), backgroundColor:'#198754'}]},
+        options:{indexAxis:'y'}
+    });
+    // CTWA tabla
+    const tb = document.querySelector('#tblCtwa tbody');
+    d.roi_ctwa.forEach(r => {
+        const conv = r.total ? ((r.clientes/r.total)*100).toFixed(1) : 0;
+        tb.innerHTML += `<tr><td>${r.campaign_id||'—'}</td><td>${r.ad_id||'—'}</td><td>${r.total}</td><td>${r.leads}</td><td>${r.clientes}</td><td>${conv}%</td></tr>`;
+    });
+    if(!d.roi_ctwa.length) tb.innerHTML = '<tr><td colspan="6" class="text-muted text-center">Sin conversaciones CTWA en este rango</td></tr>';
+    // Forecast
+    const tf = document.querySelector('#tblForecast tbody');
+    d.pipeline_forecast.forEach(r => {
+        const ponderado = (r.total * (r.etapa__probabilidad_cierre||0) / 100).toFixed(2);
+        tf.innerHTML += `<tr><td>${r.etapa__pipeline__nombre}</td><td>${r.etapa__nombre}</td><td>${r.n}</td><td>${r.etapa__probabilidad_cierre}%</td><td>${r.moneda} ${r.total.toFixed(2)}</td><td><strong>${r.moneda} ${ponderado}</strong></td></tr>`;
+    });
+}
+function kpi(label,val,color){ return `<div class="col-md-2"><div class="card border-${color}"><div class="card-body text-center p-2">
+    <div class="small text-muted">${label}</div><div class="h5 mb-0 text-${color}">${val}</div></div></div></div>`;}
+function miniKpi(label,val,color){ return `<div class="col p-2"><div class="small text-muted">${label}</div><div class="fw-bold text-${color}">${val}</div></div>`;}
+function fmtSeg(s){ if(!s) return '—'; if(s<60) return s+'s'; const m=Math.floor(s/60); const r=Math.round(s%60); return m+'m '+r+'s';}
+load();
+</script>
+{% endblock %}

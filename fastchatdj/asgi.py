@@ -11,6 +11,7 @@ django.setup()
 
 # Importar después de configurar Django
 import whatsapp.routing  # Ajusta según el nombre de tu app
+import voz.routing
 
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),
@@ -18,6 +19,7 @@ application = ProtocolTypeRouter({
         AuthMiddlewareStack(
             URLRouter(
                 whatsapp.routing.websocket_urlpatterns
+                + voz.routing.websocket_urlpatterns
             )
         )
     ),

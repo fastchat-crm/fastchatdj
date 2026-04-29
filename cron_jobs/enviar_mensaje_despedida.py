@@ -1,4 +1,14 @@
-import os, sys
+"""
+cron_jobs/enviar_mensaje_despedida.py
+
+Cierra conversaciones que han superado su tiempo de expiración (fecha_hora_expira < now).
+
+La lógica de cierre vive en ConversacionWhatsApp.cerrar() — aquí sólo se
+seleccionan las candidatas y se delega el cierre con los flags del cron.
+"""
+import os
+import sys
+
 from django.core.wsgi import get_wsgi_application
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -6,25 +16,46 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'fastchatdj.settings')
 
 application = get_wsgi_application()
 
+from django.utils import timezone
+
+from core.funciones import logCron
 from whatsapp.models import ConversacionWhatsApp
-from whatsapp.services import WhatsAppService
+
+PROCESO = 'Cierre Automático de Conversaciones'
 
 
-conversaciones = ConversacionWhatsApp.objects.expirado.filter(
-    despedida_enviado=False, conversacion_finalizada=False, fromMe=False
-).select_related('contacto', 'contacto__sesion')
-whatsapp_service = WhatsAppService()
+conversaciones = ConversacionWhatsApp.objects.filter(
+    despedida_enviado=False,
+    conversacion_finalizada=False,
+    fecha_hora_expira__lt=timezone.now(),
+    contacto__sesion__activo=True,
+).select_related(
+    'contacto',
+    'contacto__sesion',
+    'contacto__sesion__agente_ia',
+    'asignado_a',
+)
 
-try:
+total = conversaciones.count()
+
+if total == 0:
+    logCron(PROCESO, 'Sin conversaciones expiradas pendientes de cerrar', exito=True)
+else:
+    logCron(PROCESO, f'Procesando {total} conversación(es) expirada(s)', exito=True)
     for conversacion in conversaciones:
-        mensaje_despedida = conversacion.contacto.sesion.mensaje_despedida
-        from_number = conversacion.contacto.from_number
-        session_id = conversacion.contacto.sesion.session_id
-        if mensaje_despedida:
-            whatsapp_service.send_text_message(session_id, from_number, mensaje_despedida, conversacion_id=conversacion.id, simularEscritura=True)
-        conversacion.resumir_conversacion()
-        conversacion.despedida_enviado = True
-        conversacion.conversacion_finalizada = True
-        conversacion.save()
-except Exception as e:
-    print(f"Error al enviar mensajes de despedida: {e}")
+        try:
+            cerrada = conversacion.cerrar(
+                enviar_despedida=True,
+                respetar_asignacion_humana=True,
+                respetar_bloqueo_cierre=True,
+            )
+            if cerrada:
+                logCron(PROCESO, f'Conversación #{conversacion.id} cerrada por expiración', exito=True)
+            else:
+                logCron(
+                    PROCESO,
+                    f'Conversación #{conversacion.id} omitida (asignada a humano, bloqueada o ya cerrada)',
+                    exito=True,
+                )
+        except Exception as e:
+            logCron(PROCESO, f'Error al cerrar conversación #{conversacion.id}: {e}', exito=False)

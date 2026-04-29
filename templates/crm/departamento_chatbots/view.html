@@ -1,4 +1,8 @@
 {% extends 'base.html' %}
+{% load static %}
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/dpto_a_agente_ia.css' %}">
+{% endblock %}
 {% block content %}
 
     <div class="card mb-3">
@@ -34,11 +38,23 @@
     </div>
 
     <div class="row align-items-center mb-3">
-        <div class="col-md-12 mb-2 mb-md-0">
-            <a href="javascript:void(0);" class="btn btn-success btn-sm"
-               onclick="formModal(0, 'Agregar {{ titulo }}', 'add')">
+        <div class="col-md-12 mb-2 mb-md-0 d-flex gap-2 flex-wrap">
+            <a href="?action=add&full=1" class="btn btn-success btn-sm">
                 <i class="fas fa-plus-circle me-2"></i> Nuevo {{ titulo }}
             </a>
+            {% if ia_disponible %}
+                <a href="javascript:void(0);" class="btn btn-warning btn-sm"
+                   onclick="abrirModalCrearConIA()"
+                   title="Generar un departamento + opciones automáticamente describiendo tu negocio">
+                    <i class="fa fa-wand-magic-sparkles me-1"></i> Crear con IA
+                </a>
+            {% else %}
+                <button type="button" class="btn btn-outline-secondary btn-sm" disabled
+                        title="Para habilitar 'Crear con IA' configurá una API Key IA del sistema en /seguridad/configuracion/ y activá el switch 'Features de IA del sistema'">
+                    <i class="fa fa-wand-magic-sparkles me-1"></i> Crear con IA
+                    <small class="text-muted">(deshabilitado)</small>
+                </button>
+            {% endif %}
         </div>
     </div>
 
@@ -48,6 +64,7 @@
                 <table id="tabla" class="table table-hover table-striped">
                     <thead>
                     <tr>
+                        <th class="text-center">Cod.</th>
                         <th class="text-center">Nombre</th>
                         <th class="text-center">Color</th>
                         <th class="text-center">Mensaje de Saludo</th>
@@ -57,6 +74,7 @@
                     <tbody>
                     {% for l in listado %}
                         <tr>
+                            <td class="text-center"><b>{{ l.id|default:'' }}</b></td>
                             <td class="text-center">{{ l.nombre|default:'' }}</td>
                             <td class="text-center"><span
                                     style="display:inline-block; width:25px; height:25px; border-radius:5px; border:1px solid #ccc; background-color:{{ l.color }};"></span>
@@ -81,9 +99,20 @@
                                         <li class="dropdown-divider"></li>
                                         <li>
                                             <a class="dropdown-item"
-                                               onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'change')"
-                                               href="javascript:void(0);">
+                                               href="?action=change&id={{ l.pk }}&full=1">
                                                 <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="abrirModalGenerarAgente({{ l.pk }}, '{{ l.nombre|escapejs }}')">
+                                                <i class="fa fa-robot me-2 text-info"></i>Generar Agente IA
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="abrirModalDuplicar({{ l.pk }})">
+                                                <i class="fa fa-copy me-2 text-warning"></i>Duplicar
                                             </a>
                                         </li>
                                         <li>
@@ -116,6 +145,233 @@
                     <div class="modal-body detalleProd">
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    {# ───────── Modal: Crear con IA ───────── #}
+    {% if ia_disponible %}
+    <div class="modal fade" id="modalCrearConIA" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title">
+                        <i class="fa fa-wand-magic-sparkles me-2 text-warning"></i>
+                        Crear departamento con IA
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="fa fa-circle-info me-1"></i>
+                        Describí tu negocio y la IA te generará un <b>departamento completo</b> con
+                        nombre, descripción y opciones de menú jerárquicas. Después podés editarlo a mano.
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">¿Qué tipo de negocio es?</label>
+                        <input type="text" class="form-control form-control-sm" id="ia_negocio_tipo"
+                               placeholder="Ej: Pizzería · Gimnasio · Estudio jurídico · Pet shop">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Describí qué querés que el bot haga <span class="text-danger">*</span></label>
+                        <textarea class="form-control form-control-sm" id="ia_descripcion" rows="14"
+                                  style="min-height:320px;font-family:'Consolas',monospace;font-size:.82rem;line-height:1.5"
+                                  placeholder="Ej: Tenemos 4 sucursales (Centro, Norte, Sur, Oeste). Vendemos pizzas, bebidas y postres. El bot debe permitir al cliente ver el menú por sucursal, hacer pedido para retiro/delivery, consultar promociones del día, y derivar al humano si es queja. Horario lunes a domingo 11am-11pm."
+                                  maxlength="8000"></textarea>
+                        <small class="text-muted">Sé específico: sucursales, productos/servicios con precios, métodos de pago, casos para derivar a humano. <span id="ia_charcount">0</span>/8000</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Tono</label>
+                        <select class="form-select form-select-sm" id="ia_tono">
+                            <option value="amable">Amable y cercano</option>
+                            <option value="formal">Formal y profesional</option>
+                            <option value="casual">Casual y juvenil</option>
+                            <option value="directo">Directo y conciso</option>
+                        </select>
+                    </div>
+
+                    <div id="ia_resultado" class="alert d-none mb-0"></div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning btn-sm" id="btnGenerarIA">
+                        <i class="fa fa-wand-magic-sparkles me-1"></i> Generar con IA
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ───────── Modal: Generar Agente IA desde un departamento ───────── #}
+    <div class="modal fade" id="modalGenerarAgente" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header py-2 dpto-agente-header">
+                    <h5 class="modal-title">
+                        <i class="fa fa-robot me-2"></i>
+                        Generar Agente IA desde departamento
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                            aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="fa fa-circle-info me-1"></i>
+                        Vamos a crear un <b>Agente IA nuevo</b> con los datos del departamento
+                        <b id="dpto_agente_nombre">—</b>: saludo, opciones del menú, endpoints y perfil
+                        de empresa. El departamento sigue funcionando como flujo tradicional;
+                        el agente IA queda independiente y editable desde Entrenamiento IA.
+                    </div>
+
+                    {% if not tiene_perfil_ia %}
+                        <div class="alert alert-warning py-2 small mb-0">
+                            <i class="fa fa-triangle-exclamation me-1"></i>
+                            Antes de generar un agente necesitás configurar tu
+                            <a href="/crm/perfil_empresa/" class="alert-link">Perfil de Empresa</a>.
+                        </div>
+                    {% elif not apikeys_ia %}
+                        <div class="alert alert-warning py-2 small mb-0">
+                            <i class="fa fa-triangle-exclamation me-1"></i>
+                            No tenés API Keys IA cargadas. Creá una en
+                            <a href="/crm/entrenamiento/" class="alert-link">Entrenamiento IA</a>
+                            antes de generar el agente.
+                        </div>
+                    {% else %}
+                        <input type="hidden" id="dpto_agente_id" value="">
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Nombre del agente</label>
+                            <input type="text" class="form-control form-control-sm" id="ag_nombre"
+                                   placeholder="Ej: Agente · Ventas">
+                            <small class="text-muted">Si lo dejás vacío usamos «Agente · {nombre del depto}».</small>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">API Key IA <span class="text-danger">*</span></label>
+                                <select class="form-select form-select-sm" id="ag_apikey">
+                                    {% for k in apikeys_ia %}
+                                        <option value="{{ k.id }}">
+                                            {{ k.alias|default:'(sin alias)' }} · {{ k.modelo|default:'default' }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Personalidad</label>
+                                <select class="form-select form-select-sm" id="ag_preset">
+                                    <option value="amable" selected>Amable</option>
+                                    <option value="directo">Directo</option>
+                                    <option value="formal">Formal</option>
+                                    <option value="vendedor">Vendedor</option>
+                                    <option value="personalizado">Personalizado (configurar luego)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="ag_resultado" class="alert d-none mt-3 mb-0"></div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    {% if tiene_perfil_ia and apikeys_ia %}
+                        <button type="button" class="btn btn-primary btn-sm" id="btnGenerarAgenteIA">
+                            <i class="fa fa-wand-magic-sparkles me-1"></i> Generar Agente IA
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ───────── Modal: Duplicar departamento ───────── #}
+    <div class="modal fade" id="modalDuplicarDpto" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2 dup-dpto-header">
+                    <h5 class="modal-title">
+                        <i class="fa fa-copy me-2"></i>
+                        Duplicar departamento
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                            aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="dup_dpto_loading" class="text-center text-muted py-4">
+                        <i class="fa fa-spinner fa-spin fa-2x mb-2"></i>
+                        <div>Cargando información…</div>
+                    </div>
+
+                    <div id="dup_dpto_content" style="display:none;">
+                        <div class="alert alert-info py-2 small mb-3">
+                            <i class="fa fa-circle-info me-1"></i>
+                            Vamos a crear una copia exacta del departamento, incluyendo
+                            <b>nodos, conexiones, endpoints y usuarios asignados</b>.
+                            Cambiá el nombre si querés diferenciarlo.
+                        </div>
+
+                        <input type="hidden" id="dup_dpto_id" value="">
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-8">
+                                <label class="form-label small fw-bold">Nuevo nombre <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control form-control-sm" id="dup_dpto_nombre"
+                                       maxlength="100" placeholder="Nombre del nuevo departamento">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold">Color</label>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span id="dup_dpto_color_swatch"
+                                          style="display:inline-block;width:30px;height:30px;border-radius:6px;border:1px solid #ccc;"></span>
+                                    <span id="dup_dpto_color_hex" class="small text-muted font-monospace"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-body py-2 px-3">
+                                <h6 class="fw-bold mb-2 small text-uppercase text-muted">
+                                    <i class="fa fa-list-check me-1"></i> Resumen del original
+                                </h6>
+                                <div class="row g-2 small">
+                                    <div class="col-md-6">
+                                        <div><b>Nombre original:</b> <span id="dup_dpto_orig_nombre"></span></div>
+                                        <div><b>Saludo:</b> <span id="dup_dpto_saludo" class="text-muted"></span></div>
+                                        <div><b>Default del sistema:</b> <span id="dup_dpto_default"></span>
+                                            <small class="text-muted">(la copia siempre se crea como NO default)</small>
+                                        </div>
+                                        <div><b>Flujo activo:</b> <span id="dup_dpto_activo"></span></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div><b>Nodos:</b> <span id="dup_dpto_nodos" class="badge bg-primary"></span></div>
+                                        <div><b>Conexiones:</b> <span id="dup_dpto_conexiones" class="badge bg-info"></span></div>
+                                        <div><b>Endpoints API distintos:</b> <span id="dup_dpto_endpoints" class="badge bg-secondary"></span>
+                                            <small class="text-muted">(se reutilizan, no se clonan)</small>
+                                        </div>
+                                        <div><b>Usuarios asignados:</b> <span id="dup_dpto_usuarios" class="badge bg-success"></span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="dup_dpto_palabras_wrap" class="mb-3" style="display:none;">
+                            <label class="form-label small fw-bold mb-1">Palabras clave</label>
+                            <div id="dup_dpto_palabras" class="d-flex flex-wrap gap-1"></div>
+                        </div>
+
+                        <div id="dup_dpto_resultado" class="alert d-none mb-0"></div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning btn-sm" id="btnDuplicarDpto" disabled>
+                        <i class="fa fa-copy me-1"></i> Duplicar
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -274,7 +530,349 @@
             $('#modalDetalle').on('hidden.bs.modal', function () {
                 $('#arbolOpciones').empty();
             });
+        });
 
-        })
+        // ───── Generar Agente IA desde un departamento ─────
+        let _modalAgenteInstance = null;
+        function abrirModalGenerarAgente(dptoId, dptoNombre) {
+            const el = document.getElementById('modalGenerarAgente');
+            if (!el) return;
+            if (!_modalAgenteInstance) _modalAgenteInstance = new bootstrap.Modal(el);
+            const $id = document.getElementById('dpto_agente_id');
+            if ($id) $id.value = dptoId;
+            const $nom = document.getElementById('dpto_agente_nombre');
+            if ($nom) $nom.textContent = dptoNombre || '—';
+            const $name = document.getElementById('ag_nombre');
+            if ($name) $name.value = '';
+            const res = document.getElementById('ag_resultado');
+            if (res) {
+                res.classList.add('d-none');
+                res.innerHTML = '';
+            }
+            _modalAgenteInstance.show();
+        }
+
+        const _btnGenAg = document.getElementById('btnGenerarAgenteIA');
+        if (_btnGenAg) {
+            _btnGenAg.addEventListener('click', async function () {
+                const dptoId = (document.getElementById('dpto_agente_id') || {}).value;
+                const apikey = (document.getElementById('ag_apikey') || {}).value;
+                const nombre = ((document.getElementById('ag_nombre') || {}).value || '').trim();
+                const preset = (document.getElementById('ag_preset') || {}).value || 'amable';
+                const res = document.getElementById('ag_resultado');
+                const btn = this;
+
+                if (!dptoId) {
+                    res.classList.remove('d-none', 'alert-success', 'alert-info');
+                    res.classList.add('alert-danger');
+                    res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Departamento no detectado, recargá la página.';
+                    return;
+                }
+                if (!apikey) {
+                    res.classList.remove('d-none', 'alert-success', 'alert-info');
+                    res.classList.add('alert-danger');
+                    res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Elegí una API Key IA.';
+                    return;
+                }
+
+                const orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Creando agente...';
+                res.classList.remove('d-none', 'alert-danger', 'alert-success');
+                res.classList.add('alert-info');
+                res.innerHTML = '<i class="fa fa-cog fa-spin me-1"></i> Generando agente IA con los datos del departamento...';
+
+                const fd = new FormData();
+                fd.append('action', 'crear_agente_desde_dpto');
+                fd.append('csrfmiddlewaretoken', document.querySelector('input[name=csrfmiddlewaretoken]').value);
+                fd.append('departamento_id', dptoId);
+                fd.append('apikey_id', apikey);
+                fd.append('nombre', nombre);
+                fd.append('personalidad_preset', preset);
+
+                try {
+                    const r = await fetch('{{ request.path }}', {
+                        method: 'POST',
+                        body: fd,
+                        headers: {'X-Requested-With': 'XMLHttpRequest'},
+                        credentials: 'same-origin',
+                    });
+                    const data = await r.json();
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+
+                    if (data.error) {
+                        res.classList.remove('alert-info', 'alert-success');
+                        res.classList.add('alert-danger');
+                        res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> ' + (data.message || 'No se pudo crear el agente.');
+                        return;
+                    }
+
+                    res.classList.remove('alert-info', 'alert-danger');
+                    res.classList.add('alert-success');
+                    res.innerHTML =
+                        '<i class="fa fa-circle-check me-1"></i> <b>Agente creado:</b> ' +
+                        (data.agente_nombre || '') +
+                        '. Te llevamos al editor...';
+                    setTimeout(() => {
+                        if (data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            window.location.reload();
+                        }
+                    }, 1100);
+
+                } catch (ex) {
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+                    res.classList.remove('alert-info', 'alert-success');
+                    res.classList.add('alert-danger');
+                    res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Error de red: ' + ex.message;
+                }
+            });
+        }
+
+        // ───── Duplicar departamento ─────
+        let _modalDupInstance = null;
+        function abrirModalDuplicar(dptoId) {
+            const el = document.getElementById('modalDuplicarDpto');
+            if (!el) return;
+            if (!_modalDupInstance) _modalDupInstance = new bootstrap.Modal(el);
+            // Reset estado del modal
+            document.getElementById('dup_dpto_loading').style.display = '';
+            document.getElementById('dup_dpto_content').style.display = 'none';
+            const res = document.getElementById('dup_dpto_resultado');
+            res.classList.add('d-none');
+            res.innerHTML = '';
+            const btn = document.getElementById('btnDuplicarDpto');
+            btn.disabled = true;
+            _modalDupInstance.show();
+
+            // Cargar info del depto
+            const fd = new FormData();
+            fd.append('action', 'duplicar_info');
+            fd.append('csrfmiddlewaretoken', document.querySelector('input[name=csrfmiddlewaretoken]').value);
+            fd.append('id', dptoId);
+
+            fetch('{{ request.path }}', {
+                method: 'POST',
+                body: fd,
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
+                credentials: 'same-origin',
+            }).then(r => r.json()).then(resp => {
+                if (resp.error) {
+                    document.getElementById('dup_dpto_loading').innerHTML =
+                        '<div class="alert alert-danger mb-0">' +
+                        '<i class="fa fa-circle-xmark me-1"></i> ' + (resp.message || 'Error') + '</div>';
+                    return;
+                }
+                const d = resp.data;
+                document.getElementById('dup_dpto_id').value = d.id;
+                document.getElementById('dup_dpto_nombre').value = d.nombre_sugerido;
+                document.getElementById('dup_dpto_orig_nombre').textContent = d.nombre;
+                const swatch = document.getElementById('dup_dpto_color_swatch');
+                swatch.style.backgroundColor = d.color || '#cccccc';
+                document.getElementById('dup_dpto_color_hex').textContent = d.color || '(sin color)';
+                document.getElementById('dup_dpto_saludo').textContent =
+                    d.mensaje_saludo ? (d.mensaje_saludo.length > 120 ? d.mensaje_saludo.slice(0, 120) + '…' : d.mensaje_saludo) : '(sin saludo)';
+                document.getElementById('dup_dpto_default').textContent = d.es_default ? 'Sí' : 'No';
+                document.getElementById('dup_dpto_activo').textContent = d.activo_tradicional ? 'Sí' : 'No';
+                document.getElementById('dup_dpto_nodos').textContent = d.count_opciones;
+                document.getElementById('dup_dpto_conexiones').textContent = d.count_conexiones;
+                document.getElementById('dup_dpto_endpoints').textContent = d.count_endpoints;
+                document.getElementById('dup_dpto_usuarios').textContent = d.count_usuarios;
+
+                const palWrap = document.getElementById('dup_dpto_palabras_wrap');
+                const palCont = document.getElementById('dup_dpto_palabras');
+                palCont.innerHTML = '';
+                if (d.palabras_clave && d.palabras_clave.length) {
+                    d.palabras_clave.forEach(p => {
+                        const span = document.createElement('span');
+                        span.className = 'badge bg-light text-dark border';
+                        span.textContent = p;
+                        palCont.appendChild(span);
+                    });
+                    palWrap.style.display = '';
+                } else {
+                    palWrap.style.display = 'none';
+                }
+
+                document.getElementById('dup_dpto_loading').style.display = 'none';
+                document.getElementById('dup_dpto_content').style.display = '';
+                btn.disabled = false;
+            }).catch(ex => {
+                document.getElementById('dup_dpto_loading').innerHTML =
+                    '<div class="alert alert-danger mb-0">' +
+                    '<i class="fa fa-circle-xmark me-1"></i> Error de red: ' + ex.message + '</div>';
+            });
+        }
+
+        const _btnDup = document.getElementById('btnDuplicarDpto');
+        if (_btnDup) {
+            _btnDup.addEventListener('click', async function () {
+                const dptoId = (document.getElementById('dup_dpto_id') || {}).value;
+                const nombre = ((document.getElementById('dup_dpto_nombre') || {}).value || '').trim();
+                const res = document.getElementById('dup_dpto_resultado');
+                const btn = this;
+
+                if (!dptoId) {
+                    res.classList.remove('d-none', 'alert-success', 'alert-info');
+                    res.classList.add('alert-danger');
+                    res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Departamento no detectado, recargá.';
+                    return;
+                }
+                if (!nombre) {
+                    res.classList.remove('d-none', 'alert-success', 'alert-info');
+                    res.classList.add('alert-danger');
+                    res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Ingresá un nombre para la copia.';
+                    return;
+                }
+
+                const orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Duplicando...';
+                res.classList.remove('d-none', 'alert-danger', 'alert-success');
+                res.classList.add('alert-info');
+                res.innerHTML = '<i class="fa fa-cog fa-spin me-1"></i> Clonando nodos, conexiones y usuarios...';
+
+                const fd = new FormData();
+                fd.append('action', 'duplicar');
+                fd.append('csrfmiddlewaretoken', document.querySelector('input[name=csrfmiddlewaretoken]').value);
+                fd.append('id', dptoId);
+                fd.append('nuevo_nombre', nombre);
+
+                try {
+                    const r = await fetch('{{ request.path }}', {
+                        method: 'POST',
+                        body: fd,
+                        headers: {'X-Requested-With': 'XMLHttpRequest'},
+                        credentials: 'same-origin',
+                    });
+                    const data = await r.json();
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+
+                    if (data.error) {
+                        res.classList.remove('alert-info', 'alert-success');
+                        res.classList.add('alert-danger');
+                        res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> ' + (data.message || 'Error al duplicar.');
+                        return;
+                    }
+
+                    res.classList.remove('alert-info', 'alert-danger');
+                    res.classList.add('alert-success');
+                    res.innerHTML =
+                        '<i class="fa fa-circle-check me-1"></i> <b>' + (data.departamento_nombre || '') +
+                        '</b> creado · ' + (data.nodos || 0) + ' nodos · ' +
+                        (data.conexiones || 0) + ' conexiones · ' +
+                        (data.usuarios || 0) + ' usuarios. Recargando…';
+                    setTimeout(() => window.location.reload(), 1200);
+                } catch (ex) {
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+                    res.classList.remove('alert-info', 'alert-success');
+                    res.classList.add('alert-danger');
+                    res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Error de red: ' + ex.message;
+                }
+            });
+        }
+
+        {% if ia_disponible %}
+        // ───── Crear con IA ─────
+        let _modalIaInstance = null;
+        function abrirModalCrearConIA() {
+            const el = document.getElementById('modalCrearConIA');
+            if (!el) return;
+            if (!_modalIaInstance) _modalIaInstance = new bootstrap.Modal(el);
+            // Reset campos
+            document.getElementById('ia_negocio_tipo').value = '';
+            document.getElementById('ia_descripcion').value = '';
+            document.getElementById('ia_tono').value = 'amable';
+            document.getElementById('ia_charcount').textContent = '0';
+            const res = document.getElementById('ia_resultado');
+            res.classList.add('d-none');
+            res.innerHTML = '';
+            _modalIaInstance.show();
+        }
+
+        // Contador chars
+        document.addEventListener('input', function (e) {
+            if (e.target && e.target.id === 'ia_descripcion') {
+                document.getElementById('ia_charcount').textContent = e.target.value.length;
+            }
+        });
+
+        document.getElementById('btnGenerarIA').addEventListener('click', async function () {
+            const desc = document.getElementById('ia_descripcion').value.trim();
+            const tipo = document.getElementById('ia_negocio_tipo').value.trim();
+            const tono = document.getElementById('ia_tono').value;
+            const res = document.getElementById('ia_resultado');
+            const btn = this;
+
+            if (desc.length < 30) {
+                res.classList.remove('d-none', 'alert-success', 'alert-info');
+                res.classList.add('alert-danger');
+                res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Describí con más detalle (mínimo 30 caracteres).';
+                return;
+            }
+
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Generando con IA...';
+            res.classList.remove('d-none', 'alert-danger', 'alert-success');
+            res.classList.add('alert-info');
+            res.innerHTML = '<i class="fa fa-robot me-1"></i> La IA está armando tu departamento... esto toma 5-15 segundos.';
+
+            const fd = new FormData();
+            fd.append('action', 'generar_con_ia');
+            fd.append('csrfmiddlewaretoken', document.querySelector('input[name=csrfmiddlewaretoken]').value);
+            fd.append('descripcion', desc);
+            fd.append('tipo_negocio', tipo);
+            fd.append('tono', tono);
+
+            try {
+                const r = await fetch('{{ request.path }}', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'X-Requested-With': 'XMLHttpRequest'},
+                    credentials: 'same-origin',
+                });
+                const data = await r.json();
+                btn.disabled = false;
+                btn.innerHTML = orig;
+
+                if (data.error) {
+                    res.classList.remove('alert-info', 'alert-success');
+                    res.classList.add('alert-danger');
+                    let html = '<i class="fa fa-circle-xmark me-1"></i> ' + (data.message || 'Error generando con IA.');
+                    if (data.raw_preview) {
+                        const escapado = data.raw_preview.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+                        html += '<details class="mt-2"><summary class="small">Ver respuesta cruda del LLM</summary>' +
+                                '<pre style="background:#1f2937;color:#d1d5db;padding:.5rem;border-radius:6px;font-size:.7rem;max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:.35rem 0 0">' +
+                                escapado +
+                                '</pre></details>';
+                    }
+                    res.innerHTML = html;
+                    return;
+                }
+
+                res.classList.remove('alert-info', 'alert-danger');
+                res.classList.add('alert-success');
+                res.innerHTML =
+                    '<i class="fa fa-circle-check me-1"></i> <b>Departamento creado:</b> ' +
+                    (data.nombre || '') +
+                    ' con ' + (data.opciones_count || 0) + ' opciones de menú. ' +
+                    'Recargando...';
+                setTimeout(() => window.location.reload(), 1500);
+
+            } catch (ex) {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                res.classList.remove('alert-info', 'alert-success');
+                res.classList.add('alert-danger');
+                res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Error de red: ' + ex.message;
+            }
+        });
+        {% endif %}
     </script>
 {% endblock %}

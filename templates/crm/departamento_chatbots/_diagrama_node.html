@@ -1,0 +1,72 @@
+<li>
+    {% if nodo.etiqueta %}
+        <div class="dp-tree-edge-label">
+            <span class="badge bg-light text-dark border">{{ nodo.etiqueta }}</span>
+        </div>
+    {% endif %}
+    <div class="dp-tree-card tipo-{{ nodo.opcion.tipo_nodo }}{% if nodo.cycle %} dp-tree-cycle{% endif %}">
+        <div class="dp-tree-card-pill dp-tipo-pill tipo-{{ nodo.opcion.tipo_nodo }}">
+            {{ nodo.opcion.get_tipo_nodo_display }}
+        </div>
+        <div class="dp-tree-card-name">
+            {% if nodo.opcion.es_inicio %}
+                <i class="fa fa-play text-success me-1" title="Nodo de inicio"></i>
+            {% endif %}
+            {{ nodo.opcion.nombre|default:'(sin nombre)' }}
+            {% if nodo.cycle %}
+                <i class="fa fa-rotate-left text-muted ms-1" title="Vuelve a un nodo ya visitado"></i>
+            {% endif %}
+        </div>
+        <div class="dp-tree-card-flags">
+            {% if nodo.opcion.tipo_nodo == 'fin' %}
+                <span class="dp-flag-pill dp-flag-fin" title="Finaliza la conversación">
+                    <i class="fa fa-flag-checkered"></i> Termina
+                </span>
+            {% endif %}
+            {% if nodo.opcion.config.envia_correo %}
+                <span class="dp-flag-pill dp-flag-email" title="Envía correo">
+                    <i class="fa fa-envelope"></i> Correo
+                </span>
+            {% endif %}
+            {% if nodo.opcion.tipo_nodo == 'menu' and nodo.opcion.config.opcion_default and nodo.opcion.config.opcion_default.valor %}
+                <span class="dp-flag-pill dp-flag-default"
+                      title="Atajo Sí/Otra: autoasigna ${{ nodo.opcion.variable_destino }}={{ nodo.opcion.config.opcion_default.valor }} al confirmar">
+                    <i class="fa fa-bolt"></i>
+                    Atajo {{ nodo.opcion.config.opcion_default.etiqueta|default:nodo.opcion.config.opcion_default.valor|truncatechars:18 }}
+                </span>
+            {% endif %}
+            {% if nodo.opcion.tipo_nodo == 'funcion' %}
+                <span class="dp-flag-pill" style="background:#f5f3ff;color:#6d28d9;border:1px solid #ddd6fe;"
+                      title="Función Python registrada: {{ nodo.opcion.config.funcion_codigo|default:'(sin código)' }}">
+                    <i class="fa fa-bolt"></i>
+                    fn:{{ nodo.opcion.config.funcion_codigo|default:'?'|truncatechars:18 }}
+                </span>
+            {% endif %}
+        </div>
+        {% if nodo.opcion.boton_id %}
+            <div class="dp-tree-card-btnid">id: <code>{{ nodo.opcion.boton_id }}</code></div>
+        {% endif %}
+        {% if nodo.opcion.respuesta %}
+            <div class="dp-tree-card-resp">{{ nodo.opcion.respuesta|truncatechars:90 }}</div>
+        {% endif %}
+        <div class="dp-tree-card-actions">
+            <a href="/crm/departamentos_chatbots/?action=change&id={{ nodo.opcion.departamento_id }}&full=1#nodo-{{ nodo.opcion.id }}"
+               class="btn btn-xs btn-outline-primary"
+               title="Editar este nodo en el editor">
+                <i class="fa fa-pen"></i>
+            </a>
+            <button type="button" class="btn btn-xs btn-outline-info"
+                    data-act="ver-ficha-nodo" data-nodo-id="{{ nodo.opcion.id }}"
+                    title="Ver ficha completa de este nodo">
+                <i class="fa fa-id-card"></i>
+            </button>
+        </div>
+    </div>
+    {% if nodo.hijos %}
+        <ul>
+            {% for h in nodo.hijos %}
+                {% include "crm/departamento_chatbots/_diagrama_node.html" with nodo=h %}
+            {% endfor %}
+        </ul>
+    {% endif %}
+</li>

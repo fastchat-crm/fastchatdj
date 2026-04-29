@@ -1,0 +1,128 @@
+/* ========== quienes-somos.css — estilos de /quienes-somos/ ========== */
+
+.qs-wrapper {
+    padding: 15px;
+}
+
+.qs-wrapper h1 {
+    font-weight: 700;
+    color: #2874A6;
+    margin-bottom: 12px;
+}
+
+.qs-wrapper h2 {
+    font-weight: 600;
+    color: #1f3a5f;
+    margin-top: 28px;
+    margin-bottom: 14px;
+    font-size: 1.5rem;
+    border-left: 4px solid #2874A6;
+    padding-left: 12px;
+}
+
+.qs-slogan {
+    font-size: 1.15rem;
+    font-style: italic;
+    color: #4a5568;
+    margin: 18px 0 10px 0;
+    line-height: 1.5;
+}
+
+.qs-tagline {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #2874A6;
+    margin-bottom: 24px;
+}
+
+.qs-card {
+    background: #ffffff;
+    border: 1px solid #e3e8ee;
+    border-radius: 10px;
+    padding: 22px 26px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    margin-bottom: 20px;
+}
+
+.qs-list {
+    list-style: none;
+    padding-left: 0;
+    margin-bottom: 0;
+}
+
+.qs-list li {
+    padding: 10px 0;
+    border-bottom: 1px solid #eef1f5;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.qs-list li:last-child {
+    border-bottom: none;
+}
+
+.qs-list li i {
+    color: #25d366;
+    margin-top: 4px;
+    min-width: 18px;
+}
+
+.qs-list li strong {
+    color: #1f3a5f;
+}
+
+.qs-stack {
+    background: linear-gradient(135deg, #2874A6 0%, #1a5380 100%);
+    color: #ffffff;
+    padding: 20px 24px;
+    border-radius: 10px;
+    margin-top: 20px;
+    font-size: 0.95rem;
+    line-height: 1.7;
+    word-break: break-word;
+}
+
+.qs-stack strong {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 1.05rem;
+    letter-spacing: 0.3px;
+}
+
+.qs-contact {
+    background: #f7f9fc;
+    border: 1px dashed #cfd8e3;
+    border-radius: 10px;
+    padding: 18px 22px;
+    margin-top: 24px;
+}
+
+.qs-contact p {
+    margin-bottom: 6px;
+    color: #3a4a5e;
+}
+
+.qs-contact a {
+    color: #2874A6;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.qs-contact a:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 576px) {
+    .qs-wrapper h1 {
+        font-size: 1.6rem;
+    }
+
+    .qs-wrapper h2 {
+        font-size: 1.25rem;
+    }
+
+    .qs-card {
+        padding: 16px 18px;
+    }
+}

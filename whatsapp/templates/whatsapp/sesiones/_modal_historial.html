@@ -1,0 +1,38 @@
+{# Modal historial — log entries de la sesion (conectada, reconectada, editada, etc). #}
+<div class="detail-wrap">
+  <div class="detail-head">
+    <div>
+      <h5>Historial de conexiones</h5>
+      <p class="muted">Últimos 80 eventos de <b>{{ sesion.nombre|default:sesion.numero }}</b></p>
+    </div>
+    <button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>
+  </div>
+
+  <div class="detail-body">
+    {% if entries %}
+      <ol class="timeline">
+        {% for e in entries %}
+          <li class="timeline-item">
+            <span class="tl-dot tl-{{ e.action_flag }}"></span>
+            <div class="tl-content">
+              <div class="tl-msg">{{ e.change_message|default:e.object_repr }}</div>
+              <div class="tl-meta">
+                {{ e.action_time|date:"d M Y · H:i" }}
+                {% if e.user %} · <b>{{ e.user.get_full_name|default:e.user.username }}</b>{% endif %}
+              </div>
+            </div>
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <div class="detail-empty">
+        <i class="fa fa-clock-rotate-left"></i>
+        <p>Todavía no hay eventos registrados para esta sesión.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="detail-actions">
+    <button type="button" class="conex-btn conex-btn-light" data-cerrar-detail>Cerrar</button>
+  </div>
+</div>

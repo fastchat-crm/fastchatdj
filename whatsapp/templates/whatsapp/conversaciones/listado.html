@@ -1,15 +1,58 @@
 {% extends 'base.html' %}
+{% load templatefunctions %}
 {% block head %}
+<link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css">
+<link rel="stylesheet" href="/static/stylenew/conversaciones.css">
 <style>
-    .chat-body {
-        height: calc(100vh - 250px);
+    /* ── Layout flexbox: anula el position:absolute del tema ── */
+    .chat-box-right {
+        display: flex !important;
+        flex-direction: column;
+        height: calc(100vh - 120px) !important;
+        position: relative;
+    }
+    #chat-header { flex-shrink: 0; }
+
+    /* Anula position:absolute del tema para que el footer entre en el flujo */
+    .chat-box-right .chat-body {
+        flex: 1 1 auto !important;
+        height: 105% !important;
+        min-height: 0;
         overflow-y: auto;
+        padding-bottom: 0 !important;
+    }
+    .chat-box-right .chat-footer {
+        position: static !important;   /* cancela el absolute del tema */
+        flex-shrink: 0;
+        width: 100% !important;
+        background: #f0f2f5 !important;
+        border-top: 1px solid #dde1e7;
+        box-shadow: 0 -2px 8px rgba(0,0,0,.07);
+        border-radius: 0 0 8px 8px;
+        padding: 10px 14px !important;
     }
 
     .chat-body-left {
-        height: calc(100vh - 500px) !important;
+        {#height: calc(100vh - 500px) !important;#}
         overflow-y: auto;
     }
+
+    /* Badge de atribución (CTWA ad) en chat header */
+    .attrib-badge {
+        background: linear-gradient(135deg, #1877f2, #166fe5);
+        color: #fff !important;
+        border: none;
+        font-size: .72rem;
+        font-weight: 600;
+        padding: .35em .65em;
+        text-decoration: none !important;
+        cursor: pointer;
+    }
+    .attrib-badge:hover {
+        background: linear-gradient(135deg, #166fe5, #0d5dcb);
+        color: #fff !important;
+    }
+    .attrib-badge .fa-bullhorn { font-size: .7rem; }
 
     .conversacion-item {
         cursor: pointer;
@@ -22,26 +65,136 @@
         background-color: rgba(0,123,255,0.1);
         border-color: #007bff !important;
     }
+    /* Filtros rápidos */
+    .btn-xs {
+        font-size: .75rem;
+        padding: .2rem .55rem;
+        border-radius: 20px;
+        border: 1px solid #dee2e6;
+        background: #fff;
+        color: #6c757d;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .btn-xs:hover, .btn-xs.active {
+        background: #0d6efd;
+        color: #fff;
+        border-color: #0d6efd;
+    }
+    .btn-xs.active.sin-responder { background: #dc3545; border-color: #dc3545; }
+    /* Bot toggle */
+    #btn-toggle-bot.bot-on  { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+    #btn-toggle-bot.bot-off { background: #fce4ec; color: #c62828; border: 1px solid #ef9a9a; }
 
-    /* Añadir estos estilos en tu CSS */
-    .deleted-message {
-        opacity: 0.7;
-        font-style: italic;
+    /* Chat background */
+    #chat-messages {
+        background-color: #e5ddd5;
+        background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8b8a2' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    /* Anclar mensajes al fondo como WhatsApp Web */
+    #chat-messages .simplebar-content-wrapper { display: flex; flex-direction: column; }
+    #chat-messages .simplebar-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 8px 0 4px !important;
+        min-height: 100%;
     }
 
-    .edited-message p {
-        position: relative;
+    /* ── Emoji picker ── */
+    #emoji-picker-popup {
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 0;
+        width: 320px;
+        max-height: 260px;
+        background: #fff;
+        border: 1px solid #dde1e7;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,.18);
+        overflow-y: auto;
+        z-index: 999;
+        padding: 8px;
+        display: none;
     }
-
-    .edited-message small {
-        font-size: 0.7em;
-        margin-top: -5px;
-        display: block;
+    #emoji-picker-popup .emoji-cat-title {
+        font-size: .68rem;
+        font-weight: 600;
+        color: #888;
+        padding: 4px 2px 2px;
+        letter-spacing: .04em;
+        text-transform: uppercase;
     }
+    #emoji-picker-popup .emoji-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px;
+        margin-bottom: 4px;
+    }
+    #emoji-picker-popup .e {
+        font-size: 1.35rem;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        border-radius: 6px;
+        transition: background .12s;
+        user-select: none;
+    }
+    #emoji-picker-popup .e:hover { background: #f0f0f0; }
+    #emoji-btn {
+        width: 38px; height: 38px; border-radius: 50%;
+        background: none; border: none; font-size: 1.25rem;
+        cursor: pointer; color: #6c757d; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        transition: background .15s;
+    }
+    #emoji-btn:hover { background: rgba(0,0,0,.07); }
 </style>
 {% endblock %}
 
 {% block content %}
+
+{# ── Toast de nuevo mensaje ──────────────────────────────────────────────── #}
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:9999">
+    <div id="toast-nuevo-mensaje" class="toast align-items-center text-white border-0"
+         role="alert" aria-live="assertive" aria-atomic="true"
+         style="background:linear-gradient(135deg,#25d366,#128c5e);min-width:280px;">
+        <div class="d-flex">
+            <div class="toast-body d-flex align-items-center gap-2">
+                <i class="fab fa-whatsapp fs-5"></i>
+                <div>
+                    <div class="fw-semibold" id="toast-nombre" style="font-size:.88rem;">Nuevo mensaje</div>
+                    <div class="text-white-75" id="toast-sub" style="font-size:.78rem;opacity:.85;">WhatsApp</div>
+                </div>
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                    data-bs-dismiss="toast" aria-label="Cerrar"></button>
+        </div>
+    </div>
+</div>
+
+    {% if sesion_seleccionada and not sesion_seleccionada.activo %}
+        <div class="alert-sesion-pausada" role="alert">
+            <div class="alert-sp-icon"><i class="fa fa-pause-circle"></i></div>
+            <div class="alert-sp-body">
+                <div class="alert-sp-title">Esta sesión está PAUSADA</div>
+                <div class="alert-sp-msg">
+                    <b>{{ sesion_seleccionada.nombre|default:sesion_seleccionada.numero }}</b> no procesa mensajes
+                    entrantes ni envía respuestas (no consume API ni IA). Selecciona otra sesión del combo o
+                    reactívala desde
+                    <a href="/whatsapp/sesiones/" class="alert-sp-link">Sesiones</a>.
+                </div>
+            </div>
+            <button type="button" class="alert-sp-cta" id="btn-cambiar-sesion-pausada">
+                <i class="fa fa-arrow-left-right"></i> Cambiar sesión
+            </button>
+        </div>
+    {% endif %}
+
     <div class="row">
         <div class="col-12">
             <div class="chat-box-left">
@@ -49,10 +202,10 @@
                 <!-- Selector de sesiones -->
                 <div class="p-3">
                     <div class="d-flex">
-                        <select id="sesion-selector" class="form-select">
+                        <select id="sesion-selector" class="form-select{% if sesion_seleccionada and not sesion_seleccionada.activo %} sesion-selector-pausada{% endif %}">
                                 {% for sesion in sesiones %}
                                     <option value="{{ sesion.id }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
-                                        {{ sesion.numero }} | {{ sesion.nombre }} ({{ sesion.get_estado_display }})
+                                        {% if sesion.es_meta %}☁️ Meta{% elif sesion.es_baileys %}📱 Baileys{% elif sesion.es_instagram %}📸 IG{% elif sesion.es_messenger %}💬 FB{% endif %} · {{ sesion.numero }} | {{ sesion.nombre }} ({{ sesion.get_estado_display }}{% if not sesion.activo %} · ⏸ PAUSADA{% endif %})
                                     </option>
                                 {% endfor %}
                             </select>
@@ -63,12 +216,44 @@
                 <ul class="nav nav-tabs nav-justified" id="myTab" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link py-2 active" id="open_chats_tab" data-bs-toggle="tab"
-                               data-bs-target="#open_chats_content" type="button" role="tab">Conversaciones Abiertas</button>
+                               data-bs-target="#open_chats_content" type="button" role="tab">
+                            Abiertas
+                            {% if total_sin_leer %}<span class="badge bg-danger ms-1">{{ total_sin_leer }}</span>{% endif %}
+                        </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <a href="/whatsapp/conversaciones-finalizadas/" class="nav-link py-2 bloqueo_pantalla" id="resolved_chats_tab">Conversaciones Finalizadas</a>
+                        <a href="/whatsapp/conversaciones-finalizadas/" class="nav-link py-2 bloqueo_pantalla" id="resolved_chats_tab">Finalizadas</a>
                     </li>
                 </ul>
+                <!-- Filtros rápidos -->
+                <div class="px-3 pt-2 pb-1 d-flex flex-wrap gap-1" id="filtros-rapidos">
+                    <button class="btn btn-xs filter-btn {% if not filtro_sin_responder and not filtro_mis_conv and not filtro_clasificacion %}active{% endif %}"
+                            data-filter="">
+                        <i class="fa fa-th-list me-1"></i>Todas
+                    </button>
+                    <button class="btn btn-xs filter-btn {% if filtro_sin_responder %}active{% endif %}"
+                            data-filter="sin_responder=1"
+                            title="Último mensaje es del cliente">
+                        <i class="fa fa-reply me-1"></i>Sin responder
+                    </button>
+                    <button class="btn btn-xs filter-btn {% if filtro_mis_conv %}active{% endif %}"
+                            data-filter="mis_conv=1">
+                        <i class="fa fa-user me-1"></i>Mis conv.
+                    </button>
+                    <div class="dropdown">
+                        <button class="btn btn-xs filter-btn dropdown-toggle {% if filtro_clasificacion %}active{% endif %}" data-bs-toggle="dropdown">
+                            <i class="fa fa-tag me-1"></i>Etapa
+                        </button>
+                        <ul class="dropdown-menu">
+                            {% for val, label in ESTADOS_CLASIFICACION %}
+                            <li>
+                                <a class="dropdown-item filter-link" href="#"
+                                   data-filter="clasificacion={{ val }}">{{ label }}</a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
 
 
                 <div class="chat-search p-3">
@@ -99,24 +284,67 @@
 
             <div class="chat-box-right">
                 <div class="p-3 d-flex justify-content-between align-items-center card-bg rounded" id="chat-header">
+                    <button type="button" class="btn btn-sm btn-link text-dark me-2 d-md-none chat-back-btn" id="chat-back-btn"
+                            title="Volver a la lista">
+                        <i class="fa fa-arrow-left"></i>
+                    </button>
                     <a href="javascript:void(0);" class="d-flex align-self-center">
                         <div class="flex-shrink-0">
                             <img src="/static/assets/img/avatar.png" alt="user" class="rounded-circle thumb-lg" id="contacto-foto">
                         </div><!-- media-left -->
                         <div class="flex-grow-1 ms-2 align-self-center">
                             <div>
-                                <h6 class="my-0 fw-medium text-dark fs-14" id="contacto-nombre">Selecciona una conversación</h6>
+                                <h6 class="my-0 fw-medium text-dark fs-14">
+                                    <span id="contacto-nombre">Selecciona una conversación</span>
+                                    <span id="conv-id-badge" class="badge bg-light text-dark border ms-1" style="font-size:.7rem;display:none;"></span>
+                                </h6>
                                 <p class="text-muted mb-0" id="contacto-numero"></p>
-                                <p class="text-muted mb-0 d-none d-sm-block"><span id="contacto-hashedId"></span></p>
+                                <p class="text-muted mb-0 d-none d-sm-block">
+                                    <span id="contacto-hashedId"></span>
+                                    <small id="conv-fecha-inicio" class="ms-2 text-muted" style="display:none;font-size:.75rem;"></small>
+                                </p>
                             </div>
                         </div><!-- end media-body -->
                     </a><!--end media-->
-                    <div class="d-sm-inline-block align-self-center">
+                    <div class="d-sm-inline-block align-self-center d-flex align-items-center gap-2 flex-wrap">
+                        <!-- Atribución (referral CTWA / IG ad) -->
+                        <div class="d-none" id="referral-container">
+                            <a id="referral-badge"
+                               href="#" target="_blank" rel="noopener"
+                               class="badge d-inline-flex align-items-center gap-1 attrib-badge"
+                               data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                               title="Vino de un anuncio de Meta">
+                                <i class="fa-solid fa-bullhorn"></i>
+                                <span id="referral-label">Anuncio</span>
+                            </a>
+                        </div>
+                        <!-- Tokens IA -->
+                        <div class="d-none" id="tokens-container">
+                            <span class="badge border d-flex align-items-center gap-1"
+                                  id="tokens-badge"
+                                  title="Tokens IA consumidos en esta conversación"
+                                  style="background:#f3f0ff;color:#5c35d4;border-color:#c4b5fd!important;font-size:.72rem;font-weight:500;cursor:default;">
+                                <i class="fa fa-microchip" style="font-size:.7rem;"></i>
+                                <span id="tokens-valor">0</span>
+                                <span class="text-muted" style="font-size:.65rem;" id="tokens-detalle"></span>
+                            </span>
+                        </div>
+                        <!-- Asignado a -->
+                        <div class="d-none" id="asignado-container">
+                            <span class="badge bg-light text-dark border" id="asignado-badge" title="Asignado a">
+                                <i class="fa fa-user-circle me-1"></i><span id="asignado-nombre">—</span>
+                            </span>
+                        </div>
+                        <!-- Toggle bot -->
+                        <div class="d-none" id="bot-toggle-container">
+                            <button class="btn btn-sm" id="btn-toggle-bot" title="Activar/pausar bot IA en esta conversación"
+                                    onclick="toggleBot()">
+                                <i class="fa fa-robot me-1"></i><span id="bot-estado-label">Bot</span>
+                            </button>
+                        </div>
                         <div class="btn-group d-none" id="resolver-btn">
                             <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" id="marcar-resuelto"
-                               data-bs-toggle="tooltip"
-                               data-bs-placement="top" data-bs-title="Marcar como resuelto"
-                               data-bs-custom-class="tooltip-primary">
+                               data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Marcar como resuelto">
                                 <i class="fa fa-check-circle"></i> Terminar
                             </a>
                         </div>
@@ -124,23 +352,130 @@
                             <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" data-bs-toggle="dropdown">
                                 <i class="fa fa-ellipsis-v"></i>
                             </a>
-                            <div class="dropdown-menu">
+                            <div class="dropdown-menu dropdown-menu-end">
                                 <a href="javascript:void(0)" class="dropdown-item form_modal" id="cambiar-nombre-contacto" title="Cambiar nombre de contacto">
-                                    <i class="fa fa-user-edit"></i> Cambiar nombre de contacto
+                                    <i class="fa fa-user-edit me-2"></i> Cambiar nombre de contacto
                                 </a>
                                 <a href="javascript:void(0)" class="dropdown-item form_modal" id="cambiar-clasificacion" title="Cambiar clasificacion">
-                                    <i class="fa fa-sync"></i> Cambiar clasificacion
+                                    <i class="fa fa-sync me-2"></i> Cambiar clasificación
                                 </a>
                                 <a class="dropdown-item form_modal" href="javascript:void(0)" id="asignar-conversacion" title="Asignar a otro usuario">
-                                    <i class="fa fa-user-plus"></i> Asignar a otro usuario
+                                    <i class="fa fa-user-plus me-2"></i> Asignar a agente
                                 </a>
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="abrirModalAsignarPipeline()" title="Asignar esta conversacion a un pipeline de ventas">
+                                    <i class="fa fa-columns me-2 text-primary"></i> Asignar a pipeline
+                                </a>
+                                <div class="dropdown-divider"></div>
+                                <a class="dropdown-item" href="javascript:void(0)"
+                                   onclick="toggleEstadisticasPanel()">
+                                    <i class="fa fa-chart-line me-2 text-primary"></i> Estadísticas
+                                </a>
+                                <a class="dropdown-item" href="javascript:void(0)" id="btn-control-respuestas"
+                                   onclick="toggleControlRespuestas()">
+                                    <i class="fa fa-chart-bar me-2 text-info"></i> Control de Respuestas
+                                </a>
+                                <a class="dropdown-item" href="javascript:void(0)" id="btn-bloquear-cierre"
+                                   onclick="toggleBloquearCierre()">
+                                    <i class="fa fa-lock me-2 text-warning" id="icon-bloquear-cierre"></i>
+                                    <span id="label-bloquear-cierre">Bloquear cierre automático</span>
+                                </a>
+                                {% if request.user.is_superuser %}
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="javascript:void(0)" id="ver-webhook-conv"
+                                       onclick="abrirWebhookConv()" title="Endpoint para inyectar mensajes desde un proceso externo">
+                                        <i class="fa fa-plug me-2 text-success"></i> Ver webhook API <span class="badge bg-success ms-1" style="font-size:.62rem;">SUPERUSER</span>
+                                    </a>
+                                {% endif %}
+                                <div class="dropdown-divider"></div>
                                 <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida" title="Terminar sin despedida">
-                                    <i class="fa fa-times"></i> Terminar sin despedida
+                                    <i class="fa fa-times me-2 text-danger"></i> Terminar sin despedida
                                 </a>
                             </div>
                         </div>
                     </div>
                 </div><!-- end chat-header -->
+
+                {# ── Barra de menús rápidos por sesión ── #}
+                <div id="menus-rapidos-bar" class="menus-rapidos-bar d-none">
+                    <div class="mr-bar-inner">
+                        <div class="mr-bar-chips" id="mr-bar-chips"></div>
+                        <button type="button" class="mr-bar-add" id="mr-bar-add"
+                                title="Crear o editar menús de esta sesión">
+                            <i class="fa fa-plus"></i> <span class="d-none d-md-inline">Nuevo menú</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Panel Estadísticas -->
+                <div id="stats-panel" class="d-none border-bottom" style="background:#f0f4ff;font-size:.8rem;">
+                    <div class="px-3 py-2">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <strong class="text-primary"><i class="fa fa-chart-line me-1"></i>Estadísticas de conversación</strong>
+                            <span id="stat-estado"></span>
+                            <span class="ms-auto text-muted"><i class="fa fa-clock me-1"></i><span id="stat-duracion">—</span></span>
+                        </div>
+                        <div class="row g-1">
+                            <div class="col-auto">
+                                <div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;">
+                                    <div class="fw-bold text-dark" id="stat-msgs-total">0</div>
+                                    <div class="text-muted" style="font-size:.7rem;">Total msgs</div>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;">
+                                    <div class="fw-bold text-warning" id="stat-msgs-cliente">0</div>
+                                    <div class="text-muted" style="font-size:.7rem;">Cliente</div>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;">
+                                    <div class="fw-bold text-success" id="stat-msgs-agente">0</div>
+                                    <div class="text-muted" style="font-size:.7rem;">Agente</div>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;">
+                                    <div class="fw-bold" style="color:#5c6bc0" id="stat-msgs-ia">0</div>
+                                    <div class="text-muted" style="font-size:.7rem;">IA</div>
+                                </div>
+                            </div>
+                            <div class="col-auto ms-2">
+                                <div class="border rounded px-2 py-1 bg-white" style="min-width:140px;">
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <i class="fa fa-microchip" style="color:#5c35d4;font-size:.75rem;"></i>
+                                        <span class="fw-bold" id="stat-tokens-total">0</span>
+                                        <small class="text-muted">tokens</small>
+                                    </div>
+                                    <div class="text-muted" style="font-size:.7rem;">
+                                        ↑<span id="stat-tokens-entrada">0</span> prompt &nbsp;·&nbsp; ↓<span id="stat-tokens-salida">0</span> resp
+                                    </div>
+                                    <div class="text-muted mt-1" style="font-size:.7rem;"><i class="fa fa-robot me-1"></i><span id="stat-modelo">—</span></div>
+                                </div>
+                            </div>
+                            <div class="col-auto ms-1">
+                                <div class="border rounded px-2 py-1 bg-white" style="min-width:100px;">
+                                    <div class="text-muted" style="font-size:.7rem;">Primer agente</div>
+                                    <div class="fw-bold" id="stat-primer-agente" style="font-size:.78rem;">—</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel Control de Respuestas -->
+                <div id="control-respuestas-panel" class="d-none px-3 py-2 border-bottom"
+                     style="background:#f8f9fa;font-size:.82rem;">
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <strong><i class="fa fa-chart-bar me-1 text-info"></i>Control de Respuestas</strong>
+                        <span class="badge" style="background:#5c6bc0;color:#fff;">
+                            <i class="fa fa-robot me-1"></i><span id="cr-ia-count">0</span> IA
+                        </span>
+                        <span class="badge bg-success">
+                            <i class="fa fa-headset me-1"></i><span id="cr-agent-count">0</span> Agente
+                        </span>
+                        <div id="cr-agentes-list" class="d-flex flex-wrap gap-2"></div>
+                    </div>
+                </div>
 
                 <div class="chat-body" data-simplebar id="chat-messages">
                     <div class="chat-detail" id="mensajes-container">
@@ -153,28 +488,86 @@
                 </div><!-- end chat-body -->
 
                 <!-- Formulario para enviar mensajes -->
-                <div class="chat-footer p-3 bg-light" id="chat-footer" style="display: none;">
+                <div class="chat-footer" id="chat-footer" style="display:none;">
                     <form id="form-enviar-mensaje" enctype="multipart/form-data">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="send">
                         <input type="hidden" name="pk" id="conversacion-id" value="">
-                        <div class="row">
-                            <div class="col-9">
-                                <div class="input-group">
-                                    <input type="text" class="form-control" name="mensaje" placeholder="Escribe un mensaje..." required>
-                                    <div class="input-group-append">
-                                        <label for="archivo" class="btn btn-light border">
-                                            <i class="fa fa-paperclip"></i>
-                                        </label>
-                                        <input type="file" id="archivo" name="archivo" style="display: none;">
+
+                        <!-- Preview archivo -->
+                        <div id="footer-file-preview" class="d-none mb-2 d-flex align-items-center gap-2"
+                             style="font-size:.82rem;background:#e9f5ff;border-radius:8px;padding:6px 10px;">
+                            <i class="fa fa-file-alt text-primary" id="footer-file-icon"></i>
+                            <span id="footer-file-name" class="text-truncate flex-grow-1"></span>
+                            <button type="button" class="btn btn-sm btn-link text-danger p-0" id="footer-file-remove">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+
+                        <div class="d-flex align-items-center gap-2" style="position:relative;">
+                            <!-- Emoji -->
+                            <div style="position:relative;flex-shrink:0;">
+                                <button type="button" id="emoji-btn" title="Emojis">😊</button>
+                                <div id="emoji-picker-popup"></div>
+                            </div>
+
+                            <!-- Adjuntar -->
+                            <label for="archivo" class="mb-0 d-flex align-items-center justify-content-center"
+                                   title="Adjuntar archivo"
+                                   style="width:38px;height:38px;border-radius:50%;background:#f0f2f5;cursor:pointer;color:#6c757d;flex-shrink:0;border:none;">
+                                <i class="fa fa-paperclip"></i>
+                            </label>
+                            <input type="file" id="archivo" name="archivo" style="display:none;"
+                                   accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar">
+
+                            <!-- Plantillas Meta (solo visible si sesion.es_meta) -->
+                            <div style="position:relative;flex-shrink:0;">
+                                <button type="button" id="plantillas-btn" title="Enviar plantilla Meta pre-aprobada">
+                                    <i class="fa fa-layer-group"></i>
+                                    <span class="badge-count" id="plantillas-badge" style="display:none;">0</span>
+                                </button>
+                                <div id="plantillas-panel">
+                                    <div class="pp-header">
+                                        <span><i class="fa fa-layer-group me-1"></i>Plantillas aprobadas</span>
+                                        <span>
+                                            <button type="button" class="pp-close" id="plantillas-refresh" title="Refrescar plantillas">
+                                                <i class="fa fa-rotate"></i>
+                                            </button>
+                                            <button type="button" class="pp-close" id="plantillas-close" title="Cerrar">&times;</button>
+                                        </span>
+                                    </div>
+                                    <div class="pp-search">
+                                        <input type="search" id="plantillas-search" placeholder="Buscar plantilla...">
+                                    </div>
+                                    <div class="pp-list" id="plantillas-list">
+                                        <div class="pp-empty">Cargando...</div>
+                                    </div>
+                                    <div class="pp-form" id="plantillas-form">
+                                        <div class="pp-form-title">
+                                            <button type="button" class="pp-back" id="plantillas-form-back">
+                                                <i class="fa fa-arrow-left"></i>
+                                            </button>
+                                            <span id="plantillas-form-nombre"></span>
+                                        </div>
+                                        <div id="plantillas-form-vars"></div>
+                                        <div class="pp-form-actions">
+                                            <button type="button" class="pp-btn-cancelar" id="plantillas-form-cancelar">Cancelar</button>
+                                            <button type="button" class="pp-btn-enviar" id="plantillas-form-enviar">Enviar</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-3">
-                                <button type="submit" class="btn btn-primary w-100">
-                                    <i class="fa fa-paper-plane"></i> Enviar
-                                </button>
-                            </div>
+
+                            <!-- Texto -->
+                            <input type="text" class="form-control border-0 rounded-pill" name="mensaje" id="footer-mensaje-input"
+                                   placeholder="Escribe un mensaje..."
+                                   style="background:#fff;box-shadow:none;min-height:40px;">
+
+                            <!-- Enviar -->
+                            <button type="submit" id="footer-send-btn"
+                                    style="width:42px;height:42px;border-radius:50%;background:#25d366;color:#fff;border:none;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem;transition:background .15s;">
+                                <i class="fa fa-paper-plane"></i>
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -197,6 +590,314 @@
             </div>
         </div>
     </div>
+    {# Modal compartido para asignar la conversacion seleccionada a un pipeline #}
+    {% include 'whatsapp/conversaciones/_modal_asignar_pipeline.html' %}
+
+    {# Modal: no hay sesiones de WhatsApp configuradas #}
+    <div class="modal fade" id="modalSinSesiones" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center py-4 px-4">
+                    <div class="mb-3">
+                        <i class="fa fa-satellite-dish fa-3x text-primary"></i>
+                    </div>
+                    <h5 class="mb-2">Aún no hay sesiones de WhatsApp</h5>
+                    <p class="text-muted mb-4">
+                        Para ver conversaciones primero necesitás conectar al menos
+                        un canal (WhatsApp, Instagram o Messenger).
+                    </p>
+                    <a href="/whatsapp/sesiones/" class="btn btn-primary">
+                        <i class="fa fa-plus me-1"></i> Crear o conectar una sesión
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Modal CRUD de menús rápidos de la sesión actual #}
+    <div class="modal fade" id="modalMenusRapidos" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2 bg-success bg-opacity-10">
+                    <h6 class="modal-title text-success">
+                        <i class="fa fa-list-check me-1"></i> Menús rápidos · <span id="mr-modal-sesion-nombre"></span>
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+
+                    {# Alert explicativo: qué es y para qué sirve #}
+                    <div class="alert alert-info py-2 small mb-3">
+                        <div class="d-flex gap-2">
+                            <i class="fa fa-circle-info mt-1"></i>
+                            <div>
+                                <b>¿Qué es un menú rápido?</b>
+                                Una plantilla de botones que el operador puede mandar al cliente
+                                con un click — ej. "¿Qué querés cotizar?", "Elige sucursal",
+                                "Forma de pago".
+                                <ul class="mb-1 mt-1 ps-3">
+                                    <li>El cliente recibe el texto del <b>cuerpo</b> + los botones.</li>
+                                    <li>Cuando toca uno, llega al chat como mensaje normal con el
+                                        <code>ID interno</code> del botón (útil para automatizar).</li>
+                                    <li>Los menús son <b>por sesión</b> — cada número de WhatsApp
+                                        tiene los suyos.</li>
+                                    <li>En <b>Meta</b> se envían como interactivos nativos
+                                        (≤3 botones = "buttons", &gt;3 = "list" hasta 10).
+                                        En <b>Baileys</b> caen a texto numerado.</li>
+                                </ul>
+                                <details class="mt-1">
+                                    <summary class="text-primary" style="cursor:pointer;">Ver ejemplo</summary>
+                                    <div class="mt-2 p-2 bg-white border rounded small">
+                                        <b>Nombre:</b> "Catálogo"<br>
+                                        <b>Cuerpo:</b> "¿Qué información necesitás?"<br>
+                                        <b>Botones:</b><br>
+                                        &nbsp;&nbsp;• <i>"💰 Precios"</i> → <code>ver_precios</code><br>
+                                        &nbsp;&nbsp;• <i>"🕐 Horarios"</i> → <code>ver_horarios</code><br>
+                                        &nbsp;&nbsp;• <i>"📍 Sucursales"</i> → <code>ver_sucursales</code>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Lista de menús ya creados #}
+                    <div id="mr-modal-lista" class="mb-3"></div>
+
+                    {# Form crear/editar #}
+                    <div class="border rounded p-2" id="mr-modal-form" style="background:#f8fafc;">
+                        <h6 class="small fw-bold text-success mb-2 mt-1">
+                            <i class="fa fa-plus-circle me-1"></i> Nuevo menú
+                        </h6>
+                        <div class="row g-2">
+                            <div class="col-md-7">
+                                <label class="form-label small fw-bold mb-1">
+                                    Nombre del menú
+                                    <small class="text-muted fw-normal">— solo lo ves vos como operador</small>
+                                </label>
+                                <input type="text" id="mr-form-nombre" class="form-control form-control-sm"
+                                       maxlength="80" placeholder="Ej: Catálogo · Horarios · Formas de pago">
+                                <small class="text-muted">Etiqueta del chip que aparece arriba del chat.</small>
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label small fw-bold mb-1">
+                                    Color del chip
+                                    <small class="text-muted fw-normal">— solo visual</small>
+                                </label>
+                                <input type="color" id="mr-form-color" class="form-control form-control-color form-control-sm w-100" value="#16a34a">
+                                <small class="text-muted">Para identificarlo de un vistazo (rojo urgente, verde catálogo…).</small>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold mb-1">
+                                    Cuerpo del mensaje
+                                    <small class="text-muted fw-normal">— ≤1024 chars · lo ve el cliente</small>
+                                </label>
+                                <textarea id="mr-form-cuerpo" class="form-control form-control-sm" rows="2"
+                                          maxlength="1024"
+                                          placeholder="Ej: ¿Qué información necesitás? Tocá el botón que más te interese 👇"></textarea>
+                                <small class="text-muted">
+                                    Texto principal que acompaña los botones. Soporta emojis y *negrita*.
+                                </small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold mb-1">
+                                    Header
+                                    <small class="text-muted fw-normal">— opcional, ≤60</small>
+                                </label>
+                                <input type="text" id="mr-form-header" class="form-control form-control-sm"
+                                       maxlength="60" placeholder="Ej: 🛒 Nuestro catálogo">
+                                <small class="text-muted">Línea superior en negrita (solo Meta).</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold mb-1">
+                                    Footer
+                                    <small class="text-muted fw-normal">— opcional, ≤60</small>
+                                </label>
+                                <input type="text" id="mr-form-footer" class="form-control form-control-sm"
+                                       maxlength="60" placeholder="Ej: Lun-Vie 9:00 a 18:00">
+                                <small class="text-muted">Línea inferior pequeña, ideal para horario o aviso (solo Meta).</small>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold mb-1">
+                                    Botones del menú
+                                    <small class="text-muted fw-normal">— máx 10 · ≤3 manda "buttons", &gt;3 manda "list"</small>
+                                </label>
+                                <div class="alert alert-light border py-1 px-2 small mb-2">
+                                    <i class="fa fa-lightbulb text-warning me-1"></i>
+                                    <b>Etiqueta</b> = lo que ve el cliente en el botón (≤24 chars).
+                                    <b>ID interno</b> = lo que recibís en el chat cuando lo tocan
+                                    (útil para automatizar respuestas). Si lo dejás vacío, se usa
+                                    la etiqueta.
+                                </div>
+                                <table class="table table-sm small mb-2" id="mr-form-tabla">
+                                    <thead>
+                                        <tr>
+                                            <th>Etiqueta del botón (≤24)</th>
+                                            <th>ID interno <small class="text-muted">(opcional)</small></th>
+                                            <th style="width:50px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="mr-form-opciones-body"></tbody>
+                                </table>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="mr-form-add-opcion">
+                                    <i class="fa fa-plus me-1"></i> Agregar botón
+                                </button>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-end gap-2 mt-3">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="mr-form-cancelar"
+                                    title="Vacía los campos del formulario para empezar de cero">
+                                <i class="fa fa-eraser me-1"></i> Limpiar form
+                            </button>
+                            <button type="button" class="btn btn-sm btn-success" id="mr-form-guardar">
+                                <i class="fa fa-save me-1"></i> Guardar menú
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if request.user.is_superuser %}
+    <div class="modal fade" id="modalWebhookConv" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-success bg-opacity-10">
+                    <h5 class="modal-title text-success">
+                        <i class="fa fa-plug me-2"></i> Webhook API · Conversación <span id="webhook-conv-id"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-2">
+                        Endpoint para inyectar mensajes a esta conversación desde un proceso externo
+                        (ej. cuando termine un job en background). Despacha automáticamente por Baileys o Meta
+                        según el proveedor de la sesión.
+                    </p>
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="fa fa-circle-info me-1"></i>
+                        <b>Sin autenticación.</b> Validaciones mínimas:
+                        <ol class="mb-0 ps-3 mt-1">
+                            <li>Conversación existe.</li>
+                            <li>Conversación NO finalizada.</li>
+                            <li>Sesión WhatsApp activa (no pausada).</li>
+                            <li>Conversación con menos de 2 horas desde creada.</li>
+                        </ol>
+                    </div>
+
+                    <h6 class="mt-3 mb-1"><i class="fa fa-link me-1"></i> URL</h6>
+                    <div class="input-group input-group-sm mb-3">
+                        <input type="text" class="form-control font-monospace" id="webhook-url" readonly>
+                        <button class="btn btn-outline-success" type="button" onclick="copiarTexto('webhook-url')">
+                            <i class="fa fa-copy"></i> Copiar
+                        </button>
+                    </div>
+
+                    <h6 class="mt-3 mb-1"><i class="fa fa-cube me-1"></i> Body</h6>
+                    <ul class="small mb-2">
+                        <li><code>texto</code> — string (opcional si hay archivo)</li>
+                        <li><code>archivo</code> — file (opcional, multipart). Tipo deducido por MIME (image/video/audio/document)</li>
+                        <li><code>caption</code> — string opcional, va con el archivo</li>
+                    </ul>
+
+                    <h6 class="mt-3 mb-1"><i class="fa fa-terminal me-1"></i> Ejemplo: solo texto (JSON)</h6>
+                    <pre class="bg-dark text-light p-2 rounded small mb-2" style="white-space:pre-wrap;"><code id="webhook-curl-json"></code></pre>
+                    <button class="btn btn-sm btn-outline-secondary mb-3" type="button" onclick="copiarTexto('webhook-curl-json')">
+                        <i class="fa fa-copy"></i> Copiar comando
+                    </button>
+
+                    <h6 class="mt-3 mb-1"><i class="fa fa-terminal me-1"></i> Ejemplo: texto + archivo (multipart)</h6>
+                    <pre class="bg-dark text-light p-2 rounded small mb-2" style="white-space:pre-wrap;"><code id="webhook-curl-multipart"></code></pre>
+                    <button class="btn btn-sm btn-outline-secondary mb-3" type="button" onclick="copiarTexto('webhook-curl-multipart')">
+                        <i class="fa fa-copy"></i> Copiar comando
+                    </button>
+
+                    <h6 class="mt-3 mb-1"><i class="fa-brands fa-python me-1"></i> Ejemplo: Python (con <code>requests</code>)</h6>
+                    <pre class="bg-dark text-light p-2 rounded small mb-2" style="white-space:pre-wrap;"><code id="webhook-py-text"></code></pre>
+                    <button class="btn btn-sm btn-outline-secondary mb-3" type="button" onclick="copiarTexto('webhook-py-text')">
+                        <i class="fa fa-copy"></i> Copiar Python (solo texto)
+                    </button>
+
+                    <pre class="bg-dark text-light p-2 rounded small mb-2" style="white-space:pre-wrap;"><code id="webhook-py-multipart"></code></pre>
+                    <button class="btn btn-sm btn-outline-secondary mb-3" type="button" onclick="copiarTexto('webhook-py-multipart')">
+                        <i class="fa fa-copy"></i> Copiar Python (texto + archivo)
+                    </button>
+
+                    <h6 class="mt-3 mb-1"><i class="fa fa-circle-check me-1 text-success"></i> Respuesta exitosa (200)</h6>
+                    <pre class="bg-dark text-light p-2 rounded small mb-3" style="white-space:pre-wrap;"><code>{
+  "success": true,
+  "conversacion_id": 1102,
+  "enviados": [
+    {"tipo": "texto", "mensaje_id": 9876, "externo": "wamid.HBgM..."},
+    {"tipo": "documento", "mensaje_id": 9877, "externo": "wamid.HBgM..."}
+  ]
+}</code></pre>
+
+                    <h6 class="mt-3 mb-1"><i class="fa fa-triangle-exclamation me-1 text-danger"></i> Respuestas de error</h6>
+                    <table class="table table-sm small mb-2">
+                        <thead><tr><th style="width:70px;">Status</th><th>error</th><th>Caso</th></tr></thead>
+                        <tbody>
+                            <tr><td><code>404</code></td><td><code>not_found</code></td><td>La conversación no existe</td></tr>
+                            <tr><td><code>409</code></td><td><code>conversation_closed</code></td><td>Conversación finalizada</td></tr>
+                            <tr><td><code>409</code></td><td><code>conversation_too_old</code></td><td>Tiene más de 2 horas de creada</td></tr>
+                            <tr><td><code>423</code></td><td><code>session_paused</code></td><td>Sesión WhatsApp desactivada</td></tr>
+                            <tr><td><code>400</code></td><td><code>texto_o_archivo_requerido</code></td><td>Sin <code>texto</code> ni <code>archivo</code></td></tr>
+                            <tr><td><code>502</code></td><td><code>send_failed</code></td><td>Baileys/Meta rechazó el envío</td></tr>
+                        </tbody>
+                    </table>
+
+                    <details class="mb-0">
+                        <summary class="small text-muted" style="cursor:pointer;">Ver bodies de cada error</summary>
+                        <div class="mt-2">
+                            <p class="small mb-1"><b>409 · conversation_closed</b></p>
+                            <pre class="bg-dark text-light p-2 rounded small mb-2" style="white-space:pre-wrap;"><code>{
+  "success": false,
+  "error": "conversation_closed",
+  "message": "No se puede enviar: la conversación ya está finalizada."
+}</code></pre>
+
+                            <p class="small mb-1"><b>409 · conversation_too_old</b></p>
+                            <pre class="bg-dark text-light p-2 rounded small mb-2" style="white-space:pre-wrap;"><code>{
+  "success": false,
+  "error": "conversation_too_old",
+  "message": "No se puede enviar: la conversación tiene más de 2 horas de creada.",
+  "edad_minutos": 145
+}</code></pre>
+
+                            <p class="small mb-1"><b>423 · session_paused</b></p>
+                            <pre class="bg-dark text-light p-2 rounded small mb-2" style="white-space:pre-wrap;"><code>{
+  "success": false,
+  "error": "session_paused",
+  "message": "No se puede enviar: la sesión de WhatsApp está desactivada."
+}</code></pre>
+
+                            <p class="small mb-1"><b>404 · not_found</b></p>
+                            <pre class="bg-dark text-light p-2 rounded small mb-2" style="white-space:pre-wrap;"><code>{
+  "success": false,
+  "error": "not_found",
+  "message": "La conversación no existe."
+}</code></pre>
+
+                            <p class="small mb-1"><b>502 · send_failed</b></p>
+                            <pre class="bg-dark text-light p-2 rounded small mb-2" style="white-space:pre-wrap;"><code>{
+  "success": false,
+  "error": "send_failed",
+  "message": "El proveedor (Baileys/Meta) rechazó el envío."
+}</code></pre>
+
+                            <p class="small mb-1"><b>400 · texto_o_archivo_requerido</b></p>
+                            <pre class="bg-dark text-light p-2 rounded small mb-0" style="white-space:pre-wrap;"><code>{
+  "success": false,
+  "error": "texto_o_archivo_requerido",
+  "message": "Debes enviar al menos un campo: texto o archivo."
+}</code></pre>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 {% endblock %}
 
 {% block jscript %}
@@ -221,15 +922,97 @@
                     const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
                     modal.show();
                 } else {
+                    console.error('[formModal] backend error', data);
                     mensajeWarning(data.message);
                 }
             },
-            error: function () {
+            error: function (xhr, status, error) {
                 setTimeout($.unblockUI, 1);
+                console.error('[formModal] ajax error', status, error, xhr.responseText);
                 mensajeWarning("Error de conexión.");
             },
             dataType: "json"
         });
+    }
+</script>
+<script>
+    /* ── Funciones globales (deben estar fuera de document.ready para ser accesibles desde onclick) ── */
+    function toggleControlRespuestas() {
+        $('#control-respuestas-panel').toggleClass('d-none');
+        if (!$('#control-respuestas-panel').hasClass('d-none')) {
+            refrescarEstadisticas();
+        }
+    }
+
+    function toggleEstadisticasPanel() {
+        $('#stats-panel').toggleClass('d-none');
+        if (!$('#stats-panel').hasClass('d-none')) {
+            refrescarEstadisticas();
+        }
+    }
+
+    let _bloquearCierreActual = false;
+    function toggleBloquearCierre() {
+        const id = $('#conversacion-id').val();
+        if (!id) return;
+        $.post('', { action: 'toggle-bloquear-cierre', id: id, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
+            .done(function(r) {
+                if (r.error) { console.error('[toggleBloquearCierre] backend error', r); return; }
+                _bloquearCierreActual = r.bloquear_cierre;
+                _actualizarBloquearCierreUI(_bloquearCierreActual);
+            })
+            .fail(function(xhr) { console.error('[toggleBloquearCierre] ajax fail', xhr.status, xhr.responseText); });
+    }
+
+    function _actualizarBloquearCierreUI(bloqueado) {
+        if (bloqueado) {
+            $('#icon-bloquear-cierre').removeClass('fa-lock').addClass('fa-lock-open').removeClass('text-warning').addClass('text-danger');
+            $('#label-bloquear-cierre').text('Desbloquear cierre automático');
+        } else {
+            $('#icon-bloquear-cierre').removeClass('fa-lock-open').addClass('fa-lock').removeClass('text-danger').addClass('text-warning');
+            $('#label-bloquear-cierre').text('Bloquear cierre automático');
+        }
+    }
+
+    function refrescarEstadisticas() {
+        const id = $('#conversacion-id').val();
+        if (!id) return;
+        $.get('', { action: 'ver_estadisticas', pk: id })
+            .done(function(r) {
+                if (r.error) { console.error('[refrescarEstadisticas] backend error', r); return; }
+                _renderEstadisticas(r);
+            })
+            .fail(function(xhr) { console.error('[refrescarEstadisticas] ajax fail', xhr.status, xhr.responseText); });
+    }
+
+    function _renderEstadisticas(r) {
+        // Tokens badge header
+        if (r.tokens_total > 0) {
+            $('#tokens-valor').text(r.tokens_total.toLocaleString());
+            $('#tokens-detalle').text('↑' + r.tokens_entrada.toLocaleString() + ' ↓' + r.tokens_salida.toLocaleString());
+            $('#tokens-container').removeClass('d-none').show();
+        }
+        // Panel estadísticas
+        $('#stat-duracion').text(r.duracion || '—');
+        $('#stat-estado').html(r.estado_badge || '');
+        $('#stat-msgs-total').text(r.total_mensajes || 0);
+        $('#stat-msgs-cliente').text(r.mensajes_cliente || 0);
+        $('#stat-msgs-ia').text(r.mensajes_ia || 0);
+        $('#stat-msgs-agente').text(r.mensajes_asesor || 0);
+        $('#stat-tokens-entrada').text((r.tokens_entrada || 0).toLocaleString());
+        $('#stat-tokens-salida').text((r.tokens_salida || 0).toLocaleString());
+        $('#stat-tokens-total').text((r.tokens_total || 0).toLocaleString());
+        $('#stat-modelo').text(r.modelo_ia || '—');
+        $('#stat-primer-agente').text(r.primer_agente || '—');
+        // Control de respuestas
+        $('#cr-ia-count').text(r.cr_ia || 0);
+        $('#cr-agent-count').text(r.cr_agent || 0);
+        var agentesHtml = '';
+        (r.cr_agentes || []).forEach(function(a) {
+            var nombre = ((a.agente__first_name || '') + ' ' + (a.agente__last_name || '')).trim() || 'Agente';
+            agentesHtml += '<span class="badge bg-light text-dark border"><i class="fa fa-user me-1"></i>' + nombre + ' <small>(' + a.total + ')</small></span>';
+        });
+        $('#cr-agentes-list').html(agentesHtml);
     }
 </script>
 <script>
@@ -239,6 +1022,9 @@
         let chatSocket;
         let sessionSocket;
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
+        // Declarar filtroActivo aquí para evitar ReferenceError antes de su uso
+        let filtroActivo = '{{ url_vars }}'.replace('&sesion={{ sesion_seleccionada.id|encrypt_id }}', '').replace(/^&/, '');
 
         function conectarWebSocket(conversacionId) {
             const wsUrl = `${wsProtocol}//${window.location.host}/ws/chat/${conversacionId}/`;
@@ -257,10 +1043,12 @@
                 if (data.type === 'new_message' || data.type === 'messages_update') {
                     // Actualizar los mensajes
                     $('#mensajes-container').html(data.html);
+                    setTimeout(() => { scrollToBottom(); }, 1500);
 
-                    setTimeout(() => {
-                        scrollToBottom();
-                    }, 1500);
+                    // Refrescar estadísticas cuando llega un mensaje IA (from_me=true, ia_generado)
+                    if (data.from_me) {
+                        setTimeout(refrescarEstadisticas, 1000);
+                    }
                 }
             };
 
@@ -273,11 +1061,16 @@
             };
         }
 
-        function sessionWebSocket(sessionId) {
-            const wsUrl = `${wsProtocol}//${window.location.host}/ws/sessionroom/${sessionId}/`;
+        function sessionWebSocket(sessionId, filtro = '') {
             if (sessionSocket){
                 sessionSocket.close();
+                sessionSocket = null;
             }
+            if (!sessionId || isNaN(parseInt(sessionId, 10))) {
+                console.warn('sessionWebSocket: sin sessionId válido — no abro WS.');
+                return;
+            }
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/sessionroom/${sessionId}/`;
             sessionSocket = new ReconnectingWebSocket(wsUrl, null, {reconnectInterval: 1500});
 
             sessionSocket.onopen = function(e) {
@@ -287,12 +1080,36 @@
             sessionSocket.onmessage = function(e) {
                 const data = JSON.parse(e.data);
 
-                if ((data.type === 'new_message' || data.type === 'messages_update') && data.html) {
-                    const conversacion = $(`#lista-conversaciones div[data-id=${data.conversacion_id}]`);
-                    if (conversacion.length) {
-                        conversacion.replaceWith(data.html);
+                if ((data.type === 'new_message' || data.type === 'messages_update')) {
+                    if (!data.html) {
+                        // Backend no nos dió html (ej. conversación huérfana o
+                        // permiso): forzar refresh completo de la lista para
+                        // que el usuario vea la nueva conversación igual.
+                        cargarConversaciones($('#sesion-selector').val(), $('#search-conversacion').val(), filtroActivo);
                     } else {
-                        $(`#lista-conversaciones`).append(data.html);
+                        const conversacion = $(`#lista-conversaciones .conversacion-item[data-id="${data.conversacion_id}"]`);
+                        if (conversacion.length) {
+                            conversacion.replaceWith(data.html);
+                        } else {
+                            // Nueva conversación: insertar al principio +
+                            // animación para que llame la atención.
+                            const $nueva = $(data.html);
+                            $nueva.addClass('conv-nueva-flash');
+                            $(`#lista-conversaciones`).prepend($nueva);
+                            setTimeout(function() { $nueva.removeClass('conv-nueva-flash'); }, 2400);
+                        }
+                    }
+                    // Re-marcar la conv activa (replaceWith pierde la clase)
+                    if (conversacionActiva) {
+                        $(`.conversacion-item[data-id="${conversacionActiva}"]`).addClass('active');
+                    }
+                    // Sonido + toast + notif nativa solo para entrantes del cliente
+                    if (!data.from_me) {
+                        notificarNuevoMensaje(data.contacto_nombre || 'Nuevo mensaje', {
+                            conversacionId: data.conversacion_id,
+                            preview:        data.preview || '',
+                            esConvActiva:   String(conversacionActiva || '') === String(data.conversacion_id),
+                        });
                     }
                 }
             };
@@ -305,33 +1122,36 @@
                 console.error('Error en SessionWebSocket:', e);
             };
 
-            cargarConversaciones(sessionId);
+            cargarConversaciones(sessionId, '', filtro);
         }
 
-        sessionWebSocket($('#sesion-selector').val());
-
-        function scrollToBottom(smooth = true) {
-            const chatContainer = document.getElementById('chat-messages').querySelector('.simplebar-content-wrapper');
-            if (chatContainer) {
-                // Calcular la altura total del contenido
-                const scrollHeight = chatContainer.scrollHeight;
-
-                // Hacer scroll
-                if (smooth) {
-                    // En algunos dispositivos móviles, scrollTo con behavior: 'smooth' puede no funcionar
-                    try {
-                        chatContainer.scrollTo({
-                            top: scrollHeight,
-                            behavior: 'smooth'
-                        });
-                    } catch (e) {
-                        // Fallback para navegadores que no soportan scrollTo con opciones
-                        chatContainer.scrollTop = scrollHeight;
-                    }
-                } else {
-                    chatContainer.scrollTop = scrollHeight;
-                }
+        // Mostrar modal si no hay sesiones disponibles.
+        const _sesionInicialId = $('#sesion-selector').val();
+        if (!_sesionInicialId || isNaN(parseInt(_sesionInicialId, 10))) {
+            const modalSinSesionesEl = document.getElementById('modalSinSesiones');
+            if (modalSinSesionesEl) {
+                new bootstrap.Modal(modalSinSesionesEl, {backdrop: 'static', keyboard: false}).show();
             }
+        } else {
+            sessionWebSocket(_sesionInicialId, filtroActivo);
+        }
+
+        {% if auto_open_conv_id %}
+            // Deep-link `?conv=<token>` — auto-abrir la conversación una vez
+            // que la lista cargó. Damos un pequeño margen para que el WS
+            // pinte las cards. Si la card aún no está, cargarMensajes maneja
+            // la carga directa de mensajes igual.
+            setTimeout(function() {
+                if (typeof cargarMensajes === 'function') {
+                    cargarMensajes({{ auto_open_conv_id }});
+                    document.body.classList.add('chat-mobile-open');
+                }
+            }, 600);
+        {% endif %}
+
+        function scrollToBottom(smooth = false) {
+            const cw = document.getElementById('chat-messages')?.querySelector('.simplebar-content-wrapper');
+            if (cw) cw.scrollTop = cw.scrollHeight;
         }
 
         // Variables globales
@@ -341,23 +1161,339 @@
 
         console.log("Inicializando chat de WhatsApp");
 
+        // ================ Menús rápidos por sesión ================
+        // Cargados al cambiar de sesión y al abrir conversación. Click en
+        // chip → confirma → POST a sesionesView que arma el envío y persiste.
+        var _menusCache = [];
+
+        function _mrPostSesionAction(action, params) {
+            var fd = new FormData();
+            fd.append('csrfmiddlewaretoken', $('input[name=csrfmiddlewaretoken]').first().val() || '');
+            fd.append('action', action);
+            Object.keys(params || {}).forEach(function (k) {
+                fd.append(k, params[k]);
+            });
+            return fetch('/whatsapp/sesiones/', {
+                method: 'POST', body: fd, credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            }).then(function (r) { return r.json(); });
+        }
+
+        function cargarMenusRapidos() {
+            var sesionId = $('#sesion-selector').val();
+            var bar = document.getElementById('menus-rapidos-bar');
+            if (!sesionId || !bar) {
+                if (bar) bar.classList.add('d-none');
+                return;
+            }
+            _mrPostSesionAction('menu_rapido_listar', {sesion_id: sesionId}).then(function (r) {
+                if (r.error) {
+                    bar.classList.add('d-none');
+                    return;
+                }
+                _menusCache = r.items || [];
+                renderMenusRapidos();
+            }).catch(function () {
+                bar.classList.add('d-none');
+            });
+        }
+
+        function renderMenusRapidos() {
+            var bar = document.getElementById('menus-rapidos-bar');
+            var chips = document.getElementById('mr-bar-chips');
+            if (!bar || !chips) return;
+            chips.innerHTML = '';
+            (_menusCache || []).forEach(function (m) {
+                var chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'mr-chip';
+                chip.style.background = m.color || '#16a34a';
+                chip.setAttribute('data-menu-id', m.id);
+                chip.title = (m.cuerpo || '') + ' · ' +
+                             ((m.opciones || []).map(function (o) { return o.etiqueta; }).join(' / '));
+                chip.innerHTML = '<i class="fa fa-paper-plane me-1"></i>' + escHtmlMr(m.nombre);
+                chips.appendChild(chip);
+            });
+            bar.classList.remove('d-none');
+        }
+
+        function escHtmlMr(s) {
+            return String(s || '').replace(/[&<>"]/g, function (c) {
+                return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c];
+            });
+        }
+
+        // Click en chip → confirma + envía
+        $(document).on('click', '#mr-bar-chips .mr-chip', function () {
+            if (!conversacionActiva) {
+                if (typeof toastr !== 'undefined') toastr.warning('Abrí una conversación primero.');
+                return;
+            }
+            var id = $(this).data('menu-id');
+            var menu = (_menusCache || []).find(function (m) { return String(m.id) === String(id); });
+            if (!menu) return;
+            var preview = menu.cuerpo + '\n— Botones: ' +
+                (menu.opciones || []).map(function (o) { return o.etiqueta; }).join(' · ');
+            if (window.Swal) {
+                Swal.fire({
+                    title: 'Enviar menú "' + menu.nombre + '"?',
+                    text: preview,
+                    type: 'question', showCancelButton: true,
+                    confirmButtonText: 'Enviar', cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#16a34a',
+                }).then(function (res) {
+                    if (!res.value) return;
+                    _enviarMenu(menu.id);
+                });
+            } else if (confirm('Enviar menú "' + menu.nombre + '"?')) {
+                _enviarMenu(menu.id);
+            }
+        });
+
+        function _enviarMenu(menuId) {
+            _mrPostSesionAction('menu_rapido_enviar', {
+                conversacion_id: conversacionActiva,
+                menu_id: menuId,
+            }).then(function (r) {
+                if (r.error) {
+                    if (typeof toastr !== 'undefined') toastr.error(r.message || 'Error');
+                    return;
+                }
+                if (typeof toastr !== 'undefined') toastr.success(r.message || 'Menú enviado');
+            });
+        }
+
+        // ================ Modal CRUD de menús ================
+        $('#mr-bar-add').on('click', function () { _abrirModalMenus(); });
+
+        function _abrirModalMenus(editId) {
+            var sesionId = $('#sesion-selector').val();
+            if (!sesionId) {
+                if (typeof toastr !== 'undefined') toastr.warning('Seleccioná una sesión.');
+                return;
+            }
+            var sel = $('#sesion-selector option:selected').text();
+            $('#mr-modal-sesion-nombre').text(sel);
+            _renderListaModalMenus();
+            _resetFormMenu();
+            new bootstrap.Modal(document.getElementById('modalMenusRapidos')).show();
+            if (editId) _editarMenu(editId);
+        }
+
+        function _renderListaModalMenus() {
+            var cont = document.getElementById('mr-modal-lista');
+            if (!cont) return;
+            if (!_menusCache.length) {
+                cont.innerHTML = '<div class="text-muted small text-center py-2">No hay menús aún. Creá el primero abajo.</div>';
+                return;
+            }
+            var html = '<table class="table table-sm small"><thead><tr>' +
+                '<th>Nombre</th><th>Color</th><th>Botones</th><th></th></tr></thead><tbody>';
+            _menusCache.forEach(function (m) {
+                html += '<tr>' +
+                    '<td><b>' + escHtmlMr(m.nombre) + '</b></td>' +
+                    '<td><span class="mr-color-dot" style="background:' + (m.color || '#16a34a') + '"></span></td>' +
+                    '<td><small class="text-muted">' +
+                        (m.opciones || []).slice(0, 3).map(function (o) { return escHtmlMr(o.etiqueta); }).join(' · ') +
+                        (m.opciones.length > 3 ? ' · +' + (m.opciones.length - 3) : '') +
+                    '</small></td>' +
+                    '<td class="text-end">' +
+                        '<button class="btn btn-sm btn-outline-primary mr-edit-btn" data-id="' + m.id + '"><i class="fa fa-pen"></i></button> ' +
+                        '<button class="btn btn-sm btn-outline-danger mr-del-btn" data-id="' + m.id + '"><i class="fa fa-trash"></i></button>' +
+                    '</td></tr>';
+            });
+            html += '</tbody></table>';
+            cont.innerHTML = html;
+        }
+
+        function _resetFormMenu() {
+            $('#mr-form-id').val('');
+            $('#mr-form-nombre').val('');
+            $('#mr-form-color').val('#16a34a');
+            $('#mr-form-cuerpo').val('');
+            $('#mr-form-header').val('');
+            $('#mr-form-footer').val('');
+            $('#mr-form-opciones-body').empty();
+            _addRowOpcion();
+        }
+
+        function _addRowOpcion(etq, valor) {
+            var tr = $('<tr>' +
+                '<td><input type="text" class="form-control form-control-sm mr-opt-etq" maxlength="24" value="' + escHtmlMr(etq || '') + '"></td>' +
+                '<td><input type="text" class="form-control form-control-sm mr-opt-val" maxlength="256" value="' + escHtmlMr(valor || '') + '"></td>' +
+                '<td><button type="button" class="btn btn-sm btn-outline-danger mr-opt-del"><i class="fa fa-trash"></i></button></td>' +
+                '</tr>');
+            $('#mr-form-opciones-body').append(tr);
+        }
+
+        $('#mr-form-add-opcion').on('click', function () { _addRowOpcion(); });
+        $(document).on('click', '.mr-opt-del', function () { $(this).closest('tr').remove(); });
+
+        $(document).on('click', '.mr-edit-btn', function () { _editarMenu($(this).data('id')); });
+
+        function _editarMenu(id) {
+            var menu = _menusCache.find(function (m) { return String(m.id) === String(id); });
+            if (!menu) return;
+            $('#mr-form-id').val(menu.id);
+            $('#mr-form-nombre').val(menu.nombre);
+            $('#mr-form-color').val(menu.color || '#16a34a');
+            $('#mr-form-cuerpo').val(menu.cuerpo || '');
+            $('#mr-form-header').val(menu.header || '');
+            $('#mr-form-footer').val(menu.footer || '');
+            $('#mr-form-opciones-body').empty();
+            (menu.opciones || []).forEach(function (o) { _addRowOpcion(o.etiqueta, o.valor); });
+            if (!menu.opciones || menu.opciones.length === 0) _addRowOpcion();
+        }
+
+        $(document).on('click', '.mr-del-btn', function () {
+            var id = $(this).data('id');
+            if (!confirm('¿Eliminar este menú?')) return;
+            _mrPostSesionAction('menu_rapido_eliminar', {
+                sesion_id: $('#sesion-selector').val(), id: id,
+            }).then(function (r) {
+                if (r.error) return;
+                cargarMenusRapidos();
+                setTimeout(_renderListaModalMenus, 250);
+            });
+        });
+
+        $('#mr-form-cancelar').on('click', _resetFormMenu);
+        $('#mr-form-guardar').on('click', function () {
+            var nombre = $('#mr-form-nombre').val().trim();
+            if (!nombre) { alert('Falta el nombre del menú'); return; }
+            var opciones = [];
+            $('#mr-form-opciones-body tr').each(function () {
+                var etq = $(this).find('.mr-opt-etq').val().trim();
+                var val = $(this).find('.mr-opt-val').val().trim() || etq;
+                if (etq) opciones.push({etiqueta: etq, valor: val});
+            });
+            if (!opciones.length) { alert('Agregá al menos un botón'); return; }
+            _mrPostSesionAction('menu_rapido_guardar', {
+                sesion_id: $('#sesion-selector').val(),
+                id: $('#mr-form-id').val() || '',
+                nombre: nombre,
+                color: $('#mr-form-color').val(),
+                cuerpo: $('#mr-form-cuerpo').val(),
+                header: $('#mr-form-header').val(),
+                footer: $('#mr-form-footer').val(),
+                opciones: JSON.stringify(opciones),
+            }).then(function (r) {
+                if (r.error) { alert(r.message || 'Error al guardar'); return; }
+                cargarMenusRapidos();
+                setTimeout(function () {
+                    _renderListaModalMenus();
+                    _resetFormMenu();
+                }, 250);
+            });
+        });
+
+        // Cargar menús al montar y al cambiar sesión.
+        cargarMenusRapidos();
+        $('#sesion-selector').on('change.menusrapidos', cargarMenusRapidos);
+
+        // Webhook API modal (solo superuser — el botón ya viene oculto si no lo es)
+        window.copiarTexto = function(elId) {
+            var el = document.getElementById(elId);
+            if (!el) return;
+            var txt = (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') ? el.value : el.innerText;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(txt).then(function() {
+                    if (typeof toastr !== 'undefined') toastr.success('Copiado al portapapeles');
+                });
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = txt;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                if (typeof toastr !== 'undefined') toastr.success('Copiado');
+            }
+        };
+
+        window.abrirWebhookConv = function() {
+            if (!conversacionActiva) {
+                if (typeof toastr !== 'undefined') toastr.warning('Selecciona primero una conversación.');
+                return;
+            }
+            var url = window.location.origin + '/whatsapp/api/v1/conversaciones/' + conversacionActiva + '/enviar/';
+            $('#webhook-conv-id').text('#' + conversacionActiva);
+            $('#webhook-url').val(url);
+            var curlJson =
+                'curl -X POST "' + url + '" \\\n' +
+                '  -H "Content-Type: application/json" \\\n' +
+                '  -d \'{"texto":"Tu reporte está listo ✅"}\'';
+            var curlMulti =
+                'curl -X POST "' + url + '" \\\n' +
+                '  -F "texto=Reporte adjunto" \\\n' +
+                '  -F "archivo=@reporte.pdf"';
+            $('#webhook-curl-json').text(curlJson);
+            $('#webhook-curl-multipart').text(curlMulti);
+
+            var pyText =
+                'import requests\n\n' +
+                'URL = "' + url + '"\n\n' +
+                'r = requests.post(\n' +
+                '    URL,\n' +
+                '    json={"texto": "Tu reporte está listo ✅"},\n' +
+                '    timeout=15,\n' +
+                ')\n' +
+                'r.raise_for_status()\n' +
+                'print(r.json())  # {"success": true, "enviados": [...]}';
+
+            var pyMulti =
+                'import requests\n\n' +
+                'URL = "' + url + '"\n\n' +
+                'with open("reporte.pdf", "rb") as f:\n' +
+                '    r = requests.post(\n' +
+                '        URL,\n' +
+                '        data={"texto": "Reporte adjunto", "caption": "Listo"},\n' +
+                '        files={"archivo": ("reporte.pdf", f, "application/pdf")},\n' +
+                '        timeout=30,\n' +
+                '    )\n' +
+                'r.raise_for_status()\n' +
+                'print(r.json())';
+
+            $('#webhook-py-text').text(pyText);
+            $('#webhook-py-multipart').text(pyMulti);
+
+            new bootstrap.Modal(document.getElementById('modalWebhookConv')).show();
+        };
+
+        // CTA de la alerta "sesión pausada": foco + scroll al combo + flash
+        $(document).on('click', '#btn-cambiar-sesion-pausada', function() {
+            var $sel = $('#sesion-selector');
+            if (!$sel.length) return;
+            $('html, body').animate({ scrollTop: $sel.offset().top - 90 }, 250);
+            $sel.addClass('flash-attention').focus();
+            try { $sel[0].showPicker && $sel[0].showPicker(); } catch (e) {}
+            setTimeout(function() { $sel.removeClass('flash-attention'); }, 1600);
+        });
+
         // Cambiar de sesión
         $('#sesion-selector').change(function() {
             const sesionId = $(this).val();
-            console.log("Cambiando a sesión:", sesionId);
-            sessionWebSocket(sesionId);
-            // Limpiar chat actual
+            // Abortar cualquier carga en curso
+            _cargandoMensajes = false;
+            $.unblockUI();
+            if (chatSocket) { chatSocket.close(); chatSocket = null; }
+            sessionWebSocket(sesionId, filtroActivo);
             $('#mensajes-container').html('<div class="text-center p-5"><i class="fa fa-comments fa-4x text-muted mb-3"></i><p>Selecciona una conversación para ver los mensajes</p></div>');
             $('#chat-footer').hide();
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container').addClass('d-none');
+            $('#stats-panel, #control-respuestas-panel').addClass('d-none');
             $('#contacto-nombre').text('Selecciona una conversación');
+            $('#conv-id-badge').hide();
             $('#contacto-numero').text('');
             $('#contacto-hashedId').text('');
+            $('#conv-fecha-inicio').hide();
+            mostrarPlantillasSiMeta(false, null);
             conversacionActiva = null;
         });
 
         const buscarConversacion = debounceFunction(function (e) {
             const criterio = $(e.target).val();
-            cargarConversaciones($('#sesion-selector').val(), criterio);
+            cargarConversaciones($('#sesion-selector').val(), criterio, filtroActivo);
         }, 500);
 
         const quitPresenceUpdate = debounceFunction(function (e) {
@@ -377,15 +1513,25 @@
             buscarConversacion(e);
         });
 
-        // Cargar conversación al hacer clic
+        // Cargar conversación al hacer clic — con guard anti-doble-click
+        let _cargandoMensajes = false;
         $(document).on('click', '.cargar-conversacion', function(e) {
             e.preventDefault();
             const conversacionId = $(this).data('id');
+            if (_cargandoMensajes || conversacionId == conversacionActiva) return;
             cargarMensajes(conversacionId);
 
             // Marcar como activa
             $('.conversacion-item').removeClass('active');
             $(this).closest('.conversacion-item').addClass('active');
+
+            // Mobile: ocultar lista y mostrar chat (estilo WhatsApp)
+            document.body.classList.add('chat-mobile-open');
+        });
+
+        // Mobile back button: volver a la lista de conversaciones
+        $(document).on('click', '#chat-back-btn', function() {
+            document.body.classList.remove('chat-mobile-open');
         });
 
         $('form input[name="mensaje"]').keyup(function(e) {
@@ -401,12 +1547,21 @@
             e.preventDefault();
 
             const form = $(this);
+            const texto = form.find('input[name="mensaje"]').val().trim();
+            const archivo = document.getElementById('archivo').files[0];
+            if (!texto && !archivo) {
+                alertaWarning('Escribe un mensaje o adjunta un archivo.');
+                return;
+            }
+
             const formData = new FormData(form[0]);
 
             // Deshabilitar el botón de envío
             const submitBtn = form.find('button[type="submit"]');
-            const originalBtnText = submitBtn.html();
-            submitBtn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Enviando...');
+            // Estado "enviando": spinner dentro del botón circular, sin texto
+            submitBtn.prop('disabled', true)
+                .css('background', '#1aab52')
+                .html('<span class="spinner-border spinner-border-sm" role="status" style="width:14px;height:14px;border-width:2px;"></span>');
 
             $.ajax({
                 url: '/whatsapp/conversaciones/',
@@ -422,21 +1577,29 @@
                         // Limpiar el formulario
                         form.find('input[name="mensaje"]').val('');
                         form.find('input[name="archivo"]').val('');
+                        $('#footer-file-preview').addClass('d-none');
 
                         // Scroll al final
                         setTimeout(() => {
                             scrollToBottom();
                         }, 1500);
                     } else {
+                        console.error('[enviarMensaje] backend error', response);
                         alertaWarning('Error: ' + response.message);
+                        // Si el backend senala que se requiere plantilla (ventana 24h Meta) → abrir panel
+                        if (response.requiere_plantilla && $('#plantillas-btn').hasClass('visible')) {
+                            $('#plantillas-btn').trigger('click');
+                        }
                     }
                 },
                 error: function(xhr, status, error) {
+                    console.error('[enviarMensaje] ajax error', status, error, xhr.responseText);
                     alertaWarning('Error al enviar mensaje: ' + error);
                 },
                 complete: function() {
-                    // Restaurar el botón
-                    submitBtn.prop('disabled', false).html(originalBtnText);
+                    submitBtn.prop('disabled', false)
+                        .css('background', '#25d366')
+                        .html('<i class="fa fa-paper-plane"></i>');
                 }
             });
         });
@@ -459,27 +1622,85 @@
             }
         }
 
-        // Mostrar nombre del archivo seleccionado
-        $('#archivo').change(function() {
-            const fileName = $(this).val().split('\\').pop();
-            if (fileName) {
-                // Mostrar el nombre del archivo junto al campo de mensaje
-                const messageInput = $('input[name="mensaje"]');
-                if (!messageInput.val()) {
-                    messageInput.val('Archivo adjunto: ' + fileName);
-                }
+        // Preview del archivo seleccionado en el footer
+        const _fileIconMap = {
+            'image': 'fa-file-image text-success',
+            'video': 'fa-file-video text-danger',
+            'audio': 'fa-file-audio text-warning',
+            'application/pdf': 'fa-file-pdf text-danger',
+        };
+        function _fileIcon(type) {
+            for (const k in _fileIconMap) {
+                if (type.startsWith(k)) return _fileIconMap[k];
             }
+            return 'fa-file-alt text-primary';
+        }
+
+        $('#archivo').on('change', function() {
+            const file = this.files[0];
+            if (!file) return;
+            const icon = _fileIcon(file.type);
+            $('#footer-file-icon').attr('class', 'fa ' + icon);
+            $('#footer-file-name').text(file.name);
+            $('#footer-file-preview').removeClass('d-none');
+        });
+
+        // ── Emoji picker ────────────────────────────────────────────────
+        const _emojis = {
+            '😊 Caras': ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🥸','🤩','🥳','😏','😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤','😠','😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🫣','🤗','🫡','🤔','🫢','🤭','🤫','🤥','😶','😐','😑','😬','🙄','😯','😦','😧','😮','😲','🥱','😴','🤤','😪','😵','🤐','🥴','🤢','🤮','🤧','😷','🤒','🤕'],
+            '👋 Gestos': ['👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🫰','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','🫵','👍','👎','✊','👊','🤛','🤜','👏','🙌','🫶','👐','🤲','🤝','🙏','✍️','💅','🤳','💪','🦾','🦵','🦶','👂','🦻','👃','🫀','🫁','🧠','🦷','🦴','👀','👁️','👅','👄','🫦','💋'],
+            '❤️ Corazones': ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❤️‍🔥','❤️‍🩹','❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☪️','🕉️','✡️','🔯','🪯','☯️','☦️','🛐'],
+            '🎉 Celebración': ['🎉','🎊','🎈','🎁','🎀','🎗️','🎟️','🎫','🏆','🥇','🥈','🥉','🏅','🎖️','🌟','⭐','💫','✨','🌠','🎆','🎇','🧨','🪅','🎭','🎪','🎨','🎬','🎤','🎧','🎼','🎵','🎶','🎹','🥁','🪘','🎷','🎺','🪗','🎸','🪕'],
+            '🐱 Animales': ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🪱','🐛','🦋','🐌','🐞','🐜','🪲','🦟','🦗','🕷️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐟','🐠','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🦣','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐈‍⬛','🪶','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊️','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿️','🦔'],
+            '🍕 Comida': ['🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🫒','🫑','🥕','🥦','🧄','🧅','🌽','🌶️','🫚','🥑','🍆','🥔','🍠','🥐','🥯','🍞','🫓','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🌭','🍔','🍟','🍕','🫔','🌮','🌯','🥙','🧆','🥚','🥘','🍲','🫕','🥣','🥗','🍿','🧂','🥫','🍱','🍘','🍙','🍚','🍛','🍜','🍝','🍠','🍢','🍣','🍤','🍥','🥮','🍡','🥟','🥠','🥡','🍦','🍧','🍨','🍩','🍪','🎂','🍰','🧁','🥧','🍫','🍬','🍭','🍮','🍯','☕','🫖','🍵','🧃','🥤','🧋','🍶','🍺','🍻','🥂','🍷','🫗','🥃','🍸','🍹','🧉','🍾','🧊'],
+            '✈️ Viajes': ['🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🏍️','🛵','🛺','🚲','🛴','🛹','🛼','🚏','🛣️','🛤️','⛽','🚧','⚓','🛟','⛵','🚤','🛥️','🛳️','⛴️','🚢','✈️','🛩️','🛫','🛬','🪂','💺','🚁','🚟','🚠','🚡','🛰️','🚀','🛸','🏠','🏡','🏢','🏣','🏤','🏥','🏦','🏨','🏩','🏪','🏫','🏬','🏭','🏯','🏰','💒','🗼','🗽','⛪','🕌','🛕','🕍','⛩️','🕋','⛲','⛺','🌁','🌃','🏙️','🌄','🌅','🌆','🌇','🌉','♟️','🎠','🎡','🎢','💈','🎪'],
+        };
+
+        (function _buildEmojiPicker() {
+            const popup = document.getElementById('emoji-picker-popup');
+            let html = '';
+            for (const [cat, emojis] of Object.entries(_emojis)) {
+                html += `<div class="emoji-cat-title">${cat}</div><div class="emoji-grid">`;
+                html += emojis.map(e => `<span class="e" data-e="${e}">${e}</span>`).join('');
+                html += '</div>';
+            }
+            popup.innerHTML = html;
+        })();
+
+        document.getElementById('emoji-btn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            const p = document.getElementById('emoji-picker-popup');
+            p.style.display = p.style.display === 'none' || !p.style.display ? 'block' : 'none';
+        });
+
+        document.getElementById('emoji-picker-popup').addEventListener('click', function(e) {
+            const emoji = e.target.dataset.e;
+            if (!emoji) return;
+            const inp = document.getElementById('footer-mensaje-input');
+            const pos = inp.selectionStart;
+            const val = inp.value;
+            inp.value = val.slice(0, pos) + emoji + val.slice(pos);
+            inp.selectionStart = inp.selectionEnd = pos + emoji.length;
+            inp.focus();
+        });
+
+        document.addEventListener('click', function() {
+            document.getElementById('emoji-picker-popup').style.display = 'none';
+        });
+
+        $('#footer-file-remove').on('click', function() {
+            $('#archivo').val('');
+            $('#footer-file-preview').addClass('d-none');
         });
 
         // Función para cargar conversaciones
-        function cargarConversaciones(sesionId = null, query = '') {
-            // Mostrar indicador de carga
+        function cargarConversaciones(sesionId = null, query = '', filtro = '') {
             $('#lista-conversaciones').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2">Cargando conversaciones...</p></div>');
 
-            const url = '/whatsapp/conversaciones/' +
-                        '?load_conversations=true' +
-                        (sesionId ? '&sesion_id=' + sesionId : '') +
-                        (query ? '&criterio=' + encodeURIComponent(query) : '');
+            let url = '/whatsapp/conversaciones/?load_conversations=true';
+            if (sesionId) url += '&sesion=' + sesionId;
+            if (query)    url += '&criterio=' + encodeURIComponent(query);
+            if (filtro)   url += '&' + filtro;
 
             $.ajax({
                 url: url,
@@ -514,15 +1735,27 @@
 
         // Función para cargar mensajes
         function cargarMensajes(conversacionId) {
+            if (_cargandoMensajes) return;
+            _cargandoMensajes = true;
             conversacionActiva = conversacionId;
 
-            // Mostrar indicador de carga
-            $('#mensajes-container').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2">Cargando mensajes...</p></div>');
+            pantallaespera();
+
+            // Limpiar WebSocket anterior
+            if (chatSocket) { chatSocket.close(); chatSocket = null; }
+
+            // Ocultar controles mientras carga
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #chat-footer').addClass('d-none').hide();
+            $('#stats-panel, #control-respuestas-panel').addClass('d-none');
+            $('#mensajes-container').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted small">Cargando mensajes...</p></div>');
 
             $.ajax({
                 url: '/whatsapp/conversaciones/?action=ver_mensajes&pk=' + conversacionId,
                 type: 'GET',
                 success: function(response) {
+                    $.unblockUI();
+                    _cargandoMensajes = false;
+
                     // Actualizar mensajes
                     $('#mensajes-container').html(response.html);
 
@@ -530,32 +1763,102 @@
                     $('#contacto-nombre').text(response.contacto_nombre || response.contacto_numero);
                     $('#contacto-numero').text(response.contacto_numero);
                     $('#contacto-hashedId').text(response.hashed_id && `#${response.hashed_id}` || '');
+                    $('#conv-id-badge').text('Conv #' + conversacionId).show();
 
-                    // Actualizar foto de contacto si está disponible
-                    if (response.contacto_foto) {
-                        $('#contacto-foto').attr('src', response.contacto_foto);
-                    } else {
-                        $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
-                    }
+                    // Backend siempre devuelve una URL válida via get_foto_gris():
+                    // foto real → PNG inicial del nombre → default.
+                    $('#contacto-foto').attr('src', response.contacto_foto || '/static/foto_defaultd.png');
 
                     $btnsAction.forEach(btn => $(`${btn}`).attr('data-id', conversacionId));
 
-                    response.estado_active ? $('#resolver-btn').removeClass('d-none') : $('#resolver-btn').addClass('d-none');
+                    if (response.estado_active) {
+                        $('#resolver-btn').removeClass('d-none').show();
+                    } else {
+                        $('#resolver-btn').addClass('d-none').hide();
+                    }
+                    $('#dropdowns-btn').removeClass('d-none').show();
 
-                    $('#dropdowns-btn').removeClass('d-none')
+                    // Bot toggle
+                    _convAiActivo = response.ai_activo;
+                    $('#bot-toggle-container').removeClass('d-none').show();
+                    actualizarBotUI(response.ai_activo);
+
+                    // Bloquear cierre
+                    _bloquearCierreActual = response.bloquear_cierre || false;
+                    _actualizarBloquearCierreUI(_bloquearCierreActual);
+
+                    // Asignado a
+                    if (response.asignado_a) {
+                        $('#asignado-nombre').text(response.asignado_a);
+                        $('#asignado-container').removeClass('d-none').show();
+                    } else {
+                        $('#asignado-container').addClass('d-none').hide();
+                    }
+
+                    // Fecha inicio conversación
+                    if (response.fecha_inicio) {
+                        $('#conv-fecha-inicio').text('Inicio: ' + response.fecha_inicio).show();
+                    } else {
+                        $('#conv-fecha-inicio').hide();
+                    }
+
+                    // Atribución (referral CTWA / IG ad)
+                    var $refContainer = $('#referral-container');
+                    var $refBadge = $('#referral-badge');
+                    var ref = response.referral;
+                    if (ref) {
+                        // Label corto: usa headline si hay, sino "Anuncio"
+                        var label = ref.headline ? ref.headline.slice(0, 40) : 'Anuncio';
+                        if (ref.headline && ref.headline.length > 40) label += '…';
+                        $('#referral-label').text(label);
+
+                        // Link al post/ad source si Meta lo entrega
+                        if (ref.source_url) {
+                            $refBadge.attr('href', ref.source_url).attr('target', '_blank');
+                        } else {
+                            $refBadge.attr('href', 'javascript:void(0)').removeAttr('target');
+                        }
+
+                        // Tooltip rico con la info completa
+                        var tooltipHtml = '';
+                        if (ref.headline) tooltipHtml += '<b>' + $('<div>').text(ref.headline).html() + '</b><br>';
+                        if (ref.body)     tooltipHtml += '<small>' + $('<div>').text(ref.body).html() + '</small><br>';
+                        if (ref.source_type)   tooltipHtml += '<i>Fuente:</i> ' + ref.source_type + '<br>';
+                        if (ref.media_type)    tooltipHtml += '<i>Media:</i> ' + ref.media_type + '<br>';
+                        if (ref.campaign_id)   tooltipHtml += '<i>Campaign:</i> <code>' + ref.campaign_id + '</code><br>';
+                        if (ref.ad_id)         tooltipHtml += '<i>Ad:</i> <code>' + ref.ad_id + '</code><br>';
+                        if (!tooltipHtml) tooltipHtml = 'Vino de un anuncio de Meta';
+
+                        // Recrear tooltip de Bootstrap (destruye el viejo si existe)
+                        var oldTip = bootstrap.Tooltip.getInstance($refBadge[0]);
+                        if (oldTip) oldTip.dispose();
+                        $refBadge.attr('title', tooltipHtml);
+                        new bootstrap.Tooltip($refBadge[0], {html: true});
+
+                        $refContainer.removeClass('d-none').show();
+                    } else {
+                        $refContainer.addClass('d-none').hide();
+                    }
+
+                    // Render estadísticas completas (tokens, mensajes, CR, panel)
+                    _renderEstadisticas(response);
+                    $('#stats-panel, #control-respuestas-panel').addClass('d-none');
 
                     // Mostrar footer para enviar mensajes
-                    $('#chat-footer').show();
+                    $('#chat-footer').removeClass('d-none').show();
                     $('#conversacion-id').val(response.conversacion_id);
 
-                    // Scroll al final
-                    setTimeout(() => {
-                        scrollToBottom();
-                    }, 1500);
+                    // Boton de plantillas Meta — visible solo si la sesion es Meta Y hay plantillas aprobadas
+                    mostrarPlantillasSiMeta(response.es_meta === true, response.conversacion_id);
+
+                    setTimeout(() => { scrollToBottom(); }, 800);
                     conectarWebSocket(response.conversacion_id);
                 },
                 error: function(xhr, status, error) {
-                    $('#mensajes-container').html('<div class="p-3 text-center"><p class="text-danger">Error al cargar mensajes: ' + error + '</p></div>');
+                    $.unblockUI();
+                    _cargandoMensajes = false;
+                    console.error('[cargarMensajes] ajax error', status, error, xhr.responseText);
+                    $('#mensajes-container').html('<div class="p-3 text-center"><p class="text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error al cargar mensajes: ' + error + '</p></div>');
                 }
             });
         }
@@ -565,6 +1868,65 @@
             cargarMensajes(conversacionId);
         }
 
+        // ====================== FILTROS RÁPIDOS =========================
+
+        function aplicarFiltro(filtro) {
+            filtroActivo = filtro;
+            $('.filter-btn').removeClass('active');
+            $(`.filter-btn[data-filter="${filtro}"]`).addClass('active');
+            const sesionId = $('#sesion-selector').val();
+            cargarConversaciones(sesionId, $('#search-conversacion').val(), filtroActivo);
+        }
+
+        $('.filter-btn').on('click', function() {
+            // Ignorar dropdown-toggle: solo abre/cierra el menú, el filtro lo
+            // aplica el <a.filter-link> dentro del dropdown.
+            if ($(this).hasClass('dropdown-toggle')) return;
+            const f = $(this).data('filter');
+            if (!f) return;
+            aplicarFiltro(f);
+        });
+
+        $(document).on('click', '.filter-link', function(e) {
+            e.preventDefault();
+            const f = $(this).data('filter');
+            if (!f) return;
+            aplicarFiltro(f);
+        });
+
+        // ====================== TOGGLE BOT =========================
+        let _convAiActivo = true;
+
+        window.toggleBot = function() {
+            if (!conversacionActiva) return;
+            $.post("{{ request.path }}", {
+                action: 'toggle-bot',
+                id: conversacionActiva,
+                csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()
+            }, function(data) {
+                if (!data.error) {
+                    _convAiActivo = data.ai_activo;
+                    actualizarBotUI(data.ai_activo);
+                } else {
+                    console.error('[toggleBot] backend error', data);
+                }
+            }, 'json').fail(function(xhr) {
+                console.error('[toggleBot] ajax fail', xhr.status, xhr.responseText);
+            });
+        };
+
+        function actualizarBotUI(activo) {
+            const btn = $('#btn-toggle-bot');
+            const label = $('#bot-estado-label');
+            btn.removeClass('bot-on bot-off');
+            if (activo) {
+                btn.addClass('bot-on');
+                label.text('Bot ON');
+            } else {
+                btn.addClass('bot-off');
+                label.text('Bot PAUSADO');
+            }
+        }
 
         $('.form_modal').on('click', function(e) {
             e.preventDefault();
@@ -594,18 +1956,359 @@
                     pantallaespera();
                     $.post("{{ request.path }}", { action , id,}, function (data) {
                         $.unblockUI();
-                        const data_ = data[0]
-                            console.log(data_)
+                        const data_ = data[0];
                         if (!data_.error) {
                             window.location.href = data_.url;
                         } else {
+                            console.error('[marcar-resuelto] backend error', data_);
                             mensajeWarning(data_.message)
                         }
-                    }, "json");
+                    }, "json").fail(function(xhr) {
+                        $.unblockUI();
+                        console.error('[marcar-resuelto] ajax fail', xhr.status, xhr.responseText);
+                    });
                 }
             })
         }
         });
+
+        // ====================== PLANTILLAS META =========================
+        // Panel estilo "pancake" que sube desde el boton en el composer.
+        // Se carga la lista al primer click y se cachea por conversacion.
+        const _convPath = '{{ request.path }}';
+        {% verbatim %}
+        let _plantillasCache = {};   // { conversacionId: [plantillas] }
+        let _plantillaSeleccionada = null;
+
+        window.mostrarPlantillasSiMeta = function(esMeta, convId) {
+            const $btn = $('#plantillas-btn');
+            $('#plantillas-panel').removeClass('open');
+            $('#plantillas-badge').hide();
+            if (!esMeta) {
+                $btn.removeClass('visible');
+                return;
+            }
+            // Pre-fetch silencioso: solo muestro el boton si hay al menos una plantilla APPROVED
+            _fetchPlantillas(convId, false, function(err, plantillas) {
+                if (err) {
+                    console.error('[plantillas] pre-fetch error', err);
+                    $btn.removeClass('visible');
+                    return;
+                }
+                if (plantillas.length > 0) {
+                    $btn.addClass('visible');
+                    $('#plantillas-badge').text(plantillas.length).show();
+                } else {
+                    $btn.removeClass('visible');
+                }
+            });
+        };
+
+        // Descarga plantillas de la sesion y cachea. callback(err, plantillas).
+        function _fetchPlantillas(conversacionId, forzar, callback) {
+            if (!forzar && _plantillasCache[conversacionId]) {
+                callback && callback(null, _plantillasCache[conversacionId]);
+                return;
+            }
+            $.get(_convPath, {
+                action: 'listar_plantillas_meta', pk: conversacionId,
+            }).done(function(r) {
+                if (r.error) {
+                    console.error('[plantillas] listar error', r);
+                    callback && callback(r.message || 'Error', []);
+                    return;
+                }
+                const plantillas = r.plantillas || [];
+                _plantillasCache[conversacionId] = plantillas;
+                callback && callback(null, plantillas);
+            }).fail(function(xhr) {
+                console.error('[plantillas] listar fail', xhr.status, xhr.responseText);
+                callback && callback('http_' + xhr.status, []);
+            });
+        }
+
+        function _cargarListaPlantillas(conversacionId, forzar = false) {
+            const $list = $('#plantillas-list');
+            $list.html('<div class="pp-empty"><i class="fa fa-spinner fa-spin me-1"></i>Cargando plantillas...</div>');
+            _fetchPlantillas(conversacionId, forzar, function(err, plantillas) {
+                if (err) {
+                    $list.html('<div class="pp-empty text-danger">' + err + '</div>');
+                    return;
+                }
+                _renderListaPlantillas(plantillas);
+                if (plantillas.length > 0) {
+                    $('#plantillas-badge').text(plantillas.length).show();
+                } else {
+                    $('#plantillas-badge').hide();
+                }
+            });
+        }
+
+        function _renderListaPlantillas(plantillas, filtro = '') {
+            const $list = $('#plantillas-list');
+            const q = (filtro || '').toLowerCase().trim();
+            const filtradas = q
+                ? plantillas.filter(p => (p.nombre + ' ' + (p.cuerpo || '')).toLowerCase().includes(q))
+                : plantillas;
+            if (!filtradas.length) {
+                $list.html('<div class="pp-empty">No hay plantillas aprobadas disponibles.</div>');
+                return;
+            }
+            const html = filtradas.map(p => {
+                const cat = (p.categoria || '').toUpperCase();
+                const iconMap = { URL: 'fa-link', PHONE_NUMBER: 'fa-phone', QUICK_REPLY: 'fa-reply' };
+                const botones = (p.botones || []).map(b => {
+                    const tipo = b.type || b.tipo || '';
+                    const icon = iconMap[tipo] || 'fa-square';
+                    return `<span class="pp-boton-chip ${tipo}" title="${_esc(tipo)}"><i class="fa ${icon}"></i>${_esc(b.text || b.texto || '')}</span>`;
+                }).join('');
+                return `<div class="pp-item" data-id="${p.id}">
+                    <div class="pp-item-head">
+                        <span class="pp-name">${_esc(p.nombre)}</span>
+                        <span class="pp-cat ${cat}">${cat}</span>
+                        <span class="pp-lang">${_esc(p.idioma)}</span>
+                    </div>
+                    <div class="pp-preview">${_esc(p.preview || '')}</div>
+                    ${botones ? `<div class="pp-botones">${botones}</div>` : ''}
+                    ${p.veces_enviada ? `<div class="pp-uses"><i class="fa fa-paper-plane me-1"></i>${p.veces_enviada} envios</div>` : ''}
+                </div>`;
+            }).join('');
+            $list.html(html);
+        }
+
+        function _esc(s) {
+            return (s == null ? '' : String(s))
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function _detectarVarsEnCuerpo(body) {
+            const re = /\{\{(\d+)\}\}/g;
+            const ids = new Set();
+            let m;
+            while ((m = re.exec(body || '')) !== null) {
+                ids.add(parseInt(m[1], 10));
+            }
+            return Array.from(ids).sort((a, b) => a - b);
+        }
+
+        function _plantillaNecesitaFormulario(p) {
+            if (_detectarVarsEnCuerpo(p.cuerpo).length > 0) return true;
+            if (p.header_tipo === 'TEXT' && _detectarVarsEnCuerpo(p.header_contenido).length > 0) return true;
+            if (['IMAGE', 'VIDEO', 'DOCUMENT'].indexOf(p.header_tipo) !== -1) return true;
+            return false;
+        }
+
+        function _abrirFormulario(plantilla) {
+            _plantillaSeleccionada = plantilla;
+            $('#plantillas-form-nombre').text(plantilla.nombre);
+
+            // ── Bloque header ─────────────────────────────────────────
+            let headerHtml = '';
+            const ht = plantilla.header_tipo || 'NONE';
+            if (ht === 'TEXT') {
+                const headerVars = _detectarVarsEnCuerpo(plantilla.header_contenido);
+                if (headerVars.length > 0) {
+                    headerHtml += '<div class="pp-form-title" style="font-size:.72rem;color:#65676b;margin-top:4px;">Encabezado</div>';
+                    headerHtml += headerVars.map(idx => {
+                        const abre = '{' + '{';
+                        const cierra = '}' + '}';
+                        return `<div class="pp-var-row">
+                            <label class="pp-var-label">Header ${abre}${idx}${cierra}</label>
+                            <input type="text" class="pp-var-input" data-header-var="${idx}">
+                        </div>`;
+                    }).join('');
+                }
+            } else if (ht === 'IMAGE' || ht === 'VIDEO' || ht === 'DOCUMENT') {
+                const label = { IMAGE: 'URL de imagen', VIDEO: 'URL de video', DOCUMENT: 'URL de documento' }[ht];
+                headerHtml += '<div class="pp-form-title" style="font-size:.72rem;color:#65676b;margin-top:4px;">Encabezado</div>';
+                headerHtml += `<div class="pp-var-row">
+                    <label class="pp-var-label">${label}</label>
+                    <input type="url" class="pp-var-input" id="pp-header-url" data-header-media="${ht.toLowerCase()}" placeholder="https://...">
+                </div>`;
+                if (ht === 'DOCUMENT') {
+                    headerHtml += `<div class="pp-var-row">
+                        <label class="pp-var-label">Nombre del archivo (opcional)</label>
+                        <input type="text" class="pp-var-input" id="pp-header-filename" placeholder="cotizacion.pdf">
+                    </div>`;
+                }
+            }
+
+            // ── Bloque cuerpo ─────────────────────────────────────────
+            const bodyVars = _detectarVarsEnCuerpo(plantilla.cuerpo);
+            const meta = plantilla.variables || [];
+            const abre = '{' + '{';
+            const cierra = '}' + '}';
+            let bodyHtml = '';
+            if (bodyVars.length > 0) {
+                bodyHtml += '<div class="pp-form-title" style="font-size:.72rem;color:#65676b;margin-top:10px;">Cuerpo</div>';
+                bodyHtml += bodyVars.map(idx => {
+                    const info = meta[idx - 1] || {};
+                    const nombre = info.nombre ? ' · ' + _esc(info.nombre) : '';
+                    const placeholder = info.ejemplo ? 'Ej: ' + _esc(info.ejemplo) : '';
+                    return `<div class="pp-var-row">
+                        <label class="pp-var-label">${abre}${idx}${cierra}${nombre}</label>
+                        <input type="text" class="pp-var-input" data-body-var="${idx}" placeholder="${placeholder}">
+                    </div>`;
+                }).join('');
+            }
+
+            const total = (headerHtml + bodyHtml);
+            $('#plantillas-form-vars').html(total || '<div class="text-muted" style="font-size:.78rem;">Esta plantilla no requiere variables.</div>');
+            $('#plantillas-list').hide();
+            $('#plantillas-form').addClass('open');
+        }
+
+        function _cerrarFormulario() {
+            _plantillaSeleccionada = null;
+            $('#plantillas-form').removeClass('open');
+            $('#plantillas-list').show();
+        }
+
+        $('#plantillas-btn').on('click', function(e) {
+            e.stopPropagation();
+            const convId = $('#conversacion-id').val();
+            if (!convId) return;
+            const $panel = $('#plantillas-panel');
+            const abierto = $panel.hasClass('open');
+            if (abierto) {
+                $panel.removeClass('open');
+                return;
+            }
+            $panel.addClass('open');
+            _cerrarFormulario();
+            _cargarListaPlantillas(convId);
+        });
+
+        $('#plantillas-close').on('click', function() {
+            $('#plantillas-panel').removeClass('open');
+        });
+
+        $('#plantillas-refresh').on('click', function() {
+            const convId = $('#conversacion-id').val();
+            if (!convId) return;
+            delete _plantillasCache[convId];
+            _cerrarFormulario();
+            _cargarListaPlantillas(convId, true);
+        });
+
+        $('#plantillas-panel').on('click', function(e) {
+            e.stopPropagation();
+        });
+
+        $(document).on('click', '#plantillas-list .pp-item', function() {
+            const id = $(this).data('id');
+            const convId = $('#conversacion-id').val();
+            const lista = _plantillasCache[convId] || [];
+            const p = lista.find(x => x.id === id);
+            if (!p) {
+                console.error('[plantillas] plantilla no encontrada en cache', id);
+                return;
+            }
+            if (_plantillaNecesitaFormulario(p)) {
+                _abrirFormulario(p);
+            } else {
+                _enviarPlantilla(p, [], null);
+            }
+        });
+
+        $('#plantillas-search').on('input', function() {
+            const convId = $('#conversacion-id').val();
+            _renderListaPlantillas(_plantillasCache[convId] || [], $(this).val());
+        });
+
+        $('#plantillas-form-back, #plantillas-form-cancelar').on('click', _cerrarFormulario);
+
+        $('#plantillas-form-enviar').on('click', function() {
+            if (!_plantillaSeleccionada) return;
+
+            // ── Recolectar cuerpo ───────────────────────────────────
+            const bodyVars = _detectarVarsEnCuerpo(_plantillaSeleccionada.cuerpo);
+            const paramsCuerpo = [];
+            $('#plantillas-form-vars .pp-var-input[data-body-var]').each(function() {
+                const idx = parseInt($(this).data('body-var'), 10);
+                paramsCuerpo[idx - 1] = $(this).val().trim();
+            });
+            if (bodyVars.length && paramsCuerpo.some(v => !v)) {
+                alertaWarning('Completa todas las variables del cuerpo.');
+                return;
+            }
+
+            // ── Recolectar header ───────────────────────────────────
+            let paramsHeader = null;
+            const ht = _plantillaSeleccionada.header_tipo || 'NONE';
+            if (ht === 'TEXT') {
+                const headerVars = _detectarVarsEnCuerpo(_plantillaSeleccionada.header_contenido);
+                if (headerVars.length > 0) {
+                    paramsHeader = [];
+                    $('#plantillas-form-vars .pp-var-input[data-header-var]').each(function() {
+                        const idx = parseInt($(this).data('header-var'), 10);
+                        paramsHeader[idx - 1] = $(this).val().trim();
+                    });
+                    if (paramsHeader.some(v => !v)) {
+                        alertaWarning('Completa todas las variables del encabezado.');
+                        return;
+                    }
+                }
+            } else if (ht === 'IMAGE' || ht === 'VIDEO' || ht === 'DOCUMENT') {
+                const url = ($('#pp-header-url').val() || '').trim();
+                if (!url) {
+                    alertaWarning('Agrega la URL del archivo del encabezado.');
+                    return;
+                }
+                if (ht === 'IMAGE')    paramsHeader = { image_url: url };
+                if (ht === 'VIDEO')    paramsHeader = { video_url: url };
+                if (ht === 'DOCUMENT') {
+                    paramsHeader = { document_url: url };
+                    const fname = ($('#pp-header-filename').val() || '').trim();
+                    if (fname) paramsHeader.filename = fname;
+                }
+            }
+            _enviarPlantilla(_plantillaSeleccionada, paramsCuerpo, paramsHeader);
+        });
+
+        function _enviarPlantilla(plantilla, paramsCuerpo, paramsHeader) {
+            const convId = $('#conversacion-id').val();
+            if (!convId) {
+                console.error('[plantillas] sin conversacion activa');
+                return;
+            }
+            const $btn = $('#plantillas-form-enviar');
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Enviando...');
+            $.post(_convPath, {
+                action: 'enviar_plantilla_meta',
+                pk: convId,
+                plantilla_id: plantilla.id,
+                params_cuerpo_json: JSON.stringify(paramsCuerpo || []),
+                params_header_json: JSON.stringify(paramsHeader || []),
+                csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val(),
+            }).done(function(r) {
+                if (r.error) {
+                    console.error('[plantillas] envio error', r);
+                    alertaWarning(r.message || 'Error al enviar plantilla.');
+                    return;
+                }
+                $('#mensajes-container').append(r.mensaje_html);
+                $('#plantillas-panel').removeClass('open');
+                _cerrarFormulario();
+                setTimeout(() => { scrollToBottom(); }, 200);
+            }).fail(function(xhr) {
+                console.error('[plantillas] envio fail', xhr.status, xhr.responseText);
+                alertaWarning('Error: ' + (xhr.responseText || xhr.status));
+            }).always(function() {
+                $btn.prop('disabled', false).text('Enviar');
+            });
+        }
+
+        // Click fuera cierra el panel (igual que emoji picker)
+        document.addEventListener('click', function(e) {
+            const panel = document.getElementById('plantillas-panel');
+            const btn = document.getElementById('plantillas-btn');
+            if (!panel || !panel.classList.contains('open')) return;
+            if (panel.contains(e.target) || btn.contains(e.target)) return;
+            panel.classList.remove('open');
+        });
+        {% endverbatim %}
 
         $('#terminar-sin-despedida').on('click', function(e) {
             e.preventDefault();
@@ -627,24 +2330,231 @@
                     pantallaespera();
                     $.post("{{ request.path }}", { action , id,}, function (data) {
                         $.unblockUI();
-                        const data_ = data[0]
-                            console.log(data_)
+                        const data_ = data[0];
                         if (!data_.error) {
                             window.location.href = data_.url;
                         } else {
+                            console.error('[terminar-sin-despedida] backend error', data_);
                             mensajeWarning(data_.message)
                         }
-                    }, "json");
+                    }, "json").fail(function(xhr) {
+                        $.unblockUI();
+                        console.error('[terminar-sin-despedida] ajax fail', xhr.status, xhr.responseText);
+                    });
                 }
             })
         }
         });
     });
+    /* ── Sonido + Toast + Notificación nativa ─────────────────────────── */
+    const _toastEl = document.getElementById('toast-nuevo-mensaje');
+    const _bsToast = _toastEl ? new bootstrap.Toast(_toastEl, {delay: 7000}) : null;
+
+    // AudioContext creado lazily tras primer gesto del usuario (política autoplay de Chrome/Opera).
+    let _audioCtx = null;
+    function _getAudioCtx() {
+        if (!_audioCtx) {
+            try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+        }
+        if (_audioCtx && _audioCtx.state === 'suspended') {
+            _audioCtx.resume().catch(function () {});
+        }
+        return _audioCtx;
+    }
+    // Inicializar el contexto en el primer gesto del usuario.
+    document.addEventListener('click', function _initAudio() {
+        _getAudioCtx();
+        document.removeEventListener('click', _initAudio);
+    }, { once: true });
+    // Cuando la pestaña vuelve a estar visible, asegurar que el AudioContext
+    // no quede suspended (Chrome/Opera lo congelan en background).
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden && _audioCtx && _audioCtx.state === 'suspended') {
+            _audioCtx.resume().catch(function () {});
+        }
+    });
+
+    // Notificación nativa: pedimos permiso al primer gesto del usuario para
+    // no disparar el prompt al instante de cargar (mejor UX). Si ya está
+    // concedido, no pide nada.
+    let _notifPerm = (typeof Notification !== 'undefined') ? Notification.permission : 'unsupported';
+    function _pedirPermisoNotif() {
+        if (_notifPerm === 'default' && typeof Notification !== 'undefined') {
+            Notification.requestPermission().then(function (p) {
+                _notifPerm = p;
+                console.log('[notif] permiso:', p);
+            });
+        }
+    }
+    document.addEventListener('click', function _initNotif() {
+        _pedirPermisoNotif();
+        document.removeEventListener('click', _initNotif);
+    }, { once: true });
+
+    // Notificación nativa solo cuando la pestaña no está visible — si el
+    // operador está mirando el panel, el toast in-page basta.
+    function _notificacionNativa(nombre, body, conversacionId) {
+        if (_notifPerm !== 'granted' || typeof Notification === 'undefined') return;
+        if (!document.hidden) return;
+        try {
+            // tag por conversación: si llega otro mensaje de la misma conv,
+            // reemplaza la notif anterior en lugar de apilar.
+            var n = new Notification(nombre || 'Nuevo mensaje', {
+                body: (body || 'Mensaje entrante de WhatsApp').slice(0, 140),
+                icon: '/static/assets/img/avatar.png',
+                tag:  'wa-conv-' + (conversacionId || 'x'),
+                renotify: true,
+            });
+            n.onclick = function () {
+                window.focus();
+                if (conversacionId) {
+                    // Llevar al chat correspondiente
+                    var $item = $(`.conversacion-item[data-id="${conversacionId}"]`);
+                    if ($item.length) $item.trigger('click');
+                }
+                n.close();
+            };
+        } catch (e) { console.warn('[notif] falló', e); }
+    }
+
+    function _beep() {
+        try {
+            const ctx = _getAudioCtx();
+            if (!ctx) return;
+            // Primer tono
+            const o1 = ctx.createOscillator();
+            const g1 = ctx.createGain();
+            o1.connect(g1); g1.connect(ctx.destination);
+            o1.type = 'sine'; o1.frequency.value = 880;
+            g1.gain.setValueAtTime(0, ctx.currentTime);
+            g1.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+            g1.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.18);
+            o1.start(ctx.currentTime); o1.stop(ctx.currentTime + 0.18);
+            // Segundo tono (eco suave)
+            const o2 = ctx.createOscillator();
+            const g2 = ctx.createGain();
+            o2.connect(g2); g2.connect(ctx.destination);
+            o2.type = 'sine'; o2.frequency.value = 1100;
+            g2.gain.setValueAtTime(0, ctx.currentTime + 0.12);
+            g2.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.18);
+            g2.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.32);
+            o2.start(ctx.currentTime + 0.12); o2.stop(ctx.currentTime + 0.32);
+        } catch(e) { /* navegador sin AudioContext */ }
+    }
+
+    function _mostrarToast(nombre) {
+        if (!_bsToast) return;
+        document.getElementById('toast-nombre').textContent = nombre || 'Nuevo mensaje';
+        document.getElementById('toast-sub').textContent = 'Mensaje entrante de WhatsApp';
+        _bsToast.show();
+    }
+
+    // Acumula el conteo de no-leídos para mostrarlo en el title cuando hidden.
+    let _noLeidosTab = 0;
+    let _origTitle = null;
+    let _blinkIv = null;
+    function _restaurarTitleAlVolver() {
+        if (_origTitle) document.title = _origTitle;
+        _noLeidosTab = 0;
+        if (_blinkIv) { clearInterval(_blinkIv); _blinkIv = null; }
+    }
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) _restaurarTitleAlVolver();
+    });
+
+    /**
+     * Notifica un mensaje entrante.
+     * @param {string} nombre - nombre del contacto
+     * @param {object} opts - {conversacionId, preview, esConvActiva}
+     */
+    function notificarNuevoMensaje(nombre, opts) {
+        opts = opts || {};
+        // Si el operador YA está viendo esa conversación y la pestaña está
+        // visible, no hace falta hacer ruido — solo el highlight visual del
+        // mensaje nuevo basta. Esto evita el beep redundante al chatear.
+        var convActivaVisible = opts.esConvActiva && !document.hidden;
+        if (!convActivaVisible) {
+            _beep();
+            _mostrarToast(nombre);
+        }
+        // Notificación nativa (solo si pestaña no visible — la check está
+        // adentro de _notificacionNativa).
+        _notificacionNativa(nombre, opts.preview, opts.conversacionId);
+
+        // Title parpadeante + contador
+        if (document.hidden) {
+            if (_origTitle === null) _origTitle = document.title;
+            _noLeidosTab++;
+            if (!_blinkIv) {
+                let _blink = true;
+                _blinkIv = setInterval(function() {
+                    document.title = _blink
+                        ? '💬 (' + _noLeidosTab + ') Nuevo mensaje'
+                        : _origTitle;
+                    _blink = !_blink;
+                }, 1000);
+            }
+        }
+    }
+
     async function transcribirAudio(ctr) {
         $(ctr).find('span').html('Transcribiendo');
         $(ctr).find('i.fa-ellipsis').removeClass('d-none');
         $(ctr).prop('disabled', true);
-        $.post("{{ request.path }}", { action: 'transcribe_audio' , id: ctr.dataset.id,});
+        $.post("{{ request.path }}", { action: 'transcribe_audio' , id: ctr.dataset.id,})
+            .fail(function(xhr) { console.error('[transcribirAudio] fail', xhr.status, xhr.responseText); });
+    }
+
+    /* ── Feedback IA (definidas a nivel global; el partial puede re-renderizarse) ── */
+    const _fbCsrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+    const _fbUrl  = '/whatsapp/conversaciones/';
+
+    function feedbackOk(msgId, btn) { _sendFeedback(msgId, true, '', '', btn); }
+
+    function feedbackKo(msgId, btn) {
+        const allBlocks = document.querySelectorAll('#mensajes-container .msg-row');
+        let pregunta = '';
+        let found = false;
+        for (let i = allBlocks.length - 1; i >= 0; i--) {
+            if (found && allBlocks[i].classList.contains('msg-in')) {
+                const p = allBlocks[i].querySelector('.msg-bubble p');
+                if (p) pregunta = p.innerText.trim();
+                break;
+            }
+            if (allBlocks[i].querySelector(`[data-fbid="${msgId}"]`)) found = true;
+        }
+        document.getElementById('cf-pregunta-' + msgId).value = pregunta;
+        document.getElementById('cf-' + msgId).classList.remove('d-none');
+    }
+
+    function enviarCorreccion(msgId) {
+        const correccion = document.getElementById('cf-texto-' + msgId).value.trim();
+        const pregunta   = document.getElementById('cf-pregunta-' + msgId).value.trim();
+        if (!correccion) { alert('Escribe la respuesta correcta antes de guardar.'); return; }
+        _sendFeedback(msgId, false, correccion, pregunta, null);
+    }
+
+    function _sendFeedback(msgId, esOk, correccion, pregunta, btn) {
+        fetch(_fbUrl, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': _fbCsrf},
+            body: new URLSearchParams({
+                action: 'feedback-mensaje', mensaje_id: msgId,
+                es_correcto: esOk ? '1' : '0', correccion, pregunta
+            })
+        }).then(r => r.json()).then(data => {
+            if (data.error) { console.error('[feedback] backend error', data); return; }
+            const bar = document.querySelector(`.feedback-bar[data-id="${msgId}"]`);
+            if (!bar) return;
+            if (esOk) {
+                bar.innerHTML = '<span class="text-success" style="font-size:.72rem;"><i class="fa fa-thumbs-up"></i> Correcto</span>';
+            } else {
+                const vs = data.procesado_vectorstore ? ' <i class="fa fa-brain" title="Aprendido"></i>' : '';
+                bar.innerHTML = `<span class="text-danger" style="font-size:.72rem;"><i class="fa fa-thumbs-down"></i> Corregido${vs}</span>`;
+                const cf = document.getElementById('cf-' + msgId);
+                if (cf) cf.classList.add('d-none');
+            }
+        }).catch(err => { console.error('[feedback] network error', err); });
     }
 </script>
 {% endblock %}

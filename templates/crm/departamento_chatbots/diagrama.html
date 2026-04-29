@@ -1,0 +1,562 @@
+{% extends 'base_lite.html' %}
+{% load static %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/dpchat_editor.css' %}">
+    <script>document.addEventListener('DOMContentLoaded', function () {
+        document.body.classList.add('dp-diag-page');
+    });</script>
+{% endblock %}
+
+{% block content %}
+<div class="dp-toolbar">
+    <a href="/crm/departamentos_chatbots/?action=change&id={{ filtro.pk }}&full=1"
+       class="btn btn-light btn-sm">
+        <i class="fa fa-arrow-left me-1"></i> Volver al editor
+    </a>
+    <h5 class="mb-0">
+        <i class="fa fa-diagram-project me-1 text-info"></i>
+        Árbol de decisiones · {{ filtro.nombre }}
+    </h5>
+    <button type="button" class="btn btn-outline-info btn-sm"
+            id="btn-explicar-ia"
+            data-depto-id="{{ filtro.pk }}"
+            data-bs-toggle="modal" data-bs-target="#modalExplicarIA"
+            title="Explicación narrativa del flujo generada por IA">
+        <i class="fa fa-robot me-1"></i> Explicar con IA
+    </button>
+    <a href="/crm/departamentos_chatbots/?action=preview&id={{ filtro.pk }}"
+       class="btn btn-outline-success btn-sm">
+        <i class="fab fa-whatsapp me-1"></i> Ver preview
+    </a>
+</div>
+
+<form style="display:none">{% csrf_token %}</form>
+
+{# Modal: explicación del flujo generada por IA #}
+<div class="modal fade" id="modalExplicarIA" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-info bg-opacity-10">
+                <h6 class="modal-title text-info">
+                    <i class="fa fa-robot me-1"></i>
+                    Explicación del flujo · <span class="text-dark">{{ filtro.nombre }}</span>
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="explicar-meta" class="small text-muted mb-2"></div>
+                <div id="explicar-content" class="dp-explicar-content">
+                    <div class="text-center py-4 text-muted">
+                        <i class="fa fa-spinner fa-spin"></i> Cargando explicación…
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-2 d-flex justify-content-between">
+                <small class="text-muted" id="explicar-status"></small>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-warning btn-sm d-none" id="btn-explicar-actualizar"
+                            title="Algún nodo se modificó después de la última generación">
+                        <i class="fa fa-rotate me-1"></i> Actualizar (hay cambios)
+                    </button>
+                    <button type="button" class="btn btn-outline-info btn-sm" id="btn-explicar-regenerar"
+                            title="Forzar nueva generación con IA (consume tokens)">
+                        <i class="fa fa-wand-magic-sparkles me-1"></i> Regenerar
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if filtro.mensaje_saludo %}
+    <div class="dp-diag-saludo mb-3">
+        <i class="fa fa-comment-dots me-1"></i>
+        <strong>Saludo inicial:</strong> {{ filtro.mensaje_saludo|truncatechars:300 }}
+    </div>
+{% endif %}
+
+{% if arbol_anidado %}
+    <div class="dp-diag-toolbar mb-2">
+        <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-secondary" id="dp-zoom-out" title="Reducir">
+                <i class="fa fa-search-minus"></i>
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="dp-zoom-100" title="100%">
+                100%
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="dp-zoom-in" title="Ampliar">
+                <i class="fa fa-search-plus"></i>
+            </button>
+        </div>
+        <div class="dp-diag-search">
+            <i class="fa fa-search dp-diag-search-icon"></i>
+            <input type="text" id="dp-diag-search-input"
+                   class="form-control form-control-sm"
+                   placeholder="Buscar nodo por nombre, tipo o id…"
+                   autocomplete="off">
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    id="dp-diag-search-clear" title="Limpiar"
+                    style="display:none;">
+                <i class="fa fa-times"></i>
+            </button>
+            <div id="dp-diag-search-results" class="dp-diag-search-results"
+                 style="display:none;"></div>
+        </div>
+        <small class="text-muted ms-2 d-none d-md-inline">
+            <i class="fa fa-info-circle"></i>
+            Tipeá para filtrar / saltar a un nodo.
+        </small>
+    </div>
+    <div class="card dp-diag-card">
+        {# Grid 2x2: corner + scroll-top arriba; scroll-left + wrap abajo. #}
+        {# Los mirror scrollbars (top/left) se sincronizan via JS con el  #}
+        {# wrap, que mantiene sus scrollbars naturales en bottom/right.   #}
+        <div class="dp-scroll-corner"></div>
+        <div class="dp-scroll-top" id="dp-scroll-top" aria-hidden="true">
+            <div class="dp-scroll-top-inner" id="dp-scroll-top-inner"></div>
+        </div>
+        <div class="dp-scroll-left" id="dp-scroll-left" aria-hidden="true">
+            <div class="dp-scroll-left-inner" id="dp-scroll-left-inner"></div>
+        </div>
+        <div class="dp-tree-decision-wrap" id="dp-tree-wrap">
+            <div id="dp-tree-stage" style="width:max-content;">
+                <ul class="dp-tree-decision" id="dp-tree-root">
+                    {% for nodo in arbol_anidado %}
+                        {% include "crm/departamento_chatbots/_diagrama_node.html" with nodo=nodo %}
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    {# Modal: ficha completa de un nodo del diagrama #}
+    <div class="modal fade" id="dpDiagFichaModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">
+                        <i class="fa fa-id-card text-info me-1"></i>
+                        Ficha del nodo
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="dp-diag-ficha-content">Cargando…</div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div class="card">
+        <div class="card-body text-center text-muted py-5">
+            <i class="fa fa-circle-info fa-2x mb-2"></i>
+            <p>Aún no hay nodos en el flujo.</p>
+            <a href="/crm/departamentos_chatbots/?action=change&id={{ filtro.pk }}&full=1" class="btn btn-primary btn-sm">
+                Volver al editor para agregar
+            </a>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block jscript %}
+<script>
+(function () {
+    'use strict';
+    var DEP_ID = {{ filtro.pk }};
+
+    // Zoom del árbol (CSS scale sobre el ul root). Persistente por depto.
+    var ZOOM_KEY = 'dp_diag_zoom_' + DEP_ID;
+    var zoomNivel = 1;
+    try {
+        var z = parseFloat(localStorage.getItem(ZOOM_KEY));
+        if (!isNaN(z) && z > 0) zoomNivel = z;
+    } catch (e) {}
+
+    function aplicarZoom() {
+        var root = document.getElementById('dp-tree-root');
+        var stage = document.getElementById('dp-tree-stage');
+        if (!root) return;
+        // Medir tamaño natural sin transform (transform:scale no afecta el
+        // layout box; necesitamos las dimensiones reales para luego dárselas
+        // al stage y que el wrap detecte overflow al ampliar).
+        root.style.transform = '';
+        var natW = root.offsetWidth, natH = root.offsetHeight;
+        root.style.transform = 'scale(' + zoomNivel + ')';
+        root.style.transformOrigin = 'top left';
+        if (stage) {
+            // Stage = caja real escalada → wrap.overflow:auto muestra scrollbars.
+            stage.style.width  = (natW * zoomNivel) + 'px';
+            stage.style.height = (natH * zoomNivel) + 'px';
+        }
+        var btn100 = document.getElementById('dp-zoom-100');
+        if (btn100) btn100.textContent = Math.round(zoomNivel * 100) + '%';
+        try { localStorage.setItem(ZOOM_KEY, String(zoomNivel)); } catch (e) {}
+        sincronizarTamanoMirrors();
+    }
+
+    // ── Mirror scrollbars (top + left) ────────────────────────────
+    // Duplican los scrollbars del wrap para que el usuario pueda
+    // desplazarse desde arriba/izquierda sin tener que ir al borde
+    // contrario del contenedor. Se sincronizan en ambas direcciones.
+    var wrap       = document.getElementById('dp-tree-wrap');
+    var scrollTop  = document.getElementById('dp-scroll-top');
+    var scrollLeft = document.getElementById('dp-scroll-left');
+    var topInner   = document.getElementById('dp-scroll-top-inner');
+    var leftInner  = document.getElementById('dp-scroll-left-inner');
+    var _syncing = false;
+    function sincronizarTamanoMirrors() {
+        if (!wrap || !topInner || !leftInner) return;
+        topInner.style.width  = wrap.scrollWidth + 'px';
+        leftInner.style.height = wrap.scrollHeight + 'px';
+    }
+    function bindMirrorScroll(src, target, axis) {
+        if (!src || !target) return;
+        src.addEventListener('scroll', function () {
+            if (_syncing) return;
+            _syncing = true;
+            if (axis === 'x') target.scrollLeft = src.scrollLeft;
+            else              target.scrollTop  = src.scrollTop;
+            _syncing = false;
+        });
+    }
+    bindMirrorScroll(scrollTop, wrap, 'x');
+    bindMirrorScroll(wrap, scrollTop, 'x');
+    bindMirrorScroll(scrollLeft, wrap, 'y');
+    bindMirrorScroll(wrap, scrollLeft, 'y');
+    // Resize del viewport puede cambiar layout interno → re-medir.
+    window.addEventListener('resize', sincronizarTamanoMirrors);
+    document.getElementById('dp-zoom-in').addEventListener('click', function () {
+        zoomNivel = Math.min(2, zoomNivel + 0.1); aplicarZoom();
+    });
+    document.getElementById('dp-zoom-out').addEventListener('click', function () {
+        zoomNivel = Math.max(0.4, zoomNivel - 0.1); aplicarZoom();
+    });
+    document.getElementById('dp-zoom-100').addEventListener('click', function () {
+        zoomNivel = 1; aplicarZoom();
+    });
+    aplicarZoom();
+
+    // ── Buscador ─────────────────────────────────────────────────
+    var inputBuscar = document.getElementById('dp-diag-search-input');
+    var btnClear    = document.getElementById('dp-diag-search-clear');
+    var listaResult = document.getElementById('dp-diag-search-results');
+
+    // Index local: leemos las cards renderizadas (cada una tiene data + nombre).
+    var indiceNodos = Array.prototype.map.call(
+        document.querySelectorAll('.dp-tree-card'),
+        function (card) {
+            // Extraemos el id del botón "ver-ficha-nodo" (data-nodo-id) que está
+            // dentro de cada card.
+            var btnFicha = card.querySelector('[data-nodo-id]');
+            var nid = btnFicha ? parseInt(btnFicha.getAttribute('data-nodo-id'), 10) : 0;
+            var nombreEl = card.querySelector('.dp-tree-card-name');
+            var pillEl   = card.querySelector('.dp-tipo-pill');
+            return {
+                id: nid,
+                nombre: (nombreEl ? nombreEl.textContent : '').trim(),
+                tipo: (pillEl ? pillEl.textContent : '').trim(),
+                card: card,
+            };
+        }
+    ).filter(function (n) { return n.id > 0; });
+
+    function escHtmlBuscar(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function buscar(q) {
+        q = (q || '').trim().toLowerCase();
+        if (!q) {
+            listaResult.style.display = 'none';
+            btnClear.style.display = 'none';
+            indiceNodos.forEach(function (n) {
+                n.card.classList.remove('dp-search-dim', 'dp-search-hit');
+            });
+            return;
+        }
+        btnClear.style.display = '';
+        var hits = indiceNodos.filter(function (n) {
+            return n.nombre.toLowerCase().indexOf(q) >= 0
+                || n.tipo.toLowerCase().indexOf(q) >= 0
+                || String(n.id).indexOf(q) >= 0;
+        });
+        // Marcar visualmente
+        indiceNodos.forEach(function (n) {
+            if (hits.indexOf(n) >= 0) {
+                n.card.classList.remove('dp-search-dim');
+                n.card.classList.add('dp-search-hit');
+            } else {
+                n.card.classList.add('dp-search-dim');
+                n.card.classList.remove('dp-search-hit');
+            }
+        });
+        // Lista de resultados (clickable para hacer scroll)
+        if (hits.length === 0) {
+            listaResult.innerHTML = '<div class="dp-diag-search-empty">'
+                + 'Sin resultados para "' + escHtmlBuscar(q) + '"</div>';
+        } else {
+            listaResult.innerHTML = hits.slice(0, 20).map(function (n) {
+                return '<a href="#" data-jump-to="' + n.id + '" class="dp-diag-search-row">'
+                    + '<span class="dp-diag-search-tipo">' + escHtmlBuscar(n.tipo) + '</span>'
+                    + '<span class="dp-diag-search-nombre">' + escHtmlBuscar(n.nombre) + '</span>'
+                    + '<span class="dp-diag-search-id">#' + n.id + '</span>'
+                    + '</a>';
+            }).join('') + (hits.length > 20
+                ? '<div class="dp-diag-search-empty small">+' + (hits.length - 20) + ' más</div>'
+                : '');
+        }
+        listaResult.style.display = 'block';
+    }
+
+    inputBuscar.addEventListener('input', function () { buscar(inputBuscar.value); });
+    inputBuscar.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape') { inputBuscar.value = ''; buscar(''); }
+        if (ev.key === 'Enter') {
+            // Salta al primer hit
+            var first = listaResult.querySelector('[data-jump-to]');
+            if (first) { ev.preventDefault(); first.click(); }
+        }
+    });
+    btnClear.addEventListener('click', function () {
+        inputBuscar.value = ''; buscar(''); inputBuscar.focus();
+    });
+    listaResult.addEventListener('click', function (ev) {
+        var a = ev.target.closest('[data-jump-to]');
+        if (!a) return;
+        ev.preventDefault();
+        var nid = parseInt(a.getAttribute('data-jump-to'), 10);
+        var hit = indiceNodos.find(function (n) { return n.id === nid; });
+        if (!hit) return;
+        // Scroll al card y destacar
+        hit.card.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        hit.card.classList.add('dp-search-flash');
+        setTimeout(function () { hit.card.classList.remove('dp-search-flash'); }, 1800);
+        listaResult.style.display = 'none';
+    });
+    // Cerrar resultados si click fuera
+    document.addEventListener('click', function (ev) {
+        if (!ev.target.closest('.dp-diag-search')) {
+            listaResult.style.display = 'none';
+        }
+    });
+    // Atajo Ctrl/Cmd+F focusea el buscador
+    document.addEventListener('keydown', function (ev) {
+        if ((ev.ctrlKey || ev.metaKey) && ev.key === 'f') {
+            ev.preventDefault();
+            inputBuscar.focus();
+            inputBuscar.select();
+        }
+    });
+
+    document.body.addEventListener('click', function (ev) {
+        var btn = ev.target.closest('[data-act="ver-ficha-nodo"]');
+        if (!btn) return;
+        var nid = parseInt(btn.getAttribute('data-nodo-id'), 10);
+        if (!nid) return;
+
+        var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('dpDiagFichaModal'));
+        var box = document.getElementById('dp-diag-ficha-content');
+        box.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Cargando…';
+        modal.show();
+
+        fetch('/crm/departamentos_chatbots/?action=exportar_flujo_json&id=' + DEP_ID, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        }).then(function (r) { return r.json(); }).then(function (resp) {
+            if (!resp.result) {
+                box.innerHTML = '<div class="alert alert-danger">' + (resp.message || 'Error') + '</div>';
+                return;
+            }
+            var n = (resp.data.nodos || []).find(function (x) { return x.id === nid; });
+            if (!n) {
+                box.innerHTML = '<div class="alert alert-warning">Nodo no encontrado.</div>';
+                return;
+            }
+            box.innerHTML = renderFichaUnNodo(n, resp.data);
+        }).catch(function (e) {
+            box.innerHTML = '<div class="alert alert-danger">Error: ' + e.message + '</div>';
+        });
+    });
+
+    function escHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function renderFichaUnNodo(n, data) {
+        var cfg = n.config || {};
+        var ep = (data.endpoints || []).find(function (e) { return e.id === n.endpoint_id; });
+        var html = '<div class="dp-ficha-nodo dp-ficha-tipo-' + escHtml(n.tipo_nodo) + '">'
+                 +   '<div class="dp-ficha-nodo-head">'
+                 +     '<span class="badge dp-ficha-badge-' + escHtml(n.tipo_nodo) + '">'
+                 +     escHtml(n.tipo_nodo) + '</span> '
+                 +     '<strong>' + escHtml(n.nombre) + '</strong> '
+                 +     '<small class="text-muted">#' + n.id + ' · orden ' + n.orden + '</small>'
+                 +   '</div>'
+                 +   '<div class="dp-ficha-nodo-body mt-2">';
+        if (n.tipo_nodo === 'http' && ep) {
+            html += '<div><span class="badge bg-primary">' + escHtml(cfg.metodo || 'GET')
+                 +   '</span> <code>' + escHtml(ep.base_url + (cfg.path || '')) + '</code></div>';
+            html += '<div class="mt-1"><strong>Endpoint:</strong> ' + escHtml(ep.nombre)
+                 +   ' · timeout ' + ep.timeout_seg + 's</div>';
+        }
+        html += '<pre class="dp-json-pre mt-2" style="font-size:.72rem;max-height:400px;">'
+             + escHtml(JSON.stringify(n, null, 2)) + '</pre>';
+
+        var salidas = (data.conexiones || []).filter(function (c) { return c.origen_id === n.id; });
+        if (salidas.length) {
+            html += '<div class="mt-2"><strong>→ Salidas:</strong></div><ul>';
+            salidas.forEach(function (c) {
+                html += '<li><code>' + escHtml(c.etiqueta || '(default)') + '</code> → '
+                     + '#' + c.destino_id + ' ' + escHtml(c.destino_nombre) + '</li>';
+            });
+            html += '</ul>';
+        }
+
+        html += '<div class="mt-2"><a class="btn btn-sm btn-primary" '
+             +   'href="/crm/departamentos_chatbots/?action=change&id='
+             +   data.departamento.id + '&full=1#nodo-' + n.id + '">'
+             +   '<i class="fa fa-pen me-1"></i> Editar este nodo</a></div>';
+        html += '</div></div>';
+        return html;
+    }
+})();
+</script>
+
+{# ── Explicar con IA: cargar al abrir modal + handler "Actualizar" ── #}
+<script>
+(function () {
+    var btnAbrir = document.getElementById('btn-explicar-ia');
+    var btnUpdate = document.getElementById('btn-explicar-actualizar');
+    var contentEl = document.getElementById('explicar-content');
+    var statusEl = document.getElementById('explicar-status');
+    var metaEl = document.getElementById('explicar-meta');
+    if (!btnAbrir) return;
+    var deptoId = btnAbrir.getAttribute('data-depto-id');
+
+    function escapeHtmlBasico(s) {
+        return String(s || '').replace(/[&<>]/g, function (c) {
+            return {'&': '&amp;', '<': '&lt;', '>': '&gt;'}[c];
+        });
+    }
+    // Markdown ligero → HTML: **negrita**, *cursiva*, listas y saltos.
+    function md(s) {
+        s = escapeHtmlBasico(s);
+        s = s.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+        s = s.replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
+        s = s.replace(/`([^`\n]+?)`/g, '<code>$1</code>');
+        // Listas: líneas que empiezan con "- " o "* " → <li>
+        var lines = s.split('\n');
+        var out = [];
+        var inList = false;
+        for (var i = 0; i < lines.length; i++) {
+            var l = lines[i];
+            var m = l.match(/^\s*[-*]\s+(.+)/);
+            if (m) {
+                if (!inList) { out.push('<ul class="dp-explicar-ul">'); inList = true; }
+                out.push('<li>' + m[1] + '</li>');
+            } else {
+                if (inList) { out.push('</ul>'); inList = false; }
+                out.push(l);
+            }
+        }
+        if (inList) out.push('</ul>');
+        return out.join('\n').replace(/\n/g, '<br>');
+    }
+
+    function fmtFecha(iso) {
+        if (!iso) return '';
+        try {
+            var d = new Date(iso);
+            return d.toLocaleString();
+        } catch (e) { return iso; }
+    }
+
+    // Lee el token CSRF desde la cookie (la página /diagrama no tiene <form>
+    // visible, así que el input estándar no existe).
+    function getCsrfCookie() {
+        var name = 'csrftoken=';
+        var parts = document.cookie.split(';');
+        for (var i = 0; i < parts.length; i++) {
+            var c = parts[i].trim();
+            if (c.indexOf(name) === 0) return decodeURIComponent(c.slice(name.length));
+        }
+        return '';
+    }
+
+    function cargar(force) {
+        contentEl.innerHTML = '<div class="text-center py-4 text-muted">'
+            + '<i class="fa fa-spinner fa-spin"></i> '
+            + (force ? 'Regenerando con IA…' : 'Cargando explicación…')
+            + '</div>';
+        statusEl.textContent = '';
+        btnUpdate.classList.add('d-none');
+        var fd = new FormData();
+        fd.append('action', 'explicar_flujo_ia');
+        fd.append('id', deptoId);
+        if (force) fd.append('force', '1');
+        var csrfInput = document.querySelector('input[name=csrfmiddlewaretoken]');
+        var csrfVal = csrfInput ? csrfInput.value : getCsrfCookie();
+        if (csrfVal) fd.append('csrfmiddlewaretoken', csrfVal);
+        fetch('/crm/departamentos_chatbots/', {
+            method: 'POST', body: fd, credentials: 'same-origin',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': csrfVal,
+            },
+        }).then(function (r) {
+            // Si la respuesta no es JSON (CSRF/login redirige a HTML), capturamos
+            // el error con un mensaje claro en lugar de "Unexpected token <".
+            var ct = r.headers.get('content-type') || '';
+            if (!ct.includes('application/json')) {
+                return r.text().then(function (txt) {
+                    throw new Error('Respuesta no-JSON (status ' + r.status + '). Posible CSRF o sesión expirada.');
+                });
+            }
+            return r.json();
+        }).then(function (data) {
+            if (data.error) {
+                contentEl.innerHTML = '<div class="alert alert-danger small">'
+                    + '<i class="fa fa-circle-xmark me-1"></i> '
+                    + escapeHtmlBasico(data.message || 'Error') + '</div>';
+                return;
+            }
+            contentEl.innerHTML = md(data.explicacion || '');
+            metaEl.innerHTML = data.cached
+                ? '<i class="fa fa-database text-success me-1"></i> Explicación cacheada · generada el <b>' + fmtFecha(data.generada_en) + '</b>'
+                : '<i class="fa fa-bolt text-warning me-1"></i> Recién generada · <b>' + fmtFecha(data.generada_en) + '</b>';
+            // Mostrar "Actualizar" solo si el caché está desactualizado.
+            if (data.cached && data.actualizada === false) {
+                btnUpdate.classList.remove('d-none');
+            }
+            statusEl.textContent = data.cached ? 'Sin cargo de tokens (caché).' : '';
+        }).catch(function (err) {
+            contentEl.innerHTML = '<div class="alert alert-danger small">Error de red: '
+                + escapeHtmlBasico(err.message) + '</div>';
+        });
+    }
+
+    // Cargar al abrir el modal.
+    document.getElementById('modalExplicarIA').addEventListener('shown.bs.modal', function () {
+        cargar(false);
+    });
+    btnUpdate.addEventListener('click', function () { cargar(true); });
+    var btnRegen = document.getElementById('btn-explicar-regenerar');
+    if (btnRegen) {
+        btnRegen.addEventListener('click', function () {
+            if (confirm('¿Regenerar la explicación? Esto consume tokens IA.')) {
+                cargar(true);
+            }
+        });
+    }
+})();
+</script>
+
+{% endblock %}

@@ -1,0 +1,45 @@
+{# Modal resumen — estado integral de la sesion. #}
+<div class="detail-wrap">
+  <div class="detail-head">
+    <div>
+      <h5>Estado integral de la sesión</h5>
+      <p class="muted">{{ sesion.nombre|default:sesion.numero }} · {% if sesion.es_meta %}Meta Cloud API{% else %}Baileys{% endif %}</p>
+    </div>
+    <button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>
+  </div>
+
+  <div class="detail-body">
+    <div class="resumen-pct">
+      <div class="resumen-pct-circ" style="--pct: {{ pct }};">
+        <div class="resumen-pct-inner">
+          <span class="big">{{ pct }}%</span>
+          <span class="small">{{ total_ok }} de {{ total }} listos</span>
+        </div>
+      </div>
+      <p class="muted small">
+        {% if pct == 100 %}Todo está en orden para producción.
+        {% elif pct >= 60 %}Configuración avanzada — quedan ajustes menores.
+        {% else %}Aún falta terminar de configurar esta sesión.
+        {% endif %}
+      </p>
+    </div>
+
+    <ul class="resumen-checks">
+      {% for c in checks %}
+        <li class="check-item {% if c.ok %}check-ok{% else %}check-pending{% endif %}">
+          <span class="check-icon">
+            {% if c.ok %}<i class="fa fa-circle-check"></i>{% else %}<i class="fa fa-circle-exclamation"></i>{% endif %}
+          </span>
+          <div>
+            <b>{{ c.nombre }}</b>
+            <p class="muted">{{ c.detalle }}</p>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="detail-actions">
+    <button type="button" class="conex-btn conex-btn-light" data-cerrar-detail>Cerrar</button>
+  </div>
+</div>

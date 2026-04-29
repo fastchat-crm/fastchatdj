@@ -37,8 +37,20 @@ class NormalModel(models.Model):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Campos diferidos (via .only()/.defer() o values_list parciales) — si
+        # tocamos su atributo, Django dispara refresh_from_db() que re-instancia
+        # el modelo → nuevo __init__ → loop infinito. Los salteamos y listo:
+        # los _boolhtml/_money/_a_tag no son criticos si el campo ni siquiera
+        # esta cargado en la instancia.
+        deferred_fields = set()
+        try:
+            deferred_fields = self.get_deferred_fields()
+        except Exception:
+            pass
         for x in self._meta.fields:
             f = x.name
+            if f in deferred_fields:
+                continue
             if isinstance(self._meta.get_field(f), models.BooleanField):
                 is_true = customgetattr(self, f)
                 if is_true == None:
@@ -138,7 +150,10 @@ class ModeloBase(NormalModel):
                 update_fields = [*update_fields, 'usuario_modificacion_id', 'fecha_modificacion']
                 kwargs['update_fields'] = list(set(update_fields))
         else:
-            self.fecha_registro = fecha_registro.date()
+            # fecha_registro es DateTimeField → guardamos datetime completo (no sólo date)
+            # para no perder la hora. El atributo transitorio hora_registro se sigue
+            # exponiendo para compatibilidad con plantillas/código legacy.
+            self.fecha_registro = fecha_registro
             self.hora_registro = fecha_registro.time()
             if usuario_id:
                 self.usuario_creacion_id = usuario_id

@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/etiquetas.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0">
+
+        {# ===== EXPLICACIÓN DEL MÓDULO ===== #}
+        <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
+            <i class="fa fa-tags fa-2x"></i>
+            <div>
+                <strong>¿Para qué sirven las etiquetas?</strong><br>
+                <small>
+                    Las etiquetas (o <em>tags</em>) son <strong>marcadores libres</strong> que aplicas a tus contactos
+                    para organizarlos y segmentarlos. Por ejemplo: <code>VIP</code>, <code>Newsletter OK</code>,
+                    <code>Abandonó carrito</code>, <code>Interesado Marketing</code>.<br>
+                    <strong>Úsalas en:</strong> filtrar contactos por grupo, dirigir <a href="/whatsapp/campanas/">campañas</a>
+                    solo a ciertas audiencias (incluir/excluir etiquetas), identificar rápidamente el tipo de cliente en
+                    una conversación, y disparar acciones diferenciadas según el perfil.
+                </small>
+            </div>
+        </div>
+
+        {# ===== FILTROS / BUSCADOR ===== #}
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-8">
+                            <label class="form-label">Búsqueda</label>
+                            <div class="input-group">
+                            <span class="input-group-text border-end-0">
+                                <i class="fa fa-search text-muted"></i>
+                            </span>
+                                <input type="text" class="form-control border-start-0"
+                                       placeholder="Buscar por nombre o descripción" name="criterio"
+                                       value="{{ criterio|default:'' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i> Filtrar
+                                </button>
+                                {% if url_vars %}
+                                    <a href="{{ request.path }}" class="btn btn-default">
+                                        <i class="fas fa-times"></i> Limpiar
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="mb-0">Etiquetas</h4>
+                <small class="text-muted">
+                    {{ list_count|default:0 }} etiqueta{{ list_count|default:0|pluralize }}
+                    encontrada{{ list_count|default:0|pluralize }}
+                    · Tags libres para segmentar contactos y armar campañas
+                </small>
+            </div>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalEtiqueta">
+                <i class="fa fa-plus"></i> Nueva etiqueta
+            </button>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-striped align-middle">
+                    <thead>
+                    <tr>
+                        <th>Color</th>
+                        <th>Nombre</th>
+                        <th>Descripción</th>
+                        <th>Contactos</th>
+                        <th style="width:120px">Acciones</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for e in listado %}
+                        <tr data-id="{{ e.id }}">
+                            <td><span class="badge-dot" style="background:{{ e.color }}"></span></td>
+                            <td><strong>{{ e.nombre }}</strong></td>
+                            <td>{{ e.descripcion|default:"—" }}</td>
+                            <td>{{ e.contactos.count }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-secondary btn-edit"
+                                        data-id="{{ e.id }}" data-nombre="{{ e.nombre }}"
+                                        data-color="{{ e.color }}" data-desc="{{ e.descripcion }}">
+                                    <i class="fa fa-pen"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger btn-del"
+                                        data-id="{{ e.id }}" data-nombre="{{ e.nombre }}">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">
+                                Aún no has creado etiquetas. Crea la primera para empezar a segmentar contactos.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% include 'paginacion.html' %}
+            </div>
+        </div>
+    </div>
+
+    {# --------- Modal: crear/editar --------- #}
+    <div class="modal fade" id="modalEtiqueta" tabindex="-1">
+        <div class="modal-dialog">
+            <form class="modal-content" id="formEtiqueta">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva etiqueta</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="add">
+                    <input type="hidden" name="pk" value="">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Nombre *</label>
+                            <input type="text" name="nombre" class="form-control" required maxlength="80"
+                                   placeholder="Ej: VIP, Lead caliente, Newsletter OK">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Color</label>
+                            <input type="color" name="color" class="form-control form-control-color w-100"
+                                   value="#0d6efd" style="height: 38px;">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descripción</label>
+                        <input type="text" name="descripcion" class="form-control" maxlength="255"
+                               placeholder="Opcional: cuándo aplicar esta etiqueta">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script>
+        (function () {
+            const modalEl = document.getElementById('modalEtiqueta');
+            const modal = new bootstrap.Modal(modalEl);
+            const form = document.getElementById('formEtiqueta');
+
+            document.querySelectorAll('.btn-edit').forEach(btn => btn.addEventListener('click', () => {
+                form.action.value = 'change';
+                form.pk.value = btn.dataset.id;
+                form.nombre.value = btn.dataset.nombre;
+                form.color.value = btn.dataset.color;
+                form.descripcion.value = btn.dataset.desc;
+                modalEl.querySelector('.modal-title').textContent = 'Editar etiqueta';
+                modal.show();
+            }));
+            modalEl.addEventListener('show.bs.modal', (e) => {
+                if (!e.relatedTarget || !e.relatedTarget.classList.contains('btn-edit')) {
+                    form.reset();
+                    form.action.value = 'add';
+                    form.color.value = '#0d6efd';
+                    modalEl.querySelector('.modal-title').textContent = 'Nueva etiqueta';
+                }
+            });
+            form.addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const fd = new FormData(form);
+                const r = await fetch('', {method: 'POST', body: fd, headers: {'X-Requested-With': 'XMLHttpRequest'}});
+                const j = await r.json();
+                if (j.error) {
+                    alert(j.message || 'Error');
+                    return;
+                }
+                if (j.reload) location.reload();
+            });
+            document.querySelectorAll('.btn-del').forEach(btn => btn.addEventListener('click', async () => {
+                if (!confirm(`¿Eliminar la etiqueta "${btn.dataset.nombre}"?`)) return;
+                const fd = new FormData();
+                fd.append('action', 'delete');
+                fd.append('id', btn.dataset.id);
+                fd.append('csrfmiddlewaretoken', form.querySelector('[name=csrfmiddlewaretoken]').value);
+                const r = await fetch('', {method: 'POST', body: fd});
+                const j = await r.json();
+                if (!j.error) location.reload(); else alert(j.message || 'Error');
+            }));
+        })();
+    </script>
+{% endblock %}

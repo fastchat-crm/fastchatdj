@@ -1,9 +1,51 @@
-<div class="d-flex flex-row-reverse">
-    <img src="{{ mensaje.conversacion.contacto.sesion.usuario.contacto_foto|default:'/static/assets/img/avatar.png' }}" alt="user" class="rounded-circle thumb-md">
-    <div class="me-1 chat-box w-100 reverse">
-        <div class="user-chat">
-            <p class="">{{ mensaje.mensaje }}</p>
+{% load templatefunctions %}
+<div class="msg-row msg-out d-flex flex-row-reverse align-items-end gap-2 mb-2">
+    <img src="{{ mensaje.conversacion.sesion.usuario.get_foto_url|default:'/static/assets/img/avatar.png' }}"
+         alt="yo" class="rounded-circle flex-shrink-0" style="width:32px;height:32px;object-fit:cover;">
+    <div class="msg-bubble msg-bubble-out" style="max-width:82%;">
+        {% if mensaje.mensaje %}
+            <p class="mb-0 wa-msg">{{ mensaje.mensaje|whatsapp_format }}</p>
+        {% endif %}
+        {% with url=mensaje.get_archivo_url %}
+        {% if url %}
+            {% if mensaje.tipo == 'imagen' %}
+                <a href="{{ url }}" target="_blank">
+                    <img src="{{ url }}" alt="imagen"
+                         class="img-fluid rounded mt-1 msg-img" style="max-width:300px;max-height:300px;object-fit:cover;cursor:zoom-in;">
+                </a>
+            {% elif mensaje.tipo == 'audio' %}
+                <audio controls class="mt-1" style="max-width:300px;display:block;">
+                    <source src="{{ url }}">
+                </audio>
+            {% elif mensaje.tipo == 'video' %}
+                <video controls class="img-fluid rounded mt-1" style="max-width:300px;display:block;">
+                    <source src="{{ url }}" type="video/mp4">
+                </video>
+            {% else %}
+                <a href="{{ url }}" target="_blank" class="btn btn-sm btn-light border mt-1">
+                    <i class="fa fa-download me-1"></i>{{ mensaje.tipo|capfirst }}
+                </a>
+            {% endif %}
+        {% endif %}
+        {% endwith %}
+        <div class="msg-meta text-end">
+            <span class="msg-time">{{ mensaje.fecha|date:"H:i" }}</span>
+            <span class="msg-ack ms-1" data-msg-id="{{ mensaje.id }}" style="font-size:.65rem;">
+                {% if mensaje.estado_envio == 'fallido' %}
+                    <i class="fa fa-exclamation-triangle text-danger"
+                       title="Error: {{ mensaje.error_envio|default:'Fallo de envío' }}"></i>
+                {% elif mensaje.estado_envio == 'leido' %}
+                    <i class="fa fa-check-double text-primary" title="Leído"></i>
+                {% elif mensaje.estado_envio == 'entregado' %}
+                    <i class="fa fa-check-double text-muted" title="Entregado"></i>
+                {% elif mensaje.estado_envio == 'enviado' %}
+                    <i class="fa fa-check text-muted" title="Enviado"></i>
+                {% elif mensaje.estado_envio == 'pendiente' %}
+                    <i class="fa fa-clock text-muted" title="Pendiente"></i>
+                {% else %}
+                    <i class="fa fa-check-double text-muted" title=""></i>
+                {% endif %}
+            </span>
         </div>
-        <div class="chat-time">{{ mensaje.fecha|date:"H:i" }}</div>
     </div>
 </div>

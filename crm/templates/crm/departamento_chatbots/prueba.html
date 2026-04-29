@@ -1,0 +1,396 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block atras %}{{ request.path }}{% endblock %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/prueba_chatbot.css' %}">
+{% endblock %}
+
+{% block content %}
+
+    <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small d-none d-sm-inline">
+                Probando flujo tradicional de: <strong>{{ sesion.nombre|default:sesion.numero }}</strong>
+            </span>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-default" id="btn-toggle-trace">
+                <i class="fas fa-diagram-project me-1"></i>
+                <span class="d-none d-sm-inline">Estado del flujo</span>
+            </button>
+            <button type="button" class="btn btn-sm btn-danger" id="btn-reset">
+                <i class="fas fa-rotate-left me-1"></i>
+                <span class="d-none d-sm-inline">Reiniciar </span>flujo
+            </button>
+        </div>
+    </div>
+
+    <div class="pchat-wrapper">
+        <div class="pchat-card">
+
+            <div class="pchat-head">
+                <div class="pchat-head-left">
+                    <div class="pchat-avatar"><i class="fas fa-diagram-project"></i></div>
+                    <div style="min-width:0">
+                        <p class="pchat-name">{{ sesion.nombre|default:sesion.numero }}</p>
+                        <div class="pchat-meta">
+                            <span class="pchat-pill">
+                                <i class="fas fa-flask"></i> Dry-run
+                            </span>
+                            <span style="opacity:.85;font-size:.7rem;">
+                                {{ departamentos|length }} depto(s)
+                                {% if departamento_default %}· default: {{ departamento_default.nombre }}{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-head-right">
+                    <span class="pchat-pill">
+                        <i class="fas fa-gear"></i> modo: {{ sesion.modo_bot }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="pchat-body" id="pchat-body">
+                <div class="pchat-empty" id="empty-state">
+                    <i class="fas fa-comments"></i>
+                    <h6>Inicia el flujo escribiendo un mensaje</h6>
+                    <p>No se enviará nada a WhatsApp — es una simulación local.</p>
+                </div>
+            </div>
+
+            <div class="pchat-chips">
+                <button type="button" class="pchat-chip" data-chip="Hola">Hola</button>
+                {% for n in "12345" %}
+                    <button type="button" class="pchat-chip" data-chip="{{ n }}">{{ n }}</button>
+                {% endfor %}
+                {% if departamentos|length > 1 %}
+                    {% for d in departamentos %}
+                        <button type="button" class="pchat-chip" data-chip="{{ d.nombre }}"
+                                title="Selecciona el departamento por nombre">
+                            <i class="fas fa-tag" style="font-size:.6rem;margin-right:3px;"></i>{{ d.nombre|truncatechars:18 }}
+                        </button>
+                    {% endfor %}
+                {% endif %}
+                <button type="button" class="pchat-chip back" data-chip="atras">atrás</button>
+                <button type="button" class="pchat-chip back" data-chip="menu">menú</button>
+            </div>
+
+            <div class="pchat-foot">
+                <textarea id="pchat-input" class="pchat-input" rows="1"
+                          placeholder="Escribe un mensaje… (Enter para enviar)"
+                          maxlength="2000"></textarea>
+                <button type="button" class="pchat-send" id="btn-send" disabled aria-label="Enviar">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+
+            <div class="form-check form-switch px-3 pb-2" style="font-size:.78rem;">
+                <input type="checkbox" class="form-check-input" id="chk-skip-side-effects">
+                <label class="form-check-label text-muted" for="chk-skip-side-effects"
+                       title="Si está activo, los nodos con &quot;envía correo&quot; NO disparan el envío real. Útil para iterar sin spamear asesores.">
+                    🔇 Modo dry-run — no enviar correos a asesores
+                </label>
+            </div>
+
+            <div class="pchat-info-banner" id="info-banner" style="display:none;">
+                <i class="fas fa-circle-info"></i>
+                <span id="info-banner-text"></span>
+            </div>
+        </div>
+
+        <div class="pchat-trace collapsed" id="pchat-trace">
+            <div class="pchat-trace-bar" id="pchat-trace-bar">
+                <div class="pchat-trace-bar-left">
+                    <i class="fas fa-circle" style="font-size:.5rem"></i>
+                    <span>Estado del flujo</span>
+                </div>
+                <i class="fas fa-chevron-up" id="pchat-trace-chevron"></i>
+            </div>
+            <div class="pchat-trace-body" id="pchat-trace-body">
+                <div class="pchat-trace-kv">
+                    <span class="pchat-trace-k">Departamento</span>
+                    <span class="pchat-trace-v muted" id="tr-depto">—</span>
+                    <span class="pchat-trace-k">Nodo actual</span>
+                    <span class="pchat-trace-v muted" id="tr-nodo">—</span>
+                    <span class="pchat-trace-k">Tipo nodo</span>
+                    <span class="pchat-trace-v muted" id="tr-tipo">—</span>
+                    <span class="pchat-trace-k">Intentos</span>
+                    <span class="pchat-trace-v" id="tr-intentos">0</span>
+                    <span class="pchat-trace-k">Estado</span>
+                    <span class="pchat-trace-v ok" id="tr-estado">activo</span>
+                    <span class="pchat-trace-k">Latencia</span>
+                    <span class="pchat-trace-v" id="tr-latencia">—</span>
+                </div>
+                <div class="pchat-trace-section pchat-trace-vars">
+                    <div class="pchat-trace-k" style="margin-bottom:4px;">Variables capturadas</div>
+                    <pre id="tr-variables">{}</pre>
+                </div>
+                <div class="pchat-trace-section">
+                    <div class="pchat-trace-k" style="margin-bottom:4px;">
+                        Timeline del motor
+                        <span id="tr-timeline-count" style="color:#68d391;margin-left:4px;">0</span>
+                    </div>
+                    <div class="pchat-timeline" id="tr-timeline">
+                        <div class="pchat-timeline-empty">Envía un mensaje para ver la ejecución paso a paso.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    {{ estado_inicial|json_script:"estado-inicial-data" }}
+
+{% endblock %}
+
+{% block jscript %}
+    <script>
+        (function () {
+            'use strict';
+
+            const CHAT_URL = '{{ request.path }}';
+            const CSRF = '{{ csrf_token }}';
+            const estadoInicial = JSON.parse(
+                document.getElementById('estado-inicial-data').textContent || '{}'
+            );
+
+            const body = document.getElementById('pchat-body');
+            const input = document.getElementById('pchat-input');
+            const btnSend = document.getElementById('btn-send');
+            const btnReset = document.getElementById('btn-reset');
+            const trace = document.getElementById('pchat-trace');
+            const traceBar = document.getElementById('pchat-trace-bar');
+            const traceChevron = document.getElementById('pchat-trace-chevron');
+            const infoBanner = document.getElementById('info-banner');
+            const infoBannerText = document.getElementById('info-banner-text');
+
+            function esc(t) {
+                return String(t)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/\n/g, '<br>');
+            }
+
+            function scrollBottom() {
+                body.scrollTo({top: body.scrollHeight, behavior: 'smooth'});
+            }
+
+            function appendBubble(tipo, texto) {
+                const empty = document.getElementById('empty-state');
+                if (empty) empty.remove();
+                const isHuman = tipo === 'humano';
+                const isError = tipo === 'error';
+                const row = document.createElement('div');
+                row.className = 'pchat-row ' + (isHuman ? 'from-human' : 'from-bot');
+                const avatarCls = isHuman ? 'human' : 'bot';
+                const bubbleCls = isHuman ? 'human' : (isError ? 'error' : 'bot');
+                const icon = isHuman ? 'fa-user' : 'fa-robot';
+                const label = isHuman ? 'Tú' : 'Bot';
+                const now = new Date().toLocaleTimeString('es-EC', {hour: '2-digit', minute: '2-digit'});
+                row.innerHTML =
+                    '<div class="pchat-avatar-msg ' + avatarCls + '"><i class="fas ' + icon + '"></i></div>' +
+                    '<div style="min-width:0;display:flex;flex-direction:column;' +
+                    (isHuman ? 'align-items:flex-end' : '') + '">' +
+                    '<div class="pchat-bubble ' + bubbleCls + '">' + esc(texto) + '</div>' +
+                    '<span class="pchat-time">' + label + ' · ' + now + '</span>' +
+                    '</div>';
+                body.appendChild(row);
+                scrollBottom();
+            }
+
+            function renderTrace(estado, latenciaMs) {
+                if (!estado) return;
+                const depto = estado.departamento || {};
+                const nodo = estado.nodo_actual || {};
+                document.getElementById('tr-depto').textContent = depto.nombre || '—';
+                document.getElementById('tr-depto').className = 'pchat-trace-v ' + (depto.nombre ? '' : 'muted');
+                document.getElementById('tr-nodo').textContent = nodo.nombre || '—';
+                document.getElementById('tr-nodo').className = 'pchat-trace-v ' + (nodo.nombre ? '' : 'muted');
+                document.getElementById('tr-tipo').textContent = nodo.tipo || '—';
+                document.getElementById('tr-intentos').textContent = estado.intentos || 0;
+
+                const estadoEl = document.getElementById('tr-estado');
+                if (estado.finalizado) {
+                    estadoEl.textContent = 'finalizado';
+                    estadoEl.className = 'pchat-trace-v warn';
+                } else if (estado.en_handoff) {
+                    estadoEl.textContent = 'handoff humano';
+                    estadoEl.className = 'pchat-trace-v err';
+                } else if (estado.esperando_depto) {
+                    estadoEl.textContent = 'esperando selección de depto';
+                    estadoEl.className = 'pchat-trace-v warn';
+                } else {
+                    estadoEl.textContent = 'activo';
+                    estadoEl.className = 'pchat-trace-v ok';
+                }
+
+                if (latenciaMs != null) {
+                    document.getElementById('tr-latencia').textContent = latenciaMs + ' ms';
+                }
+                document.getElementById('tr-variables').textContent =
+                    JSON.stringify(estado.variables || {}, null, 2);
+            }
+
+            function renderTimeline(entradas) {
+                const cont = document.getElementById('tr-timeline');
+                const cnt = document.getElementById('tr-timeline-count');
+                cont.innerHTML = '';
+                if (!entradas || entradas.length === 0) {
+                    cont.innerHTML = '<div class="pchat-timeline-empty">Sin ejecución registrada.</div>';
+                    cnt.textContent = '0';
+                    return;
+                }
+                cnt.textContent = entradas.length;
+                entradas.forEach(function (e) {
+                    const row = document.createElement('div');
+                    row.className = 'pchat-timeline-entry';
+                    const detalleStr = e.detalle && Object.keys(e.detalle).length
+                        ? JSON.stringify(e.detalle) : '';
+                    row.innerHTML =
+                        '<div class="pchat-timeline-ts">+' + e.ts_ms + ' ms</div>' +
+                        '<div class="pchat-timeline-dot ' + (e.ok ? 'ok' : 'err') + '"></div>' +
+                        '<div class="pchat-timeline-body">' +
+                        '<div class="pchat-timeline-label' + (e.ok ? '' : ' err') + '">' +
+                        '<span class="pchat-timeline-etapa">' + esc(e.etapa) + '</span>' +
+                        esc(e.label) + '</div>' +
+                        (detalleStr
+                            ? '<div class="pchat-timeline-detalle">' + esc(detalleStr) + '</div>'
+                            : '') +
+                        '</div>';
+                    cont.appendChild(row);
+                });
+            }
+
+            function showInfo(msg) {
+                infoBannerText.textContent = msg;
+                infoBanner.style.display = 'block';
+            }
+
+            // Estado inicial
+            renderTrace(estadoInicial, null);
+
+            // Toggle panel de traza
+            function setTraceVisible(v) {
+                trace.classList.toggle('collapsed', !v);
+                traceChevron.className = v ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+                localStorage.setItem('pchatTraceOpen', v ? '1' : '0');
+            }
+            if (localStorage.getItem('pchatTraceOpen') === '1') setTraceVisible(true);
+
+            traceBar.addEventListener('click', function () {
+                setTraceVisible(trace.classList.contains('collapsed'));
+            });
+            document.getElementById('btn-toggle-trace').addEventListener('click', function () {
+                setTraceVisible(trace.classList.contains('collapsed'));
+            });
+
+            // Input handling
+            input.addEventListener('input', function () {
+                btnSend.disabled = !this.value.trim();
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+            });
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!btnSend.disabled) send();
+                }
+            });
+            btnSend.addEventListener('click', send);
+
+            // Quick-reply chips
+            document.querySelectorAll('.pchat-chip').forEach(function (c) {
+                c.addEventListener('click', function () {
+                    input.value = this.dataset.chip;
+                    input.dispatchEvent(new Event('input'));
+                    send();
+                });
+            });
+
+            function send() {
+                const texto = input.value.trim();
+                if (!texto) return;
+                appendBubble('humano', texto);
+                input.value = '';
+                input.style.height = 'auto';
+                btnSend.disabled = true;
+
+                const skipSide = document.getElementById('chk-skip-side-effects')?.checked ? '1' : '';
+                $.ajax({
+                    type: 'POST',
+                    url: CHAT_URL,
+                    data: {csrfmiddlewaretoken: CSRF, action: 'send', mensaje: texto,
+                           skip_side_effects: skipSide},
+                    dataType: 'json',
+                    success: function (res) {
+                        if (res.error) {
+                            appendBubble('error', '⚠ ' + (res.message || 'Error'));
+                            return;
+                        }
+                        if (res.traza && res.traza.modo_forzado_tradicional) {
+                            showInfo('La sesión está en modo "' + res.traza.modo_original +
+                                '" — se forzó "tradicional" sólo para esta prueba.');
+                        }
+                        if (res.error_motor) {
+                            appendBubble('error', '⚠ Motor: ' + res.error_motor);
+                        }
+                        const resp = res.respuestas || [];
+                        if (resp.length === 0) {
+                            appendBubble('error',
+                                'El motor no produjo respuestas. Revisa el timeline para ver dónde se detuvo.');
+                        } else {
+                            resp.forEach(function (r) { appendBubble('bot', r); });
+                        }
+                        renderTrace(res.traza && res.traza.estado, res.traza && res.traza.latencia_ms);
+                        renderTimeline(res.traza && res.traza.timeline);
+                        if (res.finalizado) {
+                            appendBubble('error', '— Conversación finalizada —');
+                        }
+                        if (res.handoff) {
+                            appendBubble('error', '— Transferido a agente humano —');
+                        }
+                    },
+                    error: function () {
+                        appendBubble('error', '⚠ Error de conexión.');
+                    }
+                });
+            }
+
+            // Reset
+            btnReset.addEventListener('click', function () {
+                Swal.fire({
+                    title: '¿Reiniciar flujo?',
+                    text: 'Se borrará el estado actual y la siguiente entrada re-ejecutará el enrutamiento.',
+                    type: 'warning',
+                    showCancelButton: true,
+                    allowOutsideClick: false,
+                    confirmButtonText: 'Sí, reiniciar',
+                    cancelButtonText: 'Cancelar',
+                }).then(function (r) {
+                    if (!r.value) return;
+                    $.ajax({
+                        type: 'POST', url: CHAT_URL, dataType: 'json',
+                        data: {csrfmiddlewaretoken: CSRF, action: 'reset'},
+                        success: function () {
+                            body.querySelectorAll('.pchat-row').forEach(el => el.remove());
+                            if (!document.getElementById('empty-state')) {
+                                const d = document.createElement('div');
+                                d.className = 'pchat-empty';
+                                d.id = 'empty-state';
+                                d.innerHTML =
+                                    '<i class="fas fa-comments"></i>' +
+                                    '<h6>Flujo reiniciado</h6>' +
+                                    '<p>Escribe un mensaje para empezar de nuevo.</p>';
+                                body.appendChild(d);
+                            }
+                            renderTrace({}, null);
+                            renderTimeline([]);
+                            infoBanner.style.display = 'none';
+                        }
+                    });
+                });
+            });
+        })();
+    </script>
+{% endblock %}

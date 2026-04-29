@@ -1,0 +1,706 @@
+{% extends 'base.html' %}
+{% load static templatefunctions %}
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/horarios.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0 horarios-page">
+
+        {# ===== EXPLICACIÓN DEL MÓDULO ===== #}
+        <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
+            <i class="fa fa-clock fa-2x"></i>
+            <div>
+                <strong>¿Para qué sirve este módulo?</strong><br>
+                <small>
+                    Configura los <strong>horarios de atención</strong> de cada sesión de WhatsApp/Instagram/Messenger.
+                    Cuando un cliente escribe <strong>fuera de estos horarios</strong>, el sistema responde
+                    automáticamente
+                    con el mensaje que definas y evita enrutar la conversación a agentes humanos. También puedes agregar
+                    <strong>excepciones</strong> (feriados, días especiales) que sobrescriben el horario semanal
+                    regular.
+                </small>
+            </div>
+        </div>
+
+        {# ===== SELECTOR DE SESIÓN (combo, no sidebar) ===== #}
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="row g-2 align-items-end mb-0">
+                    <div class="col-md-5">
+                        <label class="form-label small mb-1">
+                            <i class="fa fa-search me-1 text-muted"></i> Buscar negocio o sesión
+                        </label>
+                        <input type="text" name="q" value="{{ q_negocio }}" class="form-control"
+                               placeholder="Nombre del negocio, nombre de sesión o número...">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label small mb-1">
+                            <i class="fa fa-list me-1 text-muted"></i> Sesión a configurar
+                        </label>
+                        <select name="sesion" class="form-select select2" onchange="this.form.submit()">
+                            <option value="">— Selecciona una sesión —</option>
+                            {% for s in sesiones %}
+                                <option value="{{ s.id }}" {% if sesion_actual.id == s.id %}selected{% endif %}>
+                                    {{ s.nombre|default:s.numero }}
+                                    {% if s.usuario.perfil_ia.nombre_empresa %} —
+                                        {{ s.usuario.perfil_ia.nombre_empresa }}{% endif %}
+                                    ({{ s.get_proveedor_display }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100">
+                            <i class="fa fa-filter"></i> Aplicar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if sesion_actual %}
+            {% csrf_token %}
+
+            {# ===== HEADER SESIÓN ACTUAL ===== #}
+            <div class="card mb-3 border-primary">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <h5 class="mb-0">
+                                {{ sesion_actual.nombre|default:sesion_actual.numero }}
+                                <span class="badge bg-{% if sesion_actual.proveedor == 'meta' %}warning{% else %}info{% endif %} ms-1">
+                            {{ sesion_actual.get_proveedor_display }}
+                        </span>
+                            </h5>
+                            <small class="text-muted">
+                                <i class="fa fa-briefcase me-1"></i>{{ negocio|default:"Sin negocio asignado" }}
+                                <i class="fa fa-phone ms-2 me-1"></i>{{ sesion_actual.numero }}
+                            </small>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                                    data-bs-target="#modalDuplicar">
+                                <i class="fa fa-copy me-1"></i> Usar como plantilla
+                            </button>
+                            {% if sesion_actual.es_meta %}
+                                <button class="btn btn-sm btn-warning" onclick="abrirModalMetaProfile({{ sesion_actual.id }})">
+                                    <i class="fa-brands fa-meta me-1"></i> Configurar perfil Meta
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ===== MENSAJE FUERA DE HORARIO ===== #}
+            <div class="card mb-3">
+                <div class="card-header py-2">
+                    <strong><i class="fa fa-comment-dots text-primary me-1"></i>Mensaje fuera de horario</strong>
+                    <small class="text-muted ms-2">Se envía automáticamente cuando un cliente escribe fuera del horario
+                        configurado</small>
+                </div>
+                <div class="card-body">
+            <textarea id="msgFH" class="form-control mb-2" rows="2"
+                      placeholder="Ej: Nuestro horario es Lun-Vie 9:00-18:00. Te responderemos al volver.">{{ sesion_actual.mensaje_fuera_horario|default:"" }}</textarea>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-5">
+                            <label class="form-label small mb-1">Zona horaria</label>
+                            <input id="tzFH" class="form-control form-control-sm"
+                                   value="{{ sesion_actual.zona_horaria|default:'America/Guayaquil' }}">
+                            <small class="text-muted">Ej: America/Guayaquil, America/Bogota, America/Mexico_City,
+                                UTC</small>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-sm btn-primary w-100" onclick="guardarMsgFH({{ sesion_actual.id }})">
+                                <i class="fa fa-save me-1"></i> Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                {# ===== HORARIOS SEMANALES ===== #}
+                <div class="col-md-7">
+                    <div class="card h-100">
+                        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                            <strong><i class="fa fa-calendar-week text-primary me-1"></i>Horarios semanales</strong>
+                            <div class="d-flex gap-2 align-items-center">
+                                <button type="button" class="btn btn-sm btn-outline-primary py-0"
+                                        onclick="abrirIaHorarios()" title="Generar horarios con IA">
+                                    <i class="fa fa-wand-magic-sparkles me-1"></i>Generar con IA
+                                </button>
+                                <span class="badge bg-primary">{{ horarios|length }}</span>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light">
+                                <tr>
+                                    <th>Día</th>
+                                    <th>Desde</th>
+                                    <th>Hasta</th>
+                                    <th class="text-end pe-3">Acciones</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for h in horarios %}
+                                    <tr>
+                                        <td>{{ h.get_dia_semana_display }}</td>
+                                        <td>{{ h.hora_inicio }}</td>
+                                        <td>{{ h.hora_fin }}</td>
+                                        <td class="text-end pe-3">
+                                            <button class="btn btn-sm btn-outline-danger py-0"
+                                                    onclick="delHorario({{ h.id }})">
+                                                <i class="fa fa-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                {% empty %}
+                                    <tr>
+                                        <td colspan="4" class="text-muted text-center py-3">
+                                            Sin horarios configurados. Por defecto la sesión se considera <strong>abierta
+                                            24/7</strong>.
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="card-footer bg-white">
+                            <form id="formHorario" class="row g-2 align-items-end" onsubmit="addHorario(event)">
+                                <div class="col-md-4">
+                                    <label class="form-label small mb-1">Día</label>
+                                    <select name="dia_semana" class="form-select form-select-sm">
+                                        {% for code,name in dias_semana %}
+                                            <option value="{{ code }}">{{ name }}</option>{% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small mb-1">Desde</label>
+                                    <input name="hora_inicio" type="time" class="form-control form-control-sm" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small mb-1">Hasta</label>
+                                    <input name="hora_fin" type="time" class="form-control form-control-sm" required>
+                                </div>
+                                <div class="col-md-2">
+                                    <button class="btn btn-sm btn-success w-100">
+                                        <i class="fa fa-plus"></i> Agregar
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                {# ===== EXCEPCIONES (FERIADOS) ===== #}
+                <div class="col-md-5">
+                    <div class="card h-100">
+                        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                            <strong><i class="fa fa-calendar-day text-warning me-1"></i>Excepciones (feriados o días
+                                especiales)</strong>
+                            <div class="d-flex gap-2 align-items-center">
+                                <button type="button" class="btn btn-sm btn-outline-primary py-0"
+                                        onclick="abrirIaExcepciones()" title="Generar excepciones/feriados con IA">
+                                    <i class="fa fa-wand-magic-sparkles me-1"></i>Generar con IA
+                                </button>
+                                <span class="badge bg-warning text-dark">{{ excepciones|length }}</span>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light">
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Abierto</th>
+                                    <th>Motivo</th>
+                                    <th></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for e in excepciones %}
+                                    <tr>
+                                        <td>{{ e.fecha|date:"d/m/Y" }}</td>
+                                        <td>
+                                            {% if e.abierto %}<span class="badge bg-success">Sí</span>
+                                            {% else %}<span class="badge bg-danger">No</span>{% endif %}
+                                        </td>
+                                        <td><small>{{ e.motivo|default:"—" }}</small></td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-danger py-0"
+                                                    onclick="delExcepcion({{ e.id }})">
+                                                <i class="fa fa-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                {% empty %}
+                                    <tr>
+                                        <td colspan="4" class="text-muted text-center py-3">Sin excepciones</td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="card-footer bg-white">
+                            <form id="formExcepcion" class="row g-2 align-items-end" onsubmit="addExcepcion(event)">
+                                <div class="col-md-5">
+                                    <label class="form-label small mb-1">Fecha</label>
+                                    <input name="fecha" type="date" class="form-control form-control-sm" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small mb-1">¿Abierto?</label>
+                                    <select name="abierto" class="form-select form-select-sm">
+                                        <option value="false">No</option>
+                                        <option value="true">Sí</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small mb-1">Motivo</label>
+                                    <input name="motivo" class="form-control form-control-sm"
+                                           placeholder="Feriado, etc.">
+                                </div>
+                                <div class="col-12">
+                                    <button class="btn btn-sm btn-success w-100">
+                                        <i class="fa fa-plus"></i> Agregar excepción
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ===== MODAL DUPLICAR ===== #}
+            <div class="modal fade" id="modalDuplicar" tabindex="-1">
+                <div class="modal-dialog">
+                    <form class="modal-content" onsubmit="duplicarHorarios(event)">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><i class="fa fa-copy me-2"></i>Usar estos horarios como plantilla
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="small text-muted">
+                                Copia los horarios de
+                                <strong>{{ sesion_actual.nombre|default:sesion_actual.numero }}</strong>
+                                a otra sesión (reemplaza los horarios existentes).
+                            </p>
+                            <label class="form-label">Sesión destino</label>
+                            <select name="destino_id" class="form-select" required>
+                                <option value="">Selecciona una sesión...</option>
+                                {% for s in todas_sesiones %}
+                                    <option value="{{ s.id|encrypt_id }}">{{ s.nombre|default:s.numero }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">Duplicar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {# ===== MODAL IA HORARIOS / EXCEPCIONES ===== #}
+            <div class="modal fade" id="modalIaHorarios" tabindex="-1">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <form class="modal-content" onsubmit="generarIa(event)">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fa fa-wand-magic-sparkles text-primary me-2"></i>
+                                <span id="iaModalTitulo">Generar con IA</span>
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <input type="hidden" id="iaModo" value="horarios">
+                            <div class="alert alert-light border small mb-2" id="iaModalInfo"></div>
+                            <label class="form-label small fw-semibold">Descripción en lenguaje natural</label>
+                            <textarea id="iaDescripcion" class="form-control" rows="4" required
+                                      placeholder="Ej: De lunes a viernes de 9:00 a 18:00 con hora de almuerzo de 13:00 a 14:00, sábados medio día de 9:00 a 13:00, cerrado domingos."></textarea>
+                            <small class="text-muted">Usa tu propia API Key IA. La IA convierte texto a
+                                horarios/excepciones estructuradas.</small>
+                            <div id="iaResultado" class="mt-3" style="display:none;"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fa fa-wand-magic-sparkles me-1"></i> Generar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+        {% else %}
+            <div class="alert alert-warning text-center py-4">
+                <i class="fa fa-hand-point-up fa-2x mb-2 d-block"></i>
+                <strong>Selecciona una sesión arriba para configurar sus horarios.</strong>
+            </div>
+        {% endif %}
+    </div>
+
+    {# ===== LOADING OVERLAY (se muestra durante async) ===== #}
+    <div id="loadingOverlay" class="loading-overlay" style="display:none;">
+        <div class="loading-box">
+            <div class="spinner-border text-primary" role="status" style="width:3rem;height:3rem;"></div>
+            <div class="mt-3 text-primary fw-bold" id="loadingMsg">Procesando...</div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script>
+        const CSRF = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        const SID = {{ sesion_actual.id|default:"null" }};
+
+        // ----- Loading overlay helpers -----
+        function showLoading(msg) {
+            document.getElementById('loadingMsg').textContent = msg || 'Procesando...';
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+
+        async function post(action, extras, msgLoading) {
+            showLoading(msgLoading || 'Procesando...');
+            try {
+                const fd = new FormData();
+                fd.append('csrfmiddlewaretoken', CSRF);
+                fd.append('action', action);
+                for (const k in extras) fd.append(k, extras[k]);
+                const r = await fetch('', {method: 'POST', body: fd});
+                const j = await r.json();
+                return j;
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // ----- Helpers Swal (proyecto usa `type:`, no `icon:`) -----
+        function swalOk(title, text) {
+            Swal.fire({title, text, type: 'success'});
+        }
+
+        function swalErr(title, text) {
+            Swal.fire({title, text: text || '', type: 'error'});
+        }
+
+        function swalWarn(title, text) {
+            Swal.fire({title, text: text || '', type: 'warning'});
+        }
+
+        function swalHtml(title, html, type) {
+            Swal.fire({title, html, type: type || 'info', width: 640});
+        }
+
+        function swalConfirm(title, text) {
+            return Swal.fire({
+                title, text, type: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33', cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Sí, continuar', cancelButtonText: 'Cancelar',
+            }).then(r => !!r.value);
+        }
+
+        function escHtml(s) {
+            return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        // ----- Acciones -----
+        async function guardarMsgFH(sid) {
+            const j = await post('guardar_mensaje_fuera_horario', {
+                sesion_id: sid,
+                mensaje: document.getElementById('msgFH').value,
+                zona_horaria: document.getElementById('tzFH').value,
+            }, 'Guardando mensaje...');
+            if (j.error) swalErr('Error', j.message || 'No se pudo guardar'); else toast('Mensaje guardado correctamente');
+        }
+
+        async function addHorario(ev) {
+            ev.preventDefault();
+            const f = ev.target;
+            const j = await post('add_horario', {
+                sesion_id: SID,
+                dia_semana: f.dia_semana.value,
+                hora_inicio: f.hora_inicio.value,
+                hora_fin: f.hora_fin.value,
+            }, 'Agregando horario...');
+            if (!j.error) location.reload(); else swalErr('Error', j.message);
+        }
+
+        async function delHorario(id) {
+            const ok = await swalConfirm('¿Eliminar este horario?', 'Esta acción no se puede deshacer.');
+            if (!ok) return;
+            const j = await post('delete_horario', {id}, 'Eliminando horario...');
+            if (!j.error) location.reload(); else swalErr('Error', j.message);
+        }
+
+        async function addExcepcion(ev) {
+            ev.preventDefault();
+            const f = ev.target;
+            const j = await post('add_excepcion', {
+                sesion_id: SID,
+                fecha: f.fecha.value,
+                abierto: f.abierto.value,
+                motivo: f.motivo.value,
+            }, 'Agregando excepción...');
+            if (!j.error) location.reload(); else swalErr('Error', j.message);
+        }
+
+        async function delExcepcion(id) {
+            const ok = await swalConfirm('¿Eliminar esta excepción?', 'Esta acción no se puede deshacer.');
+            if (!ok) return;
+            const j = await post('delete_excepcion', {id}, 'Eliminando excepción...');
+            if (!j.error) location.reload(); else swalErr('Error', j.message);
+        }
+
+        async function duplicarHorarios(ev) {
+            ev.preventDefault();
+            const destino = ev.target.destino_id.value;
+            const j = await post('duplicar', {origen_id: SID, destino_id: destino}, 'Duplicando horarios...');
+            if (!j.error) {
+                await Swal.fire({title: 'Duplicado', text: j.message, type: 'success'});
+                location.href = '?sesion=' + destino;
+            } else swalErr('Error al duplicar', j.message);
+        }
+
+        async function enviarMeta(sid) {
+            const j = await post('enviar_meta', {sesion_id: sid}, 'Enviando configuración a Meta...');
+            const m = j.meta || {};
+            const detalle = '<div class="text-start small">' +
+                '<div class="mb-2"><strong>Endpoint:</strong><br><code style="font-size:.72rem;word-break:break-all;">' + escHtml(m.endpoint || '—') + '</code></div>' +
+                (m.status != null ? '<div><strong>HTTP Status:</strong> <span class="badge bg-' + (m.status >= 200 && m.status < 300 ? 'success' : 'danger') + '">' + m.status + '</span></div>' : '') +
+                (m.horarios_txt ? '<div class="mt-2"><strong>Horarios enviados:</strong><br><small>' + escHtml(m.horarios_txt) + '</small></div>' : '') +
+                (m.about_sent ? '<div class="mt-2"><strong>About (≤139 chars):</strong><br><small>' + escHtml(m.about_sent) + '</small></div>' : '') +
+                (m.response ? '<div class="mt-2"><strong>Respuesta Meta:</strong><pre class="bg-light border rounded p-2 small mb-0" style="max-height:180px;overflow:auto;white-space:pre-wrap;">' + escHtml(JSON.stringify(m.response, null, 2)) + '</pre></div>' : '') +
+                (m.exception ? '<div class="mt-2 text-danger"><strong>Excepción:</strong> ' + escHtml(m.exception) + '</div>' : '') +
+                '</div>';
+            if (j.error) {
+                swalHtml('❌ ' + (j.message || 'Error enviando a Meta'), detalle, 'error');
+            } else {
+                swalHtml('✅ ' + j.message, detalle, 'success');
+            }
+        }
+
+        // ----- IA horarios / excepciones -----
+        function abrirIaHorarios() {
+            document.getElementById('iaModo').value = 'horarios';
+            document.getElementById('iaModalTitulo').textContent = 'Generar horarios con IA';
+            document.getElementById('iaModalInfo').innerHTML = '<i class="fa fa-info-circle text-primary me-1"></i>Describe los horarios de atención en texto natural. La IA creará los bloques semanales.';
+            document.getElementById('iaDescripcion').value = '';
+            document.getElementById('iaDescripcion').placeholder = 'Ej: Lun-Vie 9:00-18:00 con almuerzo de 13:00 a 14:00, Sábado 9:00-13:00, cerrado domingos.';
+            document.getElementById('iaResultado').style.display = 'none';
+            new bootstrap.Modal(document.getElementById('modalIaHorarios')).show();
+        }
+
+        function abrirIaExcepciones() {
+            document.getElementById('iaModo').value = 'excepciones';
+            document.getElementById('iaModalTitulo').textContent = 'Generar excepciones/feriados con IA';
+            document.getElementById('iaModalInfo').innerHTML = '<i class="fa fa-info-circle text-primary me-1"></i>Describe feriados, días especiales o fechas cerradas. La IA resuelve fechas estándar (ej. “feriados de Ecuador”, “Navidad y Año Nuevo”).';
+            document.getElementById('iaDescripcion').value = '';
+            document.getElementById('iaDescripcion').placeholder = 'Ej: Cerrado 25 de diciembre y 1 de enero. Horario reducido 24 y 31 de diciembre. Feriados oficiales de Ecuador este año.';
+            document.getElementById('iaResultado').style.display = 'none';
+            new bootstrap.Modal(document.getElementById('modalIaHorarios')).show();
+        }
+
+        async function generarIa(ev) {
+            ev.preventDefault();
+            const modo = document.getElementById('iaModo').value;
+            const descripcion = document.getElementById('iaDescripcion').value.trim();
+            if (descripcion.length < 10) {
+                swalWarn('Describe con más detalle', 'Mínimo 10 caracteres.');
+                return;
+            }
+            const action = (modo === 'excepciones') ? 'generar_excepciones_ia' : 'generar_horarios_ia';
+            const j = await post(action, {sesion_id: SID, descripcion}, 'Consultando IA...');
+            if (j.error) {
+                let html = '<div class="text-start small">' + escHtml(j.message || 'Error IA') + '</div>';
+                if (j.raw_preview) {
+                    html += '<div class="text-start small mt-2 text-muted"><strong>Respuesta cruda de la IA:</strong>' +
+                        '<pre class="bg-light border rounded p-2 small mt-1 mb-0" style="max-height:200px;overflow:auto;white-space:pre-wrap;">' +
+                        escHtml(j.raw_preview) + '</pre></div>';
+                }
+                Swal.fire({title: 'No se pudo generar', html, type: 'error', width: 600});
+                return;
+            }
+            const items = (modo === 'excepciones') ? (j.excepciones || []) : (j.horarios || []);
+            const resumen = items.length
+                ? '<ul class="small mb-0 ps-3">' + items.map(it => (
+                modo === 'excepciones'
+                    ? '<li>' + escHtml(it.fecha) + ' — ' + (it.abierto ? 'Abierto' : 'Cerrado') + (it.motivo ? ' · ' + escHtml(it.motivo) : '') + '</li>'
+                    : '<li>Día ' + it.dia_semana + ' · ' + escHtml(it.hora_inicio) + ' - ' + escHtml(it.hora_fin) + '</li>'
+            )).join('') + '</ul>'
+                : '<em>Sin items generados.</em>';
+            await Swal.fire({
+                title: '✅ ' + j.message,
+                html: resumen,
+                type: 'success',
+                width: 560,
+            });
+            location.reload();
+        }
+
+        // ----- Toast simple -----
+        function toast(msg) {
+            const t = document.createElement('div');
+            t.className = 'fc-toast';
+            t.innerHTML = '<i class="fa fa-check-circle text-success me-2"></i>' + msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.classList.add('fc-toast-show'), 10);
+            setTimeout(() => {
+                t.classList.remove('fc-toast-show');
+                setTimeout(() => t.remove(), 300);
+            }, 2500);
+        }
+    </script>
+
+    {# ───────── Modal: Configurar perfil Meta — solo si la sesión es Meta ───────── #}
+    {% if sesion_actual.es_meta %}
+    <div class="modal fade" id="modalMetaProfile" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title">
+                        <i class="fa-brands fa-meta me-2 text-warning"></i>
+                        Perfil de WhatsApp Business en Meta
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body" id="metaProfileBody">
+                    <div class="text-center py-4 text-muted">
+                        <i class="fa fa-spinner fa-spin fa-2x mb-2"></i><br>
+                        Consultando perfil actual en Meta...
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <a id="metaProfileDeepLink" href="#" target="_blank" rel="noopener" class="btn btn-outline-info btn-sm me-auto" style="display:none">
+                        <i class="fa fa-external-link me-1"></i> Editar en Meta Business
+                    </a>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning btn-sm" id="btnSaveMetaProfile">
+                        <i class="fa-brands fa-meta me-1"></i> Guardar en Meta
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let _metaSesionActual = null;
+        let _modalMetaInstance = null;
+
+        async function abrirModalMetaProfile(sesionId) {
+            _metaSesionActual = sesionId;
+            const modalEl = document.getElementById('modalMetaProfile');
+            if (!_modalMetaInstance) _modalMetaInstance = new bootstrap.Modal(modalEl);
+            const body = document.getElementById('metaProfileBody');
+            body.innerHTML = '<div class="text-center py-4 text-muted"><i class="fa fa-spinner fa-spin fa-2x mb-2"></i><br>Consultando perfil actual en Meta...</div>';
+            document.getElementById('metaProfileDeepLink').style.display = 'none';
+            _modalMetaInstance.show();
+
+            const j = await post('consultar_meta_profile', {sesion_id: sesionId}, null);
+            if (j.error) {
+                body.innerHTML = '<div class="alert alert-danger mb-0"><i class="fa fa-circle-xmark me-2"></i>' + (j.message || 'Error consultando Meta') + '</div>';
+                return;
+            }
+            const p = j.profile || {};
+            const sugerido = j.sugerido_description || '';
+            const horariosTxt = j.horarios_txt || '';
+
+            // Botón deep-link
+            if (j.deep_link_meta) {
+                const link = document.getElementById('metaProfileDeepLink');
+                link.href = j.deep_link_meta;
+                link.style.display = '';
+            }
+
+            body.innerHTML = `
+                <div class="alert alert-info py-2 small mb-3">
+                    <i class="fa fa-info-circle me-1"></i>
+                    Lo que ven tus clientes al abrir el perfil del número en WhatsApp.
+                    Solo se actualizan los campos que tengan valor — los vacíos se preservan tal como están en Meta.
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">About <small class="text-muted">(máx 139 chars · debajo del nombre)</small></label>
+                    <input type="text" class="form-control form-control-sm" id="meta_about" maxlength="139" value="${escHtml(p.about)}" placeholder="Ej: Tu pizzería favorita 🍕">
+                    <small class="text-muted">Línea breve. No emojis si Meta los rechaza.</small>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Description <small class="text-muted">(máx 512 chars · pestaña "Info de la empresa")</small></label>
+                    <textarea class="form-control form-control-sm" id="meta_description" rows="3" maxlength="512" placeholder="Descripción extendida del negocio. Aquí van bien los horarios.">${escHtml(p.description)}</textarea>
+                    ${horariosTxt ? `
+                        <button type="button" class="btn btn-sm btn-outline-warning mt-1" id="btnLlenarHorarios">
+                            <i class="fa fa-clock me-1"></i> Llenar con horarios actuales
+                        </button>
+                        <small class="text-muted ms-2">Sugerencia: <code>${escHtml(sugerido)}</code></small>
+                    ` : '<small class="text-muted">No hay horarios configurados en BD.</small>'}
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-bold">Email</label>
+                        <input type="email" class="form-control form-control-sm" id="meta_email" value="${escHtml(p.email)}">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-bold">Vertical (industria)</label>
+                        <select class="form-select form-select-sm" id="meta_vertical">
+                            <option value="">— No cambiar —</option>
+                            ${['UNDEFINED','OTHER','AUTO','BEAUTY','APPAREL','EDU','ENTERTAIN','EVENT_PLAN','FINANCE','GROCERY','GOVT','HOTEL','HEALTH','NONPROFIT','PROF_SERVICES','RETAIL','TRAVEL','RESTAURANT'].map(v => `<option value="${v}" ${p.vertical === v ? 'selected' : ''}>${v}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Address</label>
+                    <input type="text" class="form-control form-control-sm" id="meta_address" maxlength="256" value="${escHtml(p.address)}">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Websites <small class="text-muted">(máx 2, separados por coma)</small></label>
+                    <input type="text" class="form-control form-control-sm" id="meta_websites" value="${escHtml((p.websites || []).join(', '))}" placeholder="https://misitio.com, https://otro.com">
+                </div>
+
+                ${p.profile_picture_url ? `<div class="mb-2 small text-muted"><strong>Profile picture:</strong> <a href="${p.profile_picture_url}" target="_blank">ver imagen</a> <em>(se actualiza por separado)</em></div>` : ''}
+            `;
+
+            // Bind del botón "Llenar con horarios" — fuera del innerHTML para evitar
+            // problemas de escape con onclick="..." cuando sugerido tiene comillas.
+            const btnLlenar = document.getElementById('btnLlenarHorarios');
+            if (btnLlenar && sugerido) {
+                btnLlenar.addEventListener('click', () => {
+                    document.getElementById('meta_description').value = sugerido;
+                });
+            }
+        }
+
+        document.getElementById('btnSaveMetaProfile').addEventListener('click', async () => {
+            if (!_metaSesionActual) return;
+            const data = {
+                sesion_id:   _metaSesionActual,
+                about:       document.getElementById('meta_about').value.trim(),
+                description: document.getElementById('meta_description').value.trim(),
+                email:       document.getElementById('meta_email').value.trim(),
+                vertical:    document.getElementById('meta_vertical').value.trim(),
+                address:     document.getElementById('meta_address').value.trim(),
+                websites:    document.getElementById('meta_websites').value.trim(),
+            };
+            const j = await post('actualizar_meta_profile', data, 'Actualizando perfil en Meta...');
+            if (j.error) {
+                if (window.Swal) Swal.fire('Error', j.message || 'No se pudo actualizar', 'error');
+                else alert(j.message);
+                return;
+            }
+            if (window.Swal) Swal.fire({icon:'success', title:'Perfil actualizado', text: j.message, timer: 2400, showConfirmButton: false});
+            _modalMetaInstance.hide();
+        });
+    </script>
+    {% endif %}
+{% endblock %}

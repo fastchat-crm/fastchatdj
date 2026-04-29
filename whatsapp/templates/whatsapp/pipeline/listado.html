@@ -1,0 +1,415 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/pipeline.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+
+    {# ===== EXPLICACIÓN DEL MÓDULO ===== #}
+    <div class="alert alert-info d-flex align-items-start gap-3 mb-3">
+        <i class="fa fa-columns fa-2x mt-1"></i>
+        <div>
+            <strong>¿Qué es el Pipeline de ventas y cómo se configura?</strong>
+            <p class="small mb-1 mt-1">
+                Es un <strong>tablero Kanban</strong> que organiza tus oportunidades de venta en columnas por etapa.
+                Cada conversación de WhatsApp/IG/Messenger se vuelve una <strong>tarjeta</strong> con valor estimado,
+                probabilidad y fecha de cierre — y avanza arrastrandose entre etapas.
+            </p>
+            <ol class="small mb-1 ps-3">
+                <li class="mb-1"><strong>Crea un pipeline</strong> (ej: "Ventas B2B 2026") con boton "Nuevo pipeline" o usa
+                    <strong class="text-primary">"Generar con IA"</strong> para que armemos uno completo en 5 segundos a partir de la descripcion de tu negocio.</li>
+                <li class="mb-1"><strong>Define las etapas</strong>: ej. <code>Nuevo lead → Contactado → Cotizado → Negociacion → Cerrado ganado / Cerrado perdido</code>.
+                    Cada etapa tiene color, probabilidad de cierre (%), y opcionalmente flag <code>ganado</code> o <code>perdido</code>.</li>
+                <li class="mb-1"><strong>Agrega tarjetas</strong> desde una conversacion existente (boton en el chat).
+                    Cada tarjeta lleva contacto + valor estimado + nota.</li>
+                <li class="mb-1"><strong>Arrastra entre etapas</strong> para avanzar el negocio. Cada movimiento queda registrado en historial.</li>
+                <li class="mb-1"><strong>Cierre automatico:</strong> cuando movés una tarjeta a una etapa marcada <code>ganada</code>,
+                    el sistema dispara <strong>Purchase event a Meta Ads (CAPI)</strong> con el valor de la tarjeta — esto optimiza tus campañas.</li>
+            </ol>
+            <div class="small text-muted mt-1">
+                <i class="fa fa-chart-line me-1"></i><strong>Forecast</strong> ponderado: por columna ves total estimado * probabilidad/100 — anticipa ingresos del mes.
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+            <h4 class="mb-0 d-flex align-items-center gap-2">
+                {% if pipeline_actual %}
+                    <span>{{ pipeline_actual.nombre }}</span>
+                    <button class="btn btn-sm btn-link p-0 text-muted" data-bs-toggle="modal" data-bs-target="#modalEditarPipeline"
+                            title="Editar nombre/descripcion">
+                        <i class="fa fa-pen-to-square"></i>
+                    </button>
+                {% else %}
+                    Pipeline de ventas
+                {% endif %}
+            </h4>
+            <small class="text-muted">{{ pipeline_actual.descripcion|default:"Tablero Kanban · arrastra tarjetas entre etapas" }}</small>
+        </div>
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+            <select class="form-select form-select-sm" style="min-width:200px;" id="selPipeline" onchange="location='?pipeline='+this.value">
+                {% for p in pipelines %}
+                    <option value="{{ p.id }}" {% if pipeline_actual.id == p.id %}selected{% endif %}>{{ p.nombre }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" id="filtroBusqueda" class="form-control form-control-sm" style="max-width:200px;"
+                   placeholder="🔎 Filtrar tarjetas..." oninput="filtrarKanban(this.value)">
+            <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalGenerarIA">
+                <i class="fa fa-wand-magic-sparkles me-1"></i> Generar con IA
+            </button>
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNuevoPipeline">
+                <i class="fa fa-plus me-1"></i> Nuevo pipeline
+            </button>
+            {% if pipeline_actual %}
+            <button class="btn btn-outline-danger btn-sm"
+                    onclick="eliminarajax({{ pipeline_actual.id }}, '{{ pipeline_actual.nombre|escapejs }}', 'delete_pipeline')"
+                    title="Eliminar pipeline (soft-delete: el historial se conserva)">
+                <i class="fa fa-trash"></i>
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Modal editar nombre/descripcion del pipeline actual #}
+    {% if pipeline_actual %}
+    <div class="modal fade" id="modalEditarPipeline" tabindex="-1">
+        <div class="modal-dialog">
+            <form class="modal-content" onsubmit="editarPipeline(event)">
+                {% csrf_token %}
+                <input type="hidden" name="pipeline_id" value="{{ pipeline_actual.id }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fa fa-pen-to-square me-2"></i>Editar pipeline</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Nombre *</label>
+                        <input type="text" name="nombre" class="form-control" required maxlength="100"
+                               value="{{ pipeline_actual.nombre }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Descripcion</label>
+                        <textarea name="descripcion" class="form-control" rows="3" maxlength="500">{{ pipeline_actual.descripcion|default:'' }}</textarea>
+                        <div class="form-text small">Aparece debajo del titulo del kanban (max 500 chars).</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa fa-save me-1"></i>Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if pipeline_actual %}
+    <div class="kanban-wrap">
+        <div class="kanban-board">
+            {% for col in columnas %}
+            <div class="kanban-col" data-etapa="{{ col.etapa.id }}">
+                <div class="kanban-col-header" style="border-top:4px solid {{ col.etapa.color }}">
+                    <div class="d-flex justify-content-between align-items-center gap-1">
+                        <strong class="text-truncate">{{ col.etapa.nombre }}</strong>
+                        <div class="d-flex align-items-center gap-1">
+                            <span class="badge bg-light text-dark">{{ col.n }}</span>
+                            <button class="btn btn-sm btn-link text-primary p-0 ms-1"
+                                    onclick='abrirModalEditarEtapa({{ col.etapa.id }}, {"nombre": "{{ col.etapa.nombre|escapejs }}", "color": "{{ col.etapa.color }}", "probabilidad_cierre": {{ col.etapa.probabilidad_cierre|default:0 }}, "es_ganado": {{ col.etapa.es_ganado|yesno:"true,false" }}, "es_perdido": {{ col.etapa.es_perdido|yesno:"true,false" }}, "orden": {{ col.etapa.orden|default:0 }}})'
+                                    title="Editar etapa" style="line-height:1;">
+                                <i class="fa fa-pen-to-square"></i>
+                            </button>
+                            <button class="btn btn-sm btn-link text-danger p-0"
+                                    onclick="{% if col.n %}alertaWarning('La etapa tiene {{ col.n }} tarjeta(s). Movelas antes de eliminar.'){% else %}eliminarajax({{ col.etapa.id }}, '{{ col.etapa.nombre|escapejs }}', 'delete_etapa'){% endif %}"
+                                    title="Eliminar etapa (solo si no tiene tarjetas)" style="line-height:1;">
+                                <i class="fa fa-times-circle"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <small class="text-muted">Forecast: {{ col.total_valor|floatformat:2 }}</small>
+                </div>
+                <div class="kanban-col-body">
+                    {% for card in col.cards %}
+                    <div class="kanban-card" draggable="true" data-card="{{ card.id }}" data-conv="{{ card.conversacion_id }}">
+                        <div class="kanban-card-title">
+                            {{ card.conversacion.contacto_nombre|default:card.conversacion.contacto.contacto_numero }}
+                        </div>
+                        <div class="kanban-card-meta">
+                            <small class="text-muted">{{ card.fecha_cambio_etapa|date:"d/m H:i" }}</small>
+                            {% if card.valor_estimado %}
+                                <span class="badge bg-success">{{ card.moneda }} {{ card.valor_estimado }}</span>
+                            {% endif %}
+                        </div>
+                        {% if card.conversacion.ctwa_clid %}
+                            <div class="kanban-card-ctwa"><i class="fa fa-bullhorn text-warning"></i> CTWA: {{ card.conversacion.campaign_id|default:"—" }}</div>
+                        {% endif %}
+                        {% if card.nota %}<div class="kanban-card-nota">{{ card.nota|truncatechars:90 }}</div>{% endif %}
+                    </div>
+                    {% empty %}
+                        <div class="kanban-empty">Sin tarjetas</div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+            <div class="kanban-col kanban-col-add">
+                <button class="btn btn-outline-primary btn-sm w-100" data-bs-toggle="modal" data-bs-target="#modalNuevaEtapa">
+                    <i class="fa fa-plus-circle me-1"></i> Agregar etapa
+                </button>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">No hay pipelines. Crea el primero para empezar.</div>
+    {% endif %}
+</div>
+
+{# --- Modales --- #}
+<div class="modal fade" id="modalNuevoPipeline" tabindex="-1">
+    <div class="modal-dialog"><form class="modal-content" onsubmit="crearPipeline(event)">
+        {% csrf_token %}
+        <div class="modal-header"><h5 class="modal-title">Nuevo pipeline</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <div class="mb-3"><label>Nombre</label>
+                <input type="text" name="nombre" class="form-control" required></div>
+            <div class="mb-3"><label>Descripción</label>
+                <input type="text" name="descripcion" class="form-control"></div>
+        </div>
+        <div class="modal-footer">
+            <button type="submit" class="btn btn-primary">Crear</button>
+        </div>
+    </form></div>
+</div>
+
+<div class="modal fade" id="modalGenerarIA" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" onsubmit="generarPipelineIA(event)">
+            {% csrf_token %}
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fa fa-wand-magic-sparkles me-2"></i>Generar pipeline con IA</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info py-2 small mb-3">
+                    <i class="fa fa-circle-info me-1"></i>
+                    La IA genera un pipeline completo (nombre + 4-6 etapas con colores, probabilidades y flags ganado/perdido)
+                    a partir de la descripcion de tu negocio. Despues podes editar lo que necesites.
+                    <br><strong class="text-muted">Trazabilidad:</strong> el consumo de tokens queda registrado en CRM → Consumo IA.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Describe tu negocio y proceso de venta</label>
+                    <textarea name="descripcion" class="form-control" rows="4" required
+                              placeholder="Ej: Empresa de software B2B. Generamos leads via LinkedIn ads, calificamos por demo agendada, hacemos propuesta tecnica y comercial, luego negociamos terminos antes del cierre. Ciclo tipico 30-60 dias."></textarea>
+                    <div class="form-text small">Cuanto mas especifico, mejores etapas. Mencion industria, ciclo de venta y momentos clave.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Cantidad sugerida de etapas</label>
+                    <input type="number" name="n_etapas" min="3" max="8" value="5" class="form-control" style="max-width:100px;">
+                    <div class="form-text small">Entre 3 y 8. La IA puede ajustar +/-1 segun el contexto.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-success" id="btnGenerarIA">
+                    <i class="fa fa-bolt me-1"></i> Generar pipeline
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="modalEditarEtapa" tabindex="-1">
+    <div class="modal-dialog">
+        <form class="modal-content" onsubmit="editarEtapaSubmit(event)">
+            {% csrf_token %}
+            <input type="hidden" name="etapa_id" id="ee-etapa-id">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa fa-pen-to-square me-2"></i>Editar etapa</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Nombre *</label>
+                    <input type="text" name="nombre" id="ee-nombre" class="form-control" required maxlength="80">
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold">Color</label>
+                        <input type="color" name="color" id="ee-color" class="form-control form-control-color" value="#6c757d">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold">Orden</label>
+                        <input type="number" name="orden" id="ee-orden" class="form-control" min="0">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Probabilidad de cierre (%)</label>
+                    <input type="number" name="probabilidad_cierre" id="ee-prob" min="0" max="100" class="form-control">
+                    <div class="form-text small">Usado para calcular forecast ponderado. Default: 0% al inicio del funnel, 100% en "ganado".</div>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="ee-ganado" class="form-check-input">
+                    <label class="form-check-label small" for="ee-ganado">
+                        <i class="fa fa-trophy text-success me-1"></i>Etapa "ganado" (al mover una tarjeta aca, dispara Purchase a Meta CAPI)
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="ee-perdido" class="form-check-input">
+                    <label class="form-check-label small" for="ee-perdido">
+                        <i class="fa fa-times-circle text-danger me-1"></i>Etapa "perdido" (oportunidad descartada)
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary"><i class="fa fa-save me-1"></i>Guardar cambios</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="modalNuevaEtapa" tabindex="-1">
+    <div class="modal-dialog"><form class="modal-content" onsubmit="crearEtapa(event)">
+        {% csrf_token %}
+        <div class="modal-header"><h5 class="modal-title">Nueva etapa</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <input type="hidden" name="pipeline_id" value="{{ pipeline_actual.id|default:'' }}">
+            <div class="mb-3"><label>Nombre</label><input name="nombre" class="form-control" required></div>
+            <div class="mb-3"><label>Color</label><input name="color" type="color" class="form-control form-control-color" value="#6c757d"></div>
+            <div class="mb-3"><label>Probabilidad de cierre (%)</label>
+                <input name="probabilidad_cierre" type="number" min="0" max="100" value="0" class="form-control"></div>
+            <div class="form-check"><input type="checkbox" name="es_ganado" value="true" class="form-check-input"> <label class="form-check-label">Etapa "ganado" (dispara Purchase a CAPI)</label></div>
+            <div class="form-check"><input type="checkbox" name="es_perdido" value="true" class="form-check-input"> <label class="form-check-label">Etapa "perdido"</label></div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-primary">Agregar</button></div>
+    </form></div>
+</div>
+
+<script>
+const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
+async function crearPipeline(ev){ ev.preventDefault(); const fd = new FormData(ev.target); fd.append('action','add_pipeline');
+    const r = await fetch('', {method:'POST', body: fd}); const j = await r.json();
+    if(!j.error) location.href='?pipeline='+j.pipeline_id; else alert(j.message);
+}
+async function crearEtapa(ev){ ev.preventDefault(); const fd = new FormData(ev.target); fd.append('action','add_etapa');
+    fd.append('es_ganado', ev.target.es_ganado.checked ? 'true':'false');
+    fd.append('es_perdido', ev.target.es_perdido.checked ? 'true':'false');
+    const r = await fetch('', {method:'POST', body: fd}); const j = await r.json();
+    if(!j.error) location.reload(); else alert(j.message);
+}
+
+/* Generar pipeline con IA */
+async function generarPipelineIA(ev) {
+    ev.preventDefault();
+    const $btn = document.getElementById('btnGenerarIA');
+    const orig = $btn.innerHTML;
+    $btn.disabled = true;
+    $btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i>Generando...';
+    const fd = new FormData(ev.target);
+    fd.append('action', 'generar_pipeline_ia');
+    try {
+        const r = await fetch('', { method: 'POST', body: fd });
+        const j = await r.json();
+        if (j && !j.error) {
+            if (typeof alertaSuccess === 'function') alertaSuccess(j.message);
+            location.href = '?pipeline=' + j.pipeline_id;
+        } else {
+            $btn.disabled = false; $btn.innerHTML = orig;
+            if (typeof mostrarError === 'function') mostrarError('No se pudo generar', j);
+            else alert((j && j.message) || 'Error');
+        }
+    } catch (e) {
+        $btn.disabled = false; $btn.innerHTML = orig;
+        alert('Error de conexion: ' + e.message);
+    }
+}
+
+/* Editar etapa — abre modal pre-cargado */
+function abrirModalEditarEtapa(eid, data) {
+    document.getElementById('ee-etapa-id').value = eid;
+    document.getElementById('ee-nombre').value   = data.nombre || '';
+    document.getElementById('ee-color').value    = data.color  || '#6c757d';
+    document.getElementById('ee-orden').value    = data.orden  || 0;
+    document.getElementById('ee-prob').value     = data.probabilidad_cierre || 0;
+    document.getElementById('ee-ganado').checked  = !!data.es_ganado;
+    document.getElementById('ee-perdido').checked = !!data.es_perdido;
+    var modalEl = document.getElementById('modalEditarEtapa');
+    var inst = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    inst.show();
+}
+
+async function editarEtapaSubmit(ev) {
+    ev.preventDefault();
+    const fd = new FormData(ev.target);
+    fd.append('action', 'editar_etapa');
+    fd.append('csrfmiddlewaretoken', CSRF);
+    fd.append('es_ganado',  document.getElementById('ee-ganado').checked  ? 'true' : 'false');
+    fd.append('es_perdido', document.getElementById('ee-perdido').checked ? 'true' : 'false');
+    const r = await fetch('', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (j && !j.error) {
+        if (typeof alertaSuccess === 'function') alertaSuccess('Etapa actualizada.');
+        setTimeout(() => location.reload(), 600);
+    } else {
+        if (typeof mostrarError === 'function') mostrarError('No se pudo guardar', j);
+        else alert((j && j.message) || 'Error');
+    }
+}
+
+/* Editar nombre/descripcion del pipeline */
+async function editarPipeline(ev) {
+    ev.preventDefault();
+    const fd = new FormData(ev.target);
+    fd.append('action', 'editar_pipeline');
+    fd.append('csrfmiddlewaretoken', CSRF);
+    const r = await fetch('', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (j && !j.error) {
+        if (typeof alertaSuccess === 'function') alertaSuccess('Pipeline actualizado.');
+        setTimeout(() => location.reload(), 600);
+    } else {
+        if (typeof mostrarError === 'function') mostrarError('No se pudo guardar', j);
+        else alert((j && j.message) || 'Error');
+    }
+}
+
+/* Filtro client-side por nombre/nota dentro de las tarjetas */
+function filtrarKanban(query) {
+    query = (query || '').trim().toLowerCase();
+    document.querySelectorAll('.kanban-card').forEach(function (card) {
+        if (!query) {
+            card.style.display = '';
+            return;
+        }
+        const txt = (card.textContent || '').toLowerCase();
+        card.style.display = txt.indexOf(query) >= 0 ? '' : 'none';
+    });
+    // Recalcular contador visible por columna
+    document.querySelectorAll('.kanban-col[data-etapa]').forEach(function (col) {
+        const visibles = col.querySelectorAll('.kanban-card:not([style*="display: none"])').length;
+        const badge = col.querySelector('.kanban-col-header .badge');
+        if (badge) badge.textContent = visibles;
+    });
+}
+// Drag & drop
+document.querySelectorAll('.kanban-card').forEach(c => {
+    c.addEventListener('dragstart', e => e.dataTransfer.setData('text/card', c.dataset.card));
+});
+document.querySelectorAll('.kanban-col').forEach(col => {
+    col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drop-hover');});
+    col.addEventListener('dragleave', e => col.classList.remove('drop-hover'));
+    col.addEventListener('drop', async e => {
+        e.preventDefault(); col.classList.remove('drop-hover');
+        const cardId = e.dataTransfer.getData('text/card');
+        const etapaId = col.dataset.etapa;
+        if(!cardId || !etapaId) return;
+        const fd = new FormData(); fd.append('csrfmiddlewaretoken', CSRF);
+        fd.append('action','mover_card'); fd.append('card_id', cardId); fd.append('etapa_id', etapaId);
+        const r = await fetch('', {method:'POST', body: fd}); const j = await r.json();
+        if(!j.error) location.reload(); else alert(j.message);
+    });
+});
+</script>
+{% endblock %}

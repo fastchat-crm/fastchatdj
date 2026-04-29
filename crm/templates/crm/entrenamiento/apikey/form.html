@@ -30,3 +30,60 @@
 {{ form.media }}
 
 {% include 'base_formulario_modal.html' %}
+
+<script>
+(function() {
+    'use strict';
+    // Filtra el combo de modelos según el proveedor seleccionado.
+    // Prefijos por provider: 2=Gemini (gemini-*), 3=OpenAI (gpt-*), Claude (claude-*)
+    const PREFIJOS = { '2': 'gemini-', '3': 'gpt-' };
+
+    function filtrarModelos() {
+        const $prov = $('#id_proveedor');
+        const $modelo = $('#id_modelo');
+        if (!$prov.length || !$modelo.length) return;
+
+        const provVal = String($prov.val() || '');
+        const prefijo = PREFIJOS[provVal] || null;
+
+        // Guardar el valor actual antes de reconstruir
+        const valorActual = $modelo.val();
+        let primerValido = '';
+
+        $modelo.find('option').each(function() {
+            const $opt = $(this);
+            const v = $opt.attr('value') || '';
+            // Opción vacía (default) siempre visible
+            if (v === '') { $opt.prop('hidden', false).prop('disabled', false); return; }
+            if (!prefijo) {
+                // Proveedor desconocido: mostrar todos (fallback defensivo)
+                $opt.prop('hidden', false).prop('disabled', false);
+                if (!primerValido) primerValido = v;
+                return;
+            }
+            const match = v.startsWith(prefijo);
+            $opt.prop('hidden', !match).prop('disabled', !match);
+            if (match && !primerValido) primerValido = v;
+        });
+
+        // Si el valor actual ya no es válido para este provider, cambiar al default ''
+        const currentOpt = $modelo.find('option[value="' + valorActual + '"]');
+        if (valorActual && currentOpt.length && currentOpt.prop('disabled')) {
+            $modelo.val('');
+        }
+
+        // Mostrar texto guía bajo el combo
+        const labels = { '2': 'Gemini', '3': 'OpenAI' };
+        const prov_label = labels[provVal] || 'este proveedor';
+        let $hint = $modelo.siblings('.modelo-hint');
+        if (!$hint.length) {
+            $hint = $('<div class="form-text small modelo-hint"></div>').insertAfter($modelo);
+        }
+        $hint.html('<i class="fas fa-info-circle text-primary me-1"></i>Solo se muestran modelos compatibles con <strong>' + prov_label + '</strong>.');
+    }
+
+    $(document).on('change', '#id_proveedor', filtrarModelos);
+    // Ejecutar una vez al abrir el modal
+    setTimeout(filtrarModelos, 50);
+})();
+</script>

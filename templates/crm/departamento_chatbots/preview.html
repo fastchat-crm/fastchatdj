@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/dpchat_preview.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="dpprev-toolbar">
+    <a href="/crm/departamentos_chatbots/?action=change&id={{ filtro.pk }}&full=1"
+       class="btn btn-light btn-sm">
+        <i class="fa fa-arrow-left me-1"></i> Volver al editor
+    </a>
+    <h5 class="mb-0">Preview · {{ filtro.nombre }}</h5>
+    <div class="d-flex gap-2 align-items-center">
+        <div class="form-check form-switch m-0">
+            <input type="checkbox" class="form-check-input" id="dpprev-mode-real">
+            <label class="form-check-label small" for="dpprev-mode-real">
+                <i class="fa fa-bolt text-warning me-1"></i>
+                Modo real <small class="text-muted">(ejecuta APIs)</small>
+            </label>
+        </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="dpprev-reset">
+            <i class="fa fa-rotate me-1"></i> Reiniciar
+        </button>
+    </div>
+</div>
+
+<div class="row g-3 dpprev-wrap">
+    <div class="col-md-4">
+        <div class="dpprev-phone">
+            <div class="dpprev-header" style="background:{{ filtro.color|default:'#075e54' }}">
+                <i class="fab fa-whatsapp me-2"></i>
+                <div class="dpprev-header-info">
+                    <div class="dpprev-header-name">{{ filtro.nombre }}</div>
+                    <div class="dpprev-header-sub">Bot · simulador</div>
+                </div>
+            </div>
+            <div class="dpprev-chat" id="dpprev-chat"></div>
+            <div class="dpprev-input-bar" id="dpprev-input-bar">
+                <i class="fa fa-keyboard text-muted me-2"></i>
+                <span class="text-muted small">Tocá un botón arriba o escribí abajo cuando se pida…</span>
+            </div>
+            <div class="dpprev-text-input" id="dpprev-text-input" style="display:none;">
+                <input type="text" class="form-control form-control-sm" id="dpprev-text-field"
+                       placeholder="Escribí tu respuesta…">
+                <button type="button" class="btn btn-success btn-sm" id="dpprev-text-send">
+                    <i class="fa fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <aside class="dpprev-side dpprev-side-vars">
+            <div class="dpprev-side-head">
+                <h6 class="mb-0">
+                    <i class="fa fa-database me-1 text-primary"></i> Variables
+                </h6>
+                <button type="button" class="btn btn-sm btn-link p-0 small text-danger"
+                        id="dpprev-clear-mem" title="Borra cédula, matrícula y demás de localStorage">
+                    <i class="fa fa-eraser"></i> Limpiar memoria
+                </button>
+            </div>
+            <div class="dpprev-side-body">
+                <span class="text-muted small d-block mb-1">
+                    Variables capturadas (memoria persistente).
+                </span>
+                <pre id="dpprev-vars" class="dpprev-vars-pre">{}</pre>
+                <details class="small mt-2">
+                    <summary class="text-muted">Ayuda</summary>
+                    <ul class="ps-3 mb-0">
+                        <li><b>Memoria persistente</b>: la cédula y demás vars se guardan en
+                            <code>localStorage</code> — se mantienen al recargar la página, igual
+                            que WhatsApp recuerda el contexto entre mensajes.</li>
+                        <li><b>Reiniciar</b> (toolbar): vuelve al inicio del flujo pero conserva la memoria.</li>
+                        <li><b>Limpiar memoria</b>: borra todas las vars y reinicia. Útil para simular
+                            otro usuario.</li>
+                        <li><b>Modo mock</b>: simula APIs, deja navegar todas las ramas.</li>
+                        <li><b>Modo real</b>: ejecuta los nodos <code>http</code> contra el endpoint
+                            configurado, guarda las variables del response.</li>
+                    </ul>
+                </details>
+            </div>
+        </aside>
+    </div>
+
+    <div class="col-md-4">
+        <aside class="dpprev-side dpprev-side-log">
+            <div class="dpprev-side-head">
+                <h6 class="mb-0">
+                    <i class="fa fa-terminal me-1 text-success"></i> Debug log
+                </h6>
+                <button type="button" class="btn btn-sm btn-link p-0 small" id="dpprev-log-clear">
+                    <i class="fa fa-eraser"></i> Limpiar
+                </button>
+            </div>
+            <div class="dpprev-side-body">
+                <span class="text-muted small d-block mb-1">
+                    Eventos del runtime (más reciente abajo).
+                </span>
+                <div id="dpprev-log" class="dpprev-log"></div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<script id="dp-preview-data" type="application/json">{{ preview_json|safe }}</script>
+<script>window.DPPREV_PROBAR_URL = "/crm/departamentos_chatbots/";</script>
+{% endblock %}
+
+{% block jscript %}
+    <script src="{% static 'js/dpchat_preview.js' %}?v=5"></script>
+{% endblock %}

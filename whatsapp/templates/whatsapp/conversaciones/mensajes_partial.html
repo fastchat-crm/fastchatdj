@@ -1,113 +1,333 @@
+{% load templatefunctions %}
+<style>
+    /* ── Chat bubbles ─────────────────────────────────────────────── */
+    .msg-row {
+        padding: 0 12px;
+    }
+
+    .msg-bubble {
+        padding: 8px 12px 4px;
+        border-radius: 16px;
+        font-size: .9rem;
+        line-height: 1.45;
+        word-break: break-word;
+        position: relative;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+    }
+
+    /* Mensajes entrantes (cliente) */
+    .msg-bubble-in {
+        background: #fff;
+        border-bottom-left-radius: 4px;
+        color: #1a1a1a;
+    }
+
+    /* Mensajes salientes (bot / agente) */
+    .msg-bubble-out {
+        background: #dcf8c6;
+        border-bottom-right-radius: 4px;
+        color: #1a1a1a;
+    }
+
+    /* Mensajes IA */
+    .msg-bubble-ia {
+        background: #e8eaf6;
+        border-bottom-right-radius: 4px;
+        color: #1a1a1a;
+    }
+
+    .msg-meta {
+        font-size: .68rem;
+        color: #999;
+        margin-top: 3px;
+    }
+
+    .msg-time {
+        color: #aaa;
+    }
+
+    .msg-avatar {
+        width: 32px;
+        height: 32px;
+        object-fit: cover;
+        flex-shrink: 0;
+    }
+
+    /* Sender label */
+    .msg-sender {
+        font-size: .72rem;
+        font-weight: 600;
+        margin-bottom: 2px;
+    }
+
+    .msg-sender-ia {
+        color: #5c6bc0;
+    }
+
+    .msg-sender-agent {
+        color: #2e7d32;
+    }
+
+    .msg-sender-client {
+        color: #e65100;
+    }
+
+    /* Deleted / edited */
+    .msg-deleted {
+        opacity: .65;
+        font-style: italic;
+    }
+
+    .msg-edited-badge {
+        font-size: .65rem;
+        color: #999;
+    }
+
+    /* Feedback */
+    .btn-fb {
+        background: none;
+        border: none;
+        padding: 0 4px;
+        font-size: .78rem;
+        cursor: pointer;
+        color: #ccc;
+        transition: color .15s;
+    }
+
+    .btn-fb:hover.btn-fb-ok {
+        color: #28a745;
+    }
+
+    .btn-fb:hover.btn-fb-ko {
+        color: #dc3545;
+    }
+
+    .btn-fb.selected-ok {
+        color: #28a745;
+    }
+
+    .btn-fb.selected-ko {
+        color: #dc3545;
+    }
+
+    .btn-xs-sm {
+        font-size: .75rem;
+        padding: .2rem .55rem;
+        border-radius: 4px;
+    }
+
+    /* Media */
+    .msg-bubble img.msg-img {
+        max-width: 300px;
+        max-height: 300px;
+        object-fit: cover;
+        border-radius: 10px;
+        display: block;
+        margin-top: 4px;
+        cursor: zoom-in;
+    }
+
+    .msg-bubble video {
+        max-width: 300px;
+        border-radius: 10px;
+        display: block;
+        margin-top: 4px;
+    }
+
+    .msg-bubble audio {
+        max-width: 300px;
+        display: block;
+        margin-top: 4px;
+    }
+</style>
+
 {% for mensaje in mensajes %}
+
     {% if mensaje.remitente == conversacion.sesion.numero %}
-        <div class="d-flex flex-row-reverse">
-            {% if conversacion.sesion.foto %}
-                <img src="{{ conversacion.sesion.foto }}" alt="user" class="rounded-circle thumb-md">
+        {# ─── Mensaje saliente (bot / agente) ─── #}
+        <div class="msg-row msg-out d-flex flex-row-reverse align-items-end gap-2 mb-2">
+            {% if conversacion.sesion.es_baileys and conversacion.sesion.config_baileys.foto %}
+                <img src="{{ conversacion.sesion.config_baileys.foto }}" alt="" class="msg-avatar rounded-circle">
             {% else %}
-                <img src="{{ mensaje.conversacion.sesion.usuario.get_foto_url|default:'/static/assets/img/avatar.png' }}" alt="user" class="rounded-circle thumb-md">
+                <img src="{{ mensaje.conversacion.sesion.usuario.get_foto_url|default:'/static/assets/img/avatar.png' }}"
+                     alt="" class="msg-avatar rounded-circle">
             {% endif %}
-            <div class="me-1 chat-box w-100 reverse">
-                <div class="user-chat {% if mensaje.eliminado %}deleted-message{% endif %} {% if mensaje.editado %}edited-message{% endif %}">
+
+            <div class="d-flex flex-column align-items-end" style="max-width:82%;">
+        <span class="msg-sender msg-sender-{% if mensaje.ia_generado %}ia{% else %}agent{% endif %}">
+            {% if mensaje.ia_generado %}<i class="fa fa-robot me-1"></i>IA{% else %}<i class="fa fa-headset me-1"></i>
+                Agente{% endif %}
+        </span>
+
+                <div class="msg-bubble {% if mensaje.ia_generado %}msg-bubble-ia{% else %}msg-bubble-out{% endif %}">
                     {% if mensaje.eliminado %}
-                        <p class="text-muted"><i class="fa fa-ban"></i> Este mensaje fue eliminado</p>
+                        <p class="mb-0 msg-deleted"><i class="fa fa-ban me-1"></i>Mensaje eliminado</p>
                     {% else %}
-                        <p class="">{{ mensaje.mensaje }}</p>
-                        {% if mensaje.editado %}
-                            <small class="text-muted"><i class="fa fa-edit"></i> Editado</small>
+                        {% if mensaje.mensaje %}<p class="mb-0 wa-msg">{{ mensaje.mensaje|whatsapp_format }}</p>{% endif %}
+                        {% if mensaje.editado %}<span class="msg-edited-badge"><i class="fa fa-edit"></i> editado</span>
+                        {% endif %}
+
+                        {% if mensaje.get_archivo_url %}
+                            {% if mensaje.tipo == 'imagen' %}
+                                <a href="{{ mensaje.get_archivo_url }}" data-fancybox="gallery" target="_blank">
+                                    <img src="{{ mensaje.get_archivo_url }}" alt="imagen" class="msg-img">
+                                </a>
+                            {% elif mensaje.tipo == 'sticker' %}
+                                <img src="{{ mensaje.get_archivo_url }}" alt="sticker" class="msg-img">
+                            {% elif mensaje.tipo == 'audio' %}
+                                <audio controls>
+                                    <source src="{{ mensaje.get_archivo_url }}">
+                                </audio>
+                                <a data-id="{{ mensaje.id }}" href="javascript:;" onclick="transcribirAudio(this)"
+                                   class="d-block mt-1" style="font-size:.78rem;">
+                                    <i class="fa fa-closed-captioning me-1"></i><span>Transcribir</span>
+                                    <i class="fa fa-ellipsis fa-beat d-none ms-1"></i>
+                                </a>
+                            {% elif mensaje.tipo == 'video' %}
+                                <video controls>
+                                    <source src="{{ mensaje.get_archivo_url }}" type="video/mp4">
+                                </video>
+                            {% else %}
+                                <a href="{{ mensaje.get_archivo_url }}" target="_blank"
+                                   class="btn btn-sm btn-light border mt-1">
+                                    <i class="fa fa-download me-1"></i>{{ mensaje.tipo|capfirst }}
+                                </a>
+                            {% endif %}
+                        {% else %}
+                            {% if mensaje.tipo in 'imagen,video,audio,documento,sticker' %}
+                                <div class="border rounded p-2 mt-1 text-muted small bg-light d-inline-block">
+                                    <i class="fa fa-paperclip me-1"></i>{{ mensaje.get_tipo_display }} no capturado
+                                </div>
+                            {% endif %}
                         {% endif %}
                     {% endif %}
 
-                    {% if mensaje.get_archivo_url and not mensaje.eliminado %}
-                        {% if mensaje.tipo == 'imagen' %}
-                            <a href="{{ mensaje.get_archivo_url }}"
-                               data-fancybox="image"
-                               data-width="2048"
-                               data-height="1365">
-                                <img src="{{ mensaje.get_archivo_url }}" alt="imagen" class="img-fluid rounded"
-                                 style="max-width: 200px;">
-                            </a>
-                        {% elif mensaje.tipo == 'sticker' %}
-                            <img src="{{ mensaje.get_archivo_url }}" alt="imagen" class="img-fluid rounded"
-                                 style="max-width: 200px;">
-                        {% elif mensaje.tipo == 'audio' %}
-                            <audio controls>
-                                <source src="{{ mensaje.get_archivo_url }}" type="audio/mpeg">
-                                Tu navegador no soporta el elemento de audio.
-                            </audio>
-                            <div>
-                                <a data-id="{{ mensaje.id }}" href="javascript:;" onclick="transcribirAudio(this)">
-                                    <i class="fa-solid fa-marker"></i> <span>Transcribir audio</span> <i class="fa-solid fa-ellipsis fa-shake d-none"></i>
-                                </a>
-                            </div>
-                        {% elif mensaje.tipo == 'video' %}
-                            <video controls class="img-fluid rounded" style="max-width: 200px;">
-                                <source src="{{ mensaje.get_archivo_url }}" type="video/mp4">
-                                Tu navegador no soporta el elemento de video.
-                            </video>
+                    <div class="msg-meta d-flex align-items-center justify-content-end gap-2">
+                        {# Feedback IA #}
+                        {% if mensaje.ia_generado and not mensaje.eliminado %}
+                            <span class="feedback-bar" data-id="{{ mensaje.pk }}" data-fbid="{{ mensaje.pk }}">
+                    {% if mensaje.feedback %}
+                        {% if mensaje.feedback.es_correcto %}
+                            <span class="text-success" style="font-size:.72rem;"><i class="fa fa-thumbs-up"></i></span>
                         {% else %}
-                            <a href="{{ mensaje.get_archivo_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                <i class="fa fa-download"></i> Descargar {{ mensaje.tipo }}
-                            </a>
+                            <span class="text-danger" style="font-size:.72rem;"><i class="fa fa-thumbs-down"></i>
+                                {% if mensaje.feedback.procesado_vectorstore %}
+                                    <i class="fa fa-brain"></i>{% endif %}</span>
                         {% endif %}
+                    {% else %}
+                        <button class="btn-fb btn-fb-ok" onclick="feedbackOk({{ mensaje.pk }}, this)"
+                                title="Correcto"><i class="fa fa-thumbs-up"></i></button>
+                        <button class="btn-fb btn-fb-ko" onclick="feedbackKo({{ mensaje.pk }}, this)"
+                                title="Incorrecto"><i class="fa fa-thumbs-down"></i></button>
                     {% endif %}
+                </span>
+                        {% endif %}
+                        <span class="msg-time">{{ mensaje.fecha|date:"H:i" }}</span>
+                        <span class="msg-ack" data-msg-id="{{ mensaje.id }}" style="font-size:.65rem;">
+                            {% if mensaje.estado_envio == 'fallido' %}
+                                <i class="fa fa-exclamation-triangle text-danger"
+                                   title="Error: {{ mensaje.error_envio|default:'Fallo de envío' }}"></i>
+                            {% elif mensaje.estado_envio == 'leido' %}
+                                <i class="fa fa-check-double text-primary" title="Leído"></i>
+                            {% elif mensaje.estado_envio == 'entregado' %}
+                                <i class="fa fa-check-double text-muted" title="Entregado"></i>
+                            {% elif mensaje.estado_envio == 'enviado' %}
+                                <i class="fa fa-check text-muted" title="Enviado"></i>
+                            {% elif mensaje.estado_envio == 'pendiente' %}
+                                <i class="fa fa-clock text-muted" title="Pendiente"></i>
+                            {% else %}
+                                {# Histórico sin ACK o Baileys aún sin soporte message_ack #}
+                                <i class="fa fa-check-double text-muted" title=""></i>
+                            {% endif %}
+                        </span>
+                    </div>
                 </div>
-                <div class="chat-time">{{ mensaje.fecha|date:"H:i" }}</div>
+
+                {# Formulario de corrección #}
+                {% if mensaje.ia_generado and not mensaje.eliminado and not mensaje.feedback %}
+                    <div class="correccion-form d-none mt-1 p-2 rounded w-100" id="cf-{{ mensaje.pk }}"
+                         style="background:#fff8e1;border:1px solid #ffe082;max-width:360px;">
+                        <small class="d-block text-muted mb-1"><i class="fa fa-brain me-1"></i>¿Cuál sería la respuesta
+                            correcta?</small>
+                        <input type="hidden" id="cf-pregunta-{{ mensaje.pk }}" value="">
+                        <textarea class="form-control form-control-sm mb-1" id="cf-texto-{{ mensaje.pk }}"
+                                  rows="3" placeholder="Escribe la respuesta correcta aquí..."></textarea>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-xs-sm btn-warning" onclick="enviarCorreccion({{ mensaje.pk }})">
+                                <i class="fa fa-save me-1"></i>Guardar
+                            </button>
+                            <button class="btn btn-xs-sm btn-light"
+                                    onclick="document.getElementById('cf-{{ mensaje.pk }}').classList.add('d-none')">
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                {% endif %}
             </div>
         </div>
-    {% else %}
-        <div class="d-flex">
-            {% if conversacion.contacto_foto %}
-                <img src="{{ conversacion.contacto_foto }}" alt="user" class="rounded-circle thumb-md">
-            {% else %}
-                <img src="{{ mensaje.conversacion.sesion.usuario.get_foto_url|default:'/static/assets/img/avatar.png' }}" alt="user" class="rounded-circle thumb-md">
-            {% endif %}
-            <div class="ms-1 chat-box w-100">
-                <div class="user-chat {% if mensaje.eliminado %}deleted-message{% endif %} {% if mensaje.editado %}edited-message{% endif %}">
-                    {% if mensaje.eliminado %}
-                        <p class="text-muted"><i class="fa fa-ban"></i> Este mensaje fue eliminado</p>
-                    {% else %}
-                        <p class="">{{ mensaje.mensaje }}</p>
-                        {% if mensaje.editado %}
-                            <small class="text-muted"><i class="fa fa-edit"></i> Editado</small>
-                        {% endif %}
-                    {% endif %}
 
-                    {% if mensaje.get_archivo_url and not mensaje.eliminado %}
-                        {% if mensaje.tipo == 'imagen' %}
-                            <a href="{{ mensaje.get_archivo_url }}"
-                               data-fancybox="image"
-                               data-width="2048"
-                               data-height="1365">
-                                <img src="{{ mensaje.get_archivo_url }}" alt="imagen" class="img-fluid rounded"
-                                 style="max-width: 200px;">
-                            </a>
-                        {% elif mensaje.tipo == 'sticker' %}
-                            <img src="{{ mensaje.get_archivo_url }}" alt="imagen" class="img-fluid rounded"
-                                 style="max-width: 200px;">
-                        {% elif mensaje.tipo == 'audio' %}
-                            <audio controls>
-                                <source src="{{ mensaje.get_archivo_url }}" type="audio/mpeg">
-                                Tu navegador no soporta el elemento de audio.
-                            </audio>
-                            <div>
-                                <a data-id="{{ mensaje.id }}" href="javascript:;" onclick="transcribirAudio(this)">
-                                    <i class="fa-solid fa-marker"></i> <span>Transcribir audio</span> <i class="fa-solid fa-ellipsis fa-shake d-none"></i>
+    {% else %}
+        {# ─── Mensaje entrante (cliente) ─── #}
+        <div class="msg-row msg-in d-flex align-items-end gap-2 mb-2">
+            {% if conversacion.contacto_foto %}
+                <img src="{{ conversacion.contacto_foto }}" alt="" class="msg-avatar rounded-circle">
+            {% else %}
+                <img src="/static/assets/img/avatar.png" alt="" class="msg-avatar rounded-circle">
+            {% endif %}
+
+            <div class="d-flex flex-column" style="max-width:82%;">
+        <span class="msg-sender msg-sender-client">
+            <i class="fa fa-user me-1"></i>{{ conversacion.contacto_nombre|default:conversacion.contacto_numero }}
+        </span>
+
+                <div class="msg-bubble msg-bubble-in">
+                    {% if mensaje.eliminado %}
+                        <p class="mb-0 msg-deleted"><i class="fa fa-ban me-1"></i>Mensaje eliminado</p>
+                    {% else %}
+                        {% if mensaje.mensaje %}<p class="mb-0 wa-msg">{{ mensaje.mensaje|whatsapp_format }}</p>{% endif %}
+                        {% if mensaje.editado %}<span class="msg-edited-badge"><i class="fa fa-edit"></i> editado</span>
+                        {% endif %}
+
+                        {% if mensaje.get_archivo_url %}
+                            {% if mensaje.tipo == 'imagen' %}
+                                <a href="{{ mensaje.get_archivo_url }}" data-fancybox="gallery" target="_blank">
+                                    <img src="{{ mensaje.get_archivo_url }}" alt="imagen" class="msg-img">
                                 </a>
-                            </div>
-                        {% elif mensaje.tipo == 'video' %}
-                            <video controls class="img-fluid rounded" style="max-width: 200px;">
-                                <source src="{{ mensaje.get_archivo_url }}" type="video/mp4">
-                                Tu navegador no soporta el elemento de video.
-                            </video>
+                            {% elif mensaje.tipo == 'sticker' %}
+                                <img src="{{ mensaje.get_archivo_url }}" alt="sticker" class="msg-img">
+                            {% elif mensaje.tipo == 'audio' %}
+                                <audio controls>
+                                    <source src="{{ mensaje.get_archivo_url }}">
+                                </audio>
+                                <a data-id="{{ mensaje.id }}" href="javascript:;" onclick="transcribirAudio(this)"
+                                   class="d-block mt-1" style="font-size:.78rem;">
+                                    <i class="fa fa-closed-captioning me-1"></i><span>Transcribir</span>
+                                    <i class="fa fa-ellipsis fa-beat d-none ms-1"></i>
+                                </a>
+                            {% elif mensaje.tipo == 'video' %}
+                                <video controls>
+                                    <source src="{{ mensaje.get_archivo_url }}" type="video/mp4">
+                                </video>
+                            {% else %}
+                                <a href="{{ mensaje.get_archivo_url }}" target="_blank"
+                                   class="btn btn-sm btn-light border mt-1">
+                                    <i class="fa fa-download me-1"></i>{{ mensaje.tipo|capfirst }}
+                                </a>
+                            {% endif %}
                         {% else %}
-                            <a href="{{ mensaje.get_archivo_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                <i class="fa fa-download"></i> Descargar {{ mensaje.tipo }}
-                            </a>
+                            {% if mensaje.tipo in 'imagen,video,audio,documento,sticker' %}
+                                <div class="border rounded p-2 mt-1 text-muted small bg-light d-inline-block">
+                                    <i class="fa fa-paperclip me-1"></i>{{ mensaje.get_tipo_display }} no capturado
+                                </div>
+                            {% endif %}
                         {% endif %}
                     {% endif %}
+                    <div class="msg-meta">
+                        <span class="msg-time">{{ mensaje.fecha|date:"H:i" }}</span>
+                    </div>
                 </div>
-                <div class="chat-time">{{ mensaje.fecha|date:"H:i" }}</div>
             </div>
         </div>
     {% endif %}
+
 {% endfor %}

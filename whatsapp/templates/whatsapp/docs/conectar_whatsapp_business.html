@@ -1,0 +1,279 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block head %}
+    <link rel="stylesheet" href="{% static 'stylenew/docs.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="docs-page">
+
+        {# ───────── Sidebar izquierdo ───────── #}
+        <aside class="docs-sidebar">
+            <div class="docs-sidebar-search">
+                <i class="fa fa-search"></i>
+                <input type="text" placeholder="Buscar en la documentación...">
+            </div>
+
+            {% for seccion in sidebar %}
+                <div class="docs-sb-group">
+                    <h6 class="docs-sb-title">{{ seccion.titulo }}</h6>
+                    {% if seccion.items %}
+                        <ul class="docs-sb-list">
+                            {% for item in seccion.items %}
+                                <li>
+                                    <a href="/seguridad/documentacion/?pagina={{ item.slug }}"
+                                       class="docs-sb-item {% if item.slug == slug_actual %}active{% endif %}">
+                                        {{ item.nombre }}
+                                    </a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <span class="docs-sb-empty">Próximamente</span>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </aside>
+
+        {# ───────── Contenido principal ───────── #}
+        <main class="docs-main">
+
+            {# Breadcrumb #}
+            <nav class="docs-breadcrumb" aria-label="breadcrumb">
+                {% for crumb in breadcrumb %}
+                    {% if crumb.url %}
+                        <a href="{{ crumb.url }}">{{ crumb.nombre }}</a>
+                    {% else %}
+                        <span>{{ crumb.nombre }}</span>
+                    {% endif %}
+                    {% if not forloop.last %}<i class="fa fa-chevron-right docs-bc-sep"></i>{% endif %}
+                {% endfor %}
+            </nav>
+
+            <article class="docs-article">
+
+                <header class="docs-hero">
+                    <h1>Conectar con la cuenta de WhatsApp Business API</h1>
+                    <p class="docs-hero-lead">
+                        Aprovecha las herramientas de WhatsApp Business para maximizar los ingresos
+                        y sincronizar los eventos de compra para optimizar automáticamente los
+                        anuncios de Facebook con CAPI.
+                    </p>
+                </header>
+
+                {# Callout de QR deprecado #}
+                <aside class="docs-callout docs-callout-danger">
+                    <i class="fa fa-circle-info"></i>
+                    <div>
+                        <b>La conexión del código QR de WhatsApp ya no está disponible.</b>
+                        <p class="mb-0">
+                            Si actualmente usas un número vinculado por QR,
+                            <a href="mailto:soporte@ejemplo.com">contáctanos</a>
+                            para coordinar la migración a WhatsApp Business API oficial.
+                        </p>
+                    </div>
+                </aside>
+
+                {# Qué necesitas antes de empezar #}
+                <section class="docs-section">
+                    <h2>Lo que necesitas antes de empezar</h2>
+                    <p class="docs-lead">
+                        Este checklist evita rechazos durante el proceso de autorización con Meta.
+                        Reúne los tres elementos antes de pulsar <b>Conectar Business de WhatsApp</b>.
+                    </p>
+
+                    <div class="docs-grid docs-grid-3">
+                        <div class="docs-card">
+                            <div class="docs-card-icon docs-card-icon-green">
+                                <i class="fa fa-briefcase"></i>
+                            </div>
+                            <h4>Cuenta de Meta Business Suite</h4>
+                            <p>
+                                Con tu empresa registrada y preferiblemente verificada.
+                                Si aún no la tienes,
+                                <a href="https://business.facebook.com" target="_blank" rel="noopener">
+                                    créala gratis aquí
+                                </a>.
+                            </p>
+                        </div>
+                        <div class="docs-card">
+                            <div class="docs-card-icon docs-card-icon-blue">
+                                <i class="fa fa-globe"></i>
+                            </div>
+                            <h4>Sitio web o página oficial</h4>
+                            <p>
+                                Una URL activa de tu negocio (web, Facebook Page o Instagram)
+                                para que Meta valide tu identidad.
+                            </p>
+                        </div>
+                        <div class="docs-card">
+                            <div class="docs-card-icon docs-card-icon-purple">
+                                <i class="fa fa-mobile-screen"></i>
+                            </div>
+                            <h4>Número de teléfono</h4>
+                            <p>
+                                Un número nuevo o el mismo de WhatsApp Business App.
+                                No debe estar ya vinculado como WhatsApp Web.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                {# Pasos #}
+                <section class="docs-section">
+                    <h2>Paso a paso para conectar</h2>
+
+                    <ol class="docs-steps">
+                        <li>
+                            <div class="docs-step-num">1</div>
+                            <div class="docs-step-body">
+                                <h3>Registra las credenciales de la Meta App</h3>
+                                <p>
+                                    Como administrador, ve a
+                                    <a href="/seguridad/credencial-meta/">
+                                        Configuración → Credenciales Meta App
+                                    </a>
+                                    y completa:
+                                </p>
+                                <ul class="docs-list">
+                                    <li><b>Meta App ID</b> — creada en
+                                        <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener">
+                                            Meta for Developers
+                                        </a>.
+                                    </li>
+                                    <li><b>Meta App Secret</b> — se guarda cifrado automáticamente.</li>
+                                    <li><b>Business Manager ID</b> (opcional).</li>
+                                    <li><b>System User Token</b> — token long-lived para operaciones servidor a servidor.</li>
+                                </ul>
+                                <div class="docs-note">
+                                    Estas credenciales son únicas por organización y habilitan todas
+                                    las sesiones Meta (WhatsApp, Instagram, Messenger).
+                                </div>
+                            </div>
+                        </li>
+
+                        <li>
+                            <div class="docs-step-num">2</div>
+                            <div class="docs-step-body">
+                                <h3>Abre "Canales conectados" y pulsa "Nueva conexión"</h3>
+                                <p>
+                                    Desde el menú lateral ve a
+                                    <a href="/whatsapp/sesiones/">Canales conectados</a>
+                                    y selecciona <b>WhatsApp</b> en el sidebar del modal.
+                                    Verás la tarjeta con el copy oficial y el botón para iniciar.
+                                </p>
+                            </div>
+                        </li>
+
+                        <li>
+                            <div class="docs-step-num">3</div>
+                            <div class="docs-step-body">
+                                <h3>Completa el Embedded Signup de Meta</h3>
+                                <p>
+                                    Al pulsar <b>Iniciar enlace con Meta</b> se abre la ventana oficial
+                                    de Facebook. En ella deberás:
+                                </p>
+                                <ul class="docs-list">
+                                    <li>Seleccionar (o crear) el <b>Business Manager</b>.</li>
+                                    <li>Seleccionar la <b>WABA</b> donde vivirá el número.</li>
+                                    <li>Asignar el <b>número de teléfono</b> y verificar con SMS o llamada.</li>
+                                    <li>Autorizar los permisos que solicita la aplicación.</li>
+                                </ul>
+                            </div>
+                        </li>
+
+                        <li>
+                            <div class="docs-step-num">4</div>
+                            <div class="docs-step-body">
+                                <h3>Verifica la sesión</h3>
+                                <p>
+                                    Al volver a la pantalla, la nueva sesión aparece con estado
+                                    <b>En línea</b> en el grid. Envía un mensaje de prueba desde
+                                    otro WhatsApp al número conectado: debe aparecer una
+                                    conversación nueva en
+                                    <a href="/whatsapp/conversaciones/">Conversaciones</a>
+                                    en menos de 10 segundos.
+                                </p>
+                            </div>
+                        </li>
+
+                        <li>
+                            <div class="docs-step-num">5</div>
+                            <div class="docs-step-body">
+                                <h3>Configura tus plantillas y campañas</h3>
+                                <p>
+                                    Fuera de la ventana de 24 h Meta exige mensajes con plantilla
+                                    aprobada. Crea la primera en
+                                    <a href="/whatsapp/plantillas/">Plantillas WhatsApp</a>.
+                                    Cuando Meta la apruebe podrás lanzarla desde
+                                    <a href="/whatsapp/campanas/">Campañas</a>.
+                                </p>
+                            </div>
+                        </li>
+                    </ol>
+                </section>
+
+                {# Troubleshooting #}
+                <section class="docs-section">
+                    <h2>Preguntas frecuentes</h2>
+
+                    <details class="docs-faq">
+                        <summary>¿Por qué ya no puedo conectar por código QR?</summary>
+                        <p>
+                            WhatsApp endureció las políticas del transporte no oficial
+                            (Baileys / whatsapp-web.js). Los números conectados por QR pueden
+                            ser suspendidos sin aviso. Por eso ahora la única vía soportada es
+                            la <b>API oficial de Meta</b>, que además incluye soporte de plantillas,
+                            métricas verificadas y entrega garantizada.
+                        </p>
+                    </details>
+
+                    <details class="docs-faq">
+                        <summary>¿Cuánto cuesta usar WhatsApp Business API?</summary>
+                        <p>
+                            Meta cobra por conversación (no por mensaje). El precio varía según
+                            país y tipo de conversación (marketing, utilidad, autenticación,
+                            servicio). Consulta la
+                            <a href="https://business.whatsapp.com/products/platform-pricing"
+                               target="_blank" rel="noopener">tabla oficial de precios</a>.
+                        </p>
+                    </details>
+
+                    <details class="docs-faq">
+                        <summary>¿Puedo conservar el mismo número que tengo en WhatsApp Business App?</summary>
+                        <p>
+                            Sí. Debes primero <b>borrar la cuenta desde la app</b> (Ajustes →
+                            Cuenta → Borrar) para liberar el número. Una vez liberado, puedes
+                            usarlo en el Embedded Signup.
+                        </p>
+                    </details>
+
+                    <details class="docs-faq">
+                        <summary>¿Qué pasa con mis conversaciones anteriores si migro?</summary>
+                        <p>
+                            El histórico de la app o de Baileys no se transfiere a la API —
+                            Meta no lo expone. La API arranca con historial vacío. Los
+                            contactos sí pueden sincronizarse.
+                        </p>
+                    </details>
+                </section>
+
+                {# Siguiente paso CTA #}
+                <section class="docs-cta">
+                    <div>
+                        <h3>¿Listo para conectar?</h3>
+                        <p>
+                            Asegúrate de haber completado las credenciales Meta App
+                            y procede desde el tablero de canales.
+                        </p>
+                    </div>
+                    <a href="/whatsapp/sesiones/" class="docs-cta-btn">
+                        Ir a Canales conectados <i class="fa fa-arrow-right ms-1"></i>
+                    </a>
+                </section>
+
+            </article>
+        </main>
+    </div>
+{% endblock %}

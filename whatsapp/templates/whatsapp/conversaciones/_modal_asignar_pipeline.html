@@ -1,0 +1,126 @@
+<div class="modal fade" id="modalAsignarPipeline" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" onsubmit="confirmarAsignarPipeline(event)">
+            {% csrf_token %}
+            <input type="hidden" name="conversacion_id" id="ap-conv-id">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fa fa-columns me-2"></i>Asignar a pipeline</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">
+                    Crea una tarjeta en el pipeline de ventas para hacer seguimiento de esta conversacion como oportunidad.
+                    Si la conversacion ya esta en un pipeline, esta accion la mueve.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Pipeline *</label>
+                    <select name="pipeline" id="ap-pipeline" class="form-select" required onchange="apActualizarEtapas(this.value)">
+                        <option value="">— Selecciona pipeline —</option>
+                        {% for p in pipelines_disponibles %}
+                            <option value="{{ p.id }}"
+                                data-etapas='[{% for e in p.etapas.all %}{% if e.status %}{"id":{{ e.id }},"nombre":"{{ e.nombre|escapejs }}","color":"{{ e.color }}"}{% if not forloop.last %},{% endif %}{% endif %}{% endfor %}]'>
+                                {{ p.nombre }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    {% if not pipelines_disponibles %}
+                        <div class="form-text small text-warning">
+                            <i class="fa fa-info-circle me-1"></i>
+                            No tienes pipelines creados. <a href="/whatsapp/pipeline/" target="_blank">Crear uno</a> primero.
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Etapa inicial *</label>
+                    <select name="etapa_id" id="ap-etapa" class="form-select" required disabled>
+                        <option value="">— Primero elige el pipeline —</option>
+                    </select>
+                </div>
+                <div class="row g-2">
+                    <div class="col-8">
+                        <label class="form-label small fw-semibold">Valor estimado</label>
+                        <input type="number" step="0.01" min="0" name="valor_estimado" class="form-control" placeholder="0.00">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small fw-semibold">Moneda</label>
+                        <select name="moneda" class="form-select">
+                            <option value="USD">USD</option>
+                            <option value="MXN">MXN</option>
+                            <option value="ARS">ARS</option>
+                            <option value="EUR">EUR</option>
+                            <option value="COP">COP</option>
+                            <option value="PEN">PEN</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary"><i class="fa fa-check me-1"></i>Asignar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+/* abre el modal con la conversacion seleccionada actualmente.
+   Lo invocan ambos listados via dropdown. */
+function abrirModalAsignarPipeline() {
+    // _currentConvId es global en ambos listados de conversaciones.
+    var convId = (typeof _currentConvId !== 'undefined' && _currentConvId)
+        || $('#contacto-hashedId').data('conv-id')
+        || $('[data-bs-target="#modalAsignarPipeline"]').data('conv-id');
+    if (!convId) {
+        if (typeof alertaWarning === 'function') alertaWarning('Selecciona una conversacion primero.');
+        return;
+    }
+    $('#ap-conv-id').val(convId);
+    $('#ap-pipeline').val('');
+    $('#ap-etapa').empty().append('<option value="">— Primero elige el pipeline —</option>').prop('disabled', true);
+    var modalEl = document.getElementById('modalAsignarPipeline');
+    var inst = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    inst.show();
+}
+
+function apActualizarEtapas(pipelineId) {
+    var $sel = $('#ap-pipeline option[value="' + pipelineId + '"]');
+    var etapas = [];
+    try { etapas = JSON.parse($sel.attr('data-etapas') || '[]'); } catch(e) {}
+    var $et = $('#ap-etapa');
+    $et.empty();
+    if (!etapas.length) {
+        $et.append('<option value="">(este pipeline no tiene etapas)</option>').prop('disabled', true);
+        return;
+    }
+    $et.append('<option value="">— Selecciona etapa —</option>');
+    etapas.forEach(function(e) {
+        $et.append('<option value="' + e.id + '" data-color="' + e.color + '">' + e.nombre + '</option>');
+    });
+    $et.prop('disabled', false);
+}
+
+function confirmarAsignarPipeline(ev) {
+    ev.preventDefault();
+    var fd = new FormData(ev.target);
+    fd.append('action', 'agregar_card');
+    $.ajax({
+        type: 'POST',
+        url: '/whatsapp/pipeline/',
+        data: fd,
+        processData: false,
+        contentType: false,
+    }).done(function(r) {
+        if (r && !r.error) {
+            if (typeof alertaSuccess === 'function')
+                alertaSuccess('Conversacion asignada al pipeline (card #' + r.card_id + ').');
+            var inst = bootstrap.Modal.getInstance(document.getElementById('modalAsignarPipeline'));
+            if (inst) inst.hide();
+        } else {
+            if (typeof mostrarError === 'function') mostrarError('No se pudo asignar', r);
+            else alert((r && r.message) || 'Error');
+        }
+    }).fail(function() {
+        if (typeof alertaWarning === 'function') alertaWarning('Error de conexion.');
+    });
+}
+</script>

@@ -1,0 +1,189 @@
+/* ========== chat_traza.css — Panel de trazabilidad en el chat de prueba ========== */
+
+.chat-traza {
+    margin-top: 6px;
+    font-size: .74rem;
+    color: #64748b;
+    max-width: 100%;
+}
+
+.chat-traza-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    padding: .18rem .55rem;
+    cursor: pointer;
+    font-size: .7rem;
+    transition: background .15s, color .15s;
+    user-select: none;
+}
+
+.chat-traza-toggle:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+.chat-traza-toggle .score {
+    font-weight: 700;
+    padding: .05rem .4rem;
+    border-radius: 999px;
+    background: #fff;
+    font-size: .7rem;
+}
+
+.chat-traza-toggle .score.good  { color: #16a34a; background: #f0fdf4; }
+.chat-traza-toggle .score.warn  { color: #d97706; background: #fffbeb; }
+.chat-traza-toggle .score.bad   { color: #dc2626; background: #fef2f2; }
+
+.chat-traza-toggle i.fa-chevron-down {
+    transition: transform .15s;
+    font-size: .65rem;
+}
+
+.chat-traza.open .chat-traza-toggle i.fa-chevron-down {
+    transform: rotate(180deg);
+}
+
+.chat-traza-panel {
+    display: none;
+    margin-top: .4rem;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: .6rem .75rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,.04);
+}
+
+.chat-traza.open .chat-traza-panel {
+    display: block;
+    animation: trazaFadeIn .15s ease;
+}
+
+@keyframes trazaFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.chat-traza-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: .35rem;
+    margin-bottom: .55rem;
+}
+
+.chat-traza-cell {
+    background: #f8fafc;
+    border-radius: 6px;
+    padding: .3rem .5rem;
+    border: 1px solid #f1f5f9;
+}
+
+.chat-traza-cell .k {
+    font-size: .62rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    margin-bottom: 1px;
+}
+
+.chat-traza-cell .v {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: .78rem;
+    line-height: 1.1;
+}
+
+.chat-traza-cell.highlight-slow .v { color: #d97706; }
+.chat-traza-cell.highlight-fast .v { color: #16a34a; }
+
+.chat-traza-problemas {
+    margin: .3rem 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+}
+
+.chat-traza-problema {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    padding: .15rem .5rem;
+    border-radius: 999px;
+    font-size: .68rem;
+    font-weight: 600;
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+
+.chat-traza-problema.tipo-sin_datos {
+    background: #fef3c7;
+    color: #78350f;
+    border-color: #fde68a;
+}
+
+.chat-traza-problema.tipo-muy_larga {
+    background: #fff7ed;
+    color: #9a3412;
+    border-color: #fed7aa;
+}
+
+.chat-traza-ok {
+    padding: .15rem .5rem;
+    border-radius: 999px;
+    font-size: .68rem;
+    font-weight: 600;
+    background: #f0fdf4;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+}
+
+.chat-traza-etapas {
+    margin-top: .4rem;
+    border-top: 1px dashed #e2e8f0;
+    padding-top: .4rem;
+}
+
+.chat-traza-etapa {
+    display: flex;
+    align-items: flex-start;
+    gap: .45rem;
+    padding: .2rem 0;
+    font-size: .72rem;
+    color: #475569;
+}
+
+.chat-traza-etapa .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #22c55e;
+    margin-top: 5px;
+    flex-shrink: 0;
+}
+
+.chat-traza-etapa.error .dot { background: #dc2626; }
+
+.chat-traza-etapa .lbl {
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.chat-traza-etapa .det {
+    color: #64748b;
+    font-size: .7rem;
+}
+
+.chat-traza-etapa .ts {
+    margin-left: auto;
+    color: #94a3b8;
+    font-size: .67rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

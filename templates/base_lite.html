@@ -1,0 +1,97 @@
+{% load templatefunctions %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="es" dir="ltr" data-bs-theme="light">
+<head>
+    <meta charset="utf-8"/>
+    <title>{{ titulo }} | {{ nombreempresa }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="{{ confi.descripcion }}"/>
+    <meta name="keywords" content="{{ nombreempresa }}">
+    <link href="{{ favicon }}" rel="shortcut icon"/>
+    <meta name="theme-color" content="#2874A6">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+
+    <link href="/static/assets_riz/css/bootstrap.min.css?1.5" rel="stylesheet" type="text/css"/>
+    <link href="/static/assets_riz/css/app.min.css?1.5" rel="stylesheet" type="text/css"/>
+    <link href="/static/assets_riz/css/icons.min.css" rel="stylesheet" type="text/css"/>
+    <link href="/static/base_adicional.css?1.5" rel="stylesheet" type="text/css"/>
+
+    {# CSS específico de cada página (sobreescribible por la vista hija) #}
+    {% block head %}{% endblock %}
+
+    <style>
+        /* Layout limpio para vistas full-screen tipo diagrama */
+        html, body { height: 100%; }
+        body.base-lite-page {
+            margin: 0;
+            padding: 0;
+            background-color: #f3f4f6;
+        }
+        .base-lite-wrap {
+            min-height: 100vh;
+            padding: .75rem 1rem;
+        }
+        @media (max-width: 576px) {
+            .base-lite-wrap { padding: .5rem .5rem; }
+        }
+
+        /* ─── Modales: garantizar scroll cuando el contenido es alto ───
+           El body en páginas lite puede tener overflow:hidden (ej. dp-diag-page).
+           Forzamos que el .modal-dialog respete el viewport y el .modal-body
+           absorba el desborde. Funciona aún sin la clase nativa
+           `modal-dialog-scrollable`. */
+        body.base-lite-page .modal { overflow-y: auto; }
+        body.base-lite-page .modal-dialog {
+            max-height: calc(100vh - 1rem);
+            margin-top: .5rem;
+            margin-bottom: .5rem;
+        }
+        body.base-lite-page .modal-dialog-centered {
+            min-height: calc(100% - 1rem);
+        }
+        body.base-lite-page .modal-content {
+            max-height: calc(100vh - 1rem);
+            overflow: hidden;
+        }
+        body.base-lite-page .modal-body {
+            overflow-y: auto;
+            max-height: calc(100vh - 8rem); /* deja espacio para header + footer */
+        }
+        body.base-lite-page .modal-dialog-scrollable .modal-body {
+            max-height: none; /* la clase nativa de Bootstrap maneja el cap */
+        }
+    </style>
+</head>
+<body class="base-lite-page">
+
+<div class="base-lite-wrap">
+    {% block content %}{% endblock %}
+</div>
+
+{# Modal genérico de "espera" — funciones.js lo usa via pantallaespera() #}
+<div id="waitpanel" class="modal fade" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title" id="waitpaneltitle">Procesando</h6>
+            </div>
+            <div class="modal-body">
+                <p id="waitpanelbody">Por favor espere...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# JS esenciales — sin sparkline, vectormaps, datatable, sidebar-storage, etc. #}
+<script src="/static/assets_riz/libs/bootstrap/js/bootstrap.bundle.min.js?1"></script>
+<script src="/static/jquery-3.7.1.min.js"></script>
+<link rel="stylesheet" href="/static/sweetalert2/sweetalert2.css">
+<script src="/static/sweetalert2/sweetalert2.js"></script>
+<script src="/static/jquery.blockUI.js"></script>
+<script src="/static/validaciones/funciones.js?v=2.2"></script>
+
+{% block jscript %}{% endblock %}
+
+</body>
+</html>

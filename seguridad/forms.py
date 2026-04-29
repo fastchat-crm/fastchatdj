@@ -7,7 +7,7 @@ from django.db.models.functions import Concat
 from autenticacion.models import Usuario
 from core.custom_models import ModelFormBase, FormBase
 from core.funciones import generar_nombre
-from seguridad.models import Configuracion, Modulo, ModuloGrupo, GroupModulo, Empresa
+from seguridad.models import Configuracion, Modulo, ModuloGrupo, GroupModulo, Empresa, CredencialMetaApp
 
 
 class ConfiguracionForm(ModelFormBase):
@@ -28,6 +28,9 @@ class ConfiguracionForm(ModelFormBase):
         # self.fields['imagenprincipal'].widget.attrs['data-allowed-file-extensions'] = "jpg jpeg png tiff svg jfif"
         self.fields['fondoprincipal'].widget.attrs['data-allowed-file-extensions'] = "jpg jpeg png tiff svg jfif"
 
+        canales = ('canal_whatsapp_qr_activo', 'canal_whatsapp_api_activo',
+                   'canal_instagram_activo', 'canal_messenger_activo',
+                   'canal_tiktok_activo', 'ia_features_activas')
         for k, v in self.fields.items():
             if k in ('ico', 'imagenprincipal', 'imagen_landing', 'logo_sistema', 'logo_sistema_white', 'direccion', 'fondoprincipal', 'nombre_empresa', 'alias', 'descripcion', 'telefono', 'email',  'email_notificacion', 'textoprincipal', 'textosecundario', 'web','titulo','dias_nuevo',):
                 self.fields[k].widget.attrs['col'] = "6"
@@ -39,6 +42,52 @@ class ConfiguracionForm(ModelFormBase):
             if k in ('valor_mensual', 'valor_anual'):
                 self.fields[k].widget.attrs['title'] = "Sólo números"
                 self.fields[k].widget.attrs['onKeyPress'] = "return soloNumeros1(event)"
+            if k in canales:
+                # NO overridear 'class' — ModelFormBase auto-aplica js-switch +
+                # data-render=switchery para que se renderice como Switchery.
+                self.fields[k].widget.attrs['col'] = "3"
+                self.fields[k].required = False
+            if k == 'token_ia':
+                self.fields[k].widget.attrs['col'] = "6"
+                self.fields[k].required = False
+                # Mostrar solo keys activas, en formato amigable
+                from crm.models import ApiKeyIA
+                self.fields[k].queryset = ApiKeyIA.objects.filter(estado=True, status=True).order_by('-id')
+                self.fields[k].empty_label = '— Sin API Key (features IA del sistema deshabilitadas) —'
+
+
+class CredencialMetaAppForm(ModelFormBase):
+    class Meta:
+        model = CredencialMetaApp
+        exclude = ('usuario_modificacion', 'fecha_modificacion', 'usuario_creacion',
+                   'fecha_registro', 'status', 'configuracion', 'ultima_sincronizacion')
+
+    def __init__(self, *args, **kwargs):
+        super(CredencialMetaAppForm, self).__init__(*args, **kwargs)
+        # app_secret y system_user_token se muestran como password (render_value
+        # para que al editar se vea el valor descifrado actual). Reusamos los
+        # attrs que ya seteo el ModelFormBase (form-control, placeholder, etc.)
+        # para que el estilo sea identico a los demas inputs.
+        for campo in ('app_secret', 'system_user_token'):
+            attrs_prev = dict(self.fields[campo].widget.attrs)
+            # Quitar attrs de textarea (el campo viene de TextField) que no
+            # aplican a un <input type=password>.
+            attrs_prev.pop('cols', None)
+            attrs_prev.pop('rows', None)
+            self.fields[campo].widget = forms.PasswordInput(
+                render_value=True, attrs=attrs_prev,
+            )
+        for k in self.fields:
+            if k != 'es_tech_provider':
+                self.fields[k].widget.attrs.setdefault('class', 'form-control')
+            if k in ('app_id', 'app_secret', 'business_id', 'system_user_id'):
+                self.fields[k].widget.attrs['col'] = "6"
+            if k == 'system_user_token':
+                self.fields[k].widget.attrs['col'] = "12"
+            if k == 'es_tech_provider':
+                self.fields[k].widget.attrs['col'] = "12"
+                self.fields[k].required = False
+            self.fields[k].widget.attrs.setdefault('autocomplete', 'off')
 
 
 class ConfiguracionTerminosForm(ModelFormBase):
