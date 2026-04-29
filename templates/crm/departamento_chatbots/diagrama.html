@@ -59,6 +59,10 @@
                             title="Algún nodo se modificó después de la última generación">
                         <i class="fa fa-rotate me-1"></i> Actualizar (hay cambios)
                     </button>
+                    <button type="button" class="btn btn-outline-info btn-sm" id="btn-explicar-regenerar"
+                            title="Forzar nueva generación con IA (consume tokens)">
+                        <i class="fa fa-wand-magic-sparkles me-1"></i> Regenerar
+                    </button>
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
@@ -544,6 +548,14 @@
         cargar(false);
     });
     btnUpdate.addEventListener('click', function () { cargar(true); });
+    var btnRegen = document.getElementById('btn-explicar-regenerar');
+    if (btnRegen) {
+        btnRegen.addEventListener('click', function () {
+            if (confirm('¿Regenerar la explicación? Esto consume tokens IA.')) {
+                cargar(true);
+            }
+        });
+    }
 })();
 </script>
 

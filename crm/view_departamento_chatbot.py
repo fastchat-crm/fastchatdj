@@ -167,11 +167,11 @@ def departamentoChatbotsView(request):
                     # si el operador pide actualizar). El frontend muestra un
                     # botón "Actualizar" cuando algún nodo cambió desde la
                     # última generación.
-                    from crm.explicar_flujo_ia import (
-                        explicacion_esta_actualizada,
-                        generar_explicacion_flujo,
-                    )
                     from agents_ai.ai_actions import IAActionError
+                    from agents_ai.ai_actions.dpchatbots_crm import (
+                        explicacion_esta_actualizada,
+                        explicar_flujo,
+                    )
                     from seguridad.models import Configuracion as _Conf
                     from crm.models import PerfilNegocioIA
                     try:
@@ -213,7 +213,7 @@ def departamentoChatbotsView(request):
                         })
 
                     try:
-                        texto = generar_explicacion_flujo(depto, apikey_obj, usuario=request.user)
+                        texto = explicar_flujo(depto=depto, apikey_obj=apikey_obj, usuario=request.user)
                     except IAActionError as ex:
                         return JsonResponse({'error': True, 'message': str(ex)})
                     except Exception as ex:
