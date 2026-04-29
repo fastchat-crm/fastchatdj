@@ -625,51 +625,114 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="small text-muted mb-2">
-                        Definí menús reutilizables que aparecen como chips arriba del chat.
-                        Click en un chip → se envía como botones interactivos al cliente
-                        (Meta) o texto numerado (Baileys).
-                    </p>
+
+                    {# Alert explicativo: qué es y para qué sirve #}
+                    <div class="alert alert-info py-2 small mb-3">
+                        <div class="d-flex gap-2">
+                            <i class="fa fa-circle-info mt-1"></i>
+                            <div>
+                                <b>¿Qué es un menú rápido?</b>
+                                Una plantilla de botones que el operador puede mandar al cliente
+                                con un click — ej. "¿Qué querés cotizar?", "Elige sucursal",
+                                "Forma de pago".
+                                <ul class="mb-1 mt-1 ps-3">
+                                    <li>El cliente recibe el texto del <b>cuerpo</b> + los botones.</li>
+                                    <li>Cuando toca uno, llega al chat como mensaje normal con el
+                                        <code>ID interno</code> del botón (útil para automatizar).</li>
+                                    <li>Los menús son <b>por sesión</b> — cada número de WhatsApp
+                                        tiene los suyos.</li>
+                                    <li>En <b>Meta</b> se envían como interactivos nativos
+                                        (≤3 botones = "buttons", &gt;3 = "list" hasta 10).
+                                        En <b>Baileys</b> caen a texto numerado.</li>
+                                </ul>
+                                <details class="mt-1">
+                                    <summary class="text-primary" style="cursor:pointer;">Ver ejemplo</summary>
+                                    <div class="mt-2 p-2 bg-white border rounded small">
+                                        <b>Nombre:</b> "Catálogo"<br>
+                                        <b>Cuerpo:</b> "¿Qué información necesitás?"<br>
+                                        <b>Botones:</b><br>
+                                        &nbsp;&nbsp;• <i>"💰 Precios"</i> → <code>ver_precios</code><br>
+                                        &nbsp;&nbsp;• <i>"🕐 Horarios"</i> → <code>ver_horarios</code><br>
+                                        &nbsp;&nbsp;• <i>"📍 Sucursales"</i> → <code>ver_sucursales</code>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
 
                     {# Lista de menús ya creados #}
                     <div id="mr-modal-lista" class="mb-3"></div>
 
                     {# Form crear/editar #}
                     <div class="border rounded p-2" id="mr-modal-form" style="background:#f8fafc;">
-                        <input type="hidden" id="mr-form-id">
+                        <h6 class="small fw-bold text-success mb-2 mt-1">
+                            <i class="fa fa-plus-circle me-1"></i> Nuevo menú
+                        </h6>
                         <div class="row g-2">
                             <div class="col-md-7">
-                                <label class="form-label small fw-bold mb-1">Nombre del menú</label>
+                                <label class="form-label small fw-bold mb-1">
+                                    Nombre del menú
+                                    <small class="text-muted fw-normal">— solo lo ves vos como operador</small>
+                                </label>
                                 <input type="text" id="mr-form-nombre" class="form-control form-control-sm"
-                                       maxlength="80" placeholder="Ej: Catálogo · Horarios · Pago">
+                                       maxlength="80" placeholder="Ej: Catálogo · Horarios · Formas de pago">
+                                <small class="text-muted">Etiqueta del chip que aparece arriba del chat.</small>
                             </div>
                             <div class="col-md-5">
-                                <label class="form-label small fw-bold mb-1">Color del chip</label>
+                                <label class="form-label small fw-bold mb-1">
+                                    Color del chip
+                                    <small class="text-muted fw-normal">— solo visual</small>
+                                </label>
                                 <input type="color" id="mr-form-color" class="form-control form-control-color form-control-sm w-100" value="#16a34a">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label small fw-bold mb-1">Cuerpo del mensaje</label>
-                                <textarea id="mr-form-cuerpo" class="form-control form-control-sm" rows="2"
-                                          maxlength="1024" placeholder="Texto que acompaña los botones"></textarea>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold mb-1">Header (opcional, ≤60)</label>
-                                <input type="text" id="mr-form-header" class="form-control form-control-sm" maxlength="60">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small fw-bold mb-1">Footer (opcional, ≤60)</label>
-                                <input type="text" id="mr-form-footer" class="form-control form-control-sm" maxlength="60">
+                                <small class="text-muted">Para identificarlo de un vistazo (rojo urgente, verde catálogo…).</small>
                             </div>
                             <div class="col-12">
                                 <label class="form-label small fw-bold mb-1">
-                                    Botones (máx 10)
-                                    <small class="text-muted fw-normal">— ≤3 envía buttons, &gt;3 envía list</small>
+                                    Cuerpo del mensaje
+                                    <small class="text-muted fw-normal">— ≤1024 chars · lo ve el cliente</small>
                                 </label>
+                                <textarea id="mr-form-cuerpo" class="form-control form-control-sm" rows="2"
+                                          maxlength="1024"
+                                          placeholder="Ej: ¿Qué información necesitás? Tocá el botón que más te interese 👇"></textarea>
+                                <small class="text-muted">
+                                    Texto principal que acompaña los botones. Soporta emojis y *negrita*.
+                                </small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold mb-1">
+                                    Header
+                                    <small class="text-muted fw-normal">— opcional, ≤60</small>
+                                </label>
+                                <input type="text" id="mr-form-header" class="form-control form-control-sm"
+                                       maxlength="60" placeholder="Ej: 🛒 Nuestro catálogo">
+                                <small class="text-muted">Línea superior en negrita (solo Meta).</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold mb-1">
+                                    Footer
+                                    <small class="text-muted fw-normal">— opcional, ≤60</small>
+                                </label>
+                                <input type="text" id="mr-form-footer" class="form-control form-control-sm"
+                                       maxlength="60" placeholder="Ej: Lun-Vie 9:00 a 18:00">
+                                <small class="text-muted">Línea inferior pequeña, ideal para horario o aviso (solo Meta).</small>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-bold mb-1">
+                                    Botones del menú
+                                    <small class="text-muted fw-normal">— máx 10 · ≤3 manda "buttons", &gt;3 manda "list"</small>
+                                </label>
+                                <div class="alert alert-light border py-1 px-2 small mb-2">
+                                    <i class="fa fa-lightbulb text-warning me-1"></i>
+                                    <b>Etiqueta</b> = lo que ve el cliente en el botón (≤24 chars).
+                                    <b>ID interno</b> = lo que recibís en el chat cuando lo tocan
+                                    (útil para automatizar respuestas). Si lo dejás vacío, se usa
+                                    la etiqueta.
+                                </div>
                                 <table class="table table-sm small mb-2" id="mr-form-tabla">
                                     <thead>
                                         <tr>
                                             <th>Etiqueta del botón (≤24)</th>
-                                            <th>ID interno (button_reply.id)</th>
+                                            <th>ID interno <small class="text-muted">(opcional)</small></th>
                                             <th style="width:50px;"></th>
                                         </tr>
                                     </thead>
@@ -681,15 +744,15 @@
                             </div>
                         </div>
                         <div class="d-flex justify-content-end gap-2 mt-3">
-                            <button type="button" class="btn btn-sm btn-secondary" id="mr-form-cancelar">Cancelar</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="mr-form-cancelar"
+                                    title="Vacía los campos del formulario para empezar de cero">
+                                <i class="fa fa-eraser me-1"></i> Limpiar form
+                            </button>
                             <button type="button" class="btn btn-sm btn-success" id="mr-form-guardar">
                                 <i class="fa fa-save me-1"></i> Guardar menú
                             </button>
                         </div>
                     </div>
-                </div>
-                <div class="modal-footer py-2">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
