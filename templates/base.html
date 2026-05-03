@@ -75,7 +75,8 @@
                     </a>
                 </li>
                 <li class="dropdown topbar-item">
-                    <a class="nav-link dropdown-toggle arrow-none nav-icon position-relative" data-bs-toggle="dropdown" href="#"
+                    <a class="nav-link dropdown-toggle arrow-none nav-icon position-relative" data-bs-toggle="dropdown"
+                       href="#"
                        role="button"
                        aria-haspopup="false" aria-expanded="false">
                         <i class="icofont-bell-alt {% if totalnot %}text-warning{% endif %}"></i>
@@ -86,7 +87,8 @@
                             </span>
                         {% endif %}
                     </a>
-                    <div class="dropdown-menu stop dropdown-menu-end dropdown-lg py-0" style="min-width:320px;max-width:380px;">
+                    <div class="dropdown-menu stop dropdown-menu-end dropdown-lg py-0"
+                         style="min-width:320px;max-width:380px;">
                         <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
                             <strong class="fs-14">Notificaciones</strong>
                             {% if totalnot %}
@@ -106,7 +108,8 @@
                                 </div>
                                 <div class="flex-grow-1" style="min-width:0;">
                                     <div class="fw-medium fs-13 text-dark text-truncate">{{ notif.titulo|default:'(sin título)' }}</div>
-                                    <div class="text-muted fs-12" style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">{{ notif.cuerpo|striptags|truncatechars:80 }}</div>
+                                    <div class="text-muted fs-12"
+                                         style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">{{ notif.cuerpo|striptags|truncatechars:80 }}</div>
                                     <small class="text-muted fs-11">
                                         <i class="fa fa-clock me-1"></i>{{ notif.fecha_registro|date:'d/m/Y H:i' }}
                                     </small>
@@ -253,8 +256,9 @@
                 <div class="col-md-4 text-end">
                     {% if not request.path == '/panel/' %}
                         <a href="{% block atras %}{% if request.path == '/panel/' %}/
+
                             {% else %}{% if not tiene_val_get %}/panel/{% else %}{{ request.path }}{% endif %}{% endif %}{% endblock %}"
-                            class="btn btn-default btn-sm">
+                           class="btn btn-default btn-sm">
                             <i class="fa fa-arrow-circle-left me-1"></i>Atrás
                         </a>
                     {% endif %}
@@ -265,25 +269,25 @@
             {% endblock %}
         </div>
 
-{#        <footer class="footer text-center text-sm-start d-print-none">#}
-{#            <div class="container-xxl">#}
-{#                <div class="row">#}
-{#                    <div class="col-12">#}
-{#                        <div class="card mb-0 rounded-bottom-0">#}
-{#                            <div class="card-body">#}
-{#                                <p class="text-muted mb-0">#}
-{#                                    ©#}
-{#                                    <script> document.write(new Date().getFullYear()) </script>#}
-{#                                    <span class="text-muted d-none d-sm-inline-block float-end">#}
-{#                                        {{ alias }}#}
-{#                                    </span>#}
-{#                                </p>#}
-{#                            </div>#}
-{#                        </div>#}
-{#                    </div>#}
-{#                </div>#}
-{#            </div>#}
-{#        </footer>#}
+        {#        <footer class="footer text-center text-sm-start d-print-none">#}
+        {#            <div class="container-xxl">#}
+        {#                <div class="row">#}
+        {#                    <div class="col-12">#}
+        {#                        <div class="card mb-0 rounded-bottom-0">#}
+        {#                            <div class="card-body">#}
+        {#                                <p class="text-muted mb-0">#}
+        {#                                    ©#}
+        {#                                    <script> document.write(new Date().getFullYear()) </script>#}
+        {#                                    <span class="text-muted d-none d-sm-inline-block float-end">#}
+        {#                                        {{ alias }}#}
+        {#                                    </span>#}
+        {#                                </p>#}
+        {#                            </div>#}
+        {#                        </div>#}
+        {#                    </div>#}
+        {#                </div>#}
+        {#            </div>#}
+        {#        </footer>#}
     </div>
 </div>
 
@@ -292,12 +296,14 @@
     <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalPostLabel"><i class="fas fa-eye icono" ></i> <strong class="accion"></strong>
+                <h5 class="modal-title" id="modalPostLabel"><i class="fas fa-eye icono"></i> <strong
+                        class="accion"></strong>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="excluirFormAjax" action="{{ ruta }}" method="POST" class="form-horizontal form-modal" autocomplete="off" method="post"
+                <form id="excluirFormAjax" action="{{ ruta }}" method="POST" class="form-horizontal form-modal"
+                      autocomplete="off" method="post"
                       enctype="multipart/form-data">{% csrf_token %}
                     <div class="tablaaqui">
                     </div>
@@ -330,7 +336,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalPostAjaxLabel"><i class="fas fa-eye icono"></i>
-                <strong class="accion"></strong> </h5>
+                    <strong class="accion"></strong></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -434,7 +440,7 @@
 <script src="/static/assets_riz/libs/jsvectormap/js/jsvectormap.min.js"></script>
 <script src="/static/assets_riz/libs/jsvectormap/maps/world.js"></script>
 <script src="/static/assets_riz/js/app.js"></script>
-<script src="/static/assets_riz/js/sidebar-storage.js"></script>
+<script src="/static/assets_riz/js/sidebar-storage.js?v1.1"></script>
 <script src="/static/jquery-3.7.1.min.js"></script>
 
 {% include 'datatable.html' %}
@@ -503,7 +509,7 @@
 <script>
     {% if request.user.is_authenticated %}
         const logoutTimeout = setTimeout(
-            window.setInterval(() => location = window.location.href.replaceAll(window.location.origin, ""), ({{ fecha_session_expira|default:'0' }} +2) * 1000, 500)
+            window.setInterval(() => location = window.location.href.replaceAll(window.location.origin, ""), ({{ fecha_session_expira|default:'0' }} + 2) * 1000, 500)
         );
     {% endif %}
 </script>
@@ -619,7 +625,7 @@
         })
     }
 
-    function eliminarajax(pk, nombre, accion, titulo=`Estas a punto de eliminar este registro ${nombre}`) {
+    function eliminarajax(pk, nombre, accion, titulo = `Estas a punto de eliminar este registro ${nombre}`) {
         Swal.fire({
             title: `${titulo}`,
             text: "Esta acción es irreversible",
@@ -647,7 +653,7 @@
         })
     }
 
-    function actionSwal(pk, nombre, accion, titulo=``) {
+    function actionSwal(pk, nombre, accion, titulo = ``) {
         Swal.fire({
             title: titulo,
             text: "¿Estas seguro de realizar esta acción?",
@@ -678,7 +684,7 @@
                     setTimeout($.unblockUI, 1);
                     if (data.error === false) {
                         location.reload();
-                    } else{
+                    } else {
                         mensajeDanger(data[0].message);
                     }
                 }).fail(function (jqXHR, textStatus, errorThrown) {
@@ -738,7 +744,6 @@
     $('#tabla tbody').on('click', 'tr', function () {
         var data = tabla.row(this).data();
     });
-
 
 
     $(document).ready(function () {
@@ -829,25 +834,25 @@
                 var data = tabla_paginada_botones.row(this).data();
             });
 
-        $('.dtTable').DataTable({
-        responsive: false,
-        bInfo: false,
-        ordering: false,
-        searching: true,
-        {#dom: "<'row'<'col-sm-12 col-lg-3'f><'col-sm-12 col-lg-3'l><'col-sm-12 col-md-4'B>>" +#}
-        {#    "<'row'<'col-sm-12'tr>>" +#}
-        {#    "<'row'<'col-md-5 col-sm-12'i><'col-md-7 col-sm-12'p>>",#}
-        dom: 'Bfrtip',
-        language: {
-            "url": '/static/js/i18n/Spanish.json'
-        },
-        pageLength: 10,
-        buttons: []
-    });
+            $('.dtTable').DataTable({
+                responsive: false,
+                bInfo: false,
+                ordering: false,
+                searching: true,
+                {#dom: "<'row'<'col-sm-12 col-lg-3'f><'col-sm-12 col-lg-3'l><'col-sm-12 col-md-4'B>>" +#}
+                {#    "<'row'<'col-sm-12'tr>>" +#}
+                {#    "<'row'<'col-md-5 col-sm-12'i><'col-md-7 col-sm-12'p>>",#}
+                dom: 'Bfrtip',
+                language: {
+                    "url": '/static/js/i18n/Spanish.json'
+                },
+                pageLength: 10,
+                buttons: []
+            });
 
-    $('.dtTable tbody').on('click', 'tr', function () {
-        var data = tabla.row(this).data();
-    });
+            $('.dtTable tbody').on('click', 'tr', function () {
+                var data = tabla.row(this).data();
+            });
         });
     });
 
@@ -968,7 +973,7 @@
         })
     }
 
-    function alertaDanger(mensaje, timer=1000) {
+    function alertaDanger(mensaje, timer = 1000) {
         Swal.fire({
             toast: true,
             position: 'top-end',
@@ -1428,7 +1433,7 @@
         }
     }
 
-     function contactWS(tel, nombre) {
+    function contactWS(tel, nombre) {
         if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
             let url = `https://wa.me/${tel}?text=Hola ${nombre}`;
             window.open(url);
@@ -1441,8 +1446,8 @@
 </script>
 <script>
 
-$(function() {
-     $('#buscarEmpresa').keyup(function () {
+    $(function () {
+        $('#buscarEmpresa').keyup(function () {
             _this = this;
             $.each($(".listaEmpresaMenu li"), function () {
                 if (converToAscii($(this).text().toLowerCase()).indexOf(converToAscii($(_this).val().toLowerCase())) === -1)
@@ -1453,35 +1458,35 @@ $(function() {
         });
 
 
-    $(".empresaSelector").click(function () {
-        var option = $(this).attr('data-id');
-        if (option) {
-            Swal.fire({
-                title: '¿Esta seguro que deseas cambiar de empresa?',
-                text: "acción involucra cambios que requieren atención",
-                type: 'warning',
-                showCancelButton: true,
-                allowOutsideClick: false,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Cambiar',
-                cancelButtonText: 'Cancelar'
-            }).then((result) => {
-                if (result.value) {
-                    pantallaespera();
-                    $.post("/panel/", {'action': 'changeempresa', 'id': option,}, function (data) {
-                        $.unblockUI();
-                        if (data.resp) {
-                            window.location.href = "{{ request.path }}";
-                        } else {
-                            mensajeWarning(data.mensaje)
-                        }
-                    }, "json");
-                }
-            })
-        }
-    });
-})
+        $(".empresaSelector").click(function () {
+            var option = $(this).attr('data-id');
+            if (option) {
+                Swal.fire({
+                    title: '¿Esta seguro que deseas cambiar de empresa?',
+                    text: "acción involucra cambios que requieren atención",
+                    type: 'warning',
+                    showCancelButton: true,
+                    allowOutsideClick: false,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Cambiar',
+                    cancelButtonText: 'Cancelar'
+                }).then((result) => {
+                    if (result.value) {
+                        pantallaespera();
+                        $.post("/panel/", {'action': 'changeempresa', 'id': option,}, function (data) {
+                            $.unblockUI();
+                            if (data.resp) {
+                                window.location.href = "{{ request.path }}";
+                            } else {
+                                mensajeWarning(data.mensaje)
+                            }
+                        }, "json");
+                    }
+                })
+            }
+        });
+    })
 </script>
 
 <script src="/static/assets/plugins/moment/moment.js"></script>
@@ -1501,7 +1506,8 @@ $(function() {
                 <input type="hidden" id="id_origen" name="origen_full_url" value="{{ full_url }}">
                 <div class="modal-header">
                     <h5 class="modal-title"></h5>
-                    <button type="button" class="btn-close close" data-dismiss="modal" data-bs-dismiss="modal" aria-label="Close">
+                    <button type="button" class="btn-close close" data-dismiss="modal" data-bs-dismiss="modal"
+                            aria-label="Close">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
@@ -1510,7 +1516,8 @@ $(function() {
                 </div>
                 <div class="modal-footer">
                     <button type="submit" class="btn btn-success"><i class="fa fa-save"></i> Guardar</button>
-                    <a href="javascript:;" class="btn btn-white" data-dismiss="modal" data-bs-dismiss="modal"><i class="fa fa-window-close"></i>
+                    <a href="javascript:;" class="btn btn-white" data-dismiss="modal" data-bs-dismiss="modal"><i
+                            class="fa fa-window-close"></i>
                         Cancelar</a>
                 </div>
             </form>
@@ -1522,7 +1529,8 @@ $(function() {
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"></h5>
-                <button type="button" class="btn-close close" data-dismiss="modal" data-bs-dismiss="modal" aria-label="Close">
+                <button type="button" class="btn-close close" data-dismiss="modal" data-bs-dismiss="modal"
+                        aria-label="Close">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
@@ -1548,10 +1556,10 @@ $(function() {
                 pantallaespera();
                 $(modalForm).find('form').attr('action', '');
                 $(modalForm).find('.modal-title').html('');
-                if(aTag.dataset.action) {
+                if (aTag.dataset.action) {
                     $(modalForm).find('form').attr('action', aTag.dataset.action);
                 }
-                if(aTag.dataset.modalTitle) {
+                if (aTag.dataset.modalTitle) {
                     $(modalForm).find('.modal-title').html(aTag.dataset.modalTitle);
                 } else {
                     $(modalForm).find('.modal-title').html(aTag.innerHTML);
@@ -1580,7 +1588,7 @@ $(function() {
                 const response = await fetch(aTag.href);
                 if (!response.ok) return;
                 const text = await response.text();
-                if(aTag.dataset.modalTitle) {
+                if (aTag.dataset.modalTitle) {
                     $(modalDetail).find('.modal-title').html(aTag.dataset.modalTitle);
                 } else {
                     $(modalDetail).find('.modal-title').html(aTag.innerHTML);
@@ -1600,7 +1608,7 @@ $(function() {
 <style>
     .tableRowFocus {
         border: 2px solid !important;
-            border-color: rgb(147 196 249 / 57%) !important;
+        border-color: rgb(147 196 249 / 57%) !important;
     }
 </style>
 <script>
@@ -1648,7 +1656,8 @@ $(function() {
                         keepalive: true,
                     });
                 }
-            } catch (e) { /* no rompemos el navigate por un error de marcado */ }
+            } catch (e) { /* no rompemos el navigate por un error de marcado */
+            }
             // Feedback visual inmediato (por si el usuario abre en pestaña nueva
             // y no recarga la actual): atenúa el item y decrementa el badge.
             a.style.opacity = '.5';
