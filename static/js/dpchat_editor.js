@@ -525,10 +525,13 @@
                     var dst = parseInt(tr.querySelector('.dp-salida-dst').value || '0', 10);
                     if (!dst) return;
                     var etq = (tr.querySelector('.dp-salida-etq').value || '').trim();
+                    var descEl = tr.querySelector('.dp-salida-desc');
+                    var desc = descEl ? (descEl.value || '').trim() : '';
                     var cid = tr.getAttribute('data-conex-id') || '';
                     lista.push({
                         id: cid ? parseInt(cid, 10) : null,
                         etiqueta: etq,
+                        descripcion: desc,
                         destino_id: dst,
                     });
                 });

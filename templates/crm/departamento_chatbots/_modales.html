@@ -1,0 +1,232 @@
+{# Modal 1: JSON completo del flujo + cookbook #}
+<div class="modal fade" id="dpModalJson" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title">
+                    <i class="fa fa-code me-1 text-success"></i>
+                    JSON completo del flujo
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border py-2 small mb-2">
+                    <i class="fa fa-circle-info me-1"></i>
+                    Snapshot del depto: cabecera, todos los nodos, endpoints,
+                    credenciales (secretos REDACTED) y conexiones. Bajo
+                    <code>_help</code> tenés snippets listos para armar un
+                    seed nuevo desde cero (estilo <code>seed_ru.py</code>).
+                </div>
+                <pre id="dp-meta-json-pre" class="dp-json-pre">Cargando…</pre>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-success btn-sm" id="dp-copy-json">
+                    <i class="fa fa-copy me-1"></i> Copiar JSON
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal 2: Ficha visual del flujo #}
+<div class="modal fade" id="dpModalFicha" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title">
+                    <i class="fa fa-clipboard-list me-1 text-info"></i>
+                    Ficha del flujo
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="dp-ficha-content" class="dp-ficha-content small">Cargando…</div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal Funciones disponibles — catálogo de codigos registrados con metadata #}
+<div class="modal fade" id="dpModalFunciones" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2" style="background:#f5f3ff;">
+                <h6 class="modal-title">
+                    <i class="fa fa-bolt me-1" style="color:#7c3aed;"></i>
+                    Funciones disponibles
+                    <small class="text-muted ms-2">(tipo nodo <code>funcion</code>)</small>
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border py-2 small mb-3">
+                    <i class="fa fa-circle-info me-1 text-purple"></i>
+                    Estas son las funciones Python registradas en
+                    <code>crm/funciones_chatbot.py</code> con
+                    <code>@registrar_funcion(...)</code>. Para usarlas, creá un
+                    nodo tipo <strong>Función interna</strong> y pegá el
+                    <em>código</em> exacto en <code>funcion_codigo</code>.
+                </div>
+                <div id="dp-funciones-content">
+                    <div class="text-center text-muted py-4">
+                        <i class="fa fa-spinner fa-spin"></i> Cargando…
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal Tutorial — guía nivelada para crear y operar un flujo #}
+<div class="modal fade" id="dpModalTutorial" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-info bg-opacity-10">
+                <h6 class="modal-title text-info">
+                    <i class="fa fa-graduation-cap me-1"></i>
+                    Tutorial — Cómo crear y operar un flujo de chatbot
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <div class="alert alert-light border py-2 small mb-3">
+                    <b>¿Qué es un flujo?</b> Un <i>departamento</i> contiene una secuencia de
+                    <i>nodos</i> que el chatbot ejecuta cuando un cliente entra. Cada nodo
+                    pregunta algo, muestra un menú, llama a una API o termina la conversación.
+                    El flujo se enlaza con <b>conexiones</b> (qué nodo viene después según la
+                    respuesta del cliente, el éxito de un HTTP, etc.).
+                </div>
+
+                {# ── NIVEL BÁSICO ─────────────────────────────────── #}
+                <div class="dp-tutorial-nivel nivel-basico">
+                    <h6><i class="fa fa-seedling text-success"></i> Nivel 1 — Básico (lo mínimo para arrancar)</h6>
+                    <ul>
+                        <li><b>Cabecera del depto</b>: nombre, color, mensaje de saludo. El primer guardado crea el depto.</li>
+                        <li><b>Crear un nodo</b>: botón <i>Agregar opción raíz</i> → modal con tipo + nombre + config.</li>
+                        <li><b>Marcar el inicio</b>: poné <code>es_inicio=true</code> en el nodo desde donde arranca el flujo.</li>
+                        <li><b>Encadenar nodos</b>: en el modal de nodo, sección "Conexiones" → elegí el siguiente nodo (etiqueta vacía = default).</li>
+                        <li><b>Terminar</b>: usá un nodo tipo <code>fin</code> con un mensaje de despedida. Aparece marcado con <span class="dp-flag-pill dp-flag-fin"><i class="fa fa-flag-checkered"></i> Termina flujo</span>.</li>
+                        <li><b>Probar</b>: botón <i>Preview</i> simula el chat sin tocar WhatsApp.</li>
+                    </ul>
+                </div>
+
+                {# ── NIVEL INTERMEDIO ──────────────────────────────── #}
+                <div class="dp-tutorial-nivel nivel-intermedio">
+                    <h6><i class="fa fa-tree text-primary"></i> Nivel 2 — Intermedio (variables, validaciones, menús)</h6>
+                    <ul>
+                        <li><b>Capturar respuestas</b>: nodo tipo <code>pregunta</code> con <i>variable_destino</i> (ej. <code>cedula</code>) → el contenido del cliente queda en <code>{% verbatim %}{{variables.cedula}}{% endverbatim %}</code>.</li>
+                        <li><b>Validaciones</b>: regex (<code>^\d{10}$</code>), email, teléfono — el bot reintenta hasta <i>reintentos_max</i> y luego salta a la rama de error.</li>
+                        <li><b>Menús</b>: nodo tipo <code>menu</code> → opciones estáticas (<i>etiqueta → siguiente</i>) o dinámicas (<i>opciones_fuente</i> = lista cargada desde una variable).</li>
+                        <li><b>Atajo (valor por defecto)</b>: en cualquier menú podés activar un atajo Sí/Otra. Si la mayoría de clientes responde el mismo valor (ej: <i>Pichincha</i> en provincia, <i>Quito</i> en ciudad), configurá <code>opcion_default</code> en el bloque del menú con: <code>valor</code> + <code>etiqueta</code> + <code>salida_si</code>/<code>salida_otra</code>. Si el cliente confirma "Sí", el motor autoasigna <code>{% verbatim %}{{variables.{% endverbatim %}variable_destino<span style="font-family:monospace">}}</span> = valor</code> y avanza por <code>salida_si</code> sin mostrar el catálogo. Si elige "Otra", sigue por <code>salida_otra</code> (típicamente al nodo HTTP de catálogo). El atajo se ve marcado con badge <span class="dp-flag-pill dp-flag-default"><i class="fa fa-bolt"></i> Atajo</span>.</li>
+                        <li><b>Condicionales</b>: nodo tipo <code>condicional</code> con expresiones tipo <code>{% verbatim %}{{variables.encontrado}} == true{% endverbatim %}</code> → ramas <code>true</code>/<code>false</code>.</li>
+                        <li><b>Asignar variables</b>: <code>set_variable</code> permite calcular o resetear valores. El último paso suele resetear todo antes del <code>fin</code>.</li>
+                        <li><b>Plantillas</b>: en cualquier mensaje podés interpolar variables: <code>{% verbatim %}{{contacto.nombre}}{% endverbatim %}</code>, <code>{% verbatim %}{{conversacion.id}}{% endverbatim %}</code>, <code>{% verbatim %}{{variables.foo}}{% endverbatim %}</code>.</li>
+                    </ul>
+                </div>
+
+                {# ── NIVEL AVANZADO ────────────────────────────────── #}
+                <div class="dp-tutorial-nivel nivel-avanzado">
+                    <h6><i class="fa fa-rocket text-purple"></i> Nivel 3 — Avanzado (HTTP, side-effects, integración)</h6>
+                    <ul>
+                        <li><b>Llamadas HTTP</b>: tipo <code>http</code> con endpoint registrado en <i>/crm/endpoints_api/</i>. Path soporta templates: <code>buscar/{% verbatim %}{{variables.cedula}}{% endverbatim %}/</code>.</li>
+                        <li><b>Funciones internas</b>: tipo <code>funcion</code> ejecuta código Python registrado con <code>@registrar_funcion('codigo')</code> en <code>crm/funciones_chatbot.py</code>. Reemplaza un nodo HTTP cuando la lógica vive dentro de Django (orquestar webhooks externos, DB lookups, side-effects). El operador asocia un <code>EndpointApiChatbot</code> opcional → la URL externa queda 100% configurable sin tocar código.</li>
+                        <li><b>Extraer variables</b>: <code>extraer = [{variable: 'cotpk', jsonpath: 'data.cotpk'}]</code> — JSONPath relativo al body de respuesta.</li>
+                        <li><b>Ramificación ok/error</b>: status 2xx con <code>success: true</code> → rama <code>ok</code>; 4xx/5xx o <code>success: false</code> → rama <code>error</code>.</li>
+                        <li><b>Envío de correo</b>: marcá el nodo con <code>config.envia_correo = true</code> y el sistema lo identificará con <span class="dp-flag-pill dp-flag-email"><i class="fa fa-envelope"></i> Envía correo</span>. Útil para procesos como "notificar asesor cuando se cotiza".</li>
+                        <li><b>Side-effects con lógica Django</b>: cuando necesitás orquestar DB lookup + email + log + webhook externo, usá un nodo <code>funcion</code> apuntando a una función propia registrada — no hace falta crear un proxy HTTP intermedio.</li>
+                        <li><b>Handoff humano</b>: tipo <code>handoff</code> pausa la IA y deja la conv abierta para que un asesor responda manualmente.</li>
+                        <li><b>Deep-links</b>: dentro de un correo o CTA podés generar <code>/whatsapp/conversaciones/?conv=&lt;token&gt;</code> con <code>encrypt_sesion_id(conv.id)</code> — abre la conv si está activa, o la página de finalizadas si ya cerró.</li>
+                    </ul>
+                </div>
+
+                {# ── REFERENCIA TIPOS ──────────────────────────────── #}
+                <h6 class="mt-3 mb-2"><i class="fa fa-cubes me-1 text-muted"></i> Referencia rápida — tipos de nodo</h6>
+                <div class="dp-tutorial-tipos">
+                    <div class="dp-tutorial-tipo"><span class="t-tag">respuesta</span><b>Respuesta de texto</b>Manda un mensaje y avanza al siguiente nodo (sin esperar al cliente).</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">pregunta</span><b>Pregunta al cliente</b>Espera la respuesta del cliente y la guarda en <code>variable_destino</code>.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">menu</span><b>Menú con botones</b>Lista de opciones. Cada opción tiene su propio nodo destino.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">http</span><b>Llamada HTTP</b>POST/GET a una API. Extrae datos de la respuesta a variables.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">funcion</span><b>Función interna</b>Ejecuta código Python registrado en <code>crm/funciones_chatbot.py</code>. Sin loop HTTP a Django — invoca la función directo. Útil para orquestar lógica con DB+side-effects+webhook externo. Branching <code>ok</code>/<code>error</code> y <code>extraer</code> idénticos a HTTP.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">condicional</span><b>If/else</b>Evalúa una expresión sobre variables y bifurca.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">set_variable</span><b>Asignar variable</b>Setea o limpia variables del contexto.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">cta_url</span><b>Botón con URL</b>Envía un botón que abre una URL externa al cliente.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">ubicacion</span><b>Ubicación / Mapa</b>Manda lat/lng como pin de WhatsApp.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">handoff</span><b>Transferir a humano</b>Pausa la IA. Un asesor toma la conversación.</div>
+                    <div class="dp-tutorial-tipo"><span class="t-tag">fin</span><b>Fin de conversación</b>Cierra la conversación. Marcado con badge <span class="dp-flag-pill dp-flag-fin"><i class="fa fa-flag-checkered"></i> Termina</span>.</div>
+                </div>
+
+                {# ── BUENAS PRÁCTICAS ──────────────────────────────── #}
+                <h6 class="mt-4 mb-2"><i class="fa fa-circle-check me-1 text-success"></i> Buenas prácticas</h6>
+                <ul class="small mb-0">
+                    <li>Numerá los nodos en saltos de 10 (10, 20, 30…) para insertar pasos intermedios sin renumerar.</li>
+                    <li>Toda rama de error debería desembocar en un <code>fin</code> con un mensaje claro tipo "Inténtalo más tarde".</li>
+                    <li>Antes del <code>fin</code>, usá <code>set_variable</code> para limpiar las variables temporales (cedula, placa, etc.) por si el cliente reabre la conv.</li>
+                    <li>En nodos HTTP, configurá <code>timeout_seg</code> realista — un POST a un cotizador puede tardar 30-60s.</li>
+                    <li>Las URLs externas y los mensajes con <code>{% verbatim %}{{variables.foo}}{% endverbatim %}</code> se resuelven en runtime — probá con <i>Preview</i> antes de exponerlo.</li>
+                    <li>Si un nodo dispara correos / notificaciones, marcá <code>config.envia_correo = true</code> para que el operador lo vea como tal en el editor.</li>
+                </ul>
+
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal Ver ficha read-only de un nodo #}
+<div class="modal fade" id="dpModalFichaNodo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title">
+                    <i class="fa fa-eye text-info me-1"></i>Ficha del nodo
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" id="dpModalFichaNodoBody">
+                <div class="text-center text-muted py-4">
+                    <i class="fa fa-spinner fa-spin"></i> Cargando…
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal editor de un nodo #}
+<div class="modal fade" id="dpModalNodo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <form id="dpFormNodo" method="post" novalidate>
+                {% csrf_token %}
+                <input type="hidden" name="action" value="guardar_opcion">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title" id="dpModalNodoTitulo">Nodo</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body" id="dpModalNodoBody">
+                    <div class="text-center text-muted py-4">
+                        <i class="fa fa-spinner fa-spin"></i> Cargando…
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm" id="dpBtnGuardarNodo">
+                        <i class="fa fa-save me-1"></i> Guardar nodo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

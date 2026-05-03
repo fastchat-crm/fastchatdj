@@ -86,7 +86,8 @@
                     {% for c in op.salidas_grafo %}
                         <span class="dp-tag dp-tag-out"
                               title="Destino: {{ c.nodo_destino.nombre|default:'(sin nombre)' }} ({{ c.nodo_destino.get_tipo_nodo_display }}){% if c.etiqueta %} · etiqueta {{ c.etiqueta }}{% endif %}">
-                            {% if c.etiqueta %}<span class="text-muted">[{{ c.etiqueta }}]</span> {% endif %}#{{ c.nodo_destino_id }}
+                            {% if c.etiqueta %}<span class="text-muted">[{{ c.etiqueta }}]</span> {% endif %}
+                            #{{ c.nodo_destino_id }}
                         </span>
                     {% endfor %}
                 </div>
@@ -133,10 +134,12 @@
                     {% endif %}
                     {% if op.config.extraer %}
                         <div class="dp-http-meta">
-                            <strong>extrae {{ op.config.extraer|length }} var{{ op.config.extraer|length|pluralize }}:</strong>
+                            <strong>extrae {{ op.config.extraer|length }}
+                                var{{ op.config.extraer|length|pluralize }}:</strong>
                             {% for ex in op.config.extraer %}
                                 <code class="dp-http-extract"
-                                      title="jsonpath: {{ ex.jsonpath }}">${{ ex.variable }}</code>{% if not forloop.last %} {% endif %}
+                                      title="jsonpath: {{ ex.jsonpath }}">${{ ex.variable }}</code>
+                                {% if not forloop.last %} {% endif %}
                             {% endfor %}
                         </div>
                     {% endif %}
@@ -180,10 +183,12 @@
                     {% endif %}
                     {% if op.config.extraer %}
                         <div class="dp-http-meta">
-                            <strong>extrae {{ op.config.extraer|length }} var{{ op.config.extraer|length|pluralize }}:</strong>
+                            <strong>extrae {{ op.config.extraer|length }}
+                                var{{ op.config.extraer|length|pluralize }}:</strong>
                             {% for ex in op.config.extraer %}
                                 <code class="dp-http-extract"
-                                      title="jsonpath: {{ ex.jsonpath }}">${{ ex.variable }}</code>{% if not forloop.last %} {% endif %}
+                                      title="jsonpath: {{ ex.jsonpath }}">${{ ex.variable }}</code>
+                                {% if not forloop.last %} {% endif %}
                             {% endfor %}
                         </div>
                     {% endif %}
@@ -222,7 +227,8 @@
                 <div class="dp-http-meta">
                     <strong>asigna:</strong>
                     {% for a in op.config.asignaciones %}
-                        <code class="dp-http-pair">${{ a.variable }} = {{ a.expresion|default:'""'|truncatechars:30 }}</code>
+                        <code class="dp-http-pair">${{ a.variable }}
+                            = {{ a.expresion|default:'""'|truncatechars:30 }}</code>
                     {% endfor %}
                 </div>
             {% endif %}
@@ -230,7 +236,8 @@
             {# ── MENU: cantidad de opciones + previa de las primeras 3 ── #}
             {% if op.tipo_nodo == 'menu' and op.config.opciones %}
                 <div class="dp-http-meta">
-                    <strong>{{ op.config.opciones|length }} opcion{{ op.config.opciones|length|pluralize:"es" }}:</strong>
+                    <strong>{{ op.config.opciones|length }}
+                        opcion{{ op.config.opciones|length|pluralize:"es" }}:</strong>
                     {% for opt in op.config.opciones|slice:":4" %}
                         <code class="dp-http-pair">{{ opt.etiqueta|truncatechars:24 }}→{{ opt.salida }}</code>
                     {% endfor %}
@@ -251,8 +258,10 @@
                 <div class="dp-http-meta">
                     <i class="fa fa-bolt text-warning"></i>
                     <strong>Atajo:</strong>
-                    <code class="dp-http-pair">{{ op.config.opcion_default.etiqueta_si|default:'✅ Sí' }} → {{ op.config.opcion_default.salida_si|default:'(default)' }}</code>
-                    <code class="dp-http-pair">{{ op.config.opcion_default.etiqueta_otra|default:'📍 Otra' }} → {{ op.config.opcion_default.salida_otra|default:'(default)' }}</code>
+                    <code class="dp-http-pair">{{ op.config.opcion_default.etiqueta_si|default:'✅ Sí' }}
+                        → {{ op.config.opcion_default.salida_si|default:'(default)' }}</code>
+                    <code class="dp-http-pair">{{ op.config.opcion_default.etiqueta_otra|default:'📍 Otra' }}
+                        → {{ op.config.opcion_default.salida_otra|default:'(default)' }}</code>
                 </div>
                 <div class="dp-http-meta">
                     <span class="text-muted small">

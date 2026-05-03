@@ -1331,6 +1331,30 @@ def _guardar_opcion(request):
         else:
             opcion.boton_id = ''
 
+    # Campos comunes a todos los tipos (variable_destino, validacion_*,
+    # mensaje_error, reintentos_max). Si el form no los manda, preservamos
+    # el valor actual; si manda vacío, se aplica vacío.
+    if 'variable_destino' in request.POST:
+        opcion.variable_destino = (request.POST.get('variable_destino') or '').strip()[:80]
+    if 'validacion_tipo' in request.POST:
+        vt = (request.POST.get('validacion_tipo') or 'none').strip()
+        opcion.validacion_tipo = vt if vt in VALIDACIONES_VALIDAS else 'none'
+    if 'validacion_expresion' in request.POST:
+        opcion.validacion_expresion = (request.POST.get('validacion_expresion') or '').strip()[:250]
+    if 'mensaje_error' in request.POST:
+        opcion.mensaje_error = (request.POST.get('mensaje_error') or '').strip()
+    if 'reintentos_max' in request.POST:
+        try:
+            opcion.reintentos_max = max(0, min(99, int(request.POST.get('reintentos_max') or 3)))
+        except (TypeError, ValueError):
+            opcion.reintentos_max = 3
+    for coord in ('posicion_x', 'posicion_y'):
+        if coord in request.POST:
+            try:
+                setattr(opcion, coord, float(request.POST.get(coord) or 0))
+            except (TypeError, ValueError):
+                pass
+
     # config_json se construye según tipo_nodo nativo
     if opcion.tipo_nodo == 'cta_url':
         url = (request.POST.get('accion_url') or '').strip()
@@ -1415,10 +1439,16 @@ def _guardar_opcion(request):
             cfg['body'] = body
         if headers:  cfg['headers'] = headers
         if extraer:  cfg['extraer'] = extraer
-        # Side-effect: si está marcado, el motor envía correo a los asesores
-        # del depto al ejecutar este nodo HTTP exitosamente.
         if request.POST.get('envia_correo'):
             cfg['envia_correo'] = True
+        if request.POST.get('http_enviar_respuesta_en_error'):
+            cfg['enviar_respuesta_en_error'] = True
+        timeout_raw = (request.POST.get('http_timeout_seg') or '').strip()
+        if timeout_raw:
+            try:
+                cfg['timeout_seg'] = max(1, min(120, int(timeout_raw)))
+            except (TypeError, ValueError):
+                pass
         opcion.config = cfg
     elif opcion.tipo_nodo == 'menu':
         # Preserva keys que no edita el form (ej: `opciones` estáticas), y
@@ -1455,12 +1485,11 @@ def _guardar_opcion(request):
             }
         else:
             cfg.pop('opcion_default', None)
-        # Limpiar fields heredados de otro tipo (texto plano vive en
-        # `opcion.respuesta`, no en config.mensaje/pregunta).
-        for k in ('mensaje', 'pregunta', 'url', 'display_text',
+        for k in ('pregunta', 'url', 'display_text',
                   'lat', 'lng', 'name', 'address', 'meta_type',
                   'metodo', 'path', 'plantilla_respuesta'):
             cfg.pop(k, None)
+        cfg['mensaje'] = opcion.respuesta
         opcion.config = cfg
         opcion.endpoint = None
     elif opcion.tipo_nodo == 'condicional':
@@ -1529,6 +1558,12 @@ def _guardar_opcion(request):
         if request.POST.get('funcion_envia_correo'):
             cfg['envia_correo'] = True
 
+        plantilla_fn = (request.POST.get('funcion_plantilla') or '').strip()
+        if plantilla_fn:
+            cfg['plantilla_respuesta'] = plantilla_fn
+        if request.POST.get('funcion_enviar_respuesta_en_error'):
+            cfg['enviar_respuesta_en_error'] = True
+
         opcion.config = cfg
         # endpoint es FK ya tomado del select del form (se asigna en el bloque
         # general de guardado del form, no acá). Aceptar 0/empty como None.
@@ -1562,15 +1597,16 @@ def _guardar_opcion(request):
         elif opcion.tipo_nodo == 'pregunta':
             cfg['pregunta'] = opcion.respuesta
             cfg.pop('mensaje', None)
+        if opcion.tipo_nodo == 'respuesta':
+            resp_cta_url = (request.POST.get('respuesta_cta_url') or '').strip()
+            resp_cta_text = (request.POST.get('respuesta_cta_display_text') or '').strip()[:20]
+            if resp_cta_url:
+                cfg['cta_url'] = resp_cta_url
+                cfg['cta_display_text'] = resp_cta_text or 'Abrir'
+            else:
+                cfg.pop('cta_url', None)
+                cfg.pop('cta_display_text', None)
         opcion.config = cfg
-        # Para tipos cuya carrocería de texto vive en `opcion.respuesta`, retirar
-        # `cfg.mensaje`/`cfg.pregunta` heredados de generadores IA. Si no, el
-        # runtime (`cfg.get('mensaje') or opcion.respuesta`) preferiría el valor
-        # viejo y la edición desde el form quedaría invisible al cliente.
-        if opcion.tipo_nodo in ('respuesta', 'menu', 'pregunta') and isinstance(opcion.config, dict):
-            opcion.config.pop('mensaje', None)
-            opcion.config.pop('pregunta', None)
-        # Si dejó de ser http, desvincular el endpoint también.
         if opcion.tipo_nodo != 'http':
             opcion.endpoint = None
 
@@ -1619,6 +1655,7 @@ def _guardar_opcion(request):
                 if not destino:
                     continue
                 etiqueta = (item.get('etiqueta') or '').strip()[:50]
+                descripcion = (item.get('descripcion') or '').strip()[:200]
                 conex_id = item.get('id')
                 try:
                     conex_id = int(conex_id) if conex_id else None
@@ -1628,6 +1665,7 @@ def _guardar_opcion(request):
                     c = actuales[conex_id]
                     c.nodo_destino = destino
                     c.etiqueta = etiqueta
+                    c.descripcion = descripcion
                     c.orden = orden_idx
                     c.save()
                     ids_recibidos.add(conex_id)
@@ -1636,6 +1674,7 @@ def _guardar_opcion(request):
                         nodo_origen=opcion,
                         nodo_destino=destino,
                         etiqueta=etiqueta,
+                        descripcion=descripcion,
                         orden=orden_idx,
                     )
                     ids_recibidos.add(nueva.id)
