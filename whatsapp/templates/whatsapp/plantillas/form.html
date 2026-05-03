@@ -2,6 +2,7 @@
 {% load static templatefunctions %}
 {% block head %}
     <link rel="stylesheet" href="{% static 'stylenew/plantillas.css' %}">
+    <link rel="stylesheet" href="/static/css/whatsapp/tarifas.css?v1.0">
     <style>
         .whatsapp-bubble {
             max-width: 340px;
@@ -111,6 +112,26 @@
                                 <div class="invalid-feedback" id="errorMessagecategoria"></div>
                             </div>
 
+                            <div class="col-12 mt-2">
+                                <div class="card categoria-info-card" id="cat-info-card">
+                                    <div class="card-body py-2 px-3">
+                                        <div class="d-flex align-items-center justify-content-between mb-1">
+                                            <div class="cat-titulo mb-0">
+                                                <i class="fa fa-circle-info me-1 text-info"></i>
+                                                <span id="cat-info-titulo">Selecciona una categoria</span>
+                                            </div>
+                                            <span class="badge" id="cat-info-badge" style="display:none;"></span>
+                                        </div>
+                                        <div class="cat-objetivo" id="cat-info-objetivo">
+                                            Cada categoria de Meta tiene un objetivo distinto y un costo asociado distinto.
+                                        </div>
+                                        <ul class="cat-fines" id="cat-info-fines"></ul>
+                                        <div class="cat-ejemplo" id="cat-info-ejemplo" style="display:none;"></div>
+                                        <div class="cat-costo" id="cat-info-costo"></div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="col-6 col-md-4 mt-2">
                                 <label class="form-label small fw-semibold">Tipo de encabezado</label>
                                 {{ form.header_tipo }}
@@ -216,6 +237,45 @@
 
 {% block jscript %}
     <script>
+        var CATEGORIA_INFO = {
+            {% for code, info in categoria_info.items %}
+                "{{ code }}": {
+                    titulo: "{{ info.titulo|escapejs }}",
+                    objetivo: "{{ info.objetivo|escapejs }}",
+                    color: "{{ info.color }}",
+                    fines: [{% for fin in info.fines %}"{{ fin|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+                    ejemplo: "{{ info.ejemplo|escapejs }}",
+                    costo: "{{ info.costo|escapejs }}"
+                }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        };
+
+        function actualizarInfoCategoria() {
+            var cat = $('[name="categoria"]').val();
+            var info = CATEGORIA_INFO[cat];
+            var $card = $('#cat-info-card');
+            $card.removeClass('cat-utility cat-marketing cat-authentication');
+            if (!info) {
+                $('#cat-info-titulo').text('Selecciona una categoria');
+                $('#cat-info-badge').hide();
+                $('#cat-info-objetivo').text('Cada categoria de Meta tiene un objetivo distinto y un costo asociado distinto.');
+                $('#cat-info-fines').empty();
+                $('#cat-info-ejemplo').hide();
+                $('#cat-info-costo').text('');
+                return;
+            }
+            $card.addClass('cat-' + cat.toLowerCase());
+            $('#cat-info-titulo').text(info.titulo);
+            $('#cat-info-badge').removeClass().addClass('badge bg-' + info.color).text(cat).show();
+            $('#cat-info-objetivo').text(info.objetivo);
+            var $ul = $('#cat-info-fines').empty();
+            info.fines.forEach(function (f) {
+                $ul.append($('<li>').text(f));
+            });
+            $('#cat-info-ejemplo').text('Ejemplo: "' + info.ejemplo + '"').show();
+            $('#cat-info-costo').html('<i class="fa fa-tag me-1"></i>' + info.costo);
+        }
+
         $(document).ready(function () {
             /* ── Selectores por name (mas confiable que por id en este FormBase) ── */
             var $cuerpo = $('[name="cuerpo"]');
@@ -259,6 +319,9 @@
             $header.on('input keyup change', actualizarPreview);
             $footer.on('input keyup change', actualizarPreview);
             $(document).on('change input', '[name="header_tipo"]', actualizarPreview);
+
+            $(document).on('change', '[name="categoria"]', actualizarInfoCategoria);
+            actualizarInfoCategoria();
 
             setTimeout(actualizarPreview, 100);
 

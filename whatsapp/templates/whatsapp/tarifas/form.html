@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% block head %}
+    <link rel="stylesheet" href="/static/css/whatsapp/tarifas.css?v1.0">
+{% endblock %}
+{% block atras %}{{ request.path }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h4 class="mb-0">
+                <i class="fa fa-money-bill-wave text-primary me-2"></i>
+                {% if instance %}Editar tarifa{% else %}Nueva tarifa{% endif %}
+            </h4>
+            <small class="text-muted">
+                {% if instance %}
+                    {{ instance.pais }} · {{ instance.get_categoria_display }} · {{ instance.precio }} {{ instance.moneda }}
+                {% else %}
+                    Registra el costo Meta vigente para una categoria de plantilla en un pais.
+                {% endif %}
+            </small>
+        </div>
+    </div>
+
+    <form id="tarifa-form" method="post" onsubmit="return false;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="{% if instance %}change{% else %}add{% endif %}">
+        {% if instance %}
+            <input type="hidden" name="pk" value="{{ instance.id }}">
+        {% endif %}
+
+        <div class="row g-3">
+            <div class="col-12 col-lg-8">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row g-2">
+                            <div class="col-6 col-md-3">
+                                <label class="form-label small fw-semibold">{{ form.pais.label }} *</label>
+                                {{ form.pais }}
+                                <div class="form-text">{{ form.pais.help_text }}</div>
+                                <div class="invalid-feedback" id="errorMessagepais"></div>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label small fw-semibold">{{ form.categoria.label }} *</label>
+                                {{ form.categoria }}
+                                <div class="invalid-feedback" id="errorMessagecategoria"></div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label small fw-semibold">{{ form.precio.label }} *</label>
+                                {{ form.precio }}
+                                <div class="form-text">{{ form.precio.help_text }}</div>
+                                <div class="invalid-feedback" id="errorMessageprecio"></div>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label small fw-semibold">{{ form.moneda.label }}</label>
+                                {{ form.moneda }}
+                                <div class="invalid-feedback" id="errorMessagemoneda"></div>
+                            </div>
+
+                            <div class="col-6 col-md-4 mt-2">
+                                <label class="form-label small fw-semibold">{{ form.vigencia_desde.label }} *</label>
+                                {{ form.vigencia_desde }}
+                                <div class="invalid-feedback" id="errorMessagevigencia_desde"></div>
+                            </div>
+                            <div class="col-6 col-md-4 mt-2">
+                                <label class="form-label small fw-semibold">{{ form.vigencia_hasta.label }}</label>
+                                {{ form.vigencia_hasta }}
+                                <div class="form-text">{{ form.vigencia_hasta.help_text }}</div>
+                            </div>
+
+                            <div class="col-12 mt-2">
+                                <label class="form-label small fw-semibold">{{ form.notas.label }}</label>
+                                {{ form.notas }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-3 d-flex gap-2">
+                    <button type="button" class="btn btn-success" onclick="guardarTarifa()">
+                        <i class="fa fa-save me-1"></i>
+                        {% if instance %}Guardar cambios{% else %}Crear tarifa{% endif %}
+                    </button>
+                    <a href="{{ request.path }}" class="btn btn-light">Cancelar</a>
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-4">
+                <div class="card border-info">
+                    <div class="card-header bg-info bg-opacity-10 py-2 px-3">
+                        <i class="fa fa-circle-info me-1 text-info"></i>
+                        <strong class="small">Referencia rapida (Ecuador, USD)</strong>
+                    </div>
+                    <div class="card-body py-2 px-3 small">
+                        <p class="mb-1"><strong>Marketing</strong>: aprox 0.0626 / mensaje</p>
+                        <p class="mb-1"><strong>Utility</strong>: aprox 0.0073 / mensaje</p>
+                        <p class="mb-1"><strong>Authentication</strong>: aprox 0.0367 / mensaje</p>
+                        <p class="mb-0 text-muted tarifa-nota">
+                            Valores aproximados. Verifica la tabla oficial de Meta antes de cargar.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block jscript %}
+<script>
+function guardarTarifa() {
+    var datos = {
+        csrfmiddlewaretoken: $('[name="csrfmiddlewaretoken"]').val(),
+    };
+    $('#tarifa-form').find('input, textarea, select').each(function () {
+        var n = $(this).attr('name');
+        if (n) datos[n] = $(this).val();
+    });
+    $.post(window.location.pathname, datos, function (r) {
+        if (Array.isArray(r)) r = r[0];
+        if (r && r.error === false) {
+            if (typeof alertaSuccess === 'function') alertaSuccess('Tarifa guardada');
+            window.location.href = r.to || '/whatsapp/tarifas/';
+        } else if (r) {
+            if (typeof alertaError === 'function') alertaError(r.message || 'Error al guardar');
+            else alert(r.message || 'Error al guardar');
+            $('.invalid-feedback').text('').hide();
+            if (r.errors) {
+                for (var k in r.errors) {
+                    $('#errorMessage' + k).text(r.errors[k]).show();
+                }
+            }
+        }
+    });
+}
+</script>
+{% endblock %}

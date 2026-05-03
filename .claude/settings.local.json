@@ -72,7 +72,11 @@
       "Bash(node -e ' *)",
       "Bash(node -c static/js/dpchat_editor.js)",
       "Bash(node -e \"new Function\\(require\\('fs'\\).readFileSync\\('static/js/dpchat_editor.js','utf8'\\)\\)\")",
-      "Bash(node -e \"new Function\\(require\\('fs'\\).readFileSync\\('static/js/dpchat_preview.js','utf8'\\)\\)\")"
+      "Bash(node -e \"new Function\\(require\\('fs'\\).readFileSync\\('static/js/dpchat_preview.js','utf8'\\)\\)\")",
+      "Bash(xargs grep *)",
+      "Bash(where python *)",
+      "Bash(pycheck whatsapp/view_tarifas.py)",
+      "PowerShell(pycheck *)"
     ]
   },
   "hooks": {

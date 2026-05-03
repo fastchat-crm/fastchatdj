@@ -35,6 +35,7 @@ from .models import (
     ConfigMeta, PlantillaWhatsApp, SesionWhatsApp,
     CATEGORIAS_PLANTILLA, ESTADOS_PLANTILLA_META,
 )
+from .view_tarifas import CATEGORIA_INFO
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,7 @@ def plantillasView(request):
         data['form'] = PlantillaWhatsAppForm()
         data['sesiones_meta'] = _sesiones_meta_del_usuario(request.user)
         data['config_meta_preseleccionada'] = config_meta
+        data['categoria_info'] = CATEGORIA_INFO
         return render(request, 'whatsapp/plantillas/form.html', data)
 
     if action == 'change':
@@ -89,6 +91,7 @@ def plantillasView(request):
         data['form'] = PlantillaWhatsAppForm(instance=plantilla)
         data['sesiones_meta'] = _sesiones_meta_del_usuario(request.user)
         data['config_meta_preseleccionada'] = plantilla.config_meta
+        data['categoria_info'] = CATEGORIA_INFO
         return render(request, 'whatsapp/plantillas/form.html', data)
 
     # ===== LISTADO =====
@@ -127,6 +130,7 @@ def plantillasView(request):
     data['sesiones_meta'] = _sesiones_meta_del_usuario(request.user)
     data['estados_meta'] = ESTADOS_PLANTILLA_META
     data['categorias'] = CATEGORIAS_PLANTILLA
+    data['categoria_info'] = CATEGORIA_INFO
 
     paginador(request, listado, 20, data, url_vars)
     return render(request, 'whatsapp/plantillas/listado.html', data)

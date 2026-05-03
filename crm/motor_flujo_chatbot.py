@@ -205,6 +205,35 @@ def _valida_cedula_ec(cedula: str) -> bool:
     return ((10 - total % 10) % 10) == d[9]
 
 
+_NUMERO_LIMPIO_RE = re.compile(r'[\s.,]')
+
+
+def normalizar_numero(texto: str) -> str:
+    t = (texto or '').strip()
+    if not t:
+        return ''
+    signo = ''
+    if t[0] in '+-':
+        signo, t = t[0] if t[0] == '-' else '', t[1:]
+    if not t:
+        return ''
+    has_dot = '.' in t
+    has_comma = ',' in t
+    if has_dot and has_comma:
+        if t.rfind('.') > t.rfind(','):
+            t = t.replace(',', '')
+        else:
+            t = t.replace('.', '').replace(',', '.')
+    elif has_dot or has_comma:
+        sep = '.' if has_dot else ','
+        partes = t.split(sep)
+        if all(len(p) == 3 for p in partes[1:]) and len(partes[0]) <= 3 and len(partes) >= 2:
+            t = t.replace(sep, '')
+        elif sep == ',':
+            t = t.replace(',', '.')
+    return signo + t
+
+
 def validar_entrada(tipo: str, expresion: str, texto: str) -> bool:
     t = (texto or '').strip()
     if tipo in ('', 'none', None):
@@ -212,7 +241,8 @@ def validar_entrada(tipo: str, expresion: str, texto: str) -> bool:
     if tipo == 'email':
         return bool(re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', t))
     if tipo == 'numero':
-        return bool(re.match(r'^-?\d+([.,]\d+)?$', t))
+        n = normalizar_numero(t)
+        return bool(re.match(r'^-?\d+(\.\d+)?$', n))
     if tipo == 'telefono':
         return bool(re.match(r'^\+?[\d\s\-]{7,}$', t))
     if tipo == 'fecha':
@@ -1130,10 +1160,13 @@ class MotorFlujo:
                 self.enviar(nodo.mensaje_error or 'Dato inválido, intenta de nuevo.')
                 return None
             if nodo.variable_destino:
-                self.estado.set_variable(nodo.variable_destino, self.texto)
+                valor = self.texto
+                if nodo.validacion_tipo == 'numero':
+                    valor = normalizar_numero(valor)
+                self.estado.set_variable(nodo.variable_destino, valor)
                 self.estado.save()
                 self._trace('set_variable', f'Variable "{nodo.variable_destino}" capturada',
-                            True, {'valor': self.texto[:120]})
+                            True, {'valor': str(valor)[:120]})
             return ''
 
         if tipo == 'menu':

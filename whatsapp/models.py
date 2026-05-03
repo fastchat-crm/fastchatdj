@@ -8,6 +8,7 @@ from django.conf.global_settings import LANGUAGES
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.core.files.base import ContentFile
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 from agents_ai.agente_resumidor import AgenteResumidor
@@ -1464,6 +1465,65 @@ class PlantillaWhatsApp(ModeloBase):
             'PAUSED':   'info',
             'DISABLED': 'dark',
         }.get(self.estado_meta, 'secondary')
+
+
+class TarifaPlantillaMeta(ModeloBase):
+    pais = models.CharField(
+        max_length=2, default='EC',
+        verbose_name='Pais (ISO-3166 alpha-2)',
+        help_text='Codigo ISO de 2 letras. Ej: EC, MX, CO, PE, US.'
+    )
+    categoria = models.CharField(
+        max_length=20, choices=CATEGORIAS_PLANTILLA,
+        verbose_name='Categoria Meta'
+    )
+    precio = models.DecimalField(
+        max_digits=10, decimal_places=6,
+        verbose_name='Precio por mensaje',
+        help_text='Costo unitario por mensaje de plantilla. Ej: 0.0626 para Marketing en Ecuador.'
+    )
+    moneda = models.CharField(
+        max_length=3, default='USD',
+        verbose_name='Moneda',
+        help_text='ISO-4217. Por defecto USD (Meta factura en USD).'
+    )
+    vigencia_desde = models.DateField(
+        verbose_name='Vigente desde',
+        help_text='Fecha desde la cual aplica este precio.'
+    )
+    vigencia_hasta = models.DateField(
+        null=True, blank=True,
+        verbose_name='Vigente hasta',
+        help_text='Vacio = vigente indefinidamente. Se llena cuando Meta cambia precios.'
+    )
+    notas = models.TextField(
+        blank=True, null=True,
+        verbose_name='Notas',
+        help_text='Observaciones internas sobre esta tarifa.'
+    )
+
+    class Meta:
+        verbose_name = 'Tarifa Plantilla Meta'
+        verbose_name_plural = 'Tarifas Plantillas Meta'
+        ordering = ['pais', 'categoria', '-vigencia_desde']
+        indexes = [
+            models.Index(fields=['pais', 'categoria', 'vigencia_desde']),
+        ]
+
+    def __str__(self):
+        return f"{self.pais} · {self.get_categoria_display()} · {self.precio} {self.moneda}"
+
+    @staticmethod
+    def vigente(pais, categoria, fecha=None):
+        from datetime import date
+        f = fecha or date.today()
+        qs = TarifaPlantillaMeta.objects.filter(
+            status=True, pais=pais, categoria=categoria,
+            vigencia_desde__lte=f,
+        ).filter(
+            Q(vigencia_hasta__isnull=True) | Q(vigencia_hasta__gte=f)
+        ).order_by('-vigencia_desde')
+        return qs.first()
 
 
 class MetaWebhookHit(models.Model):

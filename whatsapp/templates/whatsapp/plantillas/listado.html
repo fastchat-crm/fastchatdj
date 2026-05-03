@@ -3,6 +3,7 @@
 {% block head %}
     <link rel="stylesheet" href="{% static 'stylenew/plantillas.css' %}">
     <link rel="stylesheet" href="{% static 'stylenew/sesionws.css' %}">
+    <link rel="stylesheet" href="/static/css/whatsapp/tarifas.css?v1.1">
 {% endblock %}
 
 {% block content %}
@@ -21,8 +22,14 @@
     {# ===== EXPLICACIÓN DEL MÓDULO ===== #}
     <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
         <i class="fa fa-file-lines fa-2x"></i>
-        <div>
-            <strong>¿Para qué sirven las plantillas de WhatsApp?</strong><br>
+        <div class="flex-grow-1">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <strong>¿Para qué sirven las plantillas de WhatsApp?</strong>
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        data-bs-toggle="collapse" data-bs-target="#cat-info-panel">
+                    <i class="fa fa-circle-info me-1"></i> Ver categorias en detalle
+                </button>
+            </div>
             <small>
                 Meta exige que <strong>todo mensaje proactivo</strong> (iniciado por tu negocio) o
                 enviado <strong>fuera de la ventana de 24 horas</strong> use una <em>plantilla pre-aprobada</em>.
@@ -37,6 +44,31 @@
             </small>
         </div>
     </div>
+
+    {% if categoria_info %}
+    <div class="collapse mb-3" id="cat-info-panel">
+        <div class="row g-3">
+            {% for code, info in categoria_info.items %}
+            <div class="col-12 col-md-4">
+                <div class="card categoria-info-card cat-{{ code|lower }} h-100">
+                    <div class="card-body">
+                        <div class="cat-titulo">
+                            <span class="badge bg-{{ info.color }}">{{ code }}</span>
+                            {{ info.titulo }}
+                        </div>
+                        <div class="cat-objetivo">{{ info.objetivo }}</div>
+                        <ul class="cat-fines">
+                            {% for fin in info.fines %}<li>{{ fin }}</li>{% endfor %}
+                        </ul>
+                        <div class="cat-ejemplo">"{{ info.ejemplo }}"</div>
+                        <div class="cat-costo"><i class="fa fa-tag me-1"></i>{{ info.costo }}</div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 
     {# ===== SIN SESIONES META ===== #}
     {% if not sesiones_meta %}
@@ -189,7 +221,16 @@
                                         {{ p.cuerpo|truncatechars:70 }}
                                     </div>
                                 </td>
-                                <td><span class="badge bg-secondary">{{ p.get_categoria_display }}</span></td>
+                                <td>
+                                    {% ver_valor_dict categoria_info p.categoria as cat_info %}
+                                    {% if cat_info %}
+                                        <span class="badge bg-{{ cat_info.color }}" title="{{ cat_info.objetivo }}">
+                                            {{ p.get_categoria_display }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ p.get_categoria_display }}</span>
+                                    {% endif %}
+                                </td>
                                 <td class="small">{{ p.idioma }}</td>
                                 <td>
                                     <span class="badge bg-{{ p.color_estado }}">

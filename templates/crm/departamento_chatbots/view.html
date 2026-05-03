@@ -58,80 +58,150 @@
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table id="tabla" class="table table-hover table-striped">
-                    <thead>
-                    <tr>
-                        <th class="text-center">Cod.</th>
-                        <th class="text-center">Nombre</th>
-                        <th class="text-center">Color</th>
-                        <th class="text-center">Mensaje de Saludo</th>
-                        <th class="text-center">Acción</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {% for l in listado %}
-                        <tr>
-                            <td class="text-center"><b>{{ l.id|default:'' }}</b></td>
-                            <td class="text-center">{{ l.nombre|default:'' }}</td>
-                            <td class="text-center"><span
-                                    style="display:inline-block; width:25px; height:25px; border-radius:5px; border:1px solid #ccc; background-color:{{ l.color }};"></span>
-                            </td>
-                            <td class="text-center">{{ l.mensaje_saludo|default:'' }}</td>
-                            <td class="text-center">
-                                <div class="dropdown">
-                                    <button class="btn btn-icon" type="button" id="dropdownMenuButton-{{ l.pk }}"
-                                            data-bs-toggle="dropdown" aria-expanded="false"
-                                            style="background: none; border: none;">
-                                        <i class="fas fa-ellipsis-v"></i>
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end"
-                                        aria-labelledby="dropdownMenuButton-{{ l.pk }}">
-                                        <li>
-                                            <a class="dropdown-item"
-                                               onclick="formModal({{ l.pk }}, 'Asignación de usuarios {{ l }}', 'addUsers')"
-                                               href="javascript:void(0);">
-                                                <i class="fas fa-users me-2 text-success"></i>Usuarios
-                                            </a>
-                                        </li>
-                                        <li class="dropdown-divider"></li>
-                                        <li>
-                                            <a class="dropdown-item"
-                                               href="?action=change&id={{ l.pk }}&full=1">
-                                                <i class="fas fa-edit me-2 text-primary"></i>Editar
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a class="dropdown-item" href="javascript:void(0);"
-                                               onclick="abrirModalGenerarAgente({{ l.pk }}, '{{ l.nombre|escapejs }}')">
-                                                <i class="fa fa-robot me-2 text-info"></i>Generar Agente IA
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a class="dropdown-item" href="javascript:void(0);"
-                                               onclick="abrirModalDuplicar({{ l.pk }})">
-                                                <i class="fa fa-copy me-2 text-warning"></i>Duplicar
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a class="dropdown-item" href="javascript:void(0);"
-                                               onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'delete')">
-                                                <i class="fas fa-trash me-2 text-danger"></i>Eliminar
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-                {% include "paginacion.html" %}
+    {# ───────── Grid de cards ───────── #}
+    {% if listado %}
+        <div class="dpchat-grid">
+            {% for l in listado %}
+                <div class="dpchat-card" style="--dpchat-color: {{ l.color|default:'#6b7280' }};">
+                    <div class="dpchat-card__bar"></div>
+                    <div class="dpchat-card__body">
+                        <div class="dpchat-card__head">
+                            <div class="dpchat-card__title-wrap">
+                                <h6 class="dpchat-card__title" title="{{ l.nombre }}">{{ l.nombre }}</h6>
+                                <small class="dpchat-card__id">#{{ l.id }}</small>
+                            </div>
+                            <div class="dropdown dpchat-card__menu">
+                                <button class="btn btn-sm btn-icon" type="button"
+                                        id="dropdownMenuButton-{{ l.pk }}"
+                                        data-bs-toggle="dropdown" aria-expanded="false"
+                                        title="Más acciones">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end"
+                                    aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                                    <li>
+                                        <a class="dropdown-item"
+                                           onclick="formModal({{ l.pk }}, 'Asignación de usuarios {{ l }}', 'addUsers')"
+                                           href="javascript:void(0);">
+                                            <i class="fas fa-users me-2 text-success"></i>Usuarios
+                                        </a>
+                                    </li>
+                                    <li class="dropdown-divider"></li>
+                                    <li>
+                                        <a class="dropdown-item" href="javascript:void(0);"
+                                           onclick="abrirModalGenerarAgente({{ l.pk }}, '{{ l.nombre|escapejs }}')">
+                                            <i class="fa fa-robot me-2 text-info"></i>Generar Agente IA
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="javascript:void(0);"
+                                           onclick="abrirModalDuplicar({{ l.pk }})">
+                                            <i class="fa fa-copy me-2 text-warning"></i>Duplicar
+                                        </a>
+                                    </li>
+                                    <li class="dropdown-divider"></li>
+                                    <li>
+                                        <a class="dropdown-item" href="javascript:void(0);"
+                                           onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'delete')">
+                                            <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="dpchat-card__badges">
+                            {% if l.es_default %}
+                                <span class="badge bg-warning text-dark">
+                                    <i class="fa fa-star me-1"></i>Default
+                                </span>
+                            {% endif %}
+                            {% if l.activo_tradicional %}
+                                <span class="badge bg-success-soft">
+                                    <i class="fa fa-circle-check me-1"></i>Activo
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary-soft">
+                                    <i class="fa fa-pause me-1"></i>Inactivo
+                                </span>
+                            {% endif %}
+                        </div>
+
+                        <p class="dpchat-card__saludo" title="{{ l.mensaje_saludo }}">
+                            {% if l.mensaje_saludo %}
+                                {{ l.mensaje_saludo|truncatechars:140 }}
+                            {% else %}
+                                <em class="text-muted">Sin mensaje de saludo</em>
+                            {% endif %}
+                        </p>
+
+                        <div class="dpchat-card__counters">
+                            <div class="dpchat-counter" title="Nodos del flujo">
+                                <span class="dpchat-counter__num">{{ l.count_nodos }}</span>
+                                <span class="dpchat-counter__lbl">Nodos</span>
+                            </div>
+                            <div class="dpchat-counter" title="Conexiones del grafo">
+                                <span class="dpchat-counter__num">{{ l.count_conexiones }}</span>
+                                <span class="dpchat-counter__lbl">Conexiones</span>
+                            </div>
+                            <div class="dpchat-counter" title="Asesores asignados">
+                                <span class="dpchat-counter__num">{{ l.count_usuarios }}</span>
+                                <span class="dpchat-counter__lbl">Usuarios</span>
+                            </div>
+                            <div class="dpchat-counter" title="Palabras clave de entrada">
+                                <span class="dpchat-counter__num">{{ l.count_palabras }}</span>
+                                <span class="dpchat-counter__lbl">Palabras</span>
+                            </div>
+                        </div>
+
+                        <div class="dpchat-card__actions">
+                            <a href="?action=change&id={{ l.pk }}&full=1"
+                               class="btn btn-sm btn-primary"
+                               title="Editar departamento y nodos">
+                                <i class="fas fa-edit me-1"></i>Editar
+                            </a>
+                            <a href="?action=diagrama&id={{ l.pk }}"
+                               class="btn btn-sm btn-outline-info"
+                               title="Ver diagrama del flujo">
+                                <i class="fas fa-diagram-project me-1"></i>Diagrama
+                            </a>
+                            <a href="?action=preview&id={{ l.pk }}"
+                               class="btn btn-sm btn-outline-success"
+                               title="Simulador WhatsApp del flujo">
+                                <i class="fab fa-whatsapp me-1"></i>Preview
+                            </a>
+                            {% if l.sesion_prueba_enc %}
+                                <a href="/crm/departamentos_chatbots/prueba/{{ l.sesion_prueba_enc }}/"
+                                   class="btn btn-sm btn-outline-warning"
+                                   title="Probar flujo con motor real (sesión asociada)">
+                                    <i class="fas fa-play me-1"></i>Probar
+                                </a>
+                            {% else %}
+                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled
+                                        title="Asigná este departamento a una sesión WhatsApp para poder probarlo">
+                                    <i class="fas fa-play me-1"></i>Probar
+                                </button>
+                            {% endif %}
+                            <button type="button" class="btn btn-sm btn-outline-dark"
+                                    onclick="abrirModalApiJson({{ l.pk }}, '{{ l.nombre|escapejs }}')"
+                                    title="Ver JSON técnico del flujo (export)">
+                                <i class="fas fa-code me-1"></i>API JSON
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        {% include "paginacion.html" %}
+    {% else %}
+        <div class="card">
+            <div class="card-body text-center py-5 text-muted">
+                <i class="fas fa-inbox fa-3x mb-3 d-block opacity-50"></i>
+                <h6>No hay departamentos</h6>
+                <p class="mb-0 small">Creá uno con el botón "Nuevo {{ titulo }}" o generalo con IA.</p>
             </div>
         </div>
-    </div>
+    {% endif %}
 
     <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-xl">
@@ -283,6 +353,48 @@
                             <i class="fa fa-wand-magic-sparkles me-1"></i> Generar Agente IA
                         </button>
                     {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ───────── Modal: Ver API JSON ───────── #}
+    <div class="modal fade" id="modalApiJson" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title">
+                        <i class="fa fa-code me-2 text-dark"></i>
+                        API JSON · <span id="apijson_dpto_nombre" class="text-primary">—</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body p-2">
+                    <div class="d-flex align-items-center justify-content-between mb-2 px-2">
+                        <small class="text-muted">
+                            <i class="fa fa-circle-info me-1"></i>
+                            Snapshot completo del flujo: depto + nodos + conexiones + endpoints.
+                        </small>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    id="btnApiJsonCopiar" disabled>
+                                <i class="fa fa-copy me-1"></i>Copiar
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                    id="btnApiJsonDescargar" disabled>
+                                <i class="fa fa-download me-1"></i>Descargar
+                            </button>
+                        </div>
+                    </div>
+                    <div id="apijson_loading" class="text-center text-muted py-5">
+                        <i class="fa fa-spinner fa-spin fa-2x mb-2"></i>
+                        <div>Cargando JSON…</div>
+                    </div>
+                    <pre id="apijson_pre" class="dpchat-json-pre" style="display:none;"></pre>
+                    <div id="apijson_error" class="alert alert-danger d-none mb-0"></div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
@@ -774,6 +886,83 @@
                     res.classList.add('alert-danger');
                     res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Error de red: ' + ex.message;
                 }
+            });
+        }
+
+        // ───── Ver API JSON ─────
+        let _modalApiJsonInstance = null;
+        let _apiJsonPayload = null;
+        let _apiJsonNombre = '';
+        function abrirModalApiJson(dptoId, dptoNombre) {
+            const el = document.getElementById('modalApiJson');
+            if (!el) return;
+            if (!_modalApiJsonInstance) _modalApiJsonInstance = new bootstrap.Modal(el);
+            _apiJsonNombre = dptoNombre || ('depto_' + dptoId);
+            document.getElementById('apijson_dpto_nombre').textContent = dptoNombre || '—';
+            document.getElementById('apijson_loading').style.display = '';
+            const pre = document.getElementById('apijson_pre');
+            pre.style.display = 'none';
+            pre.textContent = '';
+            const err = document.getElementById('apijson_error');
+            err.classList.add('d-none');
+            err.textContent = '';
+            document.getElementById('btnApiJsonCopiar').disabled = true;
+            document.getElementById('btnApiJsonDescargar').disabled = true;
+            _apiJsonPayload = null;
+            _modalApiJsonInstance.show();
+
+            fetch('{{ request.path }}?action=exportar_flujo_json&id=' + dptoId, {
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
+                credentials: 'same-origin',
+            }).then(r => r.json()).then(resp => {
+                document.getElementById('apijson_loading').style.display = 'none';
+                if (!resp.result) {
+                    err.classList.remove('d-none');
+                    err.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> ' + (resp.message || 'Error al exportar.');
+                    return;
+                }
+                _apiJsonPayload = resp.data;
+                pre.textContent = JSON.stringify(resp.data, null, 2);
+                pre.style.display = '';
+                document.getElementById('btnApiJsonCopiar').disabled = false;
+                document.getElementById('btnApiJsonDescargar').disabled = false;
+            }).catch(ex => {
+                document.getElementById('apijson_loading').style.display = 'none';
+                err.classList.remove('d-none');
+                err.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Error de red: ' + ex.message;
+            });
+        }
+
+        const _btnApiJsonCop = document.getElementById('btnApiJsonCopiar');
+        if (_btnApiJsonCop) {
+            _btnApiJsonCop.addEventListener('click', function () {
+                if (!_apiJsonPayload) return;
+                const txt = JSON.stringify(_apiJsonPayload, null, 2);
+                navigator.clipboard.writeText(txt).then(() => {
+                    const orig = this.innerHTML;
+                    this.innerHTML = '<i class="fa fa-check me-1"></i>Copiado';
+                    setTimeout(() => { this.innerHTML = orig; }, 1500);
+                }).catch(() => {
+                    alertaWarning && alertaWarning('No se pudo copiar al portapapeles.');
+                });
+            });
+        }
+
+        const _btnApiJsonDes = document.getElementById('btnApiJsonDescargar');
+        if (_btnApiJsonDes) {
+            _btnApiJsonDes.addEventListener('click', function () {
+                if (!_apiJsonPayload) return;
+                const txt = JSON.stringify(_apiJsonPayload, null, 2);
+                const blob = new Blob([txt], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const safeName = (_apiJsonNombre || 'depto').replace(/[^a-z0-9_-]+/gi, '_');
+                a.download = 'flujo_' + safeName + '.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
             });
         }
 

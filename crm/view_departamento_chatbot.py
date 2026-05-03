@@ -632,10 +632,61 @@ def departamentoChatbotsView(request):
             filtros = filtros & (Q(nombre__icontains=criterio))
             data["criterio"] = criterio
             url_vars += '&criterio=' + criterio
-        listado = model.objects.filter(filtros)
+        # Contadores anexados a cada card (nodos, conexiones, usuarios). Una
+        # sola query con annotate; los conditional Count filtran status=True
+        # para no contar soft-deleted.
+        from django.db.models import Count
+        listado = model.objects.filter(filtros).annotate(
+            count_nodos=Count(
+                'opciondepartamentochatbot',
+                filter=Q(opciondepartamentochatbot__status=True),
+                distinct=True,
+            ),
+            count_usuarios=Count(
+                'perfildepartamentochatbot',
+                filter=Q(perfildepartamentochatbot__status=True),
+                distinct=True,
+            ),
+            count_conexiones=Count(
+                'opciondepartamentochatbot__salidas',
+                filter=Q(opciondepartamentochatbot__status=True,
+                         opciondepartamentochatbot__salidas__status=True),
+                distinct=True,
+            ),
+        )
         data["list_count"] = listado.count()
         data["url_vars"] = url_vars
         paginador(request, listado.order_by('nombre'), 20, data, url_vars)
+
+        # Para el botón "Probar" de cada card resolvemos UNA sesión WhatsApp
+        # asociada al depto (M2M `departamentos` o como `departamento_default`).
+        # Si no hay, el botón queda deshabilitado en la card.
+        from whatsapp.models import SesionWhatsApp
+        from core.funciones import get_encrypt
+        deptos_ids = [d.id for d in data.get('listado', [])]
+        sesiones_por_depto = {}
+        if deptos_ids:
+            for sesion in SesionWhatsApp.objects.filter(
+                    Q(departamentos__id__in=deptos_ids) | Q(departamento_default_id__in=deptos_ids),
+                    status=True,
+            ).prefetch_related('departamentos').only('id', 'departamento_default_id'):
+                # Una sesión puede cubrir varios deptos; mapeamos para todos.
+                ids_relacionados = set(
+                    sesion.departamentos.filter(id__in=deptos_ids).values_list('id', flat=True)
+                )
+                if sesion.departamento_default_id in deptos_ids:
+                    ids_relacionados.add(sesion.departamento_default_id)
+                for dep_id in ids_relacionados:
+                    sesiones_por_depto.setdefault(dep_id, sesion.id)
+        # Anexar palabras_clave_count y sesion_prueba_enc a cada item del listado.
+        for item in data.get('listado', []):
+            item.count_palabras = len(item.get_palabras_clave())
+            sesion_id = sesiones_por_depto.get(item.id)
+            if sesion_id:
+                ok, enc = get_encrypt(sesion_id)
+                item.sesion_prueba_enc = enc if ok else ''
+            else:
+                item.sesion_prueba_enc = ''
 
         # Flag para mostrar/esconder el botón "Crear con IA". Solo activo si
         # Configuracion tiene token_ia cargado Y el switch ia_features_activas=True.

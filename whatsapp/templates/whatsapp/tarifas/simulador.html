@@ -1,0 +1,293 @@
+{% extends 'base.html' %}
+{% block head %}
+    <link rel="stylesheet" href="/static/css/whatsapp/tarifas.css?v1.1">
+    <link rel="stylesheet" href="/static/css/whatsapp/simulador.css?v1.1">
+{% endblock %}
+{% block atras %}{{ request.path }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h4 class="mb-0">
+                <i class="fa fa-calculator text-info me-2"></i>
+                Simulador de Costos Meta
+            </h4>
+            <small class="text-muted">
+                Estima cuanto te cobrara Meta por una campana o periodo, segun pais y categoria.
+            </small>
+        </div>
+        <a href="{{ request.path }}" class="btn btn-light">
+            <i class="fa fa-arrow-left me-1"></i> Volver a tarifas
+        </a>
+    </div>
+
+    <div class="alert alert-warning d-flex align-items-center gap-2 mb-3 small">
+        <i class="fa fa-triangle-exclamation"></i>
+        <div>
+            Las cantidades aqui son <strong>solo estimaciones</strong>. El cobro real depende de la conversacion
+            efectivamente abierta y de los cambios que Meta haga en su tabla. Recuerda: si el cliente escribio en
+            las ultimas 24h, los mensajes <strong>service</strong> son gratis y los <strong>utility</strong> tambien
+            (dentro de la ventana).
+        </div>
+    </div>
+
+    <form id="simulador-form" onsubmit="return false;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="simular">
+
+        <div class="row g-3">
+            <div class="col-12 col-lg-7">
+                <div class="card simulador-card">
+                    <div class="d-flex align-items-end gap-3 mb-3 flex-wrap">
+                        <div>
+                            <label class="form-label small fw-semibold mb-1">Pais</label>
+                            <select name="pais" class="form-control simulador-pais-select" id="sim-pais">
+                                {% for p in paises_disponibles %}
+                                <option value="{{ p }}" {% if p == pais_default %}selected{% endif %}>{{ p }}</option>
+                                {% empty %}
+                                <option value="EC" selected>EC</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <small class="text-muted">
+                            Si tu pais no aparece, registra primero las tarifas en
+                            <a href="{{ request.path }}">Tarifas Meta</a>.
+                        </small>
+                    </div>
+
+                    <div class="simulador-presets mb-2">
+                        <span class="presets-label small text-muted me-2">Volumen rapido:</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-preset="100">100</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-preset="500">500</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-preset="1000">1.000</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-preset="5000">5.000</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-preset="10000">10.000</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger ms-2" data-preset="0">
+                            <i class="fa fa-eraser me-1"></i>Limpiar
+                        </button>
+                    </div>
+
+                    {% for code, info in categoria_info.items %}
+                    <div class="simulador-categoria-row sim-cat-{{ code|lower }}">
+                        <div class="simulador-categoria-label">
+                            <div class="d-flex align-items-center flex-wrap">
+                                <span class="badge bg-{{ info.color }} badge-cat">{{ code }}</span>
+                                <strong>{{ info.titulo }}</strong>
+                                <span class="precio-unit ms-2" id="precio-{{ code }}">— /msg</span>
+                                <button type="button" class="btn btn-link btn-sm py-0 px-1 ms-1 sim-info-toggle"
+                                        data-cat="{{ code }}" title="Ver detalle de la categoria">
+                                    <i class="fa fa-circle-info"></i>
+                                </button>
+                            </div>
+                            <div class="text-muted simulador-cat-objetivo">{{ info.objetivo }}</div>
+                            <div class="sim-cat-detalle d-none" id="sim-detalle-{{ code }}">
+                                <div class="small fw-semibold mt-1 mb-1">Casos de uso:</div>
+                                <ul class="small mb-1 ps-3">
+                                    {% for fin in info.fines %}<li>{{ fin }}</li>{% endfor %}
+                                </ul>
+                                <div class="cat-ejemplo small">"{{ info.ejemplo }}"</div>
+                                <div class="small text-muted mt-1">
+                                    <i class="fa fa-tag me-1"></i>{{ info.costo }}
+                                </div>
+                            </div>
+                        </div>
+                        <input type="number" min="0" step="1"
+                               class="form-control simulador-cantidad-input"
+                               name="cant_{{ code|lower }}" value="0"
+                               data-categoria="{{ code }}">
+                        <div class="simulador-subtotal" id="subtotal-{{ code }}">—</div>
+                    </div>
+                    {% endfor %}
+
+                    <div class="simulador-total-bar">
+                        <div>
+                            <div class="total-label">
+                                Total estimado
+                                <span class="ms-2 small fw-normal opacity-75" id="total-pais">({{ pais_default }})</span>
+                            </div>
+                            <div class="total-mensajes small opacity-75" id="total-mensajes">0 mensajes</div>
+                        </div>
+                        <div class="total-monto" id="total-monto">0.0000 USD</div>
+                    </div>
+
+                    <div class="d-flex justify-content-end mt-3">
+                        <button type="button" class="btn btn-info text-white" onclick="simular()">
+                            <i class="fa fa-bolt me-1"></i> Calcular
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-5">
+                <div class="card mb-3">
+                    <div class="card-header bg-light py-2 px-3">
+                        <strong class="small">
+                            <i class="fa fa-tag me-1"></i> Tarifas vigentes para
+                            <span id="resumen-pais">{{ pais_default }}</span>
+                        </strong>
+                    </div>
+                    <div class="card-body p-2">
+                        <table class="table table-sm mb-0 small">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Categoria</th>
+                                    <th class="text-end">Precio / msg</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-tarifas-vigentes">
+                                {% for code, info in categoria_info.items %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-{{ info.color }} simulador-badge-cat">{{ code }}</span>
+                                    </td>
+                                    <td class="text-end" id="cell-tarifa-{{ code }}">
+                                        <span class="text-muted">—</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card border-secondary">
+                    <div class="card-header bg-light py-2 px-3">
+                        <strong class="small">
+                            <i class="fa fa-circle-info me-1"></i> Como leer este simulador
+                        </strong>
+                    </div>
+                    <div class="card-body small">
+                        <p class="mb-1"><strong>Marketing</strong>: cada envio cuenta, aunque el cliente respondio antes.</p>
+                        <p class="mb-1"><strong>Utility</strong>: gratis si el cliente escribio en las ultimas 24h.</p>
+                        <p class="mb-1"><strong>Authentication</strong>: solo OTP, formato fijo.</p>
+                        <p class="mb-0 text-muted simulador-nota">
+                            El simulador <strong>no descuenta</strong> los utility gratuitos; calcula como si todos
+                            se enviaran fuera de la ventana de servicio (peor caso).
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block jscript %}
+<script>
+var TARIFAS_VIGENTES = {
+    {% for code, t in tarifas_vigentes.items %}
+        "{{ code }}": { precio: parseFloat("{{ t.precio }}"), moneda: "{{ t.moneda }}" }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+};
+
+function fmt(num, dec) {
+    if (isNaN(num)) return '—';
+    return Number(num).toFixed(dec || 4);
+}
+
+function actualizarPreciosUnitarios() {
+    ['MARKETING', 'UTILITY', 'AUTHENTICATION'].forEach(function(cat) {
+        var t = TARIFAS_VIGENTES[cat];
+        var $p = $('#precio-' + cat);
+        var $cell = $('#cell-tarifa-' + cat);
+        if (t && !isNaN(t.precio)) {
+            $p.text(fmt(t.precio, 6) + ' ' + t.moneda + '/msg');
+            $cell.html('<span class="tarifa-precio">' + fmt(t.precio, 6) + '</span> ' + t.moneda);
+        } else {
+            $p.text('sin tarifa cargada');
+            $cell.html('<span class="text-danger small">Sin tarifa</span>');
+        }
+    });
+}
+
+function calcularLocal() {
+    var total = 0;
+    var totalQty = 0;
+    var moneda = 'USD';
+    ['MARKETING', 'UTILITY', 'AUTHENTICATION'].forEach(function(cat) {
+        var qty = parseInt($('input[name=cant_' + cat.toLowerCase() + ']').val() || 0, 10);
+        if (!isNaN(qty)) totalQty += qty;
+        var t = TARIFAS_VIGENTES[cat];
+        var $sub = $('#subtotal-' + cat);
+        if (!t || isNaN(t.precio)) {
+            $sub.addClass('sin-tarifa').text(qty > 0 ? 'sin tarifa' : '—');
+            return;
+        }
+        var sub = qty * t.precio;
+        total += sub;
+        moneda = t.moneda;
+        $sub.removeClass('sin-tarifa').text(fmt(sub, 4) + ' ' + t.moneda);
+    });
+    $('#total-monto').text(fmt(total, 4) + ' ' + moneda);
+    $('#total-mensajes').text(totalQty.toLocaleString() + ' mensaje' + (totalQty === 1 ? '' : 's'));
+}
+
+function simular() {
+    var datos = {
+        csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val(),
+        action: 'simular',
+        pais: $('#sim-pais').val(),
+        cant_marketing: $('input[name=cant_marketing]').val() || 0,
+        cant_utility: $('input[name=cant_utility]').val() || 0,
+        cant_authentication: $('input[name=cant_authentication]').val() || 0,
+    };
+    $.post(window.location.pathname, datos, function(r) {
+        if (r && r.error === false) {
+            if (r.tarifas_pais) {
+                ['MARKETING', 'UTILITY', 'AUTHENTICATION'].forEach(function(cat) {
+                    if (r.tarifas_pais[cat]) {
+                        TARIFAS_VIGENTES[cat] = {
+                            precio: parseFloat(r.tarifas_pais[cat].precio),
+                            moneda: r.tarifas_pais[cat].moneda,
+                        };
+                    } else {
+                        TARIFAS_VIGENTES[cat] = null;
+                    }
+                });
+                actualizarPreciosUnitarios();
+            }
+            $('#total-monto').text(fmt(r.total, 4) + ' ' + r.moneda);
+            $('#total-pais').text('(' + r.pais + ')');
+            $('#resumen-pais').text(r.pais);
+            (r.detalle || []).forEach(function(d) {
+                var $sub = $('#subtotal-' + d.categoria);
+                if (d.sin_tarifa) {
+                    $sub.addClass('sin-tarifa').text('sin tarifa');
+                } else {
+                    $sub.removeClass('sin-tarifa').text(fmt(d.subtotal, 4) + ' ' + d.moneda);
+                }
+            });
+            calcularLocal();
+        } else {
+            if (typeof alertaError === 'function') alertaError((r && r.message) || 'Error');
+            else alert((r && r.message) || 'Error al simular');
+        }
+    });
+}
+
+function aplicarPreset(valor) {
+    $('input.simulador-cantidad-input').val(valor);
+    calcularLocal();
+}
+
+$(document).ready(function() {
+    actualizarPreciosUnitarios();
+    calcularLocal();
+    $('input.simulador-cantidad-input').on('input change', calcularLocal);
+    $('#sim-pais').on('change', function() {
+        simular();
+    });
+    $('.simulador-presets [data-preset]').on('click', function() {
+        aplicarPreset($(this).data('preset'));
+    });
+    $('.sim-info-toggle').on('click', function() {
+        var cat = $(this).data('cat');
+        var $det = $('#sim-detalle-' + cat);
+        $det.toggleClass('d-none');
+        $(this).find('i').toggleClass('fa-circle-info fa-circle-xmark');
+    });
+});
+</script>
+{% endblock %}

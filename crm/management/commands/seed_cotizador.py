@@ -15,9 +15,13 @@ El cliente recibe en WhatsApp solo "estamos procesando" (ok) o
 
 Flujo del bot (resumido):
   /info/ → placa → /vehiculo/?placa= → confirmar →
-  cédula → /cliente/?cedula= → (si no encontrado: pedir datos básicos) →
-  catálogos (tipos-vehiculo, provincias, [cantones si requiere]) → pedir valor →
-  función cotizar_aria → mensaje de cierre (éxito o error)
+  cédula → /cliente/?cedula= →
+    (si no encontrado: pedir nombre/apellidos/email/teléfono)
+    (si encontrado: completar email/teléfono solo si vienen vacíos del lookup
+     y dar opción a corregir el email guardado) →
+  catálogos (tipos-vehiculo, provincias, [cantones si requiere]) →
+  pedir valor (acepta '10.000' / '10,000' / '10000' — el motor normaliza) →
+  validar rango → función cotizar_aria → mensaje de cierre.
 
 Uso:
     python manage.py seed_cotizador
@@ -240,32 +244,75 @@ PASOS = [
         'codigo': 'mostrar_cliente', 'nombre': 'Mostrar datos del cliente',
         'mensaje': (
             '✅ Encontré tus datos en nuestra base:\n'
-            '• Nombre: *{{variables.nombres}} {{variables.apellidos}}*\n'
-            '• Email: *{{variables.email}}*\n'
-            '• Teléfono: *{{variables.telefono}}*'
+            '• Nombre: *{{variables.nombres}} {{variables.apellidos}}*'
         ),
+        'siguiente': 191,
+    },
+
+    {
+        'id': 191, 'orden': 191, 'tipo': 'decision',
+        'codigo': 'email_vacio', 'nombre': '¿Email vacío?',
+        'condiciones': [{'izq': '{{variables.email}}', 'op': 'vacio', 'der': ''}],
+        'operador': 'and',
+        'siguiente_si': 192, 'siguiente_no': 195,
+    },
+
+    {
+        'id': 192, 'orden': 192, 'tipo': 'input_texto',
+        'codigo': 'pedir_email_faltante', 'nombre': 'Pedir email (faltante)',
+        'mensaje': (
+            '📧 No tenemos un correo registrado para ti. '
+            'Escríbeme el correo al que quieres recibir la cotización:'
+        ),
+        'guardar_en': 'email',
+        'validacion': r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$',
+        'siguiente': 193,
+    },
+
+    {
+        'id': 195, 'orden': 195, 'tipo': 'respuesta_texto',
+        'codigo': 'mostrar_email', 'nombre': 'Mostrar email actual',
+        'mensaje': '• Email: *{{variables.email}}*',
         'siguiente': 96,
     },
 
-    # ── 96 — Menu: ¿el correo es correcto? ────────────────────
     {
-        'id': 96, 'orden': 96, 'tipo': 'menu_botones',
+        'id': 96, 'orden': 196, 'tipo': 'menu_botones',
         'codigo': 'confirmar_correo', 'nombre': '¿Correo correcto?',
         'mensaje': '¿El correo que tenemos sigue siendo el correcto para enviarte la cotización?',
         'guardar_en': 'confirma_correo',
         'opciones': [
-            {'etiqueta': '✅ Sí, está bien',   'valor': 'si',     'siguiente': 200},
+            {'etiqueta': '✅ Sí, está bien',   'valor': 'si',     'siguiente': 193},
             {'etiqueta': '✏️ Cambiar correo', 'valor': 'cambiar', 'siguiente': 97},
         ],
     },
 
-    # ── 97 — Pedir correo nuevo y sobreescribir variable email ─
     {
-        'id': 97, 'orden': 97, 'tipo': 'input_texto',
+        'id': 97, 'orden': 197, 'tipo': 'input_texto',
         'codigo': 'pedir_email_nuevo', 'nombre': 'Pedir correo actualizado',
         'mensaje': '📧 Escribime el *correo nuevo* al que querés recibir la cotización:',
-        'guardar_en': 'email',  # sobreescribe la variable que vino del lookup
+        'guardar_en': 'email',
         'validacion': r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$',
+        'siguiente': 193,
+    },
+
+    {
+        'id': 193, 'orden': 198, 'tipo': 'decision',
+        'codigo': 'telefono_vacio', 'nombre': '¿Teléfono vacío?',
+        'condiciones': [{'izq': '{{variables.telefono}}', 'op': 'vacio', 'der': ''}],
+        'operador': 'and',
+        'siguiente_si': 194, 'siguiente_no': 200,
+    },
+
+    {
+        'id': 194, 'orden': 199, 'tipo': 'input_texto',
+        'codigo': 'pedir_telefono_faltante', 'nombre': 'Pedir teléfono (faltante)',
+        'mensaje': (
+            '📱 No tenemos tu *celular* registrado. '
+            'Escríbelo (10 dígitos, empieza con 0):'
+        ),
+        'guardar_en': 'telefono',
+        'validacion': r'^0[0-9]{9}$',
         'siguiente': 200,
     },
 
@@ -412,13 +459,39 @@ PASOS = [
 
     # ── 320 — Valor del vehículo ───────────────────────────────
     # `precio_accesorios` se manda hardcoded a 0 (ver nodo 340).
+    # Acepta separadores de miles ('10.000', '10,000', '10 000') y los
+    # normaliza a entero limpio antes de guardar (ver normalizar_numero
+    # en motor_flujo_chatbot). El rango se verifica en el nodo 322.
     {
         'id': 320, 'orden': 320, 'tipo': 'input_texto',
         'codigo': 'pedir_valor_vehiculo', 'nombre': 'Pedir valor del vehículo',
         'mensaje': '💵 ¿Cuánto vale el vehículo hoy? (USD, entre 1.000 y 500.000)',
         'guardar_en': 'valor_vehiculo',
-        'validacion': r'^[0-9]{4,6}$',
-        'siguiente': 340,
+        'validacion_tipo': 'numero',
+        'siguiente': 322,
+    },
+
+    # ── 322 — Validación de rango del valor ─────────────────────
+    {
+        'id': 322, 'orden': 322, 'tipo': 'decision',
+        'codigo': 'valor_en_rango', 'nombre': '¿Valor entre 1.000 y 500.000?',
+        'condiciones': [
+            {'izq': '{{variables.valor_vehiculo}}', 'op': '>=', 'der': 1000},
+            {'izq': '{{variables.valor_vehiculo}}', 'op': '<=', 'der': 500000},
+        ],
+        'operador': 'and',
+        'siguiente_si': 340, 'siguiente_no': 324,
+    },
+
+    # ── 324 — Mensaje de fuera de rango y reintento ─────────────
+    {
+        'id': 324, 'orden': 324, 'tipo': 'respuesta_texto',
+        'codigo': 'valor_fuera_rango', 'nombre': 'Valor fuera de rango',
+        'mensaje': (
+            '⚠️ El valor ingresado está fuera de rango. '
+            'Debe estar entre USD 1.000 y USD 500.000.'
+        ),
+        'siguiente': 320,
     },
 
     # ── 340 — Función interna `cotizar_aria` ────────────────────────
@@ -712,6 +785,11 @@ class Command(BaseCommand):
                 cfg['opcion_default'] = paso['opcion_default']
             return cfg
         if t == 'decision':
+            if paso.get('condiciones'):
+                return {
+                    'condiciones': paso['condiciones'],
+                    'operador': paso.get('operador', 'and'),
+                }
             conds, operador = _parse_condicion(paso.get('condicion', ''))
             return {'condiciones': conds, 'operador': operador}
         if t == 'asignar_variable':
@@ -755,7 +833,10 @@ class Command(BaseCommand):
         t = paso['tipo']
         validacion_tipo = 'none'
         validacion_expr = ''
-        if paso.get('validacion'):
+        if paso.get('validacion_tipo'):
+            validacion_tipo = paso['validacion_tipo']
+            validacion_expr = paso.get('validacion', '') or ''
+        elif paso.get('validacion'):
             validacion_tipo = 'regex'
             validacion_expr = paso['validacion']
 

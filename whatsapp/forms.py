@@ -7,6 +7,7 @@ from crm.models import DepartamentoChatBot
 from .models import (
     SesionWhatsApp, Contacto, ConversacionWhatsApp, MensajeWhatsAppProgramado,
     ConfigMeta, PlantillaWhatsApp, ConfigInstagram, ConfigMessenger,
+    TarifaPlantillaMeta,
 )
 
 
@@ -56,6 +57,41 @@ class SesionWhatsAppForm(ModelFormBase):
                 self.fields[k].widget.attrs['class'] = "form-control"
             if k in ('nombre',):
                 self.fields[k].widget.attrs['col'] = '9'
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+
+class TarifaPlantillaMetaForm(ModelFormBase):
+    class Meta:
+        model = TarifaPlantillaMeta
+        fields = ('pais', 'categoria', 'precio', 'moneda',
+                  'vigencia_desde', 'vigencia_hasta', 'notas')
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super(TarifaPlantillaMetaForm, self).__init__(*args, **kwargs)
+        for k, v in self.fields.items():
+            self.fields[k].widget.attrs['class'] = 'form-control'
+            self.fields[k].widget.attrs['col'] = '6'
+            if k in ('pais',):
+                self.fields[k].widget.attrs['placeholder'] = 'EC'
+                self.fields[k].widget.attrs['maxlength'] = '2'
+                self.fields[k].widget.attrs['style'] = 'text-transform:uppercase'
+            if k in ('moneda',):
+                self.fields[k].widget.attrs['placeholder'] = 'USD'
+                self.fields[k].widget.attrs['maxlength'] = '3'
+                self.fields[k].widget.attrs['style'] = 'text-transform:uppercase'
+            if k in ('precio',):
+                self.fields[k].widget.attrs['step'] = '0.000001'
+                self.fields[k].widget.attrs['min'] = '0'
+                self.fields[k].widget.attrs['placeholder'] = '0.0626'
+            if k in ('categoria',):
+                self.fields[k].widget.attrs['class'] = 'form-control jselect2'
+            if k in ('vigencia_desde', 'vigencia_hasta'):
+                self.fields[k].widget.attrs['type'] = 'date'
+            if k in ('notas',):
+                self.fields[k].widget.attrs['col'] = '12'
+                self.fields[k].widget.attrs['rows'] = '3'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 

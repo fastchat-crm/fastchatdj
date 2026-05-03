@@ -1,0 +1,93 @@
+.tarifa-precio {
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 600;
+    color: #0d6efd;
+}
+
+.tarifa-precio-mil {
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 700;
+    color: #198754;
+    font-size: 1.05rem;
+}
+
+.tarifa-precio-detalle {
+    font-size: 0.7rem;
+    color: #6c757d;
+}
+
+.tarifas-tabla tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.cat-info-bloque {
+    margin-bottom: 16px;
+}
+
+.categoria-info-card .cat-titulo .badge {
+    margin-right: 6px;
+}
+
+.tarifa-pais-flag {
+    display: inline-block;
+    background: #e9ecef;
+    color: #495057;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+}
+
+.categoria-info-card {
+    border-left: 4px solid;
+    background: #fafbfc;
+}
+
+.categoria-info-card.cat-utility {
+    border-left-color: #198754;
+}
+
+.categoria-info-card.cat-marketing {
+    border-left-color: #ffc107;
+}
+
+.categoria-info-card.cat-authentication {
+    border-left-color: #0dcaf0;
+}
+
+.categoria-info-card .cat-titulo {
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.categoria-info-card .cat-objetivo {
+    color: #495057;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+}
+
+.categoria-info-card ul.cat-fines {
+    padding-left: 18px;
+    margin-bottom: 6px;
+    font-size: 0.8rem;
+}
+
+.categoria-info-card .cat-ejemplo {
+    background: #fff;
+    border-left: 2px solid #dee2e6;
+    padding: 6px 10px;
+    font-style: italic;
+    font-size: 0.78rem;
+    color: #495057;
+    margin: 6px 0;
+}
+
+.categoria-info-card .cat-costo {
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+
+.tarifa-nota {
+    font-size: 0.75rem;
+}

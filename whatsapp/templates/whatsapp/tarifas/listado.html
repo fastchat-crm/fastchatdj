@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+{% block head %}
+    <link rel="stylesheet" href="/static/css/whatsapp/tarifas.css?v1.1">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+
+    <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
+        <i class="fa fa-money-bill-wave fa-2x"></i>
+        <div>
+            <strong>Tarifas Meta WhatsApp.</strong><br>
+            <small>
+                Aqui se administran los precios que Meta cobra por cada mensaje de plantilla, segun
+                <strong>pais</strong> y <strong>categoria</strong> (Marketing, Utility, Authentication).
+                Estos valores alimentan el <a href="?action=simulador">simulador de costos</a>.
+                Cuando Meta actualice precios, agrega una nueva tarifa con la fecha de vigencia y deja la anterior
+                con <em>vigencia_hasta</em> el dia previo, para mantener historico.
+            </small>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        {% for code, info in categoria_info.items %}
+        <div class="col-12 col-md-4">
+            <div class="card categoria-info-card cat-{{ code|lower }} h-100">
+                <div class="card-body">
+                    <div class="cat-titulo">
+                        <span class="badge bg-{{ info.color }}">{{ code }}</span>
+                        {{ info.titulo }}
+                    </div>
+                    <div class="cat-objetivo">{{ info.objetivo }}</div>
+                    <ul class="cat-fines">
+                        {% for fin in info.fines %}<li>{{ fin }}</li>{% endfor %}
+                    </ul>
+                    <div class="cat-ejemplo">"{{ info.ejemplo }}"</div>
+                    <div class="cat-costo"><i class="fa fa-tag me-1"></i>{{ info.costo }}</div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="GET" class="mb-0">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Busqueda</label>
+                        <div class="input-group">
+                            <span class="input-group-text border-end-0">
+                                <i class="fa fa-search text-muted"></i>
+                            </span>
+                            <input type="text" class="form-control border-start-0"
+                                   placeholder="Buscar por pais o notas" name="criterio"
+                                   value="{{ criterio|default:'' }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Pais</label>
+                        <select class="form-control" name="pais">
+                            <option value="">Todos los paises</option>
+                            {% for p in paises_disponibles %}
+                            <option value="{{ p }}" {% if pais_sel == p %}selected{% endif %}>{{ p }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Categoria</label>
+                        <select class="form-select" name="categoria">
+                            <option value="">Todas las categorias</option>
+                            {% for code, nombre in categorias %}
+                            <option value="{{ code }}" {% if categoria_sel == code %}selected{% endif %}>
+                                {{ nombre }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i>
+                            </button>
+                            {% if url_vars %}
+                                <a href="{{ request.path }}" class="btn btn-default">
+                                    <i class="fas fa-times"></i>
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row align-items-center mb-3">
+        <div class="col-md-12 d-flex flex-wrap gap-2">
+            <a href="?action=add" class="btn btn-success">
+                <i class="fas fa-plus-circle me-2"></i> Nueva Tarifa
+            </a>
+            <a href="?action=simulador" class="btn btn-info">
+                <i class="fas fa-calculator me-2"></i> Simulador de Costos
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle tarifas-tabla">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Pais</th>
+                            <th>Categoria</th>
+                            <th class="text-end">Precio unitario</th>
+                            <th class="text-end">x 1.000 msgs</th>
+                            <th>Vigencia</th>
+                            <th>Notas</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for t in listado %}
+                        <tr>
+                            <td><span class="tarifa-pais-flag">{{ t.pais }}</span></td>
+                            <td>
+                                <span class="badge bg-{{ t.cat_color }}" title="{{ t.cat_titulo }}">
+                                    {{ t.get_categoria_display }}
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <span class="tarifa-precio">{{ t.precio }}</span>
+                                <div class="tarifa-precio-detalle">{{ t.moneda }} / mensaje</div>
+                            </td>
+                            <td class="text-end">
+                                {% if t.costo_mil %}
+                                    <span class="tarifa-precio-mil">{{ t.costo_mil }}</span>
+                                    <div class="tarifa-precio-detalle">{{ t.moneda }}</div>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="small">
+                                <div>
+                                    <i class="fa fa-calendar-day me-1 text-muted"></i>
+                                    {{ t.vigencia_desde|date:"d/m/Y" }}
+                                    {% if t.vigencia_hasta %}
+                                        &rarr; {{ t.vigencia_hasta|date:"d/m/Y" }}
+                                    {% endif %}
+                                </div>
+                                <div class="mt-1">
+                                    {% if t.estado_vigencia == 'futura' %}
+                                        <span class="badge bg-info">Futura</span>
+                                    {% elif t.estado_vigencia == 'expirada' %}
+                                        <span class="badge bg-secondary">Expirada</span>
+                                    {% else %}
+                                        <span class="badge bg-success">Vigente</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="small text-muted">{{ t.notas|default:"—"|truncatechars:60 }}</td>
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-light border" href="?action=change&pk={{ t.id }}" title="Editar">
+                                    <i class="fa fa-pen-to-square text-success"></i>
+                                </a>
+                                <button type="button" class="btn btn-sm btn-light border" title="Eliminar"
+                                        onclick="eliminarTarifa({{ t.id }}, '{{ t.pais }} {{ t.get_categoria_display|escapejs }}')">
+                                    <i class="fa fa-trash text-danger"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                <i class="fa fa-inbox fa-2x mb-2 d-block"></i>
+                                No hay tarifas registradas todavia.
+                                <a href="?action=add" class="d-block mt-2">Crear la primera</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="p-2">{% include "paginacion.html" %}</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block jscript %}
+<script>
+function eliminarTarifa(id, etiqueta) {
+    if (!confirm('Eliminar tarifa ' + etiqueta + '?')) return;
+    $.post(window.location.pathname, {
+        action: 'delete', id: id,
+        csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()
+    }, function(r) {
+        if (r && r.error === false) {
+            if (typeof alertaSuccess === 'function') alertaSuccess(r.message || 'Eliminada');
+            setTimeout(function() { location.reload(); }, 600);
+        } else {
+            if (typeof alertaError === 'function') alertaError((r && r.message) || 'Error');
+            else alert((r && r.message) || 'Error');
+        }
+    });
+}
+</script>
+{% endblock %}

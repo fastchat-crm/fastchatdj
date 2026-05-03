@@ -1,0 +1,157 @@
+.simulador-card {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.simulador-categoria-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.simulador-categoria-row:last-child {
+    border-bottom: none;
+}
+
+.simulador-categoria-label {
+    flex: 1;
+}
+
+.simulador-categoria-label .badge-cat {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    margin-right: 6px;
+}
+
+.simulador-categoria-label .precio-unit {
+    font-size: 0.72rem;
+    color: #6c757d;
+    margin-left: 6px;
+}
+
+.simulador-cantidad-input {
+    width: 110px;
+}
+
+.simulador-subtotal {
+    width: 130px;
+    text-align: right;
+    font-family: 'Courier New', Courier, monospace;
+    font-weight: 600;
+    color: #198754;
+}
+
+.simulador-subtotal.sin-tarifa {
+    color: #dc3545;
+    font-style: italic;
+    font-size: 0.78rem;
+    font-weight: 400;
+}
+
+.simulador-total-bar {
+    background: #0d6efd;
+    color: #fff;
+    border-radius: 8px;
+    padding: 14px 20px;
+    margin-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.simulador-total-bar .total-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.simulador-total-bar .total-monto {
+    font-size: 1.6rem;
+    font-weight: 700;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.simulador-pais-select {
+    max-width: 200px;
+}
+
+.simulador-cat-objetivo {
+    font-size: 0.72rem;
+    margin-top: 2px;
+}
+
+.simulador-badge-cat {
+    font-size: 0.65rem;
+}
+
+.simulador-nota {
+    font-size: 0.75rem;
+}
+
+.simulador-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    padding: 8px 10px;
+    background: #fff;
+    border: 1px dashed #dee2e6;
+    border-radius: 6px;
+}
+
+.simulador-presets .presets-label {
+    font-weight: 600;
+}
+
+.simulador-categoria-row.sim-cat-utility {
+    border-left: 3px solid #198754;
+}
+
+.simulador-categoria-row.sim-cat-marketing {
+    border-left: 3px solid #ffc107;
+}
+
+.simulador-categoria-row.sim-cat-authentication {
+    border-left: 3px solid #0dcaf0;
+}
+
+.sim-info-toggle {
+    color: #6c757d;
+    text-decoration: none;
+}
+
+.sim-info-toggle:hover {
+    color: #0d6efd;
+}
+
+.sim-cat-detalle {
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-top: 6px;
+}
+
+.sim-cat-detalle .cat-ejemplo {
+    background: #f8f9fa;
+    border-left: 2px solid #dee2e6;
+    padding: 4px 8px;
+    font-style: italic;
+    color: #495057;
+    margin: 4px 0;
+}
+
+.simulador-total-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.simulador-total-bar .total-mensajes {
+    font-size: 0.78rem;
+    margin-top: 2px;
+}

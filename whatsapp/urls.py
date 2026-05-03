@@ -20,6 +20,7 @@ from .trace_receiver_view import trace_receiver
 from .meta_webhook_view import meta_webhook
 from .meta_social_webhook_view import instagram_webhook, messenger_webhook
 from .view_plantillas import plantillasView
+from .view_tarifas import tarifasView
 from .view_etiquetas import etiquetasView
 from .view_pipeline import pipelineView
 from .view_campanas import campanasView
@@ -57,6 +58,11 @@ whatsapp_urls = (
         "nombre": "Plantillas WhatsApp",
         "url": 'plantillas/',
         "vista": plantillasView,
+    },
+    {
+        "nombre": "Tarifas Meta",
+        "url": 'tarifas/',
+        "vista": tarifasView,
     },
     {
         "nombre": "Etiquetas",
