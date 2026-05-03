@@ -1542,8 +1542,11 @@ def _guardar_opcion(request):
         else:
             opcion.endpoint = None
     else:
-        # Tipos sin form específico → limpiar config si era de otro tipo (cta_url/
-        # ubicacion/http) para evitar dejar fields obsoletos.
+        # Tipos sin form específico (respuesta, pregunta, fin, handoff) →
+        # el textarea "Mensaje al cliente" se guarda en `opcion.respuesta`
+        # pero el motor lee primero `config.mensaje` / `config.pregunta`.
+        # Sincronizamos para que la edición del UI llegue al runtime sin
+        # quedar desfasada respecto al config sembrado.
         if opcion.config and (
             'url' in opcion.config or 'lat' in opcion.config or 'meta_type' in opcion.config
             or 'metodo' in opcion.config or 'path' in opcion.config
@@ -1551,6 +1554,15 @@ def _guardar_opcion(request):
             opcion.config = {}
         elif not opcion.config:
             opcion.config = {}
+
+        cfg = dict(opcion.config or {})
+        if opcion.tipo_nodo in ('respuesta', 'fin', 'handoff'):
+            cfg['mensaje'] = opcion.respuesta
+            cfg.pop('pregunta', None)
+        elif opcion.tipo_nodo == 'pregunta':
+            cfg['pregunta'] = opcion.respuesta
+            cfg.pop('mensaje', None)
+        opcion.config = cfg
         # Para tipos cuya carrocería de texto vive en `opcion.respuesta`, retirar
         # `cfg.mensaje`/`cfg.pregunta` heredados de generadores IA. Si no, el
         # runtime (`cfg.get('mensaje') or opcion.respuesta`) preferiría el valor

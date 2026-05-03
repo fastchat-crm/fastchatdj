@@ -1453,7 +1453,7 @@ class MotorFlujo:
             return ''
 
         if tipo == 'fin':
-            mensaje = cfg.get('mensaje') or self.session.mensaje_despedida or ''
+            mensaje = cfg.get('mensaje') or nodo.respuesta or self.session.mensaje_despedida or ''
             if mensaje:
                 self.enviar(mensaje)
             self.finalizado = True
