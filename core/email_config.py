@@ -5,7 +5,8 @@ from django.core.mail.message import EmailMessage
 from django.template.loader import get_template
 
 from core.funciones import Dict2Obj
-from fastchatdj.settings import EMAIL_USE_TLS, EMAIL_HOST, EMAIL_PORT, DEFAULT_FROM_EMAIL, EMAIL_HOST_PASSWORD
+from fastchatdj.settings import EMAIL_USE_TLS, EMAIL_HOST, EMAIL_PORT, DEFAULT_FROM_EMAIL, EMAIL_HOST_PASSWORD, \
+    BASE_URL_PRODUCCION
 
 
 def conectar_cuenta():
@@ -54,6 +55,7 @@ def send_html_mail(subject, html_template, datos, recipient_list, recipient_list
     try:
         if recipient_list.__len__() or recipient_list_cc.__len__():
             template = get_template(html_template)
+            datos['BASE_URL_PRODUCCION'] = BASE_URL_PRODUCCION
             d = datos
             html_content = template.render(d)
             EmailThread(subject, html_content, recipient_list, recipient_list_cc, adjuntosrender, adjuntossave, coneccion).start()
