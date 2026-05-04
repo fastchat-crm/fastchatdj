@@ -969,8 +969,16 @@
 
                 if ((data.type === 'new_message' || data.type === 'messages_update')) {
                     const conversacion = $(`#lista-conversaciones .conversacion-item[data-id="${data.conversacion_id}"]`);
-                    if (conversacion.length && data.html) {
-                        conversacion.replaceWith(data.html);
+                    if (data.html) {
+                        if (conversacion.length) {
+                            conversacion.replaceWith(data.html);
+                        } else {
+                            const $lista = $('#lista-conversaciones');
+                            if ($lista.find('.conversacion-item').length === 0) {
+                                $lista.empty();
+                            }
+                            $lista.prepend(data.html);
+                        }
                     } else {
                         cargarConversaciones($('#sesion-selector').val(), $('#search-conversacion').val(), filtroActivo);
                     }
