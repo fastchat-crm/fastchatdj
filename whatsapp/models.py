@@ -134,6 +134,14 @@ class SesionWhatsApp(ModeloBase):
     def is_connected(self):
         return self.estado == 'conectado'
 
+    def convs_del_mes(self):
+        mes_ini = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        return ConversacionWhatsApp.objects.filter(
+            status=True,
+            contacto__sesion=self,
+            fecha_registro__gte=mes_ini,
+        ).count()
+
     class Meta:
         verbose_name = 'Sesión WhatsApp'
         verbose_name_plural = 'Sesiones WhatsApp'

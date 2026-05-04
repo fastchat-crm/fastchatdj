@@ -135,6 +135,15 @@
               <p class="pp-kpi-hint">en todas tus sesiones</p>
             </div>
           </div>
+
+          <div class="pp-kpi">
+            <div class="pp-kpi-icon ic-rose"><i class="fa fa-calendar-check"></i></div>
+            <div class="pp-kpi-body">
+              <p class="pp-kpi-label">Conversaciones este mes</p>
+              <p class="pp-kpi-value">{{ convs_mes_actual|intcomma }}</p>
+              <p class="pp-kpi-hint">desde el 1 de este mes</p>
+            </div>
+          </div>
         </div>
 
         {# ───────── Sesiones activas + Actividad 7d ───────── #}
@@ -212,6 +221,7 @@
                         {% else %}
                           <span class="tag tag-modo-ninguno"><i class="fa fa-user"></i> Solo humanos</span>
                         {% endif %}
+                        <span class="tag"><i class="fa fa-comments"></i> {{ s.convs_del_mes }} conv/mes</span>
                       </div>
                       {% if s.es_baileys and s.config_baileys.error_mensaje %}
                         <div class="card-error" title="{{ s.config_baileys.error_mensaje }}">
