@@ -14,6 +14,7 @@ import json
 import logging
 import os
 
+from django.db import transaction
 from django.db.models import Count, Q, Window
 from django.db.models.functions import RowNumber
 from django.http import JsonResponse
@@ -273,33 +274,46 @@ def process_incoming_message(session, event_data, channel_layer):
         # Actualizar estadísticas
         update_conversation_stats(conversation)
 
-        # Notificar al listado y al chat ANTES de la lógica de negocio que
-        # puede cortar el flujo (rate-limit, fuera-horario, IA, motor flujo).
-        # Sin esto el mensaje queda en BD pero la conversación no aparece en
-        # la lista hasta refrescar la página manualmente.
-        async_to_sync(channel_layer.group_send)(
-            f"chat_{conversation.id}",
-            {
-                'type': 'whatsapp_message',
-                'event': 'new_message',
-                'conversation_id': conversation.id,
-                'message_id': message.id,
-                'message_type': message_type,
-                'message_text': message_text,
-                'sender': from_number,
-                'timestamp': message_date.isoformat(),
-            },
-        )
-        async_to_sync(channel_layer.group_send)(
-            f"whatsapp_sessionroom_{session.id}",
-            {
-                'type': 'whatsapp_event',
-                'event': 'new_message',
-                'conversation_id': conversation.id,
-                'from_me': False,
-                'timestamp': message_date.isoformat(),
-            },
-        )
+        # Notificar al listado y al chat. Diferimos al on_commit porque
+        # ATOMIC_REQUESTS=True envuelve el webhook entero en una transacción:
+        # si el group_send dispara antes del commit, el SessionRoomConsumer
+        # corre en otro worker, abre conexión nueva a la BD y NO ve la
+        # conversación recién creada (queda html='' y la card no aparece
+        # hasta el siguiente mensaje, cuando la conv ya está commiteada).
+        _conv_id = conversation.id
+        _message_id = message.id
+        _session_id = session.id
+        _message_type = message_type
+        _message_text = message_text
+        _from_number = from_number
+        _ts_iso = message_date.isoformat()
+
+        def _broadcast_message_events():
+            async_to_sync(channel_layer.group_send)(
+                f"chat_{_conv_id}",
+                {
+                    'type': 'whatsapp_message',
+                    'event': 'new_message',
+                    'conversation_id': _conv_id,
+                    'message_id': _message_id,
+                    'message_type': _message_type,
+                    'message_text': _message_text,
+                    'sender': _from_number,
+                    'timestamp': _ts_iso,
+                },
+            )
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_sessionroom_{_session_id}",
+                {
+                    'type': 'whatsapp_event',
+                    'event': 'new_message',
+                    'conversation_id': _conv_id,
+                    'from_me': False,
+                    'timestamp': _ts_iso,
+                },
+            )
+
+        transaction.on_commit(_broadcast_message_events)
 
         # ── Cortar envío si Node ya nos avisó que está rate-limited ──
         # Evita amplificar la saturación enviando bienvenida/IA/avisos durante la ventana.
