@@ -1842,7 +1842,7 @@
             });
         };
 
-        function actualizarBotUI(activo) {
+        window.actualizarBotUI = function(activo) {
             const btn = $('#btn-toggle-bot');
             const label = $('#bot-estado-label');
             btn.removeClass('bot-on bot-off');
@@ -1853,7 +1853,7 @@
                 btn.addClass('bot-off');
                 label.text('Bot PAUSADO');
             }
-        }
+        };
 
         $('.form_modal').on('click', function(e) {
             e.preventDefault();
