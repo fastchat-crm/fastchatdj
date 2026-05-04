@@ -2,10 +2,28 @@
 {% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css">
-<link rel="stylesheet" href="/static/stylenew/conversaciones.css">
+<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.0">
 {% endblock %}
 
 {% block content %}
+
+{% if sesion_seleccionada and not sesion_seleccionada.activo %}
+    <div class="alert-sesion-pausada" role="alert">
+        <div class="alert-sp-icon"><i class="fa fa-pause-circle"></i></div>
+        <div class="alert-sp-body">
+            <div class="alert-sp-title">Esta sesión está PAUSADA</div>
+            <div class="alert-sp-msg">
+                <b>{{ sesion_seleccionada.nombre|default:sesion_seleccionada.numero }}</b> no procesa mensajes
+                entrantes ni envía respuestas (no consume API ni IA). Selecciona otra sesión del combo o
+                reactívala desde
+                <a href="/whatsapp/sesiones/" class="alert-sp-link">Sesiones</a>.
+            </div>
+        </div>
+        <button type="button" class="alert-sp-cta" id="btn-cambiar-sesion-pausada">
+            <i class="fa fa-arrow-left-right"></i> Cambiar sesión
+        </button>
+    </div>
+{% endif %}
 
 <div class="chat-layout">
 
@@ -17,7 +35,7 @@
                 <div class="cs-session-indicator {% if sesion_seleccionada.activo %}si-active{% else %}si-paused{% endif %}"></div>
                 <select id="sesion-selector" class="cs-session-select{% if sesion_seleccionada and not sesion_seleccionada.activo %} sesion-selector-pausada{% endif %}">
                     {% for sesion in sesiones %}
-                        <option value="{{ sesion.id }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
+                        <option value="{{ sesion.id }}" data-activo="{{ sesion.activo|yesno:'true,false,false' }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
                             {% if sesion.es_meta %}☁️ Meta{% elif sesion.es_baileys %}📱 Baileys{% elif sesion.es_instagram %}📸 IG{% elif sesion.es_messenger %}💬 FB{% endif %} · {{ sesion.numero }} | {{ sesion.nombre }} ({{ sesion.get_estado_display }}{% if not sesion.activo %} · ⏸ PAUSADA{% endif %})
                         </option>
                     {% endfor %}
@@ -72,9 +90,9 @@
                         </div>
                         <div class="cs-filter-actions">
                             <button class="cs-btn-apply" id="btn-aplicar-filtros">
-                                <i class="fa fa-search me-1"></i>Apply
+                                <i class="fa fa-search me-1"></i>Aplicar
                             </button>
-                            <button class="cs-btn-clear" id="btn-limpiar-filtros" title="Clear filters">
+                            <button class="cs-btn-clear" id="btn-limpiar-filtros" title="Limpiar filtros">
                                 <i class="fa fa-times"></i>
                             </button>
                         </div>
@@ -84,7 +102,7 @@
 
             <div class="cs-search-wrap">
                 <i class="fa fa-search cs-search-icon"></i>
-                <input type="search" id="search-conversacion" class="cs-search-input" placeholder="Search contact..." value="{{ criterio }}">
+                <input type="search" id="search-conversacion" class="cs-search-input" placeholder="Buscar contacto..." value="{{ criterio }}">
             </div>
 
         </div>
@@ -99,13 +117,13 @@
 
         <div class="cm-header" id="chat-header">
             <div class="cm-header-left">
-                <button type="button" class="btn btn-sm btn-link text-muted p-1 me-1 d-md-none chat-back-btn" id="chat-back-btn" title="Back">
+                <button type="button" class="btn btn-sm btn-link text-muted p-1 me-1 d-md-none chat-back-btn" id="chat-back-btn" title="Volver">
                     <i class="fa fa-arrow-left"></i>
                 </button>
                 <img src="/static/assets/img/avatar.png" alt="" class="cm-contact-avatar" id="contacto-foto">
                 <div class="cm-contact-info">
                     <div class="cm-contact-name">
-                        <span id="contacto-nombre">Select a conversation</span>
+                        <span id="contacto-nombre">Selecciona una conversación</span>
                         <span id="conv-id-badge" class="badge bg-light text-dark border ms-1" style="font-size:.7rem;display:none;"></span>
                     </div>
                     <div class="cm-contact-sub">
@@ -117,20 +135,20 @@
             </div>
             <div class="cm-header-right">
                 <div class="btn-group d-none" id="ver-resumen-btn">
-                    <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" id="ver-resumen" title="View conversation summary">
-                        <i class="fa fa-file-alt me-1"></i>Summary
+                    <a href="javascript:void(0)" class="btn btn-sm btn-default text-muted" id="ver-resumen" title="Ver resumen de la conversación">
+                        <i class="fa fa-file-alt me-1"></i>Resumen
                     </a>
                 </div>
                 <button class="btn btn-sm btn-default text-muted d-none" id="btn-estadisticas"
-                        onclick="$('#stats-panel').toggleClass('d-none');if(!$('#stats-panel').hasClass('d-none'))_renderEstExpired();" title="Statistics">
+                        onclick="$('#stats-panel').toggleClass('d-none');if(!$('#stats-panel').hasClass('d-none'))_renderEstExpired();" title="Estadísticas">
                     <i class="fa fa-chart-line"></i>
                 </button>
                 <button class="btn btn-sm btn-default text-muted d-none" id="btn-control-respuestas"
-                        onclick="$('#control-respuestas-panel').toggleClass('d-none')" title="Response Control">
+                        onclick="$('#control-respuestas-panel').toggleClass('d-none')" title="Control de respuestas">
                     <i class="fa fa-chart-bar"></i>
                 </button>
                 <div class="btn-group d-none" id="reactivar-btn">
-                    <a href="javascript:void(0)" class="btn btn-sm btn-success" id="marcar-reactivar" title="Reactivate conversation">
+                    <a href="javascript:void(0)" class="btn btn-sm btn-success" id="marcar-reactivar" title="Reactivar conversación">
                         <i class="fa fa-redo me-1"></i>Reactivar
                     </a>
                 </div>
@@ -139,10 +157,10 @@
                         <i class="fa fa-ellipsis-v"></i>
                     </a>
                     <div class="dropdown-menu dropdown-menu-end">
-                        <a href="javascript:void(0)" class="dropdown-item form_modal" id="cambiar-clasificacion" title="Change classification">
+                        <a href="javascript:void(0)" class="dropdown-item form_modal" id="cambiar-clasificacion" title="Cambiar clasificación">
                             <i class="fa fa-sync me-2"></i>Cambiar clasificación
                         </a>
-                        <a class="dropdown-item" href="javascript:void(0)" onclick="abrirModalAsignarPipeline()" title="Assign to pipeline">
+                        <a class="dropdown-item" href="javascript:void(0)" onclick="abrirModalAsignarPipeline()" title="Asignar a pipeline">
                             <i class="fa fa-columns me-2 text-primary"></i>Asignar a pipeline
                         </a>
                     </div>
@@ -153,15 +171,15 @@
         <div id="stats-panel" class="d-none border-bottom" style="background:#f0f4ff;font-size:.8rem;">
             <div class="px-3 py-2">
                 <div class="d-flex align-items-center gap-2 mb-2">
-                    <strong class="text-primary"><i class="fa fa-chart-line me-1"></i>Statistics</strong>
+                    <strong class="text-primary"><i class="fa fa-chart-line me-1"></i>Estadísticas</strong>
                     <span id="stat-estado"></span>
                     <span class="ms-auto text-muted"><i class="fa fa-clock me-1"></i><span id="stat-duracion">—</span></span>
                 </div>
                 <div class="row g-1">
                     <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold text-dark" id="stat-msgs-total">0</div><div class="text-muted" style="font-size:.7rem;">Total</div></div></div>
-                    <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold text-warning" id="stat-msgs-cliente">0</div><div class="text-muted" style="font-size:.7rem;">Client</div></div></div>
-                    <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold text-success" id="stat-msgs-agente">0</div><div class="text-muted" style="font-size:.7rem;">Agent</div></div></div>
-                    <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold" style="color:#5c6bc0" id="stat-msgs-ia">0</div><div class="text-muted" style="font-size:.7rem;">AI</div></div></div>
+                    <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold text-warning" id="stat-msgs-cliente">0</div><div class="text-muted" style="font-size:.7rem;">Cliente</div></div></div>
+                    <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold text-success" id="stat-msgs-agente">0</div><div class="text-muted" style="font-size:.7rem;">Agente</div></div></div>
+                    <div class="col-auto"><div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;"><div class="fw-bold" style="color:#5c6bc0" id="stat-msgs-ia">0</div><div class="text-muted" style="font-size:.7rem;">IA</div></div></div>
                     <div class="col-auto ms-2"><div class="border rounded px-2 py-1 bg-white" style="min-width:160px;">
                         <div class="d-flex gap-1 align-items-center"><i class="fa fa-microchip" style="color:#5c35d4;font-size:.75rem;"></i><span class="fw-bold" id="stat-tokens-total">0</span><small class="text-muted">tokens</small></div>
                         <div class="text-muted" style="font-size:.7rem;">↑<span id="stat-tokens-entrada">0</span> &nbsp;·&nbsp; ↓<span id="stat-tokens-salida">0</span></div>
@@ -173,9 +191,9 @@
 
         <div id="control-respuestas-panel" class="d-none px-3 py-2 border-bottom" style="background:#f8f9fa;font-size:.82rem;">
             <div class="d-flex align-items-center gap-3 flex-wrap">
-                <strong><i class="fa fa-chart-bar me-1 text-info"></i>Response Control</strong>
-                <span class="badge" style="background:#5c6bc0;color:#fff;"><i class="fa fa-robot me-1"></i><span id="cr-ia-count">0</span> AI</span>
-                <span class="badge bg-success"><i class="fa fa-headset me-1"></i><span id="cr-agent-count">0</span> Agent</span>
+                <strong><i class="fa fa-chart-bar me-1 text-info"></i>Control de respuestas</strong>
+                <span class="badge" style="background:#5c6bc0;color:#fff;"><i class="fa fa-robot me-1"></i><span id="cr-ia-count">0</span> IA</span>
+                <span class="badge bg-success"><i class="fa fa-headset me-1"></i><span id="cr-agent-count">0</span> Agente</span>
                 <div id="cr-agentes-list" class="d-flex flex-wrap gap-2"></div>
             </div>
         </div>
@@ -183,8 +201,8 @@
         <div class="cm-messages" id="chat-messages">
             <div class="cm-empty-state" id="cm-empty-state">
                 <div class="cm-empty-icon"><i class="fa fa-archive"></i></div>
-                <h5 class="cm-empty-title">Select a conversation</h5>
-                <p class="cm-empty-sub">Choose a finished conversation to view its history.</p>
+                <h5 class="cm-empty-title">Selecciona una conversación</h5>
+                <p class="cm-empty-sub">Elige una conversación finalizada para ver su historial.</p>
             </div>
             <div class="chat-detail" id="mensajes-container"></div>
         </div>
@@ -198,23 +216,23 @@
             </div>
             <div class="d-flex align-items-center gap-2" id="footer-plantillas-row">
                 <div class="flex-grow-1" style="font-size:.8rem;color:var(--chat-text-secondary);">
-                    <i class="fa fa-lock me-1 text-muted"></i>Conversation closed — re-engage by sending an approved Meta template.
+                    <i class="fa fa-lock me-1 text-muted"></i>Conversación cerrada — reactívala enviando una plantilla aprobada de Meta.
                 </div>
                 <div style="position:relative;flex-shrink:0;">
-                    <button type="button" id="plantillas-btn" title="Send template to reactivate">
+                    <button type="button" id="plantillas-btn" title="Enviar plantilla para reactivar">
                         <i class="fa fa-layer-group"></i>
                         <span class="badge-count" id="plantillas-badge" style="display:none;">0</span>
                     </button>
                     <div id="plantillas-panel">
                         <div class="pp-header">
-                            <span><i class="fa fa-layer-group me-1"></i>Approved templates</span>
+                            <span><i class="fa fa-layer-group me-1"></i>Plantillas aprobadas</span>
                             <span>
-                                <button type="button" class="pp-close" id="plantillas-refresh" title="Refresh"><i class="fa fa-rotate"></i></button>
-                                <button type="button" class="pp-close" id="plantillas-close" title="Close">&times;</button>
+                                <button type="button" class="pp-close" id="plantillas-refresh" title="Actualizar"><i class="fa fa-rotate"></i></button>
+                                <button type="button" class="pp-close" id="plantillas-close" title="Cerrar">&times;</button>
                             </span>
                         </div>
-                        <div class="pp-search"><input type="search" id="plantillas-search" placeholder="Search template..."></div>
-                        <div class="pp-list" id="plantillas-list"><div class="pp-empty">Loading...</div></div>
+                        <div class="pp-search"><input type="search" id="plantillas-search" placeholder="Buscar plantilla..."></div>
+                        <div class="pp-list" id="plantillas-list"><div class="pp-empty">Cargando...</div></div>
                         <div class="pp-form" id="plantillas-form">
                             <div class="pp-form-title">
                                 <button type="button" class="pp-back" id="plantillas-form-back"><i class="fa fa-arrow-left"></i></button>
@@ -222,12 +240,20 @@
                             </div>
                             <div id="plantillas-form-vars"></div>
                             <div class="pp-form-actions">
-                                <button type="button" class="pp-btn-cancelar" id="plantillas-form-cancelar">Cancel</button>
-                                <button type="button" class="pp-btn-enviar" id="plantillas-form-enviar">Send &amp; Reactivate</button>
+                                <button type="button" class="pp-btn-cancelar" id="plantillas-form-cancelar">Cancelar</button>
+                                <button type="button" class="pp-btn-enviar" id="plantillas-form-enviar">Enviar y reactivar</button>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <div id="offline-overlay" class="offline-overlay d-none">
+            <div class="offline-overlay-card">
+                <div class="offline-overlay-icon"><i class="fa fa-satellite-dish"></i></div>
+                <div class="offline-overlay-title">Sesión desconectada</div>
+                <div class="offline-overlay-msg">Esta sesión está pausada. No es posible enviar ni recibir mensajes.</div>
             </div>
         </div>
 
@@ -240,7 +266,7 @@
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalNombre">Conversation Summary</h5>
+                <h5 class="modal-title" id="modalNombre">Resumen de la conversación</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body detalleProdModal"></div>
@@ -270,9 +296,9 @@
         <div class="modal-content">
             <div class="modal-body text-center py-4 px-4">
                 <div class="mb-3"><i class="fa fa-satellite-dish fa-3x text-primary"></i></div>
-                <h5 class="mb-2">No WhatsApp sessions yet</h5>
-                <p class="text-muted mb-4">Connect at least one channel to view finished conversations.</p>
-                <a href="/whatsapp/sesiones/" class="btn btn-primary"><i class="fa fa-plus me-1"></i>Connect a session</a>
+                <h5 class="mb-2">Aún no hay sesiones de WhatsApp</h5>
+                <p class="text-muted mb-4">Conecta al menos un canal para ver conversaciones finalizadas.</p>
+                <a href="/whatsapp/sesiones/" class="btn btn-primary"><i class="fa fa-plus me-1"></i>Conectar una sesión</a>
             </div>
         </div>
     </div>
@@ -289,6 +315,7 @@ $(document).ready(function() {
     let chatSocket, sessionSocket;
     let conversacionActiva = null;
     let _cargandoMensajes = false;
+    let _SESION_ACTIVA = $('#sesion-selector option:selected').data('activo') === true;
 
     // ── Filtros activos ────────────────────────────────────────────────
     let _filtros = {
@@ -342,9 +369,13 @@ $(document).ready(function() {
         );
         sessionSocket.onmessage = function(e) {
             const d = JSON.parse(e.data);
-            if ((d.type === 'new_message' || d.type === 'messages_update') && d.html) {
-                const el = $(`#lista-conversaciones div[data-id=${d.conversacion_id}]`);
-                el.length ? el.replaceWith(d.html) : $('#lista-conversaciones').append(d.html);
+            if (d.type === 'new_message' || d.type === 'messages_update') {
+                const el = $(`#lista-conversaciones .conversacion-item[data-id="${d.conversacion_id}"]`);
+                if (el.length && d.html) {
+                    el.replaceWith(d.html);
+                } else {
+                    cargarConversaciones();
+                }
             }
         };
         cargarConversaciones();
@@ -396,20 +427,32 @@ $(document).ready(function() {
 
     // ── Sesión ─────────────────────────────────────────────────────────
     $('#sesion-selector').on('change', function() {
+        _SESION_ACTIVA = $(this).find('option:selected').data('activo') === true;
         _filtros.sesion_id = $(this).val();
         _resetChat();
         sessionWebSocket(_filtros.sesion_id);
     });
 
+    $(document).on('click', '#btn-cambiar-sesion-pausada', function() {
+        var $sel = $('#sesion-selector');
+        if (!$sel.length) return;
+        $('html, body').animate({ scrollTop: $sel.offset().top - 90 }, 250);
+        $sel.addClass('flash-attention').focus();
+        try { $sel[0].showPicker && $sel[0].showPicker(); } catch (e) {}
+        setTimeout(function() { $sel.removeClass('flash-attention'); }, 1600);
+    });
+
     function _resetChat() {
+        $('#offline-overlay').addClass('d-none');
         _cargandoMensajes = false;
         $.unblockUI();
         if (chatSocket) { chatSocket.close(); chatSocket = null; }
+        document.body.classList.remove('chat-mobile-open');
         $('#mensajes-container').html('');
         $('#cm-empty-state').show();
         $('#reactivar-btn, #ver-resumen-btn, #chat-footer, #dropdowns-btn, #btn-estadisticas, #btn-control-respuestas').addClass('d-none').hide();
         $('#stats-panel, #control-respuestas-panel').addClass('d-none');
-        $('#contacto-nombre').text('Select a conversation');
+        $('#contacto-nombre').text('Selecciona una conversación');
         $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
         $('#contacto-numero, #contacto-hashedId').text('');
         $('#conv-id-badge').hide();
@@ -476,6 +519,12 @@ $(document).ready(function() {
                     $('#conv-fechas').hide();
                 }
 
+                if (!_SESION_ACTIVA) {
+                    $('#offline-overlay').removeClass('d-none');
+                    setTimeout(scrollToBottom, 800);
+                    return;
+                }
+
                 $('#marcar-reactivar, #ver-resumen, #cambiar-clasificacion').attr('data-id', id);
                 const _bloqueada = r.reactivar_bloqueada === true;
                 window._reactivarBloqueada = _bloqueada;
@@ -539,6 +588,11 @@ $(document).ready(function() {
         $('.conversacion-item').removeClass('active');
         $(this).closest('.conversacion-item').addClass('active');
         cargarMensajes(id);
+        document.body.classList.add('chat-mobile-open');
+    });
+
+    $(document).on('click', '#chat-back-btn', function() {
+        document.body.classList.remove('chat-mobile-open');
     });
 
     // ── Búsqueda por contacto ──────────────────────────────────────────
@@ -622,13 +676,14 @@ $(document).ready(function() {
     // Cargar conversación preseleccionada desde sesión
     {% if conversacion_selected %}
     cargarMensajes('{{ conversacion_selected.id }}');
+    document.body.classList.add('chat-mobile-open');
     {% endif %}
 
     {% if auto_open_conv_id %}
-    // Deep-link `?conv=<token>` — auto-abrir la conv (correo del asesor de cotización).
     setTimeout(function() {
         if (typeof cargarMensajes === 'function') {
             cargarMensajes('{{ auto_open_conv_id }}');
+            document.body.classList.add('chat-mobile-open');
         }
     }, 600);
     {% endif %}

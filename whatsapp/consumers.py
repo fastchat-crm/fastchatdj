@@ -150,7 +150,8 @@ class SessionRoomConsumer(AsyncWebsocketConsumer):
             if not conversacion:
                 return {'html': '', 'nombre': '', 'preview': ''}
             html = render_to_string('whatsapp/conversaciones/conversacion_item.html', {
-                'conversacion': conversacion
+                'conversacion': conversacion,
+                'show_date': bool(conversacion.fecha_fin_conversacion),
             })
             nombre = (
                 conversacion.contacto.contacto_nombre
