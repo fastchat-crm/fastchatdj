@@ -1,9 +1,18 @@
 import json
+from pathlib import Path
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
+from django.conf import settings
+from django.template import Context, Template
 from django.template.loader import render_to_string
 from .models import ConversacionWhatsApp, MensajeWhatsApp
 from .services import WhatsAppService, get_whatsapp_service
+
+
+def _render_partial_fresh(template_relpath, context):
+    template_path = Path(settings.BASE_DIR) / template_relpath
+    template_src = template_path.read_text(encoding='utf-8')
+    return Template(template_src).render(Context(context))
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -68,13 +77,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 conversacion=conversacion
             ).order_by('fecha')
 
-            # Renderizar la plantilla de mensajes
-            html = render_to_string('whatsapp/conversaciones/mensajes_partial.html', {
-                'mensajes': mensajes,
-                'conversacion': conversacion
-            })
-
-            return html
+            return _render_partial_fresh(
+                'whatsapp/templates/whatsapp/conversaciones/mensajes_partial.html',
+                {'mensajes': mensajes, 'conversacion': conversacion},
+            )
         except ConversacionWhatsApp.DoesNotExist:
             return ""
 
@@ -149,10 +155,13 @@ class SessionRoomConsumer(AsyncWebsocketConsumer):
             ).select_related('contacto').first()
             if not conversacion:
                 return {'html': '', 'nombre': '', 'preview': ''}
-            html = render_to_string('whatsapp/conversaciones/conversacion_item.html', {
-                'conversacion': conversacion,
-                'show_date': bool(conversacion.fecha_fin_conversacion),
-            })
+            html = _render_partial_fresh(
+                'whatsapp/templates/whatsapp/conversaciones/conversacion_item.html',
+                {
+                    'conversacion': conversacion,
+                    'show_date': bool(conversacion.fecha_fin_conversacion),
+                },
+            )
             nombre = (
                 conversacion.contacto.contacto_nombre
                 or conversacion.contacto.from_number
