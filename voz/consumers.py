@@ -220,6 +220,8 @@ class VozWebConsumer(AsyncWebsocketConsumer):
             evento = msg.get('event')
             if evento == 'end_utterance':
                 await self._procesar_turno(forzar=True)
+            elif evento == 'iniciar_conversacion':
+                await self._iniciar_conversacion()
             elif evento == 'stop':
                 await self.close()
 
@@ -245,6 +247,28 @@ class VozWebConsumer(AsyncWebsocketConsumer):
                     'event': 'vad', 'speaking': False, 'rms': amplitud,
                 }))
                 await self._procesar_turno()
+
+    async def _iniciar_conversacion(self):
+        if self.procesando or self.historial:
+            return
+        self.procesando = True
+        try:
+            if self.agente_id:
+                respuesta = await asyncio.to_thread(self._responder_con_agente, 'hola')
+            else:
+                respuesta = await asyncio.to_thread(services.pensar, 'hola', self.historial)
+            respuesta = (respuesta or '').strip()
+            if not respuesta:
+                return
+            logger.info('[voz-web] saludo inicial ia: %s', respuesta)
+            self.historial.append(('ia', respuesta))
+            await sync_to_async(self._guardar_mensaje)('ia', respuesta)
+            await self.send(text_data=json.dumps({'event': 'reply', 'texto': respuesta}))
+            await self.send(text_data=json.dumps({'event': 'audio_end'}))
+        except Exception:
+            logger.exception('[voz-web] fallo saludo inicial')
+        finally:
+            self.procesando = False
 
     async def _procesar_turno(self, forzar: bool = False):
         if self.procesando:

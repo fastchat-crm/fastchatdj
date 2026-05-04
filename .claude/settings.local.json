@@ -76,7 +76,8 @@
       "Bash(xargs grep *)",
       "Bash(where python *)",
       "Bash(pycheck whatsapp/view_tarifas.py)",
-      "PowerShell(pycheck *)"
+      "PowerShell(pycheck *)",
+      "Bash(pycheck C:/DESARROLLO_PROYECTOS/fastchat/fastchatdj/voz/consumers.py)"
     ]
   },
   "hooks": {

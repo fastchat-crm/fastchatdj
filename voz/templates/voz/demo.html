@@ -64,6 +64,7 @@
 
         <div class="voz-controls">
             <button class="voz-btn voz-btn-primary" id="btnStart">Iniciar conversación</button>
+            <button class="voz-btn voz-btn-warning" id="btnMute" disabled>Silenciar mic</button>
             <button class="voz-btn voz-btn-danger" id="btnStop" disabled>Detener</button>
         </div>
 
@@ -116,6 +117,7 @@
     let pendingReply = '';
     let bestVoice = null;
     let voicesCache = [];
+    let micMuted = false;
 
     const dot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
@@ -123,6 +125,7 @@
     const transcript = document.getElementById('transcript');
     const btnStart = document.getElementById('btnStart');
     const btnStop  = document.getElementById('btnStop');
+    const btnMute  = document.getElementById('btnMute');
     const agenteSelector = document.getElementById('agenteSelector');
     const meterFill = document.getElementById('meterFill');
     const micValue = document.getElementById('micValue');
@@ -298,7 +301,16 @@
             utter.rate = 1.0;
             utter.pitch = 1.05;  // levemente mas calido
             utter.onstart = () => { ttsActive = true; setBubble('speaking', 'IA hablando', '🔊'); setStatus('speaking', 'IA hablando...'); };
-            utter.onend   = () => { ttsActive = false; setBubble('listening', 'Escuchando', '🎙'); setStatus('listening', 'Escuchando'); };
+            utter.onend   = () => {
+                ttsActive = false;
+                if (micMuted) {
+                    setBubble('muted', 'Mic silenciado', '🔇');
+                    setStatus('muted', 'Mic silenciado — la IA no te escucha');
+                } else {
+                    setBubble('listening', 'Escuchando', '🎙');
+                    setStatus('listening', 'Escuchando');
+                }
+            };
             utter.onerror = () => { ttsActive = false; };
             window.speechSynthesis.speak(utter);
         } catch(e) { console.warn('browser TTS fail', e); }
@@ -413,28 +425,36 @@
         ws.onopen = () => {
             setStatus('connected', 'Conectado — escuchando');
             btnStop.disabled = false;
+            btnMute.disabled = false;
             logEvent('info', 'WS conectado', buildWsUrl());
 
             const source = audioCtx.createMediaStreamSource(micStream);
 
-            // Analyser para meter visual local (confirma que el mic capta)
             analyser = audioCtx.createAnalyser();
             analyser.fftSize = 512;
             analyserData = new Uint8Array(analyser.fftSize);
             source.connect(analyser);
             drawMeter();
 
-            // AudioWorklet que envia PCM al WS
             micNode = new AudioWorkletNode(audioCtx, 'mic-capture', {
                 processorOptions: { targetRate: TARGET_RATE }
             });
             micNode.port.onmessage = (e) => {
+                if (micMuted) return;
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(e.data);
                 }
             };
             source.connect(micNode);
-            // no conectamos micNode.connect(destination) para evitar feedback
+
+            try {
+                ws.send(JSON.stringify({event: 'iniciar_conversacion'}));
+                setStatus('thinking', 'IA preparando saludo...');
+                setBubble('thinking', 'La IA va a saludarte...', '🤔');
+                logEvent('info', 'Solicitando saludo inicial de la IA');
+            } catch(err) {
+                logEvent('warn', 'No se pudo solicitar saludo inicial', err.message);
+            }
         };
 
         ws.onmessage = (e) => {
@@ -517,6 +537,10 @@
         ws = null;
         btnStart.disabled = false;
         btnStop.disabled = true;
+        btnMute.disabled = true;
+        micMuted = false;
+        btnMute.textContent = 'Silenciar mic';
+        btnMute.classList.remove('voz-btn-mute-on');
         agenteSelector.disabled = false;
         meterFill.style.width = '0%';
         micValue.textContent = '—';
@@ -532,8 +556,27 @@
         }
     }
 
+    function setMuteUI(muted){
+        micMuted = muted;
+        btnMute.textContent = muted ? 'Reanudar mic' : 'Silenciar mic';
+        btnMute.classList.toggle('voz-btn-mute-on', muted);
+        if (muted) {
+            setBubble('muted', 'Mic silenciado', '🔇');
+            setStatus('muted', 'Mic silenciado — la IA no te escucha');
+        } else {
+            setBubble('listening', 'Escuchando', '🎙');
+            setStatus('listening', 'Escuchando');
+        }
+    }
+
+    function toggleMute(){
+        setMuteUI(!micMuted);
+        logEvent('info', micMuted ? 'Mic silenciado por el usuario' : 'Mic reanudado');
+    }
+
     btnStart.addEventListener('click', start);
     btnStop.addEventListener('click', stop);
+    btnMute.addEventListener('click', toggleMute);
 
     // Warm-up de voces de SpeechSynthesis (Chrome las pobla async)
     if (window.speechSynthesis) {

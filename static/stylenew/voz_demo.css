@@ -70,6 +70,7 @@ body.voz-demo {
 .voz-status-dot.listening { background: var(--voz-primary); animation: pulse 1.2s infinite; }
 .voz-status-dot.thinking  { background: #f59e0b; animation: pulse 0.8s infinite; }
 .voz-status-dot.speaking  { background: var(--voz-danger); animation: pulse 0.6s infinite; }
+.voz-status-dot.muted     { background: var(--voz-muted); }
 
 @keyframes pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
@@ -97,6 +98,10 @@ body.voz-demo {
 .voz-btn-primary { background: var(--voz-primary); }
 .voz-btn-primary:hover:not(:disabled) { background: var(--voz-primary-hover); }
 .voz-btn-danger { background: var(--voz-danger); }
+.voz-btn-warning { background: #f59e0b; }
+.voz-btn-warning:hover:not(:disabled) { background: #d97706; }
+.voz-btn-mute-on { background: var(--voz-muted); }
+.voz-btn-mute-on:hover:not(:disabled) { background: #475569; }
 .voz-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .voz-transcript {
@@ -367,6 +372,16 @@ body.voz-demo {
 }
 .voz-bubble[data-state="error"] .voz-bubble-ring {
     border-color: var(--voz-danger);
+}
+.voz-bubble[data-state="muted"] {
+    background: rgba(100,116,139,0.12);
+    border-color: rgba(100,116,139,0.4);
+    opacity: 0.75;
+}
+.voz-bubble[data-state="muted"] .voz-bubble-ring,
+.voz-bubble[data-state="muted"] .voz-bubble-ring-2 {
+    border-color: rgba(100,116,139,0.5);
+    animation: none;
 }
 
 @keyframes voz-ring-pulse {
