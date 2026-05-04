@@ -1,3 +1,4 @@
+from django import forms
 from django.db.models import Count, Q
 from django.utils.safestring import mark_safe
 
@@ -276,6 +277,15 @@ class CambiarNombreContactoForm(ModelFormBase):
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 
 
+class _AgentChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        label = obj.get_full_name() or obj.username
+        carga = getattr(obj, 'carga', 0)
+        if carga:
+            label += f'  ({carga} activa{"s" if carga != 1 else ""})'
+        return label
+
+
 class AsignarAgenteForm(ModelFormBase):
     class Meta:
         model = ConversacionWhatsApp
@@ -284,7 +294,6 @@ class AsignarAgenteForm(ModelFormBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Queryset con carga de trabajo anotada
         agentes = Usuario.objects.filter(is_active=True).annotate(
             carga=Count(
                 'conversaciones_asignadas',
@@ -292,17 +301,8 @@ class AsignarAgenteForm(ModelFormBase):
             )
         ).order_by('first_name')
 
-        # Etiquetas con carga: "Juan Pérez (3 activas)"
-        choices = [('', '---------')]
-        for u in agentes:
-            label = u.get_full_name() or u.username
-            if u.carga:
-                label += f'  ({u.carga} activa{"s" if u.carga != 1 else ""})'
-            choices.append((u.pk, label))
-
-        from django import forms as dj_forms
-        self.fields['asignado_a'] = dj_forms.ChoiceField(
-            choices=choices,
+        self.fields['asignado_a'] = _AgentChoiceField(
+            queryset=agentes,
             required=False,
             label='Asignar a',
         )
@@ -318,12 +318,10 @@ class AsignarAgenteForm(ModelFormBase):
 
     def save(self, commit=True):
         instance = super(ModelFormBase, self).save(commit=False)
-        pk = self.cleaned_data.get('asignado_a') or None
-        instance.asignado_a_id = int(pk) if pk else None
+        instance.asignado_a = self.cleaned_data.get('asignado_a')
         instance.nota_interna = self.cleaned_data.get('nota_interna', '')
         if commit:
-            instance.save(update_fields=['asignado_a', 'nota_interna', 'fecha_asignacion',
-                                         'ai_activo'])
+            instance.save(update_fields=['asignado_a', 'nota_interna', 'fecha_asignacion', 'ai_activo'])
         return instance
 
 
