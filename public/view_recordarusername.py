@@ -39,7 +39,7 @@ def recordarusername(request):
                 if user.exists():
                     us = user.first()
                     with transaction.atomic():
-                        if us.is_active and not us.es_administrativo():
+                        if us.is_active:
                             datos = {
                                 'sucursal': confi.nombre_empresa,
                                 'usuario': us,

@@ -2,13 +2,13 @@
 {% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css">
-<link rel="stylesheet" href="/static/stylenew/conversaciones.css">
+<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.2">
 {% endblock %}
 
 {% block content %}
 
 {# ── Toast de nuevo mensaje ──────────────────────────────────────────────── #}
-<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:9999">
+<div class="toast-container position-fixed bottom-0 end-0 p-3 wa-notif-toast-wrap" style="z-index:9999">
     <div id="toast-nuevo-mensaje" class="toast align-items-center text-white border-0"
          role="alert" aria-live="assertive" aria-atomic="true"
          style="background:linear-gradient(135deg,#25d366,#128c5e);min-width:280px;">
@@ -53,7 +53,7 @@
                 <div class="cs-session-indicator {% if sesion_seleccionada.activo %}si-active{% else %}si-paused{% endif %}"></div>
                 <select id="sesion-selector" class="cs-session-select{% if sesion_seleccionada and not sesion_seleccionada.activo %} sesion-selector-pausada{% endif %}">
                     {% for sesion in sesiones %}
-                        <option value="{{ sesion.id }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
+                        <option value="{{ sesion.id }}" data-activo="{{ sesion.activo|yesno:'true,false,false' }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
                             {% if sesion.es_meta %}☁️ Meta{% elif sesion.es_baileys %}📱 Baileys{% elif sesion.es_instagram %}📸 IG{% elif sesion.es_messenger %}💬 FB{% endif %} · {{ sesion.numero }} | {{ sesion.nombre }} ({{ sesion.get_estado_display }}{% if not sesion.activo %} · ⏸ PAUSADA{% endif %})
                         </option>
                     {% endfor %}
@@ -114,7 +114,7 @@
                 <img src="/static/assets/img/avatar.png" alt="" class="cm-contact-avatar" id="contacto-foto">
                 <div class="cm-contact-info">
                     <div class="cm-contact-name">
-                        <span id="contacto-nombre">Select a conversation</span>
+                        <span id="contacto-nombre">Selecciona una conversación</span>
                         <span id="conv-id-badge" class="badge bg-light text-dark border ms-1" style="font-size:.7rem;display:none;"></span>
                     </div>
                     <div class="cm-contact-sub">
@@ -241,7 +241,7 @@
                             <div class="col-auto">
                                 <div class="border rounded px-2 py-1 bg-white text-center" style="min-width:70px;">
                                     <div class="fw-bold text-dark" id="stat-msgs-total">0</div>
-                                    <div class="text-muted" style="font-size:.7rem;">Total msgs</div>
+                                    <div class="text-muted" style="font-size:.7rem;">Total mensajes</div>
                                 </div>
                             </div>
                             <div class="col-auto">
@@ -303,8 +303,8 @@
         <div class="cm-messages" id="chat-messages">
             <div class="cm-empty-state" id="cm-empty-state">
                 <div class="cm-empty-icon"><i class="fa fa-comments"></i></div>
-                <h5 class="cm-empty-title">Select a conversation</h5>
-                <p class="cm-empty-sub">Choose from the list to start managing messages.</p>
+                <h5 class="cm-empty-title">Selecciona una conversación</h5>
+                <p class="cm-empty-sub">Elige una de la lista para empezar a gestionar mensajes.</p>
             </div>
             <div class="chat-detail" id="mensajes-container"></div>
         </div>
@@ -374,13 +374,21 @@
                             </div>
 
                     <input type="text" class="form-control border-0 cm-text-input" name="mensaje" id="footer-mensaje-input"
-                           placeholder="Write a message...">
+                           placeholder="Escribe un mensaje...">
 
                     <button type="submit" id="footer-send-btn" class="cm-send-btn">
                         <i class="fa fa-paper-plane"></i>
                     </button>
                 </div>
             </form>
+        </div>
+
+        <div id="offline-overlay" class="offline-overlay d-none">
+            <div class="offline-overlay-card">
+                <div class="offline-overlay-icon"><i class="fa fa-satellite-dish"></i></div>
+                <div class="offline-overlay-title">Sesión desconectada</div>
+                <div class="offline-overlay-msg">Esta sesión está pausada. No es posible enviar ni recibir mensajes.</div>
+            </div>
         </div>
 
     </main>
@@ -896,6 +904,7 @@
 <script>
     $(document).ready(function() {
         $('#btnBlock').hide();
+        let _SESION_ACTIVA = $('#sesion-selector option:selected').data('activo') === true;
         // Configurar WebSocket
         let chatSocket;
         let sessionSocket;
@@ -959,23 +968,19 @@
                 const data = JSON.parse(e.data);
 
                 if ((data.type === 'new_message' || data.type === 'messages_update')) {
-                    if (!data.html) {
-                        // Backend no nos dió html (ej. conversación huérfana o
-                        // permiso): forzar refresh completo de la lista para
-                        // que el usuario vea la nueva conversación igual.
-                        cargarConversaciones($('#sesion-selector').val(), $('#search-conversacion').val(), filtroActivo);
-                    } else {
-                        const conversacion = $(`#lista-conversaciones .conversacion-item[data-id="${data.conversacion_id}"]`);
+                    const conversacion = $(`#lista-conversaciones .conversacion-item[data-id="${data.conversacion_id}"]`);
+                    if (data.html) {
                         if (conversacion.length) {
                             conversacion.replaceWith(data.html);
                         } else {
-                            // Nueva conversación: insertar al principio +
-                            // animación para que llame la atención.
-                            const $nueva = $(data.html);
-                            $nueva.addClass('conv-nueva-flash');
-                            $(`#lista-conversaciones`).prepend($nueva);
-                            setTimeout(function() { $nueva.removeClass('conv-nueva-flash'); }, 2400);
+                            const $lista = $('#lista-conversaciones');
+                            if ($lista.find('.conversacion-item').length === 0) {
+                                $lista.empty();
+                            }
+                            $lista.prepend(data.html);
                         }
+                    } else {
+                        cargarConversaciones($('#sesion-selector').val(), $('#search-conversacion').val(), filtroActivo);
                     }
                     // Re-marcar la conv activa (replaceWith pierde la clase)
                     if (conversacionActiva) {
@@ -1353,6 +1358,8 @@
         // Cambiar de sesión
         $('#sesion-selector').change(function() {
             const sesionId = $(this).val();
+            _SESION_ACTIVA = $(this).find('option:selected').data('activo') === true;
+            $('#offline-overlay').addClass('d-none');
             // Abortar cualquier carga en curso
             _cargandoMensajes = false;
             $.unblockUI();
@@ -1410,12 +1417,15 @@
             document.body.classList.add('chat-mobile-open');
         });
 
-        // Mobile back button: volver a la lista de conversaciones
+        // Mobile back button: volver a la lista de conversaciones.
+        // Usamos resetearChat() para que la conv pierda .active y conversacionActiva
+        // se ponga en null — sino al volver a tocar la misma card no recarga.
         $(document).on('click', '#chat-back-btn', function() {
-            document.body.classList.remove('chat-mobile-open');
+            resetearChat();
         });
 
         function resetearChat() {
+            $('#offline-overlay').addClass('d-none');
             if (chatSocket) { chatSocket.close(); chatSocket = null; }
             conversacionActiva = null;
             _cargandoMensajes = false;
@@ -1423,7 +1433,7 @@
             $('.conversacion-item').removeClass('active');
             $('#mensajes-container').html('');
             $('#cm-empty-state').show();
-            $('#contacto-nombre').text('Select a conversation');
+            $('#contacto-nombre').text('Selecciona una conversación');
             $('#contacto-numero').text('');
             $('#contacto-hashedId').text('');
             $('#conv-id-badge').hide();
@@ -1646,26 +1656,25 @@
             _cargandoMensajes = true;
             conversacionActiva = conversacionId;
 
-            pantallaespera();
-
             // Limpiar WebSocket anterior
             if (chatSocket) { chatSocket.close(); chatSocket = null; }
 
-            // Ocultar controles mientras carga
+            // Ocultar controles + empty state mientras carga
             $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #chat-footer').addClass('d-none').hide();
             $('#stats-panel, #control-respuestas-panel').addClass('d-none');
-            $('#mensajes-container').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted small">Cargando mensajes...</p></div>');
+            $('#cm-empty-state').hide();
+            $('#mensajes-container')
+                .addClass('is-loading')
+                .html('<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2 text-muted small mb-0">Cargando mensajes...</p></div>');
 
             $.ajax({
                 url: '/whatsapp/conversaciones/?action=ver_mensajes&pk=' + conversacionId,
                 type: 'GET',
                 success: function(response) {
-                    $.unblockUI();
                     _cargandoMensajes = false;
-                    $('#cm-empty-state').hide();
 
                     // Actualizar mensajes
-                    $('#mensajes-container').html(response.html);
+                    $('#mensajes-container').removeClass('is-loading').html(response.html);
 
                     // Actualizar información de contacto
                     $('#contacto-nombre').text(response.contacto_nombre || response.contacto_numero);
@@ -1676,6 +1685,12 @@
                     // Backend siempre devuelve una URL válida via get_foto_gris():
                     // foto real → PNG inicial del nombre → default.
                     $('#contacto-foto').attr('src', response.contacto_foto || '/static/foto_defaultd.png');
+
+                    if (!_SESION_ACTIVA) {
+                        $('#offline-overlay').removeClass('d-none');
+                        setTimeout(() => { scrollToBottom(); }, 800);
+                        return;
+                    }
 
                     $btnsAction.forEach(btn => $(`${btn}`).attr('data-id', conversacionId));
 
@@ -1770,10 +1785,9 @@
                     conectarWebSocket(response.conversacion_id);
                 },
                 error: function(xhr, status, error) {
-                    $.unblockUI();
                     _cargandoMensajes = false;
                     console.error('[cargarMensajes] ajax error', status, error, xhr.responseText);
-                    $('#mensajes-container').html('<div class="p-3 text-center"><p class="text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error al cargar mensajes: ' + error + '</p></div>');
+                    $('#mensajes-container').removeClass('is-loading').html('<div class="p-3 text-center"><p class="text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error al cargar mensajes: ' + error + '</p></div>');
                 }
             });
         }
@@ -1828,7 +1842,7 @@
             });
         };
 
-        function actualizarBotUI(activo) {
+        window.actualizarBotUI = function(activo) {
             const btn = $('#btn-toggle-bot');
             const label = $('#bot-estado-label');
             btn.removeClass('bot-on bot-off');
@@ -1839,7 +1853,7 @@
                 btn.addClass('bot-off');
                 label.text('Bot PAUSADO');
             }
-        }
+        };
 
         $('.form_modal').on('click', function(e) {
             e.preventDefault();
@@ -2275,10 +2289,16 @@
         return _audioCtx;
     }
     // Inicializar el contexto en el primer gesto del usuario.
-    document.addEventListener('click', function _initAudio() {
+    // En mobile escuchamos también `touchstart` porque iOS Safari requiere
+    // explícitamente un user-gesture del touchstart/touchend para habilitar audio,
+    // y a veces el `click` se sintetiza después y queda fuera del gesto.
+    function _initAudioOnce() {
         _getAudioCtx();
-        document.removeEventListener('click', _initAudio);
-    }, { once: true });
+        document.removeEventListener('click', _initAudioOnce);
+        document.removeEventListener('touchstart', _initAudioOnce);
+    }
+    document.addEventListener('click', _initAudioOnce, { once: true });
+    document.addEventListener('touchstart', _initAudioOnce, { once: true, passive: true });
     // Cuando la pestaña vuelve a estar visible, asegurar que el AudioContext
     // no quede suspended (Chrome/Opera lo congelan en background).
     document.addEventListener('visibilitychange', function () {
@@ -2389,6 +2409,12 @@
         if (!convActivaVisible) {
             _beep();
             _mostrarToast(nombre);
+            // Mobile: vibración como feedback complementario al sonido — en
+            // muchos browsers móviles el audio queda suspendido en background
+            // y el toast no es suficiente para llamar la atención.
+            if (navigator.vibrate) {
+                try { navigator.vibrate([180, 80, 180]); } catch (e) {}
+            }
         }
         // Notificación nativa (solo si pestaña no visible — la check está
         // adentro de _notificacionNativa).

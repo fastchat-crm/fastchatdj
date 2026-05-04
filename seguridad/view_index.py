@@ -42,6 +42,7 @@ def index(request):
     ahora = timezone.now()
     hace_24h = ahora - timedelta(hours=24)
     hace_7d = ahora - timedelta(days=7)
+    mes_ini = ahora.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     sesiones_qs = (
         SesionWhatsApp.objects
@@ -117,6 +118,13 @@ def index(request):
         contacto__sesion__status=True,
     ).count()
 
+    convs_mes_actual = ConversacionWhatsApp.objects.filter(
+        status=True,
+        contacto__sesion__usuario=persona,
+        contacto__sesion__status=True,
+        fecha_registro__gte=mes_ini,
+    ).count()
+
     mensajes_24h = MensajeWhatsApp.objects.filter(
         conversacion__contacto__sesion__usuario=persona,
         conversacion__contacto__sesion__status=True,
@@ -180,6 +188,7 @@ def index(request):
         'contactos_total':      contactos_total,
         'convs_abiertas_total': convs_abiertas_total,
         'convs_no_asignadas':   convs_no_asignadas,
+        'convs_mes_actual':     convs_mes_actual,
         'mensajes_24h':         mensajes_24h,
         'mensajes_7d':          mensajes_7d,
         'serie_7d':             serie_7d,

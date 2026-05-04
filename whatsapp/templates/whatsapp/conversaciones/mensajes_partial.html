@@ -89,9 +89,8 @@
                 </div>
 
                 {% if mensaje.ia_generado and not mensaje.eliminado and not mensaje.feedback %}
-                    <div class="correccion-form d-none mt-1 p-2 rounded w-100" id="cf-{{ mensaje.pk }}"
-                         style="background:#fff8e1;border:1px solid #ffe082;max-width:360px;">
-                        <small class="d-block text-muted mb-1"><i class="fa fa-brain me-1"></i>¿Cuál sería la respuesta correcta?</small>
+                    <div class="correccion-form d-none mt-1 w-100" id="cf-{{ mensaje.pk }}">
+                        <small class="d-block mb-1"><i class="fa fa-brain me-1"></i>¿Cuál sería la respuesta correcta?</small>
                         <input type="hidden" id="cf-pregunta-{{ mensaje.pk }}" value="">
                         <textarea class="form-control form-control-sm mb-1" id="cf-texto-{{ mensaje.pk }}"
                                   rows="3" placeholder="Escribe la respuesta correcta aquí..."></textarea>

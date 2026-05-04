@@ -228,7 +228,7 @@ def conversacionesView(request):
                 'estado_active': conversacion.estado_conversacion == 0,
                 'ai_activo': conversacion.ai_activo,
                 'asignado_a': conversacion.asignado_a.get_full_name() if conversacion.asignado_a else '',
-                'asignado_foto': conversacion.asignado_a.get_foto_url() if conversacion.asignado_a else '',
+                'asignado_foto': conversacion.asignado_a.get_foto_gris() if conversacion.asignado_a else '',
                 'nota_interna': conversacion.nota_interna or '',
                 'fecha_asignacion': conversacion.fecha_asignacion.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_asignacion else '',
                 'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_registro else '',
