@@ -2,13 +2,13 @@
 {% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css">
-<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.0">
+<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.2">
 {% endblock %}
 
 {% block content %}
 
 {# ── Toast de nuevo mensaje ──────────────────────────────────────────────── #}
-<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:9999">
+<div class="toast-container position-fixed bottom-0 end-0 p-3 wa-notif-toast-wrap" style="z-index:9999">
     <div id="toast-nuevo-mensaje" class="toast align-items-center text-white border-0"
          role="alert" aria-live="assertive" aria-atomic="true"
          style="background:linear-gradient(135deg,#25d366,#128c5e);min-width:280px;">

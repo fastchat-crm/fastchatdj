@@ -243,9 +243,11 @@
         font-size: .7rem !important;
     }
 
-    /* Header del chat más alto en mobile + botón back visible */
+    /* Header del chat más alto en mobile + botón back visible.
+       Usamos max() porque en Android sin notch env(safe-area-inset-top)
+       resuelve a 0px y el fallback no aplica — quedaría pegado al navbar. */
     #chat-header {
-        padding-top: env(safe-area-inset-top, .75rem) !important;
+        padding-top: max(env(safe-area-inset-top), 0.85rem) !important;
         padding-bottom: .75rem !important;
     }
 }
@@ -348,8 +350,10 @@
     vertical-align: middle;
 }
 
-.chat-main {
-    position: relative;
+@media (min-width: 768px) {
+    .chat-main {
+        position: relative;
+    }
 }
 
 .offline-overlay {

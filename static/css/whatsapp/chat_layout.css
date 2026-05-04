@@ -1264,15 +1264,8 @@
 .btn-toggle-bot-off { background: #fff1f2; color: #b91c1c; border: 1px solid #fecdd3; }
 
 @media (max-width: 767.98px) {
-    .chat-navbar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-    }
     .chat-app-shell {
-        padding-top: var(--chat-navbar-h);
-        height: 100dvh;
+        height: calc(100dvh - var(--chat-navbar-h));
     }
     .chat-layout {
         height: calc(100dvh - var(--chat-navbar-h));
@@ -1312,6 +1305,21 @@
     }
     .modal { z-index: 1060; }
     .modal-backdrop { z-index: 1055; }
+
+    .wa-notif-toast-wrap.position-fixed {
+        top: 0 !important;
+        bottom: auto !important;
+        left: 0 !important;
+        right: 0 !important;
+        padding: 8px !important;
+        display: flex;
+        justify-content: center;
+    }
+    .wa-notif-toast-wrap .toast {
+        min-width: auto !important;
+        width: calc(100% - 16px);
+        max-width: 480px;
+    }
 }
 
 @media (min-width: 768px) {
