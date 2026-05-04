@@ -24,6 +24,12 @@
 - `public/` — public-facing portal pages (uses `baseweb.html`)
 - `area_geografica/` — country / state / city catalog
 
+## Module Documentation
+
+Deep-dive technical references for specific modules live under `.ai/docs/`. **Always read the relevant doc before touching the corresponding module** — they capture views, templates, JS, WebSocket flows, and business rules that aren't obvious from the code alone.
+
+- `.ai/docs/conversaciones.md` — `whatsapp/conversaciones/` and `whatsapp/conversaciones-finalizadas/`: views, helpers, GET/POST actions, listing filters, partials, JS patterns, WebSocket consumers (`ChatConsumer`, `SessionRoomConsumer`), webhook → broadcast flow, 6h reactivation window, Meta template flow, and rules for adding actions/filters/panels/message types.
+
 ## Server & Background Jobs
 
 - **Do not run the server yourself.** The developer uses PyCharm, or `restart_daphne.bat <port>` (Windows) / `restart_daphne.sh <port>` (Bash). Default port 8000.
