@@ -16,11 +16,15 @@ SESSION_COOKIE_AGE = 28800
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 # EMAIL_USE_TLS = True
 # EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_HOST = 'smtp.sendgrid.net'
+
 # EMAIL_PORT = 587
-EMAIL_USE_TLS = False
 EMAIL_USE_SSL = True
+
+EMAIL_USE_TLS = False
+EMAIL_HOST = 'smtp.sendgrid.net'
 EMAIL_PORT = 465
+DEFAULT_FROM_EMAIL = 'notisimweb@gmail.com'
+EMAIL_HOST_PASSWORD = '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'
 
 # CREDENCIALES
 import json
@@ -32,11 +36,13 @@ with open(os.path.join(BASE_DIR, 'credenciales.json')) as json_file:
     POSTGRES_HOST = data['POSTGRES_HOST']
     POSTGRES_PORT = data['POSTGRES_PORT']
     POSTGRES_DBNAME = data['POSTGRES_DBNAME']
+
+    BASE_URL_PRODUCCION = data['BASE_URL_PRODUCCION']
     # SECURITY WARNING: keep the secret key used in production secret!
     SECRET_KEY = data['SECRET_KEY']
     EMAIL_HOST_USER = data['EMAIL_HOST_USER']
-    DEFAULT_FROM_EMAIL = data['DEFAULT_FROM_EMAIL']
-    EMAIL_HOST_PASSWORD = data['EMAIL_HOST_PASSWORD']
+    # DEFAULT_FROM_EMAIL = data['DEFAULT_FROM_EMAIL']
+    # EMAIL_HOST_PASSWORD = data['EMAIL_HOST_PASSWORD']
     SENDGRID_API_KEY = data['SENDGRID_API_KEY']
     # WKHTMLTOPDF
     WKHTMLTOPDF_CMD = data['WKHTMLTOPDF_CMD']
