@@ -5,6 +5,7 @@
 
 {% block head %}
   <link rel="stylesheet" href="{% static 'stylenew/panel_principal.css' %}?v1.0">
+  <link rel="stylesheet" href="/static/stylenew/sesiones.css">
 {% endblock %}
 
 {% block content %}
@@ -148,77 +149,82 @@
             </div>
 
             {% if sesiones_activas %}
-              <div class="pp-sesiones">
+              <div class="conex-grid">
                 {% for s in sesiones_activas %}
-                  <div class="pp-sesion{% if not s.activo %} pp-sesion-pausada{% endif %}">
+                  <div class="conex-card{% if not s.activo %} conex-card-pausada{% endif %}">
                     {% if not s.activo %}
-                      <span class="pp-badge-pausada" title="Sesión pausada — no procesa mensajes ni consume API">
+                      <span class="badge-pausada" title="Sesión pausada — no procesa mensajes ni consume API">
                         <i class="fa fa-pause-circle"></i> PAUSADA
                       </span>
                     {% endif %}
-                    <div class="pp-sesion-head">
-                      <div class="pp-sesion-avatar {% if s.es_baileys %}prov-baileys{% endif %}">
-                        <i class="fab fa-whatsapp"></i>
-                        <span class="pp-sesion-dot"></span>
+                    <div class="card-top">
+                      <div class="card-avatar">
+                        {% if s.es_baileys and s.config_baileys.foto %}
+                          <img src="{{ s.config_baileys.foto }}" alt="avatar">
+                        {% elif s.es_meta and s.config_meta.foto %}
+                          <img src="{{ s.config_meta.foto }}" alt="avatar">
+                        {% else %}
+                          <span class="avatar-fallback"><i class="fab fa-whatsapp"></i></span>
+                        {% endif %}
+                        <span class="avatar-status status-{{ s.estado }}" title="{{ s.get_estado_display|default:s.estado }}"></span>
                       </div>
-                      <div class="pp-sesion-headtxt">
-                        <p class="pp-sesion-title">{{ s.nombre|default:'Sesión sin nombre' }}</p>
-                        <p class="pp-sesion-sub">
+                      <div class="card-head">
+                        <div class="card-nombre">{{ s.nombre|default:'Sesión sin nombre' }}</div>
+                        <div class="card-num">
                           {% if s.es_meta and s.config_meta.display_phone_number %}
                             {{ s.config_meta.display_phone_number }}
                           {% elif s.numero %}
                             +{{ s.numero }}
                           {% else %}
-                            —
+                            <span class="muted">Pendiente de número</span>
                           {% endif %}
-                          · {% if s.es_meta %}Meta Cloud{% else %}Baileys{% endif %}
-                        </p>
+                        </div>
                       </div>
                     </div>
-
-                    <div class="pp-sesion-stats">
-                      <div class="pp-stat">
-                        <div class="pp-stat-n">{{ s.contactos_n|intcomma }}</div>
-                        <div class="pp-stat-l">Contactos</div>
+                    <div class="card-body">
+                      <div class="card-tags">
+                        {% if s.es_meta %}
+                          <span class="canal-badge canal-wa-oficial"><i class="fab fa-whatsapp"></i> WhatsApp Cloud</span>
+                        {% elif s.es_baileys %}
+                          <span class="canal-badge canal-baileys"><i class="fab fa-whatsapp"></i> Baileys</span>
+                        {% else %}
+                          <span class="canal-badge">{{ s.proveedor }}</span>
+                        {% endif %}
+                        <span class="estado-badge estado-{{ s.estado }}">
+                          <span class="dot"></span> {{ s.get_estado_display|default:s.estado }}
+                        </span>
+                        {% if s.es_meta and s.config_meta %}
+                          {% if s.config_meta.quality_rating and s.config_meta.quality_rating != 'UNKNOWN' %}
+                            <span class="tag tag-quality-{{ s.config_meta.quality_rating|lower }}">
+                              Calidad: {{ s.config_meta.get_quality_rating_display }}
+                            </span>
+                          {% endif %}
+                          {% if s.config_meta.messaging_limit_tier %}
+                            <span class="tag">{{ s.config_meta.get_messaging_limit_tier_display }}</span>
+                          {% endif %}
+                        {% endif %}
+                        {% if s.modo_bot == 'ia' %}
+                          <span class="tag tag-modo-ia"><i class="fa fa-robot"></i> Agente IA</span>
+                        {% elif s.modo_bot == 'tradicional' %}
+                          <span class="tag tag-modo-tradicional"><i class="fa fa-list-tree"></i> Chatbot tradicional</span>
+                        {% elif s.modo_bot == 'hibrido' %}
+                          <span class="tag tag-modo-hibrido"><i class="fa fa-arrows-split-up-and-left"></i> Híbrido</span>
+                        {% else %}
+                          <span class="tag tag-modo-ninguno"><i class="fa fa-user"></i> Solo humanos</span>
+                        {% endif %}
                       </div>
-                      <div class="pp-stat">
-                        <div class="pp-stat-n">{{ s.convs_abiertas|intcomma }}</div>
-                        <div class="pp-stat-l">Abiertas</div>
-                      </div>
-                      <div class="pp-stat">
-                        <div class="pp-stat-n">{{ s.msgs_24h|default:0|intcomma }}</div>
-                        <div class="pp-stat-l">Msgs 24h</div>
-                      </div>
-                    </div>
-
-                    {% if s.agente_ia %}
-                      <div class="pp-sesion-agente">
-                        <i class="fa fa-robot"></i> {{ s.agente_ia.nombre }}
-                      </div>
-                    {% else %}
-                      <div class="pp-sesion-agente muted">
-                        <i class="fa fa-robot"></i> Sin agente IA
-                      </div>
-                    {% endif %}
-
-                    <div class="pp-sesion-actions">
-                      <a href="/whatsapp/conversaciones/?sesion={{ s.id|encrypt_id }}" class="pp-act" title="Conversaciones">
-                        <i class="fa fa-comments"></i> Chats
-                      </a>
-                      {% if s.es_meta %}
-                        <a href="/whatsapp/plantillas/?sesion={{ s.id|encrypt_id }}" class="pp-act" title="Plantillas">
-                          <i class="fa fa-file-lines"></i> Plantillas
-                        </a>
+                      {% if s.es_baileys and s.config_baileys.error_mensaje %}
+                        <div class="card-error" title="{{ s.config_baileys.error_mensaje }}">
+                          <i class="fa fa-triangle-exclamation"></i> {{ s.config_baileys.error_mensaje|truncatechars:80 }}
+                        </div>
                       {% endif %}
-                      <a href="/whatsapp/analytics/?sesion={{ s.id|encrypt_id }}" class="pp-act" title="Analytics">
-                        <i class="fa fa-chart-line"></i> Analytics
-                      </a>
-                      <a href="/whatsapp/horarios/?sesion={{ s.id|encrypt_id }}" class="pp-act" title="Horarios">
-                        <i class="fa fa-clock"></i> Horarios
-                      </a>
-                      <a href="/whatsapp/sesiones/" class="pp-act" title="Configurar">
-                        <i class="fa fa-gear"></i> Config
-                      </a>
+                      {% if s.agente_ia and s.modo_bot == 'ia' or s.modo_bot == 'hibrido' %}
+                        {% if s.agente_ia %}
+                          <div class="card-subinfo">
+                            <i class="fa fa-robot"></i> Agente IA: <b>{{ s.agente_ia.nombre }}</b>
+                          </div>
+                        {% endif %}
+                      {% endif %}
                     </div>
                   </div>
                 {% endfor %}
@@ -285,46 +291,82 @@
               </h3>
               <a href="/whatsapp/sesiones/" class="pp-section-link">Ver todas →</a>
             </div>
-            <div class="pp-sesiones">
+            <div class="conex-grid">
               {% for s in sesiones_atencion %}
-                <div class="pp-sesion{% if not s.activo %} pp-sesion-pausada{% endif %}">
+                <div class="conex-card{% if not s.activo %} conex-card-pausada{% endif %}">
                   {% if not s.activo %}
-                    <span class="pp-badge-pausada" title="Sesión pausada — no procesa mensajes ni consume API">
+                    <span class="badge-pausada" title="Sesión pausada — no procesa mensajes ni consume API">
                       <i class="fa fa-pause-circle"></i> PAUSADA
                     </span>
                   {% endif %}
-                  <div class="pp-sesion-head">
-                    <div class="pp-sesion-avatar {% if s.es_baileys %}prov-baileys{% endif %}">
-                      <i class="fab fa-whatsapp"></i>
-                      <span class="pp-sesion-dot {% if s.estado == 'desconectado' %}off{% elif s.estado == 'error' %}err{% else %}warn{% endif %}"></span>
+                  <div class="card-top">
+                    <div class="card-avatar">
+                      {% if s.es_baileys and s.config_baileys.foto %}
+                        <img src="{{ s.config_baileys.foto }}" alt="avatar">
+                      {% elif s.es_meta and s.config_meta.foto %}
+                        <img src="{{ s.config_meta.foto }}" alt="avatar">
+                      {% else %}
+                        <span class="avatar-fallback"><i class="fab fa-whatsapp"></i></span>
+                      {% endif %}
+                      <span class="avatar-status status-{{ s.estado }}" title="{{ s.get_estado_display|default:s.estado }}"></span>
                     </div>
-                    <div style="min-width:0;flex:1">
-                      <p class="pp-sesion-title">{{ s.nombre|default:'Sesión sin nombre' }}</p>
-                      <p class="pp-sesion-sub">
+                    <div class="card-head">
+                      <div class="card-nombre">{{ s.nombre|default:'Sesión sin nombre' }}</div>
+                      <div class="card-num">
                         {% if s.es_meta and s.config_meta.display_phone_number %}
                           {{ s.config_meta.display_phone_number }}
                         {% elif s.numero %}
                           +{{ s.numero }}
                         {% else %}
-                          Pendiente de número
+                          <span class="muted">Pendiente de número</span>
                         {% endif %}
-                        · {{ s.get_estado_display }}
-                      </p>
+                      </div>
                     </div>
                   </div>
-                  <div class="pp-sesion-actions">
-                    {% if s.es_baileys %}
-                      <a href="/whatsapp/sesiones/" class="pp-act">
-                        <i class="fa fa-qrcode"></i> Escanear QR
-                      </a>
-                    {% else %}
-                      <a href="/whatsapp/sesiones/" class="pp-act">
-                        <i class="fa fa-satellite-dish"></i> Revalidar
-                      </a>
+                  <div class="card-body">
+                    <div class="card-tags">
+                      {% if s.es_meta %}
+                        <span class="canal-badge canal-wa-oficial"><i class="fab fa-whatsapp"></i> WhatsApp Cloud</span>
+                      {% elif s.es_baileys %}
+                        <span class="canal-badge canal-baileys"><i class="fab fa-whatsapp"></i> Baileys</span>
+                      {% else %}
+                        <span class="canal-badge">{{ s.proveedor }}</span>
+                      {% endif %}
+                      <span class="estado-badge estado-{{ s.estado }}">
+                        <span class="dot"></span> {{ s.get_estado_display|default:s.estado }}
+                      </span>
+                      {% if s.es_meta and s.config_meta %}
+                        {% if s.config_meta.quality_rating and s.config_meta.quality_rating != 'UNKNOWN' %}
+                          <span class="tag tag-quality-{{ s.config_meta.quality_rating|lower }}">
+                            Calidad: {{ s.config_meta.get_quality_rating_display }}
+                          </span>
+                        {% endif %}
+                        {% if s.config_meta.messaging_limit_tier %}
+                          <span class="tag">{{ s.config_meta.get_messaging_limit_tier_display }}</span>
+                        {% endif %}
+                      {% endif %}
+                      {% if s.modo_bot == 'ia' %}
+                        <span class="tag tag-modo-ia"><i class="fa fa-robot"></i> Agente IA</span>
+                      {% elif s.modo_bot == 'tradicional' %}
+                        <span class="tag tag-modo-tradicional"><i class="fa fa-list-tree"></i> Chatbot tradicional</span>
+                      {% elif s.modo_bot == 'hibrido' %}
+                        <span class="tag tag-modo-hibrido"><i class="fa fa-arrows-split-up-and-left"></i> Híbrido</span>
+                      {% else %}
+                        <span class="tag tag-modo-ninguno"><i class="fa fa-user"></i> Solo humanos</span>
+                      {% endif %}
+                    </div>
+                    {% if s.es_baileys and s.config_baileys.error_mensaje %}
+                      <div class="card-error" title="{{ s.config_baileys.error_mensaje }}">
+                        <i class="fa fa-triangle-exclamation"></i> {{ s.config_baileys.error_mensaje|truncatechars:80 }}
+                      </div>
                     {% endif %}
-                    <a href="/whatsapp/sesiones/" class="pp-act">
-                      <i class="fa fa-gear"></i> Configurar
-                    </a>
+                    {% if s.agente_ia and s.modo_bot == 'ia' or s.modo_bot == 'hibrido' %}
+                      {% if s.agente_ia %}
+                        <div class="card-subinfo">
+                          <i class="fa fa-robot"></i> Agente IA: <b>{{ s.agente_ia.nombre }}</b>
+                        </div>
+                      {% endif %}
+                    {% endif %}
                   </div>
                 </div>
               {% endfor %}
