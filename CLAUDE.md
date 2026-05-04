@@ -2,14 +2,37 @@
 
 ## Project Overview
 
-**fastchat** is a Django 4.0 monolithic web application. It uses PostgreSQL 15 as its database.
+**fastchat** is a Django 4.2 monolithic SaaS for WhatsApp messaging. PostgreSQL 15 + Redis. Realtime chat runs over Django Channels (ASGI/Daphne); WhatsApp connectivity is dual-provider — a Node.js Baileys service for unofficial sessions, and Meta Cloud API for official ones.
 
 ## Tech Stack
 
-- **Backend:** Python 3.9, Django 4.0, PostgreSQL 15
-- **Frontend:** Bootstrap 4, jQuery, DataTables, SweetAlert2 (legacy syntax)
-- **Auth:** Django session-based authentication
+- **Backend:** Python 3.9, Django 4.2.15, PostgreSQL 15, Redis (channel layer + cache), Daphne ASGI, Channels 4
+- **Frontend:** Bootstrap 5 (`data-bs-*` API), jQuery, DataTables, SweetAlert2 (legacy syntax)
+- **Auth:** Django session-based authentication; custom `AUTH_USER_MODEL = "autenticacion.Usuario"`
 - **Environment:** virtualenv (activated via PyCharm), development server via PyCharm debug runner
+
+## Apps
+
+- `core/` — shared utilities: `ModeloBase` (soft-delete + auditing in `core/custom_models.py`), `ConsultasAjax` dispatcher (`core/ajax.py`), current-request middleware, validators (`core/validadores.py`)
+- `autenticacion/` — `Usuario` (custom `AUTH_USER_MODEL`), login, profile, password recovery
+- `seguridad/` — modules, groups, permissions, configuration, database backups, notifications
+- `whatsapp/` — sessions, contacts, conversations, messages, campaigns, templates, tariffs, pipelines, analytics, traces; webhooks for Baileys + Meta; WebSocket consumers
+- `crm/` — chatbot flow engine, AI endpoints, agent wizard, departments, training
+- `agents_ai/` — AI agents (consultor/resumidor/auditor), tool builder, vector store, providers
+- `voz/` — voice AI (Piper TTS demo lives in `scripts/`)
+- `meta/` — Meta-specific integration helpers
+- `public/` — public-facing portal pages (uses `baseweb.html`)
+- `area_geografica/` — country / state / city catalog
+
+## Server & Background Jobs
+
+- **Do not run the server yourself.** The developer uses PyCharm, or `restart_daphne.bat <port>` (Windows) / `restart_daphne.sh <port>` (Bash). Default port 8000.
+- WebSocket routing lives in each app's `routing.py` (e.g. `whatsapp/routing.py`, `voz/routing.py`); ASGI entry is `fastchatdj/asgi.py`.
+- Background scripts live in `cron_jobs/` (campaigns, scheduled messages, reconnect sessions, etc.) and one-off seeders / demos in `scripts/`. Treat them as cron-driven; do not invoke them.
+
+## Ajax Dispatch Convention
+
+Most list/CRUD actions go through `core.ajax.ConsultasAjax` at `/ajaxrequest/<accion>` or `/ajaxrequest/<accion>/<pk>`. New CRUD logic should follow this pattern (an `accion` branch in the relevant view or in `ConsultasAjax`) rather than introducing one-off endpoints.
 
 ## How to Verify Your Changes
 
@@ -25,7 +48,8 @@ Templates follow a strict inheritance and naming structure:
 
 ```
 templates/
-├── base.html        # Authenticated layout (Bootstrap 4) — use for internal views
+├── base.html        # Authenticated layout (Bootstrap 5) — use for internal views
+├── base_chat.html   # Chat workspace layout (DM Sans, shadcn-inspired CSS vars)
 ├── baseweb.html     # Public portal layout — use for public-facing views
 └── <app>/
     ├── *_listado.html   # DataTables listing views
@@ -33,7 +57,7 @@ templates/
     └── *_detalle.html   # Read-only detail views
 ```
 
-**Static files:** Always use absolute paths — never `{% load static %}` or `{% static '...' %}`.
+**Static files:** Always reference assets with absolute paths (`/static/...`, `/media/...`). Never use the `{% static '...' %}` URL helper. Templates may still `{% load %}` other tag libraries (e.g. `templatefunctions`) — that's not the same thing.
 
 ```html
 <!-- Correct -->
@@ -71,7 +95,7 @@ Always check the current version in the template before incrementing.
 - HTML: `<!-- comment -->`
 - Django templates: `{# comment #}`
 - CSS: `/* comment */`
-```
+- JS: `// comment` and `/* comment */`
 
 ## Language & Copy
 
@@ -83,7 +107,7 @@ Models inherit from `ModeloBase` and use a `status` BooleanField for soft-delete
 
 ## File Uploads
 
-Every `FileField`/`ImageField` uploaded via a form must be validated in the backend using `validar_archivo` from `core.funciones` (returns `(ok, archivo_or_msg)`). Apply in both `add` and `change` actions. Infer allowed extensions from the model's `FileExtensionValidator`.
+Every `FileField`/`ImageField` must declare allowed extensions on the model via `FileExtensionValidator` and a size validator from `core/validadores.py` (`validate_file_size_2mb`, `validate_file_size_3mb`, `validate_file_size_20mb`, …). Validate on both `add` and `change` actions; infer allowed extensions from the model's `FileExtensionValidator`.
 
 ## Hard Rules
 
@@ -92,7 +116,7 @@ These apply to every task, no exceptions:
 - **Never modify existing migrations** — create new ones only if explicitly instructed
 - **Never run** `makemigrations`, `migrate`, `runserver`, or any management command
 - **Never execute** `git commit`, `git push`, or any destructive git operation
-- **Never read or modify** `credentials.json` or any secrets/credentials file
+- **Never read or modify** `credenciales.json` (the real credentials file at the repo root) or any other secrets file. `credenciales_template.json` shows the required keys.
 - **Never auto-format or lint** — the developer handles code style verification
 - **Run** `git add <file>` immediately after creating a new `.html`, `.css`, or `.py` file — never for existing or modified files
-- **Grid** Always use Bootstrap 4 grid system (`row` + `col-*` classes) for any multi-column layout — never use CSS Grid or custom Flexbox for structural grids, unless otherwise specified.
+- **Grid** Always use the Bootstrap 5 grid system (`row` + `col-*` classes) for any multi-column layout — never use CSS Grid or custom Flexbox for structural grids, unless otherwise specified.
