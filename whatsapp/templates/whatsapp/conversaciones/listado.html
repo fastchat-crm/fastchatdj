@@ -1417,9 +1417,11 @@
             document.body.classList.add('chat-mobile-open');
         });
 
-        // Mobile back button: volver a la lista de conversaciones
+        // Mobile back button: volver a la lista de conversaciones.
+        // Usamos resetearChat() para que la conv pierda .active y conversacionActiva
+        // se ponga en null — sino al volver a tocar la misma card no recarga.
         $(document).on('click', '#chat-back-btn', function() {
-            document.body.classList.remove('chat-mobile-open');
+            resetearChat();
         });
 
         function resetearChat() {
@@ -1654,26 +1656,25 @@
             _cargandoMensajes = true;
             conversacionActiva = conversacionId;
 
-            pantallaespera();
-
             // Limpiar WebSocket anterior
             if (chatSocket) { chatSocket.close(); chatSocket = null; }
 
-            // Ocultar controles mientras carga
+            // Ocultar controles + empty state mientras carga
             $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #chat-footer').addClass('d-none').hide();
             $('#stats-panel, #control-respuestas-panel').addClass('d-none');
-            $('#mensajes-container').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted small">Cargando mensajes...</p></div>');
+            $('#cm-empty-state').hide();
+            $('#mensajes-container')
+                .addClass('is-loading')
+                .html('<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2 text-muted small mb-0">Cargando mensajes...</p></div>');
 
             $.ajax({
                 url: '/whatsapp/conversaciones/?action=ver_mensajes&pk=' + conversacionId,
                 type: 'GET',
                 success: function(response) {
-                    $.unblockUI();
                     _cargandoMensajes = false;
-                    $('#cm-empty-state').hide();
 
                     // Actualizar mensajes
-                    $('#mensajes-container').html(response.html);
+                    $('#mensajes-container').removeClass('is-loading').html(response.html);
 
                     // Actualizar información de contacto
                     $('#contacto-nombre').text(response.contacto_nombre || response.contacto_numero);
@@ -1784,10 +1785,9 @@
                     conectarWebSocket(response.conversacion_id);
                 },
                 error: function(xhr, status, error) {
-                    $.unblockUI();
                     _cargandoMensajes = false;
                     console.error('[cargarMensajes] ajax error', status, error, xhr.responseText);
-                    $('#mensajes-container').html('<div class="p-3 text-center"><p class="text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error al cargar mensajes: ' + error + '</p></div>');
+                    $('#mensajes-container').removeClass('is-loading').html('<div class="p-3 text-center"><p class="text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error al cargar mensajes: ' + error + '</p></div>');
                 }
             });
         }
@@ -2289,10 +2289,16 @@
         return _audioCtx;
     }
     // Inicializar el contexto en el primer gesto del usuario.
-    document.addEventListener('click', function _initAudio() {
+    // En mobile escuchamos también `touchstart` porque iOS Safari requiere
+    // explícitamente un user-gesture del touchstart/touchend para habilitar audio,
+    // y a veces el `click` se sintetiza después y queda fuera del gesto.
+    function _initAudioOnce() {
         _getAudioCtx();
-        document.removeEventListener('click', _initAudio);
-    }, { once: true });
+        document.removeEventListener('click', _initAudioOnce);
+        document.removeEventListener('touchstart', _initAudioOnce);
+    }
+    document.addEventListener('click', _initAudioOnce, { once: true });
+    document.addEventListener('touchstart', _initAudioOnce, { once: true, passive: true });
     // Cuando la pestaña vuelve a estar visible, asegurar que el AudioContext
     // no quede suspended (Chrome/Opera lo congelan en background).
     document.addEventListener('visibilitychange', function () {
@@ -2403,6 +2409,12 @@
         if (!convActivaVisible) {
             _beep();
             _mostrarToast(nombre);
+            // Mobile: vibración como feedback complementario al sonido — en
+            // muchos browsers móviles el audio queda suspendido en background
+            // y el toast no es suficiente para llamar la atención.
+            if (navigator.vibrate) {
+                try { navigator.vibrate([180, 80, 180]); } catch (e) {}
+            }
         }
         // Notificación nativa (solo si pestaña no visible — la check está
         // adentro de _notificacionNativa).

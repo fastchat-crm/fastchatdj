@@ -488,22 +488,22 @@ $(document).ready(function() {
         if (_cargandoMensajes || id == conversacionActiva) return;
         _cargandoMensajes = true;
         conversacionActiva = id;
-        pantallaespera();
 
         if (chatSocket) { chatSocket.close(); chatSocket = null; }
         $('#reactivar-btn, #ver-resumen-btn, #btn-control-respuestas, #btn-estadisticas').addClass('d-none').hide();
         $('#control-respuestas-panel, #stats-panel').addClass('d-none');
-        $('#mensajes-container').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 small text-muted">Cargando mensajes...</p></div>');
+        $('#cm-empty-state').hide();
+        $('#mensajes-container')
+            .addClass('is-loading')
+            .html('<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2 small text-muted mb-0">Cargando mensajes...</p></div>');
 
         $.ajax({
             url: '/whatsapp/conversaciones-finalizadas/?action=ver_mensajes&pk=' + id,
             type: 'GET',
             success: function(r) {
-                $.unblockUI();
                 _cargandoMensajes = false;
-                $('#cm-empty-state').hide();
 
-                $('#mensajes-container').html(r.html);
+                $('#mensajes-container').removeClass('is-loading').html(r.html);
                 $('#contacto-nombre').text(r.contacto_nombre || r.contacto_numero);
                 $('#contacto-numero').text(r.contacto_numero);
                 $('#contacto-hashedId').text(r.hashed_id ? '#' + r.hashed_id : '');
@@ -572,10 +572,9 @@ $(document).ready(function() {
                 conectarWebSocket(r.conversacion_id);
             },
             error: function(xhr, s, err) {
-                $.unblockUI();
                 _cargandoMensajes = false;
                 console.error('[cargarMensajes finalizadas] ajax', s, err, xhr.responseText);
-                $('#mensajes-container').html(`<div class="p-3 text-center text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error: ${err}</div>`);
+                $('#mensajes-container').removeClass('is-loading').html(`<div class="p-3 text-center text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error: ${err}</div>`);
             }
         });
     }
@@ -591,8 +590,10 @@ $(document).ready(function() {
         document.body.classList.add('chat-mobile-open');
     });
 
+    // Mobile back button: vuelve a la lista y deselecciona la conv activa
+    // (sino al tocar la misma card no recarga porque ya está como conversacionActiva).
     $(document).on('click', '#chat-back-btn', function() {
-        document.body.classList.remove('chat-mobile-open');
+        _resetChat();
     });
 
     // ── Búsqueda por contacto ──────────────────────────────────────────
