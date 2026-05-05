@@ -53,7 +53,7 @@
                 }
                 userToggling = false;
             }, 0);
-        });
+        }, true);
     }
 
     if (document.readyState === 'loading') {
