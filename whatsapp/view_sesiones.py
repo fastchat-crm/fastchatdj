@@ -696,16 +696,15 @@ def sesionesView(request):
     #   - 'oauth'   → Tech Provider activo + config_id cargado → popup Embedded Signup
     #   - 'manual'  → sin Tech Provider → form de carga manual de WABA + Phone + token
     #   - 'sin_credenciales' → falta app_id/app_secret → mostrar alert para ir al form
-    from .common_meta import get_meta_app_credentials, get_meta_config_id
+    from .common_meta import get_meta_app_credentials
     from seguridad.models import Configuracion as _Conf, CredencialMetaApp as _Cred
     _app_id, _app_secret = get_meta_app_credentials()
     _confi = _Conf.get_instancia()
     _cred = _Cred.objects.filter(configuracion=_confi).first() if _confi and _confi.pk else None
     _es_tp = bool(_cred and _cred.es_tech_provider)
-    _config_id_ok = bool(get_meta_config_id())
     if not (_app_id and _app_secret):
         data['meta_modo'] = 'sin_credenciales'
-    elif _es_tp and _config_id_ok:
+    elif _es_tp:
         data['meta_modo'] = 'oauth'
     else:
         data['meta_modo'] = 'manual'
