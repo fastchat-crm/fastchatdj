@@ -159,7 +159,7 @@ PASOS = [
         'codigo': 'email_vacio', 'nombre': '¿Email vacío?',
         'condiciones': [{'izq': '{{variables.email}}', 'op': 'vacio', 'der': ''}],
         'operador': 'and',
-        'siguiente_si': 62, 'siguiente_no': 80,
+        'siguiente_si': 62, 'siguiente_no': 64,
     },
     {
         'id': 62, 'orden': 62, 'tipo': 'input_texto',
@@ -168,6 +168,30 @@ PASOS = [
             '📧 No tenemos un correo registrado. ¿A qué *correo* te enviamos '
             'la cotización?'
         ),
+        'guardar_en': 'email',
+        'validacion': r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$',
+        'siguiente': 80,
+    },
+
+    # ── 64/66 — Confirmar correo encontrado ────────────────────
+    # Si la API devolvió un email, preguntamos si quiere usarlo o cambiarlo
+    # (es el dato que más cambia entre cotizaciones).
+    {
+        'id': 64, 'orden': 64, 'tipo': 'menu_botones',
+        'codigo': 'confirmar_correo', 'nombre': '¿Correo correcto?',
+        'mensaje': (
+            '¿Te enviamos la cotización al correo *{{variables.email}}*?'
+        ),
+        'guardar_en': 'confirma_correo',
+        'opciones': [
+            {'etiqueta': '✅ Sí, está bien',   'valor': 'si',      'siguiente': 80},
+            {'etiqueta': '✏️ Cambiar correo', 'valor': 'cambiar', 'siguiente': 66},
+        ],
+    },
+    {
+        'id': 66, 'orden': 66, 'tipo': 'input_texto',
+        'codigo': 'pedir_email_nuevo_confirm', 'nombre': 'Pedir correo actualizado',
+        'mensaje': '📧 Escríbeme el *correo nuevo* al que quieres recibir la cotización:',
         'guardar_en': 'email',
         'validacion': r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$',
         'siguiente': 80,
@@ -409,7 +433,7 @@ PASOS = [
             'cedula': '', 'nombres': '', 'apellidos': '', 'email': '',
             'fecha_nacimiento': '', 'edad_titular': '', 'sexo_titular': '',
             'tipo_grupo': '', 'edades_miembros': '',
-            'budget_intent': '', 'quiere_asesor': '',
+            'budget_intent': '', 'quiere_asesor': '', 'confirma_correo': '',
             'cotizacion_status': '', 'cotizacion_mensaje': '',
             'encontrado_cli': '',
         },
