@@ -63,21 +63,27 @@ def _link_conversacion(conv) -> str:
     return f'{base}/whatsapp/conversaciones/?conv={token}'
 
 
-def _crear_notificaciones_internas(depto, conv, nodo_nombre, link_chat):
-    """Crea registros `seguridad.Notificacion` para cada asesor activo del
-    depto. Aparecen en la campanita del header del CRM. Si el modelo no
-    existe (proyectos antiguos), falla silenciosa."""
+def _crear_notificaciones_internas(depto, conv, nodo_nombre, link_chat,
+                                   mensaje_custom=''):
     try:
         from seguridad.models import Notificacion
     except ImportError:
         return 0
     contacto_nombre = (conv.contacto.contacto_nombre or '').strip() or conv.contacto.from_number
-    titulo = f'🔔 {nodo_nombre} — Conv #{conv.id}'
-    cuerpo = (
-        f'Nueva acción del flujo en el departamento "{depto.nombre}". '
-        f'Contacto: {contacto_nombre}. '
-        f'Hacé click para abrir la conversación.'
-    )
+    msg = (mensaje_custom or '').strip()
+    if msg:
+        titulo = f'🔔 {msg[:200]} — Conv #{conv.id}'
+        cuerpo = (
+            f'{msg} '
+            f'(Departamento "{depto.nombre}". Contacto: {contacto_nombre}.)'
+        )
+    else:
+        titulo = f'🔔 {nodo_nombre} — Conv #{conv.id}'
+        cuerpo = (
+            f'Nueva acción del flujo en el departamento "{depto.nombre}". '
+            f'Contacto: {contacto_nombre}. '
+            f'Hacé click para abrir la conversación.'
+        )
     asesores = (
         PerfilDepartamentoChatBot.objects
         .filter(departamento=depto, status=True)
@@ -104,23 +110,15 @@ def _crear_notificaciones_internas(depto, conv, nodo_nombre, link_chat):
 
 
 def notificar_asesores_depto(conv, nodo=None, request_body=None, response_body=None,
-                             asunto=None):
-    """Notifica a TODOS los asesores activos del depto del flujo en DOS canales:
-    1. Correo HTML (`send_html_mail` con template `email/asesor_cotizacion.html`).
-    2. Notificación interna (`seguridad.Notificacion` — campanita del header).
-
-    Llamado desde el motor cuando un nodo HTTP exitoso tiene
-    `config.envia_correo=true`. Idempotente: si no hay asesores con email,
-    solo loguea — el flujo del cliente no se rompe.
-    """
+                             asunto=None, mensaje_custom=''):
     depto = _resolver_departamento(conv)
     emails = _emails_asesores(depto)
     nodo_nombre = (nodo.nombre if nodo else '') or 'Nodo del flujo'
     link_chat = _link_conversacion(conv)
 
-    # 1) Notificación interna (campanita) — no requiere email para crearse,
-    #    solo necesita usuario asignado al depto.
-    n_internas = _crear_notificaciones_internas(depto, conv, nodo_nombre, link_chat) if depto else 0
+    n_internas = _crear_notificaciones_internas(
+        depto, conv, nodo_nombre, link_chat, mensaje_custom=mensaje_custom,
+    ) if depto else 0
 
     if not emails:
         logger.warning(
@@ -131,23 +129,28 @@ def notificar_asesores_depto(conv, nodo=None, request_body=None, response_body=N
         return n_internas > 0  # devuelve True si al menos hubo notif interna
 
     contacto_nombre = (conv.contacto.contacto_nombre or '').strip() or conv.contacto.from_number
+    msg_custom = (mensaje_custom or '').strip()
     datos = {
         'conv_id': conv.id,
         'contacto_nombre': contacto_nombre,
         'contacto_numero': conv.contacto.from_number,
         'depto_nombre': depto.nombre if depto else '',
         'nodo_nombre': nodo_nombre,
+        'mensaje_custom': msg_custom,
         'request_body': request_body or {},
         'response_body': response_body or {},
         'link_chat': link_chat,
-        # Atajos legacy compatibles con `email/asesor_cotizacion.html`
-        # (que arma su propio HTML usando claves específicas).
         'cliente': (request_body or {}).get('cliente') or {},
         'vehiculo': (request_body or {}).get('vehiculo') or {},
         'aseguradoras': (request_body or {}).get('aseguradoras') or {},
         'respuesta_webhook': response_body or {},
     }
-    asunto_final = asunto or f'🔔 Acción del flujo "{nodo_nombre}" — Conv #{conv.id}'
+    if asunto:
+        asunto_final = asunto
+    elif msg_custom:
+        asunto_final = f'🔔 {msg_custom[:120]} — Conv #{conv.id}'
+    else:
+        asunto_final = f'🔔 Acción del flujo "{nodo_nombre}" — Conv #{conv.id}'
     try:
         send_html_mail(asunto_final, 'email/asesor_cotizacion.html', datos, emails, [])
         logger.info('Notificación dual: %s correos + %s notif internas (conv#%s, nodo %s)',

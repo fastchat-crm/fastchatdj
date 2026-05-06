@@ -997,6 +997,7 @@ class MotorFlujo:
             })
             etiqueta = self._procesar_nodo(nodo, consumir_mensaje=consumir_mensaje)
             consumir_mensaje = False  # sólo el primer nodo consume el mensaje
+            self._notificar_asesor_nodo(nodo)
             if self.handoff or self.finalizado:
                 return
             if etiqueta is None:
@@ -1118,6 +1119,27 @@ class MotorFlujo:
         elif nodo.tipo_nodo == 'pregunta':
             pregunta = cfg.get('pregunta') or nodo.respuesta or '¿Puedes indicarme el dato?'
             self.enviar(pregunta)
+
+    def _notificar_asesor_nodo(self, nodo):
+        cfg = nodo.config or {}
+        if not cfg.get('notificar_asesor'):
+            return
+        if self.skip_side_effects:
+            self._trace('side_effect_skipped',
+                        'Notificación a asesor OMITIDA (dry-run)', True,
+                        {'nodo_id': nodo.id})
+            return
+        try:
+            from crm.helpers_correo_flujo import notificar_asesores_depto
+            notificar_asesores_depto(
+                conv=self.conversation,
+                nodo=nodo,
+                mensaje_custom=(cfg.get('mensaje_asesor') or '').strip(),
+            )
+            self._trace('notificar_asesor', 'Asesor notificado', True,
+                        {'nodo_id': nodo.id})
+        except Exception:
+            logger.exception('Error notificando asesor (nodo %s)', nodo.id)
 
     # ── Procesamiento por tipo ───────────────────────────────────────
 

@@ -132,8 +132,29 @@
         </details>
     </div>
 
-    {# Predecesores del grafo (read-only): nodos que apuntan a este vía ConexionNodoChatbot. #}
-    {# Un nodo puede tener varios predecesores en el grafo, por eso es lista informativa. #}
+    <div class="col-12">
+        <div class="border rounded p-2" style="background:#fff7ed;border-color:#fdba74 !important;">
+            <div class="form-check form-switch">
+                <input type="checkbox" class="form-check-input" id="dpNotifAsesor-{{ opcion.id|default:'new' }}"
+                       name="notificar_asesor" value="1"
+                       {% if opcion.config.notificar_asesor %}checked{% endif %}>
+                <label class="form-check-label small fw-bold" for="dpNotifAsesor-{{ opcion.id|default:'new' }}">
+                    <i class="fa fa-bell text-warning me-1"></i>
+                    Notify advisor when this node executes
+                </label>
+            </div>
+            <div class="mt-2">
+                <label class="form-label small fw-bold mb-1">Advisor message (optional)</label>
+                <textarea name="mensaje_asesor" class="form-control form-control-sm" rows="2"
+                          placeholder="Ex: Customer requested handoff — validate data and quote">{{ opcion.config.mensaje_asesor|default:'' }}</textarea>
+                <small class="text-muted">
+                    Sent as email subject + bell notification body. If empty, falls back to the node name.
+                    Available for any node type. For HTTP/function nodes, this is independent of "Send email on 2xx" — both can run.
+                </small>
+            </div>
+        </div>
+    </div>
+
     {% if predecesores_grafo %}
     <div class="col-md-12">
         <label class="form-label small fw-bold mb-1">

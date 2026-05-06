@@ -1610,6 +1610,19 @@ def _guardar_opcion(request):
         if opcion.tipo_nodo != 'http':
             opcion.endpoint = None
 
+    cfg_universal = dict(opcion.config or {})
+    if request.POST.get('notificar_asesor'):
+        cfg_universal['notificar_asesor'] = True
+        msg_asesor = (request.POST.get('mensaje_asesor') or '').strip()
+        if msg_asesor:
+            cfg_universal['mensaje_asesor'] = msg_asesor[:1000]
+        else:
+            cfg_universal.pop('mensaje_asesor', None)
+    else:
+        cfg_universal.pop('notificar_asesor', None)
+        cfg_universal.pop('mensaje_asesor', None)
+    opcion.config = cfg_universal
+
     opcion.save(request)
 
     # Si no hay otro nodo raiz con es_inicio=True y este es raiz, marcalo.
