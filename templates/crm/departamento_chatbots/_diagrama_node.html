@@ -28,6 +28,13 @@
                     <i class="fa fa-envelope"></i> Correo
                 </span>
             {% endif %}
+            {% if nodo.opcion.config.notificar_asesor %}
+                <span class="dp-flag-pill"
+                      style="background:#fff7ed;color:#b45309;border:1px solid #fdba74;"
+                      title="{{ nodo.opcion.config.mensaje_asesor|default:'Notifica asesor al ejecutar' }}">
+                    <i class="fa fa-bell"></i> Asesor
+                </span>
+            {% endif %}
             {% if nodo.opcion.tipo_nodo == 'menu' and nodo.opcion.config.opcion_default and nodo.opcion.config.opcion_default.valor %}
                 <span class="dp-flag-pill dp-flag-default"
                       title="Atajo Sí/Otra: autoasigna ${{ nodo.opcion.variable_destino }}={{ nodo.opcion.config.opcion_default.valor }} al confirmar">

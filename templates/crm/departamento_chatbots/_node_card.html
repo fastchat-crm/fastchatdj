@@ -54,6 +54,16 @@
                         <i class="fa fa-envelope"></i> Envía correo
                     </span>
                 {% endif %}
+                {% if op.config.notificar_asesor %}
+                    <span class="dp-flag-pill"
+                          style="background:#fff7ed;color:#b45309;border:1px solid #fdba74;"
+                          title="{{ op.config.mensaje_asesor|default:'Notifica al asesor cuando se ejecuta este nodo' }}">
+                        <i class="fa fa-bell"></i> Notifica asesor
+                        {% if op.config.mensaje_asesor %}
+                            <span class="text-muted small">· {{ op.config.mensaje_asesor|truncatechars:30 }}</span>
+                        {% endif %}
+                    </span>
+                {% endif %}
                 {% if op.tipo_nodo == 'menu' and op.config.opcion_default and op.config.opcion_default.valor %}
                     <span class="dp-flag-pill dp-flag-default"
                           title="Atajo Sí/Otra activo. Si confirma, se autoasigna {{ op.variable_destino }}={{ op.config.opcion_default.valor }} y avanza por '{{ op.config.opcion_default.salida_si|default:'(default)' }}'.">
@@ -159,6 +169,13 @@
                         <span class="dp-http-method dp-method-fn">FN</span>
                         {% if op.config.funcion_codigo %}
                             <code class="dp-http-url">{{ op.config.funcion_codigo }}</code>
+                            {% if op.funcion_meta and op.funcion_meta.descripcion %}
+                                <span class="text-muted small ms-1">→ {{ op.funcion_meta.descripcion|truncatechars:80 }}</span>
+                            {% elif op.funcion_meta is not None and not op.funcion_meta %}
+                                <span class="badge bg-danger ms-1" title="El código no está registrado en crm/funciones_chatbot.py">
+                                    <i class="fa fa-triangle-exclamation"></i> No registrada
+                                </span>
+                            {% endif %}
                         {% else %}
                             <code class="dp-http-url text-danger">⚠️ Sin funcion_codigo</code>
                         {% endif %}
@@ -167,12 +184,17 @@
                         <div class="dp-http-meta">
                             <i class="fa fa-link text-info me-1" title="Endpoint externo asociado"></i>
                             <code class="dp-http-pair">{{ op.endpoint.nombre }}</code>
-                            <span class="text-muted">→ {{ op.endpoint.base_url|truncatechars:60 }}</span>
+                            <span class="text-muted">→ {{ op.endpoint.base_url|truncatechars:60 }}{% if op.config.path %}<code>{{ op.config.path }}</code>{% endif %}</span>
+                        </div>
+                    {% elif op.funcion_meta.requiere_endpoint %}
+                        <div class="dp-http-meta text-danger">
+                            <i class="fa fa-triangle-exclamation me-1"></i>
+                            <strong>Falta endpoint:</strong> esta función lo requiere.
                         </div>
                     {% else %}
                         <div class="dp-http-meta text-muted">
                             <i class="fa fa-circle-info me-1"></i>
-                            Sin endpoint asociado (algunas funciones no lo necesitan).
+                            Sin endpoint asociado (esta función no lo necesita).
                         </div>
                     {% endif %}
                     {% if op.config.body %}

@@ -13,7 +13,20 @@
         {% if not opcion.status %}
             <span class="badge bg-danger">Inactivo</span>
         {% endif %}
+        {% if cfg.notificar_asesor %}
+            <span class="badge"
+                  style="background:#fff7ed;color:#b45309;border:1px solid #fdba74;"
+                  title="{{ cfg.mensaje_asesor|default:'Notifica asesor al ejecutar' }}">
+                <i class="fa fa-bell me-1"></i>Notifica asesor
+            </span>
+        {% endif %}
     </div>
+    {% if cfg.notificar_asesor and cfg.mensaje_asesor %}
+        <div class="mt-2 small">
+            <strong class="text-muted">Mensaje al asesor:</strong>
+            <em>{{ cfg.mensaje_asesor }}</em>
+        </div>
+    {% endif %}
 
     {# ── Identidad y árbol ───────────────────────────────────── #}
     <div class="row g-2 small mt-2">

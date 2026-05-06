@@ -140,16 +140,17 @@
                        {% if opcion.config.notificar_asesor %}checked{% endif %}>
                 <label class="form-check-label small fw-bold" for="dpNotifAsesor-{{ opcion.id|default:'new' }}">
                     <i class="fa fa-bell text-warning me-1"></i>
-                    Notify advisor when this node executes
+                    Notificar a asesores cuando se ejecute este nodo
                 </label>
             </div>
             <div class="mt-2">
-                <label class="form-label small fw-bold mb-1">Advisor message (optional)</label>
+                <label class="form-label small fw-bold mb-1">Mensaje al asesor (opcional)</label>
                 <textarea name="mensaje_asesor" class="form-control form-control-sm" rows="2"
-                          placeholder="Ex: Customer requested handoff — validate data and quote">{{ opcion.config.mensaje_asesor|default:'' }}</textarea>
+                          placeholder="Ej: El cliente solicitó handoff — validar datos y cotizar">{{ opcion.config.mensaje_asesor|default:'' }}</textarea>
                 <small class="text-muted">
-                    Sent as email subject + bell notification body. If empty, falls back to the node name.
-                    Available for any node type. For HTTP/function nodes, this is independent of "Send email on 2xx" — both can run.
+                    Se usa como asunto del correo + cuerpo de la notificación de campanita.
+                    Si está vacío, se usa el nombre del nodo. Disponible para cualquier tipo de nodo.
+                    En nodos HTTP/Función es independiente de "Enviar correo al responder 2xx" — pueden ejecutarse ambos.
                 </small>
             </div>
         </div>
@@ -700,10 +701,45 @@
                 </label>
                 <input type="text" name="funcion_codigo" class="form-control form-control-sm font-monospace"
                        value="{{ opcion.config.funcion_codigo|default:'' }}"
-                       placeholder="ej: cotizar_aria">
+                       placeholder="ej: cotizar_aria"
+                       list="dpFuncionesRegistradas">
+                <datalist id="dpFuncionesRegistradas">
+                    {% for cod, meta in funciones_metadata.items %}
+                        <option value="{{ cod }}">{{ meta.descripcion|default:cod }}</option>
+                    {% endfor %}
+                </datalist>
                 <small class="text-muted">
-                    Slug registrado en <code>crm/funciones_chatbot.py</code> con <code>@registrar_funcion('...')</code>.
+                    Autocompleta con funciones registradas vía
+                    <code>@registrar_funcion('...')</code> en <code>crm/funciones_chatbot.py</code>.
                 </small>
+                {% if funciones_metadata %}
+                    <details class="mt-1">
+                        <summary class="small text-primary" style="cursor:pointer;">
+                            <i class="fa fa-list me-1"></i>Ver funciones disponibles ({{ funciones_metadata|length }})
+                        </summary>
+                        <div class="border rounded p-2 mt-1 small" style="max-height:240px;overflow:auto;background:#fff;">
+                            {% for cod, meta in funciones_metadata.items %}
+                                <div class="mb-2 pb-2 border-bottom">
+                                    <code class="text-purple">{{ cod }}</code>
+                                    {% if meta.requiere_endpoint %}
+                                        <span class="badge bg-info text-dark ms-1">requiere endpoint</span>
+                                    {% endif %}
+                                    {% if meta.descripcion %}
+                                        <div class="text-muted">{{ meta.descripcion }}</div>
+                                    {% endif %}
+                                    {% if meta.parametros %}
+                                        <div class="mt-1">
+                                            <strong>Params:</strong>
+                                            {% for k, v in meta.parametros.items %}
+                                                <code class="dp-http-pair">{{ k }}</code>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </details>
+                {% endif %}
             </div>
             <div class="col-md-6">
                 <label class="form-label small fw-bold mb-1">Endpoint asociado <small class="text-muted">(opcional)</small></label>

@@ -331,9 +331,18 @@ def departamentoChatbotsView(request):
                         for c in conexiones:
                             preds_por_nodo[c.nodo_destino_id].append(c)
                             salidas_por_nodo[c.nodo_origen_id].append(c)
+                        from .funciones_chatbot import FUNCIONES_REGISTRADAS
+                        funciones_metadata = {
+                            cod: {k: v for k, v in meta.items() if k != 'callable'}
+                            for cod, meta in FUNCIONES_REGISTRADAS.items()
+                        }
                         for item in arbol_plano:
-                            item['opcion'].predecesores_grafo = preds_por_nodo.get(item['opcion'].id, [])
-                            item['opcion'].salidas_grafo = salidas_por_nodo.get(item['opcion'].id, [])
+                            opc = item['opcion']
+                            opc.predecesores_grafo = preds_por_nodo.get(opc.id, [])
+                            opc.salidas_grafo = salidas_por_nodo.get(opc.id, [])
+                            if opc.tipo_nodo == 'funcion':
+                                cod = (opc.config or {}).get('funcion_codigo') or ''
+                                opc.funcion_meta = funciones_metadata.get(cod)
                         data.update({
                             'pagina_completa': True,
                             'titulo_pagina': f'Editar {filtro}',
@@ -343,6 +352,7 @@ def departamentoChatbotsView(request):
                             'tipos_nodo_choices': OpcionDepartamentoChatBot.TIPOS_NODO,
                             'validaciones_choices': OpcionDepartamentoChatBot.VALIDACIONES,
                             'endpoints_disponibles': EndpointApiChatbot.objects.filter(status=True).order_by('nombre'),
+                            'funciones_metadata': funciones_metadata,
                         })
                         return render(request, 'crm/departamento_chatbots/form_pagina.html', data)
                     template = get_template("crm/departamento_chatbots/form.html")
@@ -440,10 +450,15 @@ def departamentoChatbotsView(request):
                     op_id = int(request.GET.get('id') or 0)
                     parent_id = int(request.GET.get('parent_id') or 0)
                     dep_id = int(request.GET.get('departamento_id') or 0)
+                    from .funciones_chatbot import FUNCIONES_REGISTRADAS
                     contexto = {
                         'tipos_nodo_choices': OpcionDepartamentoChatBot.TIPOS_NODO,
                         'validaciones_choices': OpcionDepartamentoChatBot.VALIDACIONES,
                         'endpoints_disponibles': EndpointApiChatbot.objects.filter(status=True).order_by('nombre'),
+                        'funciones_metadata': {
+                            cod: {k: v for k, v in meta.items() if k != 'callable'}
+                            for cod, meta in FUNCIONES_REGISTRADAS.items()
+                        },
                     }
                     if op_id:
                         opcion = OpcionDepartamentoChatBot.objects.filter(pk=op_id, status=True).first()
