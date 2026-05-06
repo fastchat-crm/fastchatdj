@@ -77,7 +77,9 @@
       "Bash(where python *)",
       "Bash(pycheck whatsapp/view_tarifas.py)",
       "PowerShell(pycheck *)",
-      "Bash(pycheck C:/DESARROLLO_PROYECTOS/fastchat/fastchatdj/voz/consumers.py)"
+      "Bash(pycheck C:/DESARROLLO_PROYECTOS/fastchat/fastchatdj/voz/consumers.py)",
+      "Skill(update-config)",
+      "PowerShell($j = Get-Content C:\\\\Users\\\\aaron\\\\.claude\\\\settings.json -Raw | ConvertFrom-Json; $j.hooks.SessionStart[0].hooks[0].command)"
     ]
   },
   "hooks": {

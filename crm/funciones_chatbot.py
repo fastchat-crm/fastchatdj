@@ -268,6 +268,170 @@ def cotizar_aria(conversacion, variables, config, endpoint=None) -> dict:
     }
 
 
+@registrar_funcion(
+    codigo='cotizar_am',
+    descripcion='Envía cliente+miembros al webhook de Vida Buena (asistencia médica), recomienda plan y notifica.',
+    parametros={
+        'cliente.cedula':           'string · cédula del cliente',
+        'cliente.nombres':          'string · nombre(s)',
+        'cliente.apellidos':        'string · apellido(s)',
+        'cliente.fecha_nacimiento': 'string · YYYY-MM-DD (puede venir vacío)',
+        'cliente.sexo':             'string · M | F',
+        'cliente.email':            'string · correo de contacto',
+        'cliente.telefono':         'string · celular EC (10 dígitos)',
+        'budget_intent':            'economico | equilibrio | alta_proteccion | desconocido',
+        'network_preference':       'red_cerrada_ok | quiere_red_abierta | desconocido',
+        'wants_max_protection':     'bool',
+        'variables.edad_titular':   'number · edad del titular (se usa para construir members[])',
+        'variables.sexo_titular':   'M | F · sexo del titular',
+        'variables.edades_miembros': 'string · edades de dependientes separadas por coma (opcional)',
+    },
+    requiere_endpoint=True,
+    ejemplo_body={
+        'cliente': {
+            'cedula': '{{variables.cedula}}',
+            'nombres': '{{variables.nombres}}',
+            'apellidos': '{{variables.apellidos}}',
+            'fecha_nacimiento': '{{variables.fecha_nacimiento}}',
+            'sexo': '{{variables.sexo_titular}}',
+            'email': '{{variables.email}}',
+            'telefono': '{{variables.telefono}}',
+        },
+        'budget_intent': '{{variables.budget_intent}}',
+        'network_preference': 'desconocido',
+        'wants_max_protection': False,
+    },
+)
+def cotizar_am(conversacion, variables, config, endpoint=None) -> dict:
+    """Llama al webhook Vida Buena externo (asistencia médica).
+
+    Construye `members[]` a partir de `variables.edad_titular`,
+    `variables.sexo_titular` y la lista opcional `variables.edades_miembros`
+    (string con edades separadas por coma — los dependientes van como
+    `gender='unknown'` y `relationship='otro'`, suficiente para que el
+    decision engine recomiende plan).
+
+    URL externa: leída desde `endpoint.base_url` (editable en
+    /crm/endpoints_api/). Devuelve etiqueta `ok` cuando el webhook responde
+    `{ok: true}`. La recomendación, PDFs y resumen llegan al cliente
+    después por correo + WhatsApp en background (responsabilidad del webhook).
+    """
+    from .motor_flujo_chatbot import resolver_expresion
+
+    if not endpoint:
+        return {
+            'etiqueta': 'error',
+            'body': {},
+            'status': 0,
+            'error': 'Nodo `funcion=cotizar_am` sin endpoint configurado. '
+                     'Asignale un EndpointApiChatbot en el editor.',
+        }
+
+    if conversacion is None:
+        return {
+            'etiqueta': 'error',
+            'body': {},
+            'status': 0,
+            'error': 'Sin conversación contextual.',
+        }
+    if getattr(conversacion, 'conversacion_finalizada', False):
+        return {
+            'etiqueta': 'error',
+            'body': {},
+            'status': 409,
+            'error': 'La conversación ya está finalizada.',
+        }
+
+    contexto = {'variables': variables or {}, 'conversacion': conversacion}
+
+    body_raw = config.get('body') or {}
+    body = _resolver_dict(body_raw, contexto, resolver_expresion)
+
+    vars_ = variables or {}
+    edad_titular = vars_.get('edad_titular')
+    sexo_titular = (vars_.get('sexo_titular') or '').strip() or 'unknown'
+    edades_miembros_raw = vars_.get('edades_miembros') or ''
+
+    members = []
+    try:
+        ta = int(str(edad_titular).strip()) if edad_titular not in ('', None) else None
+    except (TypeError, ValueError):
+        ta = None
+    if ta is not None:
+        members.append({
+            'age': ta,
+            'gender': sexo_titular,
+            'relationship': 'titular',
+        })
+
+    for raw in str(edades_miembros_raw).split(','):
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            members.append({
+                'age': int(raw),
+                'gender': 'unknown',
+                'relationship': 'otro',
+            })
+        except ValueError:
+            continue
+
+    body['members'] = members
+    body['id_conversacion'] = conversacion.id
+    body.setdefault('network_preference', 'desconocido')
+    body.setdefault('wants_max_protection', False)
+
+    base_url = (endpoint.base_url or '').strip()
+    if not base_url:
+        return {
+            'etiqueta': 'error', 'body': {}, 'status': 0,
+            'error': f'Endpoint "{endpoint.nombre}" no tiene base_url.',
+        }
+
+    timeout = int(config.get('timeout_seg') or endpoint.timeout_seg or 30)
+    headers = dict(endpoint.headers_default or {})
+    headers.setdefault('Content-Type', 'application/json')
+    headers.setdefault('Accept', 'application/json')
+
+    try:
+        r = requests.post(base_url, json=body, timeout=timeout, headers=headers)
+    except requests.RequestException as ex:
+        logger.exception('cotizar_am conv#%s falló: %s', conversacion.id, ex)
+        return {
+            'etiqueta': 'error', 'body': {}, 'status': 502,
+            'error': f'No pudimos contactar el cotizador: {str(ex)[:200]}',
+        }
+
+    try:
+        resp_json = r.json()
+    except ValueError:
+        resp_json = {'_raw': r.text[:1000]}
+
+    es_exito = (200 <= r.status_code < 300) and bool(resp_json.get('ok'))
+    if not es_exito:
+        logger.warning(
+            'cotizar_am conv#%s rechazado: status=%s body=%s',
+            conversacion.id, r.status_code, resp_json,
+        )
+        return {
+            'etiqueta': 'error', 'body': resp_json, 'status': r.status_code,
+            'error': resp_json.get('error') or f'Cotizador respondió {r.status_code}.',
+        }
+
+    return {
+        'etiqueta': 'ok',
+        'body': {
+            'success': True,
+            'message': resp_json.get('mensaje') or 'Cotización en proceso.',
+            'status': resp_json.get('status') or 'encolado',
+            'raw': resp_json,
+        },
+        'status': r.status_code,
+        'error': '',
+    }
+
+
 # ────────────────────────────────────────────────────────────────────
 # Helpers
 # ────────────────────────────────────────────────────────────────────
