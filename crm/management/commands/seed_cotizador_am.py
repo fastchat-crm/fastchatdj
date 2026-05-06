@@ -280,15 +280,21 @@ PASOS = [
     },
 
     # ── 200 — Intención de presupuesto ─────────────────────────
+    # `todos` = modo especial del webhook: cotiza TODOS los planes activos
+    # del tenant con tarifa para el perfil (no entra al decision engine).
     {
         'id': 200, 'orden': 200, 'tipo': 'menu_botones',
         'codigo': 'budget_intent', 'nombre': 'Intención de presupuesto',
-        'mensaje': '💰 ¿Buscas algo más económico, equilibrado o con mayor protección?',
+        'mensaje': (
+            '💰 ¿Buscas algo más económico, equilibrado, con mayor protección, '
+            'o prefieres ver *todos los planes*?'
+        ),
         'guardar_en': 'budget_intent',
         'opciones': [
             {'etiqueta': '💵 Económico',        'valor': 'economico',       'siguiente': 210},
             {'etiqueta': '⚖️ Equilibrado',      'valor': 'equilibrio',      'siguiente': 210},
             {'etiqueta': '🛡️ Mayor protección', 'valor': 'alta_proteccion', 'siguiente': 210},
+            {'etiqueta': '📋 Ver todos',         'valor': 'todos',           'siguiente': 210},
         ],
     },
 
