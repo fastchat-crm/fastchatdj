@@ -278,13 +278,13 @@ def cotizar_aria(conversacion, variables, config, endpoint=None) -> dict:
         'cliente.fecha_nacimiento': 'string · YYYY-MM-DD (puede venir vacío)',
         'cliente.sexo':             'string · M | F',
         'cliente.email':            'string · correo de contacto',
-        'cliente.telefono':         'string · celular EC (10 dígitos)',
         'budget_intent':            'economico | equilibrio | alta_proteccion | desconocido',
         'network_preference':       'red_cerrada_ok | quiere_red_abierta | desconocido',
         'wants_max_protection':     'bool',
         'variables.edad_titular':   'number · edad del titular (se usa para construir members[])',
         'variables.sexo_titular':   'M | F · sexo del titular',
         'variables.edades_miembros': 'string · edades de dependientes separadas por coma (opcional)',
+        '(auto) cliente.telefono':  'string · número de WhatsApp del contacto (inyectado por la función)',
     },
     requiere_endpoint=True,
     ejemplo_body={
@@ -295,7 +295,6 @@ def cotizar_aria(conversacion, variables, config, endpoint=None) -> dict:
             'fecha_nacimiento': '{{variables.fecha_nacimiento}}',
             'sexo': '{{variables.sexo_titular}}',
             'email': '{{variables.email}}',
-            'telefono': '{{variables.telefono}}',
         },
         'budget_intent': '{{variables.budget_intent}}',
         'network_preference': 'desconocido',
@@ -310,6 +309,12 @@ def cotizar_am(conversacion, variables, config, endpoint=None) -> dict:
     (string con edades separadas por coma — los dependientes van como
     `gender='unknown'` y `relationship='otro'`, suficiente para que el
     decision engine recomiende plan).
+
+    Inyecta `cliente.telefono` con el número de WhatsApp del contacto
+    (`Contacto.numero_telefono` o, si está vacío, `Contacto.contacto_numero`).
+    Esto reemplaza cualquier teléfono que viniera en el body del nodo: la
+    fuente de verdad para contactar al cliente es el chat por donde está
+    escribiendo en este momento.
 
     URL externa: leída desde `endpoint.base_url` (editable en
     /crm/endpoints_api/). Devuelve etiqueta `ok` cuando el webhook responde
@@ -381,6 +386,19 @@ def cotizar_am(conversacion, variables, config, endpoint=None) -> dict:
     body['id_conversacion'] = conversacion.id
     body.setdefault('network_preference', 'desconocido')
     body.setdefault('wants_max_protection', False)
+
+    contacto = getattr(conversacion, 'contacto', None)
+    wa_telefono = ''
+    if contacto is not None:
+        wa_telefono = (
+            getattr(contacto, 'numero_telefono', '')
+            or getattr(contacto, 'contacto_numero', '')
+            or ''
+        )
+    if wa_telefono:
+        if not isinstance(body.get('cliente'), dict):
+            body['cliente'] = {}
+        body['cliente']['telefono'] = wa_telefono
 
     base_url = (endpoint.base_url or '').strip()
     if not base_url:

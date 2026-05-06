@@ -18,14 +18,18 @@ manda el webhook por email + WhatsApp en background.
 
 Flujo (resumido):
   saludo → cédula → GET ?action=cliente&cedula= →
-    encontrado: confirmar email/teléfono faltantes; si faltan edad/sexo,
-                pedirlos como número (no fecha).
-    no encontrado: pedir nombres / apellidos / email / teléfono / edad / sexo.
+    encontrado: si email vacío lo pide; si edad/sexo faltan, los pide
+                (edad como número, no fecha; sexo M/F como devuelve la API).
+    no encontrado: pedir nombres / apellidos / email / edad / sexo.
   → tipo de grupo (individual / titular+1 / familia)
   → si titular+1 o familia: edades de los demás miembros (lista por coma)
   → intención de presupuesto (económico / equilibrio / alta protección)
   → "⏳ analizando..." → función cotizar_am → mensaje de cierre
   → handoff opcional al asesor.
+
+Teléfono: NO se pregunta. La función `cotizar_am` envía al webhook el
+número de WhatsApp del contacto (`Contacto.numero_telefono` o
+`Contacto.contacto_numero`) como `cliente.telefono`.
 
 Uso:
     python manage.py seed_cotizador_am
@@ -129,23 +133,33 @@ PASOS = [
     },
 
     # ── 50 — Mostrar datos encontrados ─────────────────────────
+    # Mostramos todos los campos que devuelve ?action=cliente (nombre,
+    # edad, sexo, email, teléfono). El teléfono se muestra como referencia
+    # del que tenemos en BD, pero al webhook se manda el número de
+    # WhatsApp del contacto (lo inyecta la función `cotizar_am`).
     {
         'id': 50, 'orden': 50, 'tipo': 'respuesta_texto',
         'codigo': 'mostrar_cliente', 'nombre': 'Mostrar datos del cliente',
         'mensaje': (
             '✅ Encontré tus datos:\n'
-            '• Nombre: *{{variables.nombres}} {{variables.apellidos}}*'
+            '• Nombre: *{{variables.nombres}} {{variables.apellidos}}*\n'
+            '• Edad: *{{variables.edad_titular}}*\n'
+            '• Sexo: *{{variables.sexo_titular}}*\n'
+            '• Email: *{{variables.email}}*\n'
+            '• Teléfono: *{{variables.telefono}}*'
         ),
         'siguiente': 60,
     },
 
     # ── 60/62 — Email faltante ─────────────────────────────────
+    # NO se pide teléfono: la función `cotizar_am` envía al webhook el
+    # número de WhatsApp del contacto como `cliente.telefono`.
     {
         'id': 60, 'orden': 60, 'tipo': 'decision',
         'codigo': 'email_vacio', 'nombre': '¿Email vacío?',
         'condiciones': [{'izq': '{{variables.email}}', 'op': 'vacio', 'der': ''}],
         'operador': 'and',
-        'siguiente_si': 62, 'siguiente_no': 70,
+        'siguiente_si': 62, 'siguiente_no': 80,
     },
     {
         'id': 62, 'orden': 62, 'tipo': 'input_texto',
@@ -156,23 +170,6 @@ PASOS = [
         ),
         'guardar_en': 'email',
         'validacion': r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$',
-        'siguiente': 70,
-    },
-
-    # ── 70/72 — Teléfono faltante ──────────────────────────────
-    {
-        'id': 70, 'orden': 70, 'tipo': 'decision',
-        'codigo': 'telefono_vacio', 'nombre': '¿Teléfono vacío?',
-        'condiciones': [{'izq': '{{variables.telefono}}', 'op': 'vacio', 'der': ''}],
-        'operador': 'and',
-        'siguiente_si': 72, 'siguiente_no': 80,
-    },
-    {
-        'id': 72, 'orden': 72, 'tipo': 'input_texto',
-        'codigo': 'pedir_telefono_faltante', 'nombre': 'Pedir teléfono (faltante)',
-        'mensaje': '📱 ¿Tu *celular*? (10 dígitos, empieza con 0)',
-        'guardar_en': 'telefono',
-        'validacion': r'^0[0-9]{9}$',
         'siguiente': 80,
     },
 
@@ -235,14 +232,6 @@ PASOS = [
         'mensaje': '📧 ¿A qué *correo* te enviamos la cotización?',
         'guardar_en': 'email',
         'validacion': r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$',
-        'siguiente': 130,
-    },
-    {
-        'id': 130, 'orden': 130, 'tipo': 'input_texto',
-        'codigo': 'pedir_telefono_nuevo', 'nombre': 'Pedir teléfono',
-        'mensaje': '📱 ¿Tu *celular*? (10 dígitos, empieza con 0)',
-        'guardar_en': 'telefono',
-        'validacion': r'^0[0-9]{9}$',
         'siguiente': 140,
     },
     {
@@ -331,7 +320,6 @@ PASOS = [
                 'fecha_nacimiento': '{{variables.fecha_nacimiento}}',
                 'sexo':             '{{variables.sexo_titular}}',
                 'email':            '{{variables.email}}',
-                'telefono':         '{{variables.telefono}}',
             },
             'budget_intent':         '{{variables.budget_intent}}',
             'network_preference':    'desconocido',
@@ -412,8 +400,7 @@ PASOS = [
         'id': 998, 'orden': 998, 'tipo': 'asignar_variable',
         'codigo': 'reset_sesion', 'nombre': 'Reset de variables',
         'asigna': {
-            'cedula': '', 'nombres': '', 'apellidos': '',
-            'email': '', 'telefono': '',
+            'cedula': '', 'nombres': '', 'apellidos': '', 'email': '',
             'fecha_nacimiento': '', 'edad_titular': '', 'sexo_titular': '',
             'tipo_grupo': '', 'edades_miembros': '',
             'budget_intent': '', 'quiere_asesor': '',
