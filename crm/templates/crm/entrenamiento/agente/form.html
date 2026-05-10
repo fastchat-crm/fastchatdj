@@ -1087,6 +1087,7 @@
 
 </div>{# /tab-content #}
 
+{% if not pagina_dedicada %}
 <div class="border-top my-3"></div>
 
 <div class="d-flex justify-content-end gap-1">
@@ -1097,6 +1098,7 @@
         <i class="fa fa-save me-1"></i>Guardar
     </button>
 </div>
+{% endif %}
 
 {{ form.media }}
 {% include 'base_formulario_modal.html' %}
