@@ -5,7 +5,7 @@ cotizador AM existente (NO duplica infraestructura).
 Reusa lo que ya está construido:
   - El flujo determinístico `seed_cotizador_am` sigue siendo la fuente única
     de verdad para disparar el webhook oficial (función `cotizar_am`).
-  - El cotizador web público https://fguerrero.mgaseguros.ec/cotizar/ es la
+  - El cotizador web público https://fguerrero.mgaseguros.ec/cotimedica/ es la
     salida self-service.
   - El endpoint público de lookup `?action=cliente&cedula=` se usa con tool.
 
@@ -50,7 +50,7 @@ User = get_user_model()
 NOMBRE_AGENTE = 'Vida Buena Asesor IA'
 
 BASE_AM_DEFAULT = 'https://fguerrero.mgaseguros.ec/cotimedica-api/v1/'
-COTIZADOR_WEB_URL = 'https://fguerrero.mgaseguros.ec/cotizar/'
+COTIZADOR_WEB_URL = 'https://fguerrero.mgaseguros.ec/cotimedica/'
 FORMULARIO_ASESOR_URL = ''
 FASTCHAT_URL_DEFAULT = 'https://fastchat.local'
 
@@ -378,7 +378,7 @@ CONTEXTO TEMPORAL:
 - Contacto: {contacto_nombre} · momento: {hora_local}
 
 CANALES DE CIERRE (úsalos solo si la herramienta de cotización falla):
-- Cotizador web self-service (siempre disponible): https://fguerrero.mgaseguros.ec/cotizar/
+- Cotizador web self-service (siempre disponible): https://fguerrero.mgaseguros.ec/cotimedica/
 - Para hablar con un asesor humano: el cliente debe escribir la palabra
   "asesor" y el sistema deriva. NUNCA inventes una URL para asesor.
   NUNCA inventes horarios laborales — solo si vienen en el contexto
@@ -555,7 +555,7 @@ HERRAMIENTAS = [
             '⚠️ COTIZACIÓN FALLÓ ({{codigo_error}}): {{message}}\n\n'
             'Disculpate con el cliente brevemente y ofrecé alternativa: '
             '"si querés, te conecto con un asesor humano (escribí asesor)" o '
-            '"podés cotizar vos en https://fguerrero.mgaseguros.ec/cotizar/". '
+            '"podés cotizar vos en https://fguerrero.mgaseguros.ec/cotimedica/". '
             'NO inventes URLs ni horarios. Ofrecé solo lo que está acá.'
             '{% endif %}'
         ),
