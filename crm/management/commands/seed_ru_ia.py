@@ -321,7 +321,7 @@ class Command(BaseCommand):
         parser.add_argument('--delete', action='store_true',
                             help='Solo borra el agente y sale (no recrea).')
         parser.add_argument('--apikey', type=int, default=None,
-                            help='ID de ApiKeyIA a vincular (requerido al crear).')
+                            help='ID de ApiKeyIA a vincular (opcional — si no, asignala luego desde la UI).')
         parser.add_argument('--sesion', type=int, default=None,
                             help='ID de SesionWhatsApp para asignar el agente como modo_bot=ia.')
         parser.add_argument('--base-url', type=str, default=BASE_URL_DEFAULT,
@@ -340,20 +340,21 @@ class Command(BaseCommand):
         creando = agente is None
 
         if creando:
-            if not opts['apikey']:
-                raise CommandError(
-                    'Tenés que pasar --apikey <id> al crear el agente. '
-                    'Listá las disponibles con: python manage.py shell -c '
-                    '"from crm.models import ApiKeyIA; '
-                    '[print(k.id, k.nombre, k.proveedor) for k in ApiKeyIA.objects.filter(status=True)]"'
-                )
-            try:
-                apikey = ApiKeyIA.objects.get(id=opts['apikey'], status=True)
-            except ApiKeyIA.DoesNotExist:
-                raise CommandError(f'No existe ApiKeyIA activa con id={opts["apikey"]}')
+            apikey = None
+            if opts['apikey']:
+                try:
+                    apikey = ApiKeyIA.objects.get(id=opts['apikey'], status=True)
+                except ApiKeyIA.DoesNotExist:
+                    raise CommandError(f'No existe ApiKeyIA activa con id={opts["apikey"]}')
 
             agente = self._crear_agente(apikey)
             self.stdout.write(self.style.SUCCESS(f'Agente creado: {agente.nombre} (id={agente.id})'))
+            if apikey is None:
+                self.stdout.write(self.style.WARNING(
+                    'Sin --apikey: el agente quedó SIN ApiKeyIA vinculada. '
+                    f'Asignala manualmente desde /crm/agentes_ai/?accion=editar&id={agente.id} '
+                    'antes de probarlo (sin api key no puede invocar al LLM).'
+                ))
         else:
             self.stdout.write(self.style.WARNING(f'Agente ya existe: {agente.nombre} (id={agente.id}) — actualizando.'))
             self._actualizar_agente(agente)
@@ -379,7 +380,7 @@ class Command(BaseCommand):
         agente.delete()
         self.stdout.write(self.style.SUCCESS(f'Agente "{NOMBRE_AGENTE}" + herramientas eliminados.'))
 
-    def _crear_agente(self, apikey):
+    def _crear_agente(self, apikey=None):
         agente = AgentesIA.objects.create(
             nombre=NOMBRE_AGENTE,
             descripcion=(
@@ -407,7 +408,8 @@ class Command(BaseCommand):
             cfg_history_turns=8,
             cfg_max_output_tokens=2000,
         )
-        agente.apikey.add(apikey)
+        if apikey is not None:
+            agente.apikey.add(apikey)
         return agente
 
     def _actualizar_agente(self, agente):
