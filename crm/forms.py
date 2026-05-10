@@ -233,7 +233,7 @@ class AgentesIAForm(ModelFormBase):
             'cfg_max_output_tokens', 'cfg_topic_anchor_chars',
             # Humanizacion (preset + persona + estilo + timing)
             'personalidad_preset',
-            'nombre_bot', 'personalidad', 'tono', 'estilo_escritura', 'temperature',
+            'nombre_bot', 'mensaje_bienvenida', 'personalidad', 'tono', 'estilo_escritura', 'temperature',
             'humanizar_timing',
             'humaniz_chars_burbuja_ideal', 'humaniz_chars_burbuja_max', 'humaniz_max_burbujas',
             'humaniz_lectura_cps', 'humaniz_escritura_cps',
@@ -298,6 +298,13 @@ class AgentesIAForm(ModelFormBase):
             if k in ('personalidad', 'estilo_escritura'):
                 self.fields[k].widget.attrs['rows'] = '3'
                 self.fields[k].widget.attrs['col']  = '12'
+            if k == 'mensaje_bienvenida':
+                self.fields[k].widget.attrs['rows'] = '3'
+                self.fields[k].widget.attrs['col']  = '12'
+                self.fields[k].widget.attrs['placeholder'] = (
+                    'Ej: ¡Hola! 👋 Soy Sofía. Te ayudo con tu plan de salud. '
+                    '¿Me das tu cédula (10 dígitos) para empezar?'
+                )
             if k in ('nombre_bot',):
                 self.fields[k].widget.attrs['col'] = '6'
             if k == 'personalidad_preset':

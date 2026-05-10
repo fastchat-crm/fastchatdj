@@ -440,6 +440,18 @@ class Command(BaseCommand):
             faqs_en_prompt=5,
             personalidad_preset='amable',
             nombre_bot='Lucía',
+            mensaje_bienvenida=(
+                '¡Hola! 👋 Soy Lucía, asistente virtual del ISTER.\n\n'
+                'Puedo ayudarte con:\n'
+                '📝 Tareas y actividades de la semana\n'
+                '📚 Tus materias activas y docentes\n'
+                '📅 Horarios (general y clases de hoy)\n'
+                '💲 Deudas y rubros pendientes\n'
+                '👤 Tu mentor académico y contactos\n'
+                'ℹ️ Trámites: pregrado, posgrado, becas, homologación\n\n'
+                'Para tus consultas privadas, pasame tu *cédula* (10 dígitos). '
+                '¿Sobre qué necesitás info hoy?'
+            ),
             personalidad=(
                 'Soy Lucía, asistente del ISTER. Soy paciente, clara y resolutiva. '
                 'Trato al estudiante de "vos" con calidez, sin formalismos exagerados. '

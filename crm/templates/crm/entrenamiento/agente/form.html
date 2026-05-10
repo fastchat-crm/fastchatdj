@@ -182,6 +182,17 @@
                         <div class="form-text small">Registro general al escribir.</div>
                     </div>
                     <div class="col-12">
+                        <label class="form-label small fw-semibold mb-1">
+                            {{ form.mensaje_bienvenida.label }}
+                            <span class="badge bg-success ms-1" style="font-size:.65rem;">SIN tokens LLM</span>
+                        </label>
+                        {{ form.mensaje_bienvenida }}
+                        <div class="form-text small">
+                            Si lo llenás, este texto se envía LITERAL como primer mensaje cuando el cliente saluda — <strong>cero tokens LLM</strong>.
+                            Vacío = el bot improvisa un saludo humanizado. Tiene prioridad sobre el de la sesión.
+                        </div>
+                    </div>
+                    <div class="col-12">
                         <label class="form-label small fw-semibold mb-1">{{ form.personalidad.label }}</label>
                         {{ form.personalidad }}
                         <div class="form-text small">

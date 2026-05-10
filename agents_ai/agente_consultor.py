@@ -893,11 +893,15 @@ class AgenteConsultor:
         """Si es el primer mensaje y es un saludo, devuelve la bienvenida. Sin LLM.
 
         Prioridad:
-        1. mensaje_bienvenida configurado a nivel sesión (admin).
-        2. Saludo variado por franja horaria + nombre del contacto.
+        1. mensaje_bienvenida del agente IA (config por agente, sin tokens).
+        2. mensaje_bienvenida configurado a nivel sesión (admin).
+        3. Saludo variado por franja horaria + nombre del contacto.
         """
         if not (self._es_primer_mensaje() and _es_saludo(pregunta)):
             return None
+        bienvenida_agente = getattr(self.agente, 'mensaje_bienvenida', '') if self.agente else ''
+        if bienvenida_agente and bienvenida_agente.strip():
+            return bienvenida_agente.strip()
         bienvenida = (
             self.conversacion
             and self.conversacion.contacto

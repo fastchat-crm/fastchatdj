@@ -269,6 +269,13 @@ class AgentesIA(ModeloBase):
         max_length=80, default='Asistente', verbose_name='Nombre del bot',
         help_text='Nombre con el que se presenta el bot. Ej: "Cami", "Mateo", "Sofía".'
     )
+    mensaje_bienvenida = models.TextField(
+        blank=True, default='', verbose_name='Mensaje de bienvenida (estático, sin LLM)',
+        help_text='Si se llena, este texto se envía LITERAL como primera respuesta cuando '
+                  'el cliente saluda al inicio. NO consume tokens del LLM. Tiene prioridad '
+                  'sobre el de la sesión. Dejá vacío para que el bot improvise un saludo '
+                  'humanizado o use el de la sesión.'
+    )
     personalidad = models.TextField(
         blank=True, default='', verbose_name='Personalidad',
         help_text='Rasgos humanos del bot. Ej: "Soy Cami, 28 años, extrovertida, uso emojis con mesura, '
