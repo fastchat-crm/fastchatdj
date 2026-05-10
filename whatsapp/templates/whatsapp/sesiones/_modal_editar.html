@@ -164,20 +164,21 @@
                 <label>Duración de la sesión (minutos)</label>
                 <input type="number" name="min_sesion" id="inp-min-sesion"
                        value="{{ sesion.min_sesion|default:60 }}"
-                       min="1" max="720" step="1" placeholder="60">
+                       min="1" max="720" step="1" placeholder="60"
+                       oninput="window.marcarPresetMinSesion && window.marcarPresetMinSesion()">
                 <div class="d-flex flex-wrap gap-1 mt-2" id="min-sesion-presets">
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="60">1 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="120">2 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="180">3 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="240">4 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="300">5 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="360">6 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="420">7 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="480">8 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="540">9 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="600">10 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="660">11 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="720">12 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="60"  onclick="window.setMinSesion(60)">1 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="120" onclick="window.setMinSesion(120)">2 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="180" onclick="window.setMinSesion(180)">3 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="240" onclick="window.setMinSesion(240)">4 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="300" onclick="window.setMinSesion(300)">5 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="360" onclick="window.setMinSesion(360)">6 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="420" onclick="window.setMinSesion(420)">7 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="480" onclick="window.setMinSesion(480)">8 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="540" onclick="window.setMinSesion(540)">9 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="600" onclick="window.setMinSesion(600)">10 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="660" onclick="window.setMinSesion(660)">11 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="720" onclick="window.setMinSesion(720)">12 h</button>
                 </div>
                 <small class="muted d-block mt-1">
                     Minutos de inactividad antes de cerrar la conversación. Máx 720 (12 h) —
@@ -185,28 +186,24 @@
                 </small>
             </div>
             <script>
-                (function () {
-                    const inp = document.getElementById('inp-min-sesion');
-                    const box = document.getElementById('min-sesion-presets');
+                window.marcarPresetMinSesion = function () {
+                    var inp = document.getElementById('inp-min-sesion');
+                    var box = document.getElementById('min-sesion-presets');
                     if (!inp || !box) return;
-                    function marcarActivo() {
-                        const val = String(inp.value || '').trim();
-                        box.querySelectorAll('button[data-min]').forEach(function (b) {
-                            const on = b.dataset.min === val;
-                            b.classList.toggle('conex-btn-primary', on);
-                            b.classList.toggle('conex-btn-light', !on);
-                        });
-                    }
+                    var val = String(inp.value || '').trim();
                     box.querySelectorAll('button[data-min]').forEach(function (b) {
-                        b.addEventListener('click', function () {
-                            inp.value = b.dataset.min;
-                            marcarActivo();
-                            inp.dispatchEvent(new Event('change', {bubbles: true}));
-                        });
+                        var on = b.getAttribute('data-min') === val;
+                        b.classList.toggle('conex-btn-primary', on);
+                        b.classList.toggle('conex-btn-light', !on);
                     });
-                    inp.addEventListener('input', marcarActivo);
-                    marcarActivo();
-                })();
+                };
+                window.setMinSesion = function (v) {
+                    var inp = document.getElementById('inp-min-sesion');
+                    if (!inp) return;
+                    inp.value = v;
+                    window.marcarPresetMinSesion();
+                };
+                window.marcarPresetMinSesion();
             </script>
 
             <div class="form-row">

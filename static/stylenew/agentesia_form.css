@@ -80,3 +80,10 @@
     color: var(--preset-color);
     letter-spacing: .03em;
 }
+
+#contenedorDetalles textarea,
+#contenedorDetalles input[type="text"],
+#contenedorDetalles input[type="url"],
+#contenedorDetalles select {
+    background-color: #ffffff !important;
+}
