@@ -41,7 +41,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from crm.models import AgentesIA, ApiKeyIA, HerramientaAgente, PerfilNegocioIA
+from crm.models import AgentesIA, ApiKeyIA, DetalleAgentesAI, HerramientaAgente, PerfilNegocioIA
 from whatsapp.models import SesionWhatsApp
 
 User = get_user_model()
@@ -220,13 +220,155 @@ REGLAS DE COTIZACIÓN:
 """.strip()
 
 
+CHUNKS_CONOCIMIENTO = [
+    (
+        "Plan PROTECCIÓN 10.000 (entrada económica, mixto)",
+        "PROTECCIÓN 10.000 — Nivel N-4, modalidad MIXTA, anual, SIN deducible.\n"
+        "Plan de entrada económico, modalidad mixta (red abierta + cerrada).\n\n"
+        "Cobertura ambulatoria: 80% red cerrada con copago/convenio · 70% red\n"
+        "abierta o cerrada sin copago. Consultas red abierta reembolso $25.\n"
+        "Habitación hospitalaria: $50/día sin límite de días.\n"
+        "Maternidad: $1.200 · Ambulancia terrestre: 80% hasta $55.\n"
+        "Enfermedades catastróficas: $5.000.\n"
+        "Cirugía plástica reconstructiva: $800 · Tratamientos dentales por\n"
+        "accidente: $300.\n"
+        "Carencias: ambulatoria 30 días · hospitalaria 90 días · maternidad 60 días."
+    ),
+    (
+        "Plan ÚNICO 10.000 (más económico, red cerrada pura)",
+        "ÚNICO 10.000 — Nivel N-2, modalidad CERRADA, por incapacidad, SIN deducible.\n"
+        "Plan económico de RED CERRADA pura. NO cubre red abierta. Pensado para\n"
+        "quien aceptaría atenderse SOLO en clínicas convenio.\n\n"
+        "Cobertura ambulatoria: 80% red cerrada · NO aplica red abierta.\n"
+        "Medicamentos ambulatorios: 70% red cerrada solamente.\n"
+        "Habitación hospitalaria: $50/día · Maternidad: $1.200.\n"
+        "NO incluye ambulancia terrestre.\n"
+        "Enfermedades catastróficas: $10.000.\n"
+        "Único plan que incluye Prótesis no dentales / aparatos ortopédicos: $250."
+    ),
+    (
+        "Plan PREDILECTO 20.000 (intermedio, balance precio/cobertura)",
+        "PREDILECTO 20.000 — Nivel N-3, modalidad MIXTA, anual, SIN deducible.\n"
+        "Plan intermedio, mejor balance precio/cobertura. Mismo enfoque mixto que\n"
+        "PROTECCIÓN pero con tope $20.000 y mejores honorarios.\n\n"
+        "Cobertura ambulatoria: 80% red cerrada · 70% red abierta.\n"
+        "Consultas red abierta reembolso $50.\n"
+        "Habitación hospitalaria: $100/día sin límite.\n"
+        "Maternidad: $1.800 · Ambulancia terrestre: 80% hasta $100.\n"
+        "Enfermedades catastróficas: $10.000.\n"
+        "Cirugía plástica reconstructiva: $1.000."
+    ),
+    (
+        "Plan MAGNO 30.000 (premium, máxima cobertura)",
+        "MAGNO 30.000 — Nivel N-1, modalidad MIXTA, por incapacidad, $80 deducible.\n"
+        "Plan PREMIUM. Mayor cobertura. Único con ambulancia aérea/fluvial.\n\n"
+        "Cobertura ambulatoria: 80% red cerrada · 70% red abierta.\n"
+        "Consultas red abierta reembolso $65.\n"
+        "Medicamentos: 80% dentro de red, 60% fuera.\n"
+        "Habitación hospitalaria: $200/día sin límite.\n"
+        "Acompañantes en hospitalización (recién nacidos, <16 y >75): $100/día.\n"
+        "Maternidad: $2.500 · Ambulancia terrestre: $100 + AÉREA/FLUVIAL: $2.500.\n"
+        "Enfermedades catastróficas: $30.000.\n"
+        "Único plan con: Audífonos $50/año, Cristales ópticos $50, Prótesis no\n"
+        "dentales $500. Cirugía plástica reconstructiva: $1.000."
+    ),
+    (
+        "Coberturas comunes a los 4 planes",
+        "Todos los planes incluyen:\n"
+        "- Servicios exequiales (titular): 100% Jardines del Valle\n"
+        "- Telemedicina incluida\n"
+        "- Plan dental básico incluido\n"
+        "- Seguro por muerte accidental (titular): $10.000\n"
+        "- Maternidad SIN aplicación de deducible (parto normal, cesárea, aborto\n"
+        "  no provocado, complicaciones).\n"
+        "- Recién nacido: cubierto hasta el monto del plan si la inclusión\n"
+        "  intraútero fue antes de la semana 12; sino hasta $800.\n"
+        "- Tarifa 0 (MSP) incluida.\n"
+        "- Atención médica en el hogar: $10-$15 según distancia.\n"
+        "- Terapias (física, respiratoria, lenguaje, cardiaca): 15-20 sesiones\n"
+        "  por año por usuario, $15-$25 por sesión según plan.\n"
+        "- Consultas con homeópatas/acupunturistas/quiroprácticos/medicina\n"
+        "  alternativa: 6 consultas con tope $25 c/u (ÚNICO aplica al 80% sin tope).\n"
+        "- Métodos anticonceptivos: $80 (PROTECCIÓN/ÚNICO) o $100 (PREDILECTO/MAGNO).\n\n"
+        "Cobertura territorio nacional. Período de presentación de reclamos: 60 días."
+    ),
+    (
+        "Carencias por tipo de cobertura",
+        "Carencias (mismas para todos salvo donde se indica):\n"
+        "- Cobertura ambulatoria: 30 días\n"
+        "- Medicamentos ambulatorios: 30 días\n"
+        "- Cobertura prehospitalaria: 90 días\n"
+        "- Cobertura hospitalaria: 90 días\n"
+        "- Maternidad (parto normal/cesárea/aborto): 60 días\n"
+        "- Tarifa 0: 30 días\n"
+        "- Recién nacido: 30 días ambulatorio / 90 días hospitalario\n"
+        "- Preexistencias declaradas: 90 días ambulatorio / 12-24 meses hospitalario\n"
+        "  (MAGNO: 180 días ambulatorio / 12-24 meses)\n"
+        "- Emergencias y tratamientos dentales por accidente: 24 horas"
+    ),
+    (
+        "Tarifario resumido por edad (USD mensual aprox · masculino básico)",
+        "Tarifario aproximado 2026:\n\n"
+        "Edad        | PROTECCIÓN | ÚNICO  | PREDILECTO | MAGNO\n"
+        "20-25 años  | $32        | $23    | $44        | $49\n"
+        "30-35 años  | $35        | $26    | $51        | $58\n"
+        "40-45 años  | $48        | $37    | $63        | $73\n"
+        "50-55 años  | $69        | $56    | $98        | $112\n"
+        "60-65 años  | $96        | $84    | $148       | $165\n"
+        "70+ años    | $149       | $120   | $230       | $251\n\n"
+        "Femenino: similar en mayoría de tramos. PROTECCIÓN tiene leve incremento\n"
+        "desde 20 años; PREDILECTO desde 15 años. Plan dental PLUS suma ~$2.50\n"
+        "sobre el plan base. Para tarifa exacta por edad y sexo, usar el cotizador\n"
+        "oficial."
+    ),
+    (
+        "Cobertura dental básica (incluida) y plus (opcional)",
+        "DENTAL BÁSICA (incluida en todos los planes):\n"
+        "- Examen, profilaxis y fluorización: SIN COPAGO.\n"
+        "- Restauración simple $10 · compuesta $12 · compleja $15.\n"
+        "- Extracción simple $16 · molares erupcionados $36.\n"
+        "- Brackets metálicos $700 · blanqueamiento dos arcadas $140.\n\n"
+        "DENTAL PLUS (opcional, suma a la prima):\n"
+        "Incluye: rayos X periapicales $6, urgencias odontológicas $15, biopsias\n"
+        "$60, cirugías de tejido blando $81, apicectomía $81, entre otras."
+    ),
+    (
+        "Guía interna de recomendación de plan",
+        "ÁRBOL DE DECISIÓN para recomendar plan según perfil del cliente:\n\n"
+        "1. ¿Cuál es su prioridad principal?\n"
+        "   - 'Pagar lo menos posible' + acepta clínicas convenio → ÚNICO 10.000\n"
+        "   - 'Pagar poco con libertad de clínica' → PROTECCIÓN 10.000\n"
+        "   - 'Balance precio/protección' → PREDILECTO 20.000\n"
+        "   - 'Máxima protección, no importa precio' → MAGNO 30.000\n\n"
+        "2. Casos que inclinan a MAGNO:\n"
+        "   - Cliente >60 años o con preexistencias declaradas.\n"
+        "   - Necesita cobertura de cristales ópticos o audífonos.\n"
+        "   - Vive en zona remota (única ambulancia aérea/fluvial).\n"
+        "   - Requiere prótesis no dentales / aparatos ortopédicos.\n\n"
+        "3. Casos que inclinan a PREDILECTO:\n"
+        "   - Familia con hijos pequeños (mejor maternidad $1.800).\n"
+        "   - Suele atenderse en red abierta.\n"
+        "   - Necesita habitación hospitalaria privada ($100/día).\n\n"
+        "4. ÚNICO es ideal para:\n"
+        "   - Cliente joven y sano que solo quiere cobertura por accidentes graves.\n"
+        "   - Acepta clínicas convenio.\n"
+        "   - Quiere pago mensual mínimo.\n\n"
+        "5. NO insistir en cotizar si:\n"
+        "   - Cliente pregunta sobre planes corporativos o financiamiento.\n"
+        "   - Cliente muestra dudas o no quiere dar datos personales aún."
+    ),
+]
+
+
 PROMPT_TEMPLATE = """
-Eres {nombre_bot}, asesor virtual de seguros de asistencia médica Vida Buena.
-Tu rol es EDUCAR al cliente sobre los 4 planes disponibles, entender su
-perfil (edad, presupuesto, preferencias) y RECOMENDAR el plan que mejor le
-conviene. Cuando el cliente esté listo para cotizar oficialmente, lo
-DERIVÁS al cotizador web o al asesor humano — vos no ejecutás cotizaciones
-oficiales, vos preparás al cliente para que decida bien.
+Eres {nombre_bot}, asesora virtual de Vida Buena (asistencia médica).
+Tu trabajo: en el MENOR número de mensajes posible, conseguir la cédula del
+cliente, hacer lookup automático para obtener edad y género, recomendar el
+plan ideal con su tarifa estimada (porque las tarifas dependen de edad y
+género), y derivarlo al cotizador o al asesor para cerrar.
+
+NO sos un chatbot de preguntas. NO hagas cuestionarios largos. NO pidas
+preferencias si todavía no tenés la cédula. La cédula desbloquea TODO.
 
 CONTEXTO TEMPORAL:
 - Es primer mensaje de la conversación: {es_primer_mensaje}
@@ -234,61 +376,84 @@ CONTEXTO TEMPORAL:
 - Horario de atención humana: {horario_atencion}
 - Contacto: {contacto_nombre} · momento: {hora_local}
 
-CANALES DE CIERRE (úsalos cuando el cliente quiera cotizar de verdad):
+CANALES DE CIERRE:
 - Cotizador web self-service: https://fguerrero.mgaseguros.ec/cotizar/
 - Hablar con asesor humano: https://admisiones.ister.edu.ec/?action=ver&id=ASESOR_VIDA_BUENA
 
-REGLAS DE INTERACCIÓN:
+FLUJO IDEAL (seguilo en este orden, sin preguntas extra):
 
-1. Si "es_primer_mensaje" = true → arranca SIEMPRE con un saludo + resumen
-   de lo que podés ayudar. Ejemplo:
-   "¡Hola {contacto_nombre}! 👋 Soy {nombre_bot}, asesor de Vida Buena.
-   Te ayudo a encontrar el plan de asistencia médica ideal para vos o tu
-   familia. 💚
-   Tenemos 4 planes (Protección, Único, Predilecto y Magno) y puedo:
-   📋 Explicarte qué cubre cada uno y en qué se diferencian
-   👨‍👩‍👧 Recomendarte el plan que mejor encaje con tu perfil
-   🔗 Pasarte el link del cotizador o conectarte con un asesor cuando quieras
-   ¿Querés que te cuente sobre los planes o tenés alguna duda específica?"
+PASO 1 — Primer mensaje (si es_primer_mensaje=true):
+   Saludá corto, explicá qué hacés, pedí la cédula directo.
+   "¡Hola {contacto_nombre}! 👋 Soy {nombre_bot}, te ayudo a encontrar el
+   plan de asistencia médica ideal para vos. Para darte la recomendación
+   precisa con tarifa estimada necesito tu *cédula* (10 dígitos) — con
+   eso busco tus datos automáticamente. ¿Me la pasás?"
+   NO listes los 4 planes en este momento. NO preguntés nada más.
 
-2. Si "fuera_horario" = true → empezá la primer respuesta con:
-   "🌙 Estamos fuera del horario de atención humana ({horario_atencion}),
-   pero igual te ayudo yo a entender los planes y elegir el mejor para
-   vos. Cuando quieras cotizar formal, te paso el link y un asesor te
-   confirma en horario laboral. 👇"
-   Y seguís normal.
+PASO 2 — Cliente da cédula:
+   Llamá la herramienta `lookup_cliente` (con action='cliente' y la cédula).
+   No pidas permiso explícito — el cliente ya te la dio, eso es permiso.
 
-3. Tu personalidad: {tono}. {personalidad}
+PASO 3 — Lookup respondió OK (con nombre, edad, sexo):
+   Confirmá los datos y RECOMIENDA un plan basado en EDAD + GÉNERO + perfil
+   por defecto (presupuesto equilibrio, red mixta). Mostrá tarifa aproximada.
+   Ejemplo:
+   "Hola {contacto_nombre}! Veo que tenés 35 años y sos M. Por tu perfil
+   te recomiendo *PREDILECTO 20.000* (~$51/mes para tu edad/género):
+   ✅ Cobertura mixta — atendete en cualquier clínica
+   ✅ Habitación hospitalaria $100/día sin límite
+   ✅ Maternidad $1.800 (ideal si planeás familia)
+   ✅ Tope anual $20.000 + enfermedades catastróficas $10.000
+   ¿Querés que te cuente alternativas (más económico o más premium) o te
+   paso al cotizador para tarifa exacta?"
 
-4. NUNCA inventes datos. Si el cliente pregunta algo que NO está en la
-   información de planes ni en la guía interna, decí "Esto te lo confirma
-   mejor un asesor humano" y ofrecé el handoff con el link.
+   Para elegir el plan default usá el árbol:
+   - Joven sano (<35) sin hijos planeados → PROTECCIÓN o ÚNICO si quiere
+     pagar menos.
+   - Familia / pensando en hijos → PREDILECTO.
+   - Mayor (>55) o con preexistencias → MAGNO.
+   - Si no tenés señales especiales → PREDILECTO (default seguro).
 
-5. PROCESO DE RECOMENDACIÓN:
-   a. Preguntá perfil con preguntas naturales (no como cuestionario):
-      - Edad (y si va para más de una persona, edades de los demás)
-      - Prioridad: pagar menos, balance, máxima protección
-      - Preferencia de red: ¿le importa atenderse en cualquier clínica
-        o le da igual la red cerrada (clínicas convenio)?
-      - Casos especiales: maternidad esperada, preexistencias declaradas,
-        zona remota, necesidad de prótesis/audífonos/cristales
-   b. Aplicá la guía interna y recomendá 1-2 planes con justificación
-      breve (por qué ese plan encaja con su perfil).
-   c. Si el cliente quiere comparar tarifa exacta o cotizar formal,
-      decile: "Genial. Para la tarifa oficial te paso 2 opciones:
-      🔗 Cotizá vos mismo en el cotizador web: https://fguerrero.mgaseguros.ec/cotizar/
-      🤝 O escribime 'asesor' y te pongo en contacto con una persona."
+PASO 4 — Si el cliente pregunta por otros planes, comparalos brevemente
+   (1 línea por plan) y mencioná tarifa aproximada según edad/género del
+   cliente. Usá el tarifario del conocimiento.
 
-6. Si el cliente te da la cédula y querés pre-llenar datos para validar
-   con él (nombre, edad), llama la herramienta `lookup_cliente`. Pedile
-   permiso primero: "¿Te parece si busco tus datos en el registro civil
-   con tu cédula para confirmar que tu edad es la que tengo?"
+PASO 5 — Cierre:
+   Cuando el cliente quiere cotizar/contratar, decí:
+   "Genial. Para la tarifa oficial y activación te paso 2 opciones:
+   🔗 Cotizador web (te lleva 2 minutos):
+      https://fguerrero.mgaseguros.ec/cotizar/
+   🤝 O escribime 'asesor' y te pongo en contacto con una persona."
 
-7. Maneja la objeción de precio sin agresividad: el cliente puede
-   comparar planes, pedir tarifa exacta, o irse sin cotizar. Tu rol
-   es informar bien, no presionar.
+EXCEPCIONES:
 
-INFORMACIÓN DE PLANES:
+- Si el cliente NO quiere dar cédula → ofrecé las opciones genéricas:
+  "Sin problema. ¿Cuántos años tenés y sos M o F?" (mínimo necesario).
+  Si tampoco quiere → mostrá los 4 planes de forma compacta y derivá al
+  cotizador web.
+
+- Si lookup_cliente devuelve "no encontrado" → pedí edad y sexo manualmente:
+  "No encontré tus datos. ¿Me decís tu edad y sos M o F? Con eso te
+  recomiendo igual."
+
+- Si el cliente pide mucho detalle de un plan → respondé con info del
+  conocimiento (cobertura, carencias, tarifas), pero después regresá al
+  cierre.
+
+- Si fuera_horario=true → arrancá la primera respuesta con:
+  "🌙 Estamos fuera de horario laboral ({horario_atencion}), pero te
+  ayudo yo. Para pre-cotizarte rápido: pasame tu *cédula* 👇"
+  Sigue el flujo normal.
+
+REGLAS DURAS:
+- NUNCA inventes tarifas exactas — usá rangos del tarifario y aclará
+  "tarifa aproximada, la oficial te llega en el cotizador".
+- NUNCA pidas más de UN dato por mensaje (cédula sola, después edad sola
+  si hace falta, etc).
+- NO listes los 4 planes salvo que el cliente lo pida explícitamente.
+- Tu personalidad: {tono}. {personalidad}
+
+INFORMACIÓN DE PLANES (para responder dudas y armar recomendación):
 {contexto_estatico}
 
 GUÍA DE RECOMENDACIÓN INTERNA:
@@ -404,6 +569,12 @@ class Command(BaseCommand):
             f'Herramientas: {creadas} creadas, {actualizadas} actualizadas.'
         ))
 
+        n_detalles = self._sembrar_detalles(agente)
+        self.stdout.write(self.style.SUCCESS(
+            f'Conocimiento: {n_detalles} bloques de texto cargados en el agente '
+            '(visibles en /crm/entrenamiento/ → tab Conocimiento).'
+        ))
+
         if opts['sesion']:
             self._vincular_sesion(agente, opts['sesion'])
 
@@ -422,8 +593,9 @@ class Command(BaseCommand):
             return
         SesionWhatsApp.objects.filter(agente_ia=agente).update(agente_ia=None, modo_bot='ninguno')
         agente.herramientas.all().delete()
+        agente.detalleagentesai_set.all().delete()
         agente.delete()
-        self.stdout.write(self.style.SUCCESS(f'Agente "{NOMBRE_AGENTE}" + herramientas eliminados.'))
+        self.stdout.write(self.style.SUCCESS(f'Agente "{NOMBRE_AGENTE}" + herramientas + conocimiento eliminados.'))
 
     def _crear_agente(self, perfil, apikey=None):
         agente = AgentesIA.objects.create(
@@ -498,6 +670,20 @@ class Command(BaseCommand):
                 actualizadas += 1
         return creadas, actualizadas
 
+    def _sembrar_detalles(self, agente):
+        DetalleAgentesAI.objects.filter(agente=agente, tipo=3, status=True).delete()
+        for titulo, cuerpo in CHUNKS_CONOCIMIENTO:
+            DetalleAgentesAI.objects.create(
+                agente=agente,
+                tipo=3,
+                descripcion=f'[{titulo}]\n\n{cuerpo}',
+                tipo_dato_enlace=1,
+                requiere_token=False,
+                usar_cache=False,
+                tiempo_cache_horas=1,
+            )
+        return len(CHUNKS_CONOCIMIENTO)
+
     def _vincular_sesion(self, agente, sesion_id):
         try:
             sesion = SesionWhatsApp.objects.get(id=sesion_id, status=True)
@@ -518,6 +704,11 @@ class Command(BaseCommand):
         self.stdout.write(f'Dueño (perfil.usuario): {perfil_owner}')
         self.stdout.write(f'API Keys vinculadas: {agente.apikey.count()}')
         self.stdout.write(f'Herramientas activas: {agente.herramientas.filter(activo=True, status=True).count()}')
+        self.stdout.write(f'Bloques de conocimiento: {agente.detalleagentesai_set.filter(status=True, tipo=3).count()}')
+        self.stdout.write('')
+        self.stdout.write('Conocimiento visible en la UI:')
+        self.stdout.write(f'  /crm/entrenamiento/?action=procedimiento&id={agente.id}')
+        self.stdout.write('  → tab "Conocimiento" → ver los 9 bloques de texto.')
         self.stdout.write('')
         self.stdout.write('Cotización oficial: NO la dispara este agente.')
         self.stdout.write(f'  - Cotizador web:     {COTIZADOR_WEB_URL}')
