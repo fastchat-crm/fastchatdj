@@ -162,12 +162,52 @@
 
             <div class="form-row">
                 <label>Duración de la sesión (minutos)</label>
-                <input type="number" name="min_sesion" value="{{ sesion.min_sesion|default:60 }}"
-                       min="1" max="180" step="1" placeholder="60">
+                <input type="number" name="min_sesion" id="inp-min-sesion"
+                       value="{{ sesion.min_sesion|default:60 }}"
+                       min="1" max="720" step="1" placeholder="60">
+                <div class="d-flex flex-wrap gap-1 mt-2" id="min-sesion-presets">
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="60">1 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="120">2 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="180">3 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="240">4 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="300">5 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="360">6 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="420">7 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="480">8 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="540">9 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="600">10 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="660">11 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="720">12 h</button>
+                </div>
                 <small class="muted d-block mt-1">
-                    Minutos de inactividad antes de cerrar la conversación. Máx 180 (3 h).
+                    Minutos de inactividad antes de cerrar la conversación. Máx 720 (12 h) —
+                    la ventana de servicio de WhatsApp es 24 h desde el último mensaje del contacto.
                 </small>
             </div>
+            <script>
+                (function () {
+                    const inp = document.getElementById('inp-min-sesion');
+                    const box = document.getElementById('min-sesion-presets');
+                    if (!inp || !box) return;
+                    function marcarActivo() {
+                        const val = String(inp.value || '').trim();
+                        box.querySelectorAll('button[data-min]').forEach(function (b) {
+                            const on = b.dataset.min === val;
+                            b.classList.toggle('conex-btn-primary', on);
+                            b.classList.toggle('conex-btn-light', !on);
+                        });
+                    }
+                    box.querySelectorAll('button[data-min]').forEach(function (b) {
+                        b.addEventListener('click', function () {
+                            inp.value = b.dataset.min;
+                            marcarActivo();
+                            inp.dispatchEvent(new Event('change', {bubbles: true}));
+                        });
+                    });
+                    inp.addEventListener('input', marcarActivo);
+                    marcarActivo();
+                })();
+            </script>
 
             <div class="form-row">
                 <label>Mensaje de bienvenida</label>

@@ -163,9 +163,8 @@ class SesionWhatsApp(ModeloBase):
             self.ultima_conexion = timezone.now()
         else:
             self.ultima_conexion = None
-        # Validar que min_sesion no supere 180 minutos (3 horas)
-        if self.min_sesion > 180:
-            raise ValueError("El tiempo de sesión no puede superar las 3 horas (180 minutos).")
+        if self.min_sesion and self.min_sesion > 720:
+            raise ValueError("El tiempo de sesión no puede superar las 12 horas (720 minutos).")
         if not self.min_sesion:
             self.min_sesion = 60
         # Limpiar espacios en blanco de los mensajes
