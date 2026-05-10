@@ -325,8 +325,8 @@ class Command(BaseCommand):
                             help='Solo borra el agente y sale (no recrea).')
         parser.add_argument('--apikey', type=int, default=None,
                             help='ID de ApiKeyIA a vincular (opcional — si no, asignala luego desde la UI).')
-        parser.add_argument('--usuario', type=int, default=None,
-                            help='ID del Usuario dueño del agente. Si no, usa el primer superusuario activo.')
+        parser.add_argument('--usuario', type=int, default=1,
+                            help='ID del Usuario dueño del agente (default: 1).')
         parser.add_argument('--sesion', type=int, default=None,
                             help='ID de SesionWhatsApp para asignar el agente como modo_bot=ia.')
         parser.add_argument('--base-url', type=str, default=BASE_URL_DEFAULT,
@@ -392,17 +392,10 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'Agente "{NOMBRE_AGENTE}" + herramientas eliminados.'))
 
     def _resolver_usuario(self, usuario_id):
-        if usuario_id:
-            try:
-                return User.objects.get(id=usuario_id)
-            except User.DoesNotExist:
-                raise CommandError(f'No existe Usuario con id={usuario_id}')
-        u = User.objects.filter(is_superuser=True, is_active=True).order_by('id').first()
-        if not u:
-            raise CommandError(
-                'No hay superusuarios activos. Pasá --usuario <id> con un usuario válido.'
-            )
-        return u
+        try:
+            return User.objects.get(id=usuario_id)
+        except User.DoesNotExist:
+            raise CommandError(f'No existe Usuario con id={usuario_id}')
 
     def _crear_agente(self, perfil, apikey=None):
         agente = AgentesIA.objects.create(
