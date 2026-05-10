@@ -1124,6 +1124,12 @@ def entrenamiento_ia_view(request):
                                 'aprobada':    _faqs_qs.filter(estado='aprobada').count(),
                                 'desactivada': _faqs_qs.filter(estado='desactivada').count(),
                             }
+                            data['faqs'] = _faqs_qs.select_related(
+                                'conversacion_origen', 'mensaje_origen', 'auditoria_origen',
+                            ).order_by('-prioridad', '-fecha_registro')
+                            data['contadores'] = data['faqs_contadores']
+                            data['estado_filtro'] = ''
+                            data['agente'] = filtro
                         data['titulo_pagina'] = f'Editar agente IA — {filtro}' if filtro else 'Nuevo agente IA'
                         data['ruta_post'] = request.path
                         return render(request, 'crm/entrenamiento/agente/form_pagina.html', data)

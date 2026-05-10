@@ -530,42 +530,48 @@
         </div>
 
         <div id="faq-content">
-            <div class="text-center py-3 text-muted"><i class="fas fa-spinner fa-spin me-1"></i>Cargando FAQs…</div>
+            {% include 'crm/entrenamiento/faq/lista.html' with faqs=faqs agente=filtro contadores=contadores estado_filtro=estado_filtro %}
         </div>
     </div>
 
-    {# Scripts del tab FAQ — carga la lista al abrir por primera vez #}
     <script>
     (function() {
         'use strict';
         const RUTA = '{{ ruta }}';
         const CSRF = '{{ csrf_token }}';
         const AGENTE_ID = '{{ filtro.id }}';
-        let _faqLoaded = false;
 
         function cargarLista(estado) {
             const params = {action: 'faq_lista', agente_id: AGENTE_ID};
             if (estado) params.estado = estado;
-            $.get(RUTA, params, function(r) {
-                if (r.result) { $('#faq-content').html(r.data); _faqLoaded = true; }
-                else { $('#faq-content').html('<div class="alert alert-warning">'+(r.message||'Error')+'</div>'); }
-            }, 'json');
+            $.ajax({
+                type: 'GET', url: RUTA, data: params, dataType: 'json',
+                success: function(r) {
+                    if (r.result) { $('#faq-content').html(r.data); }
+                    else { alertaWarning(r.message || 'Error cargando FAQs.'); }
+                },
+                error: function(xhr) {
+                    alertaWarning('Error de conexión al cargar FAQs (' + xhr.status + ').');
+                },
+            });
         }
+        window.fCargarLista = cargarLista;
 
         function abrirForm(faqId) {
             const params = {action: 'faq_form', agente_id: AGENTE_ID};
             if (faqId) params.id = faqId;
-            $.get(RUTA, params, function(r) {
-                if (r.result) { $('#faq-content').html(r.data); }
-                else { alertaWarning(r.message || 'Error'); }
-            }, 'json');
+            $.ajax({
+                type: 'GET', url: RUTA, data: params, dataType: 'json',
+                success: function(r) {
+                    if (r.result) { $('#faq-content').html(r.data); }
+                    else { alertaWarning(r.message || 'Error abriendo formulario.'); }
+                },
+                error: function(xhr) {
+                    alertaWarning('Error de conexión (' + xhr.status + ').');
+                },
+            });
         }
         window.fAbrirForm = abrirForm;
-
-        // Cargar lista cuando el tab se muestre por primera vez
-        $(document).on('shown.bs.tab', 'button[data-bs-target="#at-faqs"]', function() {
-            if (!_faqLoaded) cargarLista();
-        });
     })();
     </script>
     {% endif %}

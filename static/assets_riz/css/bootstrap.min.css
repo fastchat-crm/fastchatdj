@@ -2724,6 +2724,7 @@ progress {
 }
 
 textarea.form-control {
+    background: white!important;
     min-height: calc(1.5em + 1.034rem + calc(var(--bs-border-width) * 2))
 }
 
