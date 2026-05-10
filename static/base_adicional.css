@@ -673,3 +673,8 @@ a.badge-aqua.focus, a.badge-aqua:focus {
     margin-bottom: 3rem;
 }
 
+.form-control,
+.form-control:focus {
+    background-color: #ffffff !important;
+}
+

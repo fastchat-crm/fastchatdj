@@ -40,8 +40,10 @@ def cotizar_am_ia(request):
 
     edad_titular = data.get('edad_titular')
     if edad_titular in (None, ''):
+        logger.warning('cotizar_am_ia rechazo: edad_titular faltante. data=%s', data)
         return JsonResponse({
             'status': 'error',
+            'codigo_error': 'param_faltante',
             'message': 'Falta edad_titular para cotizar.',
         })
 
@@ -59,9 +61,11 @@ def cotizar_am_ia(request):
         pass
 
     if conversacion is None:
+        logger.error('cotizar_am_ia rechazo: conv id no resolvió. raw=%r', conv_id_raw)
         return JsonResponse({
             'status': 'error',
-            'message': 'No pude identificar la conversación. Reintentá en un momento.',
+            'codigo_error': 'conversacion_no_resuelta',
+            'message': f'No pude identificar la conversación (id_recibido={conv_id_raw!r}).',
         })
 
     variables = {
@@ -96,31 +100,71 @@ def cotizar_am_ia(request):
 
     endpoint = EndpointApiChatbot.objects.filter(nombre=ENDPOINT_NOMBRE_DEFAULT, status=True).first()
     if endpoint is None:
+        logger.error(
+            'cotizar_am_ia rechazo: EndpointApiChatbot "%s" no existe o inactivo.',
+            ENDPOINT_NOMBRE_DEFAULT,
+        )
         return JsonResponse({
             'status': 'error',
-            'message': 'No hay EndpointApiChatbot configurado para Vida Buena. Avisá al administrador.',
+            'codigo_error': 'endpoint_no_configurado',
+            'message': (
+                f'CRM no tiene endpoint "{ENDPOINT_NOMBRE_DEFAULT}" configurado/activo. '
+                f'El administrador debe crearlo en /crm/endpoints_api/.'
+            ),
         })
 
     try:
         resultado = cotizar_am(conversacion, variables, config, endpoint=endpoint)
     except Exception as ex:
-        logger.exception('cotizar_am_ia fallo: %s', ex)
+        logger.exception('cotizar_am_ia excepcion conv=%s: %s', conversacion.id, ex)
         return JsonResponse({
             'status': 'error',
-            'message': f'Error interno cotizando: {type(ex).__name__}.',
+            'codigo_error': 'excepcion_python',
+            'message': f'Error interno: {type(ex).__name__}: {str(ex)[:200]}',
         })
 
     etiqueta = (resultado or {}).get('etiqueta', 'error')
+    status_code = (resultado or {}).get('status', 0)
+    body_resp = (resultado or {}).get('body') or {}
+
     if etiqueta == 'ok':
+        logger.info(
+            'cotizar_am_ia OK conv=%s status=%s msg=%r',
+            conversacion.id, status_code,
+            body_resp.get('message') if isinstance(body_resp, dict) else '',
+        )
         return JsonResponse({
             'status': 'ok',
+            'codigo_error': '',
             'message': (
                 'Cotización enviada al motor oficial. En los próximos minutos '
                 'recibís por WhatsApp y email la recomendación con tarifa '
                 'exacta y los planes alternativos. 💚'
             ),
         })
+
+    error_msg = (resultado or {}).get('error') or 'Error desconocido del cotizador.'
+    if status_code == 502 or status_code == 0:
+        codigo = 'webhook_red'
+        diag = f'red/timeout: {error_msg}'
+    elif 400 <= status_code < 500:
+        codigo = f'webhook_4xx_{status_code}'
+        diag = f'webhook rechazó: {error_msg}'
+    elif 500 <= status_code < 600:
+        codigo = f'webhook_5xx_{status_code}'
+        diag = f'webhook caído: {error_msg}'
+    else:
+        codigo = 'webhook_otro'
+        diag = error_msg
+
+    logger.error(
+        'cotizar_am_ia FAIL conv=%s codigo=%s status=%s body=%r',
+        conversacion.id, codigo, status_code, str(body_resp)[:500],
+    )
     return JsonResponse({
         'status': 'error',
-        'message': (resultado or {}).get('error') or 'No pudimos enviar la cotización. Reintentá en unos minutos.',
+        'codigo_error': codigo,
+        'http_status': status_code,
+        'message': f'No pudimos enviar la cotización [{codigo}]: {diag}',
+        'webhook_response_preview': str(body_resp)[:300],
     })

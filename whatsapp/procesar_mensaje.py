@@ -440,6 +440,13 @@ def process_incoming_message(session, event_data, channel_layer):
         # No interfiere con IA: modos 'tradicional' e 'ia' son exclusivos.
         # ────────────────────────────────────────────────────────────
         _modo_bot = (session.modo_bot or 'ia')
+        if _modo_bot == 'ninguno':
+            _traza(
+                etapa='modo_bot_ninguno', sesion=session, conversacion=conversation, mensaje=message,
+                numero=from_number, nivel='info',
+                detalle={'modo_bot': 'ninguno', 'accion': 'mensaje_guardado_sin_respuesta'},
+            )
+            return JsonResponse({'status': 'ok', 'modo': 'ninguno', 'sin_respuesta': True})
         if _modo_bot == 'tradicional':
             _ex_motor = None
             try:
