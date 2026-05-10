@@ -356,72 +356,16 @@ def process_incoming_message(session, event_data, channel_layer):
         #     ANTES de la IA (evita gastar tokens fuera de hora).
         # Throttle del aviso: 1 vez por conversación cada 6h.
         try:
-            from .services_horarios import dentro_de_horario, mensaje_fuera_horario_configurado
+            from .services_horarios import dentro_de_horario
             _en_horario = dentro_de_horario(session)
             if not _en_horario:
                 _modo_actual = (session.modo_bot or 'ia')
-                if _modo_actual == 'tradicional':
-                    # Solo log — el motor del flujo se ejecuta normalmente.
-                    _traza(
-                        etapa='webhook_recibido', sesion=session, conversacion=conversation, mensaje=message,
-                        numero=from_number, nivel='info',
-                        detalle={'fuera_horario': True, 'modo_bot': 'tradicional',
-                                 'accion': 'continua_motor_flujo'},
-                    )
-                else:
-                    # IA o ninguno → enviar aviso + cortar para no invocar LLM.
-                    _msg_personalizado = mensaje_fuera_horario_configurado(session)
-                    _msg_fuera = _msg_personalizado or (
-                        "👋 ¡Gracias por escribirnos! En este momento estamos fuera "
-                        "de nuestro horario de atención. Te responderemos en cuanto "
-                        "volvamos a estar disponibles. 🕐"
-                    )
-                    _key_fuera = f'fuera_horario_aviso_{conversation.id}'
-                    # cache.add es atómico: solo un proceso/worker gana el lock
-                    # cuando llegan webhooks concurrentes del mismo cliente.
-                    _lock_aceptado = cache.add(_key_fuera, True, 6 * 3600)
-                    _ya_avisado = not _lock_aceptado
-                    _envio_ok = None
-                    if _lock_aceptado:
-                        try:
-                            _r = whatsapp_service.send_text_message(
-                                session.session_id, contacto.from_number, _msg_fuera, simularEscritura=True
-                            )
-                            _envio_ok = bool((_r or {}).get('success'))
-                            # Persistir en el historial de la conversación
-                            # para que aparezca en /whatsapp/conversaciones/<id>/.
-                            if _envio_ok:
-                                try:
-                                    _msg_id_ext = (_r or {}).get('message_id') or ''
-                                    MensajeWhatsApp.objects.create(
-                                        conversacion=conversation,
-                                        remitente=session.numero,
-                                        mensaje=_msg_fuera,
-                                        tipo='texto',
-                                        fecha=timezone.now(),
-                                        mensaje_id_externo=_msg_id_ext,
-                                        leido=True,
-                                        fecha_leido=timezone.now(),
-                                        es_automatico=True,
-                                    )
-                                except Exception as _save_ex:
-                                    logger.warning("Fuera_horario: no se pudo persistir aviso: %s", _save_ex)
-                        except Exception as _send_ex:
-                            logger.exception("Fuera_horario: error enviando aviso: %s", _send_ex)
-                            _envio_ok = False
-                    _traza(
-                        etapa='webhook_recibido', sesion=session, conversacion=conversation, mensaje=message,
-                        numero=from_number, nivel='info',
-                        detalle={
-                            'fuera_horario': True,
-                            'modo_bot': _modo_actual,
-                            'aviso_throttled': _ya_avisado,
-                            'envio_ok': _envio_ok,
-                            'mensaje_personalizado': bool(_msg_personalizado),
-                            'mensaje_preview': _msg_fuera[:140],
-                        },
-                    )
-                    return JsonResponse({'status': 'ok', 'fuera_horario': True, 'envio_ok': _envio_ok})
+                _traza(
+                    etapa='webhook_recibido', sesion=session, conversacion=conversation, mensaje=message,
+                    numero=from_number, nivel='info',
+                    detalle={'fuera_horario': True, 'modo_bot': _modo_actual,
+                             'accion': 'continua_flujo_ia_acuse_en_prompt'},
+                )
         except Exception as _h_ex:
             logger.warning("Guard horario falló (continúa flujo normal): %s", _h_ex)
         # ─────────────────────────────────────────────────────────────────

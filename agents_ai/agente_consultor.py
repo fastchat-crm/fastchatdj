@@ -517,6 +517,24 @@ class AgenteConsultor:
             'primera_vez_hoy': primera_vez_hoy,
         }
 
+    def _vars_horario(self) -> dict:
+        fuera = 'false'
+        etiqueta = '(no configurado)'
+        try:
+            sesion = self.conversacion.sesion if self.conversacion else None
+            if sesion:
+                from whatsapp.services_horarios import dentro_de_horario
+                fuera = 'false' if dentro_de_horario(sesion) else 'true'
+                try:
+                    horarios = sesion.horarios.filter(status=True).order_by('dia_semana', 'hora_inicio')
+                    if horarios.exists():
+                        etiqueta = ' · '.join(str(h) for h in horarios[:7])
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return {'fuera_horario': fuera, 'horario_atencion': etiqueta}
+
     # ------------------------------------------------------------------
     # Historial
     # ------------------------------------------------------------------
@@ -817,6 +835,15 @@ class AgenteConsultor:
         # Solo si el template la referencia, para ahorrar una query.
         if 'historial_contacto' in _input_vars:
             _vars_todas['historial_contacto'] = self._historial_persistente()
+        if _input_vars & {'fuera_horario', 'horario_atencion'}:
+            _vars_todas.update(self._vars_horario())
+        if 'es_primer_mensaje' in _input_vars:
+            try:
+                _vars_todas['es_primer_mensaje'] = (
+                    'true' if self.conversacion and self.conversacion.mensajes.count() <= 1 else 'false'
+                )
+            except Exception:
+                _vars_todas['es_primer_mensaje'] = 'false'
         _kwargs = {k: v for k, v in _vars_todas.items() if k in _input_vars}
         try:
             return self._prompt_tpl.format(**_kwargs)

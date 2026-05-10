@@ -463,10 +463,16 @@
     function abrirDetail(html) {
         if (!detailBackdrop) return;
         detailContent.innerHTML = html;
+        detailContent.querySelectorAll('script').forEach(function (old) {
+            var s = document.createElement('script');
+            for (var i = 0; i < old.attributes.length; i++) {
+                s.setAttribute(old.attributes[i].name, old.attributes[i].value);
+            }
+            s.text = old.textContent;
+            old.parentNode.replaceChild(s, old);
+        });
         detailBackdrop.classList.add('open');
         detailBackdrop.setAttribute('aria-hidden', 'false');
-        // Re-bindear forms.js al partial recién insertado. Los <script>
-        // dentro de innerHTML NO se ejecutan, así que reinyectamos el archivo.
         rebindFormsJs();
     }
 
