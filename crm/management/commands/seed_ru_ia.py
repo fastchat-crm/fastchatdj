@@ -29,11 +29,14 @@ Uso:
     python manage.py seed_ru_ia --delete
 """
 
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from crm.models import AgentesIA, ApiKeyIA, HerramientaAgente
+from crm.models import AgentesIA, ApiKeyIA, HerramientaAgente, PerfilNegocioIA
 from whatsapp.models import SesionWhatsApp
+
+User = get_user_model()
 
 
 NOMBRE_AGENTE = 'Lucía RU IA'
@@ -322,6 +325,8 @@ class Command(BaseCommand):
                             help='Solo borra el agente y sale (no recrea).')
         parser.add_argument('--apikey', type=int, default=None,
                             help='ID de ApiKeyIA a vincular (opcional — si no, asignala luego desde la UI).')
+        parser.add_argument('--usuario', type=int, default=None,
+                            help='ID del Usuario dueño del agente. Si no, usa el primer superusuario activo.')
         parser.add_argument('--sesion', type=int, default=None,
                             help='ID de SesionWhatsApp para asignar el agente como modo_bot=ia.')
         parser.add_argument('--base-url', type=str, default=BASE_URL_DEFAULT,
@@ -340,6 +345,12 @@ class Command(BaseCommand):
         creando = agente is None
 
         if creando:
+            usuario = self._resolver_usuario(opts['usuario'])
+            perfil, _ = PerfilNegocioIA.objects.get_or_create(usuario=usuario)
+            self.stdout.write(self.style.HTTP_INFO(
+                f'Usuario dueño: {usuario.username} (id={usuario.id}) · perfil_negocio={perfil.id}'
+            ))
+
             apikey = None
             if opts['apikey']:
                 try:
@@ -347,12 +358,12 @@ class Command(BaseCommand):
                 except ApiKeyIA.DoesNotExist:
                     raise CommandError(f'No existe ApiKeyIA activa con id={opts["apikey"]}')
 
-            agente = self._crear_agente(apikey)
+            agente = self._crear_agente(perfil, apikey)
             self.stdout.write(self.style.SUCCESS(f'Agente creado: {agente.nombre} (id={agente.id})'))
             if apikey is None:
                 self.stdout.write(self.style.WARNING(
                     'Sin --apikey: el agente quedó SIN ApiKeyIA vinculada. '
-                    f'Asignala manualmente desde /crm/agentes_ai/?accion=editar&id={agente.id} '
+                    f'Asignala manualmente desde /crm/entrenamiento/ '
                     'antes de probarlo (sin api key no puede invocar al LLM).'
                 ))
         else:
@@ -380,8 +391,22 @@ class Command(BaseCommand):
         agente.delete()
         self.stdout.write(self.style.SUCCESS(f'Agente "{NOMBRE_AGENTE}" + herramientas eliminados.'))
 
-    def _crear_agente(self, apikey=None):
+    def _resolver_usuario(self, usuario_id):
+        if usuario_id:
+            try:
+                return User.objects.get(id=usuario_id)
+            except User.DoesNotExist:
+                raise CommandError(f'No existe Usuario con id={usuario_id}')
+        u = User.objects.filter(is_superuser=True, is_active=True).order_by('id').first()
+        if not u:
+            raise CommandError(
+                'No hay superusuarios activos. Pasá --usuario <id> con un usuario válido.'
+            )
+        return u
+
+    def _crear_agente(self, perfil, apikey=None):
         agente = AgentesIA.objects.create(
+            perfil=perfil,
             nombre=NOMBRE_AGENTE,
             descripcion=(
                 'Asistente virtual conversacional del Instituto Superior Tecnológico '
@@ -463,17 +488,19 @@ class Command(BaseCommand):
         ))
 
     def _resumen(self, agente):
+        perfil_owner = agente.perfil.usuario.username if (agente.perfil and agente.perfil.usuario) else '(sin dueño)'
         self.stdout.write('')
         self.stdout.write(self.style.HTTP_INFO('=== RESUMEN ==='))
         self.stdout.write(f'Agente: {agente.nombre} (id={agente.id})')
+        self.stdout.write(f'Dueño (perfil.usuario): {perfil_owner}')
         self.stdout.write(f'API Keys vinculadas: {agente.apikey.count()}')
         self.stdout.write(f'Herramientas activas: {agente.herramientas.filter(activo=True, status=True).count()}')
         self.stdout.write('')
-        self.stdout.write('Probá el agente desde:')
-        self.stdout.write(f'  /crm/agentes_ai/?accion=editar&id={agente.id}')
+        self.stdout.write('IMPORTANTE: el agente solo aparece en /crm/entrenamiento/ si lo abrís logueado')
+        self.stdout.write(f'como el usuario "{perfil_owner}". Otros usuarios no lo ven (scope por perfil).')
         self.stdout.write('')
-        self.stdout.write('Verificá tools y logs en:')
-        self.stdout.write(f'  /crm/herramientas_agente/?agente={agente.id}')
+        self.stdout.write('Probá el agente desde:')
+        self.stdout.write('  /crm/entrenamiento/')
         self.stdout.write('')
         self.stdout.write('Si quedó vinculado a una sesión, mandale mensajes de prueba:')
         self.stdout.write('  - "hola"')
