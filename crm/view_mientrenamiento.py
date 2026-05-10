@@ -125,9 +125,15 @@ def entrenamiento_ia_view(request):
 
                             log(f"Registro un agente IA {agente.__str__()}", request, "add", obj=agente.id)
                             if request.POST.get('redirect_to'):
-                                messages.success(request, "Agente creado correctamente")
-                                return redirect(request.POST['redirect_to'])
-                            res_json.append({'error': False, "reload": True})
+                                res_json.append({
+                                    'error': False,
+                                    'msg_to': True,
+                                    'to': request.POST['redirect_to'],
+                                    'msg_title': 'Agente creado',
+                                    'msg_body': f'{agente.nombre} fue registrado correctamente.',
+                                })
+                            else:
+                                res_json.append({'error': False, "reload": True})
                         else:
                             raise FormError(form)
                     elif action == 'changeagente':
@@ -149,9 +155,15 @@ def entrenamiento_ia_view(request):
 
                             log(f"Edito un agente IA {agente.__str__()}", request, "change", obj=agente.id)
                             if request.POST.get('redirect_to'):
-                                messages.success(request, "Agente actualizado correctamente")
-                                return redirect(request.POST['redirect_to'])
-                            res_json.append({'error': False, "reload": True})
+                                res_json.append({
+                                    'error': False,
+                                    'msg_to': True,
+                                    'to': request.POST['redirect_to'],
+                                    'msg_title': 'Agente actualizado',
+                                    'msg_body': f'{agente.nombre} se guardó correctamente.',
+                                })
+                            else:
+                                res_json.append({'error': False, "reload": True})
                         else:
                             raise FormError(form)
                     elif action == 'deleteagente':
