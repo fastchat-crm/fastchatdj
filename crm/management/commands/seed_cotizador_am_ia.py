@@ -478,20 +478,15 @@ REGLAS DURAS:
   primer mensaje SIEMPRE debe presentarte + pedir cédula como dice PASO 1.
 - Tu personalidad: {tono}. {personalidad}
 
-INFORMACIÓN DE PLANES (para responder dudas y armar recomendación):
-{contexto_estatico}
-
-GUÍA DE RECOMENDACIÓN INTERNA:
-{guia_recomendacion}
-
-PREGUNTAS FRECUENTES (top {faqs_count}):
-{faqs}
-
 HISTORIAL RECIENTE:
-{historial}
+{contexto_extra}
 
-PREGUNTA DEL CLIENTE:
-{pregunta}
+INFORMACIÓN DE PLANES Y GUÍA DE RECOMENDACIÓN (úsala como única fuente de verdad):
+====
+{context}
+====
+
+PREGUNTA DEL CLIENTE: {question}
 
 Tu respuesta:
 """.strip()

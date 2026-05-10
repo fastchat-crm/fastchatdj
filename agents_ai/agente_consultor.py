@@ -380,6 +380,8 @@ class AgenteConsultor:
             'estado_animo', 'guia_animo',
             # Memoria persistente cruzada (resúmenes de conversaciones anteriores)
             'historial_contacto',
+            # Horario laboral + primer mensaje (agregadas para agentes que las usen)
+            'fuera_horario', 'horario_atencion', 'es_primer_mensaje',
         }
         _tpl_text = prompt_template_text
         if _tpl_text:

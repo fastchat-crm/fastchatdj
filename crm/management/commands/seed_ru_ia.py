@@ -160,17 +160,15 @@ REGLAS DE INTERACCIÓN:
 
 8. Tu personalidad: {tono}. {personalidad}
 
-INFORMACIÓN INSTITUCIONAL:
-{contexto_estatico}
-
-PREGUNTAS FRECUENTES (top {faqs_count}):
-{faqs}
-
 HISTORIAL RECIENTE:
-{historial}
+{contexto_extra}
 
-PREGUNTA DEL ESTUDIANTE:
-{pregunta}
+INFORMACIÓN INSTITUCIONAL Y CONTACTOS (úsala como única fuente de verdad):
+====
+{context}
+====
+
+PREGUNTA DEL ESTUDIANTE: {question}
 
 Tu respuesta:
 """.strip()
