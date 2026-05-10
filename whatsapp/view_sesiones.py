@@ -288,6 +288,22 @@ def _accion_editar(request):
     sesion.mensaje_bienvenida = (request.POST.get('mensaje_bienvenida') or '').strip() or None
     sesion.mensaje_despedida   = (request.POST.get('mensaje_despedida')   or '').strip() or None
     sesion.mensaje_handoff     = (request.POST.get('mensaje_handoff')     or '').strip() or None
+    min_sesion_raw = (request.POST.get('min_sesion') or '').strip()
+    if min_sesion_raw:
+        if not min_sesion_raw.isdigit():
+            return JsonResponse([{
+                'error': True,
+                'message': 'La duración de la sesión debe ser un número entero de minutos.',
+                'form': [{'min_sesion': 'Valor inválido.'}],
+            }], safe=False)
+        min_sesion_val = int(min_sesion_raw)
+        if min_sesion_val < 1 or min_sesion_val > 180:
+            return JsonResponse([{
+                'error': True,
+                'message': 'La duración de la sesión debe estar entre 1 y 180 minutos.',
+                'form': [{'min_sesion': 'Rango permitido: 1 a 180.'}],
+            }], safe=False)
+        sesion.min_sesion = min_sesion_val
     # Agente IA (opcional — llega como id o vacio)
     agente_id = request.POST.get('agente_ia') or ''
     if agente_id.isdigit():

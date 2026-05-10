@@ -79,7 +79,8 @@
       "PowerShell(pycheck *)",
       "Bash(pycheck C:/DESARROLLO_PROYECTOS/fastchat/fastchatdj/voz/consumers.py)",
       "Skill(update-config)",
-      "PowerShell($j = Get-Content C:\\\\Users\\\\aaron\\\\.claude\\\\settings.json -Raw | ConvertFrom-Json; $j.hooks.SessionStart[0].hooks[0].command)"
+      "PowerShell($j = Get-Content C:\\\\Users\\\\aaron\\\\.claude\\\\settings.json -Raw | ConvertFrom-Json; $j.hooks.SessionStart[0].hooks[0].command)",
+      "Bash(pycheck whatsapp/view_sesiones.py)"
     ]
   },
   "hooks": {
