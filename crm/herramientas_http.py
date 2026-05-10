@@ -118,9 +118,16 @@ def ejecutar_herramienta(herramienta, valores: dict, conversacion=None) -> str:
         restantes = {k: v for k, v in valores.items() if k not in claves_en_path}
 
         # 3. Armar request según ubicacion_params
+        _headers = {**(herramienta.headers or {}), 'User-Agent': 'FastChatDJ-Bot/1.0'}
+        try:
+            _conv_id = getattr(conversacion, 'id', None) if conversacion else None
+            if _conv_id:
+                _headers['X-Conversacion-Id'] = str(_conv_id)
+        except Exception:
+            pass
         kwargs_req = {
             'timeout': timeout,
-            'headers': {**(herramienta.headers or {}), 'User-Agent': 'FastChatDJ-Bot/1.0'},
+            'headers': _headers,
             'allow_redirects': False,
         }
         if herramienta.metodo == 'GET':

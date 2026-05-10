@@ -162,7 +162,7 @@
 
             <div class="form-row">
                 <label>Duración de la sesión (minutos)</label>
-                <input type="number" name="min_sesion" id="inp-min-sesion"
+                <input type="number" class="form-control" name="min_sesion" id="inp-min-sesion"
                        value="{{ sesion.min_sesion|default:60 }}"
                        min="1" max="720" step="1" placeholder="60"
                        oninput="window.marcarPresetMinSesion && window.marcarPresetMinSesion()">

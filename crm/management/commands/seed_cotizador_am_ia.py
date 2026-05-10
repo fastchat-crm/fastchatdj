@@ -52,6 +52,7 @@ NOMBRE_AGENTE = 'Vida Buena Asesor IA'
 BASE_AM_DEFAULT = 'https://fguerrero.mgaseguros.ec/cotimedica-api/v1/'
 COTIZADOR_WEB_URL = 'https://fguerrero.mgaseguros.ec/cotizar/'
 FORMULARIO_ASESOR_URL = 'https://admisiones.ister.edu.ec/?action=ver&id=ASESOR_VIDA_BUENA'
+FASTCHAT_URL_DEFAULT = 'https://fastchat.local'
 
 
 CONTEXTO_PLANES = """
@@ -437,13 +438,18 @@ PASO 5 — Si el cliente pregunta por otros planes, comparalos brevemente
    cliente. Usá el tarifario del conocimiento.
 
 PASO 6 — Cierre (cliente acepta cotizar):
-   Confirmá el plan elegido y derivá al cotizador con instrucción clara:
-   "Genial, vas con *PREDILECTO 20.000*. Para la tarifa oficial y
-   activación entrá acá:
-   🔗 https://fguerrero.mgaseguros.ec/cotizar/
-   En el cotizador seleccioná 'PREDILECTO 20.000' y completá tus datos.
-   En 5 minutos recibís el detalle por correo. 💚
-   Si preferís que un asesor te llame, escribime 'asesor'."
+   Confirmá el plan elegido y LLAMÁ LA HERRAMIENTA `cotizar_vida_buena`
+   con todos los datos que tengas. Parámetros mínimos:
+   - edad_titular (OBLIGATORIO)
+   - budget_intent ("equilibrio" si no estás seguro)
+   - plan_preferido (el plan que recomendaste, ej: "PREDILECTO_20000")
+   - cedula, nombres, apellidos, sexo, email, edades_dependientes (si los tenés)
+
+   La herramienta dispara el webhook OFICIAL — el cliente recibe en minutos
+   por WhatsApp y email la recomendación con tarifa exacta y planes
+   alternativos. NO compartas el link del cotizador web a menos que la
+   herramienta falle (status="error"). Si falla, ahí sí ofrecé el link
+   web o el asesor humano.
 
 EXCEPCIONES:
 
@@ -461,10 +467,12 @@ EXCEPCIONES:
   conocimiento (cobertura, carencias, tarifas), pero después volvé al
   flujo: "¿Querés cotizar este plan ahora o te muestro alternativas?"
 
-- Si fuera_horario=true → arrancá la primera respuesta con:
-  "🌙 Estamos fuera de horario laboral ({horario_atencion}), pero te
-  ayudo yo. Para pre-cotizarte rápido: pasame tu *cédula* 👇"
-  Sigue el flujo normal.
+- AVISO DE HORARIO — REGLA ESTRICTA:
+  Si fuera_horario=true Y es_primer_mensaje=true → SOLO en esa primera
+  respuesta agregás una línea corta tipo:
+  "🌙 Estamos fuera de horario, pero te ayudo igual."
+  En CUALQUIER otro mensaje (es_primer_mensaje=false), NUNCA menciones
+  el horario, NUNCA listes los días/horas. El cliente ya sabe.
 
 REGLAS DURAS:
 - NUNCA inventes tarifas exactas — usá rangos del tarifario y aclará
@@ -493,6 +501,59 @@ Tu respuesta:
 
 
 HERRAMIENTAS = [
+    {
+        'nombre': 'cotizar_vida_buena',
+        'nombre_amigable': 'Cotizar plan oficial (dispara webhook + email)',
+        'descripcion': (
+            'Envía la cotización oficial al motor de Vida Buena. El cliente '
+            'recibe en minutos por WhatsApp y email la recomendación con tarifa '
+            'exacta y los planes alternativos. Llamala SOLO cuando el cliente '
+            'haya elegido un plan y confirme que quiere cotizar oficialmente. '
+            'Pedile confirmación antes ("¿lanzo la cotización del plan X?").'
+        ),
+        'metodo': 'POST',
+        'es_interno': True,
+        'parametros': [
+            {'nombre': 'cedula', 'tipo': 'string', 'requerido': False,
+             'descripcion': 'Cédula del titular (10 dígitos), opcional pero recomendada.',
+             'pregunta_sugerida': ''},
+            {'nombre': 'nombres', 'tipo': 'string', 'requerido': False,
+             'descripcion': 'Nombres del titular.',
+             'pregunta_sugerida': ''},
+            {'nombre': 'apellidos', 'tipo': 'string', 'requerido': False,
+             'descripcion': 'Apellidos del titular.',
+             'pregunta_sugerida': ''},
+            {'nombre': 'fecha_nacimiento', 'tipo': 'string', 'requerido': False,
+             'descripcion': 'Fecha de nacimiento YYYY-MM-DD. Opcional si pasás edad_titular.',
+             'pregunta_sugerida': ''},
+            {'nombre': 'sexo', 'tipo': 'string', 'requerido': False,
+             'descripcion': 'M o F.',
+             'pregunta_sugerida': ''},
+            {'nombre': 'email', 'tipo': 'string', 'requerido': False,
+             'descripcion': 'Email del titular para recibir el PDF y la recomendación.',
+             'pregunta_sugerida': '¿A qué email te mando los detalles?'},
+            {'nombre': 'edad_titular', 'tipo': 'integer', 'requerido': True,
+             'descripcion': 'Edad del titular en años. OBLIGATORIO.',
+             'pregunta_sugerida': ''},
+            {'nombre': 'edades_dependientes', 'tipo': 'string', 'requerido': False,
+             'descripcion': 'Edades de los demás miembros del grupo separadas por coma. Vacío si solo titular. Ej: "5,12,40".',
+             'pregunta_sugerida': ''},
+            {'nombre': 'budget_intent', 'tipo': 'string', 'requerido': True,
+             'descripcion': 'Intención de presupuesto: "economico", "equilibrio" o "alta_proteccion".',
+             'pregunta_sugerida': ''},
+            {'nombre': 'plan_preferido', 'tipo': 'string', 'requerido': False,
+             'descripcion': 'Si el cliente eligió un plan específico, pasarlo: "PROTECCION_10000", "UNICO_10000", "PREDILECTO_20000" o "MAGNO_30000".',
+             'pregunta_sugerida': ''},
+        ],
+        'plantilla_respuesta': (
+            '{% if status == "ok" %}'
+            '✅ {{message}}'
+            '{% else %}'
+            '⚠️ No pudimos procesar la cotización: {{message}}'
+            '{% endif %}'
+        ),
+        'ubicacion_params': 'json',
+    },
     {
         'nombre': 'lookup_cliente',
         'nombre_amigable': 'Pre-llenar datos del cliente con su cédula',
@@ -545,6 +606,10 @@ class Command(BaseCommand):
                             help='ID de SesionWhatsApp para asignar el agente como modo_bot=ia.')
         parser.add_argument('--base-am', type=str, default=BASE_AM_DEFAULT,
                             help=f'Base URL del cotizador AM REST para el lookup (default: {BASE_AM_DEFAULT}).')
+        parser.add_argument('--fastchat-url', type=str, default=FASTCHAT_URL_DEFAULT,
+                            help=(f'URL pública de fastchat para el endpoint puente '
+                                  f'(default: {FASTCHAT_URL_DEFAULT}). El SSRF guard '
+                                  f'bloquea localhost — usá la URL pública real.'))
 
     @transaction.atomic
     def handle(self, *args, **opts):
@@ -584,7 +649,8 @@ class Command(BaseCommand):
             self._actualizar_agente(agente)
 
         base_am = opts['base_am'].rstrip('/') + '/'
-        creadas, actualizadas = self._sembrar_herramientas(agente, base_am)
+        fastchat_url = opts['fastchat_url'].rstrip('/')
+        creadas, actualizadas = self._sembrar_herramientas(agente, base_am, fastchat_url)
         self.stdout.write(self.style.SUCCESS(
             f'Herramientas: {creadas} creadas, {actualizadas} actualizadas.'
         ))
@@ -649,8 +715,10 @@ class Command(BaseCommand):
                 'Nunca muestro JSON ni tablas pesadas — extraigo lo relevante.'
             ),
             humanizar_timing=True,
+            humaniz_chars_burbuja_max=500,
+            humaniz_max_burbujas=8,
             cfg_history_turns=10,
-            cfg_max_output_tokens=2500,
+            cfg_max_output_tokens=3500,
             cfg_max_static_chars=8000,
         )
         if apikey is not None:
@@ -668,11 +736,16 @@ class Command(BaseCommand):
         agente.cfg_max_static_chars = 8000
         agente.save()
 
-    def _sembrar_herramientas(self, agente, base_am):
+    def _sembrar_herramientas(self, agente, base_am, fastchat_url):
         creadas = 0
         actualizadas = 0
         for spec in HERRAMIENTAS:
-            url_completa = base_am.rstrip('/') + '/'
+            if spec.get('es_interno'):
+                url_completa = fastchat_url.rstrip('/') + '/crm/api/ia/cotizador_am/'
+                timeout = 30
+            else:
+                url_completa = base_am.rstrip('/') + '/'
+                timeout = 15
             defaults = {
                 'nombre_amigable': spec['nombre_amigable'],
                 'descripcion': spec['descripcion'],
@@ -682,7 +755,7 @@ class Command(BaseCommand):
                 'parametros': spec['parametros'],
                 'ubicacion_params': spec['ubicacion_params'],
                 'plantilla_respuesta': spec['plantilla_respuesta'],
-                'timeout': 15,
+                'timeout': timeout,
                 'activo': True,
             }
             obj, creado = HerramientaAgente.objects.update_or_create(

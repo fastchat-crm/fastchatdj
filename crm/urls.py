@@ -1,6 +1,7 @@
 from django.urls import path, re_path
 
 from . import api_captura_local
+from . import api_ia_cotizador_am
 from .view_actividad_economica import actividadEconomicaView
 from .view_agente_wizard import agente_wizard_view
 from .view_chat_agente import chat_agente_view
@@ -71,4 +72,9 @@ urlpatterns.append(
 urlpatterns.append(
     path('api/captura_local/', api_captura_local.captura_local,
          name='crm_api_captura_local')
+)
+
+urlpatterns.append(
+    path('api/ia/cotizador_am/', api_ia_cotizador_am.cotizar_am_ia,
+         name='crm_api_ia_cotizador_am')
 )
