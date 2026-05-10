@@ -186,24 +186,7 @@
                 </small>
             </div>
             <script>
-                window.marcarPresetMinSesion = function () {
-                    var inp = document.getElementById('inp-min-sesion');
-                    var box = document.getElementById('min-sesion-presets');
-                    if (!inp || !box) return;
-                    var val = String(inp.value || '').trim();
-                    box.querySelectorAll('button[data-min]').forEach(function (b) {
-                        var on = b.getAttribute('data-min') === val;
-                        b.classList.toggle('conex-btn-primary', on);
-                        b.classList.toggle('conex-btn-light', !on);
-                    });
-                };
-                window.setMinSesion = function (v) {
-                    var inp = document.getElementById('inp-min-sesion');
-                    if (!inp) return;
-                    inp.value = v;
-                    window.marcarPresetMinSesion();
-                };
-                window.marcarPresetMinSesion();
+                if (typeof window.marcarPresetMinSesion === 'function') window.marcarPresetMinSesion();
             </script>
 
             <div class="form-row">

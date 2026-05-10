@@ -838,12 +838,20 @@ class AgenteConsultor:
         if _input_vars & {'fuera_horario', 'horario_atencion'}:
             _vars_todas.update(self._vars_horario())
         if 'es_primer_mensaje' in _input_vars:
+            es_primero = 'false'
             try:
-                _vars_todas['es_primer_mensaje'] = (
-                    'true' if self.conversacion and self.conversacion.mensajes.count() <= 1 else 'false'
-                )
+                if self.conversacion is not None and hasattr(self.conversacion, 'mensajes'):
+                    n = self.conversacion.mensajes.filter(status=True).count() if hasattr(self.conversacion.mensajes, 'filter') else self.conversacion.mensajes.count()
+                    if n <= 1:
+                        es_primero = 'true'
+                else:
+                    h = getattr(self, '_historia', None)
+                    msgs = list(h.messages) if h else []
+                    if len(msgs) <= 1:
+                        es_primero = 'true'
             except Exception:
-                _vars_todas['es_primer_mensaje'] = 'false'
+                pass
+            _vars_todas['es_primer_mensaje'] = es_primero
         _kwargs = {k: v for k, v in _vars_todas.items() if k in _input_vars}
         try:
             return self._prompt_tpl.format(**_kwargs)
