@@ -553,13 +553,14 @@ $(document).ready(function() {
                         const venc = r.reactivar_vence_en ? new Date(r.reactivar_vence_en) : null;
                         const vencTxt = venc ? venc.toLocaleString() : '';
                         $('#bloqueo-reactivar-msg').text(
-                            'La ventana de ' + (r.reactivar_horas_ventana || 6) +
+                            'La ventana de ' + (r.reactivar_horas_ventana || 23) +
                             'h para reactivar esta conversación ya venció' +
-                            (vencTxt ? ' (' + vencTxt + ')' : '') + '.'
+                            (vencTxt ? ' (' + vencTxt + ')' : '') +
+                            '. Reactivala enviando una plantilla aprobada de Meta.'
                         );
                         $('#bloqueo-reactivar-aviso').show();
-                        $('#footer-plantillas-row').hide();
-                        mostrarPlantillasSiMeta(false, null);
+                        $('#footer-plantillas-row').show();
+                        mostrarPlantillasSiMeta(true, r.conversacion_id);
                     } else {
                         $('#bloqueo-reactivar-aviso').hide();
                         $('#footer-plantillas-row').show();

@@ -24,7 +24,7 @@ from .forms import CambiarClasificacionForm, CambiarNombreContactoForm
 from .models import ConversacionWhatsApp
 
 
-HORAS_VENTANA_REACTIVAR = 6
+HORAS_VENTANA_REACTIVAR = 23
 
 HORAS_VENTANA_META_CUSTOMER_SERVICE = 24
 
