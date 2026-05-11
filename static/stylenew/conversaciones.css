@@ -432,7 +432,13 @@
 
 .ci-kebab-wrap .dropdown-menu {
     font-size: .85rem;
-    min-width: 200px;
+    min-width: 220px;
+    z-index: 1080;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .12);
+}
+
+.ci-kebab-wrap .dropdown-item {
+    padding: .45rem .85rem;
 }
 
 .ci-kebab-wrap .dropdown-item i {

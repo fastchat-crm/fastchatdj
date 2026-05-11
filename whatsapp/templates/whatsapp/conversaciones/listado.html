@@ -2,7 +2,7 @@
 {% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css">
-<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.3">
+<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.4">
 {% endblock %}
 
 {% block content %}
@@ -155,7 +155,7 @@
                         </div>
                         <!-- Toggle bot -->
                         <div class="d-none" id="bot-toggle-container">
-                            <button class="btn btn-sm" id="btn-toggle-bot" title="Activar/pausar bot IA en esta conversación"
+                            <button class="btn btn-sm" id="btn-toggle-bot" title="Activar/pausar el bot (chatbot tradicional o agente IA) en esta conversación"
                                     onclick="toggleBot()">
                                 <i class="fa fa-robot me-1"></i><span id="bot-estado-label">Bot</span>
                             </button>
@@ -527,7 +527,8 @@
                                     <small class="text-muted fw-normal">— solo lo ves vos como operador</small>
                                 </label>
                                 <input type="text" id="mr-form-nombre" class="form-control form-control-sm"
-                                       maxlength="80" placeholder="Ej: Catálogo · Horarios · Formas de pago">
+                                       maxlength="80" required placeholder="Ej: Catálogo · Horarios · Formas de pago">
+                                <div class="invalid-feedback" id="mr-form-nombre-feedback">El nombre del menú es obligatorio.</div>
                                 <small class="text-muted">Etiqueta del chip que aparece arriba del chat.</small>
                             </div>
                             <div class="col-md-5">
@@ -593,6 +594,10 @@
                                 <button type="button" class="btn btn-sm btn-outline-primary" id="mr-form-add-opcion">
                                     <i class="fa fa-plus me-1"></i> Agregar botón
                                 </button>
+                                <div class="alert alert-danger py-1 px-2 small mt-2 d-none" id="mr-form-opciones-feedback">
+                                    <i class="fa fa-triangle-exclamation me-1"></i>
+                                    Agregá al menos un botón con etiqueta.
+                                </div>
                             </div>
                         </div>
                         <div class="d-flex justify-content-end gap-2 mt-3">
@@ -1243,18 +1248,47 @@
         });
 
         $('#mr-form-cancelar').on('click', _resetFormMenu);
+
+        function _mrLimpiarErrores() {
+            $('#mr-form-nombre').removeClass('is-invalid');
+            $('#mr-form-opciones-feedback').addClass('d-none');
+        }
+
+        $('#mr-form-nombre').on('input', function () {
+            if ($(this).val().trim()) $(this).removeClass('is-invalid');
+        });
+
         $('#mr-form-guardar').on('click', function () {
-            var nombre = $('#mr-form-nombre').val().trim();
-            if (!nombre) { alert('Falta el nombre del menú'); return; }
+            _mrLimpiarErrores();
+
+            var $nombreInput = $('#mr-form-nombre');
+            var nombre = $nombreInput.val().trim();
+            var sesionId = $('#sesion-selector').val();
+            var errores = false;
+
+            if (!nombre) {
+                $nombreInput.addClass('is-invalid').focus();
+                errores = true;
+            }
+
             var opciones = [];
             $('#mr-form-opciones-body tr').each(function () {
                 var etq = $(this).find('.mr-opt-etq').val().trim();
                 var val = $(this).find('.mr-opt-val').val().trim() || etq;
                 if (etq) opciones.push({etiqueta: etq, valor: val});
             });
-            if (!opciones.length) { alert('Agregá al menos un botón'); return; }
+
+            if (!opciones.length) {
+                $('#mr-form-opciones-feedback').removeClass('d-none');
+                errores = true;
+            }
+
+            if (errores) return;
+
+            if (typeof pantallaespera === 'function') pantallaespera();
+
             _mrPostSesionAction('menu_rapido_guardar', {
-                sesion_id: $('#sesion-selector').val(),
+                sesion_id: sesionId,
                 id: $('#mr-form-id').val() || '',
                 nombre: nombre,
                 color: $('#mr-form-color').val(),
@@ -1263,12 +1297,16 @@
                 footer: $('#mr-form-footer').val(),
                 opciones: JSON.stringify(opciones),
             }).then(function (r) {
-                if (r.error) { alert(r.message || 'Error al guardar'); return; }
-                cargarMenusRapidos();
-                setTimeout(function () {
-                    _renderListaModalMenus();
-                    _resetFormMenu();
-                }, 250);
+                if (r.error) {
+                    setTimeout($.unblockUI, 1);
+                    if (typeof mensajeWarning === 'function') mensajeWarning(r.message || 'Error al guardar');
+                    return;
+                }
+                if (typeof alertaSuccess === 'function') alertaSuccess('Menú guardado.');
+                setTimeout(function () { window.location.reload(); }, 300);
+            }).catch(function () {
+                setTimeout($.unblockUI, 1);
+                if (typeof mensajeWarning === 'function') mensajeWarning('Error de conexión.');
             });
         });
 

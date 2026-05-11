@@ -448,11 +448,21 @@ def process_incoming_message(session, event_data, channel_layer):
             )
             return JsonResponse({'status': 'ok', 'modo': 'ninguno', 'sin_respuesta': True})
         if _modo_bot == 'tradicional':
+            if not conversation.ai_activo:
+                _traza(
+                    etapa='motor_flujo_pausado', sesion=session, conversacion=conversation, mensaje=message,
+                    numero=from_number, nivel='info',
+                    detalle={
+                        'modo_bot': _modo_bot,
+                        'ai_activo': False,
+                        'accion': 'mensaje_guardado_sin_respuesta',
+                        'motivo': 'bot_pausado_por_asesor_humano',
+                    },
+                )
+                return JsonResponse({'status': 'ok', 'modo': 'tradicional_pausado'})
             _ex_motor = None
             try:
                 from crm.motor_flujo_chatbot import procesar_mensaje_tradicional
-                # Extraer boton_id si vino de un interactive button/list reply
-                # (Meta lo inyecta en `_boton_id` desde meta_webhook_view).
                 _boton_id_evt = event_data.get('_boton_id') or ''
                 _res_motor = procesar_mensaje_tradicional(
                     session, conversation, contacto, message_text or '',

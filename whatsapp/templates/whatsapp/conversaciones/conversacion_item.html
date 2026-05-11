@@ -2,7 +2,9 @@
 <div class="conversacion-item" style="order: -{{ conversacion.order }};" data-id="{{ conversacion.id }}">
     <div class="ci-kebab-wrap dropdown">
         <button type="button" class="ci-kebab-btn dropdown-toggle"
-                data-bs-toggle="dropdown" aria-expanded="false"
+                data-bs-toggle="dropdown" data-bs-strategy="fixed"
+                data-bs-boundary="viewport"
+                aria-expanded="false"
                 onclick="event.stopPropagation();" title="Opciones">
             <i class="fa fa-ellipsis-vertical"></i>
         </button>
