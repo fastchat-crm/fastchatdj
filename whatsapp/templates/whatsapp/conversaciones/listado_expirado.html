@@ -491,6 +491,7 @@ $(document).ready(function() {
         if (_cargandoMensajes || id == conversacionActiva) return;
         _cargandoMensajes = true;
         conversacionActiva = id;
+        try { localStorage.setItem('wa_last_conv_finalizada', String(id)); } catch (e) {}
 
         if (chatSocket) { chatSocket.close(); chatSocket = null; }
         $('#reactivar-btn, #ver-resumen-btn, #btn-control-respuestas, #btn-estadisticas').addClass('d-none').hide();
@@ -580,6 +581,7 @@ $(document).ready(function() {
             error: function(xhr, s, err) {
                 _cargandoMensajes = false;
                 console.error('[cargarMensajes finalizadas] ajax', s, err, xhr.responseText);
+                try { localStorage.removeItem('wa_last_conv_finalizada'); } catch (e) {}
                 $('#mensajes-container').removeClass('is-loading').html(`<div class="p-3 text-center text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error: ${err}</div>`);
             }
         });
@@ -693,6 +695,17 @@ $(document).ready(function() {
             document.body.classList.add('chat-mobile-open');
         }
     }, 600);
+    {% else %}
+    {% if not conversacion_selected %}
+    (function () {
+        var saved = null;
+        try { saved = localStorage.getItem('wa_last_conv_finalizada'); } catch (e) {}
+        if (!saved) return;
+        setTimeout(function () {
+            if (typeof cargarMensajes === 'function') cargarMensajes(saved);
+        }, 600);
+    })();
+    {% endif %}
     {% endif %}
 
     // ====================== PLANTILLAS META (finalizadas → reactivar) =========================

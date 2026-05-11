@@ -1027,16 +1027,21 @@
         }
 
         {% if auto_open_conv_id %}
-            // Deep-link `?conv=<token>` — auto-abrir la conversación una vez
-            // que la lista cargó. Damos un pequeño margen para que el WS
-            // pinte las cards. Si la card aún no está, cargarMensajes maneja
-            // la carga directa de mensajes igual.
             setTimeout(function() {
                 if (typeof cargarMensajes === 'function') {
                     cargarMensajes({{ auto_open_conv_id }});
                     document.body.classList.add('chat-mobile-open');
                 }
             }, 600);
+        {% else %}
+            (function () {
+                var saved = null;
+                try { saved = localStorage.getItem('wa_last_conv_active'); } catch (e) {}
+                if (!saved) return;
+                setTimeout(function () {
+                    if (typeof cargarMensajes === 'function') cargarMensajes(saved);
+                }, 600);
+            })();
         {% endif %}
 
         function scrollToBottom(smooth = false) {
@@ -1690,11 +1695,11 @@
                             '#marcar-resuelto',
                             ]
 
-        // Función para cargar mensajes
         function cargarMensajes(conversacionId) {
             if (_cargandoMensajes) return;
             _cargandoMensajes = true;
             conversacionActiva = conversacionId;
+            try { localStorage.setItem('wa_last_conv_active', String(conversacionId)); } catch (e) {}
 
             // Limpiar WebSocket anterior
             if (chatSocket) { chatSocket.close(); chatSocket = null; }
@@ -1827,6 +1832,7 @@
                 error: function(xhr, status, error) {
                     _cargandoMensajes = false;
                     console.error('[cargarMensajes] ajax error', status, error, xhr.responseText);
+                    try { localStorage.removeItem('wa_last_conv_active'); } catch (e) {}
                     $('#mensajes-container').removeClass('is-loading').html('<div class="p-3 text-center"><p class="text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error al cargar mensajes: ' + error + '</p></div>');
                 }
             });
