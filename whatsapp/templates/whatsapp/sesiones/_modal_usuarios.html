@@ -1,87 +1,79 @@
-<link rel="stylesheet" href="/static/css/whatsapp/modal_usuarios_sesion.css?v1.0">
+<link rel="stylesheet" href="/static/css/whatsapp/modal_usuarios_sesion.css?v1.1">
 
-<div class="modal-header">
-    <h5 class="modal-title">
-        <i class="fa fa-users me-1"></i>
-        Usuarios asignables — {{ sesion.nombre|default:sesion.numero }}
-    </h5>
-    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-</div>
-
-<div class="modal-body">
-    <div class="row g-2 mb-3">
-        <input type="hidden" id="sesion-usuarios-pk" value="{{ sesion.pk }}">
-        <div class="col-lg-12">
-            <div class="mb-2">
-                <label class="form-label small mb-1" for="id_usuarios_sesion">Personas</label>
-                <select id="id_usuarios_sesion" multiple="multiple" style="width: 100%;"></select>
-            </div>
+<div class="row g-2">
+    <input type="hidden" id="sesion-usuarios-pk" value="{{ sesion.pk }}">
+    <div class="col-lg-12">
+        <div class="mb-2">
+            <label class="form-label small mb-1" for="id_usuarios_sesion">Personas</label>
+            <select id="id_usuarios_sesion" multiple="multiple" style="width: 100%;"></select>
         </div>
     </div>
-
-    <div class="table-resposive mb-4">
-        <table class="table table-bordered table-td-valign-middle tableUsuariosSesion">
-            <thead>
-            <tr>
-                <th class="text-center">Usuario</th>
-                <th class="text-center">Acción</th>
-            </tr>
-            </thead>
-            <tbody id="tbody_participantes_sesion">
-            {% for s in sesion.obtener_perfiles %}
-                <tr data-usuario-id="{{ s.usuario.id }}">
-                    <td class="text-left">
-                        <div class="d-flex justify-content-between align-items-center">
-                            {% with person=s.usuario %}
-                                <div class="d-flex align-items-center">
-                                    {% if person.foto %}
-                                        <a href="/media/{{ person.foto }}"
-                                           data-fancybox="image"
-                                           title="{{ person.documento }}">
-                                            <img class="rounded-circle me-3"
-                                                 src="/media/{{ person.foto }}"
-                                                 width="60" height="60"
-                                                 alt="{{ person.documento }}">
-                                        </a>
-                                    {% else %}
-                                        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
-                                             style="width: 60px; height: 60px;">
-                                            <i class="fas fa-user fa-2x text-secondary"></i>
-                                        </div>
-                                    {% endif %}
-                                    <div class="info-top ml-2">
-                                        <span>{{ person.documento }}</span><br>
-                                        <span><b>{{ person.full_name }}</b></span>
-                                        {% if person.email %}<br>
-                                            <a href="mailto:{{ person.email }}"><i
-                                                    class="fa fa-envelope"></i> {{ person.email }}
-                                            </a>
-                                        {% endif %}
-                                        {% if person.telcelular %}<br>
-                                            <a href="javascript:void(0)">
-                                                <i class="fa-brands fa-whatsapp"></i>
-                                                +593 {{ person.telcelular }}
-                                            </a>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            {% endwith %}
-                        </div>
-                    </td>
-                    <td class="text-center">
-                        <a href="javascript:void(0)"
-                           onclick="eliminarPerfilSesionUsuario({{ s.id }}, this)"
-                           class="btn btn-danger btn-mini"><i class="fa fa-trash"></i></a>
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
 </div>
 
-<div class="modal-footer">
-    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+<div class="table-resposive mb-4">
+    <table class="table table-bordered table-td-valign-middle tableUsuariosSesion">
+        <thead>
+        <tr>
+            <th class="text-center">Usuario</th>
+            <th class="text-center">Acción</th>
+        </tr>
+        </thead>
+        <tbody id="tbody_participantes_sesion">
+        {% for s in sesion.obtener_perfiles %}
+            <tr data-usuario-id="{{ s.usuario.id }}">
+                <td class="text-left">
+                    <div class="d-flex justify-content-between align-items-center">
+                        {% with person=s.usuario %}
+                            <div class="d-flex align-items-center">
+                                {% if person.foto %}
+                                    <a href="/media/{{ person.foto }}"
+                                       data-fancybox="image"
+                                       title="{{ person.documento }}">
+                                        <img class="rounded-circle me-3"
+                                             src="/media/{{ person.foto }}"
+                                             width="60" height="60"
+                                             alt="{{ person.documento }}">
+                                    </a>
+                                {% else %}
+                                    <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
+                                         style="width: 60px; height: 60px;">
+                                        <i class="fas fa-user fa-2x text-secondary"></i>
+                                    </div>
+                                {% endif %}
+                                <div class="info-top ml-2">
+                                    <span>{{ person.documento }}</span><br>
+                                    <span><b>{{ person.full_name }}</b></span>
+                                    {% if person.email %}<br>
+                                        <a href="mailto:{{ person.email }}"><i
+                                                class="fa fa-envelope"></i> {{ person.email }}
+                                        </a>
+                                    {% endif %}
+                                    {% if person.telcelular %}<br>
+                                        <a href="javascript:void(0)">
+                                            <i class="fa-brands fa-whatsapp"></i>
+                                            +593 {{ person.telcelular }}
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endwith %}
+                    </div>
+                </td>
+                <td class="text-center">
+                    <a href="javascript:void(0)"
+                       onclick="eliminarPerfilSesionUsuario({{ s.id }}, this)"
+                       class="btn btn-danger btn-mini"><i class="fa fa-trash"></i></a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="border-top my-3"></div>
+
+<div class="d-flex justify-content-end">
+    <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
         <i class="fa fa-window-close me-1"></i>Cancelar
     </button>
     <a href="javascript:void(0)" class="btn btn-success btn-sm"
@@ -114,6 +106,7 @@
         width: '100%',
         placeholder: 'Buscar persona',
         allowClear: true,
+        dropdownParent: $('#modalDetalle'),
         ajax: {
             url: '/whatsapp/sesiones/',
             dataType: 'json',
@@ -130,9 +123,7 @@
             },
             cache: true
         },
-        escapeMarkup: function (markup) {
-            return markup;
-        },
+        escapeMarkup: function (markup) { return markup; },
         minimumInputLength: 1,
         templateResult: formatPersona,
         templateSelection: selectionPersona
@@ -157,6 +148,7 @@ function guardarUsuariosSesion(pk) {
         if (typeof alertaWarning === 'function') alertaWarning('Debes seleccionar al menos un usuario.');
         return;
     }
+    if (typeof pantallaespera === 'function') pantallaespera();
     $.ajax({
         type: 'POST',
         url: '/whatsapp/sesiones/',
@@ -166,10 +158,7 @@ function guardarUsuariosSesion(pk) {
             pk: pk,
             usuarios: JSON.stringify(userIds),
         },
-        dataType: 'json',
-        beforeSend: function () {
-            if (typeof pantallaespera === 'function') pantallaespera();
-        }
+        dataType: 'json'
     }).done(function (response) {
         setTimeout($.unblockUI, 1);
         if (response.result) {
@@ -228,9 +217,7 @@ function eliminarPerfilSesionUsuario(pk, btn) {
             if (data.error === false) {
                 if (btn) {
                     var $row = $(btn).closest('tr');
-                    $row.fadeOut(200, function () {
-                        $row.remove();
-                    });
+                    $row.fadeOut(200, function () { $row.remove(); });
                 }
                 if (typeof alertaSuccess === 'function') alertaSuccess('Usuario removido.');
             } else {

@@ -1,27 +1,11 @@
 {% load humanize %}
 <div class="conversacion-item" style="order: -{{ conversacion.order }};" data-id="{{ conversacion.id }}">
-    <div class="ci-kebab-wrap dropdown">
-        <button type="button" class="ci-kebab-btn dropdown-toggle"
-                data-bs-toggle="dropdown" data-bs-strategy="fixed"
-                data-bs-boundary="viewport"
-                aria-expanded="false"
-                onclick="event.stopPropagation();" title="Opciones">
+    <div class="ci-kebab-wrap">
+        <button type="button" class="ci-kebab-btn"
+                onclick="event.stopPropagation(); abrirMenuKebabConv(event, {{ conversacion.id }});"
+                title="Opciones">
             <i class="fa fa-ellipsis-vertical"></i>
         </button>
-        <ul class="dropdown-menu dropdown-menu-end">
-            <li>
-                <a class="dropdown-item" href="javascript:void(0)"
-                   onclick="event.stopPropagation(); formModal({{ conversacion.id }}, 'Cambiar nombre de contacto', 'cambiar-nombre-contacto');">
-                    <i class="fa fa-user-edit me-2"></i> Cambiar nombre
-                </a>
-            </li>
-            <li>
-                <a class="dropdown-item" href="javascript:void(0)"
-                   onclick="event.stopPropagation(); formModal({{ conversacion.id }}, 'Cambiar clasificación', 'cambiar-clasificacion');">
-                    <i class="fa fa-sync me-2"></i> Cambiar clasificación (lead)
-                </a>
-            </li>
-        </ul>
     </div>
     <a href="javascript:void(0);" class="cargar-conversacion text-decoration-none" data-id="{{ conversacion.id }}">
         <div class="ci-inner">

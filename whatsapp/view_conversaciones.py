@@ -11,129 +11,19 @@ from autenticacion.models import Usuario
 from core.funciones import addData, paginador, secure_module, log, leer_sesion_id, encrypt_sesion_id, decrypt_sesion_id
 from seguridad.templatetags.templatefunctions import encrypt
 from .forms import CambiarClasificacionForm, CambiarNombreContactoForm, AsignarAgenteForm
+from .funcionesWhatsappConversacion import (
+    cambiar_clasificacion_get,
+    cambiar_clasificacion_post,
+    cambiar_nombre_contacto_get,
+    cambiar_nombre_contacto_post,
+    _bloqueo_reactivar,
+    _control_respuestas,
+    _estadisticas_conversacion,
+    _tokens_conversacion,
+    HORAS_VENTANA_REACTIVAR,
+)
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp, SENTIMIENTO_CHOICES
 from .services import WhatsAppService, get_whatsapp_service
-
-def _estadisticas_conversacion(conversacion):
-    """Devuelve dict completo de estadísticas para el panel de la conversación."""
-    from django.db.models import Count, Sum, Max
-    from django.utils import timezone
-
-    # Tokens
-    try:
-        tok = conversacion.consumos_token.aggregate(
-            t_in=Sum('tokens_entrada'), t_out=Sum('tokens_salida'), t_total=Sum('tokens_total'),
-        )
-        tokens_in  = tok['t_in']  or 0
-        tokens_out = tok['t_out'] or 0
-        tokens_tot = tok['t_total'] or 0
-        modelo_top = (
-            conversacion.consumos_token.values('modelo')
-            .annotate(n=Count('id')).order_by('-n')
-            .values_list('modelo', flat=True).first() or ''
-        )
-    except Exception:
-        tokens_in = tokens_out = tokens_tot = 0
-        modelo_top = ''
-
-    # Mensajes
-    try:
-        stats = conversacion.estadisticas
-        total_msgs   = stats.total_mensajes
-        msgs_cliente = stats.mensajes_cliente
-        msgs_asesor  = stats.mensajes_asesor
-        msgs_ia      = stats.mensajes_ia
-    except Exception:
-        total_msgs = msgs_cliente = msgs_asesor = msgs_ia = 0
-
-    # Duración
-    try:
-        inicio = conversacion.fecha_registro
-        fin    = conversacion.fecha_fin_conversacion or timezone.now()
-        if inicio and fin:
-            # Asegurar que ambos son aware o ambos naive para la resta
-            if hasattr(fin, 'tzinfo') and fin.tzinfo and (not hasattr(inicio, 'tzinfo') or not inicio.tzinfo):
-                fin = fin.replace(tzinfo=None)
-            delta   = fin - inicio
-            mins    = int(delta.total_seconds() // 60)
-            horas   = mins // 60
-            mins_r  = mins % 60
-            duracion = f'{horas}h {mins_r}m' if horas else f'{mins_r} min'
-        else:
-            duracion = '—'
-    except Exception:
-        duracion = '—'
-
-    # Estado badge
-    if conversacion.estado_conversacion == 0:
-        estado_badge = '<span class="badge bg-success">Activa</span>'
-    else:
-        estado_badge = '<span class="badge bg-secondary">Finalizada</span>'
-
-    # Primer agente
-    primer_agente = ''
-    try:
-        if conversacion.primer_agente:
-            primer_agente = conversacion.primer_agente.get_full_name() or conversacion.primer_agente.username
-    except Exception:
-        pass
-
-    # Control de respuestas
-    cr = _control_respuestas(conversacion)
-
-    return {
-        'tokens_entrada': tokens_in,
-        'tokens_salida': tokens_out,
-        'tokens_total': tokens_tot,
-        'modelo_ia': modelo_top,
-        'total_mensajes': total_msgs,
-        'mensajes_cliente': msgs_cliente,
-        'mensajes_asesor': msgs_asesor,
-        'mensajes_ia': msgs_ia,
-        'duracion': duracion,
-        'estado_badge': estado_badge,
-        'primer_agente': primer_agente,
-        **cr,
-    }
-
-
-def _control_respuestas(conversacion):
-    """Devuelve estadísticas de participación por tipo de remitente en una conversación."""
-    try:
-        from django.db.models import Count
-        qs = conversacion.mensajes.filter(remitente=conversacion.sesion.numero)
-        ia_count = qs.filter(ia_generado=True).count()
-        agent_qs = qs.filter(ia_generado=False, agente__isnull=False)
-        agent_count = agent_qs.count()
-        agentes = list(
-            agent_qs.values(
-                'agente__id', 'agente__first_name', 'agente__last_name', 'agente__foto'
-            ).annotate(total=Count('id')).order_by('-total')
-        )
-        return {
-            'cr_ia': ia_count,
-            'cr_agent': agent_count,
-            'cr_agentes': agentes,
-        }
-    except Exception:
-        return {'cr_ia': 0, 'cr_agent': 0, 'cr_agentes': []}
-
-
-def _tokens_conversacion(conversacion):
-    """Agrega tokens IA consumidos en una conversación."""
-    try:
-        agg = conversacion.consumos_token.aggregate(
-            t_in=Sum('tokens_entrada'),
-            t_out=Sum('tokens_salida'),
-            t_total=Sum('tokens_total'),
-        )
-        return {
-            'tokens_entrada': agg['t_in'] or 0,
-            'tokens_salida': agg['t_out'] or 0,
-            'tokens_total': agg['t_total'] or 0,
-        }
-    except Exception:
-        return {'tokens_entrada': 0, 'tokens_salida': 0, 'tokens_total': 0}
 
 
 @login_required
@@ -245,29 +135,9 @@ def conversacionesView(request):
             except Exception as ex:
                 return JsonResponse({'error': True, 'message': str(ex)})
         elif action == 'cambiar-clasificacion':
-            try:
-                filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
-                form = CambiarClasificacionForm(instance=filtro)
-                data.update({
-                    'form': form,
-                    'filtro': filtro,
-                })
-                template = get_template("whatsapp/conversaciones/form.html")
-                return JsonResponse({"result": True, 'data': template.render(data)})
-            except Exception as ex:
-                return JsonResponse({"result": False, 'message': str(ex)})
+            return cambiar_clasificacion_get(request)
         elif action == 'cambiar-nombre-contacto':
-            try:
-                filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
-                form = CambiarNombreContactoForm(instance=filtro.contacto)
-                data.update({
-                    'form': form,
-                    'filtro': filtro,
-                })
-                template = get_template("whatsapp/conversaciones/form.html")
-                return JsonResponse({"result": True, 'data': template.render(data)})
-            except Exception as ex:
-                return JsonResponse({"result": False, 'message': str(ex)})
+            return cambiar_nombre_contacto_get(request)
         elif action == 'asignar-conversacion':
             try:
                 filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
@@ -481,34 +351,9 @@ def conversacionesView(request):
                         ),
                     })
                 elif action == 'cambiar-clasificacion':
-                    try:
-                        filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['pk']))
-                    except Exception as ex:
-                        raise NameError(f'No se encontró la conversación: {ex}')
-                    form = CambiarClasificacionForm(request.POST, instance=filtro, request=request)
-                    if form.is_valid():
-                        form.save()
-                        log(f"Clasificación cambiada para la conversación {filtro.id}", request, "edit", obj=filtro.id)
-                        res_json.append({'error': False, 'reload': True})
-                        messages.success(request, 'Clasificación cambiada correctamente.')
-                        return JsonResponse(res_json, safe=False)
-                    else:
-                        raise NameError(f'Error al guardar la clasificación: {form.errors}')
+                    return cambiar_clasificacion_post(request)
                 elif action == 'cambiar-nombre-contacto':
-                    try:
-                        filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['pk']))
-                    except Exception as ex:
-                        raise NameError(f'No se encontró la conversación: {ex}')
-                    contacto = filtro.contacto
-                    form = CambiarNombreContactoForm(request.POST, instance=contacto, request=request)
-                    if form.is_valid():
-                        form.save()
-                        log(f"Nombre de contacto {contacto.__str__()} cambiado para la conversación {filtro.id}", request, "change", obj=filtro.id)
-                        res_json.append({'error': False, 'reload': True})
-                        messages.success(request, 'Nombre de contacto cambiada correctamente.')
-                        return JsonResponse(res_json, safe=False)
-                    else:
-                        raise NameError(f'Error al guardar la clasificación: {form.errors}')
+                    return cambiar_nombre_contacto_post(request)
                 elif action == 'asignar-conversacion':
                     filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['pk']))
                     # Marcar fecha_asignacion y pausar bot antes de pasar al form

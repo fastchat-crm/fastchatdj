@@ -759,13 +759,51 @@
     </div>
 
     {% csrf_token %}
+
+    <div class="modal fade" id="modalDetalle" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalNombre"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body detalleProd"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
         window.CONEX_URL = "{{ request.path }}";
         window.META_OAUTH_START_URL = "{% url 'whatsapp_meta_oauth_start' %}";
         window.META_MANUAL_VALIDAR_URL = "{% url 'whatsapp_meta_manual_validar' %}";
         window.META_MANUAL_CONECTAR_URL = "{% url 'whatsapp_meta_manual_conectar' %}";
+
+        function formModal(id, text, action) {
+            if (typeof pantallaespera === 'function') pantallaespera();
+            $.ajax({
+                type: 'GET',
+                url: '{{ request.path }}',
+                data: {action: action, id: id},
+                success: function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.result === true) {
+                        $('#modalNombre').html(text);
+                        $('.detalleProd').html(data.data);
+                        var modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+                        modal.show();
+                    } else {
+                        if (typeof mensajeWarning === 'function') mensajeWarning(data.message || 'Error');
+                    }
+                },
+                error: function () {
+                    setTimeout($.unblockUI, 1);
+                    if (typeof mensajeWarning === 'function') mensajeWarning('Error de conexión.');
+                },
+                dataType: 'json'
+            });
+        }
     </script>
-    <script src="{% static 'stylenew/sesiones.js' %}?v=2"></script>
+    <script src="{% static 'stylenew/sesiones.js' %}?v=3"></script>
 {% endblock %}
 {% block jscript %}
     <script src="/static/js/forms.js?version=1"></script>

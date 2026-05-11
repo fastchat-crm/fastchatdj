@@ -2,7 +2,7 @@
 {% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css">
-<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.4">
+<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.5">
 {% endblock %}
 
 {% block content %}
@@ -290,6 +290,8 @@
 </div>
 
 {% include 'whatsapp/conversaciones/_modal_asignar_pipeline.html' %}
+
+{% include 'whatsapp/conversaciones/_ci_kebab_portal.html' %}
 
 <div class="modal fade" id="modalSinSesiones" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">

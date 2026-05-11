@@ -1,0 +1,76 @@
+<div id="ci-kebab-portal" class="ci-kebab-portal d-none">
+    <a class="ci-kebab-item" href="javascript:void(0)" data-action="cambiar-nombre">
+        <i class="fa fa-user-edit me-2"></i> Cambiar nombre
+    </a>
+    <a class="ci-kebab-item" href="javascript:void(0)" data-action="cambiar-clasificacion">
+        <i class="fa fa-sync me-2"></i> Cambiar clasificación (lead)
+    </a>
+</div>
+
+<script>
+(function () {
+    var portal = document.getElementById('ci-kebab-portal');
+    if (!portal) return;
+    var currentConvId = null;
+
+    function posicionar(btn) {
+        var rect = btn.getBoundingClientRect();
+        portal.style.position = 'fixed';
+        portal.style.top = (rect.bottom + 6) + 'px';
+        portal.classList.remove('d-none');
+        var w = portal.offsetWidth || 220;
+        var maxLeft = window.innerWidth - w - 8;
+        var preferido = rect.right - w;
+        portal.style.left = Math.max(8, Math.min(preferido, maxLeft)) + 'px';
+    }
+
+    function cerrarMenu() {
+        portal.classList.add('d-none');
+        portal.removeAttribute('style');
+        portal.classList.add('d-none');
+        currentConvId = null;
+    }
+
+    window.abrirMenuKebabConv = function (event, convId) {
+        if (event && event.preventDefault) event.preventDefault();
+        currentConvId = convId;
+        var btn = (event && event.currentTarget) || (event && event.target && event.target.closest('.ci-kebab-btn'));
+        if (!btn) return;
+        if (!portal.classList.contains('d-none') && portal.dataset.convId == String(convId)) {
+            cerrarMenu();
+            return;
+        }
+        portal.dataset.convId = String(convId);
+        posicionar(btn);
+    };
+
+    document.addEventListener('click', function (e) {
+        if (portal.classList.contains('d-none')) return;
+        if (portal.contains(e.target)) return;
+        if (e.target.closest('.ci-kebab-btn')) return;
+        cerrarMenu();
+    });
+
+    portal.addEventListener('click', function (e) {
+        var item = e.target.closest('[data-action]');
+        if (!item || !currentConvId) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var action = item.getAttribute('data-action');
+        var convId = currentConvId;
+        cerrarMenu();
+        if (typeof formModal !== 'function') return;
+        if (action === 'cambiar-nombre') {
+            formModal(convId, 'Cambiar nombre de contacto', 'cambiar-nombre-contacto');
+        } else if (action === 'cambiar-clasificacion') {
+            formModal(convId, 'Cambiar clasificación', 'cambiar-clasificacion');
+        }
+    });
+
+    window.addEventListener('resize', cerrarMenu);
+    window.addEventListener('scroll', cerrarMenu, true);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') cerrarMenu();
+    });
+})();
+</script>

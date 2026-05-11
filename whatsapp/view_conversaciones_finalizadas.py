@@ -14,21 +14,21 @@ from seguridad.templatetags.templatefunctions import encrypt
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp
 from .services import WhatsAppService, get_whatsapp_service
 from .forms import CambiarClasificacionForm
-from .view_conversaciones import _control_respuestas, _tokens_conversacion, _estadisticas_conversacion
+from .funcionesWhatsappConversacion import (
+    cambiar_clasificacion_get,
+    cambiar_clasificacion_post,
+    cambiar_nombre_contacto_get,
+    cambiar_nombre_contacto_post,
+    _bloqueo_reactivar,
+    _bloqueo_ventana_meta,
+    _control_respuestas,
+    _estadisticas_conversacion,
+    _tokens_conversacion,
+    reactivar_conversacion,
+    HORAS_VENTANA_REACTIVAR,
+    HORAS_VENTANA_META_CUSTOMER_SERVICE,
+)
 
-HORAS_VENTANA_REACTIVAR = 6
-
-
-def _bloqueo_reactivar(conversacion):
-    """Permite reactivar/enviar solo dentro de las primeras N horas desde fecha_registro.
-
-    Retorna (bloqueada, vence_en). `bloqueada=True` cuando la conversación tiene
-    más de N horas — fuera de la ventana de gracia ya no se puede revivir.
-    """
-    if not conversacion.fecha_registro:
-        return False, None
-    vence_en = conversacion.fecha_registro + timedelta(hours=HORAS_VENTANA_REACTIVAR)
-    return timezone.now() > vence_en, vence_en
 
 @login_required
 @secure_module
@@ -120,23 +120,9 @@ def conversacionesFinalizadasView(request):
             except Exception as ex:
                 return JsonResponse({"result": False, 'message': str(ex)})
         elif action == 'cambiar-clasificacion':
-            try:
-                filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
-                form = CambiarClasificacionForm(instance=filtro)
-                ctx = {
-                    'form': form,
-                    'filtro': filtro,
-                    'action': 'cambiar-clasificacion',
-                    'ruta': request.path,
-                }
-                return JsonResponse({
-                    "result": True,
-                    'data': render_to_string("whatsapp/conversaciones/form.html", ctx, request=request),
-                })
-            except Exception as ex:
-                import traceback
-                traceback.print_exc()
-                return JsonResponse({"result": False, 'message': str(ex)})
+            return cambiar_clasificacion_get(request)
+        elif action == 'cambiar-nombre-contacto':
+            return cambiar_nombre_contacto_get(request)
         elif action == 'listar_plantillas_meta':
             try:
                 pk = int(request.GET['pk'])
@@ -182,17 +168,25 @@ def conversacionesFinalizadasView(request):
                 if action == 'send':
                     pk = int(request.POST['pk'])
                     texto = request.POST.get('mensaje')
-                    archivo = request.FILES.get('archivo')  # Obtener archivo si existe
+                    archivo = request.FILES.get('archivo')
                     conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
 
-                    bloqueada, vence_en = _bloqueo_reactivar(conversacion)
-                    if bloqueada:
+                    bloqueada_meta, vence_meta = _bloqueo_ventana_meta(conversacion)
+                    if bloqueada_meta:
+                        msg = (
+                            f'No se puede enviar texto libre: la ventana de '
+                            f'{HORAS_VENTANA_META_CUSTOMER_SERVICE}h desde el último '
+                            f'mensaje del cliente'
+                        )
+                        if vence_meta:
+                            msg += f' (venció el {vence_meta.strftime("%d/%m/%Y %H:%M")})'
+                        msg += '. Usá una *plantilla aprobada* para retomar la conversación.'
                         return JsonResponse({
                             'error': True,
-                            'message': f'No se puede enviar mensajes: la ventana de {HORAS_VENTANA_REACTIVAR}h desde la creación venció el {vence_en.strftime("%d/%m/%Y %H:%M")}.',
+                            'requiere_plantilla': True,
+                            'message': msg,
                         })
 
-                    # Crear instancia del servicio segun proveedor de la sesion
                     service = get_whatsapp_service(conversacion.sesion)
 
                     tipo_mensaje = 'texto'
@@ -245,14 +239,25 @@ def conversacionesFinalizadasView(request):
                         mensaje.archivo.save(archivo.name, ContentFile(file_bytes), save=False)
                     mensaje.save()
 
-                    log(f"Mensaje enviado a {conversacion.contacto_numero}", request, "add", obj=conversacion.id)
+                    reactivar_conversacion(conversacion)
+                    if not conversacion.primer_agente:
+                        conversacion.primer_agente = request.user
+                        conversacion.save(update_fields=['primer_agente'])
 
-                    # Devolver el HTML del mensaje para añadirlo al chat
+                    log(
+                        f"Mensaje enviado y conversacion {conversacion.id} reactivada (a {conversacion.contacto_numero})",
+                        request, "add", obj=conversacion.id,
+                    )
+
+                    request.session['contactoId'] = encrypt(conversacion.id)
                     return JsonResponse({
                         'error': False,
-                        'mensaje_html': render_to_string('whatsapp/conversaciones/mensaje_enviado_partial.html',
-                                                        {'mensaje': mensaje},
-                                                        request=request)
+                        'reactivada': True,
+                        'url': '/whatsapp/conversaciones/',
+                        'mensaje_html': render_to_string(
+                            'whatsapp/conversaciones/mensaje_enviado_partial.html',
+                            {'mensaje': mensaje}, request=request,
+                        ),
                     })
                 elif action == 'enviar_plantilla_meta':
                     # Envia plantilla Meta desde una conversacion FINALIZADA.
@@ -363,19 +368,9 @@ def conversacionesFinalizadasView(request):
                         ),
                     })
                 elif action == 'cambiar-clasificacion':
-                    try:
-                        filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['pk']))
-                    except Exception as ex:
-                        raise NameError(f'No se encontró la conversación: {ex}')
-                    form = CambiarClasificacionForm(request.POST, instance=filtro, request=request)
-                    if form.is_valid():
-                        form.save()
-                        log(f"Clasificación cambiada para la conversación {filtro.id}", request, "edit", obj=filtro.id)
-                        res_json.append({'error': False, 'reload': True})
-                        messages.success(request, 'Clasificación cambiada correctamente.')
-                        return JsonResponse(res_json, safe=False)
-                    else:
-                        raise NameError(f'Error al guardar la clasificación: {form.errors}')
+                    return cambiar_clasificacion_post(request)
+                elif action == 'cambiar-nombre-contacto':
+                    return cambiar_nombre_contacto_post(request)
                 elif action == 'marcar-reactivar':
                     try:
                         filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))

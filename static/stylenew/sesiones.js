@@ -1079,10 +1079,11 @@
                 abrirDetail(r.html);
             });
         } else if (action === 'usuarios') {
-            fetchPartial('usuarios_modal', sesionId).then(function (r) {
-                if (!r.ok) return mostrarToast(r.message || 'No se pudo abrir el panel de usuarios.', 'err');
-                abrirDetail(r.html);
-            });
+            if (typeof formModal === 'function') {
+                formModal(sesionId, '<i class="fa fa-users me-1"></i> Usuarios asignables — ' + nombre, 'usuarios');
+            } else {
+                mostrarToast('formModal no disponible.', 'err');
+            }
         } else if (action === 'historial') {
             fetchPartial('historial_modal', sesionId).then(function (r) {
                 if (!r.ok) return mostrarToast(r.message || 'No se pudo cargar el historial.', 'err');

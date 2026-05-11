@@ -687,9 +687,6 @@ def _get_partial(request, accion):
         ctx['pct'] = int(100 * total_ok / len(checks)) if checks else 0
         tpl = 'whatsapp/sesiones/_modal_resumen.html'
 
-    elif accion == 'usuarios_modal':
-        tpl = 'whatsapp/sesiones/_modal_usuarios.html'
-
     elif accion == 'plantilla_modal':
         from .models import PlantillaWhatsApp
         cfg = getattr(sesion, 'config_meta', None)
@@ -726,6 +723,20 @@ def sesionesView(request):
     accion_get = request.GET.get('action') or ''
     if accion_get.endswith('_modal'):
         return _get_partial(request, accion_get)
+
+    if accion_get == 'usuarios':
+        try:
+            pk = int(request.GET.get('id') or 0)
+            sesion = SesionWhatsApp.objects.filter(id=pk, usuario=request.user).first()
+            if not sesion:
+                return JsonResponse({'result': False, 'message': 'Sesión no encontrada.'})
+            html = get_template('whatsapp/sesiones/_modal_usuarios.html').render(
+                {'sesion': sesion, 'filtro': sesion, 'request': request},
+                request,
+            )
+            return JsonResponse({'result': True, 'data': html})
+        except Exception as ex:
+            return JsonResponse({'result': False, 'message': str(ex)})
 
     if accion_get == 'buscarpersonas':
         q = (request.GET.get('q') or '').upper().strip()
