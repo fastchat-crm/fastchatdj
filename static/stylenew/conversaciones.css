@@ -396,3 +396,45 @@
     line-height: 1.5;
     margin-bottom: 0;
 }
+
+.ci-kebab-wrap {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 5;
+}
+
+.ci-kebab-btn {
+    background: transparent;
+    border: 0;
+    color: #94a3b8;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    line-height: 1;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .9rem;
+}
+
+.ci-kebab-btn:hover,
+.ci-kebab-btn:focus {
+    background: rgba(0, 0, 0, .08);
+    color: #1f2937;
+    outline: none;
+}
+
+.ci-kebab-btn::after {
+    display: none;
+}
+
+.ci-kebab-wrap .dropdown-menu {
+    font-size: .85rem;
+    min-width: 200px;
+}
+
+.ci-kebab-wrap .dropdown-item i {
+    width: 18px;
+}

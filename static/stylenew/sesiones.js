@@ -1078,6 +1078,11 @@
                 if (!r.ok) return mostrarToast(r.message || 'No se pudo abrir el editor.', 'err');
                 abrirDetail(r.html);
             });
+        } else if (action === 'usuarios') {
+            fetchPartial('usuarios_modal', sesionId).then(function (r) {
+                if (!r.ok) return mostrarToast(r.message || 'No se pudo abrir el panel de usuarios.', 'err');
+                abrirDetail(r.html);
+            });
         } else if (action === 'historial') {
             fetchPartial('historial_modal', sesionId).then(function (r) {
                 if (!r.ok) return mostrarToast(r.message || 'No se pudo cargar el historial.', 'err');

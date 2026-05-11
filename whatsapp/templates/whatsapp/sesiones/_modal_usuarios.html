@@ -1,0 +1,242 @@
+<link rel="stylesheet" href="/static/css/whatsapp/modal_usuarios_sesion.css?v1.0">
+
+<div class="modal-header">
+    <h5 class="modal-title">
+        <i class="fa fa-users me-1"></i>
+        Usuarios asignables — {{ sesion.nombre|default:sesion.numero }}
+    </h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<div class="modal-body">
+    <div class="row g-2 mb-3">
+        <input type="hidden" id="sesion-usuarios-pk" value="{{ sesion.pk }}">
+        <div class="col-lg-12">
+            <div class="mb-2">
+                <label class="form-label small mb-1" for="id_usuarios_sesion">Personas</label>
+                <select id="id_usuarios_sesion" multiple="multiple" style="width: 100%;"></select>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-resposive mb-4">
+        <table class="table table-bordered table-td-valign-middle tableUsuariosSesion">
+            <thead>
+            <tr>
+                <th class="text-center">Usuario</th>
+                <th class="text-center">Acción</th>
+            </tr>
+            </thead>
+            <tbody id="tbody_participantes_sesion">
+            {% for s in sesion.obtener_perfiles %}
+                <tr data-usuario-id="{{ s.usuario.id }}">
+                    <td class="text-left">
+                        <div class="d-flex justify-content-between align-items-center">
+                            {% with person=s.usuario %}
+                                <div class="d-flex align-items-center">
+                                    {% if person.foto %}
+                                        <a href="/media/{{ person.foto }}"
+                                           data-fancybox="image"
+                                           title="{{ person.documento }}">
+                                            <img class="rounded-circle me-3"
+                                                 src="/media/{{ person.foto }}"
+                                                 width="60" height="60"
+                                                 alt="{{ person.documento }}">
+                                        </a>
+                                    {% else %}
+                                        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
+                                             style="width: 60px; height: 60px;">
+                                            <i class="fas fa-user fa-2x text-secondary"></i>
+                                        </div>
+                                    {% endif %}
+                                    <div class="info-top ml-2">
+                                        <span>{{ person.documento }}</span><br>
+                                        <span><b>{{ person.full_name }}</b></span>
+                                        {% if person.email %}<br>
+                                            <a href="mailto:{{ person.email }}"><i
+                                                    class="fa fa-envelope"></i> {{ person.email }}
+                                            </a>
+                                        {% endif %}
+                                        {% if person.telcelular %}<br>
+                                            <a href="javascript:void(0)">
+                                                <i class="fa-brands fa-whatsapp"></i>
+                                                +593 {{ person.telcelular }}
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endwith %}
+                        </div>
+                    </td>
+                    <td class="text-center">
+                        <a href="javascript:void(0)"
+                           onclick="eliminarPerfilSesionUsuario({{ s.id }}, this)"
+                           class="btn btn-danger btn-mini"><i class="fa fa-trash"></i></a>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+        <i class="fa fa-window-close me-1"></i>Cancelar
+    </button>
+    <a href="javascript:void(0)" class="btn btn-success btn-sm"
+       onclick="guardarUsuariosSesion('{{ sesion.pk }}')">
+        <i class="fa fa-save me-1"></i>Guardar
+    </a>
+</div>
+
+<script>
+(function () {
+    function formatPersona(repo) {
+        if (repo.loading) return 'Buscando...';
+        var fotoHtml = repo.foto
+            ? '<img class="rounded-circle me-2" src="' + repo.foto + '" width="32" height="32" alt="">'
+            : '<div class="rounded-circle bg-light d-inline-flex align-items-center justify-content-center me-2" style="width:32px;height:32px;"><i class="fas fa-user text-secondary"></i></div>';
+        return $('<div class="d-flex align-items-center" style="padding:4px;">' + fotoHtml +
+            '<div class="text-start"><div><b>Doc:</b> ' + (repo.documento || '') + '</div>' +
+            '<div><b>Nombre:</b> ' + repo.text + '</div></div></div>');
+    }
+
+    function selectionPersona(item) {
+        if (!item || !item.text) return 'Buscar persona';
+        var fotoHtml = item.foto
+            ? '<img src="' + item.foto + '" width="20" height="20" class="rounded-circle me-1" alt="">'
+            : '<div class="rounded-circle bg-light d-inline-flex align-items-center justify-content-center me-1" style="width:20px;height:20px;"><i class="fas fa-user text-secondary" style="font-size:0.8rem;"></i></div>';
+        return $(fotoHtml + '<span>' + item.text + '</span>');
+    }
+
+    $('#id_usuarios_sesion').select2({
+        width: '100%',
+        placeholder: 'Buscar persona',
+        allowClear: true,
+        ajax: {
+            url: '/whatsapp/sesiones/',
+            dataType: 'json',
+            delay: 250,
+            data: function (params) {
+                return {action: 'buscarpersonas', q: params.term || '', page: params.page};
+            },
+            processResults: function (data, params) {
+                params.page = params.page || 1;
+                return {
+                    results: data.results,
+                    pagination: {more: (params.page * 15) < data.total_count}
+                };
+            },
+            cache: true
+        },
+        escapeMarkup: function (markup) {
+            return markup;
+        },
+        minimumInputLength: 1,
+        templateResult: formatPersona,
+        templateSelection: selectionPersona
+    });
+
+    $('.tableUsuariosSesion').DataTable({
+        responsive: false,
+        bInfo: false,
+        ordering: false,
+        searching: false,
+        dom: 'Bfrtip',
+        language: {url: '/static/js/i18n/Spanish.json'},
+        pageLength: 10,
+        buttons: []
+    });
+})();
+
+function guardarUsuariosSesion(pk) {
+    var $select = $('#id_usuarios_sesion');
+    var userIds = $select.val();
+    if (!userIds || userIds.length === 0) {
+        if (typeof alertaWarning === 'function') alertaWarning('Debes seleccionar al menos un usuario.');
+        return;
+    }
+    $.ajax({
+        type: 'POST',
+        url: '/whatsapp/sesiones/',
+        data: {
+            csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val() || $('meta[name=csrf-token]').attr('content'),
+            action: 'guardar_usuarios',
+            pk: pk,
+            usuarios: JSON.stringify(userIds),
+        },
+        dataType: 'json',
+        beforeSend: function () {
+            if (typeof pantallaespera === 'function') pantallaespera();
+        }
+    }).done(function (response) {
+        setTimeout($.unblockUI, 1);
+        if (response.result) {
+            $select.val(null).trigger('change');
+            var table = $('.tableUsuariosSesion').DataTable();
+            response.usuarios.forEach(function (user) {
+                var existe = $('#tbody_participantes_sesion tr[data-usuario-id="' + user.id + '"]').length > 0;
+                if (!existe) {
+                    var fotoHtml = user.foto
+                        ? '<a href="' + user.foto + '" data-fancybox="image"><img class="rounded-circle me-3" src="' + user.foto + '" width="60" height="60" alt=""></a>'
+                        : '<div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3" style="width:60px;height:60px;"><i class="fas fa-user fa-2x text-secondary"></i></div>';
+                    var nombreHtml =
+                        '<div class="d-flex align-items-center">' + fotoHtml +
+                        '<div class="info-top"><span>' + (user.documento || '') + '</span><br>' +
+                        '<span><b>' + user.nombre + '</b></span>' +
+                        (user.email ? '<br><a href="mailto:' + user.email + '"><i class="fa fa-envelope"></i> ' + user.email + '</a>' : '') +
+                        (user.telcelular ? '<br><a href="javascript:void(0)"><i class="fa-brands fa-whatsapp"></i> +593 ' + user.telcelular + '</a>' : '') +
+                        '</div></div>';
+                    var accionHtml =
+                        '<a href="javascript:void(0)" onclick="eliminarPerfilSesionUsuario(' + user.id_relacion + ', this)" class="btn btn-danger btn-mini"><i class="fa fa-trash"></i></a>';
+                    var rowNode = table.row.add([nombreHtml, accionHtml]).draw(false).node();
+                    $(rowNode).find('td:eq(1)').addClass('text-center');
+                    $(rowNode).attr('data-usuario-id', user.id).hide().fadeIn('slow');
+                }
+            });
+            if (typeof alertaSuccess === 'function') alertaSuccess('Usuarios agregados correctamente.');
+        } else {
+            if (typeof alertaWarning === 'function') alertaWarning(response.message || 'Ocurrió un error.');
+        }
+    }).fail(function () {
+        setTimeout($.unblockUI, 1);
+        if (typeof mensajeWarning === 'function') mensajeWarning('Error en el servidor');
+    });
+}
+
+function eliminarPerfilSesionUsuario(pk, btn) {
+    Swal.fire({
+        title: 'Quitar usuario de la sesión',
+        text: 'Esta acción es reversible — podés volver a agregarlo.',
+        type: 'warning',
+        showCancelButton: true,
+        allowOutsideClick: false,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Sí, quitar',
+        cancelButtonText: 'Cancelar'
+    }).then(function (result) {
+        if (!result.value) return;
+        if (typeof pantallaespera === 'function') pantallaespera();
+        $.post('/whatsapp/sesiones/', {
+            csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val() || $('meta[name=csrf-token]').attr('content'),
+            action: 'eliminar_usuario',
+            id: pk
+        }, function (data) {
+            setTimeout($.unblockUI, 1);
+            if (data.error === false) {
+                if (btn) {
+                    var $row = $(btn).closest('tr');
+                    $row.fadeOut(200, function () {
+                        $row.remove();
+                    });
+                }
+                if (typeof alertaSuccess === 'function') alertaSuccess('Usuario removido.');
+            } else {
+                if (typeof alertaWarning === 'function') alertaWarning(data.message || 'Error al remover.');
+            }
+        });
+    });
+}
+</script>

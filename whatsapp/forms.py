@@ -301,6 +301,24 @@ class AsignarAgenteForm(ModelFormBase):
             )
         ).order_by('first_name')
 
+        sesion = None
+        try:
+            if self.instance and self.instance.pk:
+                sesion = self.instance.contacto.sesion
+        except Exception:
+            sesion = None
+
+        from .models import PerfilSesionWhatsApp
+        if sesion is not None:
+            ids_pool = list(
+                PerfilSesionWhatsApp.objects
+                .filter(sesion=sesion, status=True)
+                .values_list('usuario_id', flat=True)
+            )
+            agentes = agentes.filter(id__in=ids_pool)
+        else:
+            agentes = agentes.none()
+
         self.fields['asignado_a'] = _AgentChoiceField(
             queryset=agentes,
             required=False,

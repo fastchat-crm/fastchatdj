@@ -1,0 +1,23 @@
+.select2-search__field {
+    width: 100% !important;
+}
+
+.select2-container--open {
+    z-index: 9999 !important;
+}
+
+.tableUsuariosSesion .info-top span {
+    font-size: 0.85rem;
+    line-height: 1.2;
+}
+
+.tableUsuariosSesion .info-top a {
+    font-size: 0.8rem;
+    color: #6c757d;
+    text-decoration: none;
+}
+
+.tableUsuariosSesion .info-top a:hover {
+    color: #0d6efd;
+    text-decoration: underline;
+}

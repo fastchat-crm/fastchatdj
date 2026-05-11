@@ -27,8 +27,12 @@ from django.urls import reverse
 
 from core.funciones import addData, log, secure_module
 
-from .models import SesionWhatsApp, ConfigBaileys
+from autenticacion.models import Usuario
+
+from .models import SesionWhatsApp, ConfigBaileys, PerfilSesionWhatsApp
 from .services import WhatsAppService
+
+import json
 
 
 def _get_or_create_config_baileys(sesion):
@@ -549,6 +553,43 @@ def _accion_menu_rapido_enviar(request):
     })
 
 
+def _accion_guardar_usuarios(request):
+    try:
+        pk = int(request.POST['pk'])
+        sesion = SesionWhatsApp.objects.get(pk=pk, usuario=request.user)
+        ids_usuarios = json.loads(request.POST.get('usuarios', '[]'))
+        usuarios_creados = []
+        for uid in ids_usuarios:
+            usuario = Usuario.objects.get(pk=uid)
+            ya_existe = PerfilSesionWhatsApp.objects.filter(sesion=sesion, usuario=usuario, status=True).exists()
+            if not ya_existe:
+                relacion = PerfilSesionWhatsApp.objects.create(sesion=sesion, usuario=usuario)
+                usuarios_creados.append({
+                    'id': usuario.id,
+                    'id_relacion': relacion.id,
+                    'nombre': usuario.full_name(),
+                    'documento': usuario.documento,
+                    'email': usuario.email,
+                    'telcelular': usuario.telcelular,
+                    'foto': usuario.foto.url if usuario.foto else '',
+                })
+        log(f"Usuarios asignados a sesión {sesion.id}", request, "change", obj=sesion.id)
+        return JsonResponse({'result': True, 'usuarios': usuarios_creados})
+    except Exception as ex:
+        return JsonResponse({'result': False, 'message': str(ex)})
+
+
+def _accion_eliminar_usuario(request):
+    try:
+        filtro = PerfilSesionWhatsApp.objects.get(pk=int(request.POST['id']))
+        filtro.status = False
+        filtro.save(request)
+        log(f"Usuario removido de sesión {filtro.sesion_id if filtro.sesion_id else '?'}", request, "del", obj=filtro.id)
+        return JsonResponse({'error': False})
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
+
+
 _ACCIONES = {
     'baileys_start':               _accion_baileys_start,
     'baileys_status':              _accion_baileys_status,
@@ -563,6 +604,8 @@ _ACCIONES = {
     'menu_rapido_guardar':         _accion_menu_rapido_guardar,
     'menu_rapido_eliminar':        _accion_menu_rapido_eliminar,
     'menu_rapido_enviar':          _accion_menu_rapido_enviar,
+    'guardar_usuarios':            _accion_guardar_usuarios,
+    'eliminar_usuario':            _accion_eliminar_usuario,
 }
 
 
@@ -644,6 +687,9 @@ def _get_partial(request, accion):
         ctx['pct'] = int(100 * total_ok / len(checks)) if checks else 0
         tpl = 'whatsapp/sesiones/_modal_resumen.html'
 
+    elif accion == 'usuarios_modal':
+        tpl = 'whatsapp/sesiones/_modal_usuarios.html'
+
     elif accion == 'plantilla_modal':
         from .models import PlantillaWhatsApp
         cfg = getattr(sesion, 'config_meta', None)
@@ -680,6 +726,29 @@ def sesionesView(request):
     accion_get = request.GET.get('action') or ''
     if accion_get.endswith('_modal'):
         return _get_partial(request, accion_get)
+
+    if accion_get == 'buscarpersonas':
+        q = (request.GET.get('q') or '').upper().strip()
+        qs = Usuario.objects.filter(status=True, is_active=True).order_by('last_name')
+        if q:
+            partes = q.split(' ')
+            if len(partes) == 1:
+                qs = qs.filter(
+                    Q(first_name__icontains=q) | Q(last_name__icontains=q) | Q(documento__icontains=q)
+                ).distinct()[:15]
+            elif len(partes) >= 2:
+                qs = qs.filter(
+                    Q(last_name__icontains=partes[0]) | Q(first_name__icontains=partes[1])
+                ).distinct()[:15]
+        else:
+            qs = qs[:15]
+        results = [{
+            'id': u.id,
+            'text': u.full_name(),
+            'documento': u.documento or '',
+            'foto': u.foto.url if u.foto else '',
+        } for u in qs]
+        return JsonResponse({'results': results, 'total_count': len(results)})
 
     # GET: tablero
     data = {

@@ -149,6 +149,9 @@ class SesionWhatsApp(ModeloBase):
     def __str__(self):
         return f"{self.numero} - {self.nombre} | {self.estado}"
 
+    def obtener_perfiles(self):
+        return self.perfilsesionwhatsapp_set.filter(status=True).order_by('usuario__first_name')
+
     def is_empty_session(self):
         from django.utils import timezone
         cb = getattr(self, 'config_baileys', None)
@@ -2227,3 +2230,15 @@ class EntregaWebhookSaliente(models.Model):
         verbose_name = 'Entrega webhook'
         verbose_name_plural = 'Entregas webhook'
         ordering = ['-fecha']
+
+
+class PerfilSesionWhatsApp(ModeloBase):
+    sesion = models.ForeignKey(SesionWhatsApp, on_delete=models.CASCADE, null=True, blank=True, verbose_name='Sesión WhatsApp')
+    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, verbose_name='Usuario')
+
+    class Meta:
+        verbose_name = 'Perfil Sesión WhatsApp'
+        verbose_name_plural = 'Perfiles Sesiones WhatsApp'
+
+    def __str__(self):
+        return f"{self.usuario.get_full_name()} - {self.sesion.nombre if self.sesion else 'Sin sesión'}"

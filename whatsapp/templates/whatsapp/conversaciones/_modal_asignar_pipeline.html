@@ -66,8 +66,9 @@
 /* abre el modal con la conversacion seleccionada actualmente.
    Lo invocan ambos listados via dropdown. */
 function abrirModalAsignarPipeline() {
-    // _currentConvId es global en ambos listados de conversaciones.
-    var convId = (typeof _currentConvId !== 'undefined' && _currentConvId)
+    var convId = $('#conversacion-id').val()
+        || (typeof conversacionActiva !== 'undefined' && conversacionActiva)
+        || (typeof _currentConvId !== 'undefined' && _currentConvId)
         || $('#contacto-hashedId').data('conv-id')
         || $('[data-bs-target="#modalAsignarPipeline"]').data('conv-id');
     if (!convId) {
