@@ -1,12 +1,12 @@
 {% load templatefunctions %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8"/>
     <title>{{ titulo|default:'MensajerIA' }} | {{ nombreempresa }}</title>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <meta name="description" content="MensajerIA — Answer WhatsApp without leaving anyone unattended. AI-powered customer conversations on Baileys and Meta Cloud API.">
-    <meta name="keywords" content="whatsapp, ai, crm, customer service, baileys, meta cloud api, chatbot">
+    <meta name="description" content="MensajerIA — Atiende WhatsApp sin que nadie se quede sin respuesta. Conversaciones con IA sobre Baileys y Meta Cloud API.">
+    <meta name="keywords" content="whatsapp, ia, crm, atencion al cliente, baileys, meta cloud api, chatbot">
     <meta name="theme-color" content="#1faa54">
     <link href="{{ favicon }}" rel="shortcut icon"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -31,16 +31,16 @@
             </button>
             <div class="collapse navbar-collapse" id="landingNav">
                 <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
-                    <li class="nav-item"><a class="nav-link" href="#features">Features</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#how">How it works</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#channels">Channels</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#pricing">Pricing</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#faq">FAQ</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#features">Funcionalidades</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#how">Cómo funciona</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#channels">Canales</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#pricing">Precios</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#faq">Preguntas</a></li>
                     <li class="nav-item ms-lg-3">
-                        <a class="btn btn-outline-success btn-sm px-3" href="/login/">Log in</a>
+                        <a class="btn btn-outline-success btn-sm px-3" href="/login/">Iniciar sesión</a>
                     </li>
                     <li class="nav-item">
-                        <a class="btn btn-brand btn-sm px-3" href="/register/">Start free</a>
+                        <a class="btn btn-brand btn-sm px-3" href="/register/">Empieza gratis</a>
                     </li>
                 </ul>
             </div>
@@ -60,32 +60,32 @@
                     <span class="brand-mark">M</span>
                     <span class="brand-text">MensajerIA</span>
                 </div>
-                <p class="text-muted small">AI assistants and a real CRM for WhatsApp. Run your team, your bot, and your Meta templates in one inbox.</p>
+                <p class="text-muted small">Agentes de IA y un CRM real para WhatsApp. Tu equipo, tu bot y tus plantillas de Meta en una sola bandeja.</p>
             </div>
             <div class="col-6 col-lg-2">
-                <h6 class="footer-title">Product</h6>
+                <h6 class="footer-title">Producto</h6>
                 <ul class="list-unstyled">
-                    <li><a href="#features">Features</a></li>
-                    <li><a href="#channels">Channels</a></li>
-                    <li><a href="#pricing">Pricing</a></li>
+                    <li><a href="#features">Funcionalidades</a></li>
+                    <li><a href="#channels">Canales</a></li>
+                    <li><a href="#pricing">Precios</a></li>
                 </ul>
             </div>
             <div class="col-6 col-lg-2">
-                <h6 class="footer-title">Company</h6>
+                <h6 class="footer-title">Empresa</h6>
                 <ul class="list-unstyled">
-                    <li><a href="/acercade/">About</a></li>
-                    <li><a href="/quienes-somos/">Who we are</a></li>
-                    <li><a href="/terminosycondiciones/">Terms</a></li>
+                    <li><a href="/acercade/">Acerca de</a></li>
+                    <li><a href="/quienes-somos/">Quiénes somos</a></li>
+                    <li><a href="/terminosycondiciones/">Términos</a></li>
                 </ul>
             </div>
             <div class="col-12 col-lg-4">
-                <h6 class="footer-title">Get started</h6>
-                <p class="text-muted small mb-3">Spin up your first WhatsApp session in under five minutes.</p>
-                <a class="btn btn-brand" href="/register/">Create free account</a>
+                <h6 class="footer-title">Empieza ya</h6>
+                <p class="text-muted small mb-3">Conecta tu primera sesión de WhatsApp en menos de cinco minutos.</p>
+                <a class="btn btn-brand" href="/register/">Crear cuenta gratis</a>
             </div>
         </div>
         <div class="footer-bottom">
-            <span>&copy; {% now "Y" %} {{ nombreempresa|default:'MensajerIA' }}. All rights reserved.</span>
+            <span>&copy; {% now "Y" %} {{ nombreempresa|default:'MensajerIA' }}. Todos los derechos reservados.</span>
         </div>
     </div>
 </footer>
