@@ -26,6 +26,30 @@
     background: #e4e6eb;
 }
 
+#plantillas-btn .plantillas-btn-label {
+    display: none;
+}
+
+#plantillas-btn.plantillas-btn-pill {
+    width: auto;
+    padding: 0 16px;
+    border-radius: 19px;
+    background: #25d366;
+    color: #fff;
+    font-size: .85rem;
+    font-weight: 600;
+    gap: 4px;
+}
+
+#plantillas-btn.plantillas-btn-pill:hover {
+    background: #1ebe5a;
+}
+
+#plantillas-btn.plantillas-btn-pill .plantillas-btn-label {
+    display: inline-block;
+    font-size: .82rem;
+}
+
 #plantillas-btn .badge-count {
     position: absolute;
     top: -2px;

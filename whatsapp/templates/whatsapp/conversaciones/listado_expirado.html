@@ -1,7 +1,7 @@
 {% extends 'base_chat.html' %}
 {% load templatefunctions %}
 {% block head %}
-<link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css">
+<link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.0">
 <link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.5">
 {% endblock %}
 
@@ -219,8 +219,9 @@
                     <i class="fa fa-lock me-1 text-muted"></i>Conversación cerrada — reactívala enviando una plantilla aprobada de Meta.
                 </div>
                 <div style="position:relative;flex-shrink:0;">
-                    <button type="button" id="plantillas-btn" title="Enviar plantilla para reactivar">
-                        <i class="fa fa-layer-group"></i>
+                    <button type="button" id="plantillas-btn" class="plantillas-btn-pill" title="Enviar plantilla aprobada para reactivar">
+                        <i class="fa fa-layer-group me-1"></i>
+                        <span class="plantillas-btn-label">Enviar plantilla</span>
                         <span class="badge-count" id="plantillas-badge" style="display:none;">0</span>
                     </button>
                     <div id="plantillas-panel">
@@ -560,10 +561,12 @@ $(document).ready(function() {
                         );
                         $('#bloqueo-reactivar-aviso').show();
                         $('#footer-plantillas-row').show();
+                        $('#plantillas-btn').addClass('visible');
                         mostrarPlantillasSiMeta(true, r.conversacion_id);
                     } else {
                         $('#bloqueo-reactivar-aviso').hide();
                         $('#footer-plantillas-row').show();
+                        $('#plantillas-btn').addClass('visible');
                         mostrarPlantillasSiMeta(true, r.conversacion_id);
                     }
                 } else {
@@ -706,13 +709,13 @@ $(document).ready(function() {
             $btn.removeClass('visible');
             return;
         }
+        $btn.addClass('visible');
         _fetchPlantillas(convId, false, function(err, plantillas) {
-            if (err) { console.error('[plantillas] pre-fetch error', err); $btn.removeClass('visible'); return; }
+            if (err) { console.error('[plantillas] pre-fetch error', err); return; }
             if (plantillas.length > 0) {
-                $btn.addClass('visible');
                 $('#plantillas-badge').text(plantillas.length).show();
             } else {
-                $btn.removeClass('visible');
+                $('#plantillas-badge').hide();
             }
         });
     };
