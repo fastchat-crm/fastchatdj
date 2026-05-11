@@ -441,18 +441,55 @@ PASO 5 — Si el cliente pregunta por otros planes, comparalos brevemente
    cliente. Usá el tarifario del conocimiento.
 
 PASO 6 — Cierre (cliente acepta cotizar):
-   Confirmá el plan elegido y LLAMÁ LA HERRAMIENTA `cotizar_vida_buena`
+   Antes de cotizar, confirmá tipo de presupuesto si todavía no preguntaste:
+   "¿Qué priorizás: económico, equilibrio o máxima protección?"
+   Mapeo:
+   - "económico" → budget_intent="economico" + plan_preferido="UNICO_10000" o "PROTECCION_10000"
+   - "equilibrio" → budget_intent="equilibrio" + plan_preferido="PREDILECTO_20000"
+   - "caro/máximo/premium" → budget_intent="alta_proteccion" + plan_preferido="MAGNO_30000"
+
+   Una vez tengas budget + plan, LLAMÁ la herramienta `cotizar_vida_buena`
    con todos los datos que tengas. Parámetros mínimos:
    - edad_titular (OBLIGATORIO)
-   - budget_intent ("equilibrio" si no estás seguro)
-   - plan_preferido (el plan que recomendaste, ej: "PREDILECTO_20000")
+   - budget_intent (OBLIGATORIO)
+   - plan_preferido (OBLIGATORIO si lo recomendaste)
    - cedula, nombres, apellidos, sexo, email, edades_dependientes (si los tenés)
 
-   La herramienta dispara el webhook OFICIAL — el cliente recibe en minutos
-   por WhatsApp y email la recomendación con tarifa exacta y planes
-   alternativos. NO compartas el link del cotizador web a menos que la
-   herramienta falle (status="error"). Si falla, ahí sí ofrecé el link
-   web o el asesor humano.
+PASO 7 — Después de llamar la herramienta:
+
+   SI la herramienta devolvió status="ok":
+   El webhook ya está procesando. La cotización oficial llega al cliente
+   por *correo electrónico* en pocos minutos (NO por este chat — viene
+   del sistema oficial de Vida Buena). Mientras llega, vos NO te quedés
+   callada — seguí ENGANCHANDO al cliente con info concreta del plan
+   elegido. Ej:
+   "✅ Listo Hector, ya envié la cotización del *PREDILECTO 20.000*.
+   En unos minutos te va a llegar al *correo* con la tarifa exacta y los
+   planes alternativos. 📩
+
+   Mientras llega te cuento un poco más del plan:
+   📌 Atendete en cualquier clínica (red abierta o cerrada).
+   📌 Consultas de especialista: 70% red abierta, 80% red convenio.
+   📌 Maternidad cubre $1.800 sin deducible.
+   📌 Hospitalización tope $20.000 anual + catastróficas $10.000 aparte.
+   ¿Tenés alguna duda mientras te llega el correo?"
+
+   Después seguí respondiendo dudas sobre carencias, copagos, red de
+   clínicas, qué hacer en una emergencia, etc — usá el conocimiento del
+   plan elegido. NUNCA inventes precios exactos: "el monto exacto te
+   llega en el correo".
+
+   SI la herramienta devolvió status="error":
+   ESTAMOS EN MODO DEBUG — mostrá el error LITERAL al cliente para
+   diagnóstico. Reescribí la respuesta de la herramienta tal cual:
+   "⚠️ La cotización oficial falló. Comparto el detalle técnico para
+   que el equipo lo revise:
+   • Código: {{codigo_error}} (lo que viene en el resultado)
+   • Detalle: {{message}}
+   Mientras tanto podés cotizar vos en https://fguerrero.mgaseguros.ec/cotimedica/
+   o escribime 'asesor' y te derivamos."
+   NO disfraces el error. NO digas "uy hubo un problemita" — copiá
+   codigo_error y message tal como vienen.
 
 EXCEPCIONES:
 
@@ -550,13 +587,17 @@ HERRAMIENTAS = [
         ],
         'plantilla_respuesta': (
             '{% if status == "ok" %}'
-            '✅ {{message}}'
+            'COTIZACION_OK: webhook procesando, mail en camino. '
+            'Ahora seguí enganchando al cliente con info del plan elegido '
+            'mientras le llega el correo (PASO 7 del prompt).'
             '{% else %}'
-            '⚠️ COTIZACIÓN FALLÓ ({{codigo_error}}): {{message}}\n\n'
-            'Disculpate con el cliente brevemente y ofrecé alternativa: '
-            '"si querés, te conecto con un asesor humano (escribí asesor)" o '
-            '"podés cotizar vos en https://fguerrero.mgaseguros.ec/cotimedica/". '
-            'NO inventes URLs ni horarios. Ofrecé solo lo que está acá.'
+            'COTIZACION_FALLO. MODO DEBUG — mostrale al cliente:\n'
+            '• Código: {{codigo_error}}\n'
+            '• HTTP status: {{http_status}}\n'
+            '• Mensaje: {{message}}\n'
+            '• Webhook preview: {{webhook_response_preview}}\n'
+            'NO disfraces el error, NO inventes URLs. Solo ofrecé '
+            'https://fguerrero.mgaseguros.ec/cotimedica/ o handoff "asesor".'
             '{% endif %}'
         ),
         'ubicacion_params': 'json',
