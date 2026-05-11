@@ -543,16 +543,17 @@ Tu respuesta:
 HERRAMIENTAS = [
     {
         'nombre': 'cotizar_vida_buena',
-        'nombre_amigable': 'Cotizar plan oficial (dispara webhook + email)',
+        'nombre_amigable': 'Cotizar plan oficial (función interna cotizar_am)',
         'descripcion': (
-            'Envía la cotización oficial al motor de Vida Buena. El cliente '
-            'recibe en minutos por WhatsApp y email la recomendación con tarifa '
-            'exacta y los planes alternativos. Llamala SOLO cuando el cliente '
-            'haya elegido un plan y confirme que quiere cotizar oficialmente. '
-            'Pedile confirmación antes ("¿lanzo la cotización del plan X?").'
+            'Envía la cotización oficial al motor de Vida Buena (misma función '
+            'que usa el flujo determinístico). El cliente recibe en minutos por '
+            'WhatsApp y email la recomendación con tarifa exacta y los planes '
+            'alternativos. Llamala SOLO cuando el cliente haya elegido un plan '
+            'y confirme que quiere cotizar oficialmente.'
         ),
         'metodo': 'POST',
-        'es_interno': True,
+        'funcion_codigo': 'cotizar_am',
+        'endpoint_nombre': 'Vida Buena — Webhook Cotizador (externo)',
         'parametros': [
             {'nombre': 'cedula', 'tipo': 'string', 'requerido': False,
              'descripcion': 'Cédula del titular (10 dígitos), opcional pero recomendada.',
@@ -788,9 +789,10 @@ class Command(BaseCommand):
         creadas = 0
         actualizadas = 0
         for spec in HERRAMIENTAS:
-            if spec.get('es_interno'):
-                url_completa = fastchat_url.rstrip('/') + '/crm/api/ia/cotizador_am/'
-                timeout = 30
+            funcion_codigo = spec.get('funcion_codigo', '')
+            if funcion_codigo:
+                url_completa = spec.get('endpoint_nombre', '')
+                timeout = 45
             else:
                 url_completa = base_am.rstrip('/') + '/'
                 timeout = 15
@@ -805,6 +807,7 @@ class Command(BaseCommand):
                 'plantilla_respuesta': spec['plantilla_respuesta'],
                 'timeout': timeout,
                 'activo': True,
+                'funcion_codigo': funcion_codigo,
             }
             obj, creado = HerramientaAgente.objects.update_or_create(
                 agente=agente,

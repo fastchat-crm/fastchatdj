@@ -1738,6 +1738,14 @@ class HerramientaAgente(ModeloBase):
         help_text='Tiempo máximo de espera. Máximo permitido: 30s.'
     )
     activo = models.BooleanField(default=True, verbose_name='Activa')
+    funcion_codigo = models.CharField(
+        max_length=64, blank=True, default='', verbose_name='Función interna',
+        help_text='Si se llena, en vez de hacer HTTP la herramienta ejecuta la función '
+                  'registrada en crm.funciones_chatbot.FUNCIONES_REGISTRADAS con ese '
+                  'código (ej: "cotizar_am", "cotizar_aria"). El LLM le pasa los kwargs '
+                  'como `variables`. URL/headers se ignoran. Equivale al nodo `llamada_funcion` '
+                  'de los flujos tradicionales.'
+    )
 
     class Meta:
         verbose_name = 'Herramienta de Agente'
