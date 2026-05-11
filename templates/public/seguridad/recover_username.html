@@ -75,7 +75,7 @@
         }).done(function (data) {
             setTimeout($.unblockUI, 1);
             if (data.resp === true) {
-                location = "/login/";
+                location = "/";
             } else {
                 mensajeDanger(data.error);
             }

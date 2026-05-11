@@ -2,95 +2,55 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8"/>
-    <title>{{ titulo|default:'MensajerIA' }} | {{ nombreempresa }}</title>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <meta name="description" content="MensajerIA — Atiende WhatsApp sin que nadie se quede sin respuesta. Conversaciones con IA sobre Baileys y Meta Cloud API.">
-    <meta name="keywords" content="whatsapp, ia, crm, atencion al cliente, baileys, meta cloud api, chatbot">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MensajerIA · Atiende WhatsApp sin que nadie se quede sin respuesta</title>
+    <meta name="description" content="MensajerIA — conversaciones de WhatsApp que nunca se quedan sin respuesta. WhatsApp Cloud API + bandeja para varios agentes + IA puente.">
     <meta name="theme-color" content="#1faa54">
-    <link href="{{ favicon }}" rel="shortcut icon"/>
+    <link href="{{ favicon }}" rel="shortcut icon">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link href="/static/fonts/fontawesome/css/all.css?v=6.1.1" rel="stylesheet"/>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/static/css/public/landing.css?v1.0">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+    <link rel="stylesheet" href="/static/css/public/landing.css?v1.1">
     {% block head %}{% endblock %}
 </head>
 <body class="landing-body">
 
-<header class="landing-header">
-    <div class="container">
-        <nav class="navbar navbar-expand-lg">
-            <a class="navbar-brand d-flex align-items-center gap-2" href="/">
-                <span class="brand-mark">M</span>
-                <span class="brand-text">MensajerIA</span>
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#landingNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="landingNav">
-                <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
-                    <li class="nav-item"><a class="nav-link" href="#features">Funcionalidades</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#how">Cómo funciona</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#channels">Canales</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#pricing">Precios</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#faq">Preguntas</a></li>
-                    <li class="nav-item ms-lg-3">
-                        <a class="btn btn-outline-success btn-sm px-3" href="/login/">Iniciar sesión</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="btn btn-brand btn-sm px-3" href="/register/">Empieza gratis</a>
-                    </li>
-                </ul>
-            </div>
-        </nav>
-    </div>
-</header>
-
-<main>
-    {% block content %}{% endblock %}
-</main>
-
-<footer class="landing-footer">
-    <div class="container">
-        <div class="row g-4 align-items-start">
-            <div class="col-lg-4">
-                <div class="d-flex align-items-center gap-2 mb-3">
-                    <span class="brand-mark">M</span>
-                    <span class="brand-text">MensajerIA</span>
-                </div>
-                <p class="text-muted small">Agentes de IA y un CRM real para WhatsApp. Tu equipo, tu bot y tus plantillas de Meta en una sola bandeja.</p>
-            </div>
-            <div class="col-6 col-lg-2">
-                <h6 class="footer-title">Producto</h6>
-                <ul class="list-unstyled">
-                    <li><a href="#features">Funcionalidades</a></li>
-                    <li><a href="#channels">Canales</a></li>
-                    <li><a href="#pricing">Precios</a></li>
-                </ul>
-            </div>
-            <div class="col-6 col-lg-2">
-                <h6 class="footer-title">Empresa</h6>
-                <ul class="list-unstyled">
-                    <li><a href="/acercade/">Acerca de</a></li>
-                    <li><a href="/quienes-somos/">Quiénes somos</a></li>
-                    <li><a href="/terminosycondiciones/">Términos</a></li>
-                </ul>
-            </div>
-            <div class="col-12 col-lg-4">
-                <h6 class="footer-title">Empieza ya</h6>
-                <p class="text-muted small mb-3">Conecta tu primera sesión de WhatsApp en menos de cinco minutos.</p>
-                <a class="btn btn-brand" href="/register/">Crear cuenta gratis</a>
-            </div>
+<nav class="top">
+    <div class="wrap nav-inner">
+        <a class="logo" href="/">
+            <img src="/static/img/public/mensajeria_logo.png" alt="MensajerIA" class="brand-logo">
+            <span>Mensajer<span class="brand-name-ia">IA</span></span>
+        </a>
+        <div class="nav-links">
+            <a href="#features">Funciones</a>
+            <a href="#flujos">Árboles &amp; IA</a>
+            <a href="#panel">Panel en vivo</a>
+            <a href="#sectores">Sectores</a>
+            <a href="#precios">Planes</a>
+            <a href="#faq">FAQ</a>
         </div>
-        <div class="footer-bottom">
-            <span>&copy; {% now "Y" %} {{ nombreempresa|default:'MensajerIA' }}. Todos los derechos reservados.</span>
+        <div class="nav-cta">
+            <a href="/login/" class="btn btn-ghost">Iniciar sesión</a>
+            <a href="#cta" class="btn btn-primary">Solicitar demo</a>
+        </div>
+    </div>
+</nav>
+
+{% block content %}{% endblock %}
+
+<footer>
+    <div class="wrap foot">
+        <span>&copy; {% now "Y" %} MensajerIA · Hecho para equipos que viven en WhatsApp.</span>
+        <div class="foot-links">
+            <a href="/terminosycondiciones/">Privacidad</a>
+            <a href="/terminosycondiciones/">Términos</a>
+            <a href="/acercade/">Estado</a>
+            <a href="/quienes-somos/">Contacto</a>
         </div>
     </div>
 </footer>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 {% block jscript %}{% endblock %}
 </body>
 </html>

@@ -2,332 +2,389 @@
 
 {% block content %}
 
-<section class="hero">
-    <div class="container">
-        <div class="row align-items-center g-5">
-            <div class="col-lg-7">
-                <span class="hero-eyebrow">WhatsApp · IA · CRM</span>
-                <h1 class="hero-title">Atiende WhatsApp sin que nadie se quede sin respuesta.</h1>
-                <p class="hero-lead">MensajerIA combina una bandeja real de atención, agentes de IA y plantillas aprobadas por Meta para que cada mensaje sea leído, enrutado y respondido — incluso cuando tu equipo está durmiendo.</p>
-                <div class="hero-actions">
-                    <a class="btn btn-brand btn-lg" href="/register/">Empieza gratis</a>
-                    <a class="btn btn-ghost btn-lg" href="#how">Ver cómo funciona</a>
+<header class="hero">
+    <div class="wrap hero-grid">
+        <div>
+            <span class="eyebrow"><span class="dot"></span> WhatsApp Cloud · Meta API oficial</span>
+            <h1>Conversaciones de WhatsApp que <span class="hl">nunca se quedan sin respuesta</span>.</h1>
+            <p class="lede">MensajerIA conecta tus sesiones de WhatsApp con Meta y un CRM colaborativo. Varios agentes atienden a la vez, y mientras llega un asesor, tu árbol de decisiones o la IA mantienen la conversación viva.</p>
+            <div class="hero-ctas">
+                <a href="#cta" class="btn btn-green">Solicitar demo →</a>
+                <a href="#panel" class="btn btn-outline">Ver cómo se gestiona</a>
+            </div>
+            <div class="hero-meta">
+                <span><span class="check">✓</span> Demo guiada en 15 minutos</span>
+                <span><span class="check">✓</span> API oficial de Meta</span>
+                <span><span class="check">✓</span> Onboarding incluido</span>
+            </div>
+        </div>
+
+        <div class="hero-duo" aria-hidden="true">
+            <div class="phone">
+                <div class="phone-notch"></div>
+                <div class="phone-head">
+                    <div class="phone-back">‹</div>
+                    <div class="phone-avatar">SC</div>
+                    <div class="phone-who">
+                        <b>Sage Call Center</b>
+                        <small>en línea · escribiendo</small>
+                    </div>
+                    <div class="phone-icons"><span>📞</span><span>⋮</span></div>
                 </div>
-                <div class="hero-meta">
-                    <div><strong>5 min</strong><span>para tu primera sesión</span></div>
-                    <div><strong>2 canales</strong><span>Baileys + Meta Cloud</span></div>
-                    <div><strong>24/7</strong><span>respuesta IA automática</span></div>
+                <div class="phone-body">
+                    <div class="wbubble in">Hola, quiero cotizar asistencia médica</div>
+                    <div class="wbubble out">¡Hola Hector! 👋 Te ayudo con tu cotización. Elige una opción:
+                        <div class="wbtns"><span>💵 Económico</span><span>⚖ Equilibrado</span><span>🛡 Mayor protección</span></div>
+                    </div>
+                    <div class="wbubble in">Equilibrado</div>
+                    <div class="wbubble out">Listo ✅ Vida Sana · Predilecto 20.000: <b>$47.20/mes</b>. ¿Te contacta un asesor?</div>
+                    <div class="wbubble in tiny">Sí, contáctenme ✅</div>
+                </div>
+                <div class="phone-input">
+                    <span>😊</span>
+                    <span class="wph">Escribe un mensaje…</span>
+                    <span class="wmic">🎤</span>
                 </div>
             </div>
-            <div class="col-lg-5">
-                <div class="hero-card">
-                    <div class="hero-card-header">
-                        <span class="dot dot-r"></span>
-                        <span class="dot dot-y"></span>
-                        <span class="dot dot-g"></span>
-                        <span class="hero-card-title">Bandeja · Equipo de ventas</span>
+
+            <div class="panel-mini">
+                <div class="panel-mini-head">
+                    <div class="avatar-lg">H</div>
+                    <div class="panel-mini-who">
+                        <b>Hector <span class="chip chip-mini">Conv #1191</span></b>
+                        <small>593994233732</small>
                     </div>
-                    <div class="hero-chat">
-                        <div class="bubble inbound">
-                            <span class="avatar">L</span>
-                            <div class="msg">¡Hola! ¿Envían a México?</div>
-                            <time>09:12</time>
-                        </div>
-                        <div class="bubble outbound ai">
-                            <span class="tag">IA</span>
-                            <div class="msg">Sí — de 3 a 5 días hábiles. ¿Te comparto el costo para tu código postal?</div>
-                            <time>09:12</time>
-                        </div>
-                        <div class="bubble inbound">
-                            <span class="avatar">L</span>
-                            <div class="msg">06700 por favor</div>
-                            <time>09:13</time>
-                        </div>
-                        <div class="bubble outbound human">
-                            <span class="tag">Sara</span>
-                            <div class="msg">El total es $14.90. ¿Te envío el link de pago?</div>
-                            <time>09:14</time>
-                        </div>
-                    </div>
-                    <div class="hero-card-footer">
-                        <span class="pill pill-ok">Pasado a humano</span>
-                        <span class="pill pill-muted">SLA 2m</span>
+                    <div class="panel-mini-actions">
+                        <span class="chip">🤖 Bot ON</span>
                     </div>
                 </div>
+                <div class="panel-mini-body">
+                    <div class="msg-bubble in"><span class="who">Hector</span>✅ Sí, contáctenme</div>
+                    <div class="msg-bubble bot"><span class="who">Bot</span>¡Hola Hector! Cotización #AM-000078 lista. Un asesor te atiende en breve. 👀</div>
+                    <div class="msg-bubble out"><span class="who">Carla · Agente</span>✋ Yo lo tomo — te contacto en 2 min.</div>
+                </div>
+            </div>
+
+            <div class="flow-arrow">
+                <span>en vivo</span>
             </div>
         </div>
     </div>
-</section>
+</header>
 
-<section class="trust">
-    <div class="container">
-        <p class="trust-label">Sobre los canales en los que ya confías</p>
-        <div class="row g-4 align-items-center justify-content-center trust-row">
-            <div class="col-6 col-md-3 text-center"><span class="trust-chip"><i class="fab fa-whatsapp"></i> WhatsApp Business</span></div>
-            <div class="col-6 col-md-3 text-center"><span class="trust-chip"><i class="fab fa-meta"></i> Meta Cloud API</span></div>
-            <div class="col-6 col-md-3 text-center"><span class="trust-chip"><i class="fas fa-shield-halved"></i> Sesiones Baileys</span></div>
-            <div class="col-6 col-md-3 text-center"><span class="trust-chip"><i class="fas fa-bolt"></i> WebSockets en tiempo real</span></div>
-        </div>
+<div class="wrap trust">
+    <div class="label">Construido sobre infraestructura oficial</div>
+    <div class="trust-row">
+        <div class="logo-ph">WhatsApp Cloud</div>
+        <div class="logo-ph">Meta Business</div>
+        <div class="logo-ph">Webhooks v18</div>
+        <div class="logo-ph">OAuth 2.0</div>
+        <div class="logo-ph">256-bit TLS</div>
     </div>
-</section>
+</div>
 
-<section class="problem">
-    <div class="container">
-        <div class="row g-5 align-items-center">
-            <div class="col-lg-6">
-                <h2 class="section-title">Cada mensaje perdido es una venta perdida.</h2>
-                <p class="section-lead">Si un cliente espera más de cinco minutos, ya lo perdiste. Las bandejas manuales no escalan: los agentes copian y pegan, las sesiones se caen, las plantillas de Meta se rechazan, y alguien tiene que recordar reabrir la ventana de 24 horas.</p>
-                <ul class="bullet-list">
-                    <li><i class="fas fa-circle-xmark"></i> Pestañas de WhatsApp Web que se desconectan cada dos días</li>
-                    <li><i class="fas fa-circle-xmark"></i> Hojas de cálculo disfrazadas de CRM</li>
-                    <li><i class="fas fa-circle-xmark"></i> Un número por agente y cero visibilidad para el líder</li>
+<section>
+    <div class="wrap">
+        <span class="section-eyebrow">El problema</span>
+        <h2>Un WhatsApp solo, varios agentes, cero coordinación.</h2>
+        <p class="section-lede">El número del negocio vive en un celular. Si el asesor está en almuerzo, la conversación muere. Cuando responde 4 horas después, el cliente ya cotizó con otro.</p>
+
+        <div class="split">
+            <div class="pane bad">
+                <span class="tag">Antes</span>
+                <h3>WhatsApp en un celular</h3>
+                <ul>
+                    <li><span class="ic">✕</span> Un solo asesor responde; el resto espera turno.</li>
+                    <li><span class="ic">✕</span> Clientes esperan horas sin acuse de recibo.</li>
+                    <li><span class="ic">✕</span> Cero historial, cero métricas, cero CRM.</li>
+                    <li><span class="ic">✕</span> Si el celular se pierde, se pierden los chats.</li>
                 </ul>
             </div>
-            <div class="col-lg-6">
-                <div class="row g-3">
-                    <div class="col-6">
-                        <div class="stat-card">
-                            <span class="stat-num">82%</span>
-                            <span class="stat-label">de los compradores espera respuesta en menos de 10 minutos</span>
+            <div class="pane good">
+                <span class="tag">Con MensajerIA</span>
+                <h3>WhatsApp como canal de equipo</h3>
+                <ul>
+                    <li><span class="ic">✓</span> Varios agentes atienden en paralelo desde el navegador.</li>
+                    <li><span class="ic">✓</span> Árbol de decisiones contesta al instante mientras llega el humano.</li>
+                    <li><span class="ic">✓</span> IA explica productos y resuelve dudas frecuentes 24/7.</li>
+                    <li><span class="ic">✓</span> Cada mensaje queda registrado, asignado y medible.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="features" class="section-tight">
+    <div class="wrap">
+        <span class="section-eyebrow">Funciones</span>
+        <h2>Todo lo que tu equipo necesita para no perder un solo chat.</h2>
+        <p class="section-lede">Bandeja compartida, automatización configurable y métricas en tiempo real — sobre la API oficial de WhatsApp.</p>
+
+        <div class="bento">
+            <div class="card span-3">
+                <div class="ico-big">🌳</div>
+                <h3>Árboles de decisiones visuales</h3>
+                <p>Diseña menús, botones y flujos sin código. El cliente avanza solo hasta donde puede; cuando hace falta humano, se deriva en un click.</p>
+                <div class="tree-mini">
+                    <div class="tree-node menu">🧩 Menú con botones · Intención</div>
+                    <div class="tree-line"></div>
+                    <div class="tree-row">
+                        <div class="tree-col"><span class="leaf-label">💵 Económico</span><div class="tree-node">Cotización</div></div>
+                        <div class="tree-col"><span class="leaf-label">⚖ Equilibrado</span><div class="tree-node">Cotización</div></div>
+                        <div class="tree-col"><span class="leaf-label">🛡 Mayor</span><div class="tree-node">Cotización</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card span-3 dark">
+                <div class="ico-big">🤖</div>
+                <h3>IA puente hasta que llega el asesor</h3>
+                <p>La IA responde con tono de marca, explica catálogo y agenda — o contiene la conversación hasta que un agente humano la tome. Sin silencios incómodos.</p>
+                <div class="chat-mini chat-mini-dark">
+                    <div class="msg in msg-dark-in"><span class="who">Cliente</span>¿Tienen plan para mi mamá de 62?</div>
+                    <div class="msg out msg-dark-out"><span class="who">MensajerIA</span>Sí. Para esa edad recomiendo Vida Sana 20.000 (USD 47/mes). Te paso a un asesor para confirmar coberturas. 👋</div>
+                </div>
+            </div>
+
+            <div class="card span-2">
+                <div class="ico-big">👥</div>
+                <h3>Bandeja para varios agentes</h3>
+                <p>Asigna conversaciones, etiqueta etapas y mira quién atiende qué — en una sola pantalla.</p>
+            </div>
+
+            <div class="card span-2">
+                <div class="ico-big ico-y">⏱</div>
+                <h3>Sin respuestas en 0 segundos</h3>
+                <p>Acuse automático, mensaje de bienvenida y SLA configurable. Tus clientes nunca leen "visto" sin respuesta.</p>
+            </div>
+
+            <div class="card span-2">
+                <div class="ico-big ico-b">📊</div>
+                <h3>Métricas que sí miras</h3>
+                <p>Mensajes/día, conversaciones por agente, tiempo de primera respuesta y cierre. Exportable a CSV.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="flujos">
+    <div class="wrap">
+        <span class="section-eyebrow">Cómo funciona</span>
+        <h2>De celular caótico a operación medible en 4 pasos.</h2>
+        <p class="section-lede">Sin reinstalar nada en el teléfono. Conectas, configuras y empiezas a recibir conversaciones en el panel.</p>
+
+        <div class="flow">
+            <div class="step"><div class="n">1</div><h4>Conecta tu número</h4><p>Vincula tu cuenta de WhatsApp Business con Meta vía nuestra integración oficial.</p></div>
+            <div class="step"><div class="n">2</div><h4>Diseña el árbol</h4><p>Botones, intenciones, condiciones — todo arrastrable. O usa la IA para responder libremente.</p></div>
+            <div class="step"><div class="n">3</div><h4>Invita a tu equipo</h4><p>Crea agentes, asigna roles y deja que la bandeja compartida reparta el trabajo.</p></div>
+            <div class="step"><div class="n">4</div><h4>Mide y mejora</h4><p>Mira métricas por agente, etapa y campaña. Itera tus flujos sin tocar código.</p></div>
+        </div>
+    </div>
+</section>
+
+<section id="panel" class="section-tight">
+    <div class="wrap">
+        <span class="section-eyebrow">Panel en vivo</span>
+        <h2>La bandeja que tu equipo va a abrir todo el día.</h2>
+        <p class="section-lede">Conversación, contexto del contacto, etapa del embudo y acciones rápidas — todo en una vista. Cambia entre Bot y agente humano con un click.</p>
+
+        <div class="board">
+            <aside class="board-side">
+                <div class="conv-select"><span>☁ Meta · 593959843712</span><span class="conv-caret">▾</span></div>
+                <div class="tabs">
+                    <span class="tab on">💬 Abiertas</span>
+                    <span class="tab">✓ Finalizadas</span>
+                </div>
+                <div class="conv-item active">
+                    <div class="row"><span class="badge meta">Meta</span><span class="badge uncat">Sin clasificar</span></div>
+                    <div class="row"><span class="conv-name">Hector</span><span class="conv-when">27 min</span></div>
+                    <span class="conv-prev">☑ Sí, contáctenme</span>
+                </div>
+                <div class="conv-item conv-item-quiet">
+                    <div class="row"><span class="badge meta">Meta</span><span class="badge badge-new">Nuevo</span></div>
+                    <div class="row"><span class="conv-name">María C.</span><span class="conv-when">2 min</span></div>
+                    <span class="conv-prev">Buenas, quería cotizar…</span>
+                </div>
+            </aside>
+
+            <div class="board-main">
+                <div class="board-head">
+                    <div class="who">
+                        <div class="avatar-lg">H</div>
+                        <div>
+                            <div class="name">Hector <span class="chip">Conv #1191</span></div>
+                            <div class="sub">593994233732 · inicio 10/05/2026 19:23</div>
                         </div>
                     </div>
-                    <div class="col-6">
-                        <div class="stat-card stat-card-alt">
-                            <span class="stat-num">3x</span>
-                            <span class="stat-label">más cierre cuando la primera respuesta es automática</span>
-                        </div>
+                    <div class="actions">
+                        <span class="chip">🤖 Bot ON</span>
+                        <span class="chip dark">Terminar ▾</span>
                     </div>
-                    <div class="col-6">
-                        <div class="stat-card stat-card-alt">
-                            <span class="stat-num">6h</span>
-                            <span class="stat-label">de reactivación gratis que MensajerIA controla por ti</span>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="stat-card">
-                            <span class="stat-num">24/7</span>
-                            <span class="stat-label">cobertura del agente de IA desde el primer día</span>
-                        </div>
-                    </div>
+                </div>
+                <div class="board-msgs">
+                    <div class="msg-bubble in"><span class="who">Hector</span>☑ Sí, contáctenme</div>
+                    <div class="msg-bubble bot"><span class="who">MensajerIA · Bot</span>¡Hola Hector! 👋 Tu cotización de <b>Asistencia Médica</b> ya está lista (#AM-000078).<br><br>Opciones para ti:<br>• Vida Sana · Predilecto 20.000: <b>$47.20 / mes</b><br><br>Si tienes dudas, responde este mensaje y un asesor te atiende en breve.</div>
+                    <div class="msg-bubble out"><span class="who">Agente · Carla</span>👋 Excelente. Te contacto en breve para confirmar tarifa exacta y activación.</div>
+                    <div class="typing" aria-hidden="true"><i></i><i></i><i></i></div>
                 </div>
             </div>
         </div>
     </div>
 </section>
 
-<section class="features" id="features">
-    <div class="container">
-        <div class="section-head text-center">
-            <span class="hero-eyebrow">Qué incluye</span>
-            <h2 class="section-title">Todo lo que un equipo de WhatsApp realmente necesita.</h2>
-            <p class="section-lead">Desde el primer hola hasta el cierre — un solo espacio, dos canales y trazabilidad real.</p>
+<section id="sectores">
+    <div class="wrap">
+        <span class="section-eyebrow">A medida</span>
+        <h2>Nos adaptamos a tu sector y a tus propios sistemas.</h2>
+        <p class="section-lede">Cada operación es distinta. Diseñamos el flujo según el objetivo: ventas, cobranzas, soporte, agendamiento, inscripciones — y nos conectamos vía <b>webhooks</b> y APIs a tus herramientas internas con desarrollo personalizado y acompañamiento del equipo técnico.</p>
+
+        <div class="sectors">
+            <div class="sector">
+                <div class="sector-ico sector-ico-y">🎓</div>
+                <h3>Educación</h3>
+                <p>Captura de leads, asesoría académica y <b>cierre con inscripción</b> integrada al sistema de matrícula del instituto.</p>
+                <span class="sector-tag">Webhook → SIS / ERP académico</span>
+            </div>
+            <div class="sector">
+                <div class="sector-ico">🏥</div>
+                <h3>Salud &amp; Seguros</h3>
+                <p>Cotización guiada, validación de datos del titular y derivación a asesor humano para cerrar la póliza.</p>
+                <span class="sector-tag">Webhook → cotizador / CRM</span>
+            </div>
+            <div class="sector">
+                <div class="sector-ico sector-ico-b">🛒</div>
+                <h3>Retail &amp; e-commerce</h3>
+                <p>Catálogo, seguimiento de pedido y postventa. La IA contesta dudas y el agente cierra ventas grandes.</p>
+                <span class="sector-tag">Webhook → Shopify / WooCommerce</span>
+            </div>
+            <div class="sector">
+                <div class="sector-ico sector-ico-p">🏦</div>
+                <h3>Servicios financieros</h3>
+                <p>Pre-calificación, recordatorios de pago y atención multi-agente con trazabilidad completa.</p>
+                <span class="sector-tag">Webhook → Core / cobranzas</span>
+            </div>
         </div>
-        <div class="row g-4">
-            <div class="col-md-6 col-lg-4">
-                <div class="feature-card">
-                    <span class="feature-icon"><i class="fas fa-inbox"></i></span>
-                    <h3>Bandeja unificada</h3>
-                    <p>Todas las conversaciones en una pantalla, con asignación, departamentos, notas internas y temporizadores SLA.</p>
-                </div>
+
+        <div class="integ">
+            <div class="integ-side">
+                <span class="section-eyebrow eyebrow-paper">Integración personalizada</span>
+                <h3>Webhooks + desarrollo a medida + soporte para tu equipo de TI.</h3>
+                <p>Conectamos MensajerIA con tus sistemas internos para que la conversación no termine en el chat: termine en una matrícula confirmada, un pedido creado, un ticket asignado o una venta cerrada en tu CRM.</p>
+                <ul class="integ-list">
+                    <li><span class="ic">✓</span> Webhooks salientes en cada evento (mensaje, etapa, cierre).</li>
+                    <li><span class="ic">✓</span> API REST para empujar contactos y leer historial.</li>
+                    <li><span class="ic">✓</span> Desarrollo personalizado para tu flujo específico.</li>
+                    <li><span class="ic">✓</span> Asistencia directa a tu equipo tecnológico durante la integración.</li>
+                </ul>
             </div>
-            <div class="col-md-6 col-lg-4">
-                <div class="feature-card">
-                    <span class="feature-icon"><i class="fas fa-robot"></i></span>
-                    <h3>Agentes de IA</h3>
-                    <p>Consultor, resumidor y auditor que aprenden de tu base de conocimiento y entregan el caso al humano sin perder contexto.</p>
-                </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-                <div class="feature-card">
-                    <span class="feature-icon"><i class="fas fa-diagram-project"></i></span>
-                    <h3>Flujos de chatbot</h3>
-                    <p>Constructor visual con condiciones, saltos y previsualización en vivo. Lanza un bot en una tarde.</p>
-                </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-                <div class="feature-card">
-                    <span class="feature-icon"><i class="fas fa-rectangle-list"></i></span>
-                    <h3>Plantillas Meta</h3>
-                    <p>Envía, versiona y reabre la ventana de 24 horas automáticamente. Sin sorpresas de "plantilla rechazada".</p>
-                </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-                <div class="feature-card">
-                    <span class="feature-icon"><i class="fas fa-bullhorn"></i></span>
-                    <h3>Campañas</h3>
-                    <p>Filtros de audiencia, envío con rate limit y reportes de entrega y lectura. 50.000 mensajes sin que te bloqueen.</p>
-                </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-                <div class="feature-card">
-                    <span class="feature-icon"><i class="fas fa-chart-line"></i></span>
-                    <h3>Pipelines y analítica</h3>
-                    <p>Etapas de venta arrastrables, embudos de conversión y tableros de productividad por agente.</p>
+            <div class="integ-diag">
+                <div class="integ-node green">MensajerIA</div>
+                <div class="integ-arrow"><span>webhook</span></div>
+                <div class="integ-node dark">Tu sistema</div>
+                <div class="integ-stack">
+                    <span>SIS / ERP</span>
+                    <span>CRM</span>
+                    <span>Cobranzas</span>
+                    <span>e-commerce</span>
                 </div>
             </div>
         </div>
     </div>
 </section>
 
-<section class="how" id="how">
-    <div class="container">
-        <div class="section-head text-center">
-            <span class="hero-eyebrow">Cómo funciona</span>
-            <h2 class="section-title">De cero a respondiendo en tres pasos.</h2>
-        </div>
-        <div class="row g-4">
-            <div class="col-md-4">
-                <div class="step-card">
-                    <span class="step-num">01</span>
-                    <h3>Conecta tu número</h3>
-                    <p>Escanea un QR con Baileys o pega tus credenciales de Meta Cloud. Los dos canales viven juntos.</p>
-                </div>
+<section id="precios">
+    <div class="wrap">
+        <span class="section-eyebrow">Planes</span>
+        <h2>Tres planes. Una conversación previa para elegir.</h2>
+        <p class="section-lede">No tenemos plan gratuito: cada cuenta se configura con demo y onboarding para que tu equipo arranque bien. Los precios se ajustan a tu volumen y necesidad de IA.</p>
+
+        <div class="prices">
+            <div class="price">
+                <h3>Inicial</h3>
+                <p class="desc">Bandeja compartida y árboles de decisiones para equipos que recién migran a la API oficial.</p>
+                <div class="price-tag"><span class="amt text">A consultar</span></div>
+                <ul>
+                    <li>1 sesión de WhatsApp Cloud</li>
+                    <li>Agentes múltiples en una misma bandeja</li>
+                    <li>Árboles de decisiones ilimitados</li>
+                    <li>Etiquetas, etapas y métricas</li>
+                    <li class="li-muted">IA puente (no incluida)</li>
+                </ul>
+                <a href="#cta" class="btn btn-outline">Solicitar demo</a>
             </div>
-            <div class="col-md-4">
-                <div class="step-card step-card-mid">
-                    <span class="step-num">02</span>
-                    <h3>Entrena tu IA</h3>
-                    <p>Sube PDFs, preguntas frecuentes y el tono que usas. Prueba al agente en un sandbox antes de salir en vivo.</p>
-                </div>
+
+            <div class="price pop">
+                <span class="ribbon">Con IA</span>
+                <h3>Equipo + IA</h3>
+                <p class="desc">Igual que Inicial, más IA que mantiene la conversación hasta que llega un asesor humano.</p>
+                <div class="price-tag"><span class="amt text">A consultar</span></div>
+                <ul>
+                    <li>Todo lo de Inicial</li>
+                    <li>IA puente con tono de marca</li>
+                    <li>Respuestas a preguntas frecuentes 24/7</li>
+                    <li>Escalado automático a humano</li>
+                    <li>Plantillas y prompts editables</li>
+                </ul>
+                <a href="#cta" class="btn btn-green">Solicitar demo</a>
             </div>
-            <div class="col-md-4">
-                <div class="step-card">
-                    <span class="step-num">03</span>
-                    <h3>Enruta y cierra</h3>
-                    <p>El bot atiende la intención y las dudas, tu equipo cierra los negocios. Cada acción queda auditada.</p>
-                </div>
+
+            <div class="price">
+                <h3>Negocio</h3>
+                <p class="desc">Multi-sucursal, alto volumen, integraciones con CRM y SLA dedicado.</p>
+                <div class="price-tag"><span class="amt text">A medida</span></div>
+                <ul>
+                    <li>Sesiones &amp; agentes ilimitados</li>
+                    <li>IA con tono de marca afinada</li>
+                    <li>Integraciones (Hubspot, Salesforce…)</li>
+                    <li>Soporte prioritario y SLA</li>
+                </ul>
+                <a href="#cta" class="btn btn-outline">Hablar con ventas</a>
             </div>
         </div>
     </div>
 </section>
 
-<section class="channels" id="channels">
-    <div class="container">
-        <div class="row g-4">
-            <div class="col-lg-6">
-                <div class="channel-card channel-baileys">
-                    <span class="channel-badge">Baileys</span>
-                    <h3>WhatsApp personal, automatizado.</h3>
-                    <p>Vincula un número existente en segundos. Ideal para emprendedores, equipos pequeños y pilotos antes de pasar al canal oficial.</p>
-                    <ul class="bullet-list">
-                        <li><i class="fas fa-check"></i> Sin aprobación de Meta</li>
-                        <li><i class="fas fa-check"></i> Reconexión automática con healthchecks</li>
-                        <li><i class="fas fa-check"></i> Sesión multi-dispositivo en clúster</li>
-                    </ul>
-                </div>
-            </div>
-            <div class="col-lg-6">
-                <div class="channel-card channel-meta">
-                    <span class="channel-badge">Meta Cloud API</span>
-                    <h3>Oficial, a escala.</h3>
-                    <p>Perfil verificado, tick azul, plantillas aprobadas y monitoreo de la calidad del número.</p>
-                    <ul class="bullet-list">
-                        <li><i class="fas fa-check"></i> Versionado de plantillas y estado de revisión</li>
-                        <li><i class="fas fa-check"></i> Ventana de 24h + reactivación de 6h controlada</li>
-                        <li><i class="fas fa-check"></i> Actualizaciones en tiempo real por webhooks</li>
-                    </ul>
-                </div>
-            </div>
+<section id="faq" class="section-faq">
+    <div class="wrap wrap-narrow">
+        <span class="section-eyebrow">Preguntas</span>
+        <h2>Lo que todos preguntan antes de conectar.</h2>
+
+        <div class="faq">
+            <details class="qa" open>
+                <summary>¿Tengo que cambiar mi número de WhatsApp?</summary>
+                <p>No necesariamente. Puedes mantener tu número actual migrándolo a WhatsApp Cloud API, o usar uno nuevo dedicado a la operación. El proceso toma minutos y lo guiamos paso a paso.</p>
+            </details>
+            <details class="qa">
+                <summary>¿La IA reemplaza a mis asesores?</summary>
+                <p>No. La IA es un <b>puente</b>: contiene la conversación, responde dudas frecuentes y agenda — pero siempre escala a un humano cuando hace falta. Tú decides cuándo entra y cuándo se queda fuera.</p>
+            </details>
+            <details class="qa">
+                <summary>¿Esto es la API oficial de Meta?</summary>
+                <p>Sí. MensajerIA opera 100% sobre WhatsApp Cloud API. Cero conexiones "no oficiales", cero riesgo de bloqueo, calidad de número auditada por Meta.</p>
+            </details>
+            <details class="qa">
+                <summary>¿Cuántos agentes pueden atender el mismo número?</summary>
+                <p>Tantos como tu plan permita. El número es uno, pero la bandeja es compartida — múltiples agentes responden en paralelo sin pisarse.</p>
+            </details>
+            <details class="qa">
+                <summary>¿Puedo conectar mi CRM existente?</summary>
+                <p>Sí. Exponemos webhooks y una API REST para empujar contactos y conversaciones a Hubspot, Salesforce, Zoho u otros. Plan Negocio incluye integraciones a medida.</p>
+            </details>
         </div>
     </div>
 </section>
 
-<section class="pricing" id="pricing">
-    <div class="container">
-        <div class="section-head text-center">
-            <span class="hero-eyebrow">Precios</span>
-            <h2 class="section-title">Planes simples. Sin sorpresas por mensaje.</h2>
-        </div>
-        <div class="row g-4 justify-content-center">
-            <div class="col-md-6 col-lg-4">
-                <div class="price-card">
-                    <h3 class="price-name">Inicial</h3>
-                    <div class="price-amount"><span>$</span>0<small>/mes</small></div>
-                    <p class="price-tag">Piloto con un número</p>
-                    <ul class="bullet-list">
-                        <li><i class="fas fa-check"></i> 1 sesión Baileys</li>
-                        <li><i class="fas fa-check"></i> 1 agente de IA</li>
-                        <li><i class="fas fa-check"></i> 500 conversaciones al mes</li>
-                    </ul>
-                    <a class="btn btn-outline-success w-100" href="/register/">Empieza gratis</a>
+<section id="cta" class="section-cta">
+    <div class="wrap">
+        <div class="cta-band">
+            <div class="cta-band-inner">
+                <div>
+                    <h2>Agenda una demo de 15 minutos.</h2>
+                    <p>Te mostramos en vivo cómo conectar tu WhatsApp, cómo se ve la bandeja para tu equipo y cómo se configura el árbol o la IA puente. Sin gratuito, con onboarding incluido.</p>
                 </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-                <div class="price-card price-card-featured">
-                    <span class="price-flag">Más popular</span>
-                    <h3 class="price-name">Crecimiento</h3>
-                    <div class="price-amount"><span>$</span>49<small>/mes</small></div>
-                    <p class="price-tag">Equipos pequeños que van rápido</p>
-                    <ul class="bullet-list">
-                        <li><i class="fas fa-check"></i> 5 sesiones (Baileys o Meta)</li>
-                        <li><i class="fas fa-check"></i> Agentes de IA ilimitados</li>
-                        <li><i class="fas fa-check"></i> Campañas y plantillas</li>
-                        <li><i class="fas fa-check"></i> Pipelines y analítica</li>
-                    </ul>
-                    <a class="btn btn-brand w-100" href="/register/">Prueba 14 días</a>
-                </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-                <div class="price-card">
-                    <h3 class="price-name">Escala</h3>
-                    <div class="price-amount"><span>$</span>149<small>/mes</small></div>
-                    <p class="price-tag">Operaciones de alto volumen</p>
-                    <ul class="bullet-list">
-                        <li><i class="fas fa-check"></i> Sesiones ilimitadas</li>
-                        <li><i class="fas fa-check"></i> Departamentos y SLA</li>
-                        <li><i class="fas fa-check"></i> Add-on de voz IA</li>
-                        <li><i class="fas fa-check"></i> Soporte prioritario</li>
-                    </ul>
-                    <a class="btn btn-outline-success w-100" href="/register/">Habla con ventas</a>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section class="faq" id="faq">
-    <div class="container">
-        <div class="row g-5">
-            <div class="col-lg-4">
-                <span class="hero-eyebrow">Preguntas</span>
-                <h2 class="section-title">Respuestas honestas, sin letra pequeña.</h2>
-                <p class="section-lead">¿No encuentras lo que buscas? Escríbenos — un humano lee cada mensaje.</p>
-                <a class="btn btn-brand" href="/register/">Pruébalo gratis</a>
-            </div>
-            <div class="col-lg-8">
-                <div class="accordion accordion-flush" id="faqAcc">
-                    <div class="accordion-item">
-                        <h3 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#q1">¿Necesito un número aprobado por Meta?</button></h3>
-                        <div id="q1" class="accordion-collapse collapse show" data-bs-parent="#faqAcc"><div class="accordion-body">No. Puedes empezar con una sesión Baileys sobre cualquier WhatsApp existente y migrar a Meta Cloud API después sin perder el historial.</div></div>
-                    </div>
-                    <div class="accordion-item">
-                        <h3 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#q2">¿La IA va a reemplazar a mis agentes?</button></h3>
-                        <div id="q2" class="accordion-collapse collapse" data-bs-parent="#faqAcc"><div class="accordion-body">Se queda con el 60% aburrido: saludos, preguntas frecuentes, enrutamiento y seguimientos. Tu equipo se concentra en las conversaciones de alto valor con todo el contexto.</div></div>
-                    </div>
-                    <div class="accordion-item">
-                        <h3 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#q3">¿Cómo funciona la ventana de 24 horas?</button></h3>
-                        <div id="q3" class="accordion-collapse collapse" data-bs-parent="#faqAcc"><div class="accordion-body">MensajerIA controla la ventana de servicio de 24 horas de Meta y el periodo de reactivación de 6 horas, sugiriendo una plantilla aprobada en el momento justo.</div></div>
-                    </div>
-                    <div class="accordion-item">
-                        <h3 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#q4">¿Puedo migrar desde otra herramienta?</button></h3>
-                        <div id="q4" class="accordion-collapse collapse" data-bs-parent="#faqAcc"><div class="accordion-body">Sí. Importamos contactos, etiquetas e historial desde CSV y los principales CRMs. Tu equipo conserva toda la línea de tiempo.</div></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section class="cta">
-    <div class="container">
-        <div class="cta-card">
-            <div class="row align-items-center g-4">
-                <div class="col-lg-8">
-                    <h2>Deja de perder clientes por silencio.</h2>
-                    <p>Conecta tu número, deja que la IA cubra la guardia nocturna y mira cómo tu tiempo de respuesta baja de sesenta segundos.</p>
-                </div>
-                <div class="col-lg-4 text-lg-end">
-                    <a class="btn btn-light btn-lg" href="/register/">Crear cuenta gratis</a>
+                <div class="actions">
+                    <a href="/register/" class="btn btn-green">Solicitar demo →</a>
+                    <a href="/login/" class="btn btn-outline">Hablar por WhatsApp</a>
                 </div>
             </div>
         </div>
