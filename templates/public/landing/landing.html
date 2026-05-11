@@ -1,52 +1,337 @@
-{% extends 'public/base.html' %}
-
-{% block head %}
-    <style>
-        @media only screen and (max-width: 600px) {
-            .center-mobile {
-                text-align: center;
-            }
-        }
-
-    </style>
-{% endblock %}
+{% extends 'public/landing/baselanding.html' %}
 
 {% block content %}
 
-    <section>
-        <div class="jarallax min-vh-100 py-5">
-            <div class="jarallax-img" style="background-image: url('/media/{{ confi.fondoprincipal }}');"></div>
-            <div class="container position-relative zindex-5 py-sm-4 py-lg-5 mt-4">
-                <div class="row pt-lg-2 py-xl-4 py-xxl-5 mb-md-4 mb-lg-5 justify-content-between align-items-center">
-                    <div class="col-xl-8 col-xxl-7 pt-5 mb-5 text-center text-xl-start">
-                        <h1 class="text-uppercase pb-sm-2 pb-md-3">{{ confi.titulo|default:'Web Title' }}</h1>
-                        <p class="pb-3 pb-md-4 mb-3 d-inline"
-                           style="color:#273159!important;max-width: 520px;">{{ confi.descripcion|default:'Description web' }}</p>
-                        <div class="d-flex justify-content-center justify-content-xl-start mt-5 gap-3">
-                            <a href="https://home.protinn.com" target="_blank" class="btn btn-info ">Ir a la web <i
-                                    class="fas fa-cookie-bite ms-2"></i></a>
-                            {% if request.user.is_autenticated %}
-                                <a href="/login/" class="btn btn-success ">Inicia Sesión <i
-                                        class="fas fa-arrow-right ms-2"></i></a>
-                            {% endif %}
+<section class="hero">
+    <div class="container">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-7">
+                <span class="hero-eyebrow">WhatsApp · AI · CRM</span>
+                <h1 class="hero-title">Answer WhatsApp without anyone going unanswered.</h1>
+                <p class="hero-lead">MensajerIA combines a real customer-service inbox, AI agents and Meta-approved templates so every message is read, routed and replied — even when your team is asleep.</p>
+                <div class="hero-actions">
+                    <a class="btn btn-brand btn-lg" href="/register/">Start free</a>
+                    <a class="btn btn-ghost btn-lg" href="#how">See how it works</a>
+                </div>
+                <div class="hero-meta">
+                    <div><strong>5 min</strong><span>to first session</span></div>
+                    <div><strong>2 channels</strong><span>Baileys + Meta Cloud</span></div>
+                    <div><strong>24/7</strong><span>AI auto-reply</span></div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="hero-card">
+                    <div class="hero-card-header">
+                        <span class="dot dot-r"></span>
+                        <span class="dot dot-y"></span>
+                        <span class="dot dot-g"></span>
+                        <span class="hero-card-title">Inbox · Sales team</span>
+                    </div>
+                    <div class="hero-chat">
+                        <div class="bubble inbound">
+                            <span class="avatar">L</span>
+                            <div class="msg">Hi! Do you ship to Mexico?</div>
+                            <time>09:12</time>
+                        </div>
+                        <div class="bubble outbound ai">
+                            <span class="tag">AI</span>
+                            <div class="msg">Yes — 3 to 5 business days. Want me to share the price for your zip code?</div>
+                            <time>09:12</time>
+                        </div>
+                        <div class="bubble inbound">
+                            <span class="avatar">L</span>
+                            <div class="msg">06700 please</div>
+                            <time>09:13</time>
+                        </div>
+                        <div class="bubble outbound human">
+                            <span class="tag">Sara</span>
+                            <div class="msg">Total is $14.90. Shall I send the checkout link?</div>
+                            <time>09:14</time>
                         </div>
                     </div>
-                    <div class="col-7 col-xl-4 col-xxl-5 pt-5 mb-5 text-center mx-auto">
-                        <img src="/media/{{ confi.imagen_landing }}" alt="">
+                    <div class="hero-card-footer">
+                        <span class="pill pill-ok">Auto-handed to human</span>
+                        <span class="pill pill-muted">SLA 2m</span>
                     </div>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
+
+<section class="trust">
+    <div class="container">
+        <p class="trust-label">Built on the channels you already trust</p>
+        <div class="row g-4 align-items-center justify-content-center trust-row">
+            <div class="col-6 col-md-3 text-center"><span class="trust-chip"><i class="fab fa-whatsapp"></i> WhatsApp Business</span></div>
+            <div class="col-6 col-md-3 text-center"><span class="trust-chip"><i class="fab fa-meta"></i> Meta Cloud API</span></div>
+            <div class="col-6 col-md-3 text-center"><span class="trust-chip"><i class="fas fa-shield-halved"></i> Baileys sessions</span></div>
+            <div class="col-6 col-md-3 text-center"><span class="trust-chip"><i class="fas fa-bolt"></i> Real-time websockets</span></div>
+        </div>
+    </div>
+</section>
+
+<section class="problem">
+    <div class="container">
+        <div class="row g-5 align-items-center">
+            <div class="col-lg-6">
+                <h2 class="section-title">Missed messages are missed revenue.</h2>
+                <p class="section-lead">If a lead waits more than five minutes, you have already lost them. Manual inboxes don't scale: agents copy and paste, sessions break, Meta templates get rejected, and someone has to remember to reopen the conversation within the 24h window.</p>
+                <ul class="bullet-list">
+                    <li><i class="fas fa-circle-xmark"></i> WhatsApp Web tabs that disconnect every other day</li>
+                    <li><i class="fas fa-circle-xmark"></i> Spreadsheets pretending to be a CRM</li>
+                    <li><i class="fas fa-circle-xmark"></i> One number per agent, zero visibility for the team lead</li>
+                </ul>
+            </div>
+            <div class="col-lg-6">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <div class="stat-card">
+                            <span class="stat-num">82%</span>
+                            <span class="stat-label">of buyers expect a reply in under 10 minutes</span>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-card stat-card-alt">
+                            <span class="stat-num">3x</span>
+                            <span class="stat-label">close rate when first response is automated</span>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-card stat-card-alt">
+                            <span class="stat-num">6h</span>
+                            <span class="stat-label">free reactivation window MensajerIA tracks for you</span>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-card">
+                            <span class="stat-num">24/7</span>
+                            <span class="stat-label">AI agent coverage out of the box</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="features" id="features">
+    <div class="container">
+        <div class="section-head text-center">
+            <span class="hero-eyebrow">What you get</span>
+            <h2 class="section-title">Everything a WhatsApp team actually needs.</h2>
+            <p class="section-lead">From the first hello to the closed deal — one workspace, two channels, real audit trails.</p>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <span class="feature-icon"><i class="fas fa-inbox"></i></span>
+                    <h3>Unified inbox</h3>
+                    <p>Every conversation in one screen, with assignment, departments, internal notes and SLA timers.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <span class="feature-icon"><i class="fas fa-robot"></i></span>
+                    <h3>AI agents</h3>
+                    <p>Consultor, summarizer and auditor agents that learn from your knowledge base and hand off to humans cleanly.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <span class="feature-icon"><i class="fas fa-diagram-project"></i></span>
+                    <h3>Chatbot flows</h3>
+                    <p>Visual flow builder with conditions, jumps and live previews. Ship a bot in an afternoon.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <span class="feature-icon"><i class="fas fa-rectangle-list"></i></span>
+                    <h3>Meta templates</h3>
+                    <p>Submit, version and re-open the 24h window automatically. No more "template rejected" surprises.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <span class="feature-icon"><i class="fas fa-bullhorn"></i></span>
+                    <h3>Campaigns</h3>
+                    <p>Audience filters, rate-limited dispatch, delivery and read reports. Send 50k messages without getting flagged.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="feature-card">
+                    <span class="feature-icon"><i class="fas fa-chart-line"></i></span>
+                    <h3>Pipelines &amp; analytics</h3>
+                    <p>Drag-and-drop sales stages, conversion funnels and per-agent productivity dashboards.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="how" id="how">
+    <div class="container">
+        <div class="section-head text-center">
+            <span class="hero-eyebrow">How it works</span>
+            <h2 class="section-title">From zero to answering in three steps.</h2>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="step-card">
+                    <span class="step-num">01</span>
+                    <h3>Connect your number</h3>
+                    <p>Scan a QR code for Baileys or paste your Meta Cloud credentials. Both live side by side.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="step-card step-card-mid">
+                    <span class="step-num">02</span>
+                    <h3>Train your AI</h3>
+                    <p>Drop in PDFs, FAQs and your tone. Test the agent in a sandbox before going live.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="step-card">
+                    <span class="step-num">03</span>
+                    <h3>Route &amp; close</h3>
+                    <p>The bot handles intent and FAQs, your team takes the deals. Every action audited.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="channels" id="channels">
+    <div class="container">
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <div class="channel-card channel-baileys">
+                    <span class="channel-badge">Baileys</span>
+                    <h3>Personal WhatsApp, automated.</h3>
+                    <p>Pair an existing number in seconds. Great for solo founders, small teams and pilots before going official.</p>
+                    <ul class="bullet-list">
+                        <li><i class="fas fa-check"></i> No Meta approval needed</li>
+                        <li><i class="fas fa-check"></i> Auto-reconnect with healthchecks</li>
+                        <li><i class="fas fa-check"></i> Multi-device session in cluster</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="channel-card channel-meta">
+                    <span class="channel-badge">Meta Cloud API</span>
+                    <h3>Official, at scale.</h3>
+                    <p>Verified business profile, blue tick, approved templates and quality rating tracking.</p>
+                    <ul class="bullet-list">
+                        <li><i class="fas fa-check"></i> Template versioning &amp; review status</li>
+                        <li><i class="fas fa-check"></i> 24h window + 6h reactivation tracking</li>
+                        <li><i class="fas fa-check"></i> Webhook-driven real-time updates</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="pricing" id="pricing">
+    <div class="container">
+        <div class="section-head text-center">
+            <span class="hero-eyebrow">Pricing</span>
+            <h2 class="section-title">Simple plans. No per-message surprises.</h2>
+        </div>
+        <div class="row g-4 justify-content-center">
+            <div class="col-md-6 col-lg-4">
+                <div class="price-card">
+                    <h3 class="price-name">Starter</h3>
+                    <div class="price-amount"><span>$</span>0<small>/mo</small></div>
+                    <p class="price-tag">Pilot with one number</p>
+                    <ul class="bullet-list">
+                        <li><i class="fas fa-check"></i> 1 Baileys session</li>
+                        <li><i class="fas fa-check"></i> 1 AI agent</li>
+                        <li><i class="fas fa-check"></i> 500 monthly conversations</li>
+                    </ul>
+                    <a class="btn btn-outline-success w-100" href="/register/">Start free</a>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="price-card price-card-featured">
+                    <span class="price-flag">Most popular</span>
+                    <h3 class="price-name">Growth</h3>
+                    <div class="price-amount"><span>$</span>49<small>/mo</small></div>
+                    <p class="price-tag">Small teams shipping fast</p>
+                    <ul class="bullet-list">
+                        <li><i class="fas fa-check"></i> 5 sessions (Baileys or Meta)</li>
+                        <li><i class="fas fa-check"></i> Unlimited AI agents</li>
+                        <li><i class="fas fa-check"></i> Campaigns &amp; templates</li>
+                        <li><i class="fas fa-check"></i> Pipelines &amp; analytics</li>
+                    </ul>
+                    <a class="btn btn-brand w-100" href="/register/">Start 14-day trial</a>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="price-card">
+                    <h3 class="price-name">Scale</h3>
+                    <div class="price-amount"><span>$</span>149<small>/mo</small></div>
+                    <p class="price-tag">High-volume operations</p>
+                    <ul class="bullet-list">
+                        <li><i class="fas fa-check"></i> Unlimited sessions</li>
+                        <li><i class="fas fa-check"></i> Departments &amp; SLA</li>
+                        <li><i class="fas fa-check"></i> Voice AI add-on</li>
+                        <li><i class="fas fa-check"></i> Priority support</li>
+                    </ul>
+                    <a class="btn btn-outline-success w-100" href="/register/">Talk to sales</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="faq" id="faq">
+    <div class="container">
+        <div class="row g-5">
+            <div class="col-lg-4">
+                <span class="hero-eyebrow">FAQ</span>
+                <h2 class="section-title">Honest answers, no asterisks.</h2>
+                <p class="section-lead">Didn't find what you need? Write us — a human reads every message.</p>
+                <a class="btn btn-brand" href="/register/">Try it free</a>
+            </div>
+            <div class="col-lg-8">
+                <div class="accordion accordion-flush" id="faqAcc">
+                    <div class="accordion-item">
+                        <h3 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#q1">Do I need a Meta-approved number?</button></h3>
+                        <div id="q1" class="accordion-collapse collapse show" data-bs-parent="#faqAcc"><div class="accordion-body">No. You can start with a Baileys session on any existing WhatsApp number and switch to Meta Cloud API later without losing history.</div></div>
+                    </div>
+                    <div class="accordion-item">
+                        <h3 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#q2">Will the AI replace my agents?</button></h3>
+                        <div id="q2" class="accordion-collapse collapse" data-bs-parent="#faqAcc"><div class="accordion-body">It removes the boring 60%: greetings, FAQs, routing, follow-ups. Your team handles the high-value conversations with full context.</div></div>
+                    </div>
+                    <div class="accordion-item">
+                        <h3 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#q3">How does the 24h window work?</button></h3>
+                        <div id="q3" class="accordion-collapse collapse" data-bs-parent="#faqAcc"><div class="accordion-body">MensajerIA tracks the Meta 24h service window and the 6h reactivation grace period, suggesting an approved template the moment you need one.</div></div>
+                    </div>
+                    <div class="accordion-item">
+                        <h3 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#q4">Can I migrate from another tool?</button></h3>
+                        <div id="q4" class="accordion-collapse collapse" data-bs-parent="#faqAcc"><div class="accordion-body">Yes. We import contacts, tags and conversation history from CSV exports and most major CRMs. Your team keeps the timeline.</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta">
+    <div class="container">
+        <div class="cta-card">
+            <div class="row align-items-center g-4">
+                <div class="col-lg-8">
+                    <h2>Stop losing leads to silence.</h2>
+                    <p>Plug in your number, let the AI cover the night shift, and watch your reply time fall below sixty seconds.</p>
+                </div>
+                <div class="col-lg-4 text-lg-end">
+                    <a class="btn btn-light btn-lg" href="/register/">Create free account</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
 
 {% endblock %}
-
-{% block jscript %}
-    <div id="fb-root"></div>
-    <script async defer crossorigin="anonymous"
-            src="https://connect.facebook.net/es_ES/sdk.js#xfbml=1&version=v16.0&appId=5465147420185697&autoLogAppEvents=1"
-            nonce="GutKLHL1"></script>
-{% endblock %}
-
-
-

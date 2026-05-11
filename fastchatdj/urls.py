@@ -23,6 +23,7 @@ from crm.api_ia import consultar_ia_view
 from seguridad.models import Configuracion, Modulo
 from seguridad.urls import seguridad_urls
 from seguridad.view_index import index
+from public.view_landing import home_view
 from django.conf.urls.static import static
 from core.consultas import consultas
 from seguridad.view_notificaciones import notificacionesView
@@ -76,7 +77,7 @@ urls_sistema = (
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', index),
+    path('', home_view),
     path('panel/', index),
     path('notificaciones/', notificacionesView),
     path('perfilpanel/', perfilView),
