@@ -64,24 +64,43 @@
 }
 
 #plantillas-panel {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 0;
-    width: 380px;
-    max-width: 92vw;
-    max-height: 420px;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(.97);
+    width: 520px;
+    max-width: 94vw;
+    max-height: 82vh;
     background: #fff;
     border: 1px solid #dde1e7;
-    border-radius: 12px;
-    box-shadow: 0 4px 22px rgba(0, 0, 0, .18);
-    z-index: 999;
+    border-radius: 14px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, .28);
+    z-index: 1090;
     display: none;
     flex-direction: column;
     overflow: hidden;
+    opacity: 0;
+    transition: transform .16s ease-out, opacity .16s ease-out;
 }
 
 #plantillas-panel.open {
     display: flex;
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+}
+
+body:has(#plantillas-panel.open)::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .55);
+    z-index: 1085;
+    animation: plantillas-backdrop-fade .14s ease-out;
+}
+
+@keyframes plantillas-backdrop-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 #plantillas-panel .pp-header {
