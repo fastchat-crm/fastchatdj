@@ -233,42 +233,42 @@ def _invocar_llm(apikey_obj, prompt_text):
     except ImportError:
         ChatOpenAI = None
 
-    # PROVEEDOR_CHOICES en crm.models: 2=GEMINI, 3=OPENAI, 4=CLAUDE
     proveedor = apikey_obj.proveedor
+    modelo_cfg = (getattr(apikey_obj, 'modelo', '') or '').strip()
     if proveedor == 2:
         if not ChatGoogleGenerativeAI:
             raise RuntimeError("langchain_google_genai no instalado")
+        modelo = modelo_cfg or 'gemini-2.5-flash'
         llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model=modelo,
             google_api_key=apikey_obj.descripcion,
             max_output_tokens=16000,
             temperature=0.3,
             model_kwargs={"response_mime_type": "application/json"},
         )
-        modelo = 'gemini-2.5-flash'
     elif proveedor == 3:
         if not ChatOpenAI:
             raise RuntimeError("ChatOpenAI no disponible")
+        modelo = modelo_cfg or 'gpt-4o-mini'
         llm = ChatOpenAI(
-            model_name="gpt-4o-mini",
+            model_name=modelo,
             openai_api_key=apikey_obj.descripcion,
             max_tokens=16000,
             temperature=0.3,
             model_kwargs={"response_format": {"type": "json_object"}},
         )
-        modelo = 'gpt-4o-mini'
     elif proveedor == 4:
         try:
             from langchain_anthropic import ChatAnthropic
         except ImportError:
             raise RuntimeError("langchain_anthropic no instalado")
+        modelo = modelo_cfg or 'claude-haiku-4-5-20251001'
         llm = ChatAnthropic(
-            model="claude-haiku-4-5-20251001",
+            model=modelo,
             anthropic_api_key=apikey_obj.descripcion,
             max_tokens=16000,
             temperature=0.3,
         )
-        modelo = 'claude-haiku-4-5-20251001'
     else:
         raise RuntimeError(
             f"Proveedor {proveedor} no soportado por el auditor. "

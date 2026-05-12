@@ -12,7 +12,8 @@ class AgenteResumidor:
                  apikey_obj=None, agente_obj=None):
         self.provider = provider == 2 and 'gemini' or provider == 3 and 'openai'
         self.apikey = apikey
-        self.model_name = model_name or self.default_model()
+        modelo_cfg = (getattr(apikey_obj, 'modelo', '') or '').strip() if apikey_obj else ''
+        self.model_name = model_name or modelo_cfg or self.default_model()
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
         self.conversacion = conversacion

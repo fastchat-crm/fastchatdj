@@ -272,15 +272,16 @@ def _procesar_imagen(mensaje, archivo, agente, apikey_obj, provider, model_name)
     b64 = base64.b64encode(archivo.read()).decode('utf-8')
     ct = archivo.content_type or 'image/jpeg'
 
+    modelo_cfg = (apikey_obj.modelo or '').strip()
     if provider == 'gemini':
         from langchain_google_genai import ChatGoogleGenerativeAI
-        llm = ChatGoogleGenerativeAI(model=model_name, google_api_key=apikey_obj.descripcion)
+        llm = ChatGoogleGenerativeAI(model=(modelo_cfg or model_name), google_api_key=apikey_obj.descripcion)
     elif provider == 'claude':
         from langchain_anthropic import ChatAnthropic
-        llm = ChatAnthropic(model=(apikey_obj.modelo or 'claude-sonnet-4-5'), anthropic_api_key=apikey_obj.descripcion)
+        llm = ChatAnthropic(model=(modelo_cfg or 'claude-haiku-4-5-20251001'), anthropic_api_key=apikey_obj.descripcion)
     else:
         from langchain_community.chat_models import ChatOpenAI
-        llm = ChatOpenAI(model_name='gpt-4o', openai_api_key=apikey_obj.descripcion)
+        llm = ChatOpenAI(model_name=(modelo_cfg or 'gpt-4o'), openai_api_key=apikey_obj.descripcion)
 
     from langchain_core.messages import HumanMessage
     msg = HumanMessage(content=[
