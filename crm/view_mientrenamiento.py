@@ -19,6 +19,88 @@ from crm.models import PerfilNegocioIA, ProductoIA, ServicioIA, RespuestaEntrena
 from core.funciones import addData, secure_module, log, get_encrypt
 
 
+_DEFAULT_MODEL_BY_PROVIDER = {
+    2: 'gemini-2.5-flash',
+    3: 'gpt-4o-mini',
+    4: 'claude-haiku-4-5-20251001',
+}
+
+
+def _probar_apikey_simple(filtro):
+    modelo_test = (filtro.modelo or '').strip() or _DEFAULT_MODEL_BY_PROVIDER.get(filtro.proveedor, 'gpt-4o-mini')
+    try:
+        if filtro.proveedor == 2:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            llm = ChatGoogleGenerativeAI(
+                model=modelo_test, google_api_key=filtro.descripcion,
+                max_output_tokens=10, temperature=0,
+            )
+        elif filtro.proveedor == 4:
+            from langchain_anthropic import ChatAnthropic
+            llm = ChatAnthropic(
+                model=modelo_test, anthropic_api_key=filtro.descripcion,
+                max_tokens=10, temperature=0,
+            )
+        else:
+            from langchain_community.chat_models import ChatOpenAI
+            llm = ChatOpenAI(
+                model_name=modelo_test, openai_api_key=filtro.descripcion,
+                max_tokens=10, temperature=0,
+            )
+        _t0 = time.time()
+        llm.invoke('Responde solo: ok')
+        lat = int((time.time() - _t0) * 1000)
+        if not filtro.estado:
+            filtro.estado = True
+            filtro.msgerror = None
+            filtro.save()
+        return {
+            'id': filtro.id, 'alias': filtro.alias or filtro.get_proveedor_display(),
+            'proveedor': filtro.get_proveedor_display(), 'modelo': modelo_test,
+            'ok': True, 'status': 'ok', 'message': f'Conectividad OK ({lat} ms).',
+        }
+    except Exception as ex:
+        err_str = str(ex)
+        err_lower = err_str.lower()
+        is_quota = ('429' in err_str or 'quota' in err_lower or 'rate limit' in err_lower
+                    or 'resource has been exhausted' in err_lower or 'too many requests' in err_lower
+                    or 'credit balance is too low' in err_lower or 'insufficient_quota' in err_lower)
+        is_auth = ('401' in err_str or '403' in err_str
+                   or ('api key' in err_lower and ('invalid' in err_lower or 'not valid' in err_lower))
+                   or 'unauthenticated' in err_lower or 'permission denied' in err_lower
+                   or 'invalid x-api-key' in err_lower)
+        is_model = ('404' in err_str or ('not found' in err_lower and 'model' in err_lower)
+                    or 'does not exist' in err_lower)
+        if is_quota:
+            filtro.estado = False
+            filtro.msgerror = f'Quota/rate limit ({modelo_test}): {err_str[:300]}'
+            filtro.save()
+            status = 'quota'
+            msg = f'Sin cupo en {modelo_test} — desactivada.'
+        elif is_auth:
+            filtro.estado = False
+            filtro.msgerror = f'Clave invalida: {err_str[:300]}'
+            filtro.save()
+            status = 'auth'
+            msg = 'API Key invalida o sin permisos.'
+        elif is_model:
+            filtro.msgerror = f"Modelo '{modelo_test}' no disponible: {err_str[:300]}"
+            filtro.save(update_fields=['msgerror'])
+            status = 'model'
+            msg = f"Modelo '{modelo_test}' no existe para esta key."
+        else:
+            filtro.estado = False
+            filtro.msgerror = err_str[:400]
+            filtro.save()
+            status = 'error'
+            msg = err_str[:200]
+        return {
+            'id': filtro.id, 'alias': filtro.alias or filtro.get_proveedor_display(),
+            'proveedor': filtro.get_proveedor_display(), 'modelo': modelo_test,
+            'ok': False, 'status': status, 'message': msg,
+        }
+
+
 def guardar_detalles_agente(agente, detalles_data, archivos):
     try:
         # Lista para guardar los IDs de los detalles que deben mantenerse activos
@@ -666,7 +748,27 @@ def entrenamiento_ia_view(request):
                                     "billing": billing_info,
                                 }
 
-                    # ── Herramientas Agente (tool-calling dinámico) ───────────
+                    elif action == 'testapikey_masivo':
+                        resultados = []
+                        keys_qs = ApiKeyIA.objects.filter(perfil=perfil, status=True).exclude(descripcion='').order_by('id')
+                        for k in keys_qs:
+                            try:
+                                resultados.append(_probar_apikey_simple(k))
+                            except Exception as ex:
+                                resultados.append({
+                                    'id': k.id, 'alias': k.alias or k.get_proveedor_display(),
+                                    'proveedor': k.get_proveedor_display(), 'modelo': (k.modelo or '(default)'),
+                                    'ok': False, 'status': 'error', 'message': str(ex)[:200],
+                                })
+                        ok_count = sum(1 for r in resultados if r['ok'])
+                        res_json = {
+                            'error': False,
+                            'total': len(resultados),
+                            'ok_count': ok_count,
+                            'fail_count': len(resultados) - ok_count,
+                            'resultados': resultados,
+                        }
+
                     elif action == 'herramienta_save':
                         from crm.forms import HerramientaAgenteForm
                         from crm.models import HerramientaAgente as _HA

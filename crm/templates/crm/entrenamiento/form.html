@@ -611,11 +611,16 @@
                             </a>
                         </p>
                     </div>
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 flex-wrap">
                         <a href="javascript:void(0)" class="btn btn-sm btn-outline-primary"
                            data-bs-toggle="modal" data-bs-target="#modalGuiaTokens"
                            title="Tour para obtener API Keys de proveedores LLM">
                             <i class="fas fa-route me-1"></i> Guía tokens
+                        </a>
+                        <a href="javascript:void(0)" class="btn btn-sm btn-outline-success" id="btnTestAllKeys"
+                           onclick="testAllApiKeys(this)"
+                           title="Probar todas las API Keys y ver cuales estan activas">
+                            <i class="fas fa-vials me-1"></i> Probar todas
                         </a>
                         <a href="javascript:void(0)" class="btn btn-sm btn-dark"
                            onclick="formModal('', 'Agregar Api Key', 'addapikey')">
@@ -2349,6 +2354,72 @@
             },
             complete: function() {
                 btn.innerHTML = orig;
+                btn.style.pointerEvents = '';
+            }
+        });
+    }
+
+    function testAllApiKeys(btn) {
+        const original = btn.innerHTML;
+        btn.style.pointerEvents = 'none';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Probando todas…';
+        $.ajax({
+            type: 'POST',
+            url: '{{ request.path }}',
+            data: { csrfmiddlewaretoken: '{{ csrf_token }}', action: 'testapikey_masivo' },
+            dataType: 'json',
+            success: function(res) {
+                if (res.error) {
+                    Swal.fire({ type: 'error', title: 'Error', text: res.message || 'No se pudo probar.' });
+                    return;
+                }
+                const statusIcon = {
+                    ok: '<i class="fas fa-check-circle text-success"></i>',
+                    auth: '<i class="fas fa-key text-danger"></i>',
+                    quota: '<i class="fas fa-coins text-warning"></i>',
+                    model: '<i class="fas fa-cube text-warning"></i>',
+                    error: '<i class="fas fa-times-circle text-danger"></i>'
+                };
+                const statusLabel = {
+                    ok: 'Activa',
+                    auth: 'Key invalida',
+                    quota: 'Sin cupo',
+                    model: 'Modelo invalido',
+                    error: 'Error'
+                };
+                let rows = '';
+                (res.resultados || []).forEach(function(r) {
+                    rows += '<tr>' +
+                        '<td class="text-center" style="width:34px;">' + (statusIcon[r.status] || statusIcon.error) + '</td>' +
+                        '<td><strong>' + (r.alias || '') + '</strong><br><small class="text-muted">' + r.proveedor + ' · ' + r.modelo + '</small></td>' +
+                        '<td><span class="badge ' + (r.ok ? 'bg-success' : (r.status === 'quota' || r.status === 'model' ? 'bg-warning text-dark' : 'bg-danger')) + '">' + (statusLabel[r.status] || r.status) + '</span><br><small class="text-muted">' + (r.message || '') + '</small></td>' +
+                        '</tr>';
+                });
+                const html =
+                    '<div class="mb-2 d-flex justify-content-center gap-3">' +
+                        '<span class="badge bg-success">Activas: ' + res.ok_count + '</span>' +
+                        '<span class="badge bg-danger">Con fallas: ' + res.fail_count + '</span>' +
+                        '<span class="badge bg-secondary">Total: ' + res.total + '</span>' +
+                    '</div>' +
+                    '<div class="table-responsive" style="max-height:55vh;">' +
+                    '<table class="table table-sm align-middle"><thead><tr><th></th><th>API Key</th><th>Estado</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+                    '<div class="small text-muted text-center">Las keys con fallas quedaron desactivadas automaticamente.</div>';
+                Swal.fire({
+                    title: 'Resultado de las pruebas',
+                    html: html,
+                    width: 800,
+                    confirmButtonText: 'Recargar listado',
+                    showCancelButton: true,
+                    cancelButtonText: 'Cerrar'
+                }).then(function(r) {
+                    if (r.value || r.isConfirmed) location.reload();
+                });
+            },
+            error: function() {
+                Swal.fire({ type: 'error', title: 'Error', text: 'No se pudo probar las API Keys.' });
+            },
+            complete: function() {
+                btn.innerHTML = original;
                 btn.style.pointerEvents = '';
             }
         });
