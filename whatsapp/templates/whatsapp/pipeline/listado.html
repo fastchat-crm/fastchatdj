@@ -197,6 +197,19 @@
                     a partir de la descripcion de tu negocio. Despues podes editar lo que necesites.
                     <br><strong class="text-muted">Trazabilidad:</strong> el consumo de tokens queda registrado en CRM → Consumo IA.
                 </div>
+                {% if apikeys_ia %}
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">API Key (LLM)</label>
+                    <select name="apikey_id" class="form-select form-select-sm" required>
+                        {% for k in apikeys_ia %}
+                            <option value="{{ k.id }}">
+                                {{ k.alias|default:"(sin alias)" }} — {{ k.get_proveedor_display }}{% if k.modelo %} · {{ k.modelo }}{% else %} · default{% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text small">Elegi la API Key + modelo que la IA usara para generar el pipeline.</div>
+                </div>
+                {% endif %}
                 <div class="mb-3">
                     <label class="form-label small fw-semibold">Describe tu negocio y proceso de venta</label>
                     <textarea name="descripcion" class="form-control" rows="4" required

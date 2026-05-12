@@ -28,10 +28,17 @@ def _generar_pipeline_con_ia(request):
     perfil = PerfilNegocioIA.objects.filter(usuario=request.user).first()
     if not perfil:
         return JsonResponse({'error': True, 'message': 'No tenes perfil de negocio. Configuralo primero en CRM.'})
-    apikey_obj = ApiKeyIA.objects.filter(perfil=perfil, estado=True).first()
+
+    qs = ApiKeyIA.objects.filter(perfil=perfil, estado=True, status=True).order_by('-id')
+    apikey_id = (request.POST.get('apikey_id') or '').strip()
+    if apikey_id:
+        apikey_obj = qs.filter(pk=apikey_id).first()
+    else:
+        apikey_obj = qs.first()
     if not apikey_obj or not (apikey_obj.descripcion or '').strip():
         return JsonResponse({'error': True, 'message': 'No tenes API Key activa con clave del proveedor LLM. Configura una en CRM → Entrenamiento.'})
 
+    contexto_key = f'[ApiKey #{apikey_obj.id} "{apikey_obj.alias or "sin alias"}" · {apikey_obj.get_proveedor_display()} · modelo={apikey_obj.modelo or "(default)"}]'
     try:
         resultado = pipeline_wa.generar(
             descripcion=request.POST.get('descripcion'),
@@ -40,9 +47,9 @@ def _generar_pipeline_con_ia(request):
             request=request,
         )
     except IAActionError as ex:
-        return JsonResponse({'error': True, 'message': str(ex)})
+        return JsonResponse({'error': True, 'message': f'{ex} — {contexto_key}'})
     except Exception as ex:
-        return JsonResponse({'error': True, 'message': f'El LLM fallo: {str(ex)[:400]}'})
+        return JsonResponse({'error': True, 'message': f'El LLM fallo: {str(ex)[:400]} — {contexto_key}'})
 
     log(
         f"Pipeline '{resultado['nombre']}' generado por IA con {resultado['etapas_creadas']} etapas (api_key={apikey_obj.id})",
@@ -242,6 +249,15 @@ def pipelineView(request):
         pipeline_actual = pipelines.filter(pk=pipeline_id).first()
     if not pipeline_actual:
         pipeline_actual = pipelines.first()
+
+    from crm.models import ApiKeyIA, PerfilNegocioIA
+    perfil_ia = PerfilNegocioIA.objects.filter(usuario=request.user).first()
+    if perfil_ia:
+        data['apikeys_ia'] = ApiKeyIA.objects.filter(
+            perfil=perfil_ia, estado=True, status=True,
+        ).exclude(descripcion='').order_by('-id')
+    else:
+        data['apikeys_ia'] = ApiKeyIA.objects.none()
 
     data['pipelines'] = pipelines
     data['pipeline_actual'] = pipeline_actual
