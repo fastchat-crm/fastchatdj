@@ -152,7 +152,7 @@ def pipelineView(request):
                     card_id = int(request.POST.get('card_id') or 0)
                     card = (
                         ConversacionEnPipeline.objects
-                        .select_related('conversacion__contacto', 'conversacion__sesion', 'etapa', 'usuario_creacion')
+                        .select_related('conversacion__contacto__sesion', 'etapa', 'usuario_creacion')
                         .filter(pk=card_id).first()
                     )
                     if not card:
@@ -176,11 +176,13 @@ def pipelineView(request):
                             'contenido': contenido[:500],
                             'fecha': m.fecha.strftime('%d/%m/%Y %H:%M') if m.fecha else '',
                         })
+                    from core.funciones import encrypt_sesion_id
                     finalizada = bool(conv.conversacion_finalizada)
+                    conv_token = encrypt_sesion_id(conv.id)
                     if finalizada:
-                        url_ir = f'/whatsapp/conversaciones-finalizadas/?conv={conv.id}'
+                        url_ir = f'/whatsapp/conversaciones-finalizadas/?conv={conv_token}'
                     else:
-                        url_ir = f'/whatsapp/conversaciones/?conv={conv.id}'
+                        url_ir = f'/whatsapp/conversaciones/?conv={conv_token}'
                     comentarios_qs = (
                         ComentarioCardPipeline.objects
                         .filter(card=card, status=True)
@@ -222,7 +224,7 @@ def pipelineView(request):
                             'resumen': conv.resumen_conversacion or '',
                             'fecha_inicio': conv.fecha_registro.strftime('%d/%m/%Y %H:%M') if conv.fecha_registro else '',
                             'fecha_fin': conv.fecha_fin_conversacion.strftime('%d/%m/%Y %H:%M') if conv.fecha_fin_conversacion else '',
-                            'sesion': conv.sesion.nombre if conv.sesion_id else '',
+                            'sesion': (conv.contacto.sesion.nombre if conv.contacto and conv.contacto.sesion_id else ''),
                         },
                         'mensajes': mensajes,
                     })
@@ -394,21 +396,32 @@ def pipelineView(request):
     data['pipeline_actual'] = pipeline_actual
 
     if pipeline_actual:
+        from core.funciones import encrypt_sesion_id
+        ahora = timezone.now()
         etapas = list(pipeline_actual.etapas.filter(status=True).order_by('orden'))
         cards_por_etapa = []
         for et in etapas:
-            cards = (
+            cards_qs = list(
                 ConversacionEnPipeline.objects
                 .filter(etapa=et, status=True)
                 .select_related('conversacion__contacto', 'usuario_creacion')
                 .order_by('orden_en_etapa', '-fecha_cambio_etapa')
             )
-            agg = cards.aggregate(total=Sum('valor_estimado'), n=Count('id'))
+            for ca in cards_qs:
+                conv = ca.conversacion
+                token = encrypt_sesion_id(conv.id)
+                if conv.conversacion_finalizada:
+                    ca.url_ir = f'/whatsapp/conversaciones-finalizadas/?conv={token}'
+                    ca.lead_vivo = False
+                else:
+                    ca.url_ir = f'/whatsapp/conversaciones/?conv={token}'
+                    ca.lead_vivo = bool(conv.fecha_hora_expira and conv.fecha_hora_expira > ahora)
+            total_valor = sum((ca.valor_estimado or 0) for ca in cards_qs)
             cards_por_etapa.append({
                 'etapa': et,
-                'cards': cards,
-                'total_valor': agg.get('total') or 0,
-                'n': agg.get('n') or 0,
+                'cards': cards_qs,
+                'total_valor': total_valor,
+                'n': len(cards_qs),
             })
         data['columnas'] = cards_por_etapa
 

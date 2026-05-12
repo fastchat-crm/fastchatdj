@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block head %}
-    <link rel="stylesheet" href="/static/css/whatsapp/pipeline.css?v1.3">
+    <link rel="stylesheet" href="/static/css/whatsapp/pipeline.css?v1.4">
 {% endblock %}
 
 {% block content %}
@@ -92,8 +92,10 @@
                             </div>
                             {% if c.conversacion_finalizada %}
                                 <span class="kanban-card-state ended" title="Conversacion finalizada"><i class="fa fa-check"></i> Finalizada</span>
+                            {% elif card.lead_vivo %}
+                                <span class="kanban-card-state active" title="Lead activo — ventana de respuesta abierta"><span class="pipe-live-dot"></span> Activa</span>
                             {% else %}
-                                <span class="kanban-card-state active" title="Conversacion activa"><i class="fa fa-circle"></i> Activa</span>
+                                <span class="kanban-card-state ended" title="Conversacion activa pero ventana de respuesta cerrada"><i class="fa fa-clock"></i> En espera</span>
                             {% endif %}
                         </div>
 
@@ -122,7 +124,7 @@
                             <button type="button" class="kanban-card-action" onclick="formModal({{ card.id }}, 'Editar tarjeta #{{ card.id }}', 'editar_card_form')" title="Editar valor, fecha y nota">
                                 <i class="fa fa-pen-to-square"></i> Editar
                             </button>
-                            <a class="kanban-card-action" href="{% if c.conversacion_finalizada %}/whatsapp/conversaciones-finalizadas/?conv={{ c.id }}{% else %}/whatsapp/conversaciones/?conv={{ c.id }}{% endif %}" target="_blank" title="Ir a la conversación">
+                            <a class="kanban-card-action" href="{{ card.url_ir }}" target="_blank" title="Ir a la conversación">
                                 <i class="fa fa-arrow-up-right-from-square"></i> Ir
                             </a>
                             <button type="button" class="kanban-card-action danger" onclick="pipeEliminarCard({{ card.id }})" title="Quitar del pipeline">

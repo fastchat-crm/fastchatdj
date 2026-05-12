@@ -365,6 +365,20 @@
 }
 .kanban-card-state.active { background: #e6f6ec; color: #2d7a3e; border: 1px solid #cfe9d2; }
 .kanban-card-state.ended { background: #f1f0ec; color: #6b6964; border: 1px solid #ddd8d0; }
+.pipe-live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #16a34a;
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7);
+    animation: pipeLivePulse 1.6s ease-out infinite;
+}
+@keyframes pipeLivePulse {
+    0%   { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.55); }
+    70%  { box-shadow: 0 0 0 7px rgba(22, 163, 74, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+}
 .kanban-card-meta-row {
     display: flex;
     flex-wrap: wrap;
