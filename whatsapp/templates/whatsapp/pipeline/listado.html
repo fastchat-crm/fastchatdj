@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block head %}
-    <link rel="stylesheet" href="/static/css/whatsapp/pipeline.css?v1.0">
+    <link rel="stylesheet" href="/static/css/whatsapp/pipeline.css?v1.1">
 {% endblock %}
 
 {% block content %}
@@ -95,21 +95,52 @@
                 </div>
                 <div class="kanban-col-body">
                     {% for card in col.cards %}
-                    <div class="kanban-card" draggable="true" data-card="{{ card.id }}" data-conv="{{ card.conversacion_id }}">
-                        <div class="kanban-card-title">
-                            {{ card.conversacion.contacto_nombre|default:card.conversacion.contacto.contacto_numero }}
-                        </div>
-                        <div class="kanban-card-meta">
-                            <span>{{ card.fecha_cambio_etapa|date:"d/m H:i" }}</span>
-                            {% if card.valor_estimado %}
-                                <span class="pipe-pill">{{ card.moneda }} {{ card.valor_estimado }}</span>
+                    {% with c=card.conversacion ct=card.conversacion.contacto %}
+                    <div class="kanban-card" draggable="true" data-card="{{ card.id }}" data-conv="{{ c.id }}">
+                        <div class="kanban-card-contact">
+                            <span class="kanban-card-avatar">{{ ct.contacto_nombre|default:ct.contacto_numero|slice:":1" }}</span>
+                            <div style="flex:1; min-width:0;">
+                                <div class="kanban-card-name">{{ ct.contacto_nombre|default:"(sin nombre)" }}</div>
+                                <div class="kanban-card-phone"><i class="fa fa-phone"></i> {{ ct.contacto_numero }}</div>
+                            </div>
+                            {% if c.conversacion_finalizada %}
+                                <span class="kanban-card-state ended" title="Conversacion finalizada"><i class="fa fa-check"></i> Finalizada</span>
+                            {% else %}
+                                <span class="kanban-card-state active" title="Conversacion activa"><i class="fa fa-circle"></i> Activa</span>
                             {% endif %}
                         </div>
-                        {% if card.conversacion.ctwa_clid %}
-                            <div class="kanban-card-ctwa"><i class="fa fa-bullhorn"></i> CTWA: {{ card.conversacion.campaign_id|default:"—" }}</div>
+
+                        {% if card.valor_estimado %}
+                        <div class="kanban-card-meta">
+                            <span><i class="fa fa-coins"></i> Valor</span>
+                            <span class="pipe-pill">{{ card.moneda }} {{ card.valor_estimado }}</span>
+                        </div>
                         {% endif %}
-                        {% if card.nota %}<div class="kanban-card-nota">{{ card.nota|truncatechars:90 }}</div>{% endif %}
+
+                        <div class="kanban-card-meta-row">
+                            <span title="Quien asignó la tarjeta"><i class="fa fa-user"></i> {{ card.usuario_creacion.get_full_name|default:card.usuario_creacion.username|default:"—" }}</span>
+                            <span title="Fecha de asignación"><i class="fa fa-calendar-plus"></i> {{ card.fecha_creacion|date:"d/m H:i" }}</span>
+                            <span title="Último movimiento entre etapas"><i class="fa fa-arrows-up-down"></i> {{ card.fecha_cambio_etapa|date:"d/m H:i" }}</span>
+                        </div>
+
+                        {% if c.ctwa_clid %}
+                            <div class="kanban-card-ctwa"><i class="fa fa-bullhorn"></i> CTWA: {{ c.campaign_id|default:"—" }}</div>
+                        {% endif %}
+                        {% if card.nota %}<div class="kanban-card-nota">{{ card.nota|truncatechars:120 }}</div>{% endif %}
+
+                        <div class="kanban-card-actions">
+                            <button type="button" class="kanban-card-action" onclick="pipeVerCard({{ card.id }})" title="Ver conversación completa">
+                                <i class="fa fa-eye"></i> Ver
+                            </button>
+                            <a class="kanban-card-action" href="{% if c.conversacion_finalizada %}/whatsapp/conversaciones-finalizadas/?conv={{ c.id }}{% else %}/whatsapp/conversaciones/?conv={{ c.id }}{% endif %}" target="_blank" title="Ir a la conversación">
+                                <i class="fa fa-arrow-up-right-from-square"></i> Ir
+                            </a>
+                            <button type="button" class="kanban-card-action danger" onclick="pipeEliminarCard({{ card.id }})" title="Quitar del pipeline">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
                     </div>
+                    {% endwith %}
                     {% empty %}
                         <div class="kanban-empty">Sin tarjetas</div>
                     {% endfor %}
@@ -281,6 +312,26 @@
                 <button type="submit" class="pipe-btn pipe-btn-primary"><i class="fa fa-save"></i> Guardar cambios</button>
             </div>
         </form>
+    </div>
+</div>
+
+<div class="modal fade pipe-modal pipe-conv-modal" id="modalVerCard" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa fa-comment-dots me-2"></i>Detalle de la conversación</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="pipeVerCardBody">
+                <div class="pipe-conv-loading"><i class="fa fa-spinner fa-spin me-2"></i> Cargando...</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="pipe-btn" data-bs-dismiss="modal">Cerrar</button>
+                <a id="pipeVerCardIr" href="#" class="pipe-btn pipe-btn-primary" target="_blank">
+                    <i class="fa fa-arrow-up-right-from-square"></i> <span id="pipeVerCardIrTexto">Ir a conversación</span>
+                </a>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -456,23 +507,172 @@ function filtrarKanban(query) {
     });
 }
 
-document.querySelectorAll('.kanban-card').forEach(c => {
-    c.addEventListener('dragstart', e => e.dataTransfer.setData('text/card', c.dataset.card));
-});
+function pipeAttachDragHandlers(card){
+    card.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('text/card', card.dataset.card);
+        card.classList.add('pipe-dragging');
+    });
+    card.addEventListener('dragend', () => card.classList.remove('pipe-dragging'));
+}
+document.querySelectorAll('.kanban-card').forEach(pipeAttachDragHandlers);
+
+function pipeActualizarContador(col){
+    const visibles = col.querySelectorAll('.kanban-card').length;
+    const badge = col.querySelector('.kanban-col-count');
+    if(badge) badge.textContent = visibles;
+    const body = col.querySelector('.kanban-col-body');
+    if(body){
+        const empty = body.querySelector('.kanban-empty');
+        if(visibles === 0 && !empty){
+            const div = document.createElement('div');
+            div.className = 'kanban-empty';
+            div.textContent = 'Sin tarjetas';
+            body.appendChild(div);
+        } else if(visibles > 0 && empty){
+            empty.remove();
+        }
+    }
+}
+
 document.querySelectorAll('.kanban-col[data-etapa]').forEach(col => {
     col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drop-hover');});
-    col.addEventListener('dragleave', e => col.classList.remove('drop-hover'));
+    col.addEventListener('dragleave', () => col.classList.remove('drop-hover'));
     col.addEventListener('drop', async e => {
         e.preventDefault(); col.classList.remove('drop-hover');
         const cardId = e.dataTransfer.getData('text/card');
         const etapaId = col.dataset.etapa;
         if(!cardId || !etapaId) return;
-        const fd = new FormData(); fd.append('csrfmiddlewaretoken', CSRF);
-        fd.append('action','mover_card'); fd.append('card_id', cardId); fd.append('etapa_id', etapaId);
-        const r = await fetch('', {method:'POST', body: fd}); const j = await r.json();
-        if(!j.error) location.reload(); else alert(j.message);
+        const cardEl = document.querySelector('.kanban-card[data-card="' + cardId + '"]');
+        if(!cardEl) return;
+        const colOrigen = cardEl.closest('.kanban-col[data-etapa]');
+        if(colOrigen && colOrigen.dataset.etapa === etapaId) return;
+
+        const targetBody = col.querySelector('.kanban-col-body');
+        if(targetBody){ targetBody.appendChild(cardEl); }
+        if(colOrigen) pipeActualizarContador(colOrigen);
+        pipeActualizarContador(col);
+        cardEl.classList.add('pipe-moving');
+
+        const fd = new FormData();
+        fd.append('csrfmiddlewaretoken', CSRF);
+        fd.append('action','mover_card');
+        fd.append('card_id', cardId);
+        fd.append('etapa_id', etapaId);
+        try {
+            const r = await fetch('', {method:'POST', body: fd});
+            const j = await r.json();
+            cardEl.classList.remove('pipe-moving');
+            if(j.error){
+                if(typeof alertaWarning === 'function') alertaWarning(j.message || 'No se pudo mover.');
+                else alert(j.message || 'No se pudo mover.');
+                if(colOrigen){ colOrigen.querySelector('.kanban-col-body').appendChild(cardEl); pipeActualizarContador(colOrigen); pipeActualizarContador(col); }
+                return;
+            }
+            if(typeof alertaSuccess === 'function') alertaSuccess('Card movida.');
+        } catch(err){
+            cardEl.classList.remove('pipe-moving');
+            if(colOrigen){ colOrigen.querySelector('.kanban-col-body').appendChild(cardEl); pipeActualizarContador(colOrigen); pipeActualizarContador(col); }
+            alert('Error de conexion: ' + err.message);
+        }
     });
 });
+
+async function pipeVerCard(cardId){
+    const modalEl = document.getElementById('modalVerCard');
+    const body = document.getElementById('pipeVerCardBody');
+    body.innerHTML = '<div class="pipe-conv-loading"><i class="fa fa-spinner fa-spin me-2"></i> Cargando...</div>';
+    const inst = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    inst.show();
+    const fd = new FormData();
+    fd.append('csrfmiddlewaretoken', CSRF);
+    fd.append('action', 'ver_card');
+    fd.append('card_id', cardId);
+    try {
+        const r = await fetch('', {method:'POST', body: fd});
+        const j = await r.json();
+        if(j.error){ body.innerHTML = '<div class="pipe-conv-empty">' + (j.message || 'No se pudo cargar.') + '</div>'; return; }
+        pipeRenderVerCard(j);
+    } catch(err){
+        body.innerHTML = '<div class="pipe-conv-empty">Error: ' + err.message + '</div>';
+    }
+}
+
+function pipeEscape(t){
+    return (t === null || t === undefined) ? '' : String(t)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function pipeRenderVerCard(j){
+    const conv = j.conversacion || {};
+    const card = j.card || {};
+    const msgs = j.mensajes || [];
+    const inicial = (conv.nombre || conv.numero || '?').charAt(0);
+    const stateClass = conv.finalizada ? 'ended' : 'active';
+    let mensajesHtml = '';
+    if(msgs.length){
+        msgs.forEach(function(m){
+            mensajesHtml += '<div class="pipe-conv-msg ' + m.tipo + '">' + pipeEscape(m.contenido).replace(/\n/g, '<br>') + '<span class="pipe-conv-msg-time">' + pipeEscape(m.fecha) + '</span></div>';
+        });
+    } else {
+        mensajesHtml = '<div class="pipe-conv-empty">Sin mensajes registrados.</div>';
+    }
+    const resumenHtml = conv.resumen
+        ? '<div class="pipe-conv-summary"><div class="pipe-conv-summary-title"><i class="fa fa-lightbulb me-1"></i>Resumen IA</div>' + pipeEscape(conv.resumen) + '</div>'
+        : '';
+    const notaHtml = card.nota
+        ? '<div class="pipe-conv-summary" style="background:#eff6ff; border-color:#bfdbfe; color:#1e3a8a;"><div class="pipe-conv-summary-title"><i class="fa fa-note-sticky me-1"></i>Observación de la card</div>' + pipeEscape(card.nota) + '</div>'
+        : '';
+
+    const html =
+        '<div class="pipe-conv-header">' +
+            '<div class="pipe-conv-avatar">' + pipeEscape(inicial) + '</div>' +
+            '<div class="pipe-conv-info">' +
+                '<h6>' + pipeEscape(conv.nombre || '(sin nombre)') + '</h6>' +
+                '<div class="pipe-conv-phone"><i class="fa fa-phone me-1"></i>' + pipeEscape(conv.numero || '—') + '</div>' +
+            '</div>' +
+            '<span class="pipe-conv-state-pill ' + stateClass + '"><i class="fa fa-' + (conv.finalizada ? 'check' : 'circle') + ' me-1"></i>' + pipeEscape(conv.estado) + '</span>' +
+        '</div>' +
+        '<div class="pipe-conv-meta">' +
+            '<div class="pipe-conv-meta-item"><div class="label">Etapa</div><div class="value"><i class="fa fa-flag me-1" style="color:' + pipeEscape(card.etapa_color) + '"></i>' + pipeEscape(card.etapa) + '</div></div>' +
+            '<div class="pipe-conv-meta-item"><div class="label">Asignó</div><div class="value">' + pipeEscape(card.usuario) + '</div></div>' +
+            '<div class="pipe-conv-meta-item"><div class="label">Fecha asignación</div><div class="value">' + pipeEscape(card.fecha_creacion) + '</div></div>' +
+            '<div class="pipe-conv-meta-item"><div class="label">Último cambio</div><div class="value">' + pipeEscape(card.fecha_cambio_etapa) + '</div></div>' +
+            '<div class="pipe-conv-meta-item"><div class="label">Valor estimado</div><div class="value">' + pipeEscape(card.moneda) + ' ' + pipeEscape(card.valor_estimado) + '</div></div>' +
+            '<div class="pipe-conv-meta-item"><div class="label">Sesión</div><div class="value">' + pipeEscape(conv.sesion || '—') + '</div></div>' +
+            '<div class="pipe-conv-meta-item"><div class="label">Inicio convo</div><div class="value">' + pipeEscape(conv.fecha_inicio || '—') + '</div></div>' +
+            (conv.fecha_fin ? '<div class="pipe-conv-meta-item"><div class="label">Cierre convo</div><div class="value">' + pipeEscape(conv.fecha_fin) + '</div></div>' : '') +
+        '</div>' +
+        notaHtml +
+        resumenHtml +
+        '<div class="small fw-semibold text-muted mb-2 mt-2"><i class="fa fa-comments me-1"></i>Últimos ' + msgs.length + ' mensajes</div>' +
+        '<div class="pipe-conv-messages">' + mensajesHtml + '</div>';
+
+    document.getElementById('pipeVerCardBody').innerHTML = html;
+    const $ir = document.getElementById('pipeVerCardIr');
+    $ir.href = conv.url_ir || '#';
+    document.getElementById('pipeVerCardIrTexto').textContent = conv.finalizada
+        ? 'Ir a conversación finalizada'
+        : 'Ir a conversación activa';
+}
+
+async function pipeEliminarCard(cardId){
+    if(!confirm('¿Quitar esta tarjeta del pipeline? La conversación no se elimina.')) return;
+    const fd = new FormData();
+    fd.append('csrfmiddlewaretoken', CSRF);
+    fd.append('action', 'eliminar_card');
+    fd.append('card_id', cardId);
+    const r = await fetch('', {method:'POST', body: fd});
+    const j = await r.json();
+    if(j.error){ alert(j.message || 'Error'); return; }
+    const cardEl = document.querySelector('.kanban-card[data-card="' + cardId + '"]');
+    if(cardEl){
+        const col = cardEl.closest('.kanban-col[data-etapa]');
+        cardEl.remove();
+        if(col) pipeActualizarContador(col);
+    }
+    if(typeof alertaSuccess === 'function') alertaSuccess('Tarjeta eliminada.');
+}
 
 (function(){
     const tabs = document.querySelectorAll('.pipe-mobile-tab');

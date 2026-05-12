@@ -132,16 +132,82 @@ def pipelineView(request):
                 if action == 'agregar_card':
                     conv_id = int(request.POST['conversacion_id'])
                     etapa_id = int(request.POST['etapa_id'])
+                    nota = (request.POST.get('nota') or '').strip()[:1000]
                     conv = ConversacionWhatsApp.objects.get(pk=conv_id)
-                    card, _ = ConversacionEnPipeline.objects.get_or_create(
+                    card, creado = ConversacionEnPipeline.objects.get_or_create(
                         conversacion=conv, etapa_id=etapa_id,
                         defaults={
                             'valor_estimado': Decimal(request.POST.get('valor_estimado', '0') or '0'),
                             'moneda': request.POST.get('moneda', 'USD'),
+                            'nota': nota,
                             'usuario_creacion': request.user,
                         }
                     )
-                    return JsonResponse({'error': False, 'card_id': card.id})
+                    if not creado and nota:
+                        card.nota = nota
+                        card.save(update_fields=['nota'])
+                    return JsonResponse({'error': False, 'card_id': card.id, 'nuevo': creado})
+
+                if action == 'ver_card':
+                    card_id = int(request.POST.get('card_id') or 0)
+                    card = (
+                        ConversacionEnPipeline.objects
+                        .select_related('conversacion__contacto', 'conversacion__sesion', 'etapa', 'usuario_creacion')
+                        .filter(pk=card_id).first()
+                    )
+                    if not card:
+                        return JsonResponse({'error': True, 'message': 'Card no encontrada.'})
+                    conv = card.conversacion
+                    contacto = conv.contacto
+                    mensajes_qs = (
+                        conv.mensajes.filter(status=True)
+                        .order_by('-fecha')[:50]
+                    )
+                    mensajes = []
+                    contacto_numero = contacto.contacto_numero
+                    for m in reversed(list(mensajes_qs)):
+                        es_entrante = (m.remitente == contacto_numero)
+                        tipo_msg = 'in' if es_entrante else ('ia' if m.ia_generado else 'out')
+                        contenido = m.mensaje or ''
+                        if m.tipo and m.tipo != 'texto':
+                            contenido = f'[{m.tipo}] {contenido}' if contenido else f'[{m.tipo}]'
+                        mensajes.append({
+                            'tipo': tipo_msg,
+                            'contenido': contenido[:500],
+                            'fecha': m.fecha.strftime('%d/%m/%Y %H:%M') if m.fecha else '',
+                        })
+                    finalizada = bool(conv.conversacion_finalizada)
+                    if finalizada:
+                        url_ir = f'/whatsapp/conversaciones-finalizadas/?conv={conv.id}'
+                    else:
+                        url_ir = f'/whatsapp/conversaciones/?conv={conv.id}'
+                    return JsonResponse({
+                        'error': False,
+                        'card': {
+                            'id': card.id,
+                            'nota': card.nota or '',
+                            'valor_estimado': str(card.valor_estimado),
+                            'moneda': card.moneda,
+                            'fecha_creacion': card.fecha_creacion.strftime('%d/%m/%Y %H:%M') if card.fecha_creacion else '',
+                            'fecha_cambio_etapa': card.fecha_cambio_etapa.strftime('%d/%m/%Y %H:%M') if card.fecha_cambio_etapa else '',
+                            'etapa': card.etapa.nombre,
+                            'etapa_color': card.etapa.color,
+                            'usuario': (card.usuario_creacion.get_full_name() if card.usuario_creacion else '—') or (card.usuario_creacion.username if card.usuario_creacion else '—'),
+                        },
+                        'conversacion': {
+                            'id': conv.id,
+                            'nombre': contacto.contacto_nombre or contacto_numero,
+                            'numero': contacto_numero,
+                            'estado': 'Finalizada' if finalizada else 'Activa',
+                            'finalizada': finalizada,
+                            'url_ir': url_ir,
+                            'resumen': conv.resumen_conversacion or '',
+                            'fecha_inicio': conv.fecha_creacion.strftime('%d/%m/%Y %H:%M') if conv.fecha_creacion else '',
+                            'fecha_fin': conv.fecha_fin_conversacion.strftime('%d/%m/%Y %H:%M') if conv.fecha_fin_conversacion else '',
+                            'sesion': conv.sesion.nombre if conv.sesion_id else '',
+                        },
+                        'mensajes': mensajes,
+                    })
 
                 if action == 'editar_card':
                     card_id = int(request.POST['card_id'])
@@ -269,7 +335,7 @@ def pipelineView(request):
             cards = (
                 ConversacionEnPipeline.objects
                 .filter(etapa=et, status=True)
-                .select_related('conversacion__contacto')
+                .select_related('conversacion__contacto', 'usuario_creacion')
                 .order_by('orden_en_etapa', '-fecha_cambio_etapa')
             )
             agg = cards.aggregate(total=Sum('valor_estimado'), n=Count('id'))
