@@ -1752,7 +1752,7 @@ class ComentarioCardPipeline(ModeloBase):
     class Meta:
         verbose_name = 'Comentario de card'
         verbose_name_plural = 'Comentarios de cards'
-        ordering = ['-fecha_creacion']
+        ordering = ['-fecha_registro']
 
     def __str__(self):
         return f'Comentario #{self.id} en card {self.card_id}'

@@ -1,26 +1,10 @@
 {% extends 'base.html' %}
 {% block head %}
-    <link rel="stylesheet" href="/static/css/whatsapp/pipeline.css?v1.2">
+    <link rel="stylesheet" href="/static/css/whatsapp/pipeline.css?v1.3">
 {% endblock %}
 
 {% block content %}
 <div class="pipe-page">
-
-    <div class="pipe-intro">
-        <strong><i class="fa fa-columns me-1"></i>¿Qué es el Pipeline de ventas y cómo se configura?</strong>
-        <p class="mb-1 mt-1">
-            Es un <strong>tablero Kanban</strong> que organiza tus oportunidades de venta en columnas por etapa.
-            Cada conversación de WhatsApp/IG/Messenger se vuelve una <strong>tarjeta</strong> con valor estimado,
-            probabilidad y fecha de cierre — y avanza arrastrandose entre etapas.
-        </p>
-        <ol class="mb-1">
-            <li><strong>Crea un pipeline</strong> con "Nuevo pipeline" o usa <strong>"Generar con IA"</strong> para armar uno completo en 5 segundos.</li>
-            <li><strong>Define las etapas</strong>: <code>Nuevo lead → Contactado → Cotizado → Negociacion → Ganado / Perdido</code>.</li>
-            <li><strong>Agrega tarjetas</strong> desde una conversacion existente. Contiene contacto + valor + nota.</li>
-            <li><strong>Arrastra entre etapas</strong> — cada movimiento queda registrado en historial.</li>
-            <li><strong>Cierre automatico:</strong> al mover a etapa <code>ganada</code>, el sistema dispara <strong>Purchase a Meta Ads (CAPI)</strong>.</li>
-        </ol>
-    </div>
 
     <div class="pipe-header">
         <div>
@@ -37,6 +21,9 @@
             <div class="pipe-subtitle">{{ pipeline_actual.descripcion|default:"Tablero Kanban · arrastra tarjetas entre etapas" }}</div>
         </div>
         <div class="pipe-toolbar">
+            <button class="pipe-btn" type="button" data-bs-toggle="modal" data-bs-target="#modalAyudaPipeline" title="¿Qué es el pipeline?">
+                <i class="fa fa-circle-question"></i>
+            </button>
             <select class="form-select form-select-sm" style="min-width:180px;" id="selPipeline" onchange="location='?pipeline='+this.value">
                 {% for p in pipelines %}
                     <option value="{{ p.id }}" {% if pipeline_actual.id == p.id %}selected{% endif %}>{{ p.nombre }}</option>
@@ -119,7 +106,7 @@
 
                         <div class="kanban-card-meta-row">
                             <span title="Quien asignó la tarjeta"><i class="fa fa-user"></i> {{ card.usuario_creacion.get_full_name|default:card.usuario_creacion.username|default:"—" }}</span>
-                            <span title="Fecha de asignación"><i class="fa fa-calendar-plus"></i> {{ card.fecha_creacion|date:"d/m H:i" }}</span>
+                            <span title="Fecha de asignación"><i class="fa fa-calendar-plus"></i> {{ card.fecha_registro|date:"d/m H:i" }}</span>
                             <span title="Último movimiento entre etapas"><i class="fa fa-arrows-up-down"></i> {{ card.fecha_cambio_etapa|date:"d/m H:i" }}</span>
                         </div>
 
@@ -132,7 +119,7 @@
                             <button type="button" class="kanban-card-action" onclick="pipeVerCard({{ card.id }})" title="Ver conversación completa">
                                 <i class="fa fa-eye"></i> Ver
                             </button>
-                            <button type="button" class="kanban-card-action" onclick='pipeEditarCard({{ card.id }}, {"valor_estimado":"{{ card.valor_estimado }}","moneda":"{{ card.moneda }}","fecha_cierre_esperado":"{% if card.fecha_cierre_esperado %}{{ card.fecha_cierre_esperado|date:"Y-m-d" }}{% endif %}","nota":"{{ card.nota|escapejs }}"})' title="Editar valor, fecha y nota">
+                            <button type="button" class="kanban-card-action" onclick="formModal({{ card.id }}, 'Editar tarjeta #{{ card.id }}', 'editar_card_form')" title="Editar valor, fecha y nota">
                                 <i class="fa fa-pen-to-square"></i> Editar
                             </button>
                             <a class="kanban-card-action" href="{% if c.conversacion_finalizada %}/whatsapp/conversaciones-finalizadas/?conv={{ c.id }}{% else %}/whatsapp/conversaciones/?conv={{ c.id }}{% endif %}" target="_blank" title="Ir a la conversación">
@@ -172,7 +159,7 @@
 {% if pipeline_actual %}
 <div class="modal fade pipe-modal" id="modalEditarPipeline" tabindex="-1">
     <div class="modal-dialog">
-        <form class="modal-content" onsubmit="editarPipeline(event)">
+        <form method="get" class="modal-content" onsubmit="editarPipeline(event)">
             {% csrf_token %}
             <input type="hidden" name="pipeline_id" value="{{ pipeline_actual.id }}">
             <div class="modal-header">
@@ -200,7 +187,7 @@
 
 <div class="modal fade pipe-modal" id="modalNuevoPipeline" tabindex="-1">
     <div class="modal-dialog">
-        <form class="modal-content" onsubmit="crearPipeline(event)">
+        <form method="get" class="modal-content" onsubmit="crearPipeline(event)">
             {% csrf_token %}
             <div class="modal-header">
                 <h5 class="modal-title"><i class="fa fa-plus me-2"></i>Nuevo pipeline</h5>
@@ -222,7 +209,7 @@
 
 <div class="modal fade pipe-modal pipe-modal-ai" id="modalGenerarIA" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <form class="modal-content" onsubmit="generarPipelineIA(event)">
+        <form method="get" class="modal-content" onsubmit="generarPipelineIA(event)">
             {% csrf_token %}
             <div class="modal-header">
                 <h5 class="modal-title"><i class="fa fa-wand-magic-sparkles me-2"></i>Generar pipeline con IA</h5>
@@ -270,7 +257,7 @@
 
 <div class="modal fade pipe-modal" id="modalEditarEtapa" tabindex="-1">
     <div class="modal-dialog">
-        <form class="modal-content" onsubmit="editarEtapaSubmit(event)">
+        <form method="get" class="modal-content" onsubmit="editarEtapaSubmit(event)">
             {% csrf_token %}
             <input type="hidden" name="etapa_id" id="ee-etapa-id">
             <div class="modal-header">
@@ -318,47 +305,49 @@
     </div>
 </div>
 
-<div class="modal fade pipe-modal" id="modalEditarCard" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <form class="modal-content" onsubmit="pipeGuardarEditarCard(event)">
-            {% csrf_token %}
-            <input type="hidden" name="card_id" id="ec-card-id">
+<div class="modal fade" id="modalDetalle" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalNombre"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body detalleProd"></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade pipe-modal" id="modalAyudaPipeline" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fa fa-pen-to-square me-2"></i>Editar tarjeta</h5>
+                <h5 class="modal-title"><i class="fa fa-circle-question me-2"></i>¿Qué es el Pipeline de ventas?</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="row g-2 mb-3">
-                    <div class="col-8">
-                        <label class="form-label">Valor estimado</label>
-                        <input type="number" step="0.01" min="0" name="valor_estimado" id="ec-valor" class="form-control" placeholder="0.00">
-                    </div>
-                    <div class="col-4">
-                        <label class="form-label">Moneda</label>
-                        <select name="moneda" id="ec-moneda" class="form-select">
-                            <option value="USD">USD</option>
-                            <option value="MXN">MXN</option>
-                            <option value="ARS">ARS</option>
-                            <option value="EUR">EUR</option>
-                            <option value="COP">COP</option>
-                            <option value="PEN">PEN</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Cierre esperado</label>
-                    <input type="date" name="fecha_cierre_esperado" id="ec-cierre" class="form-control">
-                </div>
-                <div>
-                    <label class="form-label">Observación</label>
-                    <textarea name="nota" id="ec-nota" class="form-control" rows="3" maxlength="1000"></textarea>
+                <p class="mb-2">
+                    Es un <strong>tablero Kanban</strong> que organiza tus oportunidades de venta en columnas por etapa.
+                    Cada conversación de WhatsApp/IG/Messenger se vuelve una <strong>tarjeta</strong> con valor estimado,
+                    probabilidad y fecha de cierre — y avanza arrastrandose entre etapas.
+                </p>
+                <ol class="small mb-2">
+                    <li class="mb-1"><strong>Crea un pipeline</strong> con "Nuevo pipeline" o usa <strong>"Generar con IA"</strong> para armar uno completo en 5 segundos.</li>
+                    <li class="mb-1"><strong>Define las etapas</strong>: <code>Nuevo lead → Contactado → Cotizado → Negociacion → Ganado / Perdido</code>.</li>
+                    <li class="mb-1"><strong>Agrega tarjetas</strong> desde una conversacion existente — contiene contacto + valor + nota.</li>
+                    <li class="mb-1"><strong>Arrastra entre etapas</strong> — cada movimiento queda registrado en historial.</li>
+                    <li class="mb-1"><strong>Cierre automatico:</strong> al mover a etapa <code>ganada</code>, el sistema dispara <strong>Purchase a Meta Ads (CAPI)</strong>.</li>
+                </ol>
+                <div class="small text-muted">
+                    <i class="fa fa-chart-line me-1"></i><strong>Forecast</strong> ponderado: por columna ves total estimado × probabilidad/100 — anticipa ingresos del mes.
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="pipe-btn" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="pipe-btn pipe-btn-primary"><i class="fa fa-save"></i> Guardar</button>
+                <button type="button" class="pipe-btn pipe-btn-primary" data-bs-dismiss="modal">Entendido</button>
             </div>
-        </form>
+        </div>
     </div>
 </div>
 
@@ -384,7 +373,7 @@
 
 <div class="modal fade pipe-modal" id="modalNuevaEtapa" tabindex="-1">
     <div class="modal-dialog">
-        <form class="modal-content" onsubmit="crearEtapa(event)">
+        <form method="get" class="modal-content" onsubmit="crearEtapa(event)">
             {% csrf_token %}
             <div class="modal-header">
                 <h5 class="modal-title"><i class="fa fa-plus me-2"></i>Nueva etapa</h5>
@@ -697,7 +686,6 @@ function pipeRenderVerCard(j){
         pipeRenderComentarios(card.id, j.comentarios || []);
 
     document.getElementById('pipeVerCardBody').innerHTML = html;
-    pipeBindFormComentario(card.id);
     const $ir = document.getElementById('pipeVerCardIr');
     $ir.href = conv.url_ir || '#';
     document.getElementById('pipeVerCardIrTexto').textContent = conv.finalizada
@@ -739,75 +727,21 @@ function pipeRenderComentarios(cardId, comentarios){
         groupsHtml = '<div class="pipe-conv-empty">Sin comentarios. Sé el primero en aportar contexto.</div>';
     }
     return (
-        '<div class="pipe-comments">' +
-            '<div class="pipe-comments-title"><i class="fa fa-clock-rotate-left"></i> Historial de comentarios <span class="pipe-comments-count">' + comentarios.length + '</span></div>' +
-            '<form class="pipe-comments-form" id="pipeComForm" onsubmit="return false;">' +
-                '<textarea id="pipeComTexto" placeholder="Agregar comentario sobre esta etapa..." maxlength="2000"></textarea>' +
-                '<button type="button" class="pipe-btn pipe-btn-primary" id="pipeComEnviar"><i class="fa fa-paper-plane"></i></button>' +
-            '</form>' +
+        '<div class="pipe-comments" data-card="' + cardId + '">' +
+            '<div class="pipe-comments-title"><i class="fa fa-clock-rotate-left"></i> Historial de comentarios <span class="pipe-comments-count">' + comentarios.length + '</span>' +
+                '<button type="button" class="pipe-btn pipe-btn-primary ms-auto" onclick="formModal(' + cardId + ', \'Nuevo comentario\', \'comentario_card_form\')"><i class="fa fa-plus"></i> Agregar</button>' +
+            '</div>' +
             '<div class="pipe-comments-timeline" id="pipeComTimeline">' + groupsHtml + '</div>' +
         '</div>'
     );
 }
 
-function pipeBindFormComentario(cardId){
-    const $btn = document.getElementById('pipeComEnviar');
-    const $txt = document.getElementById('pipeComTexto');
-    if(!$btn || !$txt) return;
-    async function enviar(){
-        const texto = ($txt.value || '').trim();
-        if(!texto) return;
-        $btn.disabled = true;
-        const fd = new FormData();
-        fd.append('csrfmiddlewaretoken', CSRF);
-        fd.append('action', 'add_comentario');
-        fd.append('card_id', cardId);
-        fd.append('texto', texto);
-        try {
-            const r = await fetch('', {method:'POST', body: fd});
-            const j = await r.json();
-            if(j.error){ alert(j.message || 'Error'); $btn.disabled = false; return; }
-            $txt.value = '';
-            pipeAgregarComentarioDOM(j.comentario);
-            $btn.disabled = false;
-        } catch(err){ alert('Error: ' + err.message); $btn.disabled = false; }
-    }
-    $btn.addEventListener('click', enviar);
-    $txt.addEventListener('keydown', function(e){
-        if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); enviar(); }
-    });
-}
-
-function pipeAgregarComentarioDOM(c){
-    const $timeline = document.getElementById('pipeComTimeline');
-    if(!$timeline) return;
-    const empty = $timeline.querySelector('.pipe-conv-empty');
-    if(empty) empty.remove();
-    const itemHtml =
-        '<div class="pipe-comment-item" data-comment="' + c.id + '">' +
-            '<div class="pipe-comment-head">' +
-                '<span><span class="pipe-comment-user">' + pipeEscape(c.usuario) + '</span> · ' + pipeEscape(c.fecha) + '</span>' +
-                '<button class="pipe-comment-delete" onclick="pipeEliminarComentario(' + c.id + ')" title="Eliminar"><i class="fa fa-trash"></i></button>' +
-            '</div>' +
-            '<div class="pipe-comment-body">' + pipeEscape(c.texto) + '</div>' +
-        '</div>';
-    let $group = null;
-    $timeline.querySelectorAll('.pipe-comments-group').forEach(function(g){
-        const h = g.querySelector('.pipe-comments-group-header');
-        if(h && h.textContent.trim() === c.etapa) $group = g;
-    });
-    if($group){
-        $group.insertAdjacentHTML('beforeend', itemHtml);
-    } else {
-        const groupHtml =
-            '<div class="pipe-comments-group">' +
-                '<div class="pipe-comments-group-header"><span class="pipe-comments-group-dot" style="--group-color:' + pipeEscape(c.etapa_color) + '"></span>' + pipeEscape(c.etapa) + '</div>' +
-                itemHtml +
-            '</div>';
-        $timeline.insertAdjacentHTML('afterbegin', groupHtml);
-    }
-    const $count = document.querySelector('.pipe-comments-count');
-    if($count) $count.textContent = parseInt($count.textContent || '0', 10) + 1;
+function pipeAfterComentarioGuardado(cardId){
+    const detalleEl = document.getElementById('modalDetalle');
+    const inst = bootstrap.Modal.getInstance(detalleEl);
+    if(inst) inst.hide();
+    if(typeof alertaSuccess === 'function') alertaSuccess('Comentario agregado.');
+    setTimeout(function(){ pipeVerCard(cardId); }, 250);
 }
 
 async function pipeEliminarComentario(comId){
@@ -836,27 +770,28 @@ async function pipeEliminarComentario(comId){
     }
 }
 
-function pipeEditarCard(cardId, data){
-    document.getElementById('ec-card-id').value = cardId;
-    document.getElementById('ec-valor').value = data.valor_estimado || '';
-    document.getElementById('ec-moneda').value = data.moneda || 'USD';
-    document.getElementById('ec-cierre').value = data.fecha_cierre_esperado || '';
-    document.getElementById('ec-nota').value = data.nota || '';
-    const modalEl = document.getElementById('modalEditarCard');
-    const inst = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-    inst.show();
-}
-
-async function pipeGuardarEditarCard(ev){
-    ev.preventDefault();
-    const fd = new FormData(ev.target);
-    fd.append('action', 'editar_card');
-    fd.append('csrfmiddlewaretoken', CSRF);
-    const r = await fetch('', {method:'POST', body: fd});
-    const j = await r.json();
-    if(j.error){ alert(j.message || 'Error'); return; }
-    if(typeof alertaSuccess === 'function') alertaSuccess('Tarjeta actualizada.');
-    setTimeout(() => location.reload(), 500);
+function formModal(id, text, action){
+    if(typeof pantallaespera === 'function') pantallaespera();
+    $.ajax({
+        type: 'GET',
+        url: '{{ request.path }}',
+        data: { action: action, id: id },
+        dataType: 'json'
+    }).done(function(data){
+        if(typeof $.unblockUI === 'function') setTimeout($.unblockUI, 1);
+        if(data.result === true){
+            $('#modalNombre').html(text);
+            $('.detalleProd').html(data.data);
+            new bootstrap.Modal(document.getElementById('modalDetalle')).show();
+        } else {
+            if(typeof mensajeWarning === 'function') mensajeWarning(data.message || 'Error');
+            else alert(data.message || 'Error');
+        }
+    }).fail(function(){
+        if(typeof $.unblockUI === 'function') setTimeout($.unblockUI, 1);
+        if(typeof mensajeWarning === 'function') mensajeWarning('Error de conexion.');
+        else alert('Error de conexion.');
+    });
 }
 
 async function pipeEliminarCard(cardId){
@@ -904,4 +839,8 @@ async function pipeEliminarCard(cardId){
     if(tabs[0]) tabs[0].classList.add('active');
 })();
 </script>
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/forms.js?version=1"></script>
 {% endblock %}

@@ -185,14 +185,14 @@ def pipelineView(request):
                         ComentarioCardPipeline.objects
                         .filter(card=card, status=True)
                         .select_related('etapa', 'usuario_creacion')
-                        .order_by('-fecha_creacion')[:200]
+                        .order_by('-fecha_registro')[:200]
                     )
                     comentarios = []
                     for co in comentarios_qs:
                         comentarios.append({
                             'id': co.id,
                             'texto': co.texto,
-                            'fecha': co.fecha_creacion.strftime('%d/%m/%Y %H:%M') if co.fecha_creacion else '',
+                            'fecha': co.fecha_registro.strftime('%d/%m/%Y %H:%M') if co.fecha_registro else '',
                             'usuario': ((co.usuario_creacion.get_full_name() if co.usuario_creacion else '') or (co.usuario_creacion.username if co.usuario_creacion else '—')),
                             'etapa': co.etapa.nombre if co.etapa else '(etapa eliminada)',
                             'etapa_color': co.etapa.color if co.etapa else '#9b9a97',
@@ -205,7 +205,7 @@ def pipelineView(request):
                             'valor_estimado': str(card.valor_estimado),
                             'moneda': card.moneda,
                             'fecha_cierre_esperado': card.fecha_cierre_esperado.strftime('%Y-%m-%d') if card.fecha_cierre_esperado else '',
-                            'fecha_creacion': card.fecha_creacion.strftime('%d/%m/%Y %H:%M') if card.fecha_creacion else '',
+                            'fecha_creacion': card.fecha_registro.strftime('%d/%m/%Y %H:%M') if card.fecha_registro else '',
                             'fecha_cambio_etapa': card.fecha_cambio_etapa.strftime('%d/%m/%Y %H:%M') if card.fecha_cambio_etapa else '',
                             'etapa': card.etapa.nombre,
                             'etapa_color': card.etapa.color,
@@ -220,7 +220,7 @@ def pipelineView(request):
                             'finalizada': finalizada,
                             'url_ir': url_ir,
                             'resumen': conv.resumen_conversacion or '',
-                            'fecha_inicio': conv.fecha_creacion.strftime('%d/%m/%Y %H:%M') if conv.fecha_creacion else '',
+                            'fecha_inicio': conv.fecha_registro.strftime('%d/%m/%Y %H:%M') if conv.fecha_registro else '',
                             'fecha_fin': conv.fecha_fin_conversacion.strftime('%d/%m/%Y %H:%M') if conv.fecha_fin_conversacion else '',
                             'sesion': conv.sesion.nombre if conv.sesion_id else '',
                         },
@@ -228,7 +228,7 @@ def pipelineView(request):
                     })
 
                 if action == 'editar_card':
-                    card_id = int(request.POST['card_id'])
+                    card_id = int(request.POST.get('card_id') or request.POST.get('pk') or 0)
                     card = ConversacionEnPipeline.objects.get(pk=card_id)
                     if 'valor_estimado' in request.POST:
                         card.valor_estimado = Decimal(request.POST['valor_estimado'] or '0')
@@ -237,33 +237,28 @@ def pipelineView(request):
                     if 'fecha_cierre_esperado' in request.POST:
                         card.fecha_cierre_esperado = request.POST['fecha_cierre_esperado'] or None
                     if 'nota' in request.POST:
-                        card.nota = request.POST['nota']
-                    card.save()
-                    return JsonResponse({'error': False})
+                        card.nota = (request.POST['nota'] or '').strip()[:1000]
+                    card.save(request=request)
+                    log(f"Card {card_id} actualizada", request, "change", obj=card_id)
+                    return JsonResponse([{'error': False, 'reload': True}], safe=False)
 
                 if action == 'add_comentario':
-                    card_id = int(request.POST.get('card_id') or 0)
+                    card_id = int(request.POST.get('card_id') or request.POST.get('pk') or 0)
                     texto = (request.POST.get('texto') or '').strip()[:2000]
                     if not texto:
-                        return JsonResponse({'error': True, 'message': 'El comentario no puede estar vacío.'})
+                        return JsonResponse([{'error': True, 'message': 'El comentario no puede estar vacio.'}], safe=False)
                     card = ConversacionEnPipeline.objects.select_related('etapa').filter(pk=card_id).first()
                     if not card:
-                        return JsonResponse({'error': True, 'message': 'Card no encontrada.'})
+                        return JsonResponse([{'error': True, 'message': 'Card no encontrada.'}], safe=False)
                     com = ComentarioCardPipeline.objects.create(
                         card=card, etapa=card.etapa, texto=texto,
                         usuario_creacion=request.user,
                     )
-                    return JsonResponse({
+                    log(f"Comentario #{com.id} agregado a card {card_id}", request, "add", obj=com.id)
+                    return JsonResponse([{
                         'error': False,
-                        'comentario': {
-                            'id': com.id,
-                            'texto': com.texto,
-                            'fecha': com.fecha_creacion.strftime('%d/%m/%Y %H:%M') if com.fecha_creacion else '',
-                            'usuario': (request.user.get_full_name() or request.user.username) if request.user else '—',
-                            'etapa': card.etapa.nombre,
-                            'etapa_color': card.etapa.color,
-                        },
-                    })
+                        'function_js': f'pipeAfterComentarioGuardado({card_id})',
+                    }], safe=False)
 
                 if action == 'eliminar_comentario':
                     com_id = int(request.POST.get('comentario_id') or 0)
@@ -358,6 +353,25 @@ def pipelineView(request):
 
         except Exception as ex:
             return JsonResponse({'error': True, 'message': str(ex)})
+
+    if request.method == 'GET' and request.GET.get('action'):
+        from django.template.loader import get_template
+        action = request.GET.get('action')
+        try:
+            if action == 'editar_card_form':
+                pk = int(request.GET.get('id') or 0)
+                card = ConversacionEnPipeline.objects.select_related('etapa').get(pk=pk)
+                ctx = {'card': card, 'monedas': ['USD', 'MXN', 'ARS', 'EUR', 'COP', 'PEN'], 'ruta': request.path}
+                template = get_template('whatsapp/pipeline/_form_editar_card.html')
+                return JsonResponse({'result': True, 'data': template.render(ctx)})
+            if action == 'comentario_card_form':
+                pk = int(request.GET.get('id') or 0)
+                card = ConversacionEnPipeline.objects.select_related('etapa').get(pk=pk)
+                ctx = {'card': card, 'ruta': request.path}
+                template = get_template('whatsapp/pipeline/_form_comentario_card.html')
+                return JsonResponse({'result': True, 'data': template.render(ctx)})
+        except Exception as ex:
+            return JsonResponse({'result': False, 'message': str(ex)})
 
     pipeline_id = request.GET.get('pipeline')
     pipelines = PipelineVenta.objects.filter(status=True).order_by('-es_default', 'nombre')
