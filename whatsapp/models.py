@@ -1732,6 +1732,32 @@ class ConversacionEnPipeline(ModeloBase):
         return f"{self.conversacion_id} en {self.etapa}"
 
 
+class ComentarioCardPipeline(ModeloBase):
+    """Comentario/observación libre asociado a una card del Kanban.
+
+    Cada comentario guarda la `etapa` en la que estaba la card al momento de
+    escribirlo — así el modal "Ver" puede mostrar un timeline agrupado por
+    etapa con las observaciones acumuladas por los agentes.
+    """
+    card = models.ForeignKey(
+        ConversacionEnPipeline, on_delete=models.CASCADE,
+        related_name='comentarios', verbose_name='Card',
+    )
+    etapa = models.ForeignKey(
+        EtapaPipeline, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='+', verbose_name='Etapa al momento del comentario',
+    )
+    texto = models.TextField('Comentario', max_length=2000)
+
+    class Meta:
+        verbose_name = 'Comentario de card'
+        verbose_name_plural = 'Comentarios de cards'
+        ordering = ['-fecha_creacion']
+
+    def __str__(self):
+        return f'Comentario #{self.id} en card {self.card_id}'
+
+
 class HistorialEtapaPipeline(models.Model):
     """Traza de cambios de etapa para una conversación (para análisis de funnel)."""
     card = models.ForeignKey(

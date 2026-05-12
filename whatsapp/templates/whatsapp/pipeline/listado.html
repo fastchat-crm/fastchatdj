@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block head %}
-    <link rel="stylesheet" href="/static/css/whatsapp/pipeline.css?v1.1">
+    <link rel="stylesheet" href="/static/css/whatsapp/pipeline.css?v1.2">
 {% endblock %}
 
 {% block content %}
@@ -131,6 +131,9 @@
                         <div class="kanban-card-actions">
                             <button type="button" class="kanban-card-action" onclick="pipeVerCard({{ card.id }})" title="Ver conversación completa">
                                 <i class="fa fa-eye"></i> Ver
+                            </button>
+                            <button type="button" class="kanban-card-action" onclick='pipeEditarCard({{ card.id }}, {"valor_estimado":"{{ card.valor_estimado }}","moneda":"{{ card.moneda }}","fecha_cierre_esperado":"{% if card.fecha_cierre_esperado %}{{ card.fecha_cierre_esperado|date:"Y-m-d" }}{% endif %}","nota":"{{ card.nota|escapejs }}"})' title="Editar valor, fecha y nota">
+                                <i class="fa fa-pen-to-square"></i> Editar
                             </button>
                             <a class="kanban-card-action" href="{% if c.conversacion_finalizada %}/whatsapp/conversaciones-finalizadas/?conv={{ c.id }}{% else %}/whatsapp/conversaciones/?conv={{ c.id }}{% endif %}" target="_blank" title="Ir a la conversación">
                                 <i class="fa fa-arrow-up-right-from-square"></i> Ir
@@ -310,6 +313,50 @@
             <div class="modal-footer">
                 <button type="button" class="pipe-btn" data-bs-dismiss="modal">Cancelar</button>
                 <button type="submit" class="pipe-btn pipe-btn-primary"><i class="fa fa-save"></i> Guardar cambios</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade pipe-modal" id="modalEditarCard" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" onsubmit="pipeGuardarEditarCard(event)">
+            {% csrf_token %}
+            <input type="hidden" name="card_id" id="ec-card-id">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa fa-pen-to-square me-2"></i>Editar tarjeta</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-8">
+                        <label class="form-label">Valor estimado</label>
+                        <input type="number" step="0.01" min="0" name="valor_estimado" id="ec-valor" class="form-control" placeholder="0.00">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label">Moneda</label>
+                        <select name="moneda" id="ec-moneda" class="form-select">
+                            <option value="USD">USD</option>
+                            <option value="MXN">MXN</option>
+                            <option value="ARS">ARS</option>
+                            <option value="EUR">EUR</option>
+                            <option value="COP">COP</option>
+                            <option value="PEN">PEN</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Cierre esperado</label>
+                    <input type="date" name="fecha_cierre_esperado" id="ec-cierre" class="form-control">
+                </div>
+                <div>
+                    <label class="form-label">Observación</label>
+                    <textarea name="nota" id="ec-nota" class="form-control" rows="3" maxlength="1000"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="pipe-btn" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="pipe-btn pipe-btn-primary"><i class="fa fa-save"></i> Guardar</button>
             </div>
         </form>
     </div>
@@ -646,14 +693,170 @@ function pipeRenderVerCard(j){
         notaHtml +
         resumenHtml +
         '<div class="small fw-semibold text-muted mb-2 mt-2"><i class="fa fa-comments me-1"></i>Últimos ' + msgs.length + ' mensajes</div>' +
-        '<div class="pipe-conv-messages">' + mensajesHtml + '</div>';
+        '<div class="pipe-conv-messages">' + mensajesHtml + '</div>' +
+        pipeRenderComentarios(card.id, j.comentarios || []);
 
     document.getElementById('pipeVerCardBody').innerHTML = html;
+    pipeBindFormComentario(card.id);
     const $ir = document.getElementById('pipeVerCardIr');
     $ir.href = conv.url_ir || '#';
     document.getElementById('pipeVerCardIrTexto').textContent = conv.finalizada
         ? 'Ir a conversación finalizada'
         : 'Ir a conversación activa';
+}
+
+function pipeRenderComentarios(cardId, comentarios){
+    let groupsHtml = '';
+    if(comentarios.length){
+        const grupos = {};
+        const orden = [];
+        comentarios.forEach(function(c){
+            const k = c.etapa + '||' + (c.etapa_color || '#6c757d');
+            if(!grupos[k]){ grupos[k] = []; orden.push(k); }
+            grupos[k].push(c);
+        });
+        orden.forEach(function(k){
+            const partes = k.split('||');
+            const nombre = partes[0], color = partes[1];
+            let items = '';
+            grupos[k].forEach(function(c){
+                items +=
+                    '<div class="pipe-comment-item" data-comment="' + c.id + '">' +
+                        '<div class="pipe-comment-head">' +
+                            '<span><span class="pipe-comment-user">' + pipeEscape(c.usuario) + '</span> · ' + pipeEscape(c.fecha) + '</span>' +
+                            '<button class="pipe-comment-delete" onclick="pipeEliminarComentario(' + c.id + ')" title="Eliminar"><i class="fa fa-trash"></i></button>' +
+                        '</div>' +
+                        '<div class="pipe-comment-body">' + pipeEscape(c.texto) + '</div>' +
+                    '</div>';
+            });
+            groupsHtml +=
+                '<div class="pipe-comments-group">' +
+                    '<div class="pipe-comments-group-header"><span class="pipe-comments-group-dot" style="--group-color:' + pipeEscape(color) + '"></span>' + pipeEscape(nombre) + '</div>' +
+                    items +
+                '</div>';
+        });
+    } else {
+        groupsHtml = '<div class="pipe-conv-empty">Sin comentarios. Sé el primero en aportar contexto.</div>';
+    }
+    return (
+        '<div class="pipe-comments">' +
+            '<div class="pipe-comments-title"><i class="fa fa-clock-rotate-left"></i> Historial de comentarios <span class="pipe-comments-count">' + comentarios.length + '</span></div>' +
+            '<form class="pipe-comments-form" id="pipeComForm" onsubmit="return false;">' +
+                '<textarea id="pipeComTexto" placeholder="Agregar comentario sobre esta etapa..." maxlength="2000"></textarea>' +
+                '<button type="button" class="pipe-btn pipe-btn-primary" id="pipeComEnviar"><i class="fa fa-paper-plane"></i></button>' +
+            '</form>' +
+            '<div class="pipe-comments-timeline" id="pipeComTimeline">' + groupsHtml + '</div>' +
+        '</div>'
+    );
+}
+
+function pipeBindFormComentario(cardId){
+    const $btn = document.getElementById('pipeComEnviar');
+    const $txt = document.getElementById('pipeComTexto');
+    if(!$btn || !$txt) return;
+    async function enviar(){
+        const texto = ($txt.value || '').trim();
+        if(!texto) return;
+        $btn.disabled = true;
+        const fd = new FormData();
+        fd.append('csrfmiddlewaretoken', CSRF);
+        fd.append('action', 'add_comentario');
+        fd.append('card_id', cardId);
+        fd.append('texto', texto);
+        try {
+            const r = await fetch('', {method:'POST', body: fd});
+            const j = await r.json();
+            if(j.error){ alert(j.message || 'Error'); $btn.disabled = false; return; }
+            $txt.value = '';
+            pipeAgregarComentarioDOM(j.comentario);
+            $btn.disabled = false;
+        } catch(err){ alert('Error: ' + err.message); $btn.disabled = false; }
+    }
+    $btn.addEventListener('click', enviar);
+    $txt.addEventListener('keydown', function(e){
+        if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); enviar(); }
+    });
+}
+
+function pipeAgregarComentarioDOM(c){
+    const $timeline = document.getElementById('pipeComTimeline');
+    if(!$timeline) return;
+    const empty = $timeline.querySelector('.pipe-conv-empty');
+    if(empty) empty.remove();
+    const itemHtml =
+        '<div class="pipe-comment-item" data-comment="' + c.id + '">' +
+            '<div class="pipe-comment-head">' +
+                '<span><span class="pipe-comment-user">' + pipeEscape(c.usuario) + '</span> · ' + pipeEscape(c.fecha) + '</span>' +
+                '<button class="pipe-comment-delete" onclick="pipeEliminarComentario(' + c.id + ')" title="Eliminar"><i class="fa fa-trash"></i></button>' +
+            '</div>' +
+            '<div class="pipe-comment-body">' + pipeEscape(c.texto) + '</div>' +
+        '</div>';
+    let $group = null;
+    $timeline.querySelectorAll('.pipe-comments-group').forEach(function(g){
+        const h = g.querySelector('.pipe-comments-group-header');
+        if(h && h.textContent.trim() === c.etapa) $group = g;
+    });
+    if($group){
+        $group.insertAdjacentHTML('beforeend', itemHtml);
+    } else {
+        const groupHtml =
+            '<div class="pipe-comments-group">' +
+                '<div class="pipe-comments-group-header"><span class="pipe-comments-group-dot" style="--group-color:' + pipeEscape(c.etapa_color) + '"></span>' + pipeEscape(c.etapa) + '</div>' +
+                itemHtml +
+            '</div>';
+        $timeline.insertAdjacentHTML('afterbegin', groupHtml);
+    }
+    const $count = document.querySelector('.pipe-comments-count');
+    if($count) $count.textContent = parseInt($count.textContent || '0', 10) + 1;
+}
+
+async function pipeEliminarComentario(comId){
+    if(!confirm('¿Eliminar este comentario?')) return;
+    const fd = new FormData();
+    fd.append('csrfmiddlewaretoken', CSRF);
+    fd.append('action', 'eliminar_comentario');
+    fd.append('comentario_id', comId);
+    const r = await fetch('', {method:'POST', body: fd});
+    const j = await r.json();
+    if(j.error){ alert(j.message); return; }
+    const $item = document.querySelector('.pipe-comment-item[data-comment="' + comId + '"]');
+    if($item){
+        const $group = $item.closest('.pipe-comments-group');
+        $item.remove();
+        if($group && !$group.querySelector('.pipe-comment-item')) $group.remove();
+    }
+    const $count = document.querySelector('.pipe-comments-count');
+    if($count){
+        const n = Math.max(0, parseInt($count.textContent || '0', 10) - 1);
+        $count.textContent = n;
+        if(n === 0){
+            const $timeline = document.getElementById('pipeComTimeline');
+            if($timeline) $timeline.innerHTML = '<div class="pipe-conv-empty">Sin comentarios. Sé el primero en aportar contexto.</div>';
+        }
+    }
+}
+
+function pipeEditarCard(cardId, data){
+    document.getElementById('ec-card-id').value = cardId;
+    document.getElementById('ec-valor').value = data.valor_estimado || '';
+    document.getElementById('ec-moneda').value = data.moneda || 'USD';
+    document.getElementById('ec-cierre').value = data.fecha_cierre_esperado || '';
+    document.getElementById('ec-nota').value = data.nota || '';
+    const modalEl = document.getElementById('modalEditarCard');
+    const inst = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    inst.show();
+}
+
+async function pipeGuardarEditarCard(ev){
+    ev.preventDefault();
+    const fd = new FormData(ev.target);
+    fd.append('action', 'editar_card');
+    fd.append('csrfmiddlewaretoken', CSRF);
+    const r = await fetch('', {method:'POST', body: fd});
+    const j = await r.json();
+    if(j.error){ alert(j.message || 'Error'); return; }
+    if(typeof alertaSuccess === 'function') alertaSuccess('Tarjeta actualizada.');
+    setTimeout(() => location.reload(), 500);
 }
 
 async function pipeEliminarCard(cardId){

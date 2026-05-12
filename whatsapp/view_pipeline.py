@@ -13,7 +13,7 @@ from django.utils import timezone
 from core.funciones import addData, secure_module, log
 from .models import (
     PipelineVenta, EtapaPipeline, ConversacionEnPipeline,
-    HistorialEtapaPipeline, ConversacionWhatsApp,
+    HistorialEtapaPipeline, ConversacionWhatsApp, ComentarioCardPipeline,
 )
 
 logger = logging.getLogger(__name__)
@@ -181,6 +181,22 @@ def pipelineView(request):
                         url_ir = f'/whatsapp/conversaciones-finalizadas/?conv={conv.id}'
                     else:
                         url_ir = f'/whatsapp/conversaciones/?conv={conv.id}'
+                    comentarios_qs = (
+                        ComentarioCardPipeline.objects
+                        .filter(card=card, status=True)
+                        .select_related('etapa', 'usuario_creacion')
+                        .order_by('-fecha_creacion')[:200]
+                    )
+                    comentarios = []
+                    for co in comentarios_qs:
+                        comentarios.append({
+                            'id': co.id,
+                            'texto': co.texto,
+                            'fecha': co.fecha_creacion.strftime('%d/%m/%Y %H:%M') if co.fecha_creacion else '',
+                            'usuario': ((co.usuario_creacion.get_full_name() if co.usuario_creacion else '') or (co.usuario_creacion.username if co.usuario_creacion else '—')),
+                            'etapa': co.etapa.nombre if co.etapa else '(etapa eliminada)',
+                            'etapa_color': co.etapa.color if co.etapa else '#9b9a97',
+                        })
                     return JsonResponse({
                         'error': False,
                         'card': {
@@ -188,12 +204,14 @@ def pipelineView(request):
                             'nota': card.nota or '',
                             'valor_estimado': str(card.valor_estimado),
                             'moneda': card.moneda,
+                            'fecha_cierre_esperado': card.fecha_cierre_esperado.strftime('%Y-%m-%d') if card.fecha_cierre_esperado else '',
                             'fecha_creacion': card.fecha_creacion.strftime('%d/%m/%Y %H:%M') if card.fecha_creacion else '',
                             'fecha_cambio_etapa': card.fecha_cambio_etapa.strftime('%d/%m/%Y %H:%M') if card.fecha_cambio_etapa else '',
                             'etapa': card.etapa.nombre,
                             'etapa_color': card.etapa.color,
                             'usuario': (card.usuario_creacion.get_full_name() if card.usuario_creacion else '—') or (card.usuario_creacion.username if card.usuario_creacion else '—'),
                         },
+                        'comentarios': comentarios,
                         'conversacion': {
                             'id': conv.id,
                             'nombre': contacto.contacto_nombre or contacto_numero,
@@ -221,6 +239,39 @@ def pipelineView(request):
                     if 'nota' in request.POST:
                         card.nota = request.POST['nota']
                     card.save()
+                    return JsonResponse({'error': False})
+
+                if action == 'add_comentario':
+                    card_id = int(request.POST.get('card_id') or 0)
+                    texto = (request.POST.get('texto') or '').strip()[:2000]
+                    if not texto:
+                        return JsonResponse({'error': True, 'message': 'El comentario no puede estar vacío.'})
+                    card = ConversacionEnPipeline.objects.select_related('etapa').filter(pk=card_id).first()
+                    if not card:
+                        return JsonResponse({'error': True, 'message': 'Card no encontrada.'})
+                    com = ComentarioCardPipeline.objects.create(
+                        card=card, etapa=card.etapa, texto=texto,
+                        usuario_creacion=request.user,
+                    )
+                    return JsonResponse({
+                        'error': False,
+                        'comentario': {
+                            'id': com.id,
+                            'texto': com.texto,
+                            'fecha': com.fecha_creacion.strftime('%d/%m/%Y %H:%M') if com.fecha_creacion else '',
+                            'usuario': (request.user.get_full_name() or request.user.username) if request.user else '—',
+                            'etapa': card.etapa.nombre,
+                            'etapa_color': card.etapa.color,
+                        },
+                    })
+
+                if action == 'eliminar_comentario':
+                    com_id = int(request.POST.get('comentario_id') or 0)
+                    com = ComentarioCardPipeline.objects.filter(pk=com_id).first()
+                    if not com:
+                        return JsonResponse({'error': True, 'message': 'Comentario no encontrado.'})
+                    com.status = False
+                    com.save(update_fields=['status'])
                     return JsonResponse({'error': False})
 
                 if action == 'eliminar_card':
