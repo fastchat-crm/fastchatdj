@@ -36,7 +36,7 @@
     'use strict';
     // Filtra el combo de modelos según el proveedor seleccionado.
     // Prefijos por provider: 2=Gemini (gemini-*), 3=OpenAI (gpt-*), Claude (claude-*)
-    const PREFIJOS = { '2': 'gemini-', '3': 'gpt-' };
+    const PREFIJOS = { '2': 'gemini-', '3': 'gpt-', '4': 'claude-' };
 
     function filtrarModelos() {
         const $prov = $('#id_proveedor');
@@ -73,7 +73,7 @@
         }
 
         // Mostrar texto guía bajo el combo
-        const labels = { '2': 'Gemini', '3': 'OpenAI' };
+        const labels = { '2': 'Gemini', '3': 'OpenAI', '4': 'Claude' };
         const prov_label = labels[provVal] || 'este proveedor';
         let $hint = $modelo.siblings('.modelo-hint');
         if (!$hint.length) {

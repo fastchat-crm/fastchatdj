@@ -35,20 +35,24 @@ PROVEEDOR_ID_TO_NAME: dict[int, str] = {
 # Modelos disponibles para cada provider — agrupados por familia.
 # Si dejás esto vacío en el agente, se usa el default del provider (default_model()).
 MODELOS_DISPONIBLES = (
-    # ── Google Gemini ──
     ('gemini-2.5-flash',          '[Gemini] 2.5 Flash — rápido y económico (default)'),
+    ('gemini-2.5-flash-lite',     '[Gemini] 2.5 Flash Lite — el más barato'),
     ('gemini-2.5-pro',            '[Gemini] 2.5 Pro — máxima calidad'),
     ('gemini-1.5-flash',          '[Gemini] 1.5 Flash — versión anterior, estable'),
+    ('gemini-1.5-flash-8b',       '[Gemini] 1.5 Flash 8B — versión anterior, ultra barato'),
     ('gemini-1.5-pro',            '[Gemini] 1.5 Pro — versión anterior, alta calidad'),
-    # ── OpenAI ──
     ('gpt-4o-mini',               '[OpenAI] GPT-4o Mini — rápido y económico (default)'),
-    ('gpt-4o',                    '[OpenAI] GPT-4o — máxima calidad'),
-    ('gpt-4-turbo',               '[OpenAI] GPT-4 Turbo — alta calidad'),
+    ('gpt-4o',                    '[OpenAI] GPT-4o — alta calidad'),
+    ('gpt-4.1',                   '[OpenAI] GPT-4.1 — máxima calidad'),
+    ('gpt-4.1-mini',              '[OpenAI] GPT-4.1 Mini — balanceado'),
+    ('gpt-4.1-nano',              '[OpenAI] GPT-4.1 Nano — el más barato'),
+    ('gpt-4-turbo',               '[OpenAI] GPT-4 Turbo — versión anterior'),
     ('gpt-3.5-turbo',             '[OpenAI] GPT-3.5 Turbo — más económico, menor calidad'),
-    # ── Anthropic Claude ──
     ('claude-haiku-4-5-20251001', '[Claude] Haiku 4.5 — rápido y económico (default)'),
-    ('claude-sonnet-4-5',         '[Claude] Sonnet 4.5 — balanceado'),
-    ('claude-opus-4-6',           '[Claude] Opus 4.6 — máxima calidad'),
+    ('claude-sonnet-4-6',         '[Claude] Sonnet 4.6 — balanceado'),
+    ('claude-sonnet-4-5',         '[Claude] Sonnet 4.5 — versión anterior'),
+    ('claude-opus-4-7',           '[Claude] Opus 4.7 — máxima calidad'),
+    ('claude-opus-4-6',           '[Claude] Opus 4.6 — versión anterior'),
 )
 
 

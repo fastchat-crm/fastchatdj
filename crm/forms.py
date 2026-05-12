@@ -369,6 +369,10 @@ class FaqAgenteForm(ModelFormBase):
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 
 
+_PREFIJO_MODELO_POR_PROVEEDOR = {2: 'gemini-', 3: 'gpt-', 4: 'claude-'}
+_NOMBRE_PROVEEDOR = {2: 'Gemini', 3: 'OpenAI', 4: 'Claude'}
+
+
 class ApiKeyIAForm(ModelFormBase):
     class Meta:
         model = ApiKeyIA
@@ -395,6 +399,17 @@ class ApiKeyIAForm(ModelFormBase):
                 self.fields[k].widget.attrs['col'] = '6'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+    def clean(self):
+        cleaned = super().clean()
+        proveedor = cleaned.get('proveedor')
+        modelo = (cleaned.get('modelo') or '').strip()
+        if proveedor and modelo:
+            prefijo = _PREFIJO_MODELO_POR_PROVEEDOR.get(proveedor)
+            if prefijo and not modelo.startswith(prefijo):
+                nombre = _NOMBRE_PROVEEDOR.get(proveedor, 'el proveedor seleccionado')
+                self.add_error('modelo', f'The selected model is not compatible with {nombre}. Choose a model starting with "{prefijo}" or leave it empty to use the default.')
+        return cleaned
 
 
 class CredencialApiChatbotForm(ModelFormBase):
