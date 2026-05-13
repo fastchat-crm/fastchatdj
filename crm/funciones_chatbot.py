@@ -452,21 +452,23 @@ def cotizar_am(conversacion, variables, config, endpoint=None) -> dict:
 
 @registrar_funcion(
     codigo='cotizar_am_multiple',
-    descripcion='Envía cliente + selecciones explícitas (plan_id + plan_dental_id) al webhook Vida Buena (modo A — selecciones múltiples).',
+    descripcion='Envía cliente + members[] (titular + N dependientes) + budget_intent al webhook Vida Buena. Dispara el decision engine para recomendar plan.',
     parametros={
-        'cliente.cedula':           'string · cédula del cliente',
-        'cliente.nombres':          'string · nombre(s)',
-        'cliente.apellidos':        'string · apellido(s)',
-        'cliente.fecha_nacimiento': 'string · YYYY-MM-DD',
-        'cliente.sexo':             'string · M | F',
-        'cliente.email':            'string · correo de contacto',
-        'variables.plan_id_1':      'int · plan elegido en la iteración 1',
-        'variables.plan_dental_id_1': 'int · plan dental elegido en la iteración 1',
-        'variables.plan_id_2':      'int · (opcional) plan iteración 2',
-        'variables.plan_dental_id_2': 'int · (opcional) plan dental iteración 2',
-        'variables.plan_id_3':      'int · (opcional) plan iteración 3',
-        'variables.plan_dental_id_3': 'int · (opcional) plan dental iteración 3',
-        '(auto) cliente.telefono':  'string · número de WhatsApp del contacto (inyectado).',
+        'cliente.cedula':              'string · cédula del titular',
+        'cliente.nombres':             'string · nombre(s)',
+        'cliente.apellidos':           'string · apellido(s)',
+        'cliente.fecha_nacimiento':    'string · YYYY-MM-DD',
+        'cliente.sexo':                'string · M | F',
+        'cliente.email':               'string · correo de contacto',
+        'budget_intent':               'economico | equilibrio | alta_proteccion | desconocido',
+        'network_preference':          'red_cerrada_ok | quiere_red_abierta | desconocido (default)',
+        'wants_max_protection':        'bool (default False)',
+        'variables.edad_titular':      'number · edad del titular',
+        'variables.sexo_titular':      'M | F · sexo del titular',
+        'variables.num_dependientes':  'number 0-5 · cuántos dependientes incluir',
+        'variables.edad_m1..m5':       'number · edad de cada dependiente',
+        'variables.sexo_m1..m5':       'M | F · sexo de cada dependiente',
+        '(auto) cliente.telefono':     'string · número de WhatsApp del contacto (inyectado).',
     },
     requiere_endpoint=True,
     ejemplo_body={
@@ -478,20 +480,24 @@ def cotizar_am(conversacion, variables, config, endpoint=None) -> dict:
             'sexo': '{{variables.sexo_titular}}',
             'email': '{{variables.email}}',
         },
+        'budget_intent': '{{variables.budget_intent}}',
+        'network_preference': 'desconocido',
+        'wants_max_protection': False,
     },
 )
 def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
-    """Llama al webhook Vida Buena con `selecciones=[...]` (modo A).
+    """Llama al webhook Vida Buena con `cliente` + `members[]` + `budget_intent`.
 
-    Construye el array `selecciones` recogiendo hasta tres pares
-    `(plan_id_N, plan_dental_id_N)` de las variables del flujo. El bot pide
-    estos valores cíclicamente (mismas preguntas 2 o 3 veces, guardando en
-    variables distintas). Los pares vacíos se descartan; debe existir al
-    menos uno para encolar la cotización.
+    El bot pidió primero los datos del titular, luego cuántos dependientes
+    incluye y por cada uno (uno por uno) capturó cédula → lookup → si la API
+    no encontró al miembro pidió edad + sexo manualmente. Esta función
+    materializa `members[]` desde esas variables (`edad_titular`,
+    `sexo_titular`, `edad_m1..m5`, `sexo_m1..m5`) y deja que el decision
+    engine del webhook recomiende el plan para el titular según la
+    composición del grupo + el `budget_intent`.
 
-    No envía `members[]` ni dispara el decision engine: el cliente ya eligió
-    sus planes explícitamente. Inyecta `cliente.telefono` con el número de
-    WhatsApp del contacto y `id_conversacion` para el resumen async.
+    Inyecta `cliente.telefono` con el número de WhatsApp del contacto y
+    `id_conversacion` para que el webhook mande el resumen al chat.
     """
     from .motor_flujo_chatbot import resolver_expresion
 
@@ -530,29 +536,44 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
         except (TypeError, ValueError):
             return None
 
-    selecciones = []
-    seen = set()
-    for i in (1, 2, 3):
-        plan_id = _to_int(vars_.get(f'plan_id_{i}'))
-        dental_id = _to_int(vars_.get(f'plan_dental_id_{i}'))
-        if plan_id is None or dental_id is None:
-            continue
-        clave = (plan_id, dental_id)
-        if clave in seen:
-            continue
-        seen.add(clave)
-        selecciones.append({'plan_id': plan_id, 'plan_dental_id': dental_id})
+    sexo_titular = (str(vars_.get('sexo_titular') or '').strip().upper() or 'unknown')
+    edad_titular = _to_int(vars_.get('edad_titular'))
 
-    if not selecciones:
+    members = []
+    if edad_titular is not None:
+        members.append({
+            'age': edad_titular,
+            'gender': sexo_titular,
+            'relationship': 'titular',
+        })
+
+    num_dep = _to_int(vars_.get('num_dependientes')) or 0
+    if num_dep < 0:
+        num_dep = 0
+    if num_dep > 5:
+        num_dep = 5
+    for i in range(1, num_dep + 1):
+        edad = _to_int(vars_.get(f'edad_m{i}'))
+        if edad is None:
+            continue
+        sexo = (str(vars_.get(f'sexo_m{i}') or '').strip().upper() or 'unknown')
+        members.append({
+            'age': edad,
+            'gender': sexo,
+            'relationship': 'otro',
+        })
+
+    if not members:
         return {
             'etiqueta': 'error', 'body': {}, 'status': 400,
-            'error': 'No se recibió ninguna selección de plan (plan_id + plan_dental_id).',
+            'error': 'No se pudo construir members[]: falta edad del titular.',
         }
 
-    body['selecciones'] = selecciones
+    body['members'] = members
     body['id_conversacion'] = conversacion.id
-    body.pop('members', None)
-    body.pop('budget_intent', None)
+    body.setdefault('network_preference', 'desconocido')
+    body.setdefault('wants_max_protection', False)
+    body.pop('selecciones', None)
 
     contacto = getattr(conversacion, 'contacto', None)
     wa_telefono = ''
@@ -610,7 +631,7 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
             'success': True,
             'message': resp_json.get('mensaje') or 'Cotización en proceso.',
             'status': resp_json.get('status') or 'encolado',
-            'total_selecciones': len(selecciones),
+            'total_members': len(members),
             'raw': resp_json,
         },
         'status': r.status_code,

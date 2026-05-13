@@ -1,35 +1,32 @@
 """
-Seed del cotizador Vida Buena — modo MÚLTIPLE (Modo A del webhook).
+Seed del cotizador Vida Buena — modo MÚLTIPLE (titular + N dependientes).
 
-Variante del flujo `seed_cotizador_am` para el caso en que el cliente quiere
-elegir 1 a 3 planes concretos en la misma cotización. En vez de delegar la
-recomendación al decision engine (`members[] + budget_intent`), el bot pide
-explícitamente cada par `(plan_id, plan_dental_id)` y envía un solo POST con
-`selecciones=[...]` al webhook externo.
+Variante del flujo `seed_cotizador_am` para el caso en que el titular quiere
+incluir a otras personas en la cotización (cónyuge, hijos, padres…) sin
+necesidad de elegir plan por miembro: el decision engine del webhook
+recomienda *un* plan para el grupo a partir de `members[] + budget_intent`.
 
-Las opciones de plan y de plan dental se traen *en runtime* con
-`GET ?action=planes&fecha_nacimiento=&sexo=` y se renderizan dinámicamente
-en menús de botones — si el broker agrega/quita planes en el cotimedica
-admin, el bot los toma sin redeploy.
+Reglas del diálogo (lo que el usuario pidió):
+  1. Pide los datos del titular (cédula + lookup; si la API no devuelve algo
+     se pide manual).
+  2. Pregunta el tipo de presupuesto: económico, equilibrado o el más caro
+     (alta protección).
+  3. Pregunta si la cotización es *solo titular* o *titular + N personas*.
+  4. Si va con N personas, pide el número N (1 a 5) y luego, **uno por uno**,
+     pide la cédula de cada miembro:
+       - si la API devuelve datos → usa la edad/sexo de registro civil.
+       - si no encuentra al miembro → pide manualmente edad y sexo (M/F).
+  5. Confirma "procesando" y dispara `cotizar_am_multiple`, que arma
+     `members[]` con titular + dependientes y manda al webhook
+     https://fguerrero.mgaseguros.ec/cotimedica/webhook/ para que el engine
+     recomiende plan, genere PDF y notifique por correo + WhatsApp.
 
-El loop de selección NO usa nodos cíclicos en sentido estricto (el motor de
-flujo no soporta recurrencia con scopes de variable). En su lugar repetimos
-tres bloques de preguntas idénticos guardando en variables sufijadas
-(`plan_id_1`/`plan_dental_id_1`, `_2`, `_3`). El usuario decide después de
-cada par si añade otro plan o pasa a cotizar; los pares vacíos se descartan
-en `cotizar_am_multiple`.
-
-Flujo (resumido):
-  saludo → cédula → GET ?action=cliente → completar datos faltantes
-   → GET ?action=planes&fecha_nacimiento=&sexo= → planes_list + dental_options
-   → ITER 1: menu plan → menu plan dental → ¿añadir otro?
-   → ITER 2 (opcional): menu plan → menu plan dental → ¿añadir otro?
-   → ITER 3 (opcional): menu plan → menu plan dental
-   → "⏳ procesando…" → función `cotizar_am_multiple` → confirmación
-   → handoff opcional al asesor.
+El motor de flujo no soporta bucles reales: los miembros 1..5 se modelan
+como 5 bloques idénticos protegidos por una decisión `num_dependientes >= N`
+que salta directamente al menú de presupuesto cuando ya no faltan miembros.
 
 Coexiste con `seed_cotizador_am` (deptos distintos, mismas credenciales y
-endpoints reutilizados).
+endpoints reutilizados via `get_or_create`).
 
 Uso:
     python manage.py seed_cotizador_asistenciamedica_multiple
@@ -61,23 +58,25 @@ WEBHOOK_EXTERNO_ENDPOINT_NOMBRE = 'Vida Buena — Webhook Cotizador (externo)'
 WEBHOOK_EXTERNO_URL_DEFAULT = 'https://fguerrero.mgaseguros.ec/cotimedica/webhook/'
 WEBHOOK_EXTERNO_TIMEOUT_DEFAULT = 45
 
+MAX_DEPENDIENTES = 5
+
 
 BOT = {
     'codigo': 'vida_buena_multiple',
     'nombre': NOMBRE_DEPTO,
     'descripcion': (
-        'Asistente que permite al cliente elegir explícitamente 1 a 3 planes '
-        'de asistencia médica Vida Buena y dispara la cotización múltiple.'
+        'Asistente Vida Buena que cotiza para titular + N dependientes '
+        '(hasta 5) capturando los datos de cada uno paso a paso.'
     ),
     'mensaje_inicial': (
-        'Hola 👋 Soy tu asesor de Vida Buena 🏥. Te ayudo a cotizar uno o '
-        'varios planes en un solo paso. Empecemos con tus datos.'
+        'Hola 👋 Soy tu asesor de Vida Buena 🏥. Te ayudo a cotizar para ti '
+        'o para tu familia en pocos pasos. Empecemos con tus datos.'
     ),
     'color_primario': '#0d6efd',
     'palabras_clave': (
-        'vida buena multiple\nplanes multiples\nvarios planes\ncotizar varios\n'
-        'multiple plan medico\nelegir planes\ncotizacion multiple\n'
-        'comparar planes vida buena'
+        'vida buena familia\nplan familiar\ncotizar familia\n'
+        'titular dependientes\ncotizacion grupo medico\n'
+        'plan medico familia\ndependientes salud'
     ),
     'reset_triggers': [
         'reiniciar', 'cancelar', 'volver al inicio', 'empezar de nuevo',
@@ -86,6 +85,106 @@ BOT = {
     'mensaje_reset': '🔄 Listo, empezamos de nuevo. Olvidé los datos anteriores.',
 }
 
+
+def _bloque_miembro(idx, sig_si, sig_no, base_id):
+    """Devuelve los 6 pasos que capturan un dependiente (cédula → lookup →
+    si no encontrado pide edad/sexo manual). `base_id` marca el primer id
+    del bloque (los siguientes se numeran consecutivos a partir de él).
+
+    Conexiones:
+      - decisión inicial `num_dependientes >= idx`: si → entra; no → `sig_no`.
+      - al terminar el bloque (lookup ok o input manual completo) → `sig_si`.
+    """
+    dec_id      = base_id + 0
+    input_ced   = base_id + 1
+    http_ced    = base_id + 2
+    dec_encon   = base_id + 3
+    input_edad  = base_id + 4
+    menu_sexo   = base_id + 5
+
+    return [
+        {
+            'id': dec_id, 'orden': dec_id, 'tipo': 'decision',
+            'codigo': f'decision_miembro_{idx}', 'nombre': f'¿Falta miembro {idx}?',
+            'condicion': f'{{{{variables.num_dependientes}}}} >= {idx}',
+            'siguiente_si': input_ced, 'siguiente_no': sig_no,
+        },
+        {
+            'id': input_ced, 'orden': input_ced, 'tipo': 'input_texto',
+            'codigo': f'pedir_cedula_m{idx}', 'nombre': f'Cédula miembro {idx}',
+            'mensaje': (
+                f'🪪 Dame la *cédula* del miembro #{idx} (10 dígitos). '
+                'Si no la tienes a mano, escribe `0` y luego pediré su edad.'
+            ),
+            'guardar_en': f'cedula_m{idx}',
+            'validacion': r'^(0|[0-9]{10}([0-9]{3})?)$',
+            'siguiente': http_ced,
+        },
+        {
+            'id': http_ced, 'orden': http_ced, 'tipo': 'llamada_http',
+            'codigo': f'http_cliente_m{idx}',
+            'nombre': f'GET ?action=cliente miembro {idx}',
+            'metodo': 'GET', 'path': '',
+            'query': {
+                'action': 'cliente',
+                'cedula': f'{{{{variables.cedula_m{idx}}}}}',
+            },
+            'timeout_seg': 20,
+            'extrae_variables': {
+                f'$encontrado_m{idx}': '$.data.encontrado',
+                f'$edad_m{idx}':       '$.data.edad',
+                f'$sexo_m{idx}':       '$.data.sexo',
+            },
+            'siguiente_ok': dec_encon, 'siguiente_error': input_edad,
+        },
+        {
+            'id': dec_encon, 'orden': dec_encon, 'tipo': 'decision',
+            'codigo': f'decision_encontrado_m{idx}',
+            'nombre': f'¿Miembro {idx} en registro civil?',
+            'condicion': f'{{{{variables.encontrado_m{idx}}}}} == true',
+            'siguiente_si': sig_si, 'siguiente_no': input_edad,
+        },
+        {
+            'id': input_edad, 'orden': input_edad, 'tipo': 'input_texto',
+            'codigo': f'pedir_edad_m{idx}', 'nombre': f'Edad miembro {idx}',
+            'mensaje': (
+                f'🎂 ¿Qué *edad* tiene el miembro #{idx}? '
+                '(solo el número, ej: 12)'
+            ),
+            'guardar_en': f'edad_m{idx}',
+            'validacion': r'^\d{1,3}$',
+            'siguiente': menu_sexo,
+        },
+        {
+            'id': menu_sexo, 'orden': menu_sexo, 'tipo': 'menu_botones',
+            'codigo': f'pedir_sexo_m{idx}', 'nombre': f'Sexo miembro {idx}',
+            'mensaje': f'👤 ¿Cuál es el *sexo* del miembro #{idx}?',
+            'guardar_en': f'sexo_m{idx}',
+            'opciones': [
+                {'etiqueta': '👨 Masculino', 'valor': 'M', 'siguiente': sig_si},
+                {'etiqueta': '👩 Femenino',  'valor': 'F', 'siguiente': sig_si},
+            ],
+        },
+    ]
+
+
+ID_BUDGET = 500
+ID_ESPERANDO = 510
+ID_FN = 520
+ID_OK = 530
+ID_ERR = 540
+ID_HANDOFF = 600
+ID_HANDOFF_SI = 610
+ID_HANDOFF_NO = 620
+ID_ERROR_API = 900
+ID_RESET = 998
+ID_FIN = 999
+
+BASE_M1 = 230
+BASE_M2 = 250
+BASE_M3 = 270
+BASE_M4 = 290
+BASE_M5 = 310
 
 PASOS = [
     {
@@ -98,7 +197,7 @@ PASOS = [
 
     {
         'id': 20, 'orden': 20, 'tipo': 'input_texto',
-        'codigo': 'pedir_cedula', 'nombre': 'Pedir cédula',
+        'codigo': 'pedir_cedula', 'nombre': 'Pedir cédula del titular',
         'mensaje': '🪪 Para empezar, dame tu *cédula* (10 dígitos):',
         'guardar_en': 'cedula',
         'validacion': r'^[0-9]{10}([0-9]{3})?$',
@@ -106,8 +205,8 @@ PASOS = [
     },
     {
         'id': 30, 'orden': 30, 'tipo': 'llamada_http',
-        'codigo': 'http_cliente',
-        'nombre': 'GET ?action=cliente — lookup registro civil',
+        'codigo': 'http_cliente_titular',
+        'nombre': 'GET ?action=cliente — titular',
         'metodo': 'GET', 'path': '',
         'query': {'action': 'cliente', 'cedula': '{{variables.cedula}}'},
         'timeout_seg': 20,
@@ -125,14 +224,14 @@ PASOS = [
     },
     {
         'id': 40, 'orden': 40, 'tipo': 'decision',
-        'codigo': 'cliente_encontrado', 'nombre': '¿Cliente encontrado?',
+        'codigo': 'cliente_encontrado', 'nombre': '¿Titular encontrado?',
         'condicion': '{{variables.encontrado_cli}} == true',
         'siguiente_si': 50, 'siguiente_no': 100,
     },
 
     {
         'id': 50, 'orden': 50, 'tipo': 'respuesta_texto',
-        'codigo': 'mostrar_cliente', 'nombre': 'Mostrar datos del cliente',
+        'codigo': 'mostrar_titular', 'nombre': 'Mostrar datos del titular',
         'mensaje': (
             '✅ Encontré tus datos:\n'
             '• Nombre: *{{variables.nombres}} {{variables.apellidos}}*\n'
@@ -142,7 +241,6 @@ PASOS = [
         ),
         'siguiente': 60,
     },
-
     {
         'id': 60, 'orden': 60, 'tipo': 'decision',
         'codigo': 'email_vacio', 'nombre': '¿Email vacío?',
@@ -173,28 +271,27 @@ PASOS = [
     },
     {
         'id': 66, 'orden': 66, 'tipo': 'input_texto',
-        'codigo': 'pedir_email_nuevo_confirm', 'nombre': 'Pedir correo actualizado',
+        'codigo': 'pedir_email_nuevo_confirm', 'nombre': 'Pedir correo nuevo',
         'mensaje': '📧 Escríbeme el *correo nuevo* al que quieres recibir la cotización:',
         'guardar_en': 'email',
         'validacion': r'^[^@\s]+@[^@\s]+\.[^@\s]{2,}$',
         'siguiente': 80,
     },
-
     {
         'id': 80, 'orden': 80, 'tipo': 'decision',
-        'codigo': 'sexo_vacio', 'nombre': '¿Sexo vacío?',
+        'codigo': 'sexo_vacio', 'nombre': '¿Sexo titular vacío?',
         'condiciones': [{'izq': '{{variables.sexo_titular}}', 'op': 'vacio', 'der': ''}],
         'operador': 'and',
-        'siguiente_si': 90, 'siguiente_no': 160,
+        'siguiente_si': 90, 'siguiente_no': 200,
     },
     {
         'id': 90, 'orden': 90, 'tipo': 'menu_botones',
-        'codigo': 'pedir_sexo', 'nombre': 'Pedir sexo (titular)',
+        'codigo': 'pedir_sexo_titular', 'nombre': 'Pedir sexo (titular)',
         'mensaje': '👤 ¿Cuál es tu *sexo*?',
         'guardar_en': 'sexo_titular',
         'opciones': [
-            {'etiqueta': '👨 Masculino', 'valor': 'M', 'siguiente': 160},
-            {'etiqueta': '👩 Femenino',  'valor': 'F', 'siguiente': 160},
+            {'etiqueta': '👨 Masculino', 'valor': 'M', 'siguiente': 200},
+            {'etiqueta': '👩 Femenino',  'valor': 'F', 'siguiente': 200},
         ],
     },
 
@@ -231,175 +328,91 @@ PASOS = [
         ),
         'guardar_en': 'fecha_nacimiento',
         'validacion': r'^\d{2}/\d{2}/\d{4}$',
+        'siguiente': 140,
+    },
+    {
+        'id': 140, 'orden': 140, 'tipo': 'input_texto',
+        'codigo': 'pedir_edad_titular', 'nombre': 'Pedir edad (titular)',
+        'mensaje': '🎂 Confírmame también tu *edad* (solo el número, ej: 35):',
+        'guardar_en': 'edad_titular',
+        'validacion': r'^\d{1,3}$',
         'siguiente': 150,
     },
     {
         'id': 150, 'orden': 150, 'tipo': 'menu_botones',
-        'codigo': 'pedir_sexo_nuevo', 'nombre': 'Pedir sexo',
+        'codigo': 'pedir_sexo_nuevo', 'nombre': 'Pedir sexo (titular)',
         'mensaje': '👤 ¿Cuál es tu *sexo*?',
         'guardar_en': 'sexo_titular',
         'opciones': [
-            {'etiqueta': '👨 Masculino', 'valor': 'M', 'siguiente': 160},
-            {'etiqueta': '👩 Femenino',  'valor': 'F', 'siguiente': 160},
-        ],
-    },
-
-    {
-        'id': 160, 'orden': 160, 'tipo': 'llamada_http',
-        'codigo': 'http_planes',
-        'nombre': 'GET ?action=planes — planes vigentes para edad/sexo',
-        'metodo': 'GET', 'path': '',
-        'query': {
-            'action': 'planes',
-            'fecha_nacimiento': '{{variables.fecha_nacimiento}}',
-            'sexo': '{{variables.sexo_titular}}',
-        },
-        'timeout_seg': 25,
-        'extrae_variables': {
-            '$planes_list':    '$.data.planes',
-            '$dental_options': '$.data.planes[0].opciones_dental',
-            '$total_planes':   '$.data.total_planes',
-        },
-        'siguiente_ok': 165, 'siguiente_error': 900,
-    },
-    {
-        'id': 165, 'orden': 165, 'tipo': 'respuesta_texto',
-        'codigo': 'instrucciones_seleccion', 'nombre': 'Instrucciones del bucle',
-        'mensaje': (
-            '🩺 Te muestro los planes disponibles. Podés cotizar hasta *3 '
-            'planes* en una misma solicitud. Te preguntaré por cada uno y '
-            'al final eliges si quieres añadir otro o cerrar la cotización.'
-        ),
-        'siguiente': 170,
-    },
-
-    {
-        'id': 170, 'orden': 170, 'tipo': 'menu_botones',
-        'codigo': 'plan_iter_1', 'nombre': 'Plan #1',
-        'mensaje': '🏥 Elige el *plan #1* que querés cotizar:',
-        'guardar_en': 'plan_id_1',
-        'opciones': [],
-        'opciones_fuente': {
-            'variable': 'variables.planes_list',
-            'campo_id': 'plan_id',
-            'campo_etiqueta': 'nombre',
-            'salida': '',
-            'limite': 10,
-        },
-        'siguiente': 180,
-    },
-    {
-        'id': 180, 'orden': 180, 'tipo': 'menu_botones',
-        'codigo': 'dental_iter_1', 'nombre': 'Plan dental #1',
-        'mensaje': '🦷 Elige el *plan dental* para tu plan #1:',
-        'guardar_en': 'plan_dental_id_1',
-        'opciones': [],
-        'opciones_fuente': {
-            'variable': 'variables.dental_options',
-            'campo_id': 'plan_dental_id',
-            'campo_etiqueta': 'plan_dental_codigo',
-            'salida': '',
-            'limite': 10,
-        },
-        'siguiente': 190,
-    },
-    {
-        'id': 190, 'orden': 190, 'tipo': 'menu_botones',
-        'codigo': 'anadir_otro_1', 'nombre': '¿Añadir un segundo plan?',
-        'mensaje': '➕ ¿Querés cotizar *otro plan* más?',
-        'guardar_en': 'anadir_otro_1',
-        'opciones': [
-            {'etiqueta': '➕ Sí, añadir otro',   'valor': 'si', 'siguiente': 200},
-            {'etiqueta': '✅ No, ya está bien', 'valor': 'no', 'siguiente': 300},
+            {'etiqueta': '👨 Masculino', 'valor': 'M', 'siguiente': 200},
+            {'etiqueta': '👩 Femenino',  'valor': 'F', 'siguiente': 200},
         ],
     },
 
     {
         'id': 200, 'orden': 200, 'tipo': 'menu_botones',
-        'codigo': 'plan_iter_2', 'nombre': 'Plan #2',
-        'mensaje': '🏥 Elige el *plan #2* que querés cotizar:',
-        'guardar_en': 'plan_id_2',
-        'opciones': [],
-        'opciones_fuente': {
-            'variable': 'variables.planes_list',
-            'campo_id': 'plan_id',
-            'campo_etiqueta': 'nombre',
-            'salida': '',
-            'limite': 10,
-        },
-        'siguiente': 210,
-    },
-    {
-        'id': 210, 'orden': 210, 'tipo': 'menu_botones',
-        'codigo': 'dental_iter_2', 'nombre': 'Plan dental #2',
-        'mensaje': '🦷 Elige el *plan dental* para tu plan #2:',
-        'guardar_en': 'plan_dental_id_2',
-        'opciones': [],
-        'opciones_fuente': {
-            'variable': 'variables.dental_options',
-            'campo_id': 'plan_dental_id',
-            'campo_etiqueta': 'plan_dental_codigo',
-            'salida': '',
-            'limite': 10,
-        },
-        'siguiente': 220,
-    },
-    {
-        'id': 220, 'orden': 220, 'tipo': 'menu_botones',
-        'codigo': 'anadir_otro_2', 'nombre': '¿Añadir un tercer plan?',
-        'mensaje': '➕ ¿Querés cotizar un *tercer plan*?',
-        'guardar_en': 'anadir_otro_2',
+        'codigo': 'tipo_grupo', 'nombre': '¿Solo titular o con familia?',
+        'mensaje': (
+            '👨‍👩‍👧 ¿Vas a cotizar *solo para ti* o *para ti y otras '
+            'personas*?'
+        ),
+        'guardar_en': 'tipo_cobertura',
         'opciones': [
-            {'etiqueta': '➕ Sí, añadir otro',   'valor': 'si', 'siguiente': 230},
-            {'etiqueta': '✅ No, ya está bien', 'valor': 'no', 'siguiente': 300},
+            {'etiqueta': '🙋 Solo para mí',          'valor': 'solo', 'siguiente': 210},
+            {'etiqueta': '👨‍👩‍👧 Con otras personas', 'valor': 'mas',  'siguiente': 220},
         ],
     },
-
     {
-        'id': 230, 'orden': 230, 'tipo': 'menu_botones',
-        'codigo': 'plan_iter_3', 'nombre': 'Plan #3',
-        'mensaje': '🏥 Elige el *plan #3* que querés cotizar:',
-        'guardar_en': 'plan_id_3',
-        'opciones': [],
-        'opciones_fuente': {
-            'variable': 'variables.planes_list',
-            'campo_id': 'plan_id',
-            'campo_etiqueta': 'nombre',
-            'salida': '',
-            'limite': 10,
-        },
-        'siguiente': 240,
+        'id': 210, 'orden': 210, 'tipo': 'asignar_variable',
+        'codigo': 'set_num_dep_cero', 'nombre': 'num_dependientes = 0',
+        'asigna': {'num_dependientes': '0'},
+        'siguiente': ID_BUDGET,
     },
     {
-        'id': 240, 'orden': 240, 'tipo': 'menu_botones',
-        'codigo': 'dental_iter_3', 'nombre': 'Plan dental #3',
-        'mensaje': '🦷 Elige el *plan dental* para tu plan #3:',
-        'guardar_en': 'plan_dental_id_3',
-        'opciones': [],
-        'opciones_fuente': {
-            'variable': 'variables.dental_options',
-            'campo_id': 'plan_dental_id',
-            'campo_etiqueta': 'plan_dental_codigo',
-            'salida': '',
-            'limite': 10,
-        },
-        'siguiente': 300,
+        'id': 220, 'orden': 220, 'tipo': 'input_texto',
+        'codigo': 'pedir_num_dependientes', 'nombre': '¿Cuántas personas más?',
+        'mensaje': (
+            f'🔢 ¿Cuántas personas *además de ti* van en la cotización? '
+            f'(escribe un número del 1 al {MAX_DEPENDIENTES})'
+        ),
+        'guardar_en': 'num_dependientes',
+        'validacion': rf'^[1-{MAX_DEPENDIENTES}]$',
+        'siguiente': BASE_M1,
     },
 
+    *_bloque_miembro(1, sig_si=BASE_M2, sig_no=ID_BUDGET, base_id=BASE_M1),
+    *_bloque_miembro(2, sig_si=BASE_M3, sig_no=ID_BUDGET, base_id=BASE_M2),
+    *_bloque_miembro(3, sig_si=BASE_M4, sig_no=ID_BUDGET, base_id=BASE_M3),
+    *_bloque_miembro(4, sig_si=BASE_M5, sig_no=ID_BUDGET, base_id=BASE_M4),
+    *_bloque_miembro(5, sig_si=ID_BUDGET, sig_no=ID_BUDGET, base_id=BASE_M5),
+
     {
-        'id': 300, 'orden': 300, 'tipo': 'respuesta_texto',
+        'id': ID_BUDGET, 'orden': ID_BUDGET, 'tipo': 'menu_botones',
+        'codigo': 'budget_intent', 'nombre': 'Intención de presupuesto',
+        'mensaje': (
+            '💰 ¿Qué *tipo de plan* querés cotizar? Elige según tu '
+            'presupuesto:'
+        ),
+        'guardar_en': 'budget_intent',
+        'opciones': [
+            {'etiqueta': '💵 Económico',         'valor': 'economico',       'siguiente': ID_ESPERANDO},
+            {'etiqueta': '⚖️ Equilibrado',       'valor': 'equilibrio',      'siguiente': ID_ESPERANDO},
+            {'etiqueta': '🛡️ Mayor protección',  'valor': 'alta_proteccion', 'siguiente': ID_ESPERANDO},
+        ],
+    },
+    {
+        'id': ID_ESPERANDO, 'orden': ID_ESPERANDO, 'tipo': 'respuesta_texto',
         'codigo': 'esperando_cotizacion', 'nombre': 'Mensaje esperando',
         'mensaje': (
-            '⏳ Estamos generando tus cotizaciones. En breve recibirás los '
-            'PDFs por correo electrónico y aquí mismo el resumen.'
+            '⏳ Estamos analizando tu perfil y preparando la mejor '
+            'recomendación...'
         ),
-        'siguiente': 310,
+        'siguiente': ID_FN,
     },
-
     {
-        'id': 310, 'orden': 310, 'tipo': 'llamada_funcion',
+        'id': ID_FN, 'orden': ID_FN, 'tipo': 'llamada_funcion',
         'codigo': 'fn_cotizar_am_multiple',
-        'nombre': 'Función → Cotizar Vida Buena múltiple (selecciones)',
+        'nombre': 'Función → Cotizar Vida Buena múltiple (members[])',
         'funcion_codigo': 'cotizar_am_multiple',
         'endpoint_key': 'webhook_externo',
         'envia_correo': True,
@@ -414,37 +427,38 @@ PASOS = [
                 'sexo':             '{{variables.sexo_titular}}',
                 'email':            '{{variables.email}}',
             },
+            'budget_intent':        '{{variables.budget_intent}}',
+            'network_preference':   'desconocido',
+            'wants_max_protection': False,
         },
         'extrae_variables': {
             '$cotizacion_status':  '$.status',
             '$cotizacion_mensaje': '$.message',
         },
-        'siguiente_ok': 320, 'siguiente_error': 330,
+        'siguiente_ok': ID_OK, 'siguiente_error': ID_ERR,
     },
-
     {
-        'id': 320, 'orden': 320, 'tipo': 'respuesta_texto',
+        'id': ID_OK, 'orden': ID_OK, 'tipo': 'respuesta_texto',
         'codigo': 'cotizacion_encolada', 'nombre': 'Cotización en proceso',
         'mensaje': (
-            '✅ ¡Listo! Tus cotizaciones quedaron en proceso.\n\n'
-            'Recibirás los *PDFs por correo electrónico* y el resumen aquí '
-            'mismo en breve. 🏥💜'
+            '✅ ¡Listo! Estamos procesando tu cotización.\n\n'
+            'En breve recibirás aquí mismo la *recomendación de plan* y '
+            'el detalle por *correo electrónico*. 🏥💜'
         ),
-        'siguiente': 350,
+        'siguiente': ID_HANDOFF,
     },
-
     {
-        'id': 330, 'orden': 330, 'tipo': 'respuesta_texto',
+        'id': ID_ERR, 'orden': ID_ERR, 'tipo': 'respuesta_texto',
         'codigo': 'cotizacion_error', 'nombre': 'Error al cotizar',
         'mensaje': (
             '⚠️ No pudimos procesar tu cotización en este momento. '
             'Por favor inténtalo más tarde. 🙏'
         ),
-        'siguiente': 999,
+        'siguiente': ID_FIN,
     },
 
     {
-        'id': 350, 'orden': 350, 'tipo': 'menu_botones',
+        'id': ID_HANDOFF, 'orden': ID_HANDOFF, 'tipo': 'menu_botones',
         'codigo': 'handoff_asesor', 'nombre': '¿Contactar asesor?',
         'mensaje': (
             '¿Deseas que un *asesor* te contacte para validar datos y avanzar '
@@ -452,54 +466,55 @@ PASOS = [
         ),
         'guardar_en': 'quiere_asesor',
         'opciones': [
-            {'etiqueta': '✅ Sí, contáctenme',  'valor': 'si', 'siguiente': 360},
-            {'etiqueta': '👀 Solo informativo', 'valor': 'no', 'siguiente': 370},
+            {'etiqueta': '✅ Sí, contáctenme',  'valor': 'si', 'siguiente': ID_HANDOFF_SI},
+            {'etiqueta': '👀 Solo informativo', 'valor': 'no', 'siguiente': ID_HANDOFF_NO},
         ],
     },
     {
-        'id': 360, 'orden': 360, 'tipo': 'respuesta_texto',
+        'id': ID_HANDOFF_SI, 'orden': ID_HANDOFF_SI, 'tipo': 'respuesta_texto',
         'codigo': 'handoff_aceptado', 'nombre': 'Handoff aceptado',
         'mensaje': (
             '🤝 Excelente. Un asesor te contactará en breve para confirmar '
             'la tarifa exacta y la activación.'
         ),
-        'siguiente': 998,
+        'siguiente': ID_RESET,
     },
     {
-        'id': 370, 'orden': 370, 'tipo': 'respuesta_texto',
+        'id': ID_HANDOFF_NO, 'orden': ID_HANDOFF_NO, 'tipo': 'respuesta_texto',
         'codigo': 'handoff_rechazado', 'nombre': 'Handoff rechazado',
         'mensaje': (
             '👍 Perfecto. Si más adelante quieres avanzar, escríbenos cuando '
             'gustes. ¡Estamos para ayudarte!'
         ),
-        'siguiente': 998,
+        'siguiente': ID_RESET,
     },
 
     {
-        'id': 900, 'orden': 900, 'tipo': 'respuesta_texto',
+        'id': ID_ERROR_API, 'orden': ID_ERROR_API, 'tipo': 'respuesta_texto',
         'codigo': 'error_api', 'nombre': 'Error genérico de API',
         'mensaje': '⚠️ Hubo un problema al hablar con el servidor. Intenta más tarde.',
-        'siguiente': 999,
+        'siguiente': ID_FIN,
     },
     {
-        'id': 998, 'orden': 998, 'tipo': 'asignar_variable',
+        'id': ID_RESET, 'orden': ID_RESET, 'tipo': 'asignar_variable',
         'codigo': 'reset_sesion', 'nombre': 'Reset de variables',
         'asigna': {
             'cedula': '', 'nombres': '', 'apellidos': '', 'email': '',
             'fecha_nacimiento': '', 'edad_titular': '', 'sexo_titular': '',
             'telefono': '', 'encontrado_cli': '', 'confirma_correo': '',
-            'planes_list': '', 'dental_options': '', 'total_planes': '',
-            'plan_id_1': '', 'plan_dental_id_1': '',
-            'plan_id_2': '', 'plan_dental_id_2': '',
-            'plan_id_3': '', 'plan_dental_id_3': '',
-            'anadir_otro_1': '', 'anadir_otro_2': '',
-            'quiere_asesor': '',
+            'tipo_cobertura': '', 'num_dependientes': '',
+            'cedula_m1': '', 'edad_m1': '', 'sexo_m1': '', 'encontrado_m1': '',
+            'cedula_m2': '', 'edad_m2': '', 'sexo_m2': '', 'encontrado_m2': '',
+            'cedula_m3': '', 'edad_m3': '', 'sexo_m3': '', 'encontrado_m3': '',
+            'cedula_m4': '', 'edad_m4': '', 'sexo_m4': '', 'encontrado_m4': '',
+            'cedula_m5': '', 'edad_m5': '', 'sexo_m5': '', 'encontrado_m5': '',
+            'budget_intent': '', 'quiere_asesor': '',
             'cotizacion_status': '', 'cotizacion_mensaje': '',
         },
-        'siguiente': 999,
+        'siguiente': ID_FIN,
     },
     {
-        'id': 999, 'orden': 999, 'tipo': 'fin_conversacion',
+        'id': ID_FIN, 'orden': ID_FIN, 'tipo': 'fin_conversacion',
         'codigo': 'despedida', 'nombre': 'Fin',
         'mensaje': (
             '¡Hasta pronto! 👋 Cuando quieras volver a cotizar, aquí estaré.'
@@ -580,7 +595,7 @@ def _parse_condicion(expr):
 
 
 class Command(BaseCommand):
-    help = 'Crea el flujo del cotizador Vida Buena modo MÚLTIPLE (selecciones explícitas).'
+    help = 'Crea el flujo del cotizador Vida Buena modo MÚLTIPLE (titular + N dependientes).'
 
     def add_arguments(self, parser):
         parser.add_argument('--reset', action='store_true',
