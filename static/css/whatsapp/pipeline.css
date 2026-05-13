@@ -494,10 +494,14 @@
     word-break: break-word;
     white-space: pre-wrap;
 }
+.pipe-conv-msg-sender { display: block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 3px; opacity: 0.85; }
 .pipe-conv-msg-time { font-size: 0.65rem; color: var(--pipe-text-light); margin-top: 3px; display: block; }
-.pipe-conv-msg.in { align-self: flex-start; background: var(--pipe-col-bg); color: var(--pipe-text); border-bottom-left-radius: 3px; }
-.pipe-conv-msg.out { align-self: flex-end; background: #e2f1ff; color: #0a3d62; border-bottom-right-radius: 3px; }
-.pipe-conv-msg.ia { align-self: flex-end; background: #f3e8ff; color: #5b21b6; border-bottom-right-radius: 3px; }
+.pipe-conv-msg.in { align-self: flex-start; background: var(--pipe-col-bg); color: var(--pipe-text); border-bottom-left-radius: 3px; border-left: 3px solid #94a3b8; }
+.pipe-conv-msg.in .pipe-conv-msg-sender { color: #475569; }
+.pipe-conv-msg.out { align-self: flex-end; background: #e2f1ff; color: #0a3d62; border-bottom-right-radius: 3px; border-right: 3px solid #2563eb; }
+.pipe-conv-msg.out .pipe-conv-msg-sender { color: #1d4ed8; }
+.pipe-conv-msg.ia { align-self: flex-end; background: #f3e8ff; color: #5b21b6; border-bottom-right-radius: 3px; border-right: 3px solid #8b5cf6; }
+.pipe-conv-msg.ia .pipe-conv-msg-sender { color: #6d28d9; }
 .pipe-conv-empty { text-align: center; color: var(--pipe-text-light); padding: 20px 0; font-size: 0.85rem; }
 .pipe-conv-loading { text-align: center; padding: 30px 0; color: var(--pipe-text-muted); }
 

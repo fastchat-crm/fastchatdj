@@ -3,6 +3,7 @@
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
 <link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.5">
+<link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
 {% endblock %}
 
 {% block content %}
@@ -122,6 +123,7 @@
                         <span id="contacto-hashedId" class="ms-1" style="font-size:.75rem;"></span>
                         <small id="conv-fecha-inicio" class="ms-2 text-muted" style="display:none;font-size:.75rem;"></small>
                     </div>
+                    <div class="hc-strip d-none" id="historial-chips"></div>
                 </div>
             </div>
             <div class="cm-header-right">
@@ -182,6 +184,9 @@
                                 </a>
                                 <a class="dropdown-item" href="javascript:void(0)" onclick="abrirModalAsignarPipeline()" title="Asignar esta conversacion a un pipeline de ventas">
                                     <i class="fa fa-columns me-2 text-primary"></i> Asignar a pipeline
+                                </a>
+                                <a class="dropdown-item" href="javascript:void(0)" id="ver-historial-cliente" title="Ver conversaciones pasadas del cliente">
+                                    <i class="fa fa-history me-2 text-secondary"></i> Historial del cliente
                                 </a>
                                 <div class="dropdown-divider"></div>
                                 <a class="dropdown-item" href="javascript:void(0)"
@@ -757,11 +762,14 @@
         </div>
     </div>
     {% endif %}
+
+    {% include "whatsapp/conversaciones/_modal_historial_cliente.html" %}
 {% endblock %}
 
 {% block jscript %}
 <script src="/static/js/reconnecting-websocket.min.js"></script>
 <script src="/static/js/forms.js?version=2"></script>
+<script src="/static/js/whatsapp/historial_cliente.js?v1.0"></script>
 <script>
     function formModal(id, text, action) {
         pantallaespera();
@@ -1420,6 +1428,7 @@
             $('#contacto-hashedId').text('');
             $('#conv-fecha-inicio').hide();
             mostrarPlantillasSiMeta(false, null);
+            if (typeof resetHistorialCliente === 'function') resetHistorialCliente();
             conversacionActiva = null;
         });
 
@@ -1487,6 +1496,7 @@
             $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container').addClass('d-none').hide();
             $('#stats-panel, #control-respuestas-panel, #menus-rapidos-bar').addClass('d-none');
             $('#chat-footer').addClass('d-none').hide();
+            if (typeof resetHistorialCliente === 'function') resetHistorialCliente();
         }
 
         $(document).on('keydown', function(e) {
@@ -1825,6 +1835,8 @@
 
                     // Boton de plantillas Meta — visible solo si la sesion es Meta Y hay plantillas aprobadas
                     mostrarPlantillasSiMeta(response.es_meta === true, response.conversacion_id);
+
+                    if (typeof cargarHistorialCliente === 'function') cargarHistorialCliente(response.conversacion_id);
 
                     setTimeout(() => { scrollToBottom(); }, 800);
                     conectarWebSocket(response.conversacion_id);

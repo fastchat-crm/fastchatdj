@@ -16,6 +16,8 @@ from .funcionesWhatsappConversacion import (
     cambiar_clasificacion_post,
     cambiar_nombre_contacto_get,
     cambiar_nombre_contacto_post,
+    historial_cliente_list,
+    historial_cliente_mensajes,
     _bloqueo_reactivar,
     _control_respuestas,
     _estadisticas_conversacion,
@@ -147,6 +149,18 @@ def conversacionesView(request):
                 return JsonResponse({"result": True, 'data': template.render(data)})
             except Exception as ex:
                 return JsonResponse({"result": False, 'message': str(ex)})
+        elif action == 'historial_cliente':
+            try:
+                conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['pk']))
+                return historial_cliente_list(request, conv)
+            except Exception as ex:
+                return JsonResponse({'error': True, 'message': str(ex)})
+        elif action == 'historial_mensajes':
+            try:
+                conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['pk']))
+                return historial_cliente_mensajes(request, conv)
+            except Exception as ex:
+                return JsonResponse({'error': True, 'message': str(ex)})
         elif action == 'listar_plantillas_meta':
             # Devuelve plantillas APPROVED de la sesion Meta de la conversacion.
             # Se usa para poblar el panel en el composer cuando sesion.es_meta.

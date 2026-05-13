@@ -248,6 +248,62 @@ def cambiar_nombre_contacto_get(request):
         return JsonResponse({'result': False, 'message': str(ex)})
 
 
+def historial_cliente_list(request, conversacion):
+    contacto = conversacion.contacto
+    qs = (
+        ConversacionWhatsApp.objects
+        .filter(contacto=contacto, status=True)
+        .order_by('-fecha_registro')
+    )
+    items = []
+    for c in qs:
+        finalizada = bool(c.conversacion_finalizada or c.estado_conversacion == 1)
+        items.append({
+            'id': c.id,
+            'es_actual': c.id == conversacion.id,
+            'finalizada': finalizada,
+            'fecha_inicio': c.fecha_registro.strftime('%d/%m/%Y %H:%M') if c.fecha_registro else '',
+            'fecha_inicio_corta': c.fecha_registro.strftime('%d/%m/%y') if c.fecha_registro else '',
+            'fecha_fin': c.fecha_fin_conversacion.strftime('%d/%m/%Y %H:%M') if c.fecha_fin_conversacion else '',
+            'total_mensajes': c.mensajes.filter(status=True).count(),
+            'clasificacion': c.get_clasificacion_display() if c.clasificacion else '',
+            'sentimiento': c.sentimiento or '',
+            'resumen': (c.resumen_conversacion or '')[:240],
+        })
+    return JsonResponse({
+        'error': False,
+        'conversaciones': items,
+        'contacto_nombre': contacto.contacto_nombre or contacto.contacto_numero or '',
+        'contacto_numero': contacto.contacto_numero or '',
+    })
+
+
+def historial_cliente_mensajes(request, conversacion):
+    from .models import MensajeWhatsApp
+    mensajes = (
+        MensajeWhatsApp.objects
+        .filter(conversacion=conversacion, status=True)
+        .order_by('fecha')
+    )
+    html = render_to_string(
+        'whatsapp/conversaciones/mensajes_partial.html',
+        {'conversacion': conversacion, 'mensajes': mensajes},
+        request=request,
+    )
+    finalizada = bool(conversacion.conversacion_finalizada or conversacion.estado_conversacion == 1)
+    return JsonResponse({
+        'error': False,
+        'html': html,
+        'conversacion_id': conversacion.id,
+        'finalizada': finalizada,
+        'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_registro else '',
+        'fecha_fin': conversacion.fecha_fin_conversacion.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_fin_conversacion else '',
+        'total_mensajes': mensajes.count(),
+        'clasificacion': conversacion.get_clasificacion_display() if conversacion.clasificacion else '',
+        'resumen': conversacion.resumen_conversacion or '',
+    })
+
+
 def cambiar_nombre_contacto_post(request):
     try:
         filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['pk']))

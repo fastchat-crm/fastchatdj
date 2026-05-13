@@ -1,0 +1,39 @@
+<div class="modal fade hc-modal" id="modalHistorialCliente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fa fa-history me-2 text-secondary"></i>Client conversation history
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <aside class="hc-sidebar">
+                    <div class="hc-sidebar-head">
+                        <h6 id="hc-contact-name">&mdash;</h6>
+                        <div class="hc-contact-sub" id="hc-contact-sub">&mdash;</div>
+                        <div class="hc-total" id="hc-total"></div>
+                    </div>
+                    <div class="hc-list" id="hc-list"></div>
+                </aside>
+                <section class="hc-content">
+                    <div class="hc-content-head">
+                        <div class="hc-meta-line" id="hc-meta-line">Select a conversation</div>
+                        <div class="hc-resumen d-none" id="hc-resumen"></div>
+                    </div>
+                    <div class="hc-messages-wrap" id="hc-messages-wrap">
+                        <div class="chat-detail" id="hc-messages-container">
+                            <div class="hc-empty">
+                                <i class="fa fa-comments d-block"></i>
+                                Pick a conversation from the list
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>

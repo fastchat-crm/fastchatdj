@@ -161,18 +161,30 @@ def pipelineView(request):
                     contacto = conv.contacto
                     mensajes_qs = (
                         conv.mensajes.filter(status=True)
+                        .select_related('agente')
                         .order_by('-fecha')[:50]
                     )
                     mensajes = []
                     contacto_numero = contacto.contacto_numero
+                    contacto_nombre = contacto.contacto_nombre or contacto_numero or 'Client'
                     for m in reversed(list(mensajes_qs)):
                         es_entrante = (m.remitente == contacto_numero)
                         tipo_msg = 'in' if es_entrante else ('ia' if m.ia_generado else 'out')
+                        if tipo_msg == 'in':
+                            remitente_label = contacto_nombre
+                        elif tipo_msg == 'ia':
+                            remitente_label = 'AI Assistant'
+                        else:
+                            if m.agente_id:
+                                remitente_label = (m.agente.get_full_name() or m.agente.username or 'Agent')
+                            else:
+                                remitente_label = 'Agent'
                         contenido = m.mensaje or ''
                         if m.tipo and m.tipo != 'texto':
                             contenido = f'[{m.tipo}] {contenido}' if contenido else f'[{m.tipo}]'
                         mensajes.append({
                             'tipo': tipo_msg,
+                            'remitente_label': remitente_label,
                             'contenido': contenido[:500],
                             'fecha': m.fecha.strftime('%d/%m/%Y %H:%M') if m.fecha else '',
                         })

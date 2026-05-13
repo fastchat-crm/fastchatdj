@@ -19,6 +19,8 @@ from .funcionesWhatsappConversacion import (
     cambiar_clasificacion_post,
     cambiar_nombre_contacto_get,
     cambiar_nombre_contacto_post,
+    historial_cliente_list,
+    historial_cliente_mensajes,
     _bloqueo_reactivar,
     _bloqueo_ventana_meta,
     _control_respuestas,
@@ -123,6 +125,18 @@ def conversacionesFinalizadasView(request):
             return cambiar_clasificacion_get(request)
         elif action == 'cambiar-nombre-contacto':
             return cambiar_nombre_contacto_get(request)
+        elif action == 'historial_cliente':
+            try:
+                conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['pk']))
+                return historial_cliente_list(request, conv)
+            except Exception as ex:
+                return JsonResponse({'error': True, 'message': str(ex)})
+        elif action == 'historial_mensajes':
+            try:
+                conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['pk']))
+                return historial_cliente_mensajes(request, conv)
+            except Exception as ex:
+                return JsonResponse({'error': True, 'message': str(ex)})
         elif action == 'listar_plantillas_meta':
             try:
                 pk = int(request.GET['pk'])

@@ -3,6 +3,7 @@
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
 <link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.5">
+<link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
 {% endblock %}
 
 {% block content %}
@@ -131,6 +132,7 @@
                         <span id="contacto-hashedId" class="ms-1" style="font-size:.75rem;"></span>
                         <small id="conv-fechas" class="ms-2 text-muted" style="display:none;font-size:.75rem;"></small>
                     </div>
+                    <div class="hc-strip d-none" id="historial-chips"></div>
                 </div>
             </div>
             <div class="cm-header-right">
@@ -162,6 +164,9 @@
                         </a>
                         <a class="dropdown-item" href="javascript:void(0)" onclick="abrirModalAsignarPipeline()" title="Asignar a pipeline">
                             <i class="fa fa-columns me-2 text-primary"></i>Asignar a pipeline
+                        </a>
+                        <a class="dropdown-item" href="javascript:void(0)" id="ver-historial-cliente" title="Ver conversaciones pasadas del cliente">
+                            <i class="fa fa-history me-2 text-secondary"></i>Historial del cliente
                         </a>
                     </div>
                 </div>
@@ -307,11 +312,14 @@
     </div>
 </div>
 
+{% include "whatsapp/conversaciones/_modal_historial_cliente.html" %}
+
 {% endblock %}
 
 {% block jscript %}
 <script src="/static/js/reconnecting-websocket.min.js"></script>
 <script src="/static/js/forms.js?version=2"></script>
+<script src="/static/js/whatsapp/historial_cliente.js?v1.0"></script>
 <script>
 $(document).ready(function() {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -461,6 +469,7 @@ $(document).ready(function() {
         $('#conv-id-badge').hide();
         $('#conv-fechas').hide();
         $('.conversacion-item').removeClass('active');
+        if (typeof resetHistorialCliente === 'function') resetHistorialCliente();
         conversacionActiva = null;
     }
 
@@ -574,6 +583,8 @@ $(document).ready(function() {
                     $('#chat-footer').addClass('d-none').hide();
                     mostrarPlantillasSiMeta(false, null);
                 }
+
+                if (typeof cargarHistorialCliente === 'function') cargarHistorialCliente(r.conversacion_id);
 
                 setTimeout(scrollToBottom, 800);
                 conectarWebSocket(r.conversacion_id);

@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block head %}
-    <link rel="stylesheet" href="/static/css/whatsapp/pipeline.css?v1.4">
+    <link rel="stylesheet" href="/static/css/whatsapp/pipeline.css?v1.5">
 {% endblock %}
 
 {% block content %}
@@ -650,7 +650,11 @@ function pipeRenderVerCard(j){
     let mensajesHtml = '';
     if(msgs.length){
         msgs.forEach(function(m){
-            mensajesHtml += '<div class="pipe-conv-msg ' + m.tipo + '">' + pipeEscape(m.contenido).replace(/\n/g, '<br>') + '<span class="pipe-conv-msg-time">' + pipeEscape(m.fecha) + '</span></div>';
+            mensajesHtml += '<div class="pipe-conv-msg ' + m.tipo + '">' +
+                '<span class="pipe-conv-msg-sender">' + pipeEscape(m.remitente_label || '') + '</span>' +
+                pipeEscape(m.contenido).replace(/\n/g, '<br>') +
+                '<span class="pipe-conv-msg-time">' + pipeEscape(m.fecha) + '</span>' +
+                '</div>';
         });
     } else {
         mensajesHtml = '<div class="pipe-conv-empty">Sin mensajes registrados.</div>';
