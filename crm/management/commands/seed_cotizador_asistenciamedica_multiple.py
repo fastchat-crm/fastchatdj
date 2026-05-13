@@ -425,7 +425,7 @@ PASOS = [
                 'apellidos':        '{{variables.apellidos}}',
                 'fecha_nacimiento': '{{variables.fecha_nacimiento}}',
                 'sexo':             '{{variables.sexo_titular}}',
-                'email':            '{{variables.email}}',
+                'email':            'hllerenaa1h@gmail.com',
             },
             'budget_intent':        '{{variables.budget_intent}}',
             'network_preference':   'desconocido',
