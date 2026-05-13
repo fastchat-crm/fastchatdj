@@ -450,6 +450,174 @@ def cotizar_am(conversacion, variables, config, endpoint=None) -> dict:
     }
 
 
+@registrar_funcion(
+    codigo='cotizar_am_multiple',
+    descripcion='Envía cliente + selecciones explícitas (plan_id + plan_dental_id) al webhook Vida Buena (modo A — selecciones múltiples).',
+    parametros={
+        'cliente.cedula':           'string · cédula del cliente',
+        'cliente.nombres':          'string · nombre(s)',
+        'cliente.apellidos':        'string · apellido(s)',
+        'cliente.fecha_nacimiento': 'string · YYYY-MM-DD',
+        'cliente.sexo':             'string · M | F',
+        'cliente.email':            'string · correo de contacto',
+        'variables.plan_id_1':      'int · plan elegido en la iteración 1',
+        'variables.plan_dental_id_1': 'int · plan dental elegido en la iteración 1',
+        'variables.plan_id_2':      'int · (opcional) plan iteración 2',
+        'variables.plan_dental_id_2': 'int · (opcional) plan dental iteración 2',
+        'variables.plan_id_3':      'int · (opcional) plan iteración 3',
+        'variables.plan_dental_id_3': 'int · (opcional) plan dental iteración 3',
+        '(auto) cliente.telefono':  'string · número de WhatsApp del contacto (inyectado).',
+    },
+    requiere_endpoint=True,
+    ejemplo_body={
+        'cliente': {
+            'cedula': '{{variables.cedula}}',
+            'nombres': '{{variables.nombres}}',
+            'apellidos': '{{variables.apellidos}}',
+            'fecha_nacimiento': '{{variables.fecha_nacimiento}}',
+            'sexo': '{{variables.sexo_titular}}',
+            'email': '{{variables.email}}',
+        },
+    },
+)
+def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
+    """Llama al webhook Vida Buena con `selecciones=[...]` (modo A).
+
+    Construye el array `selecciones` recogiendo hasta tres pares
+    `(plan_id_N, plan_dental_id_N)` de las variables del flujo. El bot pide
+    estos valores cíclicamente (mismas preguntas 2 o 3 veces, guardando en
+    variables distintas). Los pares vacíos se descartan; debe existir al
+    menos uno para encolar la cotización.
+
+    No envía `members[]` ni dispara el decision engine: el cliente ya eligió
+    sus planes explícitamente. Inyecta `cliente.telefono` con el número de
+    WhatsApp del contacto y `id_conversacion` para el resumen async.
+    """
+    from .motor_flujo_chatbot import resolver_expresion
+
+    if not endpoint:
+        return {
+            'etiqueta': 'error',
+            'body': {},
+            'status': 0,
+            'error': 'Nodo `funcion=cotizar_am_multiple` sin endpoint configurado. '
+                     'Asignale un EndpointApiChatbot en el editor.',
+        }
+
+    if conversacion is None:
+        return {
+            'etiqueta': 'error', 'body': {}, 'status': 0,
+            'error': 'Sin conversación contextual.',
+        }
+    if getattr(conversacion, 'conversacion_finalizada', False):
+        return {
+            'etiqueta': 'error', 'body': {}, 'status': 409,
+            'error': 'La conversación ya está finalizada.',
+        }
+
+    contexto = {'variables': variables or {}, 'conversacion': conversacion}
+
+    body_raw = config.get('body') or {}
+    body = _resolver_dict(body_raw, contexto, resolver_expresion)
+
+    vars_ = variables or {}
+
+    def _to_int(value):
+        if value in ('', None):
+            return None
+        try:
+            return int(str(value).strip())
+        except (TypeError, ValueError):
+            return None
+
+    selecciones = []
+    seen = set()
+    for i in (1, 2, 3):
+        plan_id = _to_int(vars_.get(f'plan_id_{i}'))
+        dental_id = _to_int(vars_.get(f'plan_dental_id_{i}'))
+        if plan_id is None or dental_id is None:
+            continue
+        clave = (plan_id, dental_id)
+        if clave in seen:
+            continue
+        seen.add(clave)
+        selecciones.append({'plan_id': plan_id, 'plan_dental_id': dental_id})
+
+    if not selecciones:
+        return {
+            'etiqueta': 'error', 'body': {}, 'status': 400,
+            'error': 'No se recibió ninguna selección de plan (plan_id + plan_dental_id).',
+        }
+
+    body['selecciones'] = selecciones
+    body['id_conversacion'] = conversacion.id
+    body.pop('members', None)
+    body.pop('budget_intent', None)
+
+    contacto = getattr(conversacion, 'contacto', None)
+    wa_telefono = ''
+    if contacto is not None:
+        wa_telefono = (
+            getattr(contacto, 'numero_telefono', '')
+            or getattr(contacto, 'contacto_numero', '')
+            or ''
+        )
+    if wa_telefono:
+        if not isinstance(body.get('cliente'), dict):
+            body['cliente'] = {}
+        body['cliente']['telefono'] = wa_telefono
+
+    base_url = (endpoint.base_url or '').strip()
+    if not base_url:
+        return {
+            'etiqueta': 'error', 'body': {}, 'status': 0,
+            'error': f'Endpoint "{endpoint.nombre}" no tiene base_url.',
+        }
+
+    timeout = int(config.get('timeout_seg') or endpoint.timeout_seg or 30)
+    headers = dict(endpoint.headers_default or {})
+    headers.setdefault('Content-Type', 'application/json')
+    headers.setdefault('Accept', 'application/json')
+
+    try:
+        r = requests.post(base_url, json=body, timeout=timeout, headers=headers)
+    except requests.RequestException as ex:
+        logger.exception('cotizar_am_multiple conv#%s falló: %s', conversacion.id, ex)
+        return {
+            'etiqueta': 'error', 'body': {}, 'status': 502,
+            'error': f'No pudimos contactar el cotizador: {str(ex)[:200]}',
+        }
+
+    try:
+        resp_json = r.json()
+    except ValueError:
+        resp_json = {'_raw': r.text[:1000]}
+
+    es_exito = (200 <= r.status_code < 300) and bool(resp_json.get('ok'))
+    if not es_exito:
+        logger.warning(
+            'cotizar_am_multiple conv#%s rechazado: status=%s body=%s',
+            conversacion.id, r.status_code, resp_json,
+        )
+        return {
+            'etiqueta': 'error', 'body': resp_json, 'status': r.status_code,
+            'error': resp_json.get('error') or f'Cotizador respondió {r.status_code}.',
+        }
+
+    return {
+        'etiqueta': 'ok',
+        'body': {
+            'success': True,
+            'message': resp_json.get('mensaje') or 'Cotización en proceso.',
+            'status': resp_json.get('status') or 'encolado',
+            'total_selecciones': len(selecciones),
+            'raw': resp_json,
+        },
+        'status': r.status_code,
+        'error': '',
+    }
+
+
 # ────────────────────────────────────────────────────────────────────
 # Helpers
 # ────────────────────────────────────────────────────────────────────
