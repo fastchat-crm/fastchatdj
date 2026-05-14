@@ -74,7 +74,7 @@
         if (!_historialCache) return;
         $('#hc-contact-name').text(_historialCache.contacto_nombre || '');
         $('#hc-contact-sub').text(_historialCache.contacto_numero || '');
-        $('#hc-total').text((_historialCache.conversaciones || []).length + ' conversations');
+        $('#hc-total').text((_historialCache.conversaciones || []).length + ' conversaciones');
         renderListaModal(_historialCache.conversaciones, focusConvId);
         const el = document.getElementById('modalHistorialCliente');
         const inst = bootstrap.Modal.getInstance(el) || new bootstrap.Modal(el);
@@ -86,7 +86,7 @@
         const $list = $('#hc-list');
         $list.empty();
         if (!items || !items.length) {
-            $list.html('<div class="hc-empty"><i class="fa fa-folder-open d-block"></i>No history</div>');
+            $list.html('<div class="hc-empty"><i class="fa fa-folder-open d-block"></i>Sin historial</div>');
             return;
         }
         items.forEach(function(c) {
@@ -94,10 +94,10 @@
             if (c.id === activoId) cls += 'active ';
             if (c.es_actual) cls += 'is-current ';
             const stateIcon = c.finalizada ? 'fa-check-circle text-success' : 'fa-circle-dot text-primary';
-            const stateLabel = c.finalizada ? 'Finalized' : 'Active';
-            const currentBadge = c.es_actual ? '<span class="hc-li-badge">Current</span>' : '';
+            const stateLabel = c.finalizada ? 'Finalizada' : 'Activa';
+            const currentBadge = c.es_actual ? '<span class="hc-li-badge">Actual</span>' : '';
             const clasBadge = c.clasificacion ? '<span class="hc-li-clas">' + escHtml(c.clasificacion) + '</span>' : '';
-            const msgs = c.total_mensajes ? '<div class="hc-li-msgs"><i class="fa fa-comments me-1"></i>' + c.total_mensajes + ' messages</div>' : '';
+            const msgs = c.total_mensajes ? '<div class="hc-li-msgs"><i class="fa fa-comments me-1"></i>' + c.total_mensajes + ' mensajes</div>' : '';
             $list.append(
                 '<button type="button" class="hc-list-item ' + cls.trim() + '" data-id="' + c.id + '">' +
                   '<div class="hc-li-date">' + escHtml(c.fecha_inicio) + '</div>' +
@@ -114,7 +114,7 @@
     function cargarMensajesHistorial(convId) {
         const id = parseInt(convId, 10);
         if (!id) return;
-        $('#hc-messages-container').html('<div class="hc-empty"><i class="fa fa-spinner fa-spin d-block"></i>Loading messages...</div>');
+        $('#hc-messages-container').html('<div class="hc-empty"><i class="fa fa-spinner fa-spin d-block"></i>Cargando mensajes...</div>');
         $('#hc-meta-line').text('');
         $('#hc-resumen').addClass('d-none').empty();
         $('.hc-list-item').removeClass('active');
@@ -127,24 +127,24 @@
                     $('#hc-messages-container').html('<div class="hc-empty text-danger"><i class="fa fa-exclamation-circle d-block"></i>' + escHtml((r && r.message) || 'Error') + '</div>');
                     return;
                 }
-                $('#hc-messages-container').html(r.html || '<div class="hc-empty">No messages</div>');
+                $('#hc-messages-container').html(r.html || '<div class="hc-empty">Sin mensajes</div>');
                 let meta = '';
                 if (r.fecha_inicio) meta += '<i class="fa fa-calendar me-1"></i>' + escHtml(r.fecha_inicio);
                 if (r.fecha_fin) meta += ' &rarr; ' + escHtml(r.fecha_fin);
-                meta += ' &middot; <i class="fa fa-comments me-1"></i>' + (r.total_mensajes || 0) + ' messages';
+                meta += ' &middot; <i class="fa fa-comments me-1"></i>' + (r.total_mensajes || 0) + ' mensajes';
                 meta += ' &middot; ' + (r.finalizada
-                    ? '<span class="text-success"><i class="fa fa-check-circle me-1"></i>Finalized</span>'
-                    : '<span class="text-primary"><i class="fa fa-circle-dot me-1"></i>Active</span>');
+                    ? '<span class="text-success"><i class="fa fa-check-circle me-1"></i>Finalizada</span>'
+                    : '<span class="text-primary"><i class="fa fa-circle-dot me-1"></i>Activa</span>');
                 if (r.clasificacion) meta += ' &middot; <span class="hc-li-clas">' + escHtml(r.clasificacion) + '</span>';
                 $('#hc-meta-line').html(meta);
                 if (r.resumen) {
-                    $('#hc-resumen').removeClass('d-none').html('<i class="fa fa-lightbulb me-1"></i><b>Summary:</b> ' + escHtml(r.resumen));
+                    $('#hc-resumen').removeClass('d-none').html('<i class="fa fa-lightbulb me-1"></i><b>Resumen:</b> ' + escHtml(r.resumen));
                 }
                 const wrap = document.getElementById('hc-messages-wrap');
                 if (wrap) wrap.scrollTop = wrap.scrollHeight;
             },
             error: function() {
-                $('#hc-messages-container').html('<div class="hc-empty text-danger"><i class="fa fa-exclamation-circle d-block"></i>Network error</div>');
+                $('#hc-messages-container').html('<div class="hc-empty text-danger"><i class="fa fa-exclamation-circle d-block"></i>Error de red</div>');
             }
         });
     }

@@ -1709,7 +1709,6 @@
             if (_cargandoMensajes) return;
             _cargandoMensajes = true;
             conversacionActiva = conversacionId;
-            try { localStorage.setItem('wa_last_conv_active', String(conversacionId)); } catch (e) {}
 
             // Limpiar WebSocket anterior
             if (chatSocket) { chatSocket.close(); chatSocket = null; }
@@ -1751,8 +1750,10 @@
 
                     if (response.estado_active) {
                         $('#resolver-btn').removeClass('d-none').show();
+                        try { localStorage.setItem('wa_last_conv_active', String(conversacionId)); } catch (e) {}
                     } else {
                         $('#resolver-btn').addClass('d-none').hide();
+                        try { localStorage.removeItem('wa_last_conv_active'); } catch (e) {}
                     }
                     $('#dropdowns-btn').removeClass('d-none').show();
 
@@ -1943,6 +1944,7 @@
                         $.unblockUI();
                         const data_ = data[0];
                         if (!data_.error) {
+                            try { localStorage.removeItem('wa_last_conv_active'); } catch (e) {}
                             window.location.href = data_.url;
                         } else {
                             console.error('[marcar-resuelto] backend error', data_);
@@ -2317,6 +2319,7 @@
                         $.unblockUI();
                         const data_ = data[0];
                         if (!data_.error) {
+                            try { localStorage.removeItem('wa_last_conv_active'); } catch (e) {}
                             window.location.href = data_.url;
                         } else {
                             console.error('[terminar-sin-despedida] backend error', data_);

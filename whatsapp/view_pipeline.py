@@ -24,19 +24,31 @@ def _generar_pipeline_con_ia(request):
     from agents_ai.ai_actions import IAActionError
     from agents_ai.ai_actions import pipeline_wa
     from crm.models import ApiKeyIA, PerfilNegocioIA
+    from seguridad.models import Configuracion
 
-    perfil = PerfilNegocioIA.objects.filter(usuario=request.user).first()
-    if not perfil:
-        return JsonResponse({'error': True, 'message': 'No tenes perfil de negocio. Configuralo primero en CRM.'})
-
-    qs = ApiKeyIA.objects.filter(perfil=perfil, estado=True, status=True).order_by('-id')
     apikey_id = (request.POST.get('apikey_id') or '').strip()
+    apikey_obj = None
+
     if apikey_id:
-        apikey_obj = qs.filter(pk=apikey_id).first()
+        perfil = PerfilNegocioIA.objects.filter(usuario=request.user).first()
+        if perfil:
+            apikey_obj = ApiKeyIA.objects.filter(
+                pk=apikey_id, perfil=perfil, estado=True, status=True,
+            ).first()
     else:
-        apikey_obj = qs.first()
+        config = Configuracion.get_instancia()
+        token_sistema = getattr(config, 'token_ia', None)
+        if token_sistema and token_sistema.estado and token_sistema.status:
+            apikey_obj = token_sistema
+        else:
+            perfil = PerfilNegocioIA.objects.filter(usuario=request.user).first()
+            if perfil:
+                apikey_obj = ApiKeyIA.objects.filter(
+                    perfil=perfil, estado=True, status=True,
+                ).order_by('-id').first()
+
     if not apikey_obj or not (apikey_obj.descripcion or '').strip():
-        return JsonResponse({'error': True, 'message': 'No tenes API Key activa con clave del proveedor LLM. Configura una en CRM → Entrenamiento.'})
+        return JsonResponse({'error': True, 'message': 'No hay API Key IA disponible. Configura el "API Key IA del sistema" en Configuracion o agrega una en CRM → Entrenamiento.'})
 
     contexto_key = f'[ApiKey #{apikey_obj.id} "{apikey_obj.alias or "sin alias"}" · {apikey_obj.get_proveedor_display()} · modelo={apikey_obj.modelo or "(default)"}]'
     try:
@@ -396,6 +408,7 @@ def pipelineView(request):
         pipeline_actual = pipelines.first()
 
     from crm.models import ApiKeyIA, PerfilNegocioIA
+    from seguridad.models import Configuracion
     perfil_ia = PerfilNegocioIA.objects.filter(usuario=request.user).first()
     if perfil_ia:
         data['apikeys_ia'] = ApiKeyIA.objects.filter(
@@ -403,6 +416,9 @@ def pipelineView(request):
         ).exclude(descripcion='').order_by('-id')
     else:
         data['apikeys_ia'] = ApiKeyIA.objects.none()
+    _config_sistema = Configuracion.get_instancia()
+    _token_sistema = getattr(_config_sistema, 'token_ia', None)
+    data['token_ia_sistema'] = _token_sistema if (_token_sistema and _token_sistema.estado and _token_sistema.status) else None
 
     data['pipelines'] = pipelines
     data['pipeline_actual'] = pipeline_actual

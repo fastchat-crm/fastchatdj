@@ -223,19 +223,24 @@
                     La IA genera un pipeline completo (nombre + 4-6 etapas con colores, probabilidades y flags).
                     El consumo de tokens queda registrado en CRM → Consumo IA.
                 </div>
-                {% if apikeys_ia %}
                 <div class="mb-3">
                     <label class="form-label">API Key (LLM)</label>
-                    <select name="apikey_id" class="form-select form-select-sm" required>
+                    <select name="apikey_id" class="form-select form-select-sm">
+                        {% if token_ia_sistema %}
+                            <option value="" selected>
+                                Default (Configuración) — {{ token_ia_sistema.alias|default:"sin alias" }} · {{ token_ia_sistema.get_proveedor_display }}{% if token_ia_sistema.modelo %} · {{ token_ia_sistema.modelo }}{% else %} · default{% endif %}
+                            </option>
+                        {% else %}
+                            <option value="" selected>Default (Configuración) — sin token configurado</option>
+                        {% endif %}
                         {% for k in apikeys_ia %}
                             <option value="{{ k.id }}">
                                 {{ k.alias|default:"(sin alias)" }} — {{ k.get_proveedor_display }}{% if k.modelo %} · {{ k.modelo }}{% else %} · default{% endif %}
                             </option>
                         {% endfor %}
                     </select>
-                    <div class="form-text small">API Key + modelo que la IA usara para generar el pipeline.</div>
+                    <div class="form-text small">Por defecto usa el token configurado en Configuración. Podés overridear con una API Key propia.</div>
                 </div>
-                {% endif %}
                 <div class="mb-3">
                     <label class="form-label">Describe tu negocio y proceso de venta</label>
                     <textarea name="descripcion" class="form-control" rows="4" required
