@@ -86,7 +86,8 @@
       "Bash(command -v pycheck)",
       "Bash(pycheck \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\\\\whatsapp\\\\view_pipeline.py\")",
       "Bash(pycheck crm/funciones_chatbot.py)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(dir \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\\\\whatsapp\" /s /b /ad)"
     ]
   },
   "hooks": {

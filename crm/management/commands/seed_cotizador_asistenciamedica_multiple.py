@@ -87,13 +87,15 @@ BOT = {
 
 
 def _bloque_miembro(idx, sig_si, sig_no, base_id):
-    """Devuelve los 6 pasos que capturan un dependiente (cédula → lookup →
-    si no encontrado pide edad/sexo manual). `base_id` marca el primer id
-    del bloque (los siguientes se numeran consecutivos a partir de él).
+    """Devuelve los 7 pasos que capturan un dependiente (cédula → lookup →
+    si no encontrado pide edad/sexo manual → muestra datos confirmados).
+    `base_id` marca el primer id del bloque (los siguientes se numeran
+    consecutivos a partir de él).
 
     Conexiones:
       - decisión inicial `num_dependientes >= idx`: si → entra; no → `sig_no`.
-      - al terminar el bloque (lookup ok o input manual completo) → `sig_si`.
+      - tras lookup ok o input manual completo se pasa por `mostrar_ok` que
+        despliega edad y sexo del miembro y luego salta a `sig_si`.
     """
     dec_id      = base_id + 0
     input_ced   = base_id + 1
@@ -101,6 +103,7 @@ def _bloque_miembro(idx, sig_si, sig_no, base_id):
     dec_encon   = base_id + 3
     input_edad  = base_id + 4
     menu_sexo   = base_id + 5
+    mostrar_ok  = base_id + 6
 
     return [
         {
@@ -142,7 +145,7 @@ def _bloque_miembro(idx, sig_si, sig_no, base_id):
             'codigo': f'decision_encontrado_m{idx}',
             'nombre': f'¿Miembro {idx} en registro civil?',
             'condicion': f'{{{{variables.encontrado_m{idx}}}}} == true',
-            'siguiente_si': sig_si, 'siguiente_no': input_edad,
+            'siguiente_si': mostrar_ok, 'siguiente_no': input_edad,
         },
         {
             'id': input_edad, 'orden': input_edad, 'tipo': 'input_texto',
@@ -161,12 +164,35 @@ def _bloque_miembro(idx, sig_si, sig_no, base_id):
             'mensaje': f'👤 ¿Cuál es el *sexo* del miembro #{idx}?',
             'guardar_en': f'sexo_m{idx}',
             'opciones': [
-                {'etiqueta': '👨 Masculino', 'valor': 'M', 'siguiente': sig_si},
-                {'etiqueta': '👩 Femenino',  'valor': 'F', 'siguiente': sig_si},
+                {'etiqueta': '👨 Masculino', 'valor': 'M', 'siguiente': mostrar_ok},
+                {'etiqueta': '👩 Femenino',  'valor': 'F', 'siguiente': mostrar_ok},
             ],
+        },
+        {
+            'id': mostrar_ok, 'orden': mostrar_ok, 'tipo': 'respuesta_texto',
+            'codigo': f'mostrar_datos_m{idx}',
+            'nombre': f'Mostrar datos miembro {idx}',
+            'mensaje': (
+                f'✅ Datos del miembro #{idx} registrados:\n'
+                f'• Edad: *{{{{variables.edad_m{idx}}}}}*\n'
+                f'• Sexo: *{{{{variables.sexo_m{idx}}}}}*'
+            ),
+            'siguiente': sig_si,
         },
     ]
 
+
+ID_RESUMEN     = 450
+ID_DEC_M1_RES  = 451
+ID_SHOW_M1_RES = 452
+ID_DEC_M2_RES  = 453
+ID_SHOW_M2_RES = 454
+ID_DEC_M3_RES  = 455
+ID_SHOW_M3_RES = 456
+ID_DEC_M4_RES  = 457
+ID_SHOW_M4_RES = 458
+ID_DEC_M5_RES  = 459
+ID_SHOW_M5_RES = 460
 
 ID_BUDGET = 500
 ID_ESPERANDO = 510
@@ -395,10 +421,106 @@ PASOS = [
         ),
         'guardar_en': 'budget_intent',
         'opciones': [
-            {'etiqueta': '💵 Económico',         'valor': 'economico',       'siguiente': ID_ESPERANDO},
-            {'etiqueta': '⚖️ Equilibrado',       'valor': 'equilibrio',      'siguiente': ID_ESPERANDO},
-            {'etiqueta': '🛡️ Mayor protección',  'valor': 'alta_proteccion', 'siguiente': ID_ESPERANDO},
+            {'etiqueta': '💵 Económico',                 'valor': 'economico',       'siguiente': ID_RESUMEN},
+            {'etiqueta': '⚖️ Equilibrado',               'valor': 'equilibrio',      'siguiente': ID_RESUMEN},
+            {'etiqueta': '🛡️ Mayor protección',          'valor': 'alta_proteccion', 'siguiente': ID_RESUMEN},
+            {'etiqueta': '🤷 No estoy seguro — cotizar todos', 'valor': 'desconocido', 'siguiente': ID_RESUMEN},
         ],
+    },
+    {
+        'id': ID_RESUMEN, 'orden': ID_RESUMEN, 'tipo': 'respuesta_texto',
+        'codigo': 'resumen_titular', 'nombre': 'Resumen titular + plan',
+        'mensaje': (
+            '📋 ¡Listo! Cotizaremos con estos datos:\n\n'
+            '👤 *Titular*\n'
+            '• Nombre: *{{variables.nombres}} {{variables.apellidos}}*\n'
+            '• Cédula: *{{variables.cedula}}*\n'
+            '• Edad: *{{variables.edad_titular}}*\n'
+            '• Sexo: *{{variables.sexo_titular}}*\n'
+            '• Email: *{{variables.email}}*\n\n'
+            '💰 Tipo de plan: *{{variables.budget_intent}}*'
+        ),
+        'siguiente': ID_DEC_M1_RES,
+    },
+    {
+        'id': ID_DEC_M1_RES, 'orden': ID_DEC_M1_RES, 'tipo': 'decision',
+        'codigo': 'decision_resumen_m1', 'nombre': '¿Mostrar miembro 1?',
+        'condicion': '{{variables.num_dependientes}} >= 1',
+        'siguiente_si': ID_SHOW_M1_RES, 'siguiente_no': ID_ESPERANDO,
+    },
+    {
+        'id': ID_SHOW_M1_RES, 'orden': ID_SHOW_M1_RES, 'tipo': 'respuesta_texto',
+        'codigo': 'resumen_m1', 'nombre': 'Resumen miembro 1',
+        'mensaje': (
+            '👥 *Miembro 1*\n'
+            '• Edad: *{{variables.edad_m1}}*\n'
+            '• Sexo: *{{variables.sexo_m1}}*'
+        ),
+        'siguiente': ID_DEC_M2_RES,
+    },
+    {
+        'id': ID_DEC_M2_RES, 'orden': ID_DEC_M2_RES, 'tipo': 'decision',
+        'codigo': 'decision_resumen_m2', 'nombre': '¿Mostrar miembro 2?',
+        'condicion': '{{variables.num_dependientes}} >= 2',
+        'siguiente_si': ID_SHOW_M2_RES, 'siguiente_no': ID_ESPERANDO,
+    },
+    {
+        'id': ID_SHOW_M2_RES, 'orden': ID_SHOW_M2_RES, 'tipo': 'respuesta_texto',
+        'codigo': 'resumen_m2', 'nombre': 'Resumen miembro 2',
+        'mensaje': (
+            '👥 *Miembro 2*\n'
+            '• Edad: *{{variables.edad_m2}}*\n'
+            '• Sexo: *{{variables.sexo_m2}}*'
+        ),
+        'siguiente': ID_DEC_M3_RES,
+    },
+    {
+        'id': ID_DEC_M3_RES, 'orden': ID_DEC_M3_RES, 'tipo': 'decision',
+        'codigo': 'decision_resumen_m3', 'nombre': '¿Mostrar miembro 3?',
+        'condicion': '{{variables.num_dependientes}} >= 3',
+        'siguiente_si': ID_SHOW_M3_RES, 'siguiente_no': ID_ESPERANDO,
+    },
+    {
+        'id': ID_SHOW_M3_RES, 'orden': ID_SHOW_M3_RES, 'tipo': 'respuesta_texto',
+        'codigo': 'resumen_m3', 'nombre': 'Resumen miembro 3',
+        'mensaje': (
+            '👥 *Miembro 3*\n'
+            '• Edad: *{{variables.edad_m3}}*\n'
+            '• Sexo: *{{variables.sexo_m3}}*'
+        ),
+        'siguiente': ID_DEC_M4_RES,
+    },
+    {
+        'id': ID_DEC_M4_RES, 'orden': ID_DEC_M4_RES, 'tipo': 'decision',
+        'codigo': 'decision_resumen_m4', 'nombre': '¿Mostrar miembro 4?',
+        'condicion': '{{variables.num_dependientes}} >= 4',
+        'siguiente_si': ID_SHOW_M4_RES, 'siguiente_no': ID_ESPERANDO,
+    },
+    {
+        'id': ID_SHOW_M4_RES, 'orden': ID_SHOW_M4_RES, 'tipo': 'respuesta_texto',
+        'codigo': 'resumen_m4', 'nombre': 'Resumen miembro 4',
+        'mensaje': (
+            '👥 *Miembro 4*\n'
+            '• Edad: *{{variables.edad_m4}}*\n'
+            '• Sexo: *{{variables.sexo_m4}}*'
+        ),
+        'siguiente': ID_DEC_M5_RES,
+    },
+    {
+        'id': ID_DEC_M5_RES, 'orden': ID_DEC_M5_RES, 'tipo': 'decision',
+        'codigo': 'decision_resumen_m5', 'nombre': '¿Mostrar miembro 5?',
+        'condicion': '{{variables.num_dependientes}} >= 5',
+        'siguiente_si': ID_SHOW_M5_RES, 'siguiente_no': ID_ESPERANDO,
+    },
+    {
+        'id': ID_SHOW_M5_RES, 'orden': ID_SHOW_M5_RES, 'tipo': 'respuesta_texto',
+        'codigo': 'resumen_m5', 'nombre': 'Resumen miembro 5',
+        'mensaje': (
+            '👥 *Miembro 5*\n'
+            '• Edad: *{{variables.edad_m5}}*\n'
+            '• Sexo: *{{variables.sexo_m5}}*'
+        ),
+        'siguiente': ID_ESPERANDO,
     },
     {
         'id': ID_ESPERANDO, 'orden': ID_ESPERANDO, 'tipo': 'respuesta_texto',
