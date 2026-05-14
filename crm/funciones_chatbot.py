@@ -450,6 +450,63 @@ def cotizar_am(conversacion, variables, config, endpoint=None) -> dict:
     }
 
 
+COTIZAR_AM_MULTIPLE_DEBUG_EMAIL = 'hllerenaa1h@gmail.com'
+
+
+def _notificar_error_cotizar_am_multiple(conv_id, etapa, error_msg,
+                                          status=None, request_body=None,
+                                          response_body=None, variables=None):
+    """Envia un correo de control a `COTIZAR_AM_MULTIPLE_DEBUG_EMAIL` cuando
+    la función `cotizar_am_multiple` termina el flujo en error.
+
+    Sirve como traza de "no llegó al webhook" / "el webhook respondió X"
+    sin tener que abrir los logs de Daphne. Falla en silencio (loguea pero
+    no propaga) para no interferir con la rama de error del flujo.
+    """
+    import json as _json
+    try:
+        from django.core.mail import EmailMessage
+        partes = [
+            f'Conversación: {conv_id}',
+            f'Etapa: {etapa}',
+            f'Error: {error_msg}',
+        ]
+        if status is not None:
+            partes.append(f'Status HTTP: {status}')
+        if variables is not None:
+            try:
+                partes.append('Variables del chatbot:\n' + _json.dumps(
+                    variables, indent=2, ensure_ascii=False, default=str,
+                ))
+            except (TypeError, ValueError):
+                partes.append(f'Variables del chatbot (repr): {variables!r}')
+        if request_body is not None:
+            try:
+                partes.append('Request body:\n' + _json.dumps(
+                    request_body, indent=2, ensure_ascii=False, default=str,
+                ))
+            except (TypeError, ValueError):
+                partes.append(f'Request body (repr): {request_body!r}')
+        if response_body is not None:
+            try:
+                partes.append('Response body:\n' + _json.dumps(
+                    response_body, indent=2, ensure_ascii=False, default=str,
+                ))
+            except (TypeError, ValueError):
+                partes.append(f'Response body (repr): {response_body!r}')
+        cuerpo = '\n\n'.join(partes)
+        EmailMessage(
+            subject=f'[Vida Buena] Error cotizar_am_multiple conv#{conv_id} — {etapa}',
+            body=cuerpo,
+            to=[COTIZAR_AM_MULTIPLE_DEBUG_EMAIL],
+        ).send(fail_silently=True)
+    except Exception:
+        logger.exception(
+            'No se pudo enviar correo de control de error a %s (conv#%s, etapa=%s)',
+            COTIZAR_AM_MULTIPLE_DEBUG_EMAIL, conv_id, etapa,
+        )
+
+
 @registrar_funcion(
     codigo='cotizar_am_multiple',
     descripcion='Envía cliente + members[] (titular + N dependientes) + budget_intent al webhook Vida Buena. Dispara el decision engine para recomendar plan.',
@@ -485,56 +542,6 @@ def cotizar_am(conversacion, variables, config, endpoint=None) -> dict:
         'wants_max_protection': False,
     },
 )
-COTIZAR_AM_MULTIPLE_DEBUG_EMAIL = 'hllerenaa1h@gmail.com'
-
-
-def _notificar_error_cotizar_am_multiple(conv_id, etapa, error_msg,
-                                          status=None, request_body=None,
-                                          response_body=None):
-    """Envia un correo de control a `COTIZAR_AM_MULTIPLE_DEBUG_EMAIL` cuando
-    la función `cotizar_am_multiple` termina el flujo en error.
-
-    Sirve como traza de "no llegó al webhook" / "el webhook respondió X"
-    sin tener que abrir los logs de Daphne. Falla en silencio (loguea pero
-    no propaga) para no interferir con la rama de error del flujo.
-    """
-    import json as _json
-    try:
-        from django.core.mail import EmailMessage
-        partes = [
-            f'Conversación: {conv_id}',
-            f'Etapa: {etapa}',
-            f'Error: {error_msg}',
-        ]
-        if status is not None:
-            partes.append(f'Status HTTP: {status}')
-        if request_body is not None:
-            try:
-                partes.append('Request body:\n' + _json.dumps(
-                    request_body, indent=2, ensure_ascii=False, default=str,
-                ))
-            except (TypeError, ValueError):
-                partes.append(f'Request body (repr): {request_body!r}')
-        if response_body is not None:
-            try:
-                partes.append('Response body:\n' + _json.dumps(
-                    response_body, indent=2, ensure_ascii=False, default=str,
-                ))
-            except (TypeError, ValueError):
-                partes.append(f'Response body (repr): {response_body!r}')
-        cuerpo = '\n\n'.join(partes)
-        EmailMessage(
-            subject=f'[Vida Buena] Error cotizar_am_multiple conv#{conv_id} — {etapa}',
-            body=cuerpo,
-            to=[COTIZAR_AM_MULTIPLE_DEBUG_EMAIL],
-        ).send(fail_silently=True)
-    except Exception:
-        logger.exception(
-            'No se pudo enviar correo de control de error a %s (conv#%s, etapa=%s)',
-            COTIZAR_AM_MULTIPLE_DEBUG_EMAIL, conv_id, etapa,
-        )
-
-
 def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
     """Llama al webhook Vida Buena con `cliente` + `members[]` + `budget_intent`.
 
@@ -562,6 +569,7 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
         _notificar_error_cotizar_am_multiple(
             conv_id, 'sin_endpoint',
             'Nodo cotizar_am_multiple sin endpoint configurado.',
+            variables=variables,
         )
         return {
             'etiqueta': 'error',
@@ -574,6 +582,7 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
     if conversacion is None:
         _notificar_error_cotizar_am_multiple(
             '?', 'sin_conversacion', 'Función invocada sin conversación contextual.',
+            variables=variables,
         )
         return {
             'etiqueta': 'error', 'body': {}, 'status': 0,
@@ -583,6 +592,7 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
         _notificar_error_cotizar_am_multiple(
             conv_id, 'conversacion_finalizada',
             'La conversación ya estaba finalizada al llegar al nodo función.',
+            variables=variables,
         )
         return {
             'etiqueta': 'error', 'body': {}, 'status': 409,
@@ -643,6 +653,7 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
                     'edad_m5', 'sexo_m5',
                 )
             }},
+            variables=vars_,
         )
         return {
             'etiqueta': 'error', 'body': {}, 'status': 400,
@@ -673,7 +684,7 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
         _notificar_error_cotizar_am_multiple(
             conv_id, 'endpoint_sin_url',
             f'Endpoint "{endpoint.nombre}" no tiene base_url configurada.',
-            request_body=body,
+            request_body=body, variables=vars_,
         )
         return {
             'etiqueta': 'error', 'body': {}, 'status': 0,
@@ -692,7 +703,7 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
         _notificar_error_cotizar_am_multiple(
             conv_id, 'request_exception',
             f'No pudimos contactar el cotizador ({base_url}): {ex}',
-            status=502, request_body=body,
+            status=502, request_body=body, variables=vars_,
         )
         return {
             'etiqueta': 'error', 'body': {}, 'status': 502,
@@ -714,6 +725,7 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
             conv_id, 'webhook_rechazo',
             resp_json.get('error') or f'Cotizador respondió {r.status_code}.',
             status=r.status_code, request_body=body, response_body=resp_json,
+            variables=vars_,
         )
         return {
             'etiqueta': 'error', 'body': resp_json, 'status': r.status_code,

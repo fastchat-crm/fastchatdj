@@ -84,7 +84,9 @@
       "Bash(pycheck whatsapp/view_conversaciones.py whatsapp/view_conversaciones_finalizadas.py whatsapp/funcionesWhatsappConversacion.py)",
       "Skill(caveman)",
       "Bash(command -v pycheck)",
-      "Bash(pycheck \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\\\\whatsapp\\\\view_pipeline.py\")"
+      "Bash(pycheck \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\\\\whatsapp\\\\view_pipeline.py\")",
+      "Bash(pycheck crm/funciones_chatbot.py)",
+      "Bash(git stash *)"
     ]
   },
   "hooks": {
