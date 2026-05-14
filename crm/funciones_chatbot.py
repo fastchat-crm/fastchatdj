@@ -234,6 +234,10 @@ def cotizar_aria(conversacion, variables, config, endpoint=None) -> dict:
         r = requests.post(base_url, json=body, timeout=timeout, headers=headers)
     except requests.RequestException as ex:
         logger.exception('cotizar_aria conv#%s falló: %s', conversacion.id, ex)
+        _notificar_debug_envio_cotizador(
+            'cotizar_aria', conversacion.id, base_url, variables or {},
+            body, status=502, error=str(ex),
+        )
         return {
             'etiqueta': 'error', 'body': {}, 'status': 502,
             'error': f'No pudimos contactar el cotizador: {str(ex)[:200]}',
@@ -243,6 +247,11 @@ def cotizar_aria(conversacion, variables, config, endpoint=None) -> dict:
         resp_json = r.json()
     except ValueError:
         resp_json = {'_raw': r.text[:1000]}
+
+    _notificar_debug_envio_cotizador(
+        'cotizar_aria', conversacion.id, base_url, variables or {},
+        body, status=r.status_code, response_body=resp_json,
+    )
 
     es_exito = (200 <= r.status_code < 300) and bool(resp_json.get('ok'))
     if not es_exito:
@@ -416,6 +425,10 @@ def cotizar_am(conversacion, variables, config, endpoint=None) -> dict:
         r = requests.post(base_url, json=body, timeout=timeout, headers=headers)
     except requests.RequestException as ex:
         logger.exception('cotizar_am conv#%s falló: %s', conversacion.id, ex)
+        _notificar_debug_envio_cotizador(
+            'cotizar_am', conversacion.id, base_url, vars_,
+            body, status=502, error=str(ex),
+        )
         return {
             'etiqueta': 'error', 'body': {}, 'status': 502,
             'error': f'No pudimos contactar el cotizador: {str(ex)[:200]}',
@@ -425,6 +438,11 @@ def cotizar_am(conversacion, variables, config, endpoint=None) -> dict:
         resp_json = r.json()
     except ValueError:
         resp_json = {'_raw': r.text[:1000]}
+
+    _notificar_debug_envio_cotizador(
+        'cotizar_am', conversacion.id, base_url, vars_,
+        body, status=r.status_code, response_body=resp_json,
+    )
 
     es_exito = (200 <= r.status_code < 300) and bool(resp_json.get('ok'))
     if not es_exito:
@@ -450,13 +468,13 @@ def cotizar_am(conversacion, variables, config, endpoint=None) -> dict:
     }
 
 
-COTIZAR_AM_MULTIPLE_DEBUG_EMAIL = 'hllerenaa1h@gmail.com'
+COTIZADOR_DEBUG_EMAIL = 'hllerenaa1h@gmail.com'
 
 
 def _notificar_error_cotizar_am_multiple(conv_id, etapa, error_msg,
                                           status=None, request_body=None,
                                           response_body=None, variables=None):
-    """Envia un correo de control a `COTIZAR_AM_MULTIPLE_DEBUG_EMAIL` cuando
+    """Envia un correo de control a `COTIZADOR_DEBUG_EMAIL` cuando
     la función `cotizar_am_multiple` termina el flujo en error.
 
     Sirve como traza de "no llegó al webhook" / "el webhook respondió X"
@@ -498,12 +516,77 @@ def _notificar_error_cotizar_am_multiple(conv_id, etapa, error_msg,
         EmailMessage(
             subject=f'[Vida Buena] Error cotizar_am_multiple conv#{conv_id} — {etapa}',
             body=cuerpo,
-            to=[COTIZAR_AM_MULTIPLE_DEBUG_EMAIL],
+            to=[COTIZADOR_DEBUG_EMAIL],
         ).send(fail_silently=True)
     except Exception:
         logger.exception(
             'No se pudo enviar correo de control de error a %s (conv#%s, etapa=%s)',
-            COTIZAR_AM_MULTIPLE_DEBUG_EMAIL, conv_id, etapa,
+            COTIZADOR_DEBUG_EMAIL, conv_id, etapa,
+        )
+
+
+def _notificar_debug_envio_cotizador(funcion, conv_id, base_url, variables,
+                                      request_body, status=None,
+                                      response_body=None, error=None):
+    """Envia un correo de traza a `COTIZADOR_DEBUG_EMAIL` cada vez que una
+    función `cotizar_*` realiza (o intenta realizar) un POST al webhook.
+
+    Pensado como herramienta de depuración temporal: deja ver exactamente qué
+    se está enviando al webhook y qué responde, sin tener que abrir los logs
+    de Daphne. Falla en silencio para no interferir con el flujo.
+    """
+    import json as _json
+    try:
+        from django.core.mail import EmailMessage
+        if error:
+            estado = 'ERROR'
+        elif status is not None and 200 <= int(status) < 300:
+            estado = 'OK'
+        elif status is not None:
+            estado = f'HTTP {status}'
+        else:
+            estado = 'enviado'
+        partes = [
+            f'Función: {funcion}',
+            f'Conversación: {conv_id}',
+            f'URL webhook: {base_url}',
+            f'Estado: {estado}',
+        ]
+        if status is not None:
+            partes.append(f'Status HTTP: {status}')
+        if error:
+            partes.append(f'Error: {error}')
+        if variables is not None:
+            try:
+                partes.append('Variables del chatbot:\n' + _json.dumps(
+                    variables, indent=2, ensure_ascii=False, default=str,
+                ))
+            except (TypeError, ValueError):
+                partes.append(f'Variables del chatbot (repr): {variables!r}')
+        if request_body is not None:
+            try:
+                partes.append('Request body:\n' + _json.dumps(
+                    request_body, indent=2, ensure_ascii=False, default=str,
+                ))
+            except (TypeError, ValueError):
+                partes.append(f'Request body (repr): {request_body!r}')
+        if response_body is not None:
+            try:
+                partes.append('Response body:\n' + _json.dumps(
+                    response_body, indent=2, ensure_ascii=False, default=str,
+                ))
+            except (TypeError, ValueError):
+                partes.append(f'Response body (repr): {response_body!r}')
+        cuerpo = '\n\n'.join(partes)
+        EmailMessage(
+            subject=f'[Debug cotizador] {funcion} conv#{conv_id} — {estado}',
+            body=cuerpo,
+            to=[COTIZADOR_DEBUG_EMAIL],
+        ).send(fail_silently=True)
+    except Exception:
+        logger.exception(
+            'No se pudo enviar correo de debug cotizador a %s (funcion=%s, conv#%s)',
+            COTIZADOR_DEBUG_EMAIL, funcion, conv_id,
         )
 
 
@@ -705,6 +788,10 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
             f'No pudimos contactar el cotizador ({base_url}): {ex}',
             status=502, request_body=body, variables=vars_,
         )
+        _notificar_debug_envio_cotizador(
+            'cotizar_am_multiple', conv_id, base_url, vars_,
+            body, status=502, error=str(ex),
+        )
         return {
             'etiqueta': 'error', 'body': {}, 'status': 502,
             'error': f'No pudimos contactar el cotizador: {str(ex)[:200]}',
@@ -714,6 +801,11 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
         resp_json = r.json()
     except ValueError:
         resp_json = {'_raw': r.text[:1000]}
+
+    _notificar_debug_envio_cotizador(
+        'cotizar_am_multiple', conv_id, base_url, vars_,
+        body, status=r.status_code, response_body=resp_json,
+    )
 
     es_exito = (200 <= r.status_code < 300) and bool(resp_json.get('ok'))
     if not es_exito:
