@@ -29,7 +29,7 @@ from .models import (
 )
 
 
-SECCIONES_VALIDAS = ('grupos', 'recursos', 'servicios', 'excepciones', 'horarios')
+SUB_LISTADOS = ('recursos', 'servicios', 'excepciones', 'horarios')
 CRUD_GET_ACTIONS = ('add', 'change')
 
 
@@ -40,6 +40,17 @@ def _parse_time(value):
     try:
         return time(int(parts[0]), int(parts[1]))
     except (ValueError, TypeError):
+        return None
+
+
+def _resolver_grupo(request):
+    raw = request.POST.get('grupo_id') or request.GET.get('grupo_id') or ''
+    raw = str(raw).strip()
+    if not raw:
+        return None
+    try:
+        return GrupoAgenda.objects.get(pk=int(raw), status=True)
+    except (GrupoAgenda.DoesNotExist, ValueError):
         return None
 
 
@@ -122,7 +133,8 @@ def agendaConfiguracionView(request):
 
                 elif entity == 'servicio':
                     if action == 'add':
-                        form = ServicioForm(request.POST, request=request)
+                        grupo_id = request.POST.get('grupo_id') or None
+                        form = ServicioForm(request.POST, request=request, grupo_id=grupo_id)
                         if form.is_valid():
                             form.save()
                             log(f"Creó servicio {form.instance}", request, 'add', obj=form.instance.id)
@@ -151,17 +163,11 @@ def agendaConfiguracionView(request):
                                 continue
                             Servicio.objects.filter(pk=int(pk), status=True).update(orden=pos)
                         res_json.append({'error': False})
-                    elif action == 'recursos_grupo':
-                        grupo_pk = int(request.POST.get('grupo_id') or 0)
-                        items = list(
-                            Recurso.objects.filter(grupo_agenda_id=grupo_pk, status=True)
-                            .order_by('orden', 'nombre').values('id', 'nombre', 'color')
-                        )
-                        return JsonResponse({'error': False, 'items': items})
 
                 elif entity == 'excepcion':
                     if action == 'add':
-                        form = ExcepcionAgendaForm(request.POST, request=request)
+                        grupo_id = request.POST.get('grupo_id') or None
+                        form = ExcepcionAgendaForm(request.POST, request=request, grupo_id=grupo_id)
                         if form.is_valid():
                             form.save()
                             log(f"Creó excepción {form.instance}", request, 'add', obj=form.instance.id)
@@ -255,6 +261,9 @@ def agendaConfiguracionView(request):
         entity = request.GET.get('entity', '')
         data['entity'] = entity
         data['action'] = action_param
+        grupo = _resolver_grupo(request)
+        data['grupo'] = grupo
+        data['grupo_id'] = grupo.id if grupo else ''
         try:
             if entity == 'grupo':
                 if action_param == 'add':
@@ -270,7 +279,10 @@ def agendaConfiguracionView(request):
 
             elif entity == 'recurso':
                 if action_param == 'add':
-                    data['form'] = RecursoForm()
+                    initial = {}
+                    if grupo:
+                        initial['grupo_agenda'] = grupo.id
+                    data['form'] = RecursoForm(initial=initial)
                     template = get_template('agenda/configuracion/recurso_form.html')
                     return JsonResponse({'result': True, 'data': template.render(data)})
                 if action_param == 'change':
@@ -282,7 +294,13 @@ def agendaConfiguracionView(request):
 
             elif entity == 'servicio':
                 if action_param == 'add':
-                    data['form'] = ServicioForm()
+                    initial = {}
+                    if grupo:
+                        initial['grupo_agenda'] = grupo.id
+                    data['form'] = ServicioForm(
+                        initial=initial,
+                        grupo_id=(grupo.id if grupo else None),
+                    )
                     template = get_template('agenda/configuracion/servicio_form.html')
                     return JsonResponse({'result': True, 'data': template.render(data)})
                 if action_param == 'change':
@@ -296,7 +314,9 @@ def agendaConfiguracionView(request):
 
             elif entity == 'excepcion':
                 if action_param == 'add':
-                    data['form'] = ExcepcionAgendaForm()
+                    data['form'] = ExcepcionAgendaForm(
+                        grupo_id=(grupo.id if grupo else None),
+                    )
                     template = get_template('agenda/configuracion/excepcion_form.html')
                     return JsonResponse({'result': True, 'data': template.render(data)})
                 if action_param == 'change':
@@ -314,49 +334,72 @@ def agendaConfiguracionView(request):
 
         return JsonResponse({'result': False, 'message': 'Acción no soportada.'})
 
-    seccion = action_param if action_param in SECCIONES_VALIDAS else 'grupos'
-    data['seccion'] = seccion
+    if action_param in SUB_LISTADOS:
+        grupo = _resolver_grupo(request)
+        if not grupo:
+            data['error_message'] = 'Selecciona un grupo desde el listado principal.'
+            data['agenda_grupos'] = GrupoAgenda.objects.filter(status=True).order_by('nombre')
+            return render(request, 'agenda/configuracion/listado.html', data)
+
+        criterio = (request.GET.get('criterio') or '').strip()
+        data['grupo'] = grupo
+        data['filtro'] = grupo
+        data['criterio'] = criterio
+        data['seccion'] = action_param
+        data['url_vars'] = (
+            f'&action={action_param}&grupo_id={grupo.id}'
+            + (f'&criterio={criterio}' if criterio else '')
+        )
+
+        if action_param == 'recursos':
+            listado = Recurso.objects.filter(
+                grupo_agenda=grupo, status=True
+            ).select_related('grupo_agenda', 'usuario')
+            if criterio:
+                listado = listado.filter(
+                    Q(nombre__icontains=criterio) | Q(descripcion__icontains=criterio)
+                )
+            data['listado_recursos'] = listado.order_by('orden', 'nombre')
+            return render(request, 'agenda/configuracion/recurso_listado.html', data)
+
+        if action_param == 'servicios':
+            listado = Servicio.objects.filter(
+                grupo_agenda=grupo, status=True
+            ).select_related('grupo_agenda').prefetch_related('recursos')
+            if criterio:
+                listado = listado.filter(
+                    Q(nombre__icontains=criterio) | Q(descripcion__icontains=criterio)
+                )
+            data['listado_servicios'] = listado.order_by('orden', 'nombre')
+            return render(request, 'agenda/configuracion/servicio_listado.html', data)
+
+        if action_param == 'excepciones':
+            listado = ExcepcionAgenda.objects.filter(
+                recurso__grupo_agenda=grupo, status=True,
+            ).select_related('recurso', 'recurso__grupo_agenda')
+            if criterio:
+                listado = listado.filter(
+                    Q(motivo__icontains=criterio) | Q(recurso__nombre__icontains=criterio)
+                )
+            data['listado_excepciones'] = listado.order_by('-fecha', 'recurso__nombre')
+            return render(request, 'agenda/configuracion/excepcion_listado.html', data)
+
+        if action_param == 'horarios':
+            data['recursos_para_horario'] = Recurso.objects.filter(
+                grupo_agenda=grupo, status=True,
+            ).order_by('orden', 'nombre')
+            data['recurso_inicial'] = request.GET.get('recurso', '')
+            return render(request, 'agenda/configuracion/horario_panel.html', data)
 
     criterio = (request.GET.get('criterio') or '').strip()
-    data['criterio'] = criterio
-    data['url_vars'] = (f'&criterio={criterio}' if criterio else '') + f'&action={seccion}'
-
     grupos_qs = GrupoAgenda.objects.filter(status=True).order_by('nombre')
+    if criterio:
+        grupos_qs = grupos_qs.filter(
+            Q(nombre__icontains=criterio) | Q(descripcion__icontains=criterio)
+        )
+    data['criterio'] = criterio
+    data['url_vars'] = f'&criterio={criterio}' if criterio else ''
     data['agenda_grupos'] = grupos_qs
-    data['monedas_por_grupo'] = {str(g.id): g.moneda for g in grupos_qs}
-
+    data['listado_grupos'] = grupos_qs
     data['count_grupos'] = grupos_qs.count()
-    data['count_recursos'] = Recurso.objects.filter(status=True).count()
-    data['count_servicios'] = Servicio.objects.filter(status=True).count()
-    data['count_excepciones'] = ExcepcionAgenda.objects.filter(status=True).count()
-
-    if seccion == 'grupos':
-        listado = grupos_qs
-        if criterio:
-            listado = listado.filter(Q(nombre__icontains=criterio) | Q(descripcion__icontains=criterio))
-        data['listado_grupos'] = listado
-
-    elif seccion == 'recursos':
-        listado = Recurso.objects.filter(status=True).select_related('grupo_agenda', 'usuario')
-        if criterio:
-            listado = listado.filter(Q(nombre__icontains=criterio) | Q(descripcion__icontains=criterio))
-        data['listado_recursos'] = listado.order_by('grupo_agenda', 'orden', 'nombre')
-
-    elif seccion == 'servicios':
-        listado = Servicio.objects.filter(status=True).select_related('grupo_agenda').prefetch_related('recursos')
-        if criterio:
-            listado = listado.filter(Q(nombre__icontains=criterio) | Q(descripcion__icontains=criterio))
-        data['listado_servicios'] = listado.order_by('grupo_agenda', 'orden', 'nombre')
-
-    elif seccion == 'excepciones':
-        listado = ExcepcionAgenda.objects.filter(status=True).select_related('recurso', 'recurso__grupo_agenda')
-        if criterio:
-            listado = listado.filter(Q(motivo__icontains=criterio) | Q(recurso__nombre__icontains=criterio))
-        data['listado_excepciones'] = listado.order_by('-fecha', 'recurso__nombre')
-
-    elif seccion == 'horarios':
-        data['recursos_para_horario'] = Recurso.objects.filter(status=True)\
-            .select_related('grupo_agenda').order_by('grupo_agenda', 'orden', 'nombre')
-        data['recurso_inicial'] = request.GET.get('recurso', '')
-
     return render(request, 'agenda/configuracion/listado.html', data)

@@ -1390,7 +1390,9 @@ class MotorFlujo:
             for ex in (cfg.get('extraer') or []):
                 if etq == 'ok' and ex.get('variable'):
                     raw_path = (ex.get('jsonpath') or '').lstrip('$').lstrip('.')
-                    self.estado.set_variable(ex['variable'], _get_path(body, raw_path))
+                    nombre_ex = resolver_expresion(ex['variable'], self.contexto())
+                    if isinstance(nombre_ex, str) and nombre_ex.strip():
+                        self.estado.set_variable(nombre_ex.strip(), _get_path(body, raw_path))
             self.estado.save()
             plantilla = cfg.get('plantilla_respuesta')
             if plantilla and (etq == 'ok' or cfg.get('enviar_respuesta_en_error')):
@@ -1481,7 +1483,9 @@ class MotorFlujo:
             for ex in (cfg.get('extraer') or []):
                 if etq == 'ok' and ex.get('variable'):
                     raw_path = (ex.get('jsonpath') or '').lstrip('$').lstrip('.')
-                    self.estado.set_variable(ex['variable'], _get_path(body, raw_path))
+                    nombre_ex = resolver_expresion(ex['variable'], self.contexto())
+                    if isinstance(nombre_ex, str) and nombre_ex.strip():
+                        self.estado.set_variable(nombre_ex.strip(), _get_path(body, raw_path))
             self.estado.save()
             plantilla = cfg.get('plantilla_respuesta')
             if plantilla and (etq == 'ok' or cfg.get('enviar_respuesta_en_error')):

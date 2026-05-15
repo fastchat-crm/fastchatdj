@@ -45,7 +45,7 @@ class RecursoForm(forms.ModelForm):
         model = Recurso
         fields = ['grupo_agenda', 'nombre', 'descripcion', 'color', 'usuario']
         widgets = {
-            'grupo_agenda': forms.Select(attrs={'class': 'form-select'}),
+            'grupo_agenda': forms.HiddenInput(),
             'nombre': forms.TextInput(attrs={'class': 'form-control', 'maxlength': 120,
                                              'placeholder': 'Ej: Dr. Pérez, Box 1'}),
             'descripcion': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'maxlength': 500,
@@ -63,6 +63,7 @@ class RecursoForm(forms.ModelForm):
         self.fields['usuario'].queryset = Usuario.objects.filter(is_active=True).order_by('first_name', 'last_name')
         self.fields['usuario'].required = False
         self.fields['usuario'].empty_label = '— Ninguno —'
+        self.fields['descripcion'].required = False
 
     def save(self, commit=True):
         obj = super().save(commit=False)
@@ -88,7 +89,7 @@ class ServicioForm(forms.ModelForm):
         model = Servicio
         fields = ['grupo_agenda', 'nombre', 'descripcion', 'duracion_min', 'precio', 'recursos']
         widgets = {
-            'grupo_agenda': forms.Select(attrs={'class': 'form-select'}),
+            'grupo_agenda': forms.HiddenInput(),
             'nombre': forms.TextInput(attrs={'class': 'form-control', 'maxlength': 150,
                                              'placeholder': 'Ej: Consulta general, Corte de cabello'}),
             'descripcion': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'maxlength': 500,
@@ -99,15 +100,22 @@ class ServicioForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
+        grupo_id = kwargs.pop('grupo_id', None)
         super().__init__(*args, **kwargs)
         self.fields['grupo_agenda'].queryset = GrupoAgenda.objects.filter(status=True).order_by('nombre')
         instance = kwargs.get('instance') or self.instance
-        if instance and instance.pk:
+        grupo_filtrar = None
+        if instance and instance.pk and instance.grupo_agenda_id:
+            grupo_filtrar = instance.grupo_agenda_id
+        elif grupo_id:
+            grupo_filtrar = int(grupo_id)
+        if grupo_filtrar:
             self.fields['recursos'].queryset = Recurso.objects.filter(
-                grupo_agenda=instance.grupo_agenda, status=True
+                grupo_agenda_id=grupo_filtrar, status=True,
             ).order_by('orden', 'nombre')
         else:
             self.fields['recursos'].queryset = Recurso.objects.filter(status=True).order_by('grupo_agenda', 'orden', 'nombre')
+        self.fields['descripcion'].required = False
 
     def save(self, commit=True):
         obj = super().save(commit=False)
@@ -138,8 +146,18 @@ class ExcepcionAgendaForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
+        grupo_id = kwargs.pop('grupo_id', None)
         super().__init__(*args, **kwargs)
-        self.fields['recurso'].queryset = Recurso.objects.filter(status=True).select_related('grupo_agenda').order_by('grupo_agenda', 'orden', 'nombre')
+        recursos_qs = Recurso.objects.filter(status=True).select_related('grupo_agenda')
+        instance = kwargs.get('instance') or self.instance
+        grupo_filtrar = None
+        if instance and instance.pk and instance.recurso_id:
+            grupo_filtrar = instance.recurso.grupo_agenda_id
+        elif grupo_id:
+            grupo_filtrar = int(grupo_id)
+        if grupo_filtrar:
+            recursos_qs = recursos_qs.filter(grupo_agenda_id=grupo_filtrar)
+        self.fields['recurso'].queryset = recursos_qs.order_by('grupo_agenda', 'orden', 'nombre')
         self.fields['hora_inicio'].required = False
         self.fields['hora_fin'].required = False
         self.fields['motivo'].required = False

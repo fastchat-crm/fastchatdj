@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/css/agenda/configuracion.css?v1.2">
+{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0" data-agenda-cfg
+         data-ruta="{{ ruta }}" data-csrf="{{ csrf_token }}" data-grupo-id="{{ grupo.pk }}">
+
+        {% include 'agenda/configuracion/_sub_header.html' %}
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <input type="hidden" name="action" value="excepciones">
+                    <input type="hidden" name="grupo_id" value="{{ grupo.pk }}">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Buscar excepción</label>
+                            <div class="input-group">
+                                <span class="input-group-text border-end-0">
+                                    <i class="fa fa-search text-muted"></i>
+                                </span>
+                                <input type="text" class="form-control border-start-0"
+                                       placeholder="Buscar por motivo o recurso"
+                                       name="criterio" value="{{ criterio }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6 d-flex gap-2 align-items-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i> Filtrar
+                            </button>
+                            {% if criterio %}
+                                <a href="?action=excepciones&grupo_id={{ grupo.pk }}" class="btn btn-default">
+                                    <i class="fas fa-times"></i> Limpiar
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <small class="text-muted">Bloquean un día completo, un rango horario o agregan horas extra para una fecha puntual.</small>
+                    <a href="javascript:void(0)" onclick="formModalAgenda('excepcion', 0, 'Nueva excepción de {{ grupo.nombre|escapejs }}', 'add')"
+                       class="btn btn-success btn-sm">
+                        <i class="fas fa-plus-circle me-1"></i> Nueva excepción
+                    </a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Recurso</th>
+                                <th>Tipo</th>
+                                <th>Rango horario</th>
+                                <th>Motivo</th>
+                                <th class="text-center" style="width:120px">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for e in listado_excepciones %}
+                            <tr>
+                                <td><strong>{{ e.fecha|date:"Y-m-d" }}</strong> <small class="text-muted">{{ e.fecha|date:"l" }}</small></td>
+                                <td>{{ e.recurso.nombre }}</td>
+                                <td>
+                                    {% if e.tipo == 'block_day' %}<span class="badge bg-danger">{{ e.get_tipo_display }}</span>
+                                    {% elif e.tipo == 'block_range' %}<span class="badge bg-warning text-dark">{{ e.get_tipo_display }}</span>
+                                    {% else %}<span class="badge bg-success">{{ e.get_tipo_display }}</span>{% endif %}
+                                </td>
+                                <td>
+                                    {% if e.hora_inicio and e.hora_fin %}
+                                        {{ e.hora_inicio|time:"H:i" }} – {{ e.hora_fin|time:"H:i" }}
+                                    {% else %}<small class="text-muted">Día completo</small>{% endif %}
+                                </td>
+                                <td>{{ e.motivo|default:"—" }}</td>
+                                <td class="text-center">
+                                    <div class="dropdown">
+                                        <button class="btn btn-icon" type="button" data-bs-toggle="dropdown"
+                                                style="background:none;border:none;">
+                                            <i class="fas fa-ellipsis-v"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            <li><a class="dropdown-item" href="javascript:void(0);"
+                                                   onclick="formModalAgenda('excepcion', {{ e.pk }}, 'Editar excepción', 'change')">
+                                                <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                            </a></li>
+                                            <li><a class="dropdown-item" href="javascript:void(0);"
+                                                   onclick="eliminarAgenda('excepcion', {{ e.pk }}, 'esta excepción')">
+                                                <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                            </a></li>
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="6" class="text-center text-muted py-4">Aún no hay excepciones para los recursos de este grupo.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% include 'agenda/configuracion/_modal_form.html' %}
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/forms.js?version=1"></script>
+    <script src="/static/js/agenda/configuracion.js?v1.0"></script>
+{% endblock %}

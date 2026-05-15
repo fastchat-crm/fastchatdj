@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/css/agenda/configuracion.css?v1.2">
+{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0" data-agenda-cfg
+         data-ruta="{{ ruta }}" data-csrf="{{ csrf_token }}" data-grupo-id="{{ grupo.pk }}">
+
+        {% include 'agenda/configuracion/_sub_header.html' %}
+
+        <div class="card">
+            <div class="card-body">
+                <div class="alert alert-info py-2 px-3 mb-3">
+                    <small>
+                        <strong>Cómo usar:</strong> elegí un recurso del grupo, arrastrá sobre la grilla para crear bloques de trabajo,
+                        arrastrá un bloque para moverlo, sus bordes para redimensionar y doble clic para editar. <strong>Guardá</strong> al terminar.
+                    </small>
+                </div>
+                <div class="row g-3 align-items-end mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Recurso</label>
+                        <select id="horarioRecursoSelect" class="form-select" data-initial="{{ recurso_inicial }}">
+                            <option value="">Seleccionar recurso...</option>
+                            {% for r in recursos_para_horario %}
+                                <option value="{{ r.id }}" {% if recurso_inicial == r.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ r.nombre }}
+                                </option>
+                            {% empty %}
+                                <option value="" disabled>Sin recursos en este grupo. Crealos primero.</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Slot por defecto (min)</label>
+                        <input type="number" id="slotMin" class="form-control" min="5" max="240" step="5" value="30">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Inicio del día</label>
+                        <input type="time" id="dayStart" class="form-control" value="06:00">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Fin del día</label>
+                        <input type="time" id="dayEnd" class="form-control" value="22:00">
+                    </div>
+                    <div class="col-md-2 d-flex gap-2 align-items-end">
+                        <button class="btn btn-outline-secondary btn-sm flex-fill" id="btnRebuildGrid" title="Redibujar">
+                            <i class="fa fa-sync"></i>
+                        </button>
+                        <button class="btn btn-success btn-sm flex-fill" id="btnSaveHorario" disabled>
+                            <i class="fa fa-save"></i> Guardar
+                        </button>
+                    </div>
+                </div>
+                <div class="agenda-grid" id="agendaGrid"></div>
+                <div class="d-flex justify-content-between mt-2">
+                    <small class="text-muted">Tip: el motor solo ofrece slots dentro de algún bloque de trabajo.</small>
+                    <button class="btn btn-sm btn-outline-danger" id="btnClearAllBlocks" disabled>
+                        <i class="fa fa-trash"></i> Borrar todos
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalBlockHorario" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar bloque de trabajo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Día</label>
+                            <input type="text" id="blockDay" class="form-control" disabled>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Slot (min)</label>
+                            <input type="number" id="blockSlot" class="form-control" min="5" max="240" step="5" value="30">
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Hora de inicio</label>
+                            <input type="time" id="blockStart" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Hora de fin</label>
+                            <input type="time" id="blockEnd" class="form-control">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger me-auto" id="btnDeleteBlock">
+                        <i class="fa fa-trash"></i> Eliminar
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnApplyBlock">Aplicar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/forms.js?version=1"></script>
+    <script src="/static/js/agenda/configuracion.js?v1.0"></script>
+    <script src="/static/js/agenda/horarios.js?v1.0"></script>
+{% endblock %}
