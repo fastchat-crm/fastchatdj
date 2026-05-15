@@ -13,8 +13,7 @@
     {% if request.user.is_authenticated %}
         <meta name="user_id" content="{{ request.user.pk }}">
     {% endif %}
-    {% load pwa %}
-    {% progressive_web_app_meta %}
+    {% include 'pwa/meta_tags.html' %}
     <meta name="islogged" content="{{ request.user.is_authenticated }}">
     <link href="{{ favicon }}" rel="shortcut icon"/>
     <link rel="stylesheet" href="/static/form-control.css?2.18">
