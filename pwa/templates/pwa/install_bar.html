@@ -53,7 +53,15 @@
         </button>
         <h6 class="pwa-ios-sheet__title">Instalar en iPhone</h6>
         <ol class="pwa-ios-sheet__steps">
-            <li>Tocá el botón <strong>Compartir</strong> en la barra de Safari.</li>
+            <li>Tocá el botón <strong>Compartir</strong>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                     width="16" height="16" style="vertical-align:-3px">
+                    <path d="M12 17V3"></path><path d="m6 11 6-6 6 6"></path>
+                    <path d="M19 21H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+                    <path d="M16 10h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2"></path>
+                </svg>
+                en la barra de Safari.</li>
             <li>Elegí <strong>Agregar a la pantalla de inicio</strong>.</li>
             <li>Confirmá tocando <strong>Agregar</strong>.</li>
         </ol>
@@ -95,10 +103,6 @@
             return ua.includes('safari') && !ua.includes('chrome') && !ua.includes('crios') && !ua.includes('fxios');
         }
 
-        function isAndroid() {
-            return /android/i.test(window.navigator.userAgent);
-        }
-
         function dismissed() {
             if (force) return false;
             const ts = parseInt(localStorage.getItem(BAR_KEY) || '0', 10);
@@ -111,18 +115,18 @@
             try { localStorage.setItem(BAR_KEY, String(Date.now())); } catch (e) {}
         }
 
-        function showBar() {
+        function showBar(mode) {
             if (!force && (dismissed() || isStandalone())) return;
-            if (deferredPrompt) {
+            if (mode === 'native') {
                 btnLabel.textContent = 'Instalar';
-                subtitle.textContent = 'Accede más rápido desde tu dispositivo.';
-            } else if (isIOS()) {
-                btnLabel.textContent = 'Cómo';
-                subtitle.textContent = 'Tocá aquí y seguí los pasos para iPhone.';
+                subtitle.textContent = 'Acceso rápido desde tu dispositivo.';
+            } else if (mode === 'ios') {
+                btnLabel.textContent = 'Cómo instalar';
+                subtitle.textContent = 'Agregalo a tu pantalla de inicio en 3 pasos.';
             } else {
-                btnLabel.textContent = 'Cómo';
-                subtitle.textContent = 'Agregá esta app a tu pantalla de inicio.';
+                return;
             }
+            bar.dataset.mode = mode;
             bar.hidden = false;
             requestAnimationFrame(() => bar.classList.add('is-visible'));
         }
@@ -132,34 +136,25 @@
             setTimeout(() => { bar.hidden = true; }, 220);
         }
 
-        function showGenericSheet() {
-            iosSheet.querySelector('.pwa-ios-sheet__title').textContent = 'Instalar la app';
-            const ol = iosSheet.querySelector('.pwa-ios-sheet__steps');
-            if (isAndroid()) {
-                ol.innerHTML = '<li>Abrí el menú de tu navegador (los 3 puntos arriba a la derecha).</li>' +
-                               '<li>Elegí <strong>Instalar app</strong> o <strong>Agregar a pantalla de inicio</strong>.</li>' +
-                               '<li>Confirmá la instalación.</li>';
-            } else if (isIOS()) {
-                ol.innerHTML = '<li>Tocá el botón <strong>Compartir</strong> en la barra de Safari.</li>' +
-                               '<li>Elegí <strong>Agregar a la pantalla de inicio</strong>.</li>' +
-                               '<li>Confirmá tocando <strong>Agregar</strong>.</li>';
-            } else {
-                ol.innerHTML = '<li>Abrí el menú del navegador.</li>' +
-                               '<li>Buscá <strong>Instalar</strong> o <strong>Crear acceso directo</strong>.</li>' +
-                               '<li>Confirmá la creación.</li>';
-            }
+        function showIosSheet() {
             iosSheet.hidden = false;
             requestAnimationFrame(() => iosSheet.classList.add('is-visible'));
+        }
+
+        function hideIosSheet() {
+            iosSheet.classList.remove('is-visible');
+            setTimeout(() => { iosSheet.hidden = true; }, 220);
         }
 
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
-            showBar();
+            showBar('native');
         });
 
         btnInstall.addEventListener('click', async () => {
-            if (deferredPrompt) {
+            const mode = bar.dataset.mode;
+            if (mode === 'native' && deferredPrompt) {
                 deferredPrompt.prompt();
                 const choice = await deferredPrompt.userChoice;
                 deferredPrompt = null;
@@ -167,7 +162,9 @@
                 if (choice && choice.outcome === 'accepted') rememberDismiss();
                 return;
             }
-            showGenericSheet();
+            if (mode === 'ios') {
+                showIosSheet();
+            }
         });
 
         btnClose.addEventListener('click', () => {
@@ -175,16 +172,9 @@
             hideBar();
         });
 
-        btnIosClose.addEventListener('click', () => {
-            iosSheet.classList.remove('is-visible');
-            setTimeout(() => { iosSheet.hidden = true; }, 220);
-        });
-
+        btnIosClose.addEventListener('click', hideIosSheet);
         iosSheet.addEventListener('click', (ev) => {
-            if (ev.target === iosSheet) {
-                iosSheet.classList.remove('is-visible');
-                setTimeout(() => { iosSheet.hidden = true; }, 220);
-            }
+            if (ev.target === iosSheet) hideIosSheet();
         });
 
         window.addEventListener('appinstalled', () => {
@@ -193,8 +183,10 @@
             deferredPrompt = null;
         });
 
-        if (force || (!isStandalone() && !dismissed())) {
-            setTimeout(showBar, 1200);
+        if (force) {
+            setTimeout(() => showBar(deferredPrompt ? 'native' : 'ios'), 800);
+        } else if (isIOS() && isSafari() && !isStandalone() && !dismissed()) {
+            setTimeout(() => showBar('ios'), 1200);
         }
     })();
 </script>
