@@ -15,8 +15,8 @@ from .models import GrupoAgenda, Recurso, Servicio
 @secure_module
 def servicioView(request):
     data = {
-        'titulo': 'Services',
-        'descripcion': 'Bookable services with price and duration.',
+        'titulo': 'Servicios',
+        'descripcion': 'Servicios reservables con precio y duración.',
         'ruta': request.path,
     }
     addData(request, data)
@@ -46,17 +46,17 @@ def servicioView(request):
                     grupo = GrupoAgenda.objects.get(pk=grupo_pk, status=True)
                     nombre = (request.POST.get('nombre') or '').strip()
                     if not nombre:
-                        return JsonResponse({'error': True, 'message': 'Name is required.'})
+                        return JsonResponse({'error': True, 'message': 'El nombre es obligatorio.'})
                     descripcion = (request.POST.get('descripcion') or '').strip()
                     duracion = int(request.POST.get('duracion_min') or 30)
                     if duracion < 5:
-                        return JsonResponse({'error': True, 'message': 'Duration must be at least 5 minutes.'})
+                        return JsonResponse({'error': True, 'message': 'La duración debe ser de al menos 5 minutos.'})
                     try:
                         precio = Decimal(request.POST.get('precio') or '0')
                     except InvalidOperation:
-                        return JsonResponse({'error': True, 'message': 'Invalid price.'})
+                        return JsonResponse({'error': True, 'message': 'Precio inválido.'})
                     if precio < 0:
-                        return JsonResponse({'error': True, 'message': 'Price cannot be negative.'})
+                        return JsonResponse({'error': True, 'message': 'El precio no puede ser negativo.'})
                     siguiente_orden = Servicio.objects.filter(grupo_agenda=grupo, status=True).count()
                     serv = Servicio(
                         grupo_agenda=grupo, nombre=nombre, descripcion=descripcion,
@@ -68,7 +68,7 @@ def servicioView(request):
                         serv.recursos.set(
                             Recurso.objects.filter(pk__in=recursos_ids, grupo_agenda=grupo, status=True)
                         )
-                    log(f'Service {serv.nombre} created', request, 'add', obj=serv.id)
+                    log(f'Servicio {serv.nombre} creado', request, 'add', obj=serv.id)
                     return JsonResponse({'error': False, 'reload': True})
 
                 if action == 'change':
@@ -80,13 +80,13 @@ def servicioView(request):
                     try:
                         serv.precio = Decimal(request.POST.get('precio') or str(serv.precio))
                     except InvalidOperation:
-                        return JsonResponse({'error': True, 'message': 'Invalid price.'})
+                        return JsonResponse({'error': True, 'message': 'Precio inválido.'})
                     serv.save(request=request)
                     recursos_ids = request.POST.getlist('recursos[]') or request.POST.getlist('recursos')
                     serv.recursos.set(
                         Recurso.objects.filter(pk__in=recursos_ids, grupo_agenda=serv.grupo_agenda, status=True)
                     )
-                    log(f'Service {serv.nombre} updated', request, 'change', obj=serv.id)
+                    log(f'Servicio {serv.nombre} actualizado', request, 'change', obj=serv.id)
                     return JsonResponse({'error': False, 'reload': True})
 
                 if action == 'delete':
@@ -94,7 +94,7 @@ def servicioView(request):
                     serv = Servicio.objects.get(pk=pk, status=True)
                     serv.status = False
                     serv.save(request=request)
-                    log(f'Service {serv.nombre} deleted', request, 'del', obj=serv.id)
+                    log(f'Servicio {serv.nombre} eliminado', request, 'del', obj=serv.id)
                     return JsonResponse({'error': False})
 
                 if action == 'reorder':
@@ -114,9 +114,9 @@ def servicioView(request):
                     return JsonResponse({'error': False, 'items': items})
 
         except GrupoAgenda.DoesNotExist:
-            return JsonResponse({'error': True, 'message': 'Agenda group not found.'})
+            return JsonResponse({'error': True, 'message': 'Grupo de agenda no encontrado.'})
         except Servicio.DoesNotExist:
-            return JsonResponse({'error': True, 'message': 'Service not found.'})
+            return JsonResponse({'error': True, 'message': 'Servicio no encontrado.'})
         except Exception as ex:
             return JsonResponse({'error': True, 'message': f'Error: {ex}'})
 

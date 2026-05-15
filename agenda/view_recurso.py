@@ -14,8 +14,8 @@ from .models import GrupoAgenda, Recurso
 @secure_module
 def recursoView(request):
     data = {
-        'titulo': 'Resources',
-        'descripcion': 'People, rooms or assets that can host appointments.',
+        'titulo': 'Recursos',
+        'descripcion': 'Personas, salas o equipos que pueden atender turnos.',
         'ruta': request.path,
     }
     addData(request, data)
@@ -42,7 +42,7 @@ def recursoView(request):
                     grupo = GrupoAgenda.objects.get(pk=grupo_pk, status=True)
                     nombre = (request.POST.get('nombre') or '').strip()
                     if not nombre:
-                        return JsonResponse({'error': True, 'message': 'Name is required.'})
+                        return JsonResponse({'error': True, 'message': 'El nombre es obligatorio.'})
                     color = (request.POST.get('color') or '#0d6efd').strip()
                     descripcion = (request.POST.get('descripcion') or '').strip()
                     usuario_id = request.POST.get('usuario') or None
@@ -54,7 +54,7 @@ def recursoView(request):
                     if usuario_id:
                         rec.usuario_id = int(usuario_id)
                     rec.save(request=request)
-                    log(f'Resource {rec.nombre} created', request, 'add', obj=rec.id)
+                    log(f'Recurso {rec.nombre} creado', request, 'add', obj=rec.id)
                     return JsonResponse({'error': False, 'reload': True})
 
                 if action == 'change':
@@ -66,7 +66,7 @@ def recursoView(request):
                     usuario_id = request.POST.get('usuario') or None
                     rec.usuario_id = int(usuario_id) if usuario_id else None
                     rec.save(request=request)
-                    log(f'Resource {rec.nombre} updated', request, 'change', obj=rec.id)
+                    log(f'Recurso {rec.nombre} actualizado', request, 'change', obj=rec.id)
                     return JsonResponse({'error': False, 'reload': True})
 
                 if action == 'delete':
@@ -74,7 +74,7 @@ def recursoView(request):
                     rec = Recurso.objects.get(pk=pk, status=True)
                     rec.status = False
                     rec.save(request=request)
-                    log(f'Resource {rec.nombre} deleted', request, 'del', obj=rec.id)
+                    log(f'Recurso {rec.nombre} eliminado', request, 'del', obj=rec.id)
                     return JsonResponse({'error': False})
 
                 if action == 'reorder':
@@ -86,9 +86,9 @@ def recursoView(request):
                     return JsonResponse({'error': False})
 
         except GrupoAgenda.DoesNotExist:
-            return JsonResponse({'error': True, 'message': 'Agenda group not found.'})
+            return JsonResponse({'error': True, 'message': 'Grupo de agenda no encontrado.'})
         except Recurso.DoesNotExist:
-            return JsonResponse({'error': True, 'message': 'Resource not found.'})
+            return JsonResponse({'error': True, 'message': 'Recurso no encontrado.'})
         except Exception as ex:
             return JsonResponse({'error': True, 'message': f'Error: {ex}'})
 

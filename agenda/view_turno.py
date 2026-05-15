@@ -2,7 +2,6 @@ from datetime import datetime
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import render
 
@@ -37,8 +36,8 @@ def turnoView(request):
     fecha_hasta = (request.GET.get('hasta') or '').strip()
 
     data = {
-        'titulo': 'Appointments',
-        'descripcion': 'Filterable list of all bookings.',
+        'titulo': 'Turnos',
+        'descripcion': 'Listado filtrable de todos los turnos.',
         'ruta': request.path,
         'grupos': grupos,
         'recursos': recursos,
@@ -59,11 +58,11 @@ def turnoView(request):
                     pk = int(request.POST['pk'])
                     nuevo = request.POST.get('estado')
                     if nuevo not in dict(APPOINTMENT_STATUS_CHOICES):
-                        return JsonResponse({'error': True, 'message': 'Invalid status.'})
+                        return JsonResponse({'error': True, 'message': 'Estado inválido.'})
                     t = Turno.objects.get(pk=pk, status=True)
                     t.estado = nuevo
                     t.save(request=request)
-                    log(f'Appointment {t.id} marked {nuevo}', request, 'change', obj=t.id)
+                    log(f'Turno {t.id} marcado como {nuevo}', request, 'change', obj=t.id)
                     return JsonResponse({'error': False, 'reload': True})
 
                 if action == 'delete':
@@ -71,10 +70,10 @@ def turnoView(request):
                     t = Turno.objects.get(pk=pk, status=True)
                     t.status = False
                     t.save(request=request)
-                    log(f'Appointment {t.id} removed', request, 'del', obj=t.id)
+                    log(f'Turno {t.id} eliminado', request, 'del', obj=t.id)
                     return JsonResponse({'error': False})
         except Turno.DoesNotExist:
-            return JsonResponse({'error': True, 'message': 'Appointment not found.'})
+            return JsonResponse({'error': True, 'message': 'Turno no encontrado.'})
         except Exception as ex:
             return JsonResponse({'error': True, 'message': f'Error: {ex}'})
 

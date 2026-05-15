@@ -1,18 +1,18 @@
 {% extends 'base.html' %}
 
 {% block head %}
-    <link rel="stylesheet" href="/static/css/agenda/turno.css?v1.0">
+    <link rel="stylesheet" href="/static/css/agenda/turno.css?v1.1">
 {% endblock %}
 
 {% block content %}
     <div class="container-fluid p-0">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
-                <h4 class="mb-0">Appointments</h4>
-                <small class="text-muted">{{ list_count|default:0 }} appointment{{ list_count|default:0|pluralize }} matched</small>
+                <h4 class="mb-0">Turnos</h4>
+                <small class="text-muted">{{ list_count|default:0 }} turno{{ list_count|default:0|pluralize:"s" }} encontrado{{ list_count|default:0|pluralize:"s" }}</small>
             </div>
             <a href="/agenda/calendario/" class="btn btn-outline-primary">
-                <i class="fa fa-calendar"></i> Calendar view
+                <i class="fa fa-calendar"></i> Vista calendario
             </a>
         </div>
 
@@ -21,9 +21,9 @@
                 <form method="GET" class="mb-0">
                     <div class="row g-3 align-items-end">
                         <div class="col-md-3">
-                            <label class="form-label">Group</label>
+                            <label class="form-label">Grupo</label>
                             <select name="grupo" class="form-select" onchange="this.form.submit()">
-                                <option value="">All</option>
+                                <option value="">Todos</option>
                                 {% for g in grupos %}
                                     <option value="{{ g.id }}" {% if grupo_actual and grupo_actual.id == g.id %}selected{% endif %}>
                                         {{ g.nombre }}
@@ -32,9 +32,9 @@
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Resource</label>
+                            <label class="form-label">Recurso</label>
                             <select name="recurso" class="form-select">
-                                <option value="">All</option>
+                                <option value="">Todos</option>
                                 {% for r in recursos %}
                                     <option value="{{ r.id }}" {% if recurso_actual and recurso_actual.id == r.id %}selected{% endif %}>
                                         {{ r.nombre }}
@@ -43,29 +43,29 @@
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label">Status</label>
+                            <label class="form-label">Estado</label>
                             <select name="estado" class="form-select">
-                                <option value="">All</option>
+                                <option value="">Todos</option>
                                 {% for code, label in status_choices %}
                                     <option value="{{ code }}" {% if estado_filtro == code %}selected{% endif %}>{{ label }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label">From</label>
+                            <label class="form-label">Desde</label>
                             <input type="date" name="desde" class="form-control" value="{{ fecha_desde }}">
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label">To</label>
+                            <label class="form-label">Hasta</label>
                             <input type="date" name="hasta" class="form-control" value="{{ fecha_hasta }}">
                         </div>
                         <div class="col-12 d-flex gap-2">
                             <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-search me-1"></i> Filter
+                                <i class="fas fa-search me-1"></i> Filtrar
                             </button>
                             {% if url_vars %}
                                 <a href="{{ request.path }}" class="btn btn-default">
-                                    <i class="fas fa-times"></i> Clear
+                                    <i class="fas fa-times"></i> Limpiar
                                 </a>
                             {% endif %}
                         </div>
@@ -79,15 +79,15 @@
                 <table class="table table-striped align-middle">
                     <thead>
                         <tr>
-                            <th>When</th>
-                            <th>Contact</th>
-                            <th>Service</th>
-                            <th>Resource</th>
-                            <th>Status</th>
-                            <th>Origin</th>
-                            <th>Price</th>
-                            <th>Reminder</th>
-                            <th style="width:200px">Actions</th>
+                            <th>Cuándo</th>
+                            <th>Contacto</th>
+                            <th>Servicio</th>
+                            <th>Recurso</th>
+                            <th>Estado</th>
+                            <th>Origen</th>
+                            <th>Precio</th>
+                            <th>Recordatorio</th>
+                            <th style="width:200px">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -116,16 +116,16 @@
                             <td><strong>{{ t.precio_cobrado }}</strong> <small>{{ t.recurso.grupo_agenda.moneda }}</small></td>
                             <td>
                                 {% if t.recordatorio_enviado %}
-                                    <i class="fa fa-check-circle text-success" title="Reminder sent"></i>
+                                    <i class="fa fa-check-circle text-success" title="Recordatorio enviado"></i>
                                 {% else %}
-                                    <i class="fa fa-clock text-muted" title="Pending"></i>
+                                    <i class="fa fa-clock text-muted" title="Pendiente"></i>
                                 {% endif %}
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm">
                                     <button type="button" class="btn btn-outline-secondary dropdown-toggle"
                                             data-bs-toggle="dropdown">
-                                        Status
+                                        Estado
                                     </button>
                                     <ul class="dropdown-menu">
                                         {% for code, label in status_choices %}
@@ -135,7 +135,7 @@
                                             </li>
                                         {% endfor %}
                                     </ul>
-                                    <button class="btn btn-outline-danger btn-del" data-id="{{ t.id }}" title="Delete">
+                                    <button class="btn btn-outline-danger btn-del" data-id="{{ t.id }}" title="Eliminar">
                                         <i class="fa fa-trash"></i>
                                     </button>
                                 </div>
@@ -143,7 +143,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="9" class="text-center text-muted">No appointments found.</td>
+                            <td colspan="9" class="text-center text-muted">No se encontraron turnos.</td>
                         </tr>
                     {% endfor %}
                     </tbody>
@@ -172,7 +172,7 @@
                 location.reload();
             }));
             document.querySelectorAll('.btn-del').forEach(b => b.addEventListener('click', async () => {
-                if (!confirm('Remove this appointment from the list? (soft delete)')) return;
+                if (!confirm('¿Quitar este turno del listado? (eliminación lógica)')) return;
                 const j = await postAction({action: 'delete', id: b.dataset.id});
                 if (j.error) { alert(j.message || 'Error'); return; }
                 location.reload();

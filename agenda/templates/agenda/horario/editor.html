@@ -1,14 +1,14 @@
 {% extends 'base.html' %}
 
 {% block head %}
-    <link rel="stylesheet" href="/static/css/agenda/horario.css?v1.0">
+    <link rel="stylesheet" href="/static/css/agenda/horario.css?v1.1">
 {% endblock %}
 
 {% block content %}
     <div class="container-fluid p-0">
         <nav aria-label="breadcrumb" class="mb-2">
             <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="/agenda/grupos/">Agenda groups</a></li>
+                <li class="breadcrumb-item"><a href="/agenda/grupos/">Grupos de agenda</a></li>
                 <li class="breadcrumb-item"><a href="/agenda/recursos/?grupo={{ recurso.grupo_agenda.id }}">{{ recurso.grupo_agenda.nombre }}</a></li>
                 <li class="breadcrumb-item active">{{ recurso.nombre }}</li>
             </ol>
@@ -17,13 +17,13 @@
         <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
             <i class="fa fa-calendar-week fa-2x"></i>
             <div>
-                <strong>How to use this editor</strong><br>
+                <strong>Cómo usar este editor</strong><br>
                 <small>
-                    <strong>Click and drag</strong> on the grid to create a new working block.
-                    <strong>Drag a block</strong> to move it within the same day.
-                    <strong>Drag the top/bottom edge</strong> of a block to resize.
-                    <strong>Click a block then "Delete"</strong> to remove it.
-                    Press <strong>Save</strong> to persist all changes.
+                    <strong>Hacé clic y arrastrá</strong> sobre la grilla para crear un nuevo bloque de trabajo.
+                    <strong>Arrastrá un bloque</strong> para moverlo dentro del mismo día.
+                    <strong>Arrastrá el borde superior/inferior</strong> de un bloque para redimensionarlo.
+                    <strong>Doble clic en un bloque y "Eliminar"</strong> para quitarlo.
+                    Tocá <strong>Guardar</strong> para persistir todos los cambios.
                 </small>
             </div>
         </div>
@@ -31,7 +31,7 @@
         <div class="card mb-3">
             <div class="card-body d-flex flex-wrap gap-3 align-items-end">
                 <div>
-                    <label class="form-label">Resource</label>
+                    <label class="form-label">Recurso</label>
                     <div class="fw-bold">
                         <span class="badge-dot" style="background:{{ recurso.color }}"></span>
                         {{ recurso.nombre }}
@@ -39,23 +39,23 @@
                     </div>
                 </div>
                 <div>
-                    <label class="form-label">Default slot (minutes)</label>
+                    <label class="form-label">Slot por defecto (minutos)</label>
                     <input type="number" id="slotMin" class="form-control" min="5" max="240" step="5" value="{{ default_slot_min }}">
                 </div>
                 <div>
-                    <label class="form-label">Day start</label>
+                    <label class="form-label">Inicio del día</label>
                     <input type="time" id="dayStart" class="form-control" value="06:00">
                 </div>
                 <div>
-                    <label class="form-label">Day end</label>
+                    <label class="form-label">Fin del día</label>
                     <input type="time" id="dayEnd" class="form-control" value="22:00">
                 </div>
                 <div class="ms-auto d-flex gap-2">
                     <button class="btn btn-outline-secondary" id="btnRebuild">
-                        <i class="fa fa-sync"></i> Rebuild grid
+                        <i class="fa fa-sync"></i> Redibujar grilla
                     </button>
                     <button class="btn btn-success" id="btnSave">
-                        <i class="fa fa-save"></i> Save schedule
+                        <i class="fa fa-save"></i> Guardar horario
                     </button>
                 </div>
             </div>
@@ -66,10 +66,10 @@
                 <div class="agenda-grid" id="agendaGrid"></div>
                 <div class="d-flex justify-content-between mt-3">
                     <small class="text-muted">
-                        Tip: blocks can overlap visually but the booking engine will offer slots only inside any working block.
+                        Tip: los bloques pueden superponerse visualmente, pero el motor de reservas solo ofrecerá slots dentro de algún bloque de trabajo.
                     </small>
                     <button class="btn btn-sm btn-outline-danger" id="btnClearAll">
-                        <i class="fa fa-trash"></i> Clear all blocks
+                        <i class="fa fa-trash"></i> Borrar todos los bloques
                     </button>
                 </div>
             </div>
@@ -80,37 +80,37 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit working block</h5>
+                    <h5 class="modal-title">Editar bloque de trabajo</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label">Day</label>
+                            <label class="form-label">Día</label>
                             <input type="text" id="blockDay" class="form-control" disabled>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Slot duration (min)</label>
+                            <label class="form-label">Duración del slot (min)</label>
                             <input type="number" id="blockSlot" class="form-control" min="5" max="240" step="5" value="30">
                         </div>
                     </div>
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Start time</label>
+                            <label class="form-label">Hora de inicio</label>
                             <input type="time" id="blockStart" class="form-control">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">End time</label>
+                            <label class="form-label">Hora de fin</label>
                             <input type="time" id="blockEnd" class="form-control">
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-danger me-auto" id="btnDeleteBlock">
-                        <i class="fa fa-trash"></i> Delete
+                        <i class="fa fa-trash"></i> Eliminar
                     </button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="btnApplyBlock">Apply</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnApplyBlock">Aplicar</button>
                 </div>
             </div>
         </div>
@@ -125,7 +125,7 @@
             const grid = document.getElementById('agendaGrid');
             const modalEl = document.getElementById('modalBlock');
             const modal = new bootstrap.Modal(modalEl);
-            const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
             const STEP_MIN = 15;
             const PX_PER_MIN = 1.0;
             let dayStart = '06:00';
@@ -341,7 +341,7 @@
                 modal.hide();
             });
             document.getElementById('btnClearAll').addEventListener('click', () => {
-                if (!confirm('Remove all working blocks for this resource?')) return;
+                if (!confirm('¿Borrar todos los bloques de trabajo de este recurso?')) return;
                 blocks.forEach(b => { if (b.id) b._deleted = true; });
                 blocks = blocks.filter(b => b.id);
                 renderBlocks();
@@ -366,7 +366,7 @@
                 const j = await r.json();
                 btn.disabled = false;
                 if (j.error) { alert(j.message || 'Error'); return; }
-                alert(`Schedule saved (${j.count} blocks).`);
+                alert(`Horario guardado (${j.count} bloques).`);
                 location.reload();
             });
 

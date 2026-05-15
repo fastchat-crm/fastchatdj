@@ -14,8 +14,8 @@ from .models import EXCEPTION_TYPE_CHOICES, ExcepcionAgenda, GrupoAgenda, Recurs
 @secure_module
 def excepcionView(request):
     data = {
-        'titulo': 'Schedule exceptions',
-        'descripcion': 'Block days, block hour ranges or add extra hours for a resource.',
+        'titulo': 'Excepciones de agenda',
+        'descripcion': 'Bloquear días, bloquear rangos o agregar horas extra para un recurso.',
         'ruta': request.path,
         'tipos_excepcion': EXCEPTION_TYPE_CHOICES,
     }
@@ -59,14 +59,14 @@ def excepcionView(request):
                     fecha = datetime.strptime(request.POST['fecha'], '%Y-%m-%d').date()
                     tipo = request.POST.get('tipo')
                     if tipo not in dict(EXCEPTION_TYPE_CHOICES):
-                        return JsonResponse({'error': True, 'message': 'Invalid exception type.'})
+                        return JsonResponse({'error': True, 'message': 'Tipo de excepción inválido.'})
                     hora_inicio = request.POST.get('hora_inicio') or None
                     hora_fin = request.POST.get('hora_fin') or None
                     if tipo in ('block_range', 'add_range'):
                         if not hora_inicio or not hora_fin:
-                            return JsonResponse({'error': True, 'message': 'Hour range requires start and end.'})
+                            return JsonResponse({'error': True, 'message': 'El rango horario requiere hora de inicio y fin.'})
                         if hora_inicio >= hora_fin:
-                            return JsonResponse({'error': True, 'message': 'Start must be before end.'})
+                            return JsonResponse({'error': True, 'message': 'La hora de inicio debe ser anterior a la de fin.'})
                     motivo = (request.POST.get('motivo') or '').strip()
                     ex = ExcepcionAgenda(
                         recurso=rec, fecha=fecha, tipo=tipo,
@@ -75,7 +75,7 @@ def excepcionView(request):
                         motivo=motivo,
                     )
                     ex.save(request=request)
-                    log(f'Schedule exception {ex.id} created', request, 'add', obj=ex.id)
+                    log(f'Excepción de agenda {ex.id} creada', request, 'add', obj=ex.id)
                     return JsonResponse({'error': False, 'reload': True})
 
                 if action == 'change':
@@ -87,14 +87,14 @@ def excepcionView(request):
                     hora_fin = request.POST.get('hora_fin') or None
                     if ex.tipo in ('block_range', 'add_range'):
                         if not hora_inicio or not hora_fin:
-                            return JsonResponse({'error': True, 'message': 'Hour range requires start and end.'})
+                            return JsonResponse({'error': True, 'message': 'El rango horario requiere hora de inicio y fin.'})
                         if hora_inicio >= hora_fin:
-                            return JsonResponse({'error': True, 'message': 'Start must be before end.'})
+                            return JsonResponse({'error': True, 'message': 'La hora de inicio debe ser anterior a la de fin.'})
                     ex.hora_inicio = hora_inicio if ex.tipo != 'block_day' else None
                     ex.hora_fin = hora_fin if ex.tipo != 'block_day' else None
                     ex.motivo = (request.POST.get('motivo') or '').strip()
                     ex.save(request=request)
-                    log(f'Schedule exception {ex.id} updated', request, 'change', obj=ex.id)
+                    log(f'Excepción de agenda {ex.id} actualizada', request, 'change', obj=ex.id)
                     return JsonResponse({'error': False, 'reload': True})
 
                 if action == 'delete':
@@ -102,13 +102,13 @@ def excepcionView(request):
                     ex = ExcepcionAgenda.objects.get(pk=pk, status=True)
                     ex.status = False
                     ex.save(request=request)
-                    log(f'Schedule exception {ex.id} deleted', request, 'del', obj=ex.id)
+                    log(f'Excepción de agenda {ex.id} eliminada', request, 'del', obj=ex.id)
                     return JsonResponse({'error': False})
 
         except Recurso.DoesNotExist:
-            return JsonResponse({'error': True, 'message': 'Resource not found.'})
+            return JsonResponse({'error': True, 'message': 'Recurso no encontrado.'})
         except ExcepcionAgenda.DoesNotExist:
-            return JsonResponse({'error': True, 'message': 'Exception not found.'})
+            return JsonResponse({'error': True, 'message': 'Excepción no encontrada.'})
         except Exception as ex:
             return JsonResponse({'error': True, 'message': f'Error: {ex}'})
 

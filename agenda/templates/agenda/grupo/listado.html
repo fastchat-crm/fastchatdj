@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block head %}
-    <link rel="stylesheet" href="/static/css/agenda/grupo.css?v1.0">
+    <link rel="stylesheet" href="/static/css/agenda/grupo.css?v1.1">
 {% endblock %}
 
 {% block content %}
@@ -9,11 +9,11 @@
         <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
             <i class="fa fa-calendar-alt fa-2x"></i>
             <div>
-                <strong>What is an agenda group?</strong><br>
+                <strong>¿Qué es un grupo de agenda?</strong><br>
                 <small>
-                    An <em>Agenda group</em> bundles all booking configuration: resources (people/rooms),
-                    services (with price and duration), working schedules and exceptions.
-                    A WhatsApp session points to one group to enable chatbot booking.
+                    Un <em>Grupo de agenda</em> agrupa toda la configuración de turnos: recursos (personas/salas),
+                    servicios (con precio y duración), horarios laborales y excepciones.
+                    Una sesión de WhatsApp apunta a un grupo para habilitar la reserva por chatbot.
                 </small>
             </div>
         </div>
@@ -23,24 +23,24 @@
                 <form method="GET" class="mb-0">
                     <div class="row g-3 align-items-end">
                         <div class="col-md-8">
-                            <label class="form-label">Search</label>
+                            <label class="form-label">Búsqueda</label>
                             <div class="input-group">
                                 <span class="input-group-text border-end-0">
                                     <i class="fa fa-search text-muted"></i>
                                 </span>
                                 <input type="text" class="form-control border-start-0"
-                                       placeholder="Search by name or description" name="criterio"
+                                       placeholder="Buscar por nombre o descripción" name="criterio"
                                        value="{{ criterio|default:'' }}">
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="d-flex gap-2">
                                 <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-search me-1"></i> Filter
+                                    <i class="fas fa-search me-1"></i> Filtrar
                                 </button>
                                 {% if url_vars %}
                                     <a href="{{ request.path }}" class="btn btn-default">
-                                        <i class="fas fa-times"></i> Clear
+                                        <i class="fas fa-times"></i> Limpiar
                                     </a>
                                 {% endif %}
                             </div>
@@ -52,13 +52,13 @@
 
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
-                <h4 class="mb-0">Agenda groups</h4>
+                <h4 class="mb-0">Grupos de agenda</h4>
                 <small class="text-muted">
-                    {{ list_count|default:0 }} group{{ list_count|default:0|pluralize }} found
+                    {{ list_count|default:0 }} grupo{{ list_count|default:0|pluralize:"s" }} encontrado{{ list_count|default:0|pluralize:"s" }}
                 </small>
             </div>
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalGrupoAgenda">
-                <i class="fa fa-plus"></i> New group
+                <i class="fa fa-plus"></i> Nuevo grupo
             </button>
         </div>
 
@@ -67,14 +67,14 @@
                 <table class="table table-striped align-middle">
                     <thead>
                         <tr>
-                            <th>Name</th>
-                            <th>Description</th>
-                            <th>Currency</th>
-                            <th>Reminder (h)</th>
-                            <th>Timezone</th>
-                            <th>Resources</th>
-                            <th>Services</th>
-                            <th style="width:170px">Actions</th>
+                            <th>Nombre</th>
+                            <th>Descripción</th>
+                            <th>Moneda</th>
+                            <th>Recordatorio (h)</th>
+                            <th>Zona horaria</th>
+                            <th>Recursos</th>
+                            <th>Servicios</th>
+                            <th style="width:170px">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -112,7 +112,7 @@
                     {% empty %}
                         <tr>
                             <td colspan="8" class="text-center text-muted">
-                                No agenda groups yet. Create the first to start configuring resources and services.
+                                Aún no hay grupos de agenda. Creá el primero para empezar a configurar recursos y servicios.
                             </td>
                         </tr>
                     {% endfor %}
@@ -128,7 +128,7 @@
             <form class="modal-content" id="formGrupoAgenda">
                 {% csrf_token %}
                 <div class="modal-header">
-                    <h5 class="modal-title">New agenda group</h5>
+                    <h5 class="modal-title">Nuevo grupo de agenda</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -136,12 +136,12 @@
                     <input type="hidden" name="pk" value="">
                     <div class="row g-3 mb-3">
                         <div class="col-md-8">
-                            <label class="form-label">Name *</label>
+                            <label class="form-label">Nombre *</label>
                             <input type="text" name="nombre" class="form-control" required maxlength="120"
-                                   placeholder="e.g. Central Clinic, Studio A">
+                                   placeholder="Ej: Clínica Central, Estudio A">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Currency *</label>
+                            <label class="form-label">Moneda *</label>
                             <select name="moneda" class="form-select" required>
                                 {% for code, label in currency_choices %}
                                     <option value="{{ code }}">{{ label }}</option>
@@ -150,27 +150,27 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Description</label>
+                        <label class="form-label">Descripción</label>
                         <textarea name="descripcion" class="form-control" rows="2" maxlength="500"
-                                  placeholder="Optional notes about this group"></textarea>
+                                  placeholder="Notas opcionales sobre este grupo"></textarea>
                     </div>
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Timezone</label>
+                            <label class="form-label">Zona horaria</label>
                             <input type="text" name="zona_horaria" class="form-control" maxlength="64"
                                    value="America/Guayaquil"
-                                   placeholder="e.g. America/Guayaquil, UTC">
+                                   placeholder="Ej: America/Guayaquil, UTC">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Reminder hours before</label>
+                            <label class="form-label">Horas de anticipación del recordatorio</label>
                             <input type="number" name="recordatorio_horas_antes" class="form-control"
                                    min="0" max="240" value="24">
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
                 </div>
             </form>
         </div>
@@ -192,7 +192,7 @@
                 form.descripcion.value = btn.dataset.desc;
                 form.zona_horaria.value = btn.dataset.zona;
                 form.recordatorio_horas_antes.value = btn.dataset.horas;
-                modalEl.querySelector('.modal-title').textContent = 'Edit agenda group';
+                modalEl.querySelector('.modal-title').textContent = 'Editar grupo de agenda';
                 modal.show();
             }));
             modalEl.addEventListener('show.bs.modal', (e) => {
@@ -201,7 +201,7 @@
                     form.action.value = 'add';
                     form.zona_horaria.value = 'America/Guayaquil';
                     form.recordatorio_horas_antes.value = 24;
-                    modalEl.querySelector('.modal-title').textContent = 'New agenda group';
+                    modalEl.querySelector('.modal-title').textContent = 'Nuevo grupo de agenda';
                 }
             });
             form.addEventListener('submit', async (ev) => {
@@ -216,7 +216,7 @@
                 if (j.reload) location.reload();
             });
             document.querySelectorAll('.btn-del').forEach(btn => btn.addEventListener('click', async () => {
-                if (!confirm(`Delete the agenda group "${btn.dataset.nombre}"? This will hide it but keep history.`)) return;
+                if (!confirm(`¿Eliminar el grupo "${btn.dataset.nombre}"? Quedará oculto pero conserva el historial.`)) return;
                 const fd = new FormData();
                 fd.append('action', 'delete');
                 fd.append('id', btn.dataset.id);

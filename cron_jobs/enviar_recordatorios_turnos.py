@@ -22,19 +22,19 @@ CRON_WINDOW_MIN = 30
 def _build_message(turno):
     grupo = turno.recurso.grupo_agenda
     return (
-        f"Reminder: you have an appointment\n"
+        f"Recordatorio: tenés un turno\n"
         f"- {turno.servicio.nombre}\n"
-        f"- With: {turno.recurso.nombre}\n"
-        f"- When: {turno.inicio.strftime('%Y-%m-%d %H:%M')}\n"
-        f"- Price: {turno.precio_cobrado} {grupo.moneda}\n"
-        f"\nReply *cancel* to cancel or *reschedule* to move it."
+        f"- Con: {turno.recurso.nombre}\n"
+        f"- Cuándo: {turno.inicio.strftime('%Y-%m-%d %H:%M')}\n"
+        f"- Precio: {turno.precio_cobrado} {grupo.moneda}\n"
+        f"\nRespondé *cancelar* para cancelarlo o *reagendar* para moverlo."
     )
 
 
 def _enviar(turno):
     sesion = turno.contacto.sesion
     if not sesion or not sesion.activo:
-        return False, 'Session inactive'
+        return False, 'Sesión inactiva'
     service = get_whatsapp_service(sesion)
     response = service.send_text_message(
         sesion.session_id,
@@ -42,7 +42,7 @@ def _enviar(turno):
         _build_message(turno),
     )
     if not response.get('success', False):
-        return False, response.get('error') or response.get('message') or 'Send failed'
+        return False, response.get('error') or response.get('message') or 'Falló el envío'
     return True, 'OK'
 
 
@@ -66,14 +66,14 @@ def main():
                     turno.recordatorio_enviado = True
                     turno.save()
                     enviados += 1
-                    logCron('Reminders', f'Reminder sent for appointment {turno.id}', True)
+                    logCron('Recordatorios', f'Recordatorio enviado para turno {turno.id}', True)
                 else:
                     fallidos += 1
-                    logCron('Reminders', f'Failed to send reminder for appointment {turno.id}: {msg}', False)
+                    logCron('Recordatorios', f'Falló el envío del recordatorio para turno {turno.id}: {msg}', False)
         except Exception as ex:
             fallidos += 1
-            logCron('Reminders', f'Exception sending reminder for appointment {turno.id}: {ex}', False)
-    logCron('Reminders', f'Run complete. Sent={enviados}, failed={fallidos}', True)
+            logCron('Recordatorios', f'Excepción al enviar recordatorio para turno {turno.id}: {ex}', False)
+    logCron('Recordatorios', f'Ejecución completada. Enviados={enviados}, fallidos={fallidos}', True)
 
 
 if __name__ == '__main__':

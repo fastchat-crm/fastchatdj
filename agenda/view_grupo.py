@@ -13,8 +13,8 @@ from .models import CURRENCY_CHOICES, GrupoAgenda
 @secure_module
 def grupoAgendaView(request):
     data = {
-        'titulo': 'Agenda groups',
-        'descripcion': 'Top-level container that bundles resources, services and schedules.',
+        'titulo': 'Grupos de agenda',
+        'descripcion': 'Contenedor principal que agrupa recursos, servicios y horarios.',
         'ruta': request.path,
         'currency_choices': CURRENCY_CHOICES,
     }
@@ -27,19 +27,19 @@ def grupoAgendaView(request):
                 if action == 'add':
                     nombre = (request.POST.get('nombre') or '').strip()
                     if not nombre:
-                        return JsonResponse({'error': True, 'message': 'Name is required.'})
+                        return JsonResponse({'error': True, 'message': 'El nombre es obligatorio.'})
                     moneda = (request.POST.get('moneda') or 'USD').strip()
                     descripcion = (request.POST.get('descripcion') or '').strip()
                     zona = (request.POST.get('zona_horaria') or 'America/Guayaquil').strip()
                     horas = int(request.POST.get('recordatorio_horas_antes') or 24)
                     if GrupoAgenda.objects.filter(nombre__iexact=nombre, status=True).exists():
-                        return JsonResponse({'error': True, 'message': 'A group with that name already exists.'})
+                        return JsonResponse({'error': True, 'message': 'Ya existe un grupo con ese nombre.'})
                     grupo = GrupoAgenda(
                         nombre=nombre, moneda=moneda, descripcion=descripcion,
                         zona_horaria=zona, recordatorio_horas_antes=horas,
                     )
                     grupo.save(request=request)
-                    log(f'Agenda group {grupo.nombre} created', request, 'add', obj=grupo.id)
+                    log(f'Grupo de agenda {grupo.nombre} creado', request, 'add', obj=grupo.id)
                     return JsonResponse({'error': False, 'reload': True})
 
                 if action == 'change':
@@ -53,7 +53,7 @@ def grupoAgendaView(request):
                         request.POST.get('recordatorio_horas_antes') or grupo.recordatorio_horas_antes
                     )
                     grupo.save(request=request)
-                    log(f'Agenda group {grupo.nombre} updated', request, 'change', obj=grupo.id)
+                    log(f'Grupo de agenda {grupo.nombre} actualizado', request, 'change', obj=grupo.id)
                     return JsonResponse({'error': False, 'reload': True})
 
                 if action == 'delete':
@@ -61,11 +61,11 @@ def grupoAgendaView(request):
                     grupo = GrupoAgenda.objects.get(pk=pk, status=True)
                     grupo.status = False
                     grupo.save(request=request)
-                    log(f'Agenda group {grupo.nombre} deleted', request, 'del', obj=grupo.id)
+                    log(f'Grupo de agenda {grupo.nombre} eliminado', request, 'del', obj=grupo.id)
                     return JsonResponse({'error': False})
 
         except GrupoAgenda.DoesNotExist:
-            return JsonResponse({'error': True, 'message': 'Agenda group not found.'})
+            return JsonResponse({'error': True, 'message': 'Grupo de agenda no encontrado.'})
         except Exception as ex:
             return JsonResponse({'error': True, 'message': f'Error: {ex}'})
 

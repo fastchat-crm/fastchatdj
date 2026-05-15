@@ -1,11 +1,9 @@
-from datetime import datetime, timedelta
-from decimal import Decimal
+from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import render
-from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from core.funciones import addData, log, secure_module
@@ -54,8 +52,8 @@ def calendarioView(request):
             recurso_actual = None
 
     data = {
-        'titulo': 'Booking calendar',
-        'descripcion': 'View, reschedule (drag) and create appointments visually.',
+        'titulo': 'Calendario de turnos',
+        'descripcion': 'Ver, reagendar (arrastrando) y crear turnos visualmente.',
         'ruta': request.path,
         'grupos': grupos,
         'grupo_actual': grupo_actual,
@@ -108,10 +106,10 @@ def calendarioView(request):
                     nuevo_inicio = parse_datetime(request.POST.get('inicio'))
                     nuevo_fin = parse_datetime(request.POST.get('fin'))
                     if not nuevo_inicio or not nuevo_fin:
-                        return JsonResponse({'error': True, 'message': 'Invalid date range.'})
+                        return JsonResponse({'error': True, 'message': 'Rango de fecha inválido.'})
                     turno = Turno.objects.get(pk=pk, status=True)
                     if turno.estado not in ACTIVE_STATUSES:
-                        return JsonResponse({'error': True, 'message': 'Only active appointments can be rescheduled.'})
+                        return JsonResponse({'error': True, 'message': 'Solo se pueden reagendar turnos activos.'})
                     nuevo = Turno(
                         recurso=turno.recurso, servicio=turno.servicio, contacto=turno.contacto,
                         inicio=nuevo_inicio, fin=nuevo_fin,
@@ -121,11 +119,11 @@ def calendarioView(request):
                         turno_anterior=turno,
                     )
                     if nuevo.overlaps_existing():
-                        return JsonResponse({'error': True, 'message': 'New slot overlaps another appointment.'})
+                        return JsonResponse({'error': True, 'message': 'El nuevo horario se superpone con otro turno.'})
                     nuevo.save(request=request)
                     turno.estado = 'rescheduled'
                     turno.save(request=request)
-                    log(f'Appointment {turno.id} rescheduled to {nuevo.id}', request, 'change', obj=nuevo.id)
+                    log(f'Turno {turno.id} reagendado a {nuevo.id}', request, 'change', obj=nuevo.id)
                     return JsonResponse({'error': False, 'new_id': nuevo.id})
 
                 if action == 'create':
@@ -136,7 +134,7 @@ def calendarioView(request):
                     rec = Recurso.objects.get(pk=rec_pk, status=True)
                     serv = Servicio.objects.get(pk=serv_pk, status=True)
                     if rec not in serv.recursos.all():
-                        return JsonResponse({'error': True, 'message': 'Resource cannot offer this service.'})
+                        return JsonResponse({'error': True, 'message': 'El recurso no puede ofrecer este servicio.'})
                     fin = inicio + timedelta(minutes=serv.duracion_min)
                     turno = Turno(
                         recurso=rec, servicio=serv, contacto_id=contacto_pk,
@@ -146,9 +144,9 @@ def calendarioView(request):
                         notas=(request.POST.get('notas') or '').strip(),
                     )
                     if turno.overlaps_existing():
-                        return JsonResponse({'error': True, 'message': 'This slot is already taken.'})
+                        return JsonResponse({'error': True, 'message': 'Ese horario ya está ocupado.'})
                     turno.save(request=request)
-                    log(f'Appointment {turno.id} created (manual)', request, 'add', obj=turno.id)
+                    log(f'Turno {turno.id} creado (manual)', request, 'add', obj=turno.id)
                     return JsonResponse({'error': False, 'id': turno.id})
 
                 if action == 'cancel':
@@ -156,23 +154,23 @@ def calendarioView(request):
                     t = Turno.objects.get(pk=pk, status=True)
                     t.estado = 'cancelled'
                     t.save(request=request)
-                    log(f'Appointment {t.id} cancelled', request, 'change', obj=t.id)
+                    log(f'Turno {t.id} cancelado', request, 'change', obj=t.id)
                     return JsonResponse({'error': False})
 
                 if action == 'mark_status':
                     pk = int(request.POST['pk'])
                     nuevo = request.POST.get('estado')
                     if nuevo not in dict(APPOINTMENT_STATUS_CHOICES):
-                        return JsonResponse({'error': True, 'message': 'Invalid status.'})
+                        return JsonResponse({'error': True, 'message': 'Estado inválido.'})
                     t = Turno.objects.get(pk=pk, status=True)
                     t.estado = nuevo
                     t.save(request=request)
                     return JsonResponse({'error': False})
 
         except (Recurso.DoesNotExist, Servicio.DoesNotExist):
-            return JsonResponse({'error': True, 'message': 'Resource or service not found.'})
+            return JsonResponse({'error': True, 'message': 'Recurso o servicio no encontrado.'})
         except Turno.DoesNotExist:
-            return JsonResponse({'error': True, 'message': 'Appointment not found.'})
+            return JsonResponse({'error': True, 'message': 'Turno no encontrado.'})
         except Exception as ex:
             return JsonResponse({'error': True, 'message': f'Error: {ex}'})
 

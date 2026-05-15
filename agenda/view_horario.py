@@ -27,11 +27,11 @@ def horarioEditorView(request, recurso_id):
     try:
         recurso = Recurso.objects.select_related('grupo_agenda').get(pk=recurso_id, status=True)
     except Recurso.DoesNotExist:
-        raise Http404('Resource not found.')
+        raise Http404('Recurso no encontrado.')
 
     data = {
-        'titulo': f'Schedule · {recurso.nombre}',
-        'descripcion': 'Drag on the grid to add working blocks. Drag a block to move or its edges to resize.',
+        'titulo': f'Horario · {recurso.nombre}',
+        'descripcion': 'Arrastrá sobre la grilla para crear bloques de trabajo. Arrastrá un bloque para moverlo o sus bordes para redimensionarlo.',
         'ruta': request.path,
         'recurso': recurso,
         'weekday_choices': WEEKDAY_CHOICES,
@@ -63,7 +63,7 @@ def horarioEditorView(request, recurso_id):
                         )
                         h.save(request=request)
                         creados += 1
-                    log(f'Schedule for resource {recurso.nombre} updated ({creados} blocks)',
+                    log(f'Horario del recurso {recurso.nombre} actualizado ({creados} bloques)',
                         request, 'change', obj=recurso.id)
                     return JsonResponse({'error': False, 'count': creados})
         except Exception as ex:

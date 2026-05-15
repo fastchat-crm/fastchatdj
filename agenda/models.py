@@ -9,43 +9,43 @@ from core.custom_models import ModeloBase
 
 
 CURRENCY_CHOICES = (
-    ('ARS', 'Argentine Peso (ARS)'),
-    ('USD', 'US Dollar (USD)'),
+    ('ARS', 'Peso Argentino (ARS)'),
+    ('USD', 'Dólar Estadounidense (USD)'),
     ('EUR', 'Euro (EUR)'),
-    ('PEN', 'Peruvian Sol (PEN)'),
-    ('CLP', 'Chilean Peso (CLP)'),
-    ('COP', 'Colombian Peso (COP)'),
-    ('MXN', 'Mexican Peso (MXN)'),
-    ('BRL', 'Brazilian Real (BRL)'),
-    ('UYU', 'Uruguayan Peso (UYU)'),
-    ('PYG', 'Paraguayan Guarani (PYG)'),
-    ('BOB', 'Bolivian Boliviano (BOB)'),
-    ('VES', 'Venezuelan Bolivar (VES)'),
+    ('PEN', 'Sol Peruano (PEN)'),
+    ('CLP', 'Peso Chileno (CLP)'),
+    ('COP', 'Peso Colombiano (COP)'),
+    ('MXN', 'Peso Mexicano (MXN)'),
+    ('BRL', 'Real Brasileño (BRL)'),
+    ('UYU', 'Peso Uruguayo (UYU)'),
+    ('PYG', 'Guaraní Paraguayo (PYG)'),
+    ('BOB', 'Boliviano (BOB)'),
+    ('VES', 'Bolívar Venezolano (VES)'),
 )
 
 WEEKDAY_CHOICES = (
-    (0, 'Monday'),
-    (1, 'Tuesday'),
-    (2, 'Wednesday'),
-    (3, 'Thursday'),
-    (4, 'Friday'),
-    (5, 'Saturday'),
-    (6, 'Sunday'),
+    (0, 'Lunes'),
+    (1, 'Martes'),
+    (2, 'Miércoles'),
+    (3, 'Jueves'),
+    (4, 'Viernes'),
+    (5, 'Sábado'),
+    (6, 'Domingo'),
 )
 
 EXCEPTION_TYPE_CHOICES = (
-    ('block_day', 'Block whole day'),
-    ('block_range', 'Block hour range'),
-    ('add_range', 'Add extra hour range'),
+    ('block_day', 'Bloquear día completo'),
+    ('block_range', 'Bloquear rango horario'),
+    ('add_range', 'Agregar rango extra'),
 )
 
 APPOINTMENT_STATUS_CHOICES = (
-    ('pending', 'Pending'),
-    ('confirmed', 'Confirmed'),
-    ('cancelled', 'Cancelled'),
-    ('rescheduled', 'Rescheduled'),
-    ('fulfilled', 'Fulfilled'),
-    ('no_show', 'No-show'),
+    ('pending', 'Pendiente'),
+    ('confirmed', 'Confirmado'),
+    ('cancelled', 'Cancelado'),
+    ('rescheduled', 'Reagendado'),
+    ('fulfilled', 'Cumplido'),
+    ('no_show', 'No asistió'),
 )
 
 APPOINTMENT_ORIGIN_CHOICES = (
@@ -58,21 +58,21 @@ ACTIVE_STATUSES = ('pending', 'confirmed')
 
 
 class GrupoAgenda(ModeloBase):
-    nombre = models.CharField('Name', max_length=120)
-    descripcion = models.TextField('Description', blank=True, default='')
-    moneda = models.CharField('Currency', max_length=8, choices=CURRENCY_CHOICES, default='USD')
+    nombre = models.CharField('Nombre', max_length=120)
+    descripcion = models.TextField('Descripción', blank=True, default='')
+    moneda = models.CharField('Moneda', max_length=8, choices=CURRENCY_CHOICES, default='USD')
     recordatorio_horas_antes = models.PositiveIntegerField(
-        'Reminder hours before', default=24,
-        help_text='How many hours before the appointment the reminder is sent.'
+        'Horas de anticipación del recordatorio', default=24,
+        help_text='Cuántas horas antes del turno se envía el recordatorio.'
     )
     zona_horaria = models.CharField(
-        'Timezone', max_length=64, default='America/Guayaquil',
-        help_text='TZ database name (e.g. America/Guayaquil, UTC).'
+        'Zona horaria', max_length=64, default='America/Guayaquil',
+        help_text='Nombre TZ database (ej. America/Guayaquil, UTC).'
     )
 
     class Meta:
-        verbose_name = 'Agenda group'
-        verbose_name_plural = 'Agenda groups'
+        verbose_name = 'Grupo de agenda'
+        verbose_name_plural = 'Grupos de agenda'
         ordering = ['nombre']
 
     def __str__(self):
@@ -82,22 +82,22 @@ class GrupoAgenda(ModeloBase):
 class Recurso(ModeloBase):
     grupo_agenda = models.ForeignKey(
         GrupoAgenda, on_delete=models.CASCADE, related_name='recursos',
-        verbose_name='Agenda group',
+        verbose_name='Grupo de agenda',
     )
-    nombre = models.CharField('Name', max_length=120)
-    descripcion = models.TextField('Description', blank=True, default='')
+    nombre = models.CharField('Nombre', max_length=120)
+    descripcion = models.TextField('Descripción', blank=True, default='')
     color = models.CharField('Color', max_length=20, default='#0d6efd')
-    orden = models.PositiveIntegerField('Order', default=0, db_index=True)
+    orden = models.PositiveIntegerField('Orden', default=0, db_index=True)
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='recursos_agenda',
-        verbose_name='Linked user',
-        help_text='Optional user assigned to this resource (e.g. agent).'
+        verbose_name='Usuario vinculado',
+        help_text='Usuario opcional asignado a este recurso (ej. asesor).'
     )
 
     class Meta:
-        verbose_name = 'Resource'
-        verbose_name_plural = 'Resources'
+        verbose_name = 'Recurso'
+        verbose_name_plural = 'Recursos'
         ordering = ['grupo_agenda', 'orden', 'nombre']
 
     def __str__(self):
@@ -107,20 +107,20 @@ class Recurso(ModeloBase):
 class HorarioLaboral(ModeloBase):
     recurso = models.ForeignKey(
         Recurso, on_delete=models.CASCADE, related_name='horarios',
-        verbose_name='Resource',
+        verbose_name='Recurso',
     )
-    dia_semana = models.PositiveSmallIntegerField('Weekday', choices=WEEKDAY_CHOICES)
-    hora_inicio = models.TimeField('Start time')
-    hora_fin = models.TimeField('End time')
+    dia_semana = models.PositiveSmallIntegerField('Día de la semana', choices=WEEKDAY_CHOICES)
+    hora_inicio = models.TimeField('Hora de inicio')
+    hora_fin = models.TimeField('Hora de fin')
     duracion_slot_min = models.PositiveIntegerField(
-        'Slot duration (minutes)', default=30,
+        'Duración del slot (minutos)', default=30,
         validators=[MinValueValidator(5)],
-        help_text='Default slot length used when generating availability.'
+        help_text='Duración por defecto del slot al generar disponibilidad.'
     )
 
     class Meta:
-        verbose_name = 'Working schedule'
-        verbose_name_plural = 'Working schedules'
+        verbose_name = 'Horario laboral'
+        verbose_name_plural = 'Horarios laborales'
         ordering = ['recurso', 'dia_semana', 'hora_inicio']
 
     def __str__(self):
@@ -130,17 +130,17 @@ class HorarioLaboral(ModeloBase):
 class ExcepcionAgenda(ModeloBase):
     recurso = models.ForeignKey(
         Recurso, on_delete=models.CASCADE, related_name='excepciones',
-        verbose_name='Resource',
+        verbose_name='Recurso',
     )
-    fecha = models.DateField('Date', db_index=True)
-    tipo = models.CharField('Type', max_length=20, choices=EXCEPTION_TYPE_CHOICES)
-    hora_inicio = models.TimeField('Start time', null=True, blank=True)
-    hora_fin = models.TimeField('End time', null=True, blank=True)
-    motivo = models.CharField('Reason', max_length=255, blank=True, default='')
+    fecha = models.DateField('Fecha', db_index=True)
+    tipo = models.CharField('Tipo', max_length=20, choices=EXCEPTION_TYPE_CHOICES)
+    hora_inicio = models.TimeField('Hora de inicio', null=True, blank=True)
+    hora_fin = models.TimeField('Hora de fin', null=True, blank=True)
+    motivo = models.CharField('Motivo', max_length=255, blank=True, default='')
 
     class Meta:
-        verbose_name = 'Schedule exception'
-        verbose_name_plural = 'Schedule exceptions'
+        verbose_name = 'Excepción de agenda'
+        verbose_name_plural = 'Excepciones de agenda'
         ordering = ['recurso', 'fecha']
 
     def __str__(self):
@@ -150,27 +150,27 @@ class ExcepcionAgenda(ModeloBase):
 class Servicio(ModeloBase):
     grupo_agenda = models.ForeignKey(
         GrupoAgenda, on_delete=models.CASCADE, related_name='servicios',
-        verbose_name='Agenda group',
+        verbose_name='Grupo de agenda',
     )
-    nombre = models.CharField('Name', max_length=150)
-    descripcion = models.TextField('Description', blank=True, default='')
+    nombre = models.CharField('Nombre', max_length=150)
+    descripcion = models.TextField('Descripción', blank=True, default='')
     duracion_min = models.PositiveIntegerField(
-        'Duration (minutes)', default=30,
+        'Duración (minutos)', default=30,
         validators=[MinValueValidator(5)],
     )
     precio = models.DecimalField(
-        'Price', max_digits=10, decimal_places=2, default=Decimal('0.00'),
+        'Precio', max_digits=10, decimal_places=2, default=Decimal('0.00'),
         validators=[MinValueValidator(Decimal('0.00'))],
     )
     recursos = models.ManyToManyField(
         Recurso, blank=True, related_name='servicios',
-        verbose_name='Resources offering this service',
+        verbose_name='Recursos que ofrecen este servicio',
     )
-    orden = models.PositiveIntegerField('Order', default=0, db_index=True)
+    orden = models.PositiveIntegerField('Orden', default=0, db_index=True)
 
     class Meta:
-        verbose_name = 'Service'
-        verbose_name_plural = 'Services'
+        verbose_name = 'Servicio'
+        verbose_name_plural = 'Servicios'
         ordering = ['grupo_agenda', 'orden', 'nombre']
 
     def __str__(self):
@@ -184,48 +184,48 @@ class Servicio(ModeloBase):
 class Turno(ModeloBase):
     recurso = models.ForeignKey(
         Recurso, on_delete=models.PROTECT, related_name='turnos',
-        verbose_name='Resource',
+        verbose_name='Recurso',
     )
     servicio = models.ForeignKey(
         Servicio, on_delete=models.PROTECT, related_name='turnos',
-        verbose_name='Service',
+        verbose_name='Servicio',
     )
     contacto = models.ForeignKey(
         'whatsapp.Contacto', on_delete=models.PROTECT, related_name='turnos',
-        verbose_name='Contact',
+        verbose_name='Contacto',
     )
-    inicio = models.DateTimeField('Start', db_index=True)
-    fin = models.DateTimeField('End')
+    inicio = models.DateTimeField('Inicio', db_index=True)
+    fin = models.DateTimeField('Fin')
     precio_cobrado = models.DecimalField(
-        'Charged price', max_digits=10, decimal_places=2, default=Decimal('0.00'),
+        'Precio cobrado', max_digits=10, decimal_places=2, default=Decimal('0.00'),
         validators=[MinValueValidator(Decimal('0.00'))],
-        help_text='Snapshot of service price at booking time.'
+        help_text='Snapshot del precio del servicio al momento de reservar.'
     )
     estado = models.CharField(
-        'Status', max_length=20, choices=APPOINTMENT_STATUS_CHOICES,
+        'Estado', max_length=20, choices=APPOINTMENT_STATUS_CHOICES,
         default='pending', db_index=True,
     )
     origen = models.CharField(
-        'Origin', max_length=20, choices=APPOINTMENT_ORIGIN_CHOICES,
+        'Origen', max_length=20, choices=APPOINTMENT_ORIGIN_CHOICES,
         default='manual',
     )
     conversacion = models.ForeignKey(
         'whatsapp.ConversacionWhatsApp', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='turnos',
-        verbose_name='Conversation',
+        verbose_name='Conversación',
     )
-    notas = models.TextField('Notes', blank=True, default='')
-    recordatorio_enviado = models.BooleanField('Reminder sent', default=False, db_index=True)
+    notas = models.TextField('Notas', blank=True, default='')
+    recordatorio_enviado = models.BooleanField('Recordatorio enviado', default=False, db_index=True)
     turno_anterior = models.ForeignKey(
         'self', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='reagendamientos',
-        verbose_name='Previous appointment',
-        help_text='Set when this appointment replaces a rescheduled one.'
+        verbose_name='Turno anterior',
+        help_text='Se asigna cuando este turno reemplaza a uno reagendado.'
     )
 
     class Meta:
-        verbose_name = 'Appointment'
-        verbose_name_plural = 'Appointments'
+        verbose_name = 'Turno'
+        verbose_name_plural = 'Turnos'
         ordering = ['-inicio']
         indexes = [
             models.Index(fields=['recurso', 'inicio']),
