@@ -277,10 +277,9 @@ def conversacion_enviar(request, pk):
     - La conversación debe existir.
     - No debe estar finalizada (`conversacion_finalizada=False`).
     - La sesión asociada debe estar activa (`sesion.activo=True`).
-    - La conversación no puede tener más de 2 horas desde su creación
-      (regla de WhatsApp: ventana de 24h, pero acá usamos 2h por política).
+    La ventana de envío real (24h desde el último mensaje entrante) la
+    valida el adapter de Meta más abajo en el stack.
     """
-    from datetime import timedelta
     from django.utils import timezone
     from asgiref.sync import async_to_sync
     from channels.layers import get_channel_layer
@@ -296,14 +295,6 @@ def conversacion_enviar(request, pk):
         return JsonResponse({
             'success': False, 'error': 'conversation_closed',
             'message': 'No se puede enviar: la conversación ya está finalizada.',
-        }, status=409)
-    # Ventana de envío: 2h desde la creación de la conversación.
-    edad = timezone.now() - conv.fecha_registro
-    if edad > timedelta(hours=2):
-        return JsonResponse({
-            'success': False, 'error': 'conversation_too_old',
-            'message': 'No se puede enviar: la conversación tiene más de 2 horas de creada.',
-            'edad_minutos': int(edad.total_seconds() // 60),
         }, status=409)
 
     sesion = conv.contacto.sesion
