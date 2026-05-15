@@ -1217,6 +1217,7 @@ class OpcionDepartamentoChatBot(ModeloBase):
         ('ubicacion',    'Ubicación / Mapa'),
         ('handoff',      'Transferir a humano'),
         ('agenda_turno', 'Agenda - Book/Cancel/Reschedule'),
+        ('loop',         'Bucle / iteración'),
         ('fin',          'Fin de conversación'),
     ]
     VALIDACIONES = [

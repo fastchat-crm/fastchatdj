@@ -1,32 +1,24 @@
 """
 Seed del cotizador Vida Buena — modo MÚLTIPLE (titular + N dependientes).
 
-Variante del flujo `seed_cotizador_am` para el caso en que el titular quiere
-incluir a otras personas en la cotización (cónyuge, hijos, padres…) sin
-necesidad de elegir plan por miembro: el decision engine del webhook
-recomienda *un* plan para el grupo a partir de `members[] + budget_intent`.
+Usa el nodo `loop` del motor para iterar sobre los N miembros en lugar de
+duplicar 5 veces el mismo subflujo. Pasa de ~82 a ~30 nodos.
 
-Reglas del diálogo (lo que el usuario pidió):
-  1. Pide los datos del titular (cédula + lookup; si la API no devuelve algo
-     se pide manual).
-  2. Pregunta el tipo de presupuesto: económico, equilibrado o el más caro
-     (alta protección).
-  3. Pregunta si la cotización es *solo titular* o *titular + N personas*.
-  4. Si va con N personas, pide el número N (1 a 5) y luego, **uno por uno**,
-     pide la cédula de cada miembro:
-       - si la API devuelve datos → usa la edad/sexo de registro civil.
-       - si no encuentra al miembro → pide manualmente edad y sexo (M/F).
-  5. Confirma "procesando" y dispara `cotizar_am_multiple`, que arma
-     `members[]` con titular + dependientes y manda al webhook
-     https://fguerrero.mgaseguros.ec/cotimedica/webhook/ para que el engine
-     recomiende plan, genere PDF y notifique por correo + WhatsApp.
+Las variables por miembro se nombran dinamicamente con
+`cedula_m{{variables.i}}`, `edad_m{{variables.i}}`, etc. — el motor expande
+el nombre de la variable usando `resolver_expresion` (2 pasadas).
 
-El motor de flujo no soporta bucles reales: los miembros 1..5 se modelan
-como 5 bloques idénticos protegidos por una decisión `num_dependientes >= N`
-que salta directamente al menú de presupuesto cuando ya no faltan miembros.
+Reglas del diálogo:
+  1. Pide datos del titular (cédula + lookup REST; si falta algo se pide manual).
+  2. Pregunta tipo de presupuesto (al final, antes de procesar).
+  3. Pregunta si la cotización es solo titular o titular + N personas.
+  4. Si va con N personas, pide N (1..5) y entra al LOOP de captura.
+     Cada iteración pide cédula → lookup → si no encontrado pide edad/sexo
+     manual → parentesco → muestra datos. Vuelve al loop hasta agotar N.
+  5. Otro LOOP de resumen muestra cada miembro antes de disparar
+     `cotizar_am_multiple` con `members[]` al webhook externo.
 
-Coexiste con `seed_cotizador_am` (deptos distintos, mismas credenciales y
-endpoints reutilizados via `get_or_create`).
+Coexiste con `seed_cotizador_am`.
 
 Uso:
     python manage.py seed_cotizador_asistenciamedica_multiple
@@ -66,7 +58,7 @@ BOT = {
     'nombre': NOMBRE_DEPTO,
     'descripcion': (
         'Asistente Vida Buena que cotiza para titular + N dependientes '
-        '(hasta 5) capturando los datos de cada uno paso a paso.'
+        '(hasta 5) capturando los datos de cada uno paso a paso con loop.'
     ),
     'mensaje_inicial': (
         'Hola 👋 Soy tu asesor de Vida Buena 🏥. Te ayudo a cotizar para ti '
@@ -86,134 +78,18 @@ BOT = {
 }
 
 
-def _bloque_miembro(idx, sig_si, sig_no, base_id):
-    """Devuelve los 8 pasos que capturan un dependiente: cédula → lookup →
-    si no se encontró pide edad/sexo manual → menú parentesco → muestra
-    datos confirmados. `base_id` marca el primer id del bloque (los
-    siguientes se numeran consecutivos a partir de él).
+LOOP_CAPTURA = 222
+BODY_CEDULA = 230
+BODY_HTTP = 231
+BODY_DEC_ENCON = 232
+BODY_EDAD = 233
+BODY_SEXO = 234
+BODY_PAREN = 235
+BODY_SHOW = 236
 
-    Conexiones:
-      - decisión inicial `num_dependientes >= idx`: si → entra; no → `sig_no`.
-      - tras lookup ok o input manual completo se pasa por `menu_paren`
-        para capturar el parentesco y luego `mostrar_ok` despliega los
-        datos confirmados antes de saltar a `sig_si`.
-    """
-    dec_id      = base_id + 0
-    input_ced   = base_id + 1
-    http_ced    = base_id + 2
-    dec_encon   = base_id + 3
-    input_edad  = base_id + 4
-    menu_sexo   = base_id + 5
-    menu_paren  = base_id + 6
-    mostrar_ok  = base_id + 7
-
-    return [
-        {
-            'id': dec_id, 'orden': dec_id, 'tipo': 'decision',
-            'codigo': f'decision_miembro_{idx}', 'nombre': f'¿Falta miembro {idx}?',
-            'condicion': f'{{{{variables.num_dependientes}}}} >= {idx}',
-            'siguiente_si': input_ced, 'siguiente_no': sig_no,
-        },
-        {
-            'id': input_ced, 'orden': input_ced, 'tipo': 'input_texto',
-            'codigo': f'pedir_cedula_m{idx}', 'nombre': f'Cédula miembro {idx}',
-            'mensaje': (
-                f'🪪 Dame la *cédula* del miembro #{idx} (10 dígitos). '
-                'Si no la tienes a mano, escribe `0` y luego pediré su edad.'
-            ),
-            'guardar_en': f'cedula_m{idx}',
-            'validacion': r'^(0|[0-9]{10}([0-9]{3})?)$',
-            'siguiente': http_ced,
-        },
-        {
-            'id': http_ced, 'orden': http_ced, 'tipo': 'llamada_http',
-            'codigo': f'http_cliente_m{idx}',
-            'nombre': f'GET ?action=cliente miembro {idx}',
-            'metodo': 'GET', 'path': '',
-            'query': {
-                'action': 'cliente',
-                'cedula': f'{{{{variables.cedula_m{idx}}}}}',
-            },
-            'timeout_seg': 20,
-            'extrae_variables': {
-                f'$encontrado_m{idx}': '$.data.encontrado',
-                f'$edad_m{idx}':       '$.data.edad',
-                f'$sexo_m{idx}':       '$.data.sexo',
-                f'$nombres_m{idx}':    '$.data.nombres',
-                f'$apellidos_m{idx}':  '$.data.apellidos',
-            },
-            'siguiente_ok': dec_encon, 'siguiente_error': input_edad,
-        },
-        {
-            'id': dec_encon, 'orden': dec_encon, 'tipo': 'decision',
-            'codigo': f'decision_encontrado_m{idx}',
-            'nombre': f'¿Miembro {idx} en registro civil?',
-            'condicion': f'{{{{variables.encontrado_m{idx}}}}} == true',
-            'siguiente_si': menu_paren, 'siguiente_no': input_edad,
-        },
-        {
-            'id': input_edad, 'orden': input_edad, 'tipo': 'input_texto',
-            'codigo': f'pedir_edad_m{idx}', 'nombre': f'Edad miembro {idx}',
-            'mensaje': (
-                f'🎂 ¿Qué *edad* tiene el miembro #{idx}? '
-                '(solo el número, ej: 12)'
-            ),
-            'guardar_en': f'edad_m{idx}',
-            'validacion': r'^\d{1,3}$',
-            'siguiente': menu_sexo,
-        },
-        {
-            'id': menu_sexo, 'orden': menu_sexo, 'tipo': 'menu_botones',
-            'codigo': f'pedir_sexo_m{idx}', 'nombre': f'Sexo miembro {idx}',
-            'mensaje': f'👤 ¿Cuál es el *sexo* del miembro #{idx}?',
-            'guardar_en': f'sexo_m{idx}',
-            'opciones': [
-                {'etiqueta': '👨 Masculino', 'valor': 'M', 'siguiente': menu_paren},
-                {'etiqueta': '👩 Femenino',  'valor': 'F', 'siguiente': menu_paren},
-            ],
-        },
-        {
-            'id': menu_paren, 'orden': menu_paren, 'tipo': 'menu_botones',
-            'codigo': f'pedir_parentesco_m{idx}',
-            'nombre': f'Parentesco miembro {idx}',
-            'mensaje': (
-                f'👨‍👩‍👧 ¿Qué *parentesco* tiene el miembro #{idx} contigo?'
-            ),
-            'guardar_en': f'parentesco_m{idx}',
-            'opciones': [
-                {'etiqueta': '💑 Cónyuge', 'valor': 'CONYUGE', 'siguiente': mostrar_ok},
-                {'etiqueta': '🧒 Hijo/a',  'valor': 'HIJO',    'siguiente': mostrar_ok},
-                {'etiqueta': '👨 Padre',    'valor': 'PADRE',   'siguiente': mostrar_ok},
-                {'etiqueta': '👩 Madre',    'valor': 'MADRE',   'siguiente': mostrar_ok},
-                {'etiqueta': '👤 Otro',     'valor': 'OTRO',    'siguiente': mostrar_ok},
-            ],
-        },
-        {
-            'id': mostrar_ok, 'orden': mostrar_ok, 'tipo': 'respuesta_texto',
-            'codigo': f'mostrar_datos_m{idx}',
-            'nombre': f'Mostrar datos miembro {idx}',
-            'mensaje': (
-                f'✅ Datos del miembro #{idx} registrados:\n'
-                f'• Parentesco: *{{{{variables.parentesco_m{idx}}}}}*\n'
-                f'• Edad: *{{{{variables.edad_m{idx}}}}}*\n'
-                f'• Sexo: *{{{{variables.sexo_m{idx}}}}}*'
-            ),
-            'siguiente': sig_si,
-        },
-    ]
-
-
-ID_RESUMEN     = 450
-ID_DEC_M1_RES  = 451
-ID_SHOW_M1_RES = 452
-ID_DEC_M2_RES  = 453
-ID_SHOW_M2_RES = 454
-ID_DEC_M3_RES  = 455
-ID_SHOW_M3_RES = 456
-ID_DEC_M4_RES  = 457
-ID_SHOW_M4_RES = 458
-ID_DEC_M5_RES  = 459
-ID_SHOW_M5_RES = 460
+ID_RESUMEN = 450
+LOOP_RESUMEN = 451
+BODY_RESUMEN_SHOW = 452
 
 ID_BUDGET = 500
 ID_ESPERANDO = 510
@@ -227,11 +103,6 @@ ID_ERROR_API = 900
 ID_RESET = 998
 ID_FIN = 999
 
-BASE_M1 = 230
-BASE_M2 = 250
-BASE_M3 = 270
-BASE_M4 = 290
-BASE_M5 = 310
 
 PASOS = [
     {
@@ -424,14 +295,104 @@ PASOS = [
         ),
         'guardar_en': 'num_dependientes',
         'validacion': rf'^[1-{MAX_DEPENDIENTES}]$',
-        'siguiente': BASE_M1,
+        'siguiente': LOOP_CAPTURA,
     },
 
-    *_bloque_miembro(1, sig_si=BASE_M2, sig_no=ID_BUDGET, base_id=BASE_M1),
-    *_bloque_miembro(2, sig_si=BASE_M3, sig_no=ID_BUDGET, base_id=BASE_M2),
-    *_bloque_miembro(3, sig_si=BASE_M4, sig_no=ID_BUDGET, base_id=BASE_M3),
-    *_bloque_miembro(4, sig_si=BASE_M5, sig_no=ID_BUDGET, base_id=BASE_M4),
-    *_bloque_miembro(5, sig_si=ID_BUDGET, sig_no=ID_BUDGET, base_id=BASE_M5),
+    {
+        'id': LOOP_CAPTURA, 'orden': LOOP_CAPTURA, 'tipo': 'loop_iter',
+        'codigo': 'loop_captura_miembros', 'nombre': 'Loop captura miembros',
+        'iterations_expr': '{{variables.num_dependientes}}',
+        'index_var': 'i',
+        'base_index': 1,
+        'siguiente_body': BODY_CEDULA,
+        'siguiente_done': ID_BUDGET,
+    },
+    {
+        'id': BODY_CEDULA, 'orden': BODY_CEDULA, 'tipo': 'input_texto',
+        'codigo': 'pedir_cedula_miembro', 'nombre': 'Cédula miembro {{i}}',
+        'mensaje': (
+            '🪪 Dame la *cédula* del miembro #{{variables.i}} (10 dígitos). '
+            'Si no la tienes a mano, escribe `0` y luego pediré su edad.'
+        ),
+        'guardar_en': 'cedula_m{{variables.i}}',
+        'validacion': r'^(0|[0-9]{10}([0-9]{3})?)$',
+        'siguiente': BODY_HTTP,
+    },
+    {
+        'id': BODY_HTTP, 'orden': BODY_HTTP, 'tipo': 'llamada_http',
+        'codigo': 'http_cliente_miembro',
+        'nombre': 'GET ?action=cliente miembro {{i}}',
+        'metodo': 'GET', 'path': '',
+        'query': {
+            'action': 'cliente',
+            'cedula': '{{variables.cedula_m{{variables.i}}}}',
+        },
+        'timeout_seg': 20,
+        'extrae_variables': {
+            '$encontrado_m{{variables.i}}': '$.data.encontrado',
+            '$edad_m{{variables.i}}':       '$.data.edad',
+            '$sexo_m{{variables.i}}':       '$.data.sexo',
+            '$nombres_m{{variables.i}}':    '$.data.nombres',
+            '$apellidos_m{{variables.i}}':  '$.data.apellidos',
+        },
+        'siguiente_ok': BODY_DEC_ENCON, 'siguiente_error': BODY_EDAD,
+    },
+    {
+        'id': BODY_DEC_ENCON, 'orden': BODY_DEC_ENCON, 'tipo': 'decision',
+        'codigo': 'decision_encontrado_miembro',
+        'nombre': '¿Miembro {{i}} en registro civil?',
+        'condicion': '{{variables.encontrado_m{{variables.i}}}} == true',
+        'siguiente_si': BODY_PAREN, 'siguiente_no': BODY_EDAD,
+    },
+    {
+        'id': BODY_EDAD, 'orden': BODY_EDAD, 'tipo': 'input_texto',
+        'codigo': 'pedir_edad_miembro', 'nombre': 'Edad miembro {{i}}',
+        'mensaje': (
+            '🎂 ¿Qué *edad* tiene el miembro #{{variables.i}}? '
+            '(solo el número, ej: 12)'
+        ),
+        'guardar_en': 'edad_m{{variables.i}}',
+        'validacion': r'^\d{1,3}$',
+        'siguiente': BODY_SEXO,
+    },
+    {
+        'id': BODY_SEXO, 'orden': BODY_SEXO, 'tipo': 'menu_botones',
+        'codigo': 'pedir_sexo_miembro', 'nombre': 'Sexo miembro {{i}}',
+        'mensaje': '👤 ¿Cuál es el *sexo* del miembro #{{variables.i}}?',
+        'guardar_en': 'sexo_m{{variables.i}}',
+        'opciones': [
+            {'etiqueta': '👨 Masculino', 'valor': 'M', 'siguiente': BODY_PAREN},
+            {'etiqueta': '👩 Femenino',  'valor': 'F', 'siguiente': BODY_PAREN},
+        ],
+    },
+    {
+        'id': BODY_PAREN, 'orden': BODY_PAREN, 'tipo': 'menu_botones',
+        'codigo': 'pedir_parentesco_miembro',
+        'nombre': 'Parentesco miembro {{i}}',
+        'mensaje': (
+            '👨‍👩‍👧 ¿Qué *parentesco* tiene el miembro #{{variables.i}} contigo?'
+        ),
+        'guardar_en': 'parentesco_m{{variables.i}}',
+        'opciones': [
+            {'etiqueta': '💑 Cónyuge', 'valor': 'CONYUGE', 'siguiente': BODY_SHOW},
+            {'etiqueta': '🧒 Hijo/a',  'valor': 'HIJO',    'siguiente': BODY_SHOW},
+            {'etiqueta': '👨 Padre',    'valor': 'PADRE',   'siguiente': BODY_SHOW},
+            {'etiqueta': '👩 Madre',    'valor': 'MADRE',   'siguiente': BODY_SHOW},
+            {'etiqueta': '👤 Otro',     'valor': 'OTRO',    'siguiente': BODY_SHOW},
+        ],
+    },
+    {
+        'id': BODY_SHOW, 'orden': BODY_SHOW, 'tipo': 'respuesta_texto',
+        'codigo': 'mostrar_datos_miembro',
+        'nombre': 'Mostrar datos miembro {{i}}',
+        'mensaje': (
+            '✅ Datos del miembro #{{variables.i}} registrados:\n'
+            '• Parentesco: *{{variables.parentesco_m{{variables.i}}}}*\n'
+            '• Edad: *{{variables.edad_m{{variables.i}}}}*\n'
+            '• Sexo: *{{variables.sexo_m{{variables.i}}}}*'
+        ),
+        'siguiente': LOOP_CAPTURA,
+    },
 
     {
         'id': ID_BUDGET, 'orden': ID_BUDGET, 'tipo': 'menu_botones',
@@ -460,93 +421,30 @@ PASOS = [
             '• Email: *{{variables.email}}*\n\n'
             '💰 Tipo de plan: *{{variables.budget_intent}}*'
         ),
-        'siguiente': ID_DEC_M1_RES,
+        'siguiente': LOOP_RESUMEN,
+    },
+
+    {
+        'id': LOOP_RESUMEN, 'orden': LOOP_RESUMEN, 'tipo': 'loop_iter',
+        'codigo': 'loop_resumen_miembros', 'nombre': 'Loop resumen miembros',
+        'iterations_expr': '{{variables.num_dependientes}}',
+        'index_var': 'i',
+        'base_index': 1,
+        'siguiente_body': BODY_RESUMEN_SHOW,
+        'siguiente_done': ID_ESPERANDO,
     },
     {
-        'id': ID_DEC_M1_RES, 'orden': ID_DEC_M1_RES, 'tipo': 'decision',
-        'codigo': 'decision_resumen_m1', 'nombre': '¿Mostrar miembro 1?',
-        'condicion': '{{variables.num_dependientes}} >= 1',
-        'siguiente_si': ID_SHOW_M1_RES, 'siguiente_no': ID_ESPERANDO,
-    },
-    {
-        'id': ID_SHOW_M1_RES, 'orden': ID_SHOW_M1_RES, 'tipo': 'respuesta_texto',
-        'codigo': 'resumen_m1', 'nombre': 'Resumen miembro 1',
+        'id': BODY_RESUMEN_SHOW, 'orden': BODY_RESUMEN_SHOW, 'tipo': 'respuesta_texto',
+        'codigo': 'resumen_miembro', 'nombre': 'Resumen miembro {{i}}',
         'mensaje': (
-            '👥 *Miembro 1*\n'
-            '• Parentesco: *{{variables.parentesco_m1}}*\n'
-            '• Edad: *{{variables.edad_m1}}*\n'
-            '• Sexo: *{{variables.sexo_m1}}*'
+            '👥 *Miembro {{variables.i}}*\n'
+            '• Parentesco: *{{variables.parentesco_m{{variables.i}}}}*\n'
+            '• Edad: *{{variables.edad_m{{variables.i}}}}*\n'
+            '• Sexo: *{{variables.sexo_m{{variables.i}}}}*'
         ),
-        'siguiente': ID_DEC_M2_RES,
+        'siguiente': LOOP_RESUMEN,
     },
-    {
-        'id': ID_DEC_M2_RES, 'orden': ID_DEC_M2_RES, 'tipo': 'decision',
-        'codigo': 'decision_resumen_m2', 'nombre': '¿Mostrar miembro 2?',
-        'condicion': '{{variables.num_dependientes}} >= 2',
-        'siguiente_si': ID_SHOW_M2_RES, 'siguiente_no': ID_ESPERANDO,
-    },
-    {
-        'id': ID_SHOW_M2_RES, 'orden': ID_SHOW_M2_RES, 'tipo': 'respuesta_texto',
-        'codigo': 'resumen_m2', 'nombre': 'Resumen miembro 2',
-        'mensaje': (
-            '👥 *Miembro 2*\n'
-            '• Parentesco: *{{variables.parentesco_m2}}*\n'
-            '• Edad: *{{variables.edad_m2}}*\n'
-            '• Sexo: *{{variables.sexo_m2}}*'
-        ),
-        'siguiente': ID_DEC_M3_RES,
-    },
-    {
-        'id': ID_DEC_M3_RES, 'orden': ID_DEC_M3_RES, 'tipo': 'decision',
-        'codigo': 'decision_resumen_m3', 'nombre': '¿Mostrar miembro 3?',
-        'condicion': '{{variables.num_dependientes}} >= 3',
-        'siguiente_si': ID_SHOW_M3_RES, 'siguiente_no': ID_ESPERANDO,
-    },
-    {
-        'id': ID_SHOW_M3_RES, 'orden': ID_SHOW_M3_RES, 'tipo': 'respuesta_texto',
-        'codigo': 'resumen_m3', 'nombre': 'Resumen miembro 3',
-        'mensaje': (
-            '👥 *Miembro 3*\n'
-            '• Parentesco: *{{variables.parentesco_m3}}*\n'
-            '• Edad: *{{variables.edad_m3}}*\n'
-            '• Sexo: *{{variables.sexo_m3}}*'
-        ),
-        'siguiente': ID_DEC_M4_RES,
-    },
-    {
-        'id': ID_DEC_M4_RES, 'orden': ID_DEC_M4_RES, 'tipo': 'decision',
-        'codigo': 'decision_resumen_m4', 'nombre': '¿Mostrar miembro 4?',
-        'condicion': '{{variables.num_dependientes}} >= 4',
-        'siguiente_si': ID_SHOW_M4_RES, 'siguiente_no': ID_ESPERANDO,
-    },
-    {
-        'id': ID_SHOW_M4_RES, 'orden': ID_SHOW_M4_RES, 'tipo': 'respuesta_texto',
-        'codigo': 'resumen_m4', 'nombre': 'Resumen miembro 4',
-        'mensaje': (
-            '👥 *Miembro 4*\n'
-            '• Parentesco: *{{variables.parentesco_m4}}*\n'
-            '• Edad: *{{variables.edad_m4}}*\n'
-            '• Sexo: *{{variables.sexo_m4}}*'
-        ),
-        'siguiente': ID_DEC_M5_RES,
-    },
-    {
-        'id': ID_DEC_M5_RES, 'orden': ID_DEC_M5_RES, 'tipo': 'decision',
-        'codigo': 'decision_resumen_m5', 'nombre': '¿Mostrar miembro 5?',
-        'condicion': '{{variables.num_dependientes}} >= 5',
-        'siguiente_si': ID_SHOW_M5_RES, 'siguiente_no': ID_ESPERANDO,
-    },
-    {
-        'id': ID_SHOW_M5_RES, 'orden': ID_SHOW_M5_RES, 'tipo': 'respuesta_texto',
-        'codigo': 'resumen_m5', 'nombre': 'Resumen miembro 5',
-        'mensaje': (
-            '👥 *Miembro 5*\n'
-            '• Parentesco: *{{variables.parentesco_m5}}*\n'
-            '• Edad: *{{variables.edad_m5}}*\n'
-            '• Sexo: *{{variables.sexo_m5}}*'
-        ),
-        'siguiente': ID_ESPERANDO,
-    },
+
     {
         'id': ID_ESPERANDO, 'orden': ID_ESPERANDO, 'tipo': 'respuesta_texto',
         'codigo': 'esperando_cotizacion', 'nombre': 'Mensaje esperando',
@@ -647,7 +545,7 @@ PASOS = [
             'cedula': '', 'nombres': '', 'apellidos': '', 'email': '',
             'fecha_nacimiento': '', 'edad_titular': '', 'sexo_titular': '',
             'telefono': '', 'encontrado_cli': '', 'confirma_correo': '',
-            'tipo_cobertura': '', 'num_dependientes': '',
+            'tipo_cobertura': '', 'num_dependientes': '', 'i': '',
             'cedula_m1': '', 'edad_m1': '', 'sexo_m1': '', 'encontrado_m1': '',
             'parentesco_m1': '', 'nombres_m1': '', 'apellidos_m1': '',
             'cedula_m2': '', 'edad_m2': '', 'sexo_m2': '', 'encontrado_m2': '',
@@ -681,6 +579,7 @@ TIPO_MAP = {
     'decision':         'condicional',
     'menu_botones':     'menu',
     'asignar_variable': 'set_variable',
+    'loop_iter':        'loop',
     'fin_conversacion': 'fin',
 }
 
@@ -745,7 +644,7 @@ def _parse_condicion(expr):
 
 
 class Command(BaseCommand):
-    help = 'Crea el flujo del cotizador Vida Buena modo MÚLTIPLE (titular + N dependientes).'
+    help = 'Crea el flujo del cotizador Vida Buena modo MÚLTIPLE (titular + N dependientes) usando loop.'
 
     def add_arguments(self, parser):
         parser.add_argument('--reset', action='store_true',
@@ -840,6 +739,14 @@ class Command(BaseCommand):
             if paso.get('envia_correo'):
                 cfg['envia_correo'] = True
             return cfg
+        if t == 'loop_iter':
+            return {
+                'iterations_expr': paso.get('iterations_expr', '0'),
+                'index_var': paso.get('index_var', 'i'),
+                'base_index': paso.get('base_index', 1),
+                'body_label': paso.get('body_label', 'body'),
+                'done_label': paso.get('done_label', 'done'),
+            }
         return {}
 
     def _crear_nodo(self, depto, eps, paso):
@@ -933,6 +840,21 @@ class Command(BaseCommand):
                 ConexionNodoChatbot.objects.create(
                     nodo_origen=origen, nodo_destino=mapa[paso['siguiente_error']],
                     etiqueta='error', orden=2,
+                )
+            return
+
+        if t == 'loop_iter':
+            body_label = paso.get('body_label', 'body')
+            done_label = paso.get('done_label', 'done')
+            if paso.get('siguiente_body') in mapa:
+                ConexionNodoChatbot.objects.create(
+                    nodo_origen=origen, nodo_destino=mapa[paso['siguiente_body']],
+                    etiqueta=body_label, orden=1,
+                )
+            if paso.get('siguiente_done') in mapa:
+                ConexionNodoChatbot.objects.create(
+                    nodo_origen=origen, nodo_destino=mapa[paso['siguiente_done']],
+                    etiqueta=done_label, orden=2,
                 )
             return
 

@@ -599,7 +599,15 @@ def _serializar_arbol_opciones(departamento, padre=None, nivel=0):
 
     nodos_qs = OpcionDepartamentoChatBot.objects.filter(
         departamento=departamento, status=True,
-    ).select_related('endpoint', 'endpoint__credencial')
+    ).select_related('endpoint', 'endpoint__credencial').only(
+        'id', 'nombre', 'orden', 'tipo_nodo', 'es_inicio', 'opcion_padre_id',
+        'boton_id', 'respuesta', 'config', 'endpoint_id', 'variable_destino',
+        'validacion_tipo', 'validacion_expresion', 'mensaje_error', 'reintentos_max',
+        'departamento_id',
+        'endpoint__id', 'endpoint__nombre', 'endpoint__base_url',
+        'endpoint__credencial__id', 'endpoint__credencial__nombre',
+        'endpoint__credencial__tipo',
+    )
     nodos_by_id = {n.id: n for n in nodos_qs}
     if not nodos_by_id:
         return []
@@ -613,6 +621,10 @@ def _serializar_arbol_opciones(departamento, padre=None, nivel=0):
 
     conex_qs = ConexionNodoChatbot.objects.filter(
         nodo_origen__departamento=departamento, status=True,
+    ).select_related('nodo_destino', 'nodo_origen').only(
+        'id', 'nodo_origen_id', 'nodo_destino_id', 'etiqueta', 'orden', 'descripcion',
+        'nodo_destino__id', 'nodo_destino__nombre', 'nodo_destino__tipo_nodo',
+        'nodo_origen__id', 'nodo_origen__nombre', 'nodo_origen__tipo_nodo',
     ).order_by('nodo_origen', 'orden', 'id')
     conex_by_origen_etq = {}
     for c in conex_qs:
@@ -1098,7 +1110,14 @@ def _serializar_arbol_anidado(departamento, padre=None):
 
     nodos_qs = OpcionDepartamentoChatBot.objects.filter(
         departamento=departamento, status=True,
-    ).select_related('endpoint', 'endpoint__credencial')
+    ).select_related('endpoint', 'endpoint__credencial').only(
+        'id', 'nombre', 'orden', 'tipo_nodo', 'es_inicio', 'opcion_padre_id',
+        'boton_id', 'respuesta', 'config', 'endpoint_id', 'variable_destino',
+        'validacion_tipo', 'validacion_expresion', 'mensaje_error', 'reintentos_max',
+        'departamento_id',
+        'endpoint__id', 'endpoint__nombre',
+        'endpoint__credencial__id', 'endpoint__credencial__nombre',
+    )
     nodos_by_id = {n.id: n for n in nodos_qs}
     if not nodos_by_id:
         return []
@@ -1112,6 +1131,9 @@ def _serializar_arbol_anidado(departamento, padre=None):
 
     conex_qs = ConexionNodoChatbot.objects.filter(
         nodo_origen__departamento=departamento, status=True,
+    ).select_related('nodo_destino').only(
+        'id', 'nodo_origen_id', 'nodo_destino_id', 'etiqueta', 'orden',
+        'nodo_destino__id', 'nodo_destino__nombre', 'nodo_destino__tipo_nodo',
     ).order_by('nodo_origen', 'orden', 'id')
     conex_by_origen_etq = {}
     for c in conex_qs:

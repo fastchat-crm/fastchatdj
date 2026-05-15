@@ -986,12 +986,24 @@
     }
 
     function initSortable($ul) {
-        new Sortable($ul[0], {
-            group: 'chatbot', handle: '.orden-label', animation: 150,
-            fallbackOnBody: true, swapThreshold: 0.65,
-            onEnd: actualizarOrden,
-        });
-        $ul.find('ul').each(function () { initSortable($(this)); });
+        const start = function () {
+            new Sortable($ul[0], {
+                group: 'chatbot', handle: '.orden-label', animation: 150,
+                fallbackOnBody: true, swapThreshold: 0.65,
+                onEnd: actualizarOrden,
+            });
+            $ul.find('ul').each(function () {
+                if (!this._sortableInited) {
+                    this._sortableInited = true;
+                    initSortable($(this));
+                }
+            });
+        };
+        if (window.requestIdleCallback) {
+            requestIdleCallback(start, {timeout: 800});
+        } else {
+            setTimeout(start, 0);
+        }
     }
 
     function serializar($ul) {

@@ -229,8 +229,11 @@
     bindMirrorScroll(wrap, scrollTop, 'x');
     bindMirrorScroll(scrollLeft, wrap, 'y');
     bindMirrorScroll(wrap, scrollLeft, 'y');
-    // Resize del viewport puede cambiar layout interno → re-medir.
-    window.addEventListener('resize', sincronizarTamanoMirrors);
+    var _resizeTimer = null;
+    window.addEventListener('resize', function () {
+        if (_resizeTimer) clearTimeout(_resizeTimer);
+        _resizeTimer = setTimeout(sincronizarTamanoMirrors, 150);
+    });
     document.getElementById('dp-zoom-in').addEventListener('click', function () {
         zoomNivel = Math.min(2, zoomNivel + 0.1); aplicarZoom();
     });

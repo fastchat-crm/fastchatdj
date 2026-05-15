@@ -166,19 +166,26 @@ def resolver_expresion(valor: Any, contexto: dict) -> Any:
       sustituye a string.
     """
     if isinstance(valor, str):
-        # 1) Expandir loops {% for %} ANTES de la substitución {{ }}.
         valor = _expandir_fors(valor, contexto)
 
-        # 2) Substitución {{ }} normal.
-        m = _EXPR_RE.fullmatch(valor.strip())
-        if m:
-            return _get_path(contexto, m.group(1).strip())
+        for _ in range(3):
+            m = _EXPR_RE.fullmatch(valor.strip())
+            if m:
+                resuelto = _get_path(contexto, m.group(1).strip())
+                if isinstance(resuelto, str) and _EXPR_RE.search(resuelto):
+                    valor = resuelto
+                    continue
+                return resuelto
 
-        def _repl(mo):
-            r = _get_path(contexto, mo.group(1).strip())
-            return '' if r is None else str(r)
+            def _repl(mo):
+                r = _get_path(contexto, mo.group(1).strip())
+                return '' if r is None else str(r)
 
-        return _EXPR_RE.sub(_repl, valor)
+            nuevo = _EXPR_RE.sub(_repl, valor)
+            if nuevo == valor or not _EXPR_RE.search(nuevo):
+                return nuevo
+            valor = nuevo
+        return valor
 
     if isinstance(valor, dict):
         return {k: resolver_expresion(v, contexto) for k, v in valor.items()}
@@ -1185,10 +1192,13 @@ class MotorFlujo:
                 valor = self.texto
                 if nodo.validacion_tipo == 'numero':
                     valor = normalizar_numero(valor)
-                self.estado.set_variable(nodo.variable_destino, valor)
-                self.estado.save()
-                self._trace('set_variable', f'Variable "{nodo.variable_destino}" capturada',
-                            True, {'valor': str(valor)[:120]})
+                nombre_var = resolver_expresion(nodo.variable_destino, self.contexto())
+                if isinstance(nombre_var, str) and nombre_var.strip():
+                    nombre_var = nombre_var.strip()
+                    self.estado.set_variable(nombre_var, valor)
+                    self.estado.save()
+                    self._trace('set_variable', f'Variable "{nombre_var}" capturada',
+                                True, {'valor': str(valor)[:120]})
             return ''
 
         if tipo == 'menu':
@@ -1281,8 +1291,10 @@ class MotorFlujo:
             else:
                 valor_a_guardar = valor_elegido
             if nodo.variable_destino and valor_a_guardar is not None:
-                self.estado.set_variable(nodo.variable_destino, valor_a_guardar)
-                self.estado.save()
+                nombre_var_menu = resolver_expresion(nodo.variable_destino, self.contexto())
+                if isinstance(nombre_var_menu, str) and nombre_var_menu.strip():
+                    self.estado.set_variable(nombre_var_menu.strip(), valor_a_guardar)
+                    self.estado.save()
             self._trace('menu_elegido', f'Opción "{elegida.get("etiqueta", "?")}" seleccionada',
                         True, {'salida': elegida.get('salida') or '(default)',
                                'valor': valor_a_guardar if valor_a_guardar is not None else '(no asignado)',
@@ -1296,13 +1308,62 @@ class MotorFlujo:
             for a in (cfg.get('asignaciones') or []):
                 var = a.get('variable')
                 if var:
-                    self.estado.set_variable(var, resolver_expresion(a.get('expresion', ''), ctx))
+                    var_resuelta = resolver_expresion(var, ctx)
+                    if not isinstance(var_resuelta, str) or not var_resuelta.strip():
+                        continue
+                    self.estado.set_variable(var_resuelta.strip(), resolver_expresion(a.get('expresion', ''), ctx))
             self.estado.save()
             return ''
 
         if tipo == 'agenda_turno':
             from agenda.chatbot_handlers import procesar_nodo_turno
             return procesar_nodo_turno(self, nodo, consumir_mensaje)
+
+        if tipo == 'loop':
+            state_iter_key = f'_loop_{nodo.id}_iter'
+            state_total_key = f'_loop_{nodo.id}_total'
+            ctx = self.contexto()
+            iter_actual = (self.estado.variables or {}).get(state_iter_key)
+
+            if iter_actual is None:
+                total_expr = str(cfg.get('iterations_expr') or '0')
+                try:
+                    total = int(resolver_expresion(total_expr, ctx) or 0)
+                except (ValueError, TypeError):
+                    total = 0
+                if total < 0:
+                    total = 0
+                self.estado.set_variable(state_total_key, total)
+                iter_actual = 0
+                self.estado.set_variable(state_iter_key, iter_actual)
+                self._trace('loop_init', f'Bucle "{nodo.nombre}" inicia ({total} iteraciones)',
+                            True, {'total': total, 'nodo_id': nodo.id})
+            else:
+                iter_actual = int(iter_actual) + 1
+                self.estado.set_variable(state_iter_key, iter_actual)
+
+            total = int((self.estado.variables or {}).get(state_total_key) or 0)
+
+            if iter_actual >= total:
+                if (self.estado.variables or {}).get(state_iter_key) is not None:
+                    self.estado.variables.pop(state_iter_key, None)
+                if (self.estado.variables or {}).get(state_total_key) is not None:
+                    self.estado.variables.pop(state_total_key, None)
+                index_var_done = (cfg.get('index_var') or '').strip()
+                if index_var_done and index_var_done in (self.estado.variables or {}):
+                    self.estado.variables.pop(index_var_done, None)
+                self.estado.save()
+                self._trace('loop_done', f'Bucle "{nodo.nombre}" terminó ({total} iteraciones)',
+                            True, {'total': total, 'nodo_id': nodo.id})
+                return cfg.get('done_label') or 'done'
+
+            index_var = (cfg.get('index_var') or 'i').strip()
+            base_index = int(cfg.get('base_index') or 1)
+            self.estado.set_variable(index_var, iter_actual + base_index)
+            self.estado.save()
+            self._trace('loop_step', f'Bucle "{nodo.nombre}" iteración {iter_actual + base_index}/{total}',
+                        True, {'iter': iter_actual + base_index, 'total': total, 'nodo_id': nodo.id})
+            return cfg.get('body_label') or 'body'
 
         if tipo == 'http':
             traza_extra = {}
