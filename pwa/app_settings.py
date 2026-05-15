@@ -46,4 +46,4 @@ PWA_APP_SPLASH_SCREEN = [
      'media': '(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)'},
 ]
 
-PWA_INSTALL_COOLDOWN_DAYS = 14
+PWA_INSTALL_COOLDOWN_HOURS = 10

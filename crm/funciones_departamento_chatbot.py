@@ -599,7 +599,7 @@ def _serializar_arbol_opciones(departamento, padre=None, nivel=0):
 
     nodos_qs = OpcionDepartamentoChatBot.objects.filter(
         departamento=departamento, status=True,
-    )
+    ).select_related('endpoint', 'endpoint__credencial')
     nodos_by_id = {n.id: n for n in nodos_qs}
     if not nodos_by_id:
         return []
@@ -1098,7 +1098,7 @@ def _serializar_arbol_anidado(departamento, padre=None):
 
     nodos_qs = OpcionDepartamentoChatBot.objects.filter(
         departamento=departamento, status=True,
-    )
+    ).select_related('endpoint', 'endpoint__credencial')
     nodos_by_id = {n.id: n for n in nodos_qs}
     if not nodos_by_id:
         return []

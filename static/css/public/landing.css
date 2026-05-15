@@ -348,6 +348,7 @@ nav.top{position:sticky;top:0;z-index:50;backdrop-filter:saturate(140%) blur(14p
 }
 
 @media (max-width: 460px){
-    .nav-cta .btn-ghost{display:none}
-    .nav-cta .btn-primary{padding:9px 14px}
+    .nav-cta{gap:4px}
+    .nav-cta .btn{padding:8px 10px;font-size:12.5px;border-radius:9px}
+    .nav-cta .btn-primary{padding:8px 12px}
 }

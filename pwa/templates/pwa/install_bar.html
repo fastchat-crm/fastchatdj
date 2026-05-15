@@ -71,7 +71,7 @@
 <script>
     (function () {
         const BAR_KEY = 'pwa_install_dismissed_at';
-        const COOLDOWN_DAYS = 14;
+        const COOLDOWN_HOURS = {{ pwa_install_cooldown_hours|default:10 }};
         const bar = document.getElementById('pwaInstallBar');
         const btnInstall = document.getElementById('pwaInstallBtn');
         const btnLabel = document.getElementById('pwaInstallBtnLabel');
@@ -107,8 +107,8 @@
             if (force) return false;
             const ts = parseInt(localStorage.getItem(BAR_KEY) || '0', 10);
             if (!ts) return false;
-            const days = (Date.now() - ts) / (1000 * 60 * 60 * 24);
-            return days < COOLDOWN_DAYS;
+            const hours = (Date.now() - ts) / (1000 * 60 * 60);
+            return hours < COOLDOWN_HOURS;
         }
 
         function rememberDismiss() {
