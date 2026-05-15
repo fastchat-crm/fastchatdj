@@ -272,6 +272,92 @@
         Swal.fire('Horario guardado (' + j.count + ' bloques).', '', 'success');
     });
 
+    const btnGenerar = document.getElementById('btnGenerar');
+    const genStart = document.getElementById('genStart');
+    const genEnd = document.getElementById('genEnd');
+    const genCount = document.getElementById('genCount');
+    const genReplace = document.getElementById('genReplace');
+    const genHint = document.getElementById('genHint');
+
+    function actualizarHintGenerador() {
+        if (!genStart || !genEnd || !genCount) return;
+        const s = toMin(genStart.value || '');
+        const e = toMin(genEnd.value || '');
+        const c = parseInt(genCount.value, 10);
+        if (isNaN(s) || isNaN(e) || isNaN(c) || e <= s || c < 1) {
+            genHint.textContent = '';
+            return;
+        }
+        const total = e - s;
+        const slot = Math.max(STEP_MIN, Math.round(total / c / STEP_MIN) * STEP_MIN);
+        const dias = Array.from(document.querySelectorAll('.gen-day:checked')).length;
+        genHint.textContent = c + ' turnos × ' + dias + ' días = ' + (c * dias) + ' slots. '
+            + 'Slot calculado: ' + slot + ' min.';
+    }
+
+    if (btnGenerar) {
+        btnGenerar.disabled = !recursoActual;
+        ['change', 'input'].forEach(function (ev) {
+            genStart.addEventListener(ev, actualizarHintGenerador);
+            genEnd.addEventListener(ev, actualizarHintGenerador);
+            genCount.addEventListener(ev, actualizarHintGenerador);
+        });
+        document.querySelectorAll('.gen-day').forEach(function (cb) {
+            cb.addEventListener('change', actualizarHintGenerador);
+        });
+        actualizarHintGenerador();
+
+        btnGenerar.addEventListener('click', function () {
+            if (!recursoActual) {
+                Swal.fire('Elegí primero un recurso.', '', 'warning');
+                return;
+            }
+            const s = toMin(genStart.value || '');
+            const e = toMin(genEnd.value || '');
+            const c = parseInt(genCount.value, 10);
+            const dias = Array.from(document.querySelectorAll('.gen-day:checked'))
+                .map(function (cb) { return parseInt(cb.value, 10); });
+            if (isNaN(s) || isNaN(e) || e <= s) {
+                Swal.fire('Rango horario inválido.', '', 'warning');
+                return;
+            }
+            if (isNaN(c) || c < 1) {
+                Swal.fire('Cantidad de turnos inválida.', '', 'warning');
+                return;
+            }
+            if (dias.length === 0) {
+                Swal.fire('Elegí al menos un día.', '', 'warning');
+                return;
+            }
+            const slotMin = Math.max(STEP_MIN, Math.round((e - s) / c / STEP_MIN) * STEP_MIN);
+            if (genReplace && genReplace.checked) {
+                blocks.forEach(function (b) { if (b.id) b._deleted = true; });
+                blocks = blocks.filter(function (b) { return b.id; });
+            }
+            dias.forEach(function (d) {
+                blocks.push({
+                    _tempId: nextTempId--,
+                    day: d,
+                    start: genStart.value,
+                    end: genEnd.value,
+                    slot_min: slotMin,
+                });
+            });
+            renderBlocks();
+            Swal.fire(
+                'Bloques generados',
+                'Se agregaron ' + dias.length + ' bloques (uno por día). Pulsá *Guardar* para confirmar.',
+                'success'
+            );
+        });
+    }
+
+    function actualizarBotonGenerar() {
+        if (btnGenerar) btnGenerar.disabled = !selRecurso.value;
+    }
+    selRecurso.addEventListener('change', actualizarBotonGenerar);
+    actualizarBotonGenerar();
+
     buildGrid();
     const initial = selRecurso.dataset.initial;
     if (initial && selRecurso.value === initial) {

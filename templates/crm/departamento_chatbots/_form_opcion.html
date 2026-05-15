@@ -550,13 +550,13 @@
                                     <td><input type="text" class="form-control form-control-sm" name="menu_opt_etiqueta[]" value="{{ opt.etiqueta|default:'' }}" placeholder="🙋 Solo para mí"></td>
                                     <td><input type="text" class="form-control form-control-sm" name="menu_opt_valor[]" value="{{ opt.valor|default:'' }}" placeholder="solo"></td>
                                     <td><input type="text" class="form-control form-control-sm" name="menu_opt_salida[]" value="{{ opt.salida|default:opt.valor }}" placeholder="solo"></td>
-                                    <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()" title="Eliminar opción"><i class="fa fa-times"></i></button></td>
+                                    <td><button type="button" class="btn btn-sm btn-outline-danger" data-act="dp-menu-opcion-del" title="Eliminar opción"><i class="fa fa-times"></i></button></td>
                                 </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-success" id="btnAddMenuOpcion">
+                <button type="button" class="btn btn-sm btn-outline-success" data-act="dp-menu-opcion-add">
                     <i class="fa fa-plus me-1"></i> Agregar opción
                 </button>
                 <small class="text-muted ms-2">
@@ -916,19 +916,3 @@
     </div>
 </div>
 
-<script>
-    (function () {
-        const btn = document.getElementById('btnAddMenuOpcion');
-        const tbody = document.getElementById('menuOpcionesBody');
-        if (!btn || !tbody) return;
-        btn.addEventListener('click', function () {
-            const tr = document.createElement('tr');
-            tr.innerHTML =
-                '<td><input type="text" class="form-control form-control-sm" name="menu_opt_etiqueta[]" placeholder="🙋 Solo para mí"></td>' +
-                '<td><input type="text" class="form-control form-control-sm" name="menu_opt_valor[]" placeholder="solo"></td>' +
-                '<td><input type="text" class="form-control form-control-sm" name="menu_opt_salida[]" placeholder="solo"></td>' +
-                '<td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove()" title="Eliminar"><i class="fa fa-times"></i></button></td>';
-            tbody.appendChild(tr);
-        });
-    })();
-</script>

@@ -488,6 +488,28 @@
                 if (tr) tr.remove();
                 return;
             }
+            // Agregar fila al editor inline de opciones de menú.
+            if (ev.target.closest('[data-act="dp-menu-opcion-add"]')) {
+                ev.preventDefault();
+                var tbodyOpc = document.getElementById('menuOpcionesBody');
+                if (!tbodyOpc) return;
+                var trOpc = document.createElement('tr');
+                trOpc.innerHTML =
+                    '<td><input type="text" class="form-control form-control-sm" name="menu_opt_etiqueta[]" placeholder="🙋 Solo para mí"></td>' +
+                    '<td><input type="text" class="form-control form-control-sm" name="menu_opt_valor[]" placeholder="solo"></td>' +
+                    '<td><input type="text" class="form-control form-control-sm" name="menu_opt_salida[]" placeholder="solo"></td>' +
+                    '<td><button type="button" class="btn btn-sm btn-outline-danger" data-act="dp-menu-opcion-del" title="Eliminar"><i class="fa fa-times"></i></button></td>';
+                tbodyOpc.appendChild(trOpc);
+                return;
+            }
+            // Borrar fila del editor inline de opciones de menú.
+            var delOpc = ev.target.closest('[data-act="dp-menu-opcion-del"]');
+            if (delOpc) {
+                ev.preventDefault();
+                var trDel = delOpc.closest('tr');
+                if (trDel) trDel.remove();
+                return;
+            }
         });
     }
 
