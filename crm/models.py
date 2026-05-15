@@ -1138,7 +1138,16 @@ class DepartamentoChatBot(ModeloBase):
         return self.nombre
 
     def obtener_arbol_opciones(self):
-        def construir_arbol(opciones):
+        todos = list(
+            self.opciondepartamentochatbot_set
+                .filter(status=True)
+                .order_by('orden', 'id')
+        )
+        hijos_por_padre = {}
+        for op in todos:
+            hijos_por_padre.setdefault(op.opcion_padre_id, []).append(op)
+
+        def construir(opciones):
             resultado = []
             for opcion in opciones:
                 resultado.append({
@@ -1155,12 +1164,11 @@ class DepartamentoChatBot(ModeloBase):
                     'mensaje_error': opcion.mensaje_error or '',
                     'reintentos_max': opcion.reintentos_max or 3,
                     'es_inicio': bool(opcion.es_inicio),
-                    'hijos': construir_arbol(opcion.subopciones.filter(status=True).order_by('orden'))
+                    'hijos': construir(hijos_por_padre.get(opcion.id, [])),
                 })
             return resultado
 
-        opciones_raiz = self.opciondepartamentochatbot_set.filter(opcion_padre__isnull=True, status=True).order_by('orden')
-        return construir_arbol(opciones_raiz)
+        return construir(hijos_por_padre.get(None, []))
 
     def obtener_perfiles(self):
         return self.perfildepartamentochatbot_set.filter(status=True).order_by('usuario__first_name')
@@ -1377,6 +1385,12 @@ class ConexionNodoChatbot(ModeloBase):
             models.UniqueConstraint(
                 fields=['nodo_origen', 'nodo_destino', 'etiqueta'],
                 name='uniq_conexion_chatbot'
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=['nodo_origen', 'status'],
+                name='idx_conex_origen_status',
             ),
         ]
 

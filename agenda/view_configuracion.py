@@ -3,6 +3,7 @@ from datetime import date, time
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
+from django.db.models import Q
 from django.forms.models import model_to_dict
 from django.http import JsonResponse
 from django.shortcuts import render
@@ -26,6 +27,10 @@ from .models import (
     Servicio,
     WEEKDAY_CHOICES,
 )
+
+
+SECCIONES_VALIDAS = ('grupos', 'recursos', 'servicios', 'excepciones', 'horarios')
+CRUD_GET_ACTIONS = ('add', 'change')
 
 
 def _parse_time(value):
@@ -114,13 +119,6 @@ def agendaConfiguracionView(request):
                                 continue
                             Recurso.objects.filter(pk=int(pk), status=True).update(orden=pos)
                         res_json.append({'error': False})
-                    elif action == 'recursos_grupo':
-                        grupo_pk = int(request.POST.get('grupo_id') or 0)
-                        items = list(
-                            Recurso.objects.filter(grupo_agenda_id=grupo_pk, status=True)
-                            .order_by('orden', 'nombre').values('id', 'nombre', 'color')
-                        )
-                        return JsonResponse({'error': False, 'items': items})
 
                 elif entity == 'servicio':
                     if action == 'add':
@@ -153,6 +151,13 @@ def agendaConfiguracionView(request):
                                 continue
                             Servicio.objects.filter(pk=int(pk), status=True).update(orden=pos)
                         res_json.append({'error': False})
+                    elif action == 'recursos_grupo':
+                        grupo_pk = int(request.POST.get('grupo_id') or 0)
+                        items = list(
+                            Recurso.objects.filter(grupo_agenda_id=grupo_pk, status=True)
+                            .order_by('orden', 'nombre').values('id', 'nombre', 'color')
+                        )
+                        return JsonResponse({'error': False, 'items': items})
 
                 elif entity == 'excepcion':
                     if action == 'add':
@@ -244,93 +249,114 @@ def agendaConfiguracionView(request):
             res_json.append({'error': True, 'message': f'Intente nuevamente: {ex}'})
         return JsonResponse(res_json, safe=False)
 
-    elif request.method == 'GET':
-        if 'action' in request.GET:
-            entity = request.GET.get('entity', '')
-            action = request.GET['action']
-            data['entity'] = entity
-            data['action'] = action
+    action_param = request.GET.get('action', '')
 
-            try:
-                if entity == 'grupo':
-                    if action == 'add':
-                        data['form'] = GrupoAgendaForm()
-                        template = get_template('agenda/configuracion/grupo_form.html')
-                        return JsonResponse({'result': True, 'data': template.render(data)})
-                    if action == 'change':
-                        data['pk'] = pk = int(request.GET['id'])
-                        data['filtro'] = filtro = GrupoAgenda.objects.get(pk=pk)
-                        data['form'] = GrupoAgendaForm(initial=model_to_dict(filtro), instance=filtro)
-                        template = get_template('agenda/configuracion/grupo_form.html')
-                        return JsonResponse({'result': True, 'data': template.render(data)})
+    if action_param in CRUD_GET_ACTIONS:
+        entity = request.GET.get('entity', '')
+        data['entity'] = entity
+        data['action'] = action_param
+        try:
+            if entity == 'grupo':
+                if action_param == 'add':
+                    data['form'] = GrupoAgendaForm()
+                    template = get_template('agenda/configuracion/grupo_form.html')
+                    return JsonResponse({'result': True, 'data': template.render(data)})
+                if action_param == 'change':
+                    data['pk'] = pk = int(request.GET['id'])
+                    data['filtro'] = filtro = GrupoAgenda.objects.get(pk=pk)
+                    data['form'] = GrupoAgendaForm(initial=model_to_dict(filtro), instance=filtro)
+                    template = get_template('agenda/configuracion/grupo_form.html')
+                    return JsonResponse({'result': True, 'data': template.render(data)})
 
-                elif entity == 'recurso':
-                    if action == 'add':
-                        data['form'] = RecursoForm()
-                        template = get_template('agenda/configuracion/recurso_form.html')
-                        return JsonResponse({'result': True, 'data': template.render(data)})
-                    if action == 'change':
-                        data['pk'] = pk = int(request.GET['id'])
-                        data['filtro'] = filtro = Recurso.objects.get(pk=pk)
-                        data['form'] = RecursoForm(initial=model_to_dict(filtro), instance=filtro)
-                        template = get_template('agenda/configuracion/recurso_form.html')
-                        return JsonResponse({'result': True, 'data': template.render(data)})
+            elif entity == 'recurso':
+                if action_param == 'add':
+                    data['form'] = RecursoForm()
+                    template = get_template('agenda/configuracion/recurso_form.html')
+                    return JsonResponse({'result': True, 'data': template.render(data)})
+                if action_param == 'change':
+                    data['pk'] = pk = int(request.GET['id'])
+                    data['filtro'] = filtro = Recurso.objects.get(pk=pk)
+                    data['form'] = RecursoForm(initial=model_to_dict(filtro), instance=filtro)
+                    template = get_template('agenda/configuracion/recurso_form.html')
+                    return JsonResponse({'result': True, 'data': template.render(data)})
 
-                elif entity == 'servicio':
-                    if action == 'add':
-                        data['form'] = ServicioForm()
-                        template = get_template('agenda/configuracion/servicio_form.html')
-                        return JsonResponse({'result': True, 'data': template.render(data)})
-                    if action == 'change':
-                        data['pk'] = pk = int(request.GET['id'])
-                        data['filtro'] = filtro = Servicio.objects.get(pk=pk)
-                        initial = model_to_dict(filtro)
-                        initial['recursos'] = filtro.recursos.values_list('id', flat=True)
-                        data['form'] = ServicioForm(initial=initial, instance=filtro)
-                        template = get_template('agenda/configuracion/servicio_form.html')
-                        return JsonResponse({'result': True, 'data': template.render(data)})
+            elif entity == 'servicio':
+                if action_param == 'add':
+                    data['form'] = ServicioForm()
+                    template = get_template('agenda/configuracion/servicio_form.html')
+                    return JsonResponse({'result': True, 'data': template.render(data)})
+                if action_param == 'change':
+                    data['pk'] = pk = int(request.GET['id'])
+                    data['filtro'] = filtro = Servicio.objects.get(pk=pk)
+                    initial = model_to_dict(filtro)
+                    initial['recursos'] = filtro.recursos.values_list('id', flat=True)
+                    data['form'] = ServicioForm(initial=initial, instance=filtro)
+                    template = get_template('agenda/configuracion/servicio_form.html')
+                    return JsonResponse({'result': True, 'data': template.render(data)})
 
-                elif entity == 'excepcion':
-                    if action == 'add':
-                        data['form'] = ExcepcionAgendaForm()
-                        template = get_template('agenda/configuracion/excepcion_form.html')
-                        return JsonResponse({'result': True, 'data': template.render(data)})
-                    if action == 'change':
-                        data['pk'] = pk = int(request.GET['id'])
-                        data['filtro'] = filtro = ExcepcionAgenda.objects.get(pk=pk)
-                        data['form'] = ExcepcionAgendaForm(initial=model_to_dict(filtro), instance=filtro)
-                        template = get_template('agenda/configuracion/excepcion_form.html')
-                        return JsonResponse({'result': True, 'data': template.render(data)})
+            elif entity == 'excepcion':
+                if action_param == 'add':
+                    data['form'] = ExcepcionAgendaForm()
+                    template = get_template('agenda/configuracion/excepcion_form.html')
+                    return JsonResponse({'result': True, 'data': template.render(data)})
+                if action_param == 'change':
+                    data['pk'] = pk = int(request.GET['id'])
+                    data['filtro'] = filtro = ExcepcionAgenda.objects.get(pk=pk)
+                    data['form'] = ExcepcionAgendaForm(initial=model_to_dict(filtro), instance=filtro)
+                    template = get_template('agenda/configuracion/excepcion_form.html')
+                    return JsonResponse({'result': True, 'data': template.render(data)})
 
-            except (GrupoAgenda.DoesNotExist, Recurso.DoesNotExist,
-                    Servicio.DoesNotExist, ExcepcionAgenda.DoesNotExist):
-                return JsonResponse({'result': False, 'message': 'Registro no encontrado.'})
-            except Exception as ex:
-                return JsonResponse({'result': False, 'message': str(ex)})
+        except (GrupoAgenda.DoesNotExist, Recurso.DoesNotExist,
+                Servicio.DoesNotExist, ExcepcionAgenda.DoesNotExist):
+            return JsonResponse({'result': False, 'message': 'Registro no encontrado.'})
+        except Exception as ex:
+            return JsonResponse({'result': False, 'message': str(ex)})
 
-            return JsonResponse({'result': False, 'message': 'Acción no soportada.'})
+        return JsonResponse({'result': False, 'message': 'Acción no soportada.'})
 
-        criterio = (request.GET.get('criterio') or '').strip()
-        data['criterio'] = criterio
-        data['url_vars'] = f'&criterio={criterio}' if criterio else ''
+    seccion = action_param if action_param in SECCIONES_VALIDAS else 'grupos'
+    data['seccion'] = seccion
 
-        grupos = GrupoAgenda.objects.filter(status=True)
-        recursos = Recurso.objects.filter(status=True).select_related('grupo_agenda', 'usuario')
-        servicios = Servicio.objects.filter(status=True).select_related('grupo_agenda').prefetch_related('recursos')
-        excepciones = ExcepcionAgenda.objects.filter(status=True).select_related('recurso', 'recurso__grupo_agenda')
+    criterio = (request.GET.get('criterio') or '').strip()
+    data['criterio'] = criterio
+    data['url_vars'] = (f'&criterio={criterio}' if criterio else '') + f'&action={seccion}'
 
+    grupos_qs = GrupoAgenda.objects.filter(status=True).order_by('nombre')
+    data['agenda_grupos'] = grupos_qs
+    data['monedas_por_grupo'] = {str(g.id): g.moneda for g in grupos_qs}
+
+    data['count_grupos'] = grupos_qs.count()
+    data['count_recursos'] = Recurso.objects.filter(status=True).count()
+    data['count_servicios'] = Servicio.objects.filter(status=True).count()
+    data['count_excepciones'] = ExcepcionAgenda.objects.filter(status=True).count()
+
+    if seccion == 'grupos':
+        listado = grupos_qs
         if criterio:
-            from django.db.models import Q
-            grupos = grupos.filter(Q(nombre__icontains=criterio) | Q(descripcion__icontains=criterio))
-            recursos = recursos.filter(Q(nombre__icontains=criterio) | Q(descripcion__icontains=criterio))
-            servicios = servicios.filter(Q(nombre__icontains=criterio) | Q(descripcion__icontains=criterio))
-            excepciones = excepciones.filter(Q(motivo__icontains=criterio) | Q(recurso__nombre__icontains=criterio))
+            listado = listado.filter(Q(nombre__icontains=criterio) | Q(descripcion__icontains=criterio))
+        data['listado_grupos'] = listado
 
-        data['grupos'] = grupos.order_by('nombre')
-        data['recursos'] = recursos.order_by('grupo_agenda', 'orden', 'nombre')
-        data['servicios'] = servicios.order_by('grupo_agenda', 'orden', 'nombre')
-        data['excepciones'] = excepciones.order_by('-fecha', 'recurso__nombre')
-        data['recursos_para_horario'] = recursos.order_by('grupo_agenda', 'orden', 'nombre')
-        data['monedas_por_grupo'] = {str(g.id): g.moneda for g in data['grupos']}
+    elif seccion == 'recursos':
+        listado = Recurso.objects.filter(status=True).select_related('grupo_agenda', 'usuario')
+        if criterio:
+            listado = listado.filter(Q(nombre__icontains=criterio) | Q(descripcion__icontains=criterio))
+        data['listado_recursos'] = listado.order_by('grupo_agenda', 'orden', 'nombre')
 
-        return render(request, 'agenda/configuracion/listado.html', data)
+    elif seccion == 'servicios':
+        listado = Servicio.objects.filter(status=True).select_related('grupo_agenda').prefetch_related('recursos')
+        if criterio:
+            listado = listado.filter(Q(nombre__icontains=criterio) | Q(descripcion__icontains=criterio))
+        data['listado_servicios'] = listado.order_by('grupo_agenda', 'orden', 'nombre')
+
+    elif seccion == 'excepciones':
+        listado = ExcepcionAgenda.objects.filter(status=True).select_related('recurso', 'recurso__grupo_agenda')
+        if criterio:
+            listado = listado.filter(Q(motivo__icontains=criterio) | Q(recurso__nombre__icontains=criterio))
+        data['listado_excepciones'] = listado.order_by('-fecha', 'recurso__nombre')
+
+    elif seccion == 'horarios':
+        data['recursos_para_horario'] = Recurso.objects.filter(status=True)\
+            .select_related('grupo_agenda').order_by('grupo_agenda', 'orden', 'nombre')
+        data['recurso_inicial'] = request.GET.get('recurso', '')
+
+    return render(request, 'agenda/configuracion/listado.html', data)

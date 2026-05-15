@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block head %}
-    <link rel="stylesheet" href="/static/css/agenda/configuracion.css?v1.0">
+    <link rel="stylesheet" href="/static/css/agenda/configuracion.css?v1.1">
 {% endblock %}
 
 {% block content %}
@@ -9,7 +9,7 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
                 <h4 class="mb-0">Configuración de agenda</h4>
-                <small class="text-muted">Grupos, recursos, servicios, excepciones y horarios en un solo lugar.</small>
+                <small class="text-muted">Grupos, recursos, servicios, excepciones y horarios.</small>
             </div>
             <a href="/agenda/citas/" class="btn btn-outline-primary btn-sm">
                 <i class="fa fa-calendar-check me-1"></i> Ver citas asignadas
@@ -19,15 +19,16 @@
         <div class="card mb-3">
             <div class="card-body">
                 <form method="GET" class="mb-0">
+                    <input type="hidden" name="action" value="{{ seccion }}">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Búsqueda general</label>
+                            <label class="form-label">Búsqueda en {{ seccion }}</label>
                             <div class="input-group">
                                 <span class="input-group-text border-end-0">
                                     <i class="fa fa-search text-muted"></i>
                                 </span>
                                 <input type="text" class="form-control border-start-0"
-                                       placeholder="Buscar en grupos, recursos, servicios o excepciones"
+                                       placeholder="Buscar por nombre o descripción"
                                        name="criterio" value="{{ criterio }}">
                             </div>
                         </div>
@@ -35,8 +36,8 @@
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-search me-1"></i> Filtrar
                             </button>
-                            {% if url_vars %}
-                                <a href="{{ request.path }}" class="btn btn-default">
+                            {% if criterio %}
+                                <a href="?action={{ seccion }}" class="btn btn-default">
                                     <i class="fas fa-times"></i> Limpiar
                                 </a>
                             {% endif %}
@@ -46,37 +47,41 @@
             </div>
         </div>
 
-        <ul class="nav nav-tabs" id="agendaTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-grupos" type="button">
-                    <i class="fa fa-layer-group me-1"></i> Grupos <span class="badge bg-secondary ms-1">{{ grupos.count }}</span>
-                </button>
+        <ul class="nav nav-tabs">
+            <li class="nav-item">
+                <a class="nav-link {% if seccion == 'grupos' %}active{% endif %}" href="?action=grupos">
+                    <i class="fa fa-layer-group me-1"></i> Grupos
+                    <span class="badge bg-secondary ms-1">{{ count_grupos }}</span>
+                </a>
             </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-recursos" type="button">
-                    <i class="fa fa-user-md me-1"></i> Recursos <span class="badge bg-secondary ms-1">{{ recursos.count }}</span>
-                </button>
+            <li class="nav-item">
+                <a class="nav-link {% if seccion == 'recursos' %}active{% endif %}" href="?action=recursos">
+                    <i class="fa fa-user-md me-1"></i> Recursos
+                    <span class="badge bg-secondary ms-1">{{ count_recursos }}</span>
+                </a>
             </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-servicios" type="button">
-                    <i class="fa fa-concierge-bell me-1"></i> Servicios <span class="badge bg-secondary ms-1">{{ servicios.count }}</span>
-                </button>
+            <li class="nav-item">
+                <a class="nav-link {% if seccion == 'servicios' %}active{% endif %}" href="?action=servicios">
+                    <i class="fa fa-concierge-bell me-1"></i> Servicios
+                    <span class="badge bg-secondary ms-1">{{ count_servicios }}</span>
+                </a>
             </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-excepciones" type="button">
-                    <i class="fa fa-ban me-1"></i> Excepciones <span class="badge bg-secondary ms-1">{{ excepciones.count }}</span>
-                </button>
+            <li class="nav-item">
+                <a class="nav-link {% if seccion == 'excepciones' %}active{% endif %}" href="?action=excepciones">
+                    <i class="fa fa-ban me-1"></i> Excepciones
+                    <span class="badge bg-secondary ms-1">{{ count_excepciones }}</span>
+                </a>
             </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-horarios" type="button">
+            <li class="nav-item">
+                <a class="nav-link {% if seccion == 'horarios' %}active{% endif %}" href="?action=horarios">
                     <i class="fa fa-calendar-week me-1"></i> Horarios
-                </button>
+                </a>
             </li>
         </ul>
 
-        <div class="tab-content card border-top-0 rounded-top-0">
-            <div class="tab-pane fade show active" id="tab-grupos">
-                <div class="card-body">
+        <div class="card border-top-0 rounded-top-0">
+            <div class="card-body">
+                {% if seccion == 'grupos' %}
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <small class="text-muted">Un grupo agrupa recursos, servicios y horarios. Una sesión WhatsApp se ata a un grupo.</small>
                         <a href="javascript:void(0)" onclick="formModalAgenda('grupo', 0, 'Nuevo grupo de agenda', 'add')"
@@ -97,7 +102,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                            {% for g in grupos %}
+                            {% for g in listado_grupos %}
                                 <tr>
                                     <td><strong>{{ g.nombre }}</strong></td>
                                     <td>{{ g.descripcion|default:"—"|truncatechars:60 }}</td>
@@ -129,11 +134,8 @@
                             </tbody>
                         </table>
                     </div>
-                </div>
-            </div>
 
-            <div class="tab-pane fade" id="tab-recursos">
-                <div class="card-body">
+                {% elif seccion == 'recursos' %}
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <small class="text-muted">Personas, salas o equipos que pueden atender turnos. Arrastrá filas para reordenar.</small>
                         <a href="javascript:void(0)" onclick="formModalAgenda('recurso', 0, 'Nuevo recurso', 'add')"
@@ -150,11 +152,12 @@
                                     <th>Nombre</th>
                                     <th>Grupo</th>
                                     <th>Usuario vinculado</th>
+                                    <th>Horario</th>
                                     <th class="text-center" style="width:120px">Acción</th>
                                 </tr>
                             </thead>
                             <tbody id="recursosBody">
-                            {% for r in recursos %}
+                            {% for r in listado_recursos %}
                                 <tr data-id="{{ r.id }}">
                                     <td class="drag-handle text-muted text-center"><i class="fa fa-grip-vertical"></i></td>
                                     <td><span class="badge-dot" style="background:{{ r.color }}"></span></td>
@@ -166,6 +169,11 @@
                                     <td>
                                         {% if r.usuario %}<small>{{ r.usuario.first_name }} {{ r.usuario.last_name }}</small>
                                         {% else %}<small class="text-muted">—</small>{% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="?action=horarios&recurso={{ r.id }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fa fa-calendar-week"></i> Editar horario
+                                        </a>
                                     </td>
                                     <td class="text-center">
                                         <div class="dropdown">
@@ -187,18 +195,15 @@
                                     </td>
                                 </tr>
                             {% empty %}
-                                <tr><td colspan="6" class="text-center text-muted">Aún no hay recursos.</td></tr>
+                                <tr><td colspan="7" class="text-center text-muted">Aún no hay recursos.</td></tr>
                             {% endfor %}
                             </tbody>
                         </table>
                     </div>
-                </div>
-            </div>
 
-            <div class="tab-pane fade" id="tab-servicios">
-                <div class="card-body">
+                {% elif seccion == 'servicios' %}
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <small class="text-muted">Lo que reserva el cliente: con precio, duración y recursos asignados. Arrastrá filas para reordenar.</small>
+                        <small class="text-muted">Lo que reserva el cliente: precio, duración y recursos asignados. Arrastrá filas para reordenar.</small>
                         <a href="javascript:void(0)" onclick="formModalAgenda('servicio', 0, 'Nuevo servicio', 'add')"
                            class="btn btn-success btn-sm">
                             <i class="fas fa-plus-circle me-1"></i> Nuevo servicio
@@ -218,7 +223,7 @@
                                 </tr>
                             </thead>
                             <tbody id="serviciosBody">
-                            {% for s in servicios %}
+                            {% for s in listado_servicios %}
                                 <tr data-id="{{ s.id }}">
                                     <td class="drag-handle text-muted text-center"><i class="fa fa-grip-vertical"></i></td>
                                     <td>
@@ -262,11 +267,8 @@
                             </tbody>
                         </table>
                     </div>
-                </div>
-            </div>
 
-            <div class="tab-pane fade" id="tab-excepciones">
-                <div class="card-body">
+                {% elif seccion == 'excepciones' %}
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <small class="text-muted">Bloquean un día completo, un rango horario o agregan horas extra para una fecha puntual.</small>
                         <a href="javascript:void(0)" onclick="formModalAgenda('excepcion', 0, 'Nueva excepción', 'add')"
@@ -287,7 +289,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                            {% for e in excepciones %}
+                            {% for e in listado_excepciones %}
                                 <tr>
                                     <td><strong>{{ e.fecha|date:"Y-m-d" }}</strong> <small class="text-muted">{{ e.fecha|date:"l" }}</small></td>
                                     <td>{{ e.recurso.nombre }} <small class="text-muted">({{ e.recurso.grupo_agenda.nombre }})</small></td>
@@ -327,25 +329,23 @@
                             </tbody>
                         </table>
                     </div>
-                </div>
-            </div>
 
-            <div class="tab-pane fade" id="tab-horarios">
-                <div class="card-body">
+                {% elif seccion == 'horarios' %}
                     <div class="alert alert-info py-2 px-3">
                         <small>
                             <strong>Cómo usar:</strong> elegí un recurso, arrastrá sobre la grilla para crear bloques de trabajo,
-                            arrastrá un bloque para moverlo, sus bordes para redimensionar y doble clic para editar.
-                            <strong>Guardá</strong> al terminar.
+                            arrastrá un bloque para moverlo, sus bordes para redimensionar y doble clic para editar. <strong>Guardá</strong> al terminar.
                         </small>
                     </div>
                     <div class="row g-3 align-items-end mb-3">
                         <div class="col-md-4">
                             <label class="form-label">Recurso</label>
-                            <select id="horarioRecursoSelect" class="form-select">
+                            <select id="horarioRecursoSelect" class="form-select" data-initial="{{ recurso_inicial }}">
                                 <option value="">Seleccionar recurso...</option>
                                 {% for r in recursos_para_horario %}
-                                    <option value="{{ r.id }}">{{ r.nombre }} ({{ r.grupo_agenda.nombre }})</option>
+                                    <option value="{{ r.id }}" {% if recurso_inicial == r.id|stringformat:"s" %}selected{% endif %}>
+                                        {{ r.nombre }} ({{ r.grupo_agenda.nombre }})
+                                    </option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -362,7 +362,7 @@
                             <input type="time" id="dayEnd" class="form-control" value="22:00">
                         </div>
                         <div class="col-md-2 d-flex gap-2 align-items-end">
-                            <button class="btn btn-outline-secondary btn-sm flex-fill" id="btnRebuildGrid">
+                            <button class="btn btn-outline-secondary btn-sm flex-fill" id="btnRebuildGrid" title="Redibujar">
                                 <i class="fa fa-sync"></i>
                             </button>
                             <button class="btn btn-success btn-sm flex-fill" id="btnSaveHorario" disabled>
@@ -377,7 +377,7 @@
                             <i class="fa fa-trash"></i> Borrar todos
                         </button>
                     </div>
-                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -397,6 +397,7 @@
         </div>
     </div>
 
+    {% if seccion == 'horarios' %}
     <div class="modal fade" id="modalBlockHorario" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -436,11 +437,14 @@
             </div>
         </div>
     </div>
+    {% endif %}
 {% endblock %}
 
 {% block jscript %}
     <script src="/static/js/forms.js?version=1"></script>
+    {% if seccion == 'recursos' or seccion == 'servicios' %}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    {% endif %}
     <script>
         const RUTA_AGENDA = '{{ ruta }}';
         const CSRF_AGENDA = '{{ csrf_token }}';
@@ -503,33 +507,39 @@
             return fetch(RUTA_AGENDA, {method: 'POST', body: fd}).then(r => r.json());
         }
 
+        {% if seccion == 'recursos' %}
         (function () {
-            const tbodyR = document.getElementById('recursosBody');
-            if (tbodyR) {
-                Sortable.create(tbodyR, {
-                    handle: '.drag-handle', animation: 150,
-                    onEnd: async () => {
-                        const ids = Array.from(tbodyR.querySelectorAll('tr[data-id]')).map(tr => tr.dataset.id);
-                        const j = await postEntity({entity: 'recurso', action: 'reorder', ids: ids.join(',')});
-                        const r = Array.isArray(j) ? j[0] : j;
-                        if (r.error) Swal.fire(r.message || 'Falló el reordenamiento', '', 'error');
-                    }
-                });
-            }
-            const tbodyS = document.getElementById('serviciosBody');
-            if (tbodyS) {
-                Sortable.create(tbodyS, {
-                    handle: '.drag-handle', animation: 150,
-                    onEnd: async () => {
-                        const ids = Array.from(tbodyS.querySelectorAll('tr[data-id]')).map(tr => tr.dataset.id);
-                        const j = await postEntity({entity: 'servicio', action: 'reorder', ids: ids.join(',')});
-                        const r = Array.isArray(j) ? j[0] : j;
-                        if (r.error) Swal.fire(r.message || 'Falló el reordenamiento', '', 'error');
-                    }
-                });
-            }
+            const tbody = document.getElementById('recursosBody');
+            if (!tbody) return;
+            Sortable.create(tbody, {
+                handle: '.drag-handle', animation: 150,
+                onEnd: async () => {
+                    const ids = Array.from(tbody.querySelectorAll('tr[data-id]')).map(tr => tr.dataset.id);
+                    const j = await postEntity({entity: 'recurso', action: 'reorder', ids: ids.join(',')});
+                    const r = Array.isArray(j) ? j[0] : j;
+                    if (r.error) Swal.fire(r.message || 'Falló el reordenamiento', '', 'error');
+                }
+            });
         })();
+        {% endif %}
 
+        {% if seccion == 'servicios' %}
+        (function () {
+            const tbody = document.getElementById('serviciosBody');
+            if (!tbody) return;
+            Sortable.create(tbody, {
+                handle: '.drag-handle', animation: 150,
+                onEnd: async () => {
+                    const ids = Array.from(tbody.querySelectorAll('tr[data-id]')).map(tr => tr.dataset.id);
+                    const j = await postEntity({entity: 'servicio', action: 'reorder', ids: ids.join(',')});
+                    const r = Array.isArray(j) ? j[0] : j;
+                    if (r.error) Swal.fire(r.message || 'Falló el reordenamiento', '', 'error');
+                }
+            });
+        })();
+        {% endif %}
+
+        {% if seccion == 'horarios' %}
         (function () {
             const grid = document.getElementById('agendaGrid');
             const selRecurso = document.getElementById('horarioRecursoSelect');
@@ -736,8 +746,8 @@
                 buildGrid();
             });
 
-            selRecurso.addEventListener('change', async () => {
-                recursoActual = selRecurso.value || null;
+            async function cargarRecurso(rid) {
+                recursoActual = rid || null;
                 blocks = [];
                 if (!recursoActual) {
                     btnSave.disabled = true; btnClear.disabled = true;
@@ -755,7 +765,9 @@
                 document.getElementById('slotMin').value = j.default_slot_min || 30;
                 btnSave.disabled = false; btnClear.disabled = false;
                 buildGrid();
-            });
+            }
+
+            selRecurso.addEventListener('change', () => cargarRecurso(selRecurso.value));
 
             btnSave.addEventListener('click', async () => {
                 if (!recursoActual) return;
@@ -772,6 +784,11 @@
             });
 
             buildGrid();
+            const initial = selRecurso.dataset.initial;
+            if (initial && selRecurso.value === initial) {
+                cargarRecurso(initial);
+            }
         })();
+        {% endif %}
     </script>
 {% endblock %}

@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block head %}
-    <link rel="stylesheet" href="/static/css/agenda/citas.css?v1.0">
+    <link rel="stylesheet" href="/static/css/agenda/citas.css?v1.1">
 {% endblock %}
 
 {% block content %}
@@ -9,7 +9,7 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
                 <h4 class="mb-0">Citas</h4>
-                <small class="text-muted">{{ list_count|default:0 }} cita{{ list_count|default:0|pluralize:"s" }} encontrada{{ list_count|default:0|pluralize:"s" }}</small>
+                <small class="text-muted">{{ count_total|default:0 }} cita{{ count_total|default:0|pluralize:"s" }} encontrada{{ count_total|default:0|pluralize:"s" }}</small>
             </div>
             <a href="/agenda/configuracion/" class="btn btn-outline-secondary btn-sm">
                 <i class="fa fa-cog me-1"></i> Configurar agenda
@@ -19,12 +19,13 @@
         <div class="card mb-3">
             <div class="card-body">
                 <form method="GET" class="mb-0">
+                    <input type="hidden" name="action" value="{{ seccion }}">
                     <div class="row g-3 align-items-end">
                         <div class="col-md-3">
                             <label class="form-label">Grupo</label>
                             <select name="grupo" class="form-select" onchange="this.form.submit()">
                                 <option value="">Todos</option>
-                                {% for g in grupos %}
+                                {% for g in agenda_grupos %}
                                     <option value="{{ g.id }}" {% if grupo_actual and grupo_actual.id == g.id %}selected{% endif %}>{{ g.nombre }}</option>
                                 {% endfor %}
                             </select>
@@ -59,33 +60,34 @@
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-search me-1"></i> Filtrar
                             </button>
-                            {% if url_vars %}
-                                <a href="{{ request.path }}" class="btn btn-default">
-                                    <i class="fas fa-times"></i> Limpiar
-                                </a>
-                            {% endif %}
+                            <a href="?action={{ seccion }}" class="btn btn-default">
+                                <i class="fas fa-times"></i> Limpiar
+                            </a>
                         </div>
                     </div>
                 </form>
             </div>
         </div>
 
-        <ul class="nav nav-tabs" role="tablist">
+        <ul class="nav nav-tabs">
             <li class="nav-item">
-                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-listado">
+                <a class="nav-link {% if seccion == 'listado' %}active{% endif %}"
+                   href="?action=listado{% if grupo_actual %}&grupo={{ grupo_actual.id }}{% endif %}{% if recurso_actual %}&recurso={{ recurso_actual.id }}{% endif %}{% if estado_filtro %}&estado={{ estado_filtro }}{% endif %}{% if fecha_desde %}&desde={{ fecha_desde }}{% endif %}{% if fecha_hasta %}&hasta={{ fecha_hasta }}{% endif %}">
                     <i class="fa fa-list me-1"></i> Listado
-                </button>
+                    <span class="badge bg-secondary ms-1">{{ count_total }}</span>
+                </a>
             </li>
             <li class="nav-item">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-calendario" id="btnTabCalendario">
+                <a class="nav-link {% if seccion == 'calendario' %}active{% endif %}"
+                   href="?action=calendario{% if grupo_actual %}&grupo={{ grupo_actual.id }}{% endif %}{% if recurso_actual %}&recurso={{ recurso_actual.id }}{% endif %}">
                     <i class="fa fa-calendar me-1"></i> Calendario
-                </button>
+                </a>
             </li>
         </ul>
 
-        <div class="tab-content card border-top-0 rounded-top-0">
-            <div class="tab-pane fade show active" id="tab-listado">
-                <div class="card-body">
+        <div class="card border-top-0 rounded-top-0">
+            <div class="card-body">
+                {% if seccion == 'listado' %}
                     <div class="table-responsive">
                         <table class="table table-hover table-striped align-middle">
                             <thead>
@@ -157,11 +159,8 @@
                         </table>
                         {% include 'paginacion.html' %}
                     </div>
-                </div>
-            </div>
 
-            <div class="tab-pane fade" id="tab-calendario">
-                <div class="card-body">
+                {% elif seccion == 'calendario' %}
                     <div id="calendar"></div>
                     <div class="d-flex flex-wrap gap-1 mt-3">
                         <small class="text-muted me-2">Referencias:</small>
@@ -172,11 +171,12 @@
                         <span class="badge" style="background:#fd7e14">Reagendado</span>
                         <span class="badge" style="background:#6c757d">Cancelado</span>
                     </div>
-                </div>
+                {% endif %}
             </div>
         </div>
     </div>
 
+    {% if seccion == 'calendario' %}
     <div class="modal fade" id="modalCita" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -241,11 +241,10 @@
             </form>
         </div>
     </div>
+    {% endif %}
 {% endblock %}
 
 {% block jscript %}
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/locales/es.global.min.js"></script>
     <script>
         const RUTA_CITAS = '{{ ruta }}';
         const CSRF_CITAS = '{{ csrf_token }}';
@@ -258,6 +257,7 @@
             return r.json();
         }
 
+        {% if seccion == 'listado' %}
         document.querySelectorAll('.btn-status').forEach(a => a.addEventListener('click', async ev => {
             ev.preventDefault();
             const j = await postCita({action: 'mark_status', pk: a.dataset.id, estado: a.dataset.status});
@@ -272,64 +272,68 @@
             if (r.error) { Swal.fire(r.message || 'Error', '', 'error'); return; }
             location.reload();
         }));
+        {% endif %}
+    </script>
 
-        let calendar = null;
-        const detailModal = new bootstrap.Modal(document.getElementById('modalCita'));
-        const nuevaModal = new bootstrap.Modal(document.getElementById('modalNuevaCita'));
-        const detailBody = document.getElementById('citaDetailBody');
-        const formNueva = document.getElementById('formNuevaCita');
-        let currentTurnoId = null;
+    {% if seccion == 'calendario' %}
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/locales/es.global.min.js"></script>
+    <script>
+        (function () {
+            const detailModal = new bootstrap.Modal(document.getElementById('modalCita'));
+            const nuevaModal = new bootstrap.Modal(document.getElementById('modalNuevaCita'));
+            const detailBody = document.getElementById('citaDetailBody');
+            const formNueva = document.getElementById('formNuevaCita');
+            let currentTurnoId = null;
 
-        const serviciosMap = {
-            {% for s in servicios %}
-            '{{ s.id }}': {
-                nombre: '{{ s.nombre|escapejs }}',
-                duracion: {{ s.duracion_min }},
-                recursos: [{% for r in s.recursos.all %}{{ r.id }}{% if not forloop.last %},{% endif %}{% endfor %}]
-            }{% if not forloop.last %}, {% endif %}
-            {% endfor %}
-        };
+            const serviciosMap = {
+                {% for s in servicios %}
+                '{{ s.id }}': {
+                    nombre: '{{ s.nombre|escapejs }}',
+                    duracion: {{ s.duracion_min }},
+                    recursos: [{% for r in s.recursos.all %}{{ r.id }}{% if not forloop.last %},{% endif %}{% endfor %}]
+                }{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            };
 
-        function refrescarServicios() {
-            const recId = parseInt(document.getElementById('nuevoRecurso').value, 10);
-            const sel = document.getElementById('nuevoServicio');
-            sel.innerHTML = '';
-            Object.entries(serviciosMap).forEach(([id, s]) => {
-                if (s.recursos.includes(recId)) {
-                    const opt = document.createElement('option');
-                    opt.value = id;
-                    opt.textContent = `${s.nombre} (${s.duracion} min)`;
-                    sel.appendChild(opt);
-                }
+            function refrescarServicios() {
+                const recId = parseInt(document.getElementById('nuevoRecurso').value, 10);
+                const sel = document.getElementById('nuevoServicio');
+                sel.innerHTML = '';
+                Object.entries(serviciosMap).forEach(([id, s]) => {
+                    if (s.recursos.includes(recId)) {
+                        const opt = document.createElement('option');
+                        opt.value = id;
+                        opt.textContent = `${s.nombre} (${s.duracion} min)`;
+                        sel.appendChild(opt);
+                    }
+                });
+            }
+            document.getElementById('nuevoRecurso').addEventListener('change', refrescarServicios);
+            refrescarServicios();
+
+            formNueva.addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const fd = new FormData(formNueva);
+                fd.append('csrfmiddlewaretoken', CSRF_CITAS);
+                const r = await fetch(RUTA_CITAS, {method: 'POST', body: fd});
+                const j = await r.json();
+                const v = Array.isArray(j) ? j[0] : j;
+                if (v.error) { Swal.fire(v.message || 'Error', '', 'error'); return; }
+                nuevaModal.hide();
+                calendar.refetchEvents();
             });
-        }
-        document.getElementById('nuevoRecurso').addEventListener('change', refrescarServicios);
-        refrescarServicios();
 
-        formNueva.addEventListener('submit', async (ev) => {
-            ev.preventDefault();
-            const fd = new FormData(formNueva);
-            fd.append('csrfmiddlewaretoken', CSRF_CITAS);
-            const r = await fetch(RUTA_CITAS, {method: 'POST', body: fd});
-            const j = await r.json();
-            const v = Array.isArray(j) ? j[0] : j;
-            if (v.error) { Swal.fire(v.message || 'Error', '', 'error'); return; }
-            nuevaModal.hide();
-            if (calendar) calendar.refetchEvents();
-        });
+            document.querySelectorAll('#modalCita [data-status]').forEach(btn => btn.addEventListener('click', async () => {
+                if (!currentTurnoId) return;
+                const j = await postCita({action: 'mark_status', pk: currentTurnoId, estado: btn.dataset.status});
+                const v = Array.isArray(j) ? j[0] : j;
+                if (v.error) { Swal.fire(v.message || 'Error', '', 'error'); return; }
+                detailModal.hide();
+                calendar.refetchEvents();
+            }));
 
-        document.querySelectorAll('#modalCita [data-status]').forEach(btn => btn.addEventListener('click', async () => {
-            if (!currentTurnoId) return;
-            const j = await postCita({action: 'mark_status', pk: currentTurnoId, estado: btn.dataset.status});
-            const v = Array.isArray(j) ? j[0] : j;
-            if (v.error) { Swal.fire(v.message || 'Error', '', 'error'); return; }
-            detailModal.hide();
-            if (calendar) calendar.refetchEvents();
-        }));
-
-        document.getElementById('btnTabCalendario').addEventListener('shown.bs.tab', () => {
-            if (calendar) { calendar.updateSize(); return; }
-            calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+            const calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
                 initialView: 'timeGridWeek',
                 locale: 'es',
                 headerToolbar: {
@@ -395,6 +399,7 @@
                 }
             });
             calendar.render();
-        });
+        })();
     </script>
+    {% endif %}
 {% endblock %}

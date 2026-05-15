@@ -604,24 +604,30 @@ def _serializar_arbol_opciones(departamento, padre=None, nivel=0):
     if not nodos_by_id:
         return []
 
+    hijos_legacy_por_padre = {}
+    for n in nodos_by_id.values():
+        if n.opcion_padre_id:
+            hijos_legacy_por_padre.setdefault(n.opcion_padre_id, []).append(n)
+    for lst in hijos_legacy_por_padre.values():
+        lst.sort(key=lambda x: (x.orden, x.id))
+
     conex_qs = ConexionNodoChatbot.objects.filter(
         nodo_origen__departamento=departamento, status=True,
     ).order_by('nodo_origen', 'orden', 'id')
-    conex_by_origen = {}
+    conex_by_origen_etq = {}
     for c in conex_qs:
-        conex_by_origen.setdefault(c.nodo_origen_id, []).append(c)
+        conex_by_origen_etq.setdefault(c.nodo_origen_id, {}).setdefault(c.etiqueta or '', c)
 
     def _destino(op_id, etiqueta):
-        for c in conex_by_origen.get(op_id, []):
-            if c.etiqueta == etiqueta:
-                return nodos_by_id.get(c.nodo_destino_id)
-        return None
+        c = conex_by_origen_etq.get(op_id, {}).get(etiqueta)
+        return nodos_by_id.get(c.nodo_destino_id) if c else None
 
     def _siguiente_default(op_id):
+        salidas = conex_by_origen_etq.get(op_id, {})
         for et in ('', 'ok'):
-            d = _destino(op_id, et)
-            if d:
-                return d
+            c = salidas.get(et)
+            if c:
+                return nodos_by_id.get(c.nodo_destino_id)
         return None
 
     items = []
@@ -633,20 +639,17 @@ def _serializar_arbol_opciones(departamento, padre=None, nivel=0):
         visited.add(op.id)
         items.append({'opcion': op, 'nivel': lvl})
         cfg = op.config or {}
+        salidas_grafo = conex_by_origen_etq.get(op.id, {})
         if op.tipo_nodo == 'menu':
             for opt in (cfg.get('opciones') or []):
                 sal = (opt.get('salida') or '').strip()
                 dest = _destino(op.id, sal) if sal else _siguiente_default(op.id)
                 if dest:
                     _walk(dest, lvl + 1)
-            # Fallback legacy: hijos por opcion_padre
-            for c in OpcionDepartamentoChatBot.objects.filter(
-                opcion_padre=op, status=True,
-            ).order_by('orden', 'id'):
-                _walk(c, lvl + 1)
+            if not salidas_grafo:
+                for c in hijos_legacy_por_padre.get(op.id, []):
+                    _walk(c, lvl + 1)
         elif op.tipo_nodo == 'condicional':
-            # Sigue ambas ramas; 'true' primero para que el árbol refleje
-            # la lógica natural ("si pasa la condición → este sub-flujo").
             for et in ('true', 'false'):
                 d = _destino(op.id, et)
                 if d:
@@ -659,18 +662,15 @@ def _serializar_arbol_opciones(departamento, padre=None, nivel=0):
             sig = _destino(op.id, 'ok') or _siguiente_default(op.id)
             if sig:
                 _walk(sig, lvl + 1)
-        # handoff / fin / ubicacion → no descendientes
 
     inicio = next((n for n in nodos_by_id.values() if n.es_inicio), None)
     if not inicio:
-        inicio = OpcionDepartamentoChatBot.objects.filter(
-            departamento=departamento, opcion_padre__isnull=True, status=True,
-        ).order_by('orden', 'id').first()
+        sin_padre = [n for n in nodos_by_id.values() if not n.opcion_padre_id]
+        sin_padre.sort(key=lambda x: (x.orden, x.id))
+        inicio = sin_padre[0] if sin_padre else None
     if inicio:
         _walk(inicio, 0)
 
-    # Anexar nodos huérfanos del grafo (sin entrada y no inicio) al final, nivel 0,
-    # para que el editor pueda verlos y conectarlos.
     for n in sorted(nodos_by_id.values(), key=lambda x: (x.orden, x.id)):
         if n.id not in visited:
             items.append({'opcion': n, 'nivel': 0})
@@ -913,9 +913,14 @@ def _serializar_para_preview(departamento):
     """
     from .models import ConexionNodoChatbot
 
-    nodos_qs = OpcionDepartamentoChatBot.objects.filter(
+    nodos_qs = list(OpcionDepartamentoChatBot.objects.filter(
         departamento=departamento, status=True,
-    )
+    ))
+
+    hijos_legacy_por_padre = {}
+    for n in sorted(nodos_qs, key=lambda x: (x.orden, x.id)):
+        if n.opcion_padre_id:
+            hijos_legacy_por_padre.setdefault(n.opcion_padre_id, []).append(n.id)
 
     conex_qs = ConexionNodoChatbot.objects.filter(
         nodo_origen__departamento=departamento, status=True,
@@ -940,16 +945,14 @@ def _serializar_para_preview(departamento):
             'variable_destino': n.variable_destino or '',
             'validacion_tipo': n.validacion_tipo or 'none',
             'salidas': salidas_by_origen.get(n.id, []),
-            # Hijos legacy via opcion_padre — fallback si el nodo no tiene salidas.
-            'hijos_legacy': list(n.subopciones.filter(status=True)
-                                  .order_by('orden').values_list('id', flat=True)),
+            'hijos_legacy': hijos_legacy_por_padre.get(n.id, []),
         }
 
     inicio = next((n for n in nodos_qs if n.es_inicio), None)
     if not inicio:
-        inicio = OpcionDepartamentoChatBot.objects.filter(
-            departamento=departamento, opcion_padre__isnull=True, status=True,
-        ).order_by('orden', 'id').first()
+        sin_padre = [n for n in nodos_qs if not n.opcion_padre_id]
+        sin_padre.sort(key=lambda x: (x.orden, x.id))
+        inicio = sin_padre[0] if sin_padre else None
 
     return {
         'departamento': {
@@ -1100,25 +1103,26 @@ def _serializar_arbol_anidado(departamento, padre=None):
     if not nodos_by_id:
         return []
 
+    hijos_legacy_por_padre = {}
+    for n in nodos_by_id.values():
+        if n.opcion_padre_id:
+            hijos_legacy_por_padre.setdefault(n.opcion_padre_id, []).append(n)
+    for lst in hijos_legacy_por_padre.values():
+        lst.sort(key=lambda x: (x.orden, x.id))
+
     conex_qs = ConexionNodoChatbot.objects.filter(
         nodo_origen__departamento=departamento, status=True,
     ).order_by('nodo_origen', 'orden', 'id')
-    conex_by_origen = {}
+    conex_by_origen_etq = {}
     for c in conex_qs:
-        conex_by_origen.setdefault(c.nodo_origen_id, []).append(c)
+        conex_by_origen_etq.setdefault(c.nodo_origen_id, {}).setdefault(c.etiqueta or '', c)
 
     def _conex_etq(op_id, etiqueta):
-        for c in conex_by_origen.get(op_id, []):
-            if c.etiqueta == etiqueta:
-                return c
-        return None
+        return conex_by_origen_etq.get(op_id, {}).get(etiqueta)
 
     def _conex_default(op_id):
-        for et in ('', 'ok'):
-            c = _conex_etq(op_id, et)
-            if c:
-                return c
-        return None
+        salidas = conex_by_origen_etq.get(op_id, {})
+        return salidas.get('') or salidas.get('ok')
 
     def _walk(op, visited):
         if op.id in visited:
@@ -1140,11 +1144,8 @@ def _serializar_arbol_anidado(departamento, padre=None):
                         sub = _walk(dest, visited)
                         sub['etiqueta'] = etq_label or sal
                         hijos.append(sub)
-            # Fallback árbol legacy
             if not hijos:
-                for c in OpcionDepartamentoChatBot.objects.filter(
-                    opcion_padre=op, status=True,
-                ).order_by('orden', 'id'):
+                for c in hijos_legacy_por_padre.get(op.id, []):
                     sub = _walk(c, visited)
                     sub['etiqueta'] = ''
                     hijos.append(sub)
@@ -1174,15 +1175,14 @@ def _serializar_arbol_anidado(departamento, padre=None):
                     sub = _walk(dest, visited)
                     sub['etiqueta'] = ''
                     hijos.append(sub)
-        # handoff / fin / ubicacion → sin hijos
 
         return {'opcion': op, 'hijos': hijos, 'etiqueta': ''}
 
     inicio = next((n for n in nodos_by_id.values() if n.es_inicio), None)
     if not inicio:
-        inicio = OpcionDepartamentoChatBot.objects.filter(
-            departamento=departamento, opcion_padre__isnull=True, status=True,
-        ).order_by('orden', 'id').first()
+        sin_padre = [n for n in nodos_by_id.values() if not n.opcion_padre_id]
+        sin_padre.sort(key=lambda x: (x.orden, x.id))
+        inicio = sin_padre[0] if sin_padre else None
 
     raices = [_walk(inicio, set())] if inicio else []
 

@@ -124,6 +124,24 @@ def listar_metadata() -> list[dict]:
 # Funciones registradas
 # ────────────────────────────────────────────────────────────────────
 
+def _respuesta_webhook_es_exito(status_code, resp_json):
+    """True si la respuesta del webhook se considera exitosa.
+
+    Acepta `ok` o `success` como flag explícito. Si no viene flag y la
+    respuesta no trae `error`, un 2xx es éxito (cubre el caso 202
+    encolado donde algunos webhooks devuelven `success` en vez de `ok`).
+    """
+    if not (200 <= status_code < 300):
+        return False
+    if not isinstance(resp_json, dict):
+        return True
+    if 'ok' in resp_json:
+        return bool(resp_json['ok'])
+    if 'success' in resp_json:
+        return bool(resp_json['success'])
+    return not bool(resp_json.get('error'))
+
+
 @registrar_funcion(
     codigo='cotizar_aria',
     descripcion='Envía cliente+vehículo+aseguradoras al webhook externo del cotizador y notifica a asesores.',
@@ -253,7 +271,7 @@ def cotizar_aria(conversacion, variables, config, endpoint=None) -> dict:
         body, status=r.status_code, response_body=resp_json,
     )
 
-    es_exito = (200 <= r.status_code < 300) and bool(resp_json.get('ok'))
+    es_exito = _respuesta_webhook_es_exito(r.status_code, resp_json)
     if not es_exito:
         logger.warning(
             'cotizar_aria conv#%s rechazado: status=%s body=%s',
@@ -444,7 +462,7 @@ def cotizar_am(conversacion, variables, config, endpoint=None) -> dict:
         body, status=r.status_code, response_body=resp_json,
     )
 
-    es_exito = (200 <= r.status_code < 300) and bool(resp_json.get('ok'))
+    es_exito = _respuesta_webhook_es_exito(r.status_code, resp_json)
     if not es_exito:
         logger.warning(
             'cotizar_am conv#%s rechazado: status=%s body=%s',
@@ -872,7 +890,7 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
         body, status=r.status_code, response_body=resp_json,
     )
 
-    es_exito = (200 <= r.status_code < 300) and bool(resp_json.get('ok'))
+    es_exito = _respuesta_webhook_es_exito(r.status_code, resp_json)
     if not es_exito:
         logger.warning(
             'cotizar_am_multiple conv#%s rechazado: status=%s body=%s',

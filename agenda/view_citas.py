@@ -27,6 +27,9 @@ STATUS_COLORS = {
     'no_show': '#dc3545',
 }
 
+SECCIONES_CITAS = ('listado', 'calendario')
+POST_ACTIONS = ('events', 'reschedule', 'create', 'mark_status', 'delete', 'cancel')
+
 
 @login_required
 @secure_module
@@ -63,7 +66,7 @@ def citasView(request):
         'modulo': 'Agenda',
         'ruta': request.path,
         'fecha': str(date.today()),
-        'grupos': grupos,
+        'agenda_grupos': grupos,
         'grupo_actual': grupo_actual,
         'recursos': recursos,
         'recurso_actual': recurso_actual,
@@ -189,36 +192,44 @@ def citasView(request):
             res_json.append({'error': True, 'message': f'Intente nuevamente: {ex}'})
         return JsonResponse(res_json, safe=False)
 
-    qs = Turno.objects.filter(status=True).select_related(
+    action_param = (request.GET.get('action') or '').strip()
+    seccion = action_param if action_param in SECCIONES_CITAS else 'listado'
+    data['seccion'] = seccion
+
+    qs_base = Turno.objects.filter(status=True).select_related(
         'recurso', 'recurso__grupo_agenda', 'servicio', 'contacto'
     )
-    url_vars = ''
+    url_vars = f'&action={seccion}'
     if grupo_actual:
-        qs = qs.filter(recurso__grupo_agenda=grupo_actual)
+        qs_base = qs_base.filter(recurso__grupo_agenda=grupo_actual)
         url_vars += f'&grupo={grupo_actual.id}'
     if recurso_actual:
-        qs = qs.filter(recurso=recurso_actual)
+        qs_base = qs_base.filter(recurso=recurso_actual)
         url_vars += f'&recurso={recurso_actual.id}'
     if estado_filtro:
-        qs = qs.filter(estado=estado_filtro)
+        qs_base = qs_base.filter(estado=estado_filtro)
         url_vars += f'&estado={estado_filtro}'
     if fecha_desde:
         try:
             d = datetime.strptime(fecha_desde, '%Y-%m-%d').date()
-            qs = qs.filter(inicio__date__gte=d)
+            qs_base = qs_base.filter(inicio__date__gte=d)
             url_vars += f'&desde={fecha_desde}'
         except ValueError:
             pass
     if fecha_hasta:
         try:
             d = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
-            qs = qs.filter(inicio__date__lte=d)
+            qs_base = qs_base.filter(inicio__date__lte=d)
             url_vars += f'&hasta={fecha_hasta}'
         except ValueError:
             pass
 
-    listado = qs.order_by('-inicio')
-    data['list_count'] = listado.count()
     data['url_vars'] = url_vars
-    paginador(request, listado, 50, data, url_vars)
+    data['count_total'] = qs_base.count()
+
+    if seccion == 'listado':
+        listado = qs_base.order_by('-inicio')
+        data['list_count'] = listado.count()
+        paginador(request, listado, 50, data, url_vars)
+
     return render(request, 'agenda/citas/listado.html', data)
