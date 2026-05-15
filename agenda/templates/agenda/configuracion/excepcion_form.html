@@ -1,0 +1,34 @@
+{% extends 'ajaxformmodal.html' %}
+
+{% block replace_id %}
+    <input type="hidden" name="pk" id="id_objeto" value="{{ pk|default:'' }}"/>
+    <input type="hidden" name="entity" value="excepcion"/>
+{% endblock %}
+
+{% block extra_js %}
+    <script>
+        (function () {
+            const tipo = document.getElementById('id_tipo_excepcion');
+            const inicio = document.getElementById('id_hora_inicio');
+            const fin = document.getElementById('id_hora_fin');
+            function ajustar() {
+                const wrapInicio = document.getElementById('fieldset_hora_inicio');
+                const wrapFin = document.getElementById('fieldset_hora_fin');
+                if (!tipo) return;
+                if (tipo.value === 'block_day') {
+                    if (wrapInicio) wrapInicio.style.display = 'none';
+                    if (wrapFin) wrapFin.style.display = 'none';
+                    if (inicio) inicio.value = '';
+                    if (fin) fin.value = '';
+                } else {
+                    if (wrapInicio) wrapInicio.style.display = '';
+                    if (wrapFin) wrapFin.style.display = '';
+                }
+            }
+            if (tipo) {
+                tipo.addEventListener('change', ajustar);
+                ajustar();
+            }
+        })();
+    </script>
+{% endblock %}

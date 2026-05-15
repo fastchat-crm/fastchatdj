@@ -1,0 +1,6 @@
+{% extends 'ajaxformmodal.html' %}
+
+{% block replace_id %}
+    <input type="hidden" name="pk" id="id_objeto" value="{{ pk|default:'' }}"/>
+    <input type="hidden" name="entity" value="servicio"/>
+{% endblock %}

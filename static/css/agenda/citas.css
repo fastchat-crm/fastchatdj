@@ -1,3 +1,12 @@
+.badge-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
 #calendar {
     min-height: 600px;
 }
@@ -15,12 +24,4 @@
 
 .fc-event:hover {
     filter: brightness(0.92);
-}
-
-.fc-timegrid-event-harness {
-    margin-right: 2px;
-}
-
-.badge[style*="background:#ffc107"] {
-    color: #000 !important;
 }

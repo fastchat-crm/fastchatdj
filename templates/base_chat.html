@@ -23,8 +23,7 @@
     <link href="/static/lib/tempusdominus-bootstrap-4/tempusdominus-bootstrap-4.min.css" rel="stylesheet"/>
     <meta name="vapid-key" content="{{ vapid_key }}">
     <meta name="islogged" content="{{ request.user.is_authenticated }}">
-    {% load pwa %}
-    {% progressive_web_app_meta %}
+    {% include 'pwa/meta_tags.html' %}
     <link rel="stylesheet" href="/static/css/pwa/install_bar.css?v1.0">
     {% block head %}{% endblock %}
     <script>

@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils.dateparse import parse_datetime
 
-from core.funciones import addData, log, secure_module
+from core.funciones import addData, log, paginador, secure_module
 
 from .models import (
     ACTIVE_STATUSES,
@@ -30,8 +30,9 @@ STATUS_COLORS = {
 
 @login_required
 @secure_module
-def calendarioView(request):
+def citasView(request):
     grupos = GrupoAgenda.objects.filter(status=True).order_by('nombre')
+
     grupo_id = request.GET.get('grupo') or request.POST.get('grupo_id')
     grupo_actual = None
     if grupo_id:
@@ -39,10 +40,12 @@ def calendarioView(request):
             grupo_actual = grupos.get(pk=int(grupo_id))
         except (GrupoAgenda.DoesNotExist, ValueError):
             grupo_actual = None
+
     recursos = (Recurso.objects.filter(grupo_agenda=grupo_actual, status=True).order_by('orden', 'nombre')
                 if grupo_actual else Recurso.objects.none())
     servicios = (Servicio.objects.filter(grupo_agenda=grupo_actual, status=True).prefetch_related('recursos').order_by('orden', 'nombre')
                  if grupo_actual else Servicio.objects.none())
+
     recurso_id = request.GET.get('recurso')
     recurso_actual = None
     if recurso_id:
@@ -51,26 +54,35 @@ def calendarioView(request):
         except (Recurso.DoesNotExist, ValueError):
             recurso_actual = None
 
+    estado_filtro = (request.GET.get('estado') or '').strip()
+    fecha_desde = (request.GET.get('desde') or '').strip()
+    fecha_hasta = (request.GET.get('hasta') or '').strip()
+
     data = {
-        'titulo': 'Calendario de turnos',
-        'descripcion': 'Ver, reagendar (arrastrando) y crear turnos visualmente.',
+        'titulo': 'Citas',
+        'modulo': 'Agenda',
         'ruta': request.path,
+        'fecha': str(date.today()),
         'grupos': grupos,
         'grupo_actual': grupo_actual,
         'recursos': recursos,
         'recurso_actual': recurso_actual,
         'servicios': servicios,
+        'estado_filtro': estado_filtro,
+        'fecha_desde': fecha_desde,
+        'fecha_hasta': fecha_hasta,
         'status_choices': APPOINTMENT_STATUS_CHOICES,
     }
     addData(request, data)
 
     if request.method == 'POST':
-        action = request.POST.get('action')
+        res_json = []
+        action = request.POST.get('action', '')
         try:
             with transaction.atomic():
                 if action == 'events':
-                    desde = parse_datetime(request.POST.get('start'))
-                    hasta = parse_datetime(request.POST.get('end'))
+                    desde = parse_datetime(request.POST.get('start') or '')
+                    hasta = parse_datetime(request.POST.get('end') or '')
                     qs = Turno.objects.filter(status=True)
                     if grupo_actual:
                         qs = qs.filter(recurso__grupo_agenda=grupo_actual)
@@ -103,8 +115,8 @@ def calendarioView(request):
 
                 if action == 'reschedule':
                     pk = int(request.POST['pk'])
-                    nuevo_inicio = parse_datetime(request.POST.get('inicio'))
-                    nuevo_fin = parse_datetime(request.POST.get('fin'))
+                    nuevo_inicio = parse_datetime(request.POST.get('inicio') or '')
+                    nuevo_fin = parse_datetime(request.POST.get('fin') or '')
                     if not nuevo_inicio or not nuevo_fin:
                         return JsonResponse({'error': True, 'message': 'Rango de fecha inválido.'})
                     turno = Turno.objects.get(pk=pk, status=True)
@@ -149,14 +161,6 @@ def calendarioView(request):
                     log(f'Turno {turno.id} creado (manual)', request, 'add', obj=turno.id)
                     return JsonResponse({'error': False, 'id': turno.id})
 
-                if action == 'cancel':
-                    pk = int(request.POST['pk'])
-                    t = Turno.objects.get(pk=pk, status=True)
-                    t.estado = 'cancelled'
-                    t.save(request=request)
-                    log(f'Turno {t.id} cancelado', request, 'change', obj=t.id)
-                    return JsonResponse({'error': False})
-
                 if action == 'mark_status':
                     pk = int(request.POST['pk'])
                     nuevo = request.POST.get('estado')
@@ -165,13 +169,56 @@ def calendarioView(request):
                     t = Turno.objects.get(pk=pk, status=True)
                     t.estado = nuevo
                     t.save(request=request)
-                    return JsonResponse({'error': False})
+                    log(f'Turno {t.id} marcado como {nuevo}', request, 'change', obj=t.id)
+                    return JsonResponse({'error': False, 'reload': True})
 
+                if action == 'delete':
+                    pk = int(request.POST['id'])
+                    t = Turno.objects.get(pk=pk, status=True)
+                    t.status = False
+                    t.save(request=request)
+                    log(f'Turno {t.id} eliminado', request, 'del', obj=t.id)
+                    return JsonResponse({'error': False, 'reload': True})
+
+                res_json.append({'error': True, 'message': 'Acción no reconocida.'})
         except (Recurso.DoesNotExist, Servicio.DoesNotExist):
-            return JsonResponse({'error': True, 'message': 'Recurso o servicio no encontrado.'})
+            res_json.append({'error': True, 'message': 'Recurso o servicio no encontrado.'})
         except Turno.DoesNotExist:
-            return JsonResponse({'error': True, 'message': 'Turno no encontrado.'})
+            res_json.append({'error': True, 'message': 'Turno no encontrado.'})
         except Exception as ex:
-            return JsonResponse({'error': True, 'message': f'Error: {ex}'})
+            res_json.append({'error': True, 'message': f'Intente nuevamente: {ex}'})
+        return JsonResponse(res_json, safe=False)
 
-    return render(request, 'agenda/calendario/index.html', data)
+    qs = Turno.objects.filter(status=True).select_related(
+        'recurso', 'recurso__grupo_agenda', 'servicio', 'contacto'
+    )
+    url_vars = ''
+    if grupo_actual:
+        qs = qs.filter(recurso__grupo_agenda=grupo_actual)
+        url_vars += f'&grupo={grupo_actual.id}'
+    if recurso_actual:
+        qs = qs.filter(recurso=recurso_actual)
+        url_vars += f'&recurso={recurso_actual.id}'
+    if estado_filtro:
+        qs = qs.filter(estado=estado_filtro)
+        url_vars += f'&estado={estado_filtro}'
+    if fecha_desde:
+        try:
+            d = datetime.strptime(fecha_desde, '%Y-%m-%d').date()
+            qs = qs.filter(inicio__date__gte=d)
+            url_vars += f'&desde={fecha_desde}'
+        except ValueError:
+            pass
+    if fecha_hasta:
+        try:
+            d = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
+            qs = qs.filter(inicio__date__lte=d)
+            url_vars += f'&hasta={fecha_hasta}'
+        except ValueError:
+            pass
+
+    listado = qs.order_by('-inicio')
+    data['list_count'] = listado.count()
+    data['url_vars'] = url_vars
+    paginador(request, listado, 50, data, url_vars)
+    return render(request, 'agenda/citas/listado.html', data)

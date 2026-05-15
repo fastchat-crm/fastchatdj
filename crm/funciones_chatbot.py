@@ -600,86 +600,32 @@ _ALTA_PROTECCION_TOKENS = {
     'altaproteccion', 'mayorproteccion', 'maximaproteccion',
     'alta', 'high', 'premium', 'top',
 }
-_TODOS_TOKENS = {'todos', 'all', 'completo', 'mostrartodos', 'showall'}
-_PARENTESCOS_VALIDOS = {'TITULAR', 'CONYUGE', 'HIJO', 'PADRE', 'MADRE', 'OTRO'}
+_PARENTESCOS_VALIDOS = {'CONYUGE', 'HIJO', 'PADRE', 'MADRE', 'OTRO'}
 
 
 def _normalizar_budget(token: str) -> str:
-    return (token or '').strip().lower().replace(' ', '').replace('-', '').replace('_', '')
-
-
-def _derivar_api_url_desde_webhook(webhook_url: str) -> str:
-    """`https://x/cotimedica/webhook/` → `https://x/cotimedica-api/v1/`.
-
-    Si el webhook no encaja con el patrón conocido, devuelve el mismo URL
-    (la llamada a `action=planes_grupo` luego fallará y se reportará por
-    correo de debug).
-    """
-    if '/cotimedica/webhook' in webhook_url:
-        prefix = webhook_url.split('/cotimedica/webhook', 1)[0]
-        return prefix + '/cotimedica-api/v1/'
-    return webhook_url
-
-
-def _resolver_plan_para_grupo(api_url, members, budget_norm, timeout, headers):
-    """Llama `action=planes_grupo` y elige plan según `budget_norm`.
-
-    Devuelve (plan_id, plan_dental_id, error_msg). plan_dental_id por
-    defecto es 1 (suele ser el dental BÁSICO). El doc indica que la
-    respuesta viene ordenada de menor a mayor prima — economico=primero,
-    alta_proteccion=último, equilibrio/desconocido=mediano.
-    """
-    payload = {'action': 'planes_grupo', 'members': members}
-    try:
-        r = requests.post(api_url, json=payload, timeout=timeout, headers=headers)
-    except requests.RequestException as ex:
-        return None, None, f'planes_grupo request_exception: {ex}'
-
-    if r.status_code >= 300:
-        return None, None, f'planes_grupo HTTP {r.status_code}: {r.text[:300]}'
-    try:
-        data = r.json()
-    except ValueError:
-        return None, None, f'planes_grupo respuesta no JSON: {r.text[:300]}'
-    if not data.get('ok'):
-        return None, None, f'planes_grupo ok=false: {data.get("error") or data}'
-    planes = (data.get('data') or {}).get('planes') or []
-    if not planes:
-        return None, None, 'planes_grupo: lista de planes vacía para este grupo.'
-
-    if budget_norm in _ALTA_PROTECCION_TOKENS:
-        plan = planes[-1]
-    elif budget_norm in _ECONOMICO_TOKENS:
-        plan = planes[0]
-    else:
-        plan = planes[len(planes) // 2]
-
-    plan_id = plan.get('plan_id')
-    if plan_id is None:
-        return None, None, f'planes_grupo: plan elegido sin plan_id: {plan}'
-    dental_opts = plan.get('opciones_dental') or []
-    plan_dental_id = None
-    if dental_opts:
-        plan_dental_id = dental_opts[0].get('plan_dental_id')
-    if plan_dental_id is None:
-        plan_dental_id = 1
-    return plan_id, plan_dental_id, None
+    norm = (token or '').strip().lower().replace(' ', '').replace('-', '').replace('_', '')
+    if norm in _ECONOMICO_TOKENS:
+        return 'economico'
+    if norm in _EQUILIBRIO_TOKENS:
+        return 'equilibrio'
+    if norm in _ALTA_PROTECCION_TOKENS:
+        return 'alta_proteccion'
+    return ''
 
 
 @registrar_funcion(
     codigo='cotizar_am_multiple',
-    descripcion='Envía cliente + miembros[] + tipo_grupo (Mode D del webhook Vida Buena) o, si budget_intent="todos", entra al Mode B (cotiza todos los planes del titular).',
+    descripcion='Envía cliente + tipo_grupo + budget_intent + dependientes[] al webhook Vida Buena. El engine recomienda 1 plan que se aplica a todos los miembros (precio cambia por edad/sexo).',
     parametros={
-        'cliente.cedula':              'string · cédula del titular',
-        'cliente.nombres':             'string · nombre(s)',
-        'cliente.apellidos':           'string · apellido(s)',
-        'cliente.fecha_nacimiento':    'string · YYYY-MM-DD',
+        'cliente.cedula':              'string · cédula del titular (10/13 dígitos)',
+        'cliente.nombres':             'string · nombres del titular',
+        'cliente.apellidos':           'string · apellidos del titular',
+        'cliente.fecha_nacimiento':    'string · YYYY-MM-DD | DD/MM/YYYY | DD-MM-YYYY',
         'cliente.sexo':                'string · M | F',
         'cliente.email':               'string · correo de contacto',
-        'budget_intent':               'economico | equilibrio | alta_proteccion | todos | desconocido',
-        'network_preference':          'red_cerrada_ok | quiere_red_abierta | desconocido (default)',
-        'wants_max_protection':        'bool (default False)',
-        'variables.edad_titular':      'number · edad del titular',
+        'budget_intent':               'economico | equilibrio | alta_proteccion (requerido)',
+        'variables.edad_titular':      'number · edad del titular (no se envía, se infiere)',
         'variables.sexo_titular':      'M | F · sexo del titular',
         'variables.num_dependientes':  'number 0-5 · cuántos dependientes incluir',
         'variables.edad_m1..m5':       'number · edad de cada dependiente',
@@ -688,7 +634,8 @@ def _resolver_plan_para_grupo(api_url, members, budget_norm, timeout, headers):
         'variables.cedula_m1..m5':     'string · cédula del dependiente (opcional, "0" = no aplica)',
         'variables.nombres_m1..m5':    'string · nombres del dependiente (opcional, viene del SRI)',
         'variables.apellidos_m1..m5':  'string · apellidos del dependiente (opcional, viene del SRI)',
-        '(auto) cliente.telefono':     'string · número de WhatsApp del contacto (inyectado).',
+        '(auto) cliente.telefono':     'string · número de WhatsApp del contacto (inyectado, mín 7 dígitos)',
+        '(auto) tipo_grupo':           'INDIVIDUAL | TITULAR_MAS_UNO | FAMILIA (derivado de num_dependientes)',
     },
     requiere_endpoint=True,
     ejemplo_body={
@@ -701,32 +648,30 @@ def _resolver_plan_para_grupo(api_url, members, budget_norm, timeout, headers):
             'email': '{{variables.email}}',
         },
         'budget_intent': '{{variables.budget_intent}}',
-        'network_preference': '{{variables.network_preference}}',
-        'wants_max_protection': False,
     },
 )
 def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
-    """Cotiza Vida Buena para titular + N dependientes (Mode D del webhook).
+    """Cotiza Vida Buena para titular + N dependientes.
 
-    El bot capturó: titular (cédula → lookup en SRI o manual), número de
-    dependientes (0-5), y por cada dependiente: cédula → lookup → edad +
-    sexo + parentesco. También capturó `budget_intent` y
-    `network_preference`.
+    Body que arma esta función para el webhook:
 
-    Esta función:
-      1. Materializa `members[]` desde las variables del bot.
-      2. Si `budget_intent` normaliza a "todos" → entra al **Mode B** del
-         webhook (sin `members`/`miembros`): cotiza TODOS los planes con
-         tarifa para edad/sexo del titular.
-      3. Si no, entra al **Mode D** (grupo familiar):
-         a. Llama `action=planes_grupo` al REST API para listar planes
-            ordenados por prima total del grupo.
-         b. Elige plan según `budget_intent` (economico=cheaper,
-            equilibrio=mid, alta_proteccion=most_expensive).
-         c. Construye `miembros[]` con titular + dependientes (cada uno
-            con `parentesco`, `edad`, `sexo` y la misma `selecciones`).
-         d. Determina `tipo_grupo` (1=INDIVIDUAL, 2=TITULAR_MAS_UNO,
-            3+=FAMILIA) y arma el body Mode D.
+        {
+          "cliente": {cedula, nombres, apellidos, fecha_nacimiento, sexo,
+                      email, telefono},
+          "tipo_grupo": "INDIVIDUAL" | "TITULAR_MAS_UNO" | "FAMILIA",
+          "budget_intent": "economico" | "equilibrio" | "alta_proteccion",
+          "dependientes": [
+            {"parentesco", "edad", "sexo", (opcional) "cedula", "nombres",
+             "apellidos"},
+            ...
+          ],
+          "id_conversacion": <int opcional>
+        }
+
+    El titular vive en `cliente`, NO en `dependientes[]`. `tipo_grupo` se
+    deriva del conteo: 0 → INDIVIDUAL, 1 → TITULAR_MAS_UNO, 2+ → FAMILIA.
+    El engine del webhook elige UN plan según `budget_intent` y lo aplica
+    a todos los miembros del grupo (cambia solo el precio por edad/sexo).
 
     Inyecta `cliente.telefono` con el número de WhatsApp del contacto y
     `id_conversacion` para que el webhook mande el resumen al chat.
@@ -789,54 +734,75 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
         except (TypeError, ValueError):
             return None
 
-    sexo_titular = (str(vars_.get('sexo_titular') or '').strip().upper() or 'unknown')
+    sexo_titular = (str(vars_.get('sexo_titular') or '').strip().upper() or '')
     edad_titular = _to_int(vars_.get('edad_titular'))
 
-    members = []
-    if edad_titular is not None:
-        members.append({
-            'age': edad_titular,
-            'gender': sexo_titular,
-            'relationship': 'titular',
-        })
+    if edad_titular is None or sexo_titular not in ('M', 'F'):
+        _notificar_error_cotizar_am_multiple(
+            conv_id, 'titular_incompleto',
+            'Falta edad o sexo del titular para armar el body.',
+            request_body={'variables_relevantes': {
+                k: vars_.get(k) for k in ('edad_titular', 'sexo_titular')
+            }},
+            variables=vars_,
+        )
+        return {
+            'etiqueta': 'error', 'body': {}, 'status': 400,
+            'error': 'Datos del titular incompletos (edad/sexo).',
+        }
 
     num_dep = _to_int(vars_.get('num_dependientes')) or 0
     if num_dep < 0:
         num_dep = 0
     if num_dep > 5:
         num_dep = 5
-    for i in range(1, num_dep + 1):
-        edad = _to_int(vars_.get(f'edad_m{i}'))
-        if edad is None:
-            continue
-        sexo = (str(vars_.get(f'sexo_m{i}') or '').strip().upper() or 'unknown')
-        members.append({
-            'age': edad,
-            'gender': sexo,
-            'relationship': 'otro',
-        })
 
-    if not members:
+    dependientes = []
+    for i in range(1, num_dep + 1):
+        edad_i = _to_int(vars_.get(f'edad_m{i}'))
+        if edad_i is None:
+            continue
+        sexo_i = (str(vars_.get(f'sexo_m{i}') or '').strip().upper() or 'M')
+        if sexo_i not in ('M', 'F'):
+            sexo_i = 'M'
+        paren_i = (str(vars_.get(f'parentesco_m{i}') or '').strip().upper() or 'OTRO')
+        if paren_i not in _PARENTESCOS_VALIDOS:
+            paren_i = 'OTRO'
+        dep = {
+            'parentesco': paren_i,
+            'edad': edad_i,
+            'sexo': sexo_i,
+        }
+        ced_i = (str(vars_.get(f'cedula_m{i}') or '').strip())
+        if ced_i and ced_i != '0':
+            dep['cedula'] = ced_i
+        nom_i = (str(vars_.get(f'nombres_m{i}') or '').strip())
+        if nom_i:
+            dep['nombres'] = nom_i
+        ap_i = (str(vars_.get(f'apellidos_m{i}') or '').strip())
+        if ap_i:
+            dep['apellidos'] = ap_i
+        dependientes.append(dep)
+
+    if len(dependientes) == 0:
+        tipo_grupo = 'INDIVIDUAL'
+    elif len(dependientes) == 1:
+        tipo_grupo = 'TITULAR_MAS_UNO'
+    else:
+        tipo_grupo = 'FAMILIA'
+
+    budget_norm = _normalizar_budget(body.get('budget_intent'))
+    if not budget_norm:
         _notificar_error_cotizar_am_multiple(
-            conv_id, 'sin_members',
-            'No se pudo construir members[]: falta edad del titular.',
-            request_body={'variables_relevantes': {
-                k: vars_.get(k) for k in (
-                    'edad_titular', 'sexo_titular', 'num_dependientes',
-                    'edad_m1', 'sexo_m1', 'edad_m2', 'sexo_m2',
-                    'edad_m3', 'sexo_m3', 'edad_m4', 'sexo_m4',
-                    'edad_m5', 'sexo_m5',
-                )
-            }},
-            variables=vars_,
+            conv_id, 'budget_invalido',
+            f'budget_intent inválido: {body.get("budget_intent")!r}. '
+            'Valores aceptados: economico | equilibrio | alta_proteccion.',
+            request_body=body, variables=vars_,
         )
         return {
             'etiqueta': 'error', 'body': {}, 'status': 400,
-            'error': 'No se pudo construir members[]: falta edad del titular.',
+            'error': 'budget_intent inválido. Esperado: economico | equilibrio | alta_proteccion.',
         }
-
-    body['id_conversacion'] = conversacion.id
-    body.pop('selecciones', None)
 
     contacto = getattr(conversacion, 'contacto', None)
     wa_telefono = ''
@@ -868,83 +834,15 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
     headers.setdefault('Content-Type', 'application/json')
     headers.setdefault('Accept', 'application/json')
 
-    budget_norm = _normalizar_budget(body.get('budget_intent'))
-    es_modo_todos = budget_norm in _TODOS_TOKENS
-
-    if es_modo_todos:
-        body.pop('members', None)
-        body.pop('miembros', None)
-        body.pop('tipo_grupo', None)
-        body.pop('network_preference', None)
-        body.pop('wants_max_protection', None)
-    else:
-        api_url = _derivar_api_url_desde_webhook(base_url)
-        plan_id, plan_dental_id, plan_err = _resolver_plan_para_grupo(
-            api_url, members, budget_norm, timeout, headers,
-        )
-        if plan_id is None:
-            _notificar_error_cotizar_am_multiple(
-                conv_id, 'planes_grupo_fallo',
-                plan_err or 'No se pudo elegir plan para el grupo.',
-                request_body={
-                    'api_url': api_url,
-                    'action': 'planes_grupo',
-                    'members': members,
-                    'budget_norm': budget_norm,
-                },
-                variables=vars_,
-            )
-            return {
-                'etiqueta': 'error', 'body': {}, 'status': 502,
-                'error': plan_err or 'No se pudo elegir plan para el grupo.',
-            }
-
-        miembros = [{
-            'parentesco': 'TITULAR',
-            'edad': edad_titular,
-            'sexo': sexo_titular if sexo_titular in ('M', 'F') else 'M',
-            'selecciones': [{'plan_id': plan_id, 'plan_dental_id': plan_dental_id}],
-        }]
-        for i in range(1, num_dep + 1):
-            edad_i = _to_int(vars_.get(f'edad_m{i}'))
-            if edad_i is None:
-                continue
-            sexo_i = (str(vars_.get(f'sexo_m{i}') or '').strip().upper() or 'M')
-            if sexo_i not in ('M', 'F'):
-                sexo_i = 'M'
-            paren_i = (str(vars_.get(f'parentesco_m{i}') or '').strip().upper() or 'OTRO')
-            if paren_i not in _PARENTESCOS_VALIDOS or paren_i == 'TITULAR':
-                paren_i = 'OTRO'
-            miembro = {
-                'parentesco': paren_i,
-                'edad': edad_i,
-                'sexo': sexo_i,
-                'selecciones': [{'plan_id': plan_id, 'plan_dental_id': plan_dental_id}],
-            }
-            ced_i = (str(vars_.get(f'cedula_m{i}') or '').strip())
-            if ced_i and ced_i != '0':
-                miembro['cedula'] = ced_i
-            nom_i = (str(vars_.get(f'nombres_m{i}') or '').strip())
-            if nom_i:
-                miembro['nombres'] = nom_i
-            ap_i = (str(vars_.get(f'apellidos_m{i}') or '').strip())
-            if ap_i:
-                miembro['apellidos'] = ap_i
-            miembros.append(miembro)
-
-        if len(miembros) == 1:
-            tipo_grupo = 'INDIVIDUAL'
-        elif len(miembros) == 2:
-            tipo_grupo = 'TITULAR_MAS_UNO'
-        else:
-            tipo_grupo = 'FAMILIA'
-
-        body.pop('members', None)
-        body.pop('budget_intent', None)
-        body.pop('network_preference', None)
-        body.pop('wants_max_protection', None)
-        body['tipo_grupo'] = tipo_grupo
-        body['miembros'] = miembros
+    cliente_dict = body.get('cliente') if isinstance(body.get('cliente'), dict) else {}
+    body = {
+        'cliente': cliente_dict,
+        'tipo_grupo': tipo_grupo,
+        'budget_intent': budget_norm,
+        'id_conversacion': conversacion.id,
+    }
+    if dependientes:
+        body['dependientes'] = dependientes
 
     try:
         r = requests.post(base_url, json=body, timeout=timeout, headers=headers)

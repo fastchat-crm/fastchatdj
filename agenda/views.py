@@ -4,4 +4,4 @@ from django.shortcuts import redirect
 
 @login_required
 def agendaIndexView(request):
-    return redirect('/agenda/grupos/')
+    return redirect('/agenda/configuracion/')

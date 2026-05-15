@@ -1,0 +1,777 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/css/agenda/configuracion.css?v1.0">
+{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="mb-0">Configuración de agenda</h4>
+                <small class="text-muted">Grupos, recursos, servicios, excepciones y horarios en un solo lugar.</small>
+            </div>
+            <a href="/agenda/citas/" class="btn btn-outline-primary btn-sm">
+                <i class="fa fa-calendar-check me-1"></i> Ver citas asignadas
+            </a>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Búsqueda general</label>
+                            <div class="input-group">
+                                <span class="input-group-text border-end-0">
+                                    <i class="fa fa-search text-muted"></i>
+                                </span>
+                                <input type="text" class="form-control border-start-0"
+                                       placeholder="Buscar en grupos, recursos, servicios o excepciones"
+                                       name="criterio" value="{{ criterio }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6 d-flex gap-2 align-items-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i> Filtrar
+                            </button>
+                            {% if url_vars %}
+                                <a href="{{ request.path }}" class="btn btn-default">
+                                    <i class="fas fa-times"></i> Limpiar
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <ul class="nav nav-tabs" id="agendaTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-grupos" type="button">
+                    <i class="fa fa-layer-group me-1"></i> Grupos <span class="badge bg-secondary ms-1">{{ grupos.count }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-recursos" type="button">
+                    <i class="fa fa-user-md me-1"></i> Recursos <span class="badge bg-secondary ms-1">{{ recursos.count }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-servicios" type="button">
+                    <i class="fa fa-concierge-bell me-1"></i> Servicios <span class="badge bg-secondary ms-1">{{ servicios.count }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-excepciones" type="button">
+                    <i class="fa fa-ban me-1"></i> Excepciones <span class="badge bg-secondary ms-1">{{ excepciones.count }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-horarios" type="button">
+                    <i class="fa fa-calendar-week me-1"></i> Horarios
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content card border-top-0 rounded-top-0">
+            <div class="tab-pane fade show active" id="tab-grupos">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <small class="text-muted">Un grupo agrupa recursos, servicios y horarios. Una sesión WhatsApp se ata a un grupo.</small>
+                        <a href="javascript:void(0)" onclick="formModalAgenda('grupo', 0, 'Nuevo grupo de agenda', 'add')"
+                           class="btn btn-success btn-sm">
+                            <i class="fas fa-plus-circle me-1"></i> Nuevo grupo
+                        </a>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>Descripción</th>
+                                    <th>Moneda</th>
+                                    <th>Recordatorio (h)</th>
+                                    <th>Zona horaria</th>
+                                    <th class="text-center" style="width:120px">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for g in grupos %}
+                                <tr>
+                                    <td><strong>{{ g.nombre }}</strong></td>
+                                    <td>{{ g.descripcion|default:"—"|truncatechars:60 }}</td>
+                                    <td><span class="badge bg-light text-dark">{{ g.moneda }}</span></td>
+                                    <td>{{ g.recordatorio_horas_antes }}</td>
+                                    <td><small class="text-muted">{{ g.zona_horaria }}</small></td>
+                                    <td class="text-center">
+                                        <div class="dropdown">
+                                            <button class="btn btn-icon" type="button" data-bs-toggle="dropdown"
+                                                    style="background:none;border:none;">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li><a class="dropdown-item" href="javascript:void(0);"
+                                                       onclick="formModalAgenda('grupo', {{ g.pk }}, 'Editar grupo: {{ g.nombre|escapejs }}', 'change')">
+                                                    <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                                </a></li>
+                                                <li><a class="dropdown-item" href="javascript:void(0);"
+                                                       onclick="eliminarAgenda('grupo', {{ g.pk }}, '{{ g.nombre|escapejs }}')">
+                                                    <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                                </a></li>
+                                            </ul>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="6" class="text-center text-muted">Aún no hay grupos.</td></tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="tab-recursos">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <small class="text-muted">Personas, salas o equipos que pueden atender turnos. Arrastrá filas para reordenar.</small>
+                        <a href="javascript:void(0)" onclick="formModalAgenda('recurso', 0, 'Nuevo recurso', 'add')"
+                           class="btn btn-success btn-sm">
+                            <i class="fas fa-plus-circle me-1"></i> Nuevo recurso
+                        </a>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped align-middle table-recursos">
+                            <thead>
+                                <tr>
+                                    <th style="width:36px"></th>
+                                    <th>Color</th>
+                                    <th>Nombre</th>
+                                    <th>Grupo</th>
+                                    <th>Usuario vinculado</th>
+                                    <th class="text-center" style="width:120px">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recursosBody">
+                            {% for r in recursos %}
+                                <tr data-id="{{ r.id }}">
+                                    <td class="drag-handle text-muted text-center"><i class="fa fa-grip-vertical"></i></td>
+                                    <td><span class="badge-dot" style="background:{{ r.color }}"></span></td>
+                                    <td>
+                                        <strong>{{ r.nombre }}</strong>
+                                        {% if r.descripcion %}<br><small class="text-muted">{{ r.descripcion|truncatechars:60 }}</small>{% endif %}
+                                    </td>
+                                    <td><small>{{ r.grupo_agenda.nombre }}</small></td>
+                                    <td>
+                                        {% if r.usuario %}<small>{{ r.usuario.first_name }} {{ r.usuario.last_name }}</small>
+                                        {% else %}<small class="text-muted">—</small>{% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="dropdown">
+                                            <button class="btn btn-icon" type="button" data-bs-toggle="dropdown"
+                                                    style="background:none;border:none;">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li><a class="dropdown-item" href="javascript:void(0);"
+                                                       onclick="formModalAgenda('recurso', {{ r.pk }}, 'Editar recurso: {{ r.nombre|escapejs }}', 'change')">
+                                                    <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                                </a></li>
+                                                <li><a class="dropdown-item" href="javascript:void(0);"
+                                                       onclick="eliminarAgenda('recurso', {{ r.pk }}, '{{ r.nombre|escapejs }}')">
+                                                    <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                                </a></li>
+                                            </ul>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="6" class="text-center text-muted">Aún no hay recursos.</td></tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="tab-servicios">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <small class="text-muted">Lo que reserva el cliente: con precio, duración y recursos asignados. Arrastrá filas para reordenar.</small>
+                        <a href="javascript:void(0)" onclick="formModalAgenda('servicio', 0, 'Nuevo servicio', 'add')"
+                           class="btn btn-success btn-sm">
+                            <i class="fas fa-plus-circle me-1"></i> Nuevo servicio
+                        </a>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped align-middle table-servicios">
+                            <thead>
+                                <tr>
+                                    <th style="width:36px"></th>
+                                    <th>Nombre</th>
+                                    <th>Grupo</th>
+                                    <th>Duración</th>
+                                    <th>Precio</th>
+                                    <th>Recursos</th>
+                                    <th class="text-center" style="width:120px">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="serviciosBody">
+                            {% for s in servicios %}
+                                <tr data-id="{{ s.id }}">
+                                    <td class="drag-handle text-muted text-center"><i class="fa fa-grip-vertical"></i></td>
+                                    <td>
+                                        <strong>{{ s.nombre }}</strong>
+                                        {% if s.descripcion %}<br><small class="text-muted">{{ s.descripcion|truncatechars:60 }}</small>{% endif %}
+                                    </td>
+                                    <td><small>{{ s.grupo_agenda.nombre }}</small></td>
+                                    <td><span class="badge bg-light text-dark">{{ s.duracion_min }} min</span></td>
+                                    <td><strong>{{ s.precio }}</strong> <small class="text-muted">{{ s.grupo_agenda.moneda }}</small></td>
+                                    <td>
+                                        {% for r in s.recursos.all %}
+                                            <span class="badge text-dark" style="background:{{ r.color }}33; border:1px solid {{ r.color }}">
+                                                {{ r.nombre }}
+                                            </span>
+                                        {% empty %}
+                                            <small class="text-muted">Sin recursos</small>
+                                        {% endfor %}
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="dropdown">
+                                            <button class="btn btn-icon" type="button" data-bs-toggle="dropdown"
+                                                    style="background:none;border:none;">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li><a class="dropdown-item" href="javascript:void(0);"
+                                                       onclick="formModalAgenda('servicio', {{ s.pk }}, 'Editar servicio: {{ s.nombre|escapejs }}', 'change')">
+                                                    <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                                </a></li>
+                                                <li><a class="dropdown-item" href="javascript:void(0);"
+                                                       onclick="eliminarAgenda('servicio', {{ s.pk }}, '{{ s.nombre|escapejs }}')">
+                                                    <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                                </a></li>
+                                            </ul>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="7" class="text-center text-muted">Aún no hay servicios.</td></tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="tab-excepciones">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <small class="text-muted">Bloquean un día completo, un rango horario o agregan horas extra para una fecha puntual.</small>
+                        <a href="javascript:void(0)" onclick="formModalAgenda('excepcion', 0, 'Nueva excepción', 'add')"
+                           class="btn btn-success btn-sm">
+                            <i class="fas fa-plus-circle me-1"></i> Nueva excepción
+                        </a>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Recurso</th>
+                                    <th>Tipo</th>
+                                    <th>Rango horario</th>
+                                    <th>Motivo</th>
+                                    <th class="text-center" style="width:120px">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for e in excepciones %}
+                                <tr>
+                                    <td><strong>{{ e.fecha|date:"Y-m-d" }}</strong> <small class="text-muted">{{ e.fecha|date:"l" }}</small></td>
+                                    <td>{{ e.recurso.nombre }} <small class="text-muted">({{ e.recurso.grupo_agenda.nombre }})</small></td>
+                                    <td>
+                                        {% if e.tipo == 'block_day' %}<span class="badge bg-danger">{{ e.get_tipo_display }}</span>
+                                        {% elif e.tipo == 'block_range' %}<span class="badge bg-warning text-dark">{{ e.get_tipo_display }}</span>
+                                        {% else %}<span class="badge bg-success">{{ e.get_tipo_display }}</span>{% endif %}
+                                    </td>
+                                    <td>
+                                        {% if e.hora_inicio and e.hora_fin %}
+                                            {{ e.hora_inicio|time:"H:i" }} – {{ e.hora_fin|time:"H:i" }}
+                                        {% else %}<small class="text-muted">Día completo</small>{% endif %}
+                                    </td>
+                                    <td>{{ e.motivo|default:"—" }}</td>
+                                    <td class="text-center">
+                                        <div class="dropdown">
+                                            <button class="btn btn-icon" type="button" data-bs-toggle="dropdown"
+                                                    style="background:none;border:none;">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li><a class="dropdown-item" href="javascript:void(0);"
+                                                       onclick="formModalAgenda('excepcion', {{ e.pk }}, 'Editar excepción', 'change')">
+                                                    <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                                </a></li>
+                                                <li><a class="dropdown-item" href="javascript:void(0);"
+                                                       onclick="eliminarAgenda('excepcion', {{ e.pk }}, 'esta excepción')">
+                                                    <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                                </a></li>
+                                            </ul>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="6" class="text-center text-muted">Aún no hay excepciones.</td></tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="tab-horarios">
+                <div class="card-body">
+                    <div class="alert alert-info py-2 px-3">
+                        <small>
+                            <strong>Cómo usar:</strong> elegí un recurso, arrastrá sobre la grilla para crear bloques de trabajo,
+                            arrastrá un bloque para moverlo, sus bordes para redimensionar y doble clic para editar.
+                            <strong>Guardá</strong> al terminar.
+                        </small>
+                    </div>
+                    <div class="row g-3 align-items-end mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Recurso</label>
+                            <select id="horarioRecursoSelect" class="form-select">
+                                <option value="">Seleccionar recurso...</option>
+                                {% for r in recursos_para_horario %}
+                                    <option value="{{ r.id }}">{{ r.nombre }} ({{ r.grupo_agenda.nombre }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Slot por defecto (min)</label>
+                            <input type="number" id="slotMin" class="form-control" min="5" max="240" step="5" value="30">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Inicio del día</label>
+                            <input type="time" id="dayStart" class="form-control" value="06:00">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Fin del día</label>
+                            <input type="time" id="dayEnd" class="form-control" value="22:00">
+                        </div>
+                        <div class="col-md-2 d-flex gap-2 align-items-end">
+                            <button class="btn btn-outline-secondary btn-sm flex-fill" id="btnRebuildGrid">
+                                <i class="fa fa-sync"></i>
+                            </button>
+                            <button class="btn btn-success btn-sm flex-fill" id="btnSaveHorario" disabled>
+                                <i class="fa fa-save"></i> Guardar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="agenda-grid" id="agendaGrid"></div>
+                    <div class="d-flex justify-content-between mt-2">
+                        <small class="text-muted">Tip: el motor solo ofrece slots dentro de algún bloque de trabajo.</small>
+                        <button class="btn btn-sm btn-outline-danger" id="btnClearAllBlocks" disabled>
+                            <i class="fa fa-trash"></i> Borrar todos
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalAgenda" tabindex="-1" aria-labelledby="modalAgendaLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form" id="formAgendaModal">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalAgendaNombre"></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body detalleAgenda"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalBlockHorario" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar bloque de trabajo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Día</label>
+                            <input type="text" id="blockDay" class="form-control" disabled>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Slot (min)</label>
+                            <input type="number" id="blockSlot" class="form-control" min="5" max="240" step="5" value="30">
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Hora de inicio</label>
+                            <input type="time" id="blockStart" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Hora de fin</label>
+                            <input type="time" id="blockEnd" class="form-control">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger me-auto" id="btnDeleteBlock">
+                        <i class="fa fa-trash"></i> Eliminar
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnApplyBlock">Aplicar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/forms.js?version=1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script>
+        const RUTA_AGENDA = '{{ ruta }}';
+        const CSRF_AGENDA = '{{ csrf_token }}';
+
+        function formModalAgenda(entity, id, text, action) {
+            pantallaespera();
+            $.ajax({
+                type: 'GET',
+                url: RUTA_AGENDA,
+                data: {entity: entity, action: action, id: id},
+                dataType: 'json',
+                success: function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.result === true) {
+                        $('#modalAgendaNombre').html(text);
+                        $('.detalleAgenda').html(data.data);
+                        const modal = new bootstrap.Modal(document.getElementById('modalAgenda'));
+                        modal.show();
+                    } else {
+                        Swal.fire(data.message || 'Error', '', 'error');
+                    }
+                },
+                error: function () {
+                    setTimeout($.unblockUI, 1);
+                    Swal.fire('Error de conexión.', '', 'error');
+                }
+            });
+        }
+
+        function eliminarAgenda(entity, pk, nombre) {
+            Swal.fire({
+                title: `¿Eliminar "${nombre}"?`,
+                text: 'Esta acción es irreversible.',
+                type: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (!result.value) return;
+                pantallaespera();
+                $.post(RUTA_AGENDA, {entity: entity, action: 'delete', id: pk, csrfmiddlewaretoken: CSRF_AGENDA},
+                    function (data) {
+                        $.unblockUI();
+                        const r = Array.isArray(data) ? data[0] : data;
+                        if (!r.error) {
+                            location.reload();
+                        } else {
+                            Swal.fire(r.message || 'Error', '', 'error');
+                        }
+                    }, 'json');
+            });
+        }
+
+        function postEntity(payload) {
+            const fd = new FormData();
+            Object.entries(payload).forEach(([k, v]) => fd.append(k, v));
+            fd.append('csrfmiddlewaretoken', CSRF_AGENDA);
+            return fetch(RUTA_AGENDA, {method: 'POST', body: fd}).then(r => r.json());
+        }
+
+        (function () {
+            const tbodyR = document.getElementById('recursosBody');
+            if (tbodyR) {
+                Sortable.create(tbodyR, {
+                    handle: '.drag-handle', animation: 150,
+                    onEnd: async () => {
+                        const ids = Array.from(tbodyR.querySelectorAll('tr[data-id]')).map(tr => tr.dataset.id);
+                        const j = await postEntity({entity: 'recurso', action: 'reorder', ids: ids.join(',')});
+                        const r = Array.isArray(j) ? j[0] : j;
+                        if (r.error) Swal.fire(r.message || 'Falló el reordenamiento', '', 'error');
+                    }
+                });
+            }
+            const tbodyS = document.getElementById('serviciosBody');
+            if (tbodyS) {
+                Sortable.create(tbodyS, {
+                    handle: '.drag-handle', animation: 150,
+                    onEnd: async () => {
+                        const ids = Array.from(tbodyS.querySelectorAll('tr[data-id]')).map(tr => tr.dataset.id);
+                        const j = await postEntity({entity: 'servicio', action: 'reorder', ids: ids.join(',')});
+                        const r = Array.isArray(j) ? j[0] : j;
+                        if (r.error) Swal.fire(r.message || 'Falló el reordenamiento', '', 'error');
+                    }
+                });
+            }
+        })();
+
+        (function () {
+            const grid = document.getElementById('agendaGrid');
+            const selRecurso = document.getElementById('horarioRecursoSelect');
+            const btnSave = document.getElementById('btnSaveHorario');
+            const btnClear = document.getElementById('btnClearAllBlocks');
+            const btnRebuild = document.getElementById('btnRebuildGrid');
+            const modalEl = document.getElementById('modalBlockHorario');
+            const modalBlock = new bootstrap.Modal(modalEl);
+            const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+            const STEP_MIN = 15;
+            const PX_PER_MIN = 1.0;
+            let dayStart = '06:00';
+            let dayEnd = '22:00';
+            let blocks = [];
+            let nextTempId = -1;
+            let editingId = null;
+            let recursoActual = null;
+
+            const toMin = h => { const [a,b] = h.split(':').map(Number); return a*60+b; };
+            const toHHMM = m => { const h=Math.floor(m/60), x=m%60; return `${String(h).padStart(2,'0')}:${String(x).padStart(2,'0')}`; };
+            const snap = m => Math.round(m/STEP_MIN)*STEP_MIN;
+
+            function buildGrid() {
+                grid.innerHTML = '';
+                if (!recursoActual) {
+                    grid.innerHTML = '<div class="text-center text-muted py-5"><i class="fa fa-arrow-up me-1"></i> Elegí un recurso para editar su horario.</div>';
+                    return;
+                }
+                const sM = toMin(dayStart), eM = toMin(dayEnd);
+                if (eM - sM <= 0) return;
+                const heightPx = (eM - sM) * PX_PER_MIN;
+                const header = document.createElement('div');
+                header.className = 'ag-header';
+                header.appendChild(document.createElement('div'));
+                dayNames.forEach(n => {
+                    const c = document.createElement('div');
+                    c.className = 'ag-day-head';
+                    c.textContent = n;
+                    header.appendChild(c);
+                });
+                grid.appendChild(header);
+                const body = document.createElement('div');
+                body.className = 'ag-body';
+                const ruler = document.createElement('div');
+                ruler.className = 'ag-ruler';
+                ruler.style.height = heightPx + 'px';
+                for (let m = sM; m <= eM; m += 60) {
+                    const t = document.createElement('div');
+                    t.className = 'ag-tick';
+                    t.style.top = ((m - sM) * PX_PER_MIN) + 'px';
+                    t.textContent = toHHMM(m);
+                    ruler.appendChild(t);
+                }
+                body.appendChild(ruler);
+                for (let d = 0; d < 7; d++) {
+                    const col = document.createElement('div');
+                    col.className = 'ag-day-col';
+                    col.dataset.day = d;
+                    col.style.height = heightPx + 'px';
+                    for (let m = sM; m < eM; m += 60) {
+                        const hr = document.createElement('div');
+                        hr.className = 'ag-hour-line';
+                        hr.style.top = ((m - sM) * PX_PER_MIN) + 'px';
+                        col.appendChild(hr);
+                    }
+                    attachColEvents(col);
+                    body.appendChild(col);
+                }
+                grid.appendChild(body);
+                renderBlocks();
+            }
+
+            function renderBlocks() {
+                grid.querySelectorAll('.ag-block').forEach(el => el.remove());
+                if (!recursoActual) return;
+                const sM = toMin(dayStart);
+                blocks.forEach(b => {
+                    if (b._deleted) return;
+                    const col = grid.querySelector(`.ag-day-col[data-day="${b.day}"]`);
+                    if (!col) return;
+                    const top = (toMin(b.start) - sM) * PX_PER_MIN;
+                    const height = (toMin(b.end) - toMin(b.start)) * PX_PER_MIN;
+                    if (height <= 0) return;
+                    const el = document.createElement('div');
+                    el.className = 'ag-block';
+                    el.dataset.id = b.id || b._tempId;
+                    el.style.top = top + 'px';
+                    el.style.height = height + 'px';
+                    el.innerHTML = `<div class="ag-resize ag-resize-top"></div>
+                        <div class="ag-block-body">
+                            <div class="ag-block-time">${b.start} – ${b.end}</div>
+                            <div class="ag-block-slot">${b.slot_min} min</div>
+                        </div>
+                        <div class="ag-resize ag-resize-bottom"></div>`;
+                    attachBlockEvents(el, b);
+                    col.appendChild(el);
+                });
+            }
+
+            function findBlock(id) { return blocks.find(b => String(b.id || b._tempId) === String(id)); }
+
+            function attachColEvents(col) {
+                let drag = null;
+                col.addEventListener('mousedown', e => {
+                    if (e.target.closest('.ag-block')) return;
+                    if (e.button !== 0) return;
+                    const rect = col.getBoundingClientRect();
+                    const sM = toMin(dayStart);
+                    const m0 = snap(sM + (e.clientY - rect.top) / PX_PER_MIN);
+                    drag = {m0, day: parseInt(col.dataset.day, 10), preview: null};
+                    e.preventDefault();
+                });
+                col.addEventListener('mousemove', e => {
+                    if (!drag) return;
+                    const rect = col.getBoundingClientRect();
+                    const sM = toMin(dayStart);
+                    const m1 = snap(sM + (e.clientY - rect.top) / PX_PER_MIN);
+                    const a = Math.min(drag.m0, m1), b = Math.max(drag.m0, m1);
+                    if (b - a < STEP_MIN) return;
+                    if (!drag.preview) {
+                        drag.preview = document.createElement('div');
+                        drag.preview.className = 'ag-block ag-preview';
+                        col.appendChild(drag.preview);
+                    }
+                    drag.preview.style.top = ((a - sM) * PX_PER_MIN) + 'px';
+                    drag.preview.style.height = ((b - a) * PX_PER_MIN) + 'px';
+                    drag.preview.textContent = `${toHHMM(a)} – ${toHHMM(b)}`;
+                    drag.range = [a, b];
+                });
+                document.addEventListener('mouseup', () => {
+                    if (!drag) return;
+                    if (drag.preview) drag.preview.remove();
+                    if (drag.range) {
+                        const [a, b] = drag.range;
+                        const slot = parseInt(document.getElementById('slotMin').value || 30, 10);
+                        blocks.push({_tempId: nextTempId--, day: drag.day, start: toHHMM(a), end: toHHMM(b), slot_min: slot});
+                        renderBlocks();
+                    }
+                    drag = null;
+                });
+            }
+
+            function attachBlockEvents(el, b) {
+                let mode = null, startY = 0, oS = 0, oE = 0;
+                el.addEventListener('mousedown', e => {
+                    e.stopPropagation();
+                    if (e.button !== 0) return;
+                    if (e.target.classList.contains('ag-resize-top')) mode = 'rt';
+                    else if (e.target.classList.contains('ag-resize-bottom')) mode = 'rb';
+                    else mode = 'mv';
+                    startY = e.clientY;
+                    oS = toMin(b.start);
+                    oE = toMin(b.end);
+                });
+                document.addEventListener('mousemove', e => {
+                    if (!mode) return;
+                    const dM = snap((e.clientY - startY) / PX_PER_MIN);
+                    if (mode === 'mv') {
+                        const len = oE - oS;
+                        let ns = oS + dM;
+                        ns = Math.max(toMin(dayStart), Math.min(toMin(dayEnd) - len, ns));
+                        b.start = toHHMM(ns); b.end = toHHMM(ns + len);
+                    } else if (mode === 'rt') {
+                        b.start = toHHMM(Math.max(toMin(dayStart), Math.min(oE - STEP_MIN, oS + dM)));
+                    } else if (mode === 'rb') {
+                        b.end = toHHMM(Math.max(oS + STEP_MIN, Math.min(toMin(dayEnd), oE + dM)));
+                    }
+                    renderBlocks();
+                });
+                document.addEventListener('mouseup', () => { mode = null; });
+                el.addEventListener('dblclick', e => {
+                    e.stopPropagation();
+                    editingId = b.id || b._tempId;
+                    document.getElementById('blockDay').value = dayNames[b.day];
+                    document.getElementById('blockStart').value = b.start;
+                    document.getElementById('blockEnd').value = b.end;
+                    document.getElementById('blockSlot').value = b.slot_min;
+                    modalBlock.show();
+                });
+            }
+
+            document.getElementById('btnApplyBlock').addEventListener('click', () => {
+                const b = findBlock(editingId); if (!b) return;
+                b.start = document.getElementById('blockStart').value;
+                b.end = document.getElementById('blockEnd').value;
+                b.slot_min = parseInt(document.getElementById('blockSlot').value || 30, 10);
+                renderBlocks(); modalBlock.hide();
+            });
+            document.getElementById('btnDeleteBlock').addEventListener('click', () => {
+                const b = findBlock(editingId); if (!b) return;
+                if (b.id) b._deleted = true; else blocks = blocks.filter(x => x._tempId !== b._tempId);
+                renderBlocks(); modalBlock.hide();
+            });
+
+            btnClear.addEventListener('click', () => {
+                if (!confirm('¿Borrar todos los bloques de este recurso?')) return;
+                blocks.forEach(b => { if (b.id) b._deleted = true; });
+                blocks = blocks.filter(b => b.id);
+                renderBlocks();
+            });
+            btnRebuild.addEventListener('click', () => {
+                dayStart = document.getElementById('dayStart').value || '06:00';
+                dayEnd = document.getElementById('dayEnd').value || '22:00';
+                buildGrid();
+            });
+
+            selRecurso.addEventListener('change', async () => {
+                recursoActual = selRecurso.value || null;
+                blocks = [];
+                if (!recursoActual) {
+                    btnSave.disabled = true; btnClear.disabled = true;
+                    buildGrid();
+                    return;
+                }
+                pantallaespera();
+                const j = await postEntity({entity: 'horario', action: 'load', recurso_id: recursoActual});
+                $.unblockUI();
+                if (j.error) {
+                    Swal.fire(j.message || 'Error', '', 'error');
+                    return;
+                }
+                blocks = (j.blocks || []).map(b => ({...b}));
+                document.getElementById('slotMin').value = j.default_slot_min || 30;
+                btnSave.disabled = false; btnClear.disabled = false;
+                buildGrid();
+            });
+
+            btnSave.addEventListener('click', async () => {
+                if (!recursoActual) return;
+                btnSave.disabled = true;
+                const payload = blocks.filter(b => !b._deleted)
+                    .map(b => ({day: b.day, start: b.start, end: b.end, slot_min: b.slot_min}));
+                const j = await postEntity({
+                    entity: 'horario', action: 'save', recurso_id: recursoActual,
+                    blocks: JSON.stringify(payload), slot_min: document.getElementById('slotMin').value || 30
+                });
+                btnSave.disabled = false;
+                if (j.error) { Swal.fire(j.message || 'Error', '', 'error'); return; }
+                Swal.fire(`Horario guardado (${j.count} bloques).`, '', 'success');
+            });
+
+            buildGrid();
+        })();
+    </script>
+{% endblock %}

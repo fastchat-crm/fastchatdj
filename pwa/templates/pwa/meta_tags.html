@@ -1,0 +1,42 @@
+<link rel="manifest" href="/manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="{{ nombreempresa|default:'fastchat' }}">
+
+<meta name="theme-color" content="#2874A6">
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="{{ nombreempresa|default:'fastchat' }}">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+{% if logo %}
+    <link rel="apple-touch-icon" href="{{ logo }}">
+    <link rel="apple-touch-icon" sizes="152x152" href="{{ logo }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ logo }}">
+    <link rel="apple-touch-icon" sizes="192x192" href="{{ logo }}">
+{% else %}
+    <link rel="apple-touch-icon" href="/static/images/icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/static/images/icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/static/images/icons/icon-192x192.png">
+{% endif %}
+
+{% if favicon %}
+    <link rel="icon" type="image/png" href="{{ favicon }}">
+{% else %}
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/images/icons/icon-192x192.png">
+{% endif %}
+
+<meta name="msapplication-TileColor" content="#2874A6">
+{% if logo %}
+    <meta name="msapplication-TileImage" content="{{ logo }}">
+{% else %}
+    <meta name="msapplication-TileImage" content="/static/images/icons/icon-144x144.png">
+{% endif %}
+
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+            navigator.serviceWorker.register('/serviceworker.js', {scope: '/'})
+                .catch(function (err) { console.warn('SW registration failed:', err); });
+        });
+    }
+</script>
