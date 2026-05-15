@@ -590,9 +590,85 @@ def _notificar_debug_envio_cotizador(funcion, conv_id, base_url, variables,
         )
 
 
+_ECONOMICO_TOKENS = {
+    'economico', 'economy', 'barato', 'low', 'lowcost', 'minimo',
+}
+_EQUILIBRIO_TOKENS = {
+    'equilibrio', 'equilibrado', 'medio', 'medium', 'balanced',
+}
+_ALTA_PROTECCION_TOKENS = {
+    'altaproteccion', 'mayorproteccion', 'maximaproteccion',
+    'alta', 'high', 'premium', 'top',
+}
+_TODOS_TOKENS = {'todos', 'all', 'completo', 'mostrartodos', 'showall'}
+_PARENTESCOS_VALIDOS = {'TITULAR', 'CONYUGE', 'HIJO', 'PADRE', 'MADRE', 'OTRO'}
+
+
+def _normalizar_budget(token: str) -> str:
+    return (token or '').strip().lower().replace(' ', '').replace('-', '').replace('_', '')
+
+
+def _derivar_api_url_desde_webhook(webhook_url: str) -> str:
+    """`https://x/cotimedica/webhook/` → `https://x/cotimedica-api/v1/`.
+
+    Si el webhook no encaja con el patrón conocido, devuelve el mismo URL
+    (la llamada a `action=planes_grupo` luego fallará y se reportará por
+    correo de debug).
+    """
+    if '/cotimedica/webhook' in webhook_url:
+        prefix = webhook_url.split('/cotimedica/webhook', 1)[0]
+        return prefix + '/cotimedica-api/v1/'
+    return webhook_url
+
+
+def _resolver_plan_para_grupo(api_url, members, budget_norm, timeout, headers):
+    """Llama `action=planes_grupo` y elige plan según `budget_norm`.
+
+    Devuelve (plan_id, plan_dental_id, error_msg). plan_dental_id por
+    defecto es 1 (suele ser el dental BÁSICO). El doc indica que la
+    respuesta viene ordenada de menor a mayor prima — economico=primero,
+    alta_proteccion=último, equilibrio/desconocido=mediano.
+    """
+    payload = {'action': 'planes_grupo', 'members': members}
+    try:
+        r = requests.post(api_url, json=payload, timeout=timeout, headers=headers)
+    except requests.RequestException as ex:
+        return None, None, f'planes_grupo request_exception: {ex}'
+
+    if r.status_code >= 300:
+        return None, None, f'planes_grupo HTTP {r.status_code}: {r.text[:300]}'
+    try:
+        data = r.json()
+    except ValueError:
+        return None, None, f'planes_grupo respuesta no JSON: {r.text[:300]}'
+    if not data.get('ok'):
+        return None, None, f'planes_grupo ok=false: {data.get("error") or data}'
+    planes = (data.get('data') or {}).get('planes') or []
+    if not planes:
+        return None, None, 'planes_grupo: lista de planes vacía para este grupo.'
+
+    if budget_norm in _ALTA_PROTECCION_TOKENS:
+        plan = planes[-1]
+    elif budget_norm in _ECONOMICO_TOKENS:
+        plan = planes[0]
+    else:
+        plan = planes[len(planes) // 2]
+
+    plan_id = plan.get('plan_id')
+    if plan_id is None:
+        return None, None, f'planes_grupo: plan elegido sin plan_id: {plan}'
+    dental_opts = plan.get('opciones_dental') or []
+    plan_dental_id = None
+    if dental_opts:
+        plan_dental_id = dental_opts[0].get('plan_dental_id')
+    if plan_dental_id is None:
+        plan_dental_id = 1
+    return plan_id, plan_dental_id, None
+
+
 @registrar_funcion(
     codigo='cotizar_am_multiple',
-    descripcion='Envía cliente + members[] (titular + N dependientes) + budget_intent al webhook Vida Buena. Dispara el decision engine para recomendar plan.',
+    descripcion='Envía cliente + miembros[] + tipo_grupo (Mode D del webhook Vida Buena) o, si budget_intent="todos", entra al Mode B (cotiza todos los planes del titular).',
     parametros={
         'cliente.cedula':              'string · cédula del titular',
         'cliente.nombres':             'string · nombre(s)',
@@ -600,7 +676,7 @@ def _notificar_debug_envio_cotizador(funcion, conv_id, base_url, variables,
         'cliente.fecha_nacimiento':    'string · YYYY-MM-DD',
         'cliente.sexo':                'string · M | F',
         'cliente.email':               'string · correo de contacto',
-        'budget_intent':               'economico | equilibrio | alta_proteccion | desconocido',
+        'budget_intent':               'economico | equilibrio | alta_proteccion | todos | desconocido',
         'network_preference':          'red_cerrada_ok | quiere_red_abierta | desconocido (default)',
         'wants_max_protection':        'bool (default False)',
         'variables.edad_titular':      'number · edad del titular',
@@ -608,6 +684,10 @@ def _notificar_debug_envio_cotizador(funcion, conv_id, base_url, variables,
         'variables.num_dependientes':  'number 0-5 · cuántos dependientes incluir',
         'variables.edad_m1..m5':       'number · edad de cada dependiente',
         'variables.sexo_m1..m5':       'M | F · sexo de cada dependiente',
+        'variables.parentesco_m1..m5': 'CONYUGE | HIJO | PADRE | MADRE | OTRO',
+        'variables.cedula_m1..m5':     'string · cédula del dependiente (opcional, "0" = no aplica)',
+        'variables.nombres_m1..m5':    'string · nombres del dependiente (opcional, viene del SRI)',
+        'variables.apellidos_m1..m5':  'string · apellidos del dependiente (opcional, viene del SRI)',
         '(auto) cliente.telefono':     'string · número de WhatsApp del contacto (inyectado).',
     },
     requiere_endpoint=True,
@@ -621,28 +701,40 @@ def _notificar_debug_envio_cotizador(funcion, conv_id, base_url, variables,
             'email': '{{variables.email}}',
         },
         'budget_intent': '{{variables.budget_intent}}',
-        'network_preference': 'desconocido',
+        'network_preference': '{{variables.network_preference}}',
         'wants_max_protection': False,
     },
 )
 def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
-    """Llama al webhook Vida Buena con `cliente` + `members[]` + `budget_intent`.
+    """Cotiza Vida Buena para titular + N dependientes (Mode D del webhook).
 
-    El bot pidió primero los datos del titular, luego cuántos dependientes
-    incluye y por cada uno (uno por uno) capturó cédula → lookup → si la API
-    no encontró al miembro pidió edad + sexo manualmente. Esta función
-    materializa `members[]` desde esas variables (`edad_titular`,
-    `sexo_titular`, `edad_m1..m5`, `sexo_m1..m5`) y deja que el decision
-    engine del webhook recomiende el plan para el titular según la
-    composición del grupo + el `budget_intent`.
+    El bot capturó: titular (cédula → lookup en SRI o manual), número de
+    dependientes (0-5), y por cada dependiente: cédula → lookup → edad +
+    sexo + parentesco. También capturó `budget_intent` y
+    `network_preference`.
+
+    Esta función:
+      1. Materializa `members[]` desde las variables del bot.
+      2. Si `budget_intent` normaliza a "todos" → entra al **Mode B** del
+         webhook (sin `members`/`miembros`): cotiza TODOS los planes con
+         tarifa para edad/sexo del titular.
+      3. Si no, entra al **Mode D** (grupo familiar):
+         a. Llama `action=planes_grupo` al REST API para listar planes
+            ordenados por prima total del grupo.
+         b. Elige plan según `budget_intent` (economico=cheaper,
+            equilibrio=mid, alta_proteccion=most_expensive).
+         c. Construye `miembros[]` con titular + dependientes (cada uno
+            con `parentesco`, `edad`, `sexo` y la misma `selecciones`).
+         d. Determina `tipo_grupo` (1=INDIVIDUAL, 2=TITULAR_MAS_UNO,
+            3+=FAMILIA) y arma el body Mode D.
 
     Inyecta `cliente.telefono` con el número de WhatsApp del contacto y
     `id_conversacion` para que el webhook mande el resumen al chat.
 
     Control de error: cualquier salida con `etiqueta='error'` dispara un
     correo a `hllerenaa1h@gmail.com` con el detalle de la falla (request
-    body, status, response). Esto facilita diagnosticar por qué un flujo
-    cayó al mensaje "no pudimos procesar" sin tener que abrir los logs.
+    body, status, response). Cada invocación además dispara un correo de
+    debug con el body real enviado al webhook + variables del chatbot.
     """
     from .motor_flujo_chatbot import resolver_expresion
 
@@ -743,18 +835,8 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
             'error': 'No se pudo construir members[]: falta edad del titular.',
         }
 
-    body['members'] = members
     body['id_conversacion'] = conversacion.id
-    body.setdefault('network_preference', 'desconocido')
-    body.setdefault('wants_max_protection', False)
     body.pop('selecciones', None)
-
-    budget_norm = (
-        str(body.get('budget_intent') or '')
-        .strip().lower().replace(' ', '').replace('-', '').replace('_', '')
-    )
-    if budget_norm in {'todos', 'all', 'completo', 'mostrartodos', 'showall'}:
-        body.pop('members', None)
 
     contacto = getattr(conversacion, 'contacto', None)
     wa_telefono = ''
@@ -785,6 +867,84 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
     headers = dict(endpoint.headers_default or {})
     headers.setdefault('Content-Type', 'application/json')
     headers.setdefault('Accept', 'application/json')
+
+    budget_norm = _normalizar_budget(body.get('budget_intent'))
+    es_modo_todos = budget_norm in _TODOS_TOKENS
+
+    if es_modo_todos:
+        body.pop('members', None)
+        body.pop('miembros', None)
+        body.pop('tipo_grupo', None)
+        body.pop('network_preference', None)
+        body.pop('wants_max_protection', None)
+    else:
+        api_url = _derivar_api_url_desde_webhook(base_url)
+        plan_id, plan_dental_id, plan_err = _resolver_plan_para_grupo(
+            api_url, members, budget_norm, timeout, headers,
+        )
+        if plan_id is None:
+            _notificar_error_cotizar_am_multiple(
+                conv_id, 'planes_grupo_fallo',
+                plan_err or 'No se pudo elegir plan para el grupo.',
+                request_body={
+                    'api_url': api_url,
+                    'action': 'planes_grupo',
+                    'members': members,
+                    'budget_norm': budget_norm,
+                },
+                variables=vars_,
+            )
+            return {
+                'etiqueta': 'error', 'body': {}, 'status': 502,
+                'error': plan_err or 'No se pudo elegir plan para el grupo.',
+            }
+
+        miembros = [{
+            'parentesco': 'TITULAR',
+            'edad': edad_titular,
+            'sexo': sexo_titular if sexo_titular in ('M', 'F') else 'M',
+            'selecciones': [{'plan_id': plan_id, 'plan_dental_id': plan_dental_id}],
+        }]
+        for i in range(1, num_dep + 1):
+            edad_i = _to_int(vars_.get(f'edad_m{i}'))
+            if edad_i is None:
+                continue
+            sexo_i = (str(vars_.get(f'sexo_m{i}') or '').strip().upper() or 'M')
+            if sexo_i not in ('M', 'F'):
+                sexo_i = 'M'
+            paren_i = (str(vars_.get(f'parentesco_m{i}') or '').strip().upper() or 'OTRO')
+            if paren_i not in _PARENTESCOS_VALIDOS or paren_i == 'TITULAR':
+                paren_i = 'OTRO'
+            miembro = {
+                'parentesco': paren_i,
+                'edad': edad_i,
+                'sexo': sexo_i,
+                'selecciones': [{'plan_id': plan_id, 'plan_dental_id': plan_dental_id}],
+            }
+            ced_i = (str(vars_.get(f'cedula_m{i}') or '').strip())
+            if ced_i and ced_i != '0':
+                miembro['cedula'] = ced_i
+            nom_i = (str(vars_.get(f'nombres_m{i}') or '').strip())
+            if nom_i:
+                miembro['nombres'] = nom_i
+            ap_i = (str(vars_.get(f'apellidos_m{i}') or '').strip())
+            if ap_i:
+                miembro['apellidos'] = ap_i
+            miembros.append(miembro)
+
+        if len(miembros) == 1:
+            tipo_grupo = 'INDIVIDUAL'
+        elif len(miembros) == 2:
+            tipo_grupo = 'TITULAR_MAS_UNO'
+        else:
+            tipo_grupo = 'FAMILIA'
+
+        body.pop('members', None)
+        body.pop('budget_intent', None)
+        body.pop('network_preference', None)
+        body.pop('wants_max_protection', None)
+        body['tipo_grupo'] = tipo_grupo
+        body['miembros'] = miembros
 
     try:
         r = requests.post(base_url, json=body, timeout=timeout, headers=headers)
