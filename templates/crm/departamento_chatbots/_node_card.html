@@ -159,8 +159,6 @@
                         </div>
                     {% endif %}
                 </div>
-            {% endif %}
-
             {% elif op.tipo_nodo == 'funcion' %}
                 <div class="dp-node-http">
                     <div class="dp-http-line">
@@ -213,8 +211,6 @@
                         </div>
                     {% endif %}
                 </div>
-            {% endif %}
-
             {% elif op.tipo_nodo == 'pregunta' %}
                 <div class="dp-node-preview">
                     <i class="fa fa-question-circle me-1"></i>
@@ -229,8 +225,6 @@
                     {% endif %}
                     · {{ op.reintentos_max }} reintentos
                 </div>
-            {% endif %}
-
             {% elif op.tipo_nodo == 'condicional' %}
                 <div class="dp-http-meta">
                     <strong>{{ op.config.operador|default:'and'|upper }}</strong>
@@ -238,8 +232,6 @@
                         <code class="dp-http-pair">{{ c.izq }} {{ c.op }} {{ c.der|default:'""' }}</code>
                     {% endfor %}
                 </div>
-            {% endif %}
-
             {% elif op.tipo_nodo == 'set_variable' %}
                 <div class="dp-http-meta">
                     <strong>asigna:</strong>
@@ -248,8 +240,6 @@
                             = {{ a.expresion|default:'""'|truncatechars:30 }}</code>
                     {% endfor %}
                 </div>
-            {% endif %}
-
             {% elif op.tipo_nodo == 'menu' %}
                 {% if op.config.opciones %}
                     <div class="dp-http-meta">
