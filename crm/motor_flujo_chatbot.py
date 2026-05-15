@@ -1300,6 +1300,10 @@ class MotorFlujo:
             self.estado.save()
             return ''
 
+        if tipo == 'agenda_turno':
+            from agenda.chatbot_handlers import procesar_nodo_turno
+            return procesar_nodo_turno(self, nodo, consumir_mensaje)
+
         if tipo == 'http':
             traza_extra = {}
             t0 = _time.time()

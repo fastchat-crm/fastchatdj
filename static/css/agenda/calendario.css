@@ -1,0 +1,26 @@
+#calendar {
+    min-height: 600px;
+}
+
+.fc .fc-toolbar-title {
+    font-size: 1.1rem;
+}
+
+.fc-event {
+    cursor: pointer;
+    font-size: 0.78rem;
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+
+.fc-event:hover {
+    filter: brightness(0.92);
+}
+
+.fc-timegrid-event-harness {
+    margin-right: 2px;
+}
+
+.badge[style*="background:#ffc107"] {
+    color: #000 !important;
+}

@@ -1,0 +1,123 @@
+.agenda-grid {
+    user-select: none;
+    width: 100%;
+    overflow-x: auto;
+}
+
+.ag-header {
+    display: grid;
+    grid-template-columns: 60px repeat(7, minmax(110px, 1fr));
+    border-bottom: 2px solid #dee2e6;
+    background: #f8f9fa;
+}
+
+.ag-day-head {
+    padding: 8px 6px;
+    text-align: center;
+    font-weight: 600;
+    border-left: 1px solid #dee2e6;
+    color: #495057;
+}
+
+.ag-body {
+    display: grid;
+    grid-template-columns: 60px repeat(7, minmax(110px, 1fr));
+    position: relative;
+}
+
+.ag-ruler {
+    position: relative;
+    border-right: 1px solid #dee2e6;
+    background: #fcfcfd;
+}
+
+.ag-tick {
+    position: absolute;
+    left: 0;
+    right: 0;
+    padding-right: 4px;
+    text-align: right;
+    font-size: 0.7rem;
+    color: #6c757d;
+    transform: translateY(-50%);
+}
+
+.ag-day-col {
+    position: relative;
+    border-left: 1px solid #dee2e6;
+    background: #ffffff;
+    cursor: crosshair;
+}
+
+.ag-hour-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1px dashed #f1f3f5;
+    pointer-events: none;
+}
+
+.ag-block {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    background: linear-gradient(135deg, #4dabf7, #339af0);
+    color: white;
+    border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    padding: 4px 6px;
+    font-size: 0.75rem;
+    cursor: move;
+    overflow: hidden;
+    z-index: 2;
+}
+
+.ag-block.ag-preview {
+    background: rgba(13, 110, 253, 0.35);
+    border: 2px dashed #0d6efd;
+    color: #084298;
+    pointer-events: none;
+    text-align: center;
+    font-weight: 600;
+}
+
+.ag-block-body {
+    pointer-events: none;
+}
+
+.ag-block-time {
+    font-weight: 600;
+    line-height: 1.1;
+}
+
+.ag-block-slot {
+    opacity: 0.85;
+    font-size: 0.7rem;
+}
+
+.ag-resize {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 6px;
+    cursor: ns-resize;
+    z-index: 3;
+}
+
+.ag-resize-top {
+    top: 0;
+}
+
+.ag-resize-bottom {
+    bottom: 0;
+}
+
+.badge-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+}

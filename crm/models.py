@@ -1208,6 +1208,7 @@ class OpcionDepartamentoChatBot(ModeloBase):
         ('cta_url',      'Botón con URL externa'),
         ('ubicacion',    'Ubicación / Mapa'),
         ('handoff',      'Transferir a humano'),
+        ('agenda_turno', 'Agenda - Book/Cancel/Reschedule'),
         ('fin',          'Fin de conversación'),
     ]
     VALIDACIONES = [

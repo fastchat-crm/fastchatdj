@@ -1,0 +1,291 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/css/agenda/calendario.css?v1.0">
+{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="mb-0">Booking calendar</h4>
+                <small class="text-muted">{{ descripcion }}</small>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="/agenda/turnos/" class="btn btn-outline-secondary">
+                    <i class="fa fa-list"></i> Appointments list
+                </a>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label">Agenda group</label>
+                            <select name="grupo" class="form-select" onchange="this.form.submit()">
+                                <option value="">All groups</option>
+                                {% for g in grupos %}
+                                    <option value="{{ g.id }}" {% if grupo_actual and grupo_actual.id == g.id %}selected{% endif %}>
+                                        {{ g.nombre }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Resource</label>
+                            <select name="recurso" class="form-select" onchange="this.form.submit()">
+                                <option value="">All resources in group</option>
+                                {% for r in recursos %}
+                                    <option value="{{ r.id }}" {% if recurso_actual and recurso_actual.id == r.id %}selected{% endif %}>
+                                        {{ r.nombre }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex gap-2 align-items-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i> Apply
+                            </button>
+                            <a href="{{ request.path }}" class="btn btn-default">
+                                <i class="fas fa-times"></i> Clear
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <div id="calendar"></div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-body py-2">
+                <small class="text-muted me-3">Legend:</small>
+                <span class="badge me-1" style="background:#ffc107;color:#000">Pending</span>
+                <span class="badge me-1" style="background:#0d6efd">Confirmed</span>
+                <span class="badge me-1" style="background:#198754">Fulfilled</span>
+                <span class="badge me-1" style="background:#dc3545">No-show</span>
+                <span class="badge me-1" style="background:#fd7e14">Rescheduled</span>
+                <span class="badge me-1" style="background:#6c757d">Cancelled</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalTurno" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Appointment details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="turnoDetailBody"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-success btn-sm" data-status="confirmed">Confirm</button>
+                    <button type="button" class="btn btn-outline-success btn-sm" data-status="fulfilled">Mark fulfilled</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" data-status="no_show">No-show</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-status="cancelled">Cancel appointment</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalNuevo" tabindex="-1">
+        <div class="modal-dialog">
+            <form class="modal-content" id="formNuevo">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">New appointment</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="create">
+                    <input type="hidden" name="inicio" id="nuevoInicio">
+                    <div class="mb-3">
+                        <label class="form-label">Date / time</label>
+                        <input type="text" id="nuevoFechaTexto" class="form-control" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Resource *</label>
+                        <select name="recurso" id="nuevoRecurso" class="form-select" required>
+                            {% for r in recursos %}
+                                <option value="{{ r.id }}">{{ r.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Service *</label>
+                        <select name="servicio" id="nuevoServicio" class="form-select" required></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Contact ID *</label>
+                        <input type="number" name="contacto" class="form-control" required
+                               placeholder="Contacto.id (WhatsApp contact)">
+                        <small class="text-muted">Use the WhatsApp contact ID from the conversation list.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea name="notas" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    <script>
+        (function () {
+            const csrf = '{{ csrf_token }}';
+            const calendarEl = document.getElementById('calendar');
+            const modalDetail = new bootstrap.Modal(document.getElementById('modalTurno'));
+            const modalNuevo = new bootstrap.Modal(document.getElementById('modalNuevo'));
+            const detailBody = document.getElementById('turnoDetailBody');
+            const formNuevo = document.getElementById('formNuevo');
+            let currentTurnoId = null;
+
+            const serviciosMap = {
+                {% for s in servicios %}
+                '{{ s.id }}': {
+                    nombre: '{{ s.nombre|escapejs }}',
+                    duracion: {{ s.duracion_min }},
+                    recursos: [{% for r in s.recursos.all %}{{ r.id }}{% if not forloop.last %},{% endif %}{% endfor %}]
+                }{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            };
+
+            function refrescarServicios() {
+                const recId = parseInt(document.getElementById('nuevoRecurso').value, 10);
+                const sel = document.getElementById('nuevoServicio');
+                sel.innerHTML = '';
+                Object.entries(serviciosMap).forEach(([id, s]) => {
+                    if (s.recursos.includes(recId)) {
+                        const opt = document.createElement('option');
+                        opt.value = id;
+                        opt.textContent = `${s.nombre} (${s.duracion} min)`;
+                        sel.appendChild(opt);
+                    }
+                });
+            }
+
+            async function postAction(payload) {
+                const fd = new FormData();
+                Object.entries(payload).forEach(([k, v]) => fd.append(k, v));
+                fd.append('csrfmiddlewaretoken', csrf);
+                const r = await fetch('', {method: 'POST', body: fd});
+                return r.json();
+            }
+
+            const calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'timeGridWeek',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
+                },
+                slotMinTime: '06:00:00',
+                slotMaxTime: '22:00:00',
+                editable: true,
+                selectable: true,
+                eventOverlap: false,
+                allDaySlot: false,
+                nowIndicator: true,
+                height: 'auto',
+                events: async (info, success, failure) => {
+                    try {
+                        const j = await postAction({
+                            action: 'events',
+                            start: info.start.toISOString(),
+                            end: info.end.toISOString()
+                        });
+                        if (j.error) { failure(j.message); return; }
+                        success(j.items);
+                    } catch (ex) {
+                        failure(ex);
+                    }
+                },
+                eventDrop: async (info) => {
+                    const j = await postAction({
+                        action: 'reschedule',
+                        pk: info.event.id,
+                        inicio: info.event.start.toISOString(),
+                        fin: info.event.end.toISOString()
+                    });
+                    if (j.error) {
+                        alert(j.message || 'Error');
+                        info.revert();
+                        return;
+                    }
+                    calendar.refetchEvents();
+                },
+                eventResize: async (info) => {
+                    const j = await postAction({
+                        action: 'reschedule',
+                        pk: info.event.id,
+                        inicio: info.event.start.toISOString(),
+                        fin: info.event.end.toISOString()
+                    });
+                    if (j.error) {
+                        alert(j.message || 'Error');
+                        info.revert();
+                    }
+                },
+                select: (info) => {
+                    document.getElementById('nuevoInicio').value = info.start.toISOString();
+                    document.getElementById('nuevoFechaTexto').value = info.start.toLocaleString();
+                    refrescarServicios();
+                    modalNuevo.show();
+                },
+                eventClick: (info) => {
+                    currentTurnoId = info.event.id;
+                    const p = info.event.extendedProps;
+                    detailBody.innerHTML = `
+                        <p class="mb-1"><strong>Status:</strong> <span class="badge" style="background:${info.event.backgroundColor}">${p.estado_label}</span></p>
+                        <p class="mb-1"><strong>Contact:</strong> ${p.contacto}</p>
+                        <p class="mb-1"><strong>Service:</strong> ${p.servicio}</p>
+                        <p class="mb-1"><strong>Resource:</strong> ${p.recurso}</p>
+                        <p class="mb-1"><strong>Price:</strong> ${p.precio} ${p.moneda}</p>
+                        <p class="mb-1"><strong>From:</strong> ${info.event.start.toLocaleString()}</p>
+                        <p class="mb-1"><strong>To:</strong> ${info.event.end.toLocaleString()}</p>
+                        ${p.notas ? '<p class="mb-1"><strong>Notes:</strong> ' + p.notas + '</p>' : ''}`;
+                    modalDetail.show();
+                }
+            });
+            calendar.render();
+
+            document.getElementById('nuevoRecurso').addEventListener('change', refrescarServicios);
+            refrescarServicios();
+
+            formNuevo.addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const fd = new FormData(formNuevo);
+                fd.append('csrfmiddlewaretoken', csrf);
+                const r = await fetch('', {method: 'POST', body: fd});
+                const j = await r.json();
+                if (j.error) { alert(j.message || 'Error'); return; }
+                modalNuevo.hide();
+                calendar.refetchEvents();
+            });
+
+            document.querySelectorAll('#modalTurno [data-status]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    if (!currentTurnoId) return;
+                    const j = await postAction({action: 'mark_status', pk: currentTurnoId, estado: btn.dataset.status});
+                    if (j.error) { alert(j.message || 'Error'); return; }
+                    modalDetail.hide();
+                    calendar.refetchEvents();
+                });
+            });
+        })();
+    </script>
+{% endblock %}

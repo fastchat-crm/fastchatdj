@@ -28,6 +28,7 @@ from django.conf.urls.static import static
 from core.consultas import consultas
 from seguridad.view_notificaciones import notificacionesView
 from whatsapp.urls import whatsapp_urls
+from agenda.urls import agenda_urls
 
 confi = Configuracion.get_instancia()
 icon_url = confi.ico.url if confi.ico else ""
@@ -70,6 +71,14 @@ urls_sistema = (
         "url": 'crm/',
         "sub_urls": crm_urls,
         "include": include('crm.urls'),
+        "name": None,
+        "vista": None
+    },
+    {
+        "nombre": "Agenda",
+        "url": 'agenda/',
+        "sub_urls": agenda_urls,
+        "include": include('agenda.urls'),
         "name": None,
         "vista": None
     },

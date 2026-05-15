@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     'crm.apps.CrmConfig',
     'agents_ai.apps.AgentsAiConfig',
     'voz.apps.VozConfig',
+    'agenda.apps.AgendaConfig',
     # packages
     'wkhtmltopdf',
     'django_select2',

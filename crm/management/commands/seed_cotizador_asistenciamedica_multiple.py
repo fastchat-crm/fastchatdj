@@ -424,7 +424,7 @@ PASOS = [
             {'etiqueta': '💵 Económico',                 'valor': 'economico',       'siguiente': ID_RESUMEN},
             {'etiqueta': '⚖️ Equilibrado',               'valor': 'equilibrio',      'siguiente': ID_RESUMEN},
             {'etiqueta': '🛡️ Mayor protección',          'valor': 'alta_proteccion', 'siguiente': ID_RESUMEN},
-            {'etiqueta': '🤷 No estoy seguro — cotizar todos', 'valor': 'desconocido', 'siguiente': ID_RESUMEN},
+            {'etiqueta': '🤷 No estoy seguro — cotizar todos', 'valor': 'todos', 'siguiente': ID_RESUMEN},
         ],
     },
     {

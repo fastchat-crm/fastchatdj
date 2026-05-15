@@ -114,6 +114,12 @@ class SesionWhatsApp(ModeloBase):
         'Sesión activa', default=True, db_index=True,
         help_text='Si está apagada, la sesión no procesa mensajes entrantes ni envía respuestas (corta consumo de API y costos del modelo IA). Útil para suspender el servicio de un cliente sin eliminar la sesión.'
     )
+    grupo_agenda = models.ForeignKey(
+        'agenda.GrupoAgenda', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='sesiones',
+        verbose_name='Agenda group',
+        help_text='Agenda configuration (resources, services, schedules) available for appointment booking on this session.'
+    )
 
     @property
     def es_meta(self):

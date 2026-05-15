@@ -1,0 +1,267 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/css/agenda/excepcion.css?v1.0">
+{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0">
+        <div class="alert alert-warning d-flex align-items-center gap-3 mb-3">
+            <i class="fa fa-ban fa-2x"></i>
+            <div>
+                <strong>Schedule exceptions</strong><br>
+                <small>
+                    Override the regular working schedule for a specific date.
+                    <strong>Block whole day</strong>: full day off.
+                    <strong>Block hour range</strong>: lunch break, meeting, etc.
+                    <strong>Add extra hour range</strong>: open on a holiday or after-hours appointment.
+                </small>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label">Agenda group</label>
+                            <select name="grupo" class="form-select" onchange="this.form.submit()">
+                                <option value="">All groups</option>
+                                {% for g in grupos %}
+                                    <option value="{{ g.id }}" {% if grupo_actual and grupo_actual.id == g.id %}selected{% endif %}>
+                                        {{ g.nombre }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label">Resource</label>
+                            <select name="recurso" class="form-select" onchange="this.form.submit()">
+                                <option value="">All resources</option>
+                                {% for r in recursos_grupo %}
+                                    <option value="{{ r.id }}" {% if recurso_actual and recurso_actual.id == r.id %}selected{% endif %}>
+                                        {{ r.nombre }} ({{ r.grupo_agenda.nombre }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-flex gap-2 align-items-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i> Filter
+                            </button>
+                            {% if url_vars %}
+                                <a href="{{ request.path }}" class="btn btn-default">
+                                    <i class="fas fa-times"></i> Clear
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="mb-0">Schedule exceptions</h4>
+                <small class="text-muted">
+                    {{ list_count|default:0 }} exception{{ list_count|default:0|pluralize }} found
+                    {% if recurso_actual %} for <strong>{{ recurso_actual.nombre }}</strong>{% endif %}
+                </small>
+            </div>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalExcepcion">
+                <i class="fa fa-plus"></i> New exception
+            </button>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Resource</th>
+                            <th>Group</th>
+                            <th>Type</th>
+                            <th>Time range</th>
+                            <th>Reason</th>
+                            <th style="width:140px">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for e in listado %}
+                        <tr>
+                            <td><strong>{{ e.fecha|date:"Y-m-d" }}</strong> <small class="text-muted">{{ e.fecha|date:"l" }}</small></td>
+                            <td>{{ e.recurso.nombre }}</td>
+                            <td><small>{{ e.recurso.grupo_agenda.nombre }}</small></td>
+                            <td>
+                                {% if e.tipo == 'block_day' %}
+                                    <span class="badge bg-danger">{{ e.get_tipo_display }}</span>
+                                {% elif e.tipo == 'block_range' %}
+                                    <span class="badge bg-warning text-dark">{{ e.get_tipo_display }}</span>
+                                {% else %}
+                                    <span class="badge bg-success">{{ e.get_tipo_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if e.hora_inicio and e.hora_fin %}
+                                    {{ e.hora_inicio|time:"H:i" }} – {{ e.hora_fin|time:"H:i" }}
+                                {% else %}
+                                    <small class="text-muted">All day</small>
+                                {% endif %}
+                            </td>
+                            <td>{{ e.motivo|default:"—" }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-secondary btn-edit"
+                                        data-id="{{ e.id }}"
+                                        data-recurso="{{ e.recurso_id }}"
+                                        data-fecha="{{ e.fecha|date:'Y-m-d' }}"
+                                        data-tipo="{{ e.tipo }}"
+                                        data-inicio="{{ e.hora_inicio|time:'H:i'|default:'' }}"
+                                        data-fin="{{ e.hora_fin|time:'H:i'|default:'' }}"
+                                        data-motivo="{{ e.motivo }}">
+                                    <i class="fa fa-pen"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger btn-del"
+                                        data-id="{{ e.id }}">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">
+                                No schedule exceptions yet.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% include 'paginacion.html' %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalExcepcion" tabindex="-1">
+        <div class="modal-dialog">
+            <form class="modal-content" id="formExcepcion">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">New exception</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="add">
+                    <input type="hidden" name="pk" value="">
+                    <div class="mb-3">
+                        <label class="form-label">Resource *</label>
+                        <select name="recurso" class="form-select" required>
+                            <option value="">Select resource...</option>
+                            {% for r in recursos_grupo %}
+                                <option value="{{ r.id }}" {% if recurso_actual and recurso_actual.id == r.id %}selected{% endif %}>
+                                    {{ r.nombre }} ({{ r.grupo_agenda.nombre }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Date *</label>
+                            <input type="date" name="fecha" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Type *</label>
+                            <select name="tipo" class="form-select" id="tipoSelect" required>
+                                {% for code, label in tipos_excepcion %}
+                                    <option value="{{ code }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3" id="rangoHoras">
+                        <div class="col-md-6">
+                            <label class="form-label">Start time</label>
+                            <input type="time" name="hora_inicio" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">End time</label>
+                            <input type="time" name="hora_fin" class="form-control">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Reason</label>
+                        <input type="text" name="motivo" class="form-control" maxlength="255"
+                               placeholder="Optional: holiday, vacation, lunch, etc.">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script>
+        (function () {
+            const modalEl = document.getElementById('modalExcepcion');
+            const modal = new bootstrap.Modal(modalEl);
+            const form = document.getElementById('formExcepcion');
+            const csrf = form.querySelector('[name=csrfmiddlewaretoken]').value;
+            const rangoHoras = document.getElementById('rangoHoras');
+            const tipoSelect = document.getElementById('tipoSelect');
+
+            function ajustarRango() {
+                if (tipoSelect.value === 'block_day') {
+                    rangoHoras.style.display = 'none';
+                    form.hora_inicio.value = '';
+                    form.hora_fin.value = '';
+                } else {
+                    rangoHoras.style.display = '';
+                }
+            }
+            tipoSelect.addEventListener('change', ajustarRango);
+
+            document.querySelectorAll('.btn-edit').forEach(btn => btn.addEventListener('click', () => {
+                form.action.value = 'change';
+                form.pk.value = btn.dataset.id;
+                form.recurso.value = btn.dataset.recurso;
+                form.fecha.value = btn.dataset.fecha;
+                form.tipo.value = btn.dataset.tipo;
+                form.hora_inicio.value = btn.dataset.inicio || '';
+                form.hora_fin.value = btn.dataset.fin || '';
+                form.motivo.value = btn.dataset.motivo || '';
+                ajustarRango();
+                modalEl.querySelector('.modal-title').textContent = 'Edit exception';
+                modal.show();
+            }));
+            modalEl.addEventListener('show.bs.modal', (e) => {
+                if (!e.relatedTarget || !e.relatedTarget.classList.contains('btn-edit')) {
+                    form.reset();
+                    form.action.value = 'add';
+                    ajustarRango();
+                    modalEl.querySelector('.modal-title').textContent = 'New exception';
+                }
+            });
+            form.addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const fd = new FormData(form);
+                const r = await fetch('', {method: 'POST', body: fd, headers: {'X-Requested-With': 'XMLHttpRequest'}});
+                const j = await r.json();
+                if (j.error) { alert(j.message || 'Error'); return; }
+                if (j.reload) location.reload();
+            });
+            document.querySelectorAll('.btn-del').forEach(btn => btn.addEventListener('click', async () => {
+                if (!confirm('Delete this exception?')) return;
+                const fd = new FormData();
+                fd.append('action', 'delete');
+                fd.append('id', btn.dataset.id);
+                fd.append('csrfmiddlewaretoken', csrf);
+                const r = await fetch('', {method: 'POST', body: fd});
+                const j = await r.json();
+                if (!j.error) location.reload(); else alert(j.message || 'Error');
+            }));
+        })();
+    </script>
+{% endblock %}

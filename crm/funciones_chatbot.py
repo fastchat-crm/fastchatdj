@@ -749,6 +749,13 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
     body.setdefault('wants_max_protection', False)
     body.pop('selecciones', None)
 
+    budget_norm = (
+        str(body.get('budget_intent') or '')
+        .strip().lower().replace(' ', '').replace('-', '').replace('_', '')
+    )
+    if budget_norm in {'todos', 'all', 'completo', 'mostrartodos', 'showall'}:
+        body.pop('members', None)
+
     contacto = getattr(conversacion, 'contacto', None)
     wa_telefono = ''
     if contacto is not None:

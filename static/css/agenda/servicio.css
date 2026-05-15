@@ -1,0 +1,11 @@
+.table-servicios .drag-handle {
+    cursor: grab;
+}
+
+.table-servicios .drag-handle:active {
+    cursor: grabbing;
+}
+
+.table-servicios .badge {
+    font-weight: 500;
+}
