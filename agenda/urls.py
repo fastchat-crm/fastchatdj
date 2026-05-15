@@ -12,32 +12,32 @@ from .view_turno import turnoView
 
 agenda_urls = (
     {
-        'nombre': 'Agenda groups',
+        'nombre': 'Grupos de agenda',
         'url': 'grupos/',
         'vista': grupoAgendaView,
     },
     {
-        'nombre': 'Resources',
+        'nombre': 'Recursos',
         'url': 'recursos/',
         'vista': recursoView,
     },
     {
-        'nombre': 'Services',
+        'nombre': 'Servicios',
         'url': 'servicios/',
         'vista': servicioView,
     },
     {
-        'nombre': 'Schedule exceptions',
+        'nombre': 'Excepciones de agenda',
         'url': 'excepciones/',
         'vista': excepcionView,
     },
     {
-        'nombre': 'Booking calendar',
+        'nombre': 'Calendario de turnos',
         'url': 'calendario/',
         'vista': calendarioView,
     },
     {
-        'nombre': 'Appointments',
+        'nombre': 'Turnos',
         'url': 'turnos/',
         'vista': turnoView,
     },

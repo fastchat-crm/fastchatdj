@@ -28,6 +28,9 @@
 {#    <link href="/static/assets/css/dark/custom-dark.css?1.1" rel="stylesheet" type="text/css"/>#}
     <meta name="vapid-key" content="{{ vapid_key }}">
     <meta name="islogged" content="{{ request.user.is_authenticated }}">
+    {% load pwa %}
+    {% progressive_web_app_meta %}
+    <link rel="stylesheet" href="/static/css/pwa/install_bar.css?v1.0">
     {% block head %}{% endblock %}
     <script>
         {% if activar_cambio_clave %}
@@ -1675,5 +1678,6 @@
     })();
 </script>
 
+{% include 'pwa/install_bar.html' %}
 </body>
 </html>

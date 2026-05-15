@@ -1,0 +1,148 @@
+<div id="pwaInstallBar" class="pwa-install-bar" hidden>
+    <div class="pwa-install-bar__inner">
+        <img src="/static/images/icons/icon-72x72.png" alt="" class="pwa-install-bar__icon">
+        <div class="pwa-install-bar__body">
+            <div class="pwa-install-bar__title" id="pwaInstallBarTitle">Instalar fastchat</div>
+            <div class="pwa-install-bar__subtitle" id="pwaInstallBarSubtitle">
+                Acceso rápido desde tu pantalla de inicio.
+            </div>
+        </div>
+        <button type="button" class="pwa-install-bar__action" id="pwaInstallBtn">
+            <i class="fa fa-download"></i>
+            <span>Instalar</span>
+        </button>
+        <button type="button" class="pwa-install-bar__close" id="pwaInstallClose" aria-label="Cerrar">
+            <i class="fa fa-times"></i>
+        </button>
+    </div>
+</div>
+
+<div id="pwaIosSheet" class="pwa-ios-sheet" hidden>
+    <div class="pwa-ios-sheet__card">
+        <button type="button" class="pwa-ios-sheet__close" id="pwaIosClose" aria-label="Cerrar">
+            <i class="fa fa-times"></i>
+        </button>
+        <h6 class="pwa-ios-sheet__title">Instalar en iPhone</h6>
+        <ol class="pwa-ios-sheet__steps">
+            <li>Tocá el botón <strong>Compartir</strong> <i class="fa fa-square-arrow-up-right"></i> en la barra de Safari.</li>
+            <li>Elegí <strong>Agregar a la pantalla de inicio</strong>.</li>
+            <li>Confirmá tocando <strong>Agregar</strong>.</li>
+        </ol>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const BAR_KEY = 'pwa_install_dismissed_at';
+        const COOLDOWN_DAYS = 14;
+        const bar = document.getElementById('pwaInstallBar');
+        const btnInstall = document.getElementById('pwaInstallBtn');
+        const btnClose = document.getElementById('pwaInstallClose');
+        const iosSheet = document.getElementById('pwaIosSheet');
+        const btnIosClose = document.getElementById('pwaIosClose');
+        const titleEl = document.getElementById('pwaInstallBarTitle');
+        const subtitleEl = document.getElementById('pwaInstallBarSubtitle');
+
+        if (!bar) return;
+
+        let deferredPrompt = null;
+
+        function isStandalone() {
+            return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+                || window.navigator.standalone === true;
+        }
+
+        function isIOS() {
+            const ua = window.navigator.userAgent;
+            const isIDevice = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+            const isMacTouch = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+            return isIDevice || isMacTouch;
+        }
+
+        function isSafari() {
+            const ua = window.navigator.userAgent.toLowerCase();
+            return ua.includes('safari') && !ua.includes('chrome') && !ua.includes('crios') && !ua.includes('fxios');
+        }
+
+        function dismissed() {
+            const ts = parseInt(localStorage.getItem(BAR_KEY) || '0', 10);
+            if (!ts) return false;
+            const days = (Date.now() - ts) / (1000 * 60 * 60 * 24);
+            return days < COOLDOWN_DAYS;
+        }
+
+        function rememberDismiss() {
+            try { localStorage.setItem(BAR_KEY, String(Date.now())); } catch (e) {}
+        }
+
+        function showBar({android}) {
+            if (dismissed() || isStandalone()) return;
+            if (android) {
+                titleEl.textContent = 'Instalar fastchat';
+                subtitleEl.textContent = 'Acceso rápido desde tu pantalla de inicio.';
+                btnInstall.style.display = '';
+            } else {
+                titleEl.textContent = 'Instalá la app en tu iPhone';
+                subtitleEl.textContent = 'Tocá aquí y seguí los pasos.';
+                btnInstall.querySelector('span').textContent = 'Cómo';
+            }
+            bar.hidden = false;
+            requestAnimationFrame(() => bar.classList.add('is-visible'));
+        }
+
+        function hideBar() {
+            bar.classList.remove('is-visible');
+            setTimeout(() => { bar.hidden = true; }, 220);
+        }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            showBar({android: true});
+        });
+
+        btnInstall.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const choice = await deferredPrompt.userChoice;
+                deferredPrompt = null;
+                hideBar();
+                if (choice && choice.outcome === 'accepted') {
+                    rememberDismiss();
+                }
+                return;
+            }
+            if (isIOS()) {
+                iosSheet.hidden = false;
+                requestAnimationFrame(() => iosSheet.classList.add('is-visible'));
+            }
+        });
+
+        btnClose.addEventListener('click', () => {
+            rememberDismiss();
+            hideBar();
+        });
+
+        btnIosClose.addEventListener('click', () => {
+            iosSheet.classList.remove('is-visible');
+            setTimeout(() => { iosSheet.hidden = true; }, 220);
+        });
+
+        iosSheet.addEventListener('click', (ev) => {
+            if (ev.target === iosSheet) {
+                iosSheet.classList.remove('is-visible');
+                setTimeout(() => { iosSheet.hidden = true; }, 220);
+            }
+        });
+
+        window.addEventListener('appinstalled', () => {
+            rememberDismiss();
+            hideBar();
+            deferredPrompt = null;
+        });
+
+        if (isIOS() && isSafari() && !isStandalone() && !dismissed()) {
+            setTimeout(() => showBar({android: false}), 1500);
+        }
+    })();
+</script>

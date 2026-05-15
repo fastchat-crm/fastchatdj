@@ -215,8 +215,6 @@ ID_SHOW_M4_RES = 458
 ID_DEC_M5_RES  = 459
 ID_SHOW_M5_RES = 460
 
-ID_NETWORK = 470
-
 ID_BUDGET = 500
 ID_ESPERANDO = 510
 ID_FN = 520
@@ -444,25 +442,10 @@ PASOS = [
         ),
         'guardar_en': 'budget_intent',
         'opciones': [
-            {'etiqueta': '💵 Económico',                 'valor': 'economico',       'siguiente': ID_NETWORK},
-            {'etiqueta': '⚖️ Equilibrado',               'valor': 'equilibrio',      'siguiente': ID_NETWORK},
-            {'etiqueta': '🛡️ Mayor protección',          'valor': 'alta_proteccion', 'siguiente': ID_NETWORK},
-            {'etiqueta': '🤷 No estoy seguro — cotizar todos', 'valor': 'todos', 'siguiente': ID_NETWORK},
-        ],
-    },
-    {
-        'id': ID_NETWORK, 'orden': ID_NETWORK, 'tipo': 'menu_botones',
-        'codigo': 'network_preference', 'nombre': 'Preferencia de red',
-        'mensaje': (
-            '🏥 ¿Tenés *preferencia de red* de hospitales/clínicas?\n'
-            '• *Red cerrada*: solo prestadores de la aseguradora (más económico).\n'
-            '• *Red abierta*: cualquier prestador (más cobertura).'
-        ),
-        'guardar_en': 'network_preference',
-        'opciones': [
-            {'etiqueta': '🔒 Red cerrada', 'valor': 'red_cerrada_ok',     'siguiente': ID_RESUMEN},
-            {'etiqueta': '🌐 Red abierta', 'valor': 'quiere_red_abierta', 'siguiente': ID_RESUMEN},
-            {'etiqueta': '🤷 No estoy seguro', 'valor': 'desconocido',    'siguiente': ID_RESUMEN},
+            {'etiqueta': '💵 Económico',                 'valor': 'economico',       'siguiente': ID_RESUMEN},
+            {'etiqueta': '⚖️ Equilibrado',               'valor': 'equilibrio',      'siguiente': ID_RESUMEN},
+            {'etiqueta': '🛡️ Mayor protección',          'valor': 'alta_proteccion', 'siguiente': ID_RESUMEN},
+            {'etiqueta': '🤷 No estoy seguro — cotizar todos', 'valor': 'todos', 'siguiente': ID_RESUMEN},
         ],
     },
     {
@@ -476,8 +459,7 @@ PASOS = [
             '• Edad: *{{variables.edad_titular}}*\n'
             '• Sexo: *{{variables.sexo_titular}}*\n'
             '• Email: *{{variables.email}}*\n\n'
-            '💰 Tipo de plan: *{{variables.budget_intent}}*\n'
-            '🏥 Red: *{{variables.network_preference}}*'
+            '💰 Tipo de plan: *{{variables.budget_intent}}*'
         ),
         'siguiente': ID_DEC_M1_RES,
     },
@@ -594,8 +576,6 @@ PASOS = [
                 'email':            'hllerenaa1h@gmail.com',
             },
             'budget_intent':        '{{variables.budget_intent}}',
-            'network_preference':   '{{variables.network_preference}}',
-            'wants_max_protection': False,
         },
         'extrae_variables': {
             '$cotizacion_status':  '$.status',
@@ -679,7 +659,7 @@ PASOS = [
             'parentesco_m4': '', 'nombres_m4': '', 'apellidos_m4': '',
             'cedula_m5': '', 'edad_m5': '', 'sexo_m5': '', 'encontrado_m5': '',
             'parentesco_m5': '', 'nombres_m5': '', 'apellidos_m5': '',
-            'budget_intent': '', 'network_preference': '', 'quiere_asesor': '',
+            'budget_intent': '', 'quiere_asesor': '',
             'cotizacion_status': '', 'cotizacion_mensaje': '',
         },
         'siguiente': ID_FIN,
