@@ -81,7 +81,7 @@ class ServicioForm(forms.ModelForm):
     recursos = forms.ModelMultipleChoiceField(
         queryset=Recurso.objects.filter(status=True),
         required=False,
-        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'}),
+        widget=forms.SelectMultiple(attrs={'class': 'form-select select2'}),
         label='Recursos que ofrecen este servicio',
     )
 

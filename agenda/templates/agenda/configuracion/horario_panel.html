@@ -34,15 +34,15 @@
                     </div>
                     <div class="col-md-2">
                         <label class="form-label">Slot por defecto (min)</label>
-                        <input type="number" id="slotMin" class="form-control" min="5" max="240" step="5" value="30">
+                        <input type="number" id="slotMin" class="form-control" min="5" max="240" step="5" value="{{ slot_inicial }}">
                     </div>
                     <div class="col-md-2">
                         <label class="form-label">Inicio del día</label>
-                        <input type="time" id="dayStart" class="form-control" value="06:00">
+                        <input type="time" id="dayStart" class="form-control" value="{{ day_start_inicial }}">
                     </div>
                     <div class="col-md-2">
                         <label class="form-label">Fin del día</label>
-                        <input type="time" id="dayEnd" class="form-control" value="22:00">
+                        <input type="time" id="dayEnd" class="form-control" value="{{ day_end_inicial }}">
                     </div>
                     <div class="col-md-2 d-flex gap-2 align-items-end">
                         <button class="btn btn-outline-secondary btn-sm flex-fill" id="btnRebuildGrid" title="Redibujar">

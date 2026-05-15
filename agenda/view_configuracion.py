@@ -389,6 +389,9 @@ def agendaConfiguracionView(request):
                 grupo_agenda=grupo, status=True,
             ).order_by('orden', 'nombre')
             data['recurso_inicial'] = request.GET.get('recurso', '')
+            data['day_start_inicial'] = request.GET.get('day_start', '') or '06:00'
+            data['day_end_inicial'] = request.GET.get('day_end', '') or '22:00'
+            data['slot_inicial'] = request.GET.get('slot', '') or '30'
             return render(request, 'agenda/configuracion/horario_panel.html', data)
 
     criterio = (request.GET.get('criterio') or '').strip()

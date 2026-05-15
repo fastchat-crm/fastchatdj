@@ -2,6 +2,9 @@
     const grid = document.getElementById('agendaGrid');
     if (!grid) return;
     const selRecurso = document.getElementById('horarioRecursoSelect');
+    const dayStartInput = document.getElementById('dayStart');
+    const dayEndInput = document.getElementById('dayEnd');
+    const slotInput = document.getElementById('slotMin');
     const btnSave = document.getElementById('btnSaveHorario');
     const btnClear = document.getElementById('btnClearAllBlocks');
     const btnRebuild = document.getElementById('btnRebuildGrid');
@@ -10,12 +13,29 @@
     const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
     const STEP_MIN = 15;
     const PX_PER_MIN = 1.0;
-    let dayStart = '06:00';
-    let dayEnd = '22:00';
+    let dayStart = dayStartInput.value || '06:00';
+    let dayEnd = dayEndInput.value || '22:00';
     let blocks = [];
     let nextTempId = -1;
     let editingId = null;
     let recursoActual = null;
+
+    function sincronizarUrl() {
+        const url = new URL(window.location.href);
+        if (recursoActual) {
+            url.searchParams.set('recurso', recursoActual);
+        } else {
+            url.searchParams.delete('recurso');
+        }
+        if (dayStartInput.value) url.searchParams.set('day_start', dayStartInput.value);
+        if (dayEndInput.value) url.searchParams.set('day_end', dayEndInput.value);
+        if (slotInput.value) url.searchParams.set('slot', slotInput.value);
+        window.history.replaceState({}, '', url.toString());
+    }
+
+    dayStartInput.addEventListener('change', sincronizarUrl);
+    dayEndInput.addEventListener('change', sincronizarUrl);
+    slotInput.addEventListener('change', sincronizarUrl);
 
     const toMin = function (h) { const p = h.split(':').map(Number); return p[0] * 60 + p[1]; };
     const toHHMM = function (m) {
@@ -233,7 +253,10 @@
         buildGrid();
     }
 
-    selRecurso.addEventListener('change', function () { cargarRecurso(selRecurso.value); });
+    selRecurso.addEventListener('change', function () {
+        cargarRecurso(selRecurso.value);
+        sincronizarUrl();
+    });
 
     btnSave.addEventListener('click', async function () {
         if (!recursoActual) return;

@@ -1473,9 +1473,31 @@ def _guardar_opcion(request):
                 pass
         opcion.config = cfg
     elif opcion.tipo_nodo == 'menu':
-        # Preserva keys que no edita el form (ej: `opciones` estáticas), y
-        # actualiza solo `opciones_fuente` desde los inputs `menu_fuente_*`.
         cfg = dict(opcion.config or {})
+
+        etiquetas_opt = (request.POST.getlist('menu_opt_etiqueta[]')
+                         or request.POST.getlist('menu_opt_etiqueta'))
+        valores_opt = (request.POST.getlist('menu_opt_valor[]')
+                       or request.POST.getlist('menu_opt_valor'))
+        salidas_opt = (request.POST.getlist('menu_opt_salida[]')
+                       or request.POST.getlist('menu_opt_salida'))
+        opciones_inline = []
+        for et, val, sal in zip(etiquetas_opt, valores_opt, salidas_opt):
+            et_s = (et or '').strip()
+            val_s = (val or '').strip()
+            sal_s = (sal or '').strip()
+            if not et_s and not val_s:
+                continue
+            opciones_inline.append({
+                'etiqueta': et_s,
+                'valor': val_s,
+                'salida': sal_s or val_s,
+            })
+        if opciones_inline:
+            cfg['opciones'] = opciones_inline
+        else:
+            cfg.pop('opciones', None)
+
         var = (request.POST.get('menu_fuente_variable') or '').strip()
         if var:
             fuente = {

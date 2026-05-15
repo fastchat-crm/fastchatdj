@@ -521,9 +521,50 @@
         <div class="alert alert-info py-2 small mb-2" style="background:#e0f2fe;border-color:#7dd3fc;">
             <i class="fa fa-list-ul me-1"></i>
             <strong>Menú con botones:</strong> envía un mensaje interactive (≤3 button, &gt;3 list).
-            Las opciones pueden venir de <em>subnodos hijos</em> (estáticas, gestiónalas desde el árbol)
-            o de una <em>variable</em> que un nodo HTTP previo llenó (dinámicas, abajo).
+            Las opciones pueden venir de <em>subnodos hijos</em>, definirse <em>inline</em> aquí,
+            o llenarse desde una <em>variable</em> (opciones_fuente).
         </div>
+
+        <div class="row g-2 p-2 mb-2" style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:6px;">
+            <div class="col-12">
+                <div class="alert alert-success py-2 small mb-2" style="background:#d1fae5;border-color:#6ee7b7;">
+                    <i class="fa fa-list me-1"></i>
+                    <strong>Opciones inline:</strong> editá los botones aquí (alternativa al árbol de hijos).
+                    Cada fila = un botón. <code>etiqueta</code> = texto visible · <code>valor</code> = lo que se guarda en la variable destino · <code>salida</code> = etiqueta de la conexión a seguir (debe matchear la etiqueta del edge saliente).
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-2" id="menuOpcionesTable">
+                        <thead>
+                            <tr>
+                                <th style="width:38%">Etiqueta (texto del botón)</th>
+                                <th style="width:24%">Valor (se guarda en variable)</th>
+                                <th style="width:24%">Salida (etiqueta arista)</th>
+                                <th style="width:14%"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="menuOpcionesBody">
+                            {% for opt in opcion.config.opciones %}
+                                <tr>
+                                    <td><input type="text" class="form-control form-control-sm" name="menu_opt_etiqueta[]" value="{{ opt.etiqueta|default:'' }}" placeholder="🙋 Solo para mí"></td>
+                                    <td><input type="text" class="form-control form-control-sm" name="menu_opt_valor[]" value="{{ opt.valor|default:'' }}" placeholder="solo"></td>
+                                    <td><input type="text" class="form-control form-control-sm" name="menu_opt_salida[]" value="{{ opt.salida|default:opt.valor }}" placeholder="solo"></td>
+                                    <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()" title="Eliminar opción"><i class="fa fa-times"></i></button></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-success" id="btnAddMenuOpcion">
+                    <i class="fa fa-plus me-1"></i> Agregar opción
+                </button>
+                <small class="text-muted ms-2">
+                    Dejá la tabla vacía para usar subnodos hijos o <em>opciones_fuente</em> en su lugar.
+                </small>
+            </div>
+        </div>
+
         <div class="row g-2 p-2" style="background:#f0f9ff;border-radius:6px;">
             {% if opcion.config.opciones_fuente %}
                 <div class="col-12">
@@ -875,3 +916,19 @@
     </div>
 </div>
 
+<script>
+    (function () {
+        const btn = document.getElementById('btnAddMenuOpcion');
+        const tbody = document.getElementById('menuOpcionesBody');
+        if (!btn || !tbody) return;
+        btn.addEventListener('click', function () {
+            const tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td><input type="text" class="form-control form-control-sm" name="menu_opt_etiqueta[]" placeholder="🙋 Solo para mí"></td>' +
+                '<td><input type="text" class="form-control form-control-sm" name="menu_opt_valor[]" placeholder="solo"></td>' +
+                '<td><input type="text" class="form-control form-control-sm" name="menu_opt_salida[]" placeholder="solo"></td>' +
+                '<td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove()" title="Eliminar"><i class="fa fa-times"></i></button></td>';
+            tbody.appendChild(tr);
+        });
+    })();
+</script>
