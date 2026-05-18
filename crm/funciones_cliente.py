@@ -8,7 +8,7 @@ Funciones:
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.utils import timezone
 
@@ -90,6 +90,12 @@ def cliente_upsert(conversacion, variables, config, endpoint=None) -> dict:
         )
     edad = _to_int(variables.get('edad') or variables.get('driver_age'))
     fecha_nac = _parse_fecha_nac(variables.get('fecha_nacimiento'))
+    if not fecha_nac and edad is not None and edad >= 0:
+        hoy = timezone.now().date()
+        try:
+            fecha_nac = hoy.replace(year=hoy.year - int(edad))
+        except ValueError:
+            fecha_nac = hoy - timedelta(days=int(edad) * 365)
     sexo = _str(variables.get('sexo')).upper()
     if sexo not in ('M', 'F'):
         sexo = ''

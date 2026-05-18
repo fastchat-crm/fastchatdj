@@ -156,14 +156,6 @@ PASOS = [
         'mensaje': '🎂 ¿Cuál es tu *edad*?',
         'guardar_en': 'driver_age',
         'validacion_tipo': 'numero',
-        'siguiente': 55,
-    },
-    {
-        'id': 55, 'orden': 55, 'tipo': 'input_texto',
-        'codigo': 'pedir_fecha_nac', 'nombre': 'Pedir fecha de nacimiento',
-        'mensaje': '🗓️ ¿Cuál es tu *fecha de nacimiento*? (formato DD/MM/AAAA)',
-        'guardar_en': 'fecha_nacimiento',
-        'validacion': r'^\d{2}/\d{2}/\d{4}$',
         'siguiente': 100,
     },
 
@@ -499,7 +491,7 @@ PASOS = [
         'codigo': 'reset_variables', 'nombre': 'Reset variables',
         'asigna': {
             'cedula': '', 'nombres': '', 'apellidos': '', 'email': '',
-            'driver_age': '', 'fecha_nacimiento': '', 'encontrado_cli': '',
+            'driver_age': '', 'encontrado_cli': '',
             'accion_principal': '', 'agendar_nueva': '',
             'citas_text': '', 'total_citas': '', 'tiene_citas': '',
             'servicio_id': '', 'recurso_id': '', 'fecha': '', 'dias': '',
