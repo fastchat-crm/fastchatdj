@@ -5,8 +5,8 @@ existente (sembrado por `scripts/seed_agenda_consultorio_medico.py`). El flujo:
 
   1. Lee config del grupo (moneda, recordatorio_h, zona_horaria) vía
      función interna `agenda_init` (no HTTP).
-  2. Pide cédula → HTTP al endpoint MGA (reusa `Cotizador ARIA REST v1`)
-     `/cliente/?cedula=` para autocompletar nombres/apellidos/email/edad.
+  2. Pide cédula → HTTP al endpoint MGA (reusa `Cotizador Vida Buena REST v1`)
+     `?action=cliente&cedula=` para autocompletar nombres/apellidos/email/edad.
   3. Si el lookup falla o trae campos vacíos → pide solo lo faltante.
   4. Elige servicio → recurso (con atajo "cualquiera") → fecha → slot.
   5. Pide motivo (opcional, "-"/"saltar" para omitir).
@@ -38,9 +38,9 @@ from crm.models import (
 NOMBRE_DEPTO = 'Consultorio Médico — Agenda'
 GRUPO_NOMBRE_DEFAULT = 'Consultorio Medico'
 
-CLIENTE_ENDPOINT_NOMBRE = 'Cotizador ARIA REST v1'
-CLIENTE_BASE_URL_DEFAULT = 'https://fguerrero.mgaseguros.ec/aria-api/v1/'
-CLIENTE_CREDENCIAL_NOMBRE = 'ARIA REST - AllowAny'
+CLIENTE_ENDPOINT_NOMBRE = 'Cotizador Vida Buena REST v1'
+CLIENTE_BASE_URL_DEFAULT = 'https://fguerrero.mgaseguros.ec/cotimedica-api/v1/'
+CLIENTE_CREDENCIAL_NOMBRE = 'Vida Buena REST - AllowAny'
 
 
 BOT = {
@@ -99,16 +99,16 @@ PASOS = [
     },
     {
         'id': 30, 'orden': 30, 'tipo': 'llamada_http',
-        'codigo': 'http_cliente', 'nombre': 'GET /cliente/?cedula= (MGA)',
-        'metodo': 'GET', 'path': 'cliente/',
-        'query': {'cedula': '{{variables.cedula}}'},
+        'codigo': 'http_cliente', 'nombre': 'GET ?action=cliente (Vida Buena)',
+        'metodo': 'GET', 'path': '',
+        'query': {'action': 'cliente', 'cedula': '{{variables.cedula}}'},
         'timeout_seg': 15,
         'extrae_variables': {
             '$encontrado_cli': '$.data.encontrado',
-            '$nombres':        '$.data.cliente.nombres',
-            '$apellidos':      '$.data.cliente.apellidos',
-            '$email':          '$.data.cliente.email',
-            '$driver_age':     '$.data.cliente.edad',
+            '$nombres':        '$.data.nombres',
+            '$apellidos':      '$.data.apellidos',
+            '$email':          '$.data.email',
+            '$driver_age':     '$.data.edad',
         },
         'siguiente_ok': 40, 'siguiente_error': 50,
     },

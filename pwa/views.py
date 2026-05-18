@@ -1,3 +1,6 @@
+import mimetypes
+import os
+
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
@@ -12,13 +15,33 @@ def _get_configuracion():
         return None
 
 
+def _detect_mime(path_or_url):
+    if not path_or_url:
+        return 'image/png'
+    ext = os.path.splitext(path_or_url.split('?')[0])[1].lower()
+    mapping = {
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.webp': 'image/webp',
+        '.svg': 'image/svg+xml',
+        '.gif': 'image/gif',
+        '.ico': 'image/x-icon',
+    }
+    if ext in mapping:
+        return mapping[ext]
+    guessed, _ = mimetypes.guess_type(path_or_url)
+    return guessed or 'image/png'
+
+
 def _normalizar_iconos(items):
     out = []
     for i in items or []:
+        src = i.get('src')
         out.append({
-            'src': i.get('src'),
+            'src': src,
             'sizes': i.get('sizes') or i.get('size'),
-            'type': i.get('type', 'image/png'),
+            'type': i.get('type') or _detect_mime(src),
             **({'purpose': i['purpose']} if i.get('purpose') else {}),
         })
     return out
@@ -29,15 +52,23 @@ def _build_icons(confi):
     if not confi or not confi.logo_sistema:
         return fallback
     logo_url = confi.logo_sistema.url
+    mime = _detect_mime(logo_url)
+    if mime == 'image/svg+xml':
+        return [
+            {'src': logo_url, 'sizes': 'any', 'type': mime, 'purpose': 'any'},
+            {'src': logo_url, 'sizes': 'any', 'type': mime, 'purpose': 'maskable'},
+        ] + [i for i in fallback if i.get('sizes') in ('192x192', '512x512')]
     return [
-        {'src': logo_url, 'sizes': '72x72', 'type': 'image/png'},
-        {'src': logo_url, 'sizes': '96x96', 'type': 'image/png'},
-        {'src': logo_url, 'sizes': '128x128', 'type': 'image/png'},
-        {'src': logo_url, 'sizes': '144x144', 'type': 'image/png'},
-        {'src': logo_url, 'sizes': '152x152', 'type': 'image/png'},
-        {'src': logo_url, 'sizes': '192x192', 'type': 'image/png', 'purpose': 'any maskable'},
-        {'src': logo_url, 'sizes': '384x384', 'type': 'image/png'},
-        {'src': logo_url, 'sizes': '512x512', 'type': 'image/png', 'purpose': 'any maskable'},
+        {'src': logo_url, 'sizes': '72x72', 'type': mime},
+        {'src': logo_url, 'sizes': '96x96', 'type': mime},
+        {'src': logo_url, 'sizes': '128x128', 'type': mime},
+        {'src': logo_url, 'sizes': '144x144', 'type': mime},
+        {'src': logo_url, 'sizes': '152x152', 'type': mime},
+        {'src': logo_url, 'sizes': '192x192', 'type': mime, 'purpose': 'any'},
+        {'src': logo_url, 'sizes': '192x192', 'type': mime, 'purpose': 'maskable'},
+        {'src': logo_url, 'sizes': '384x384', 'type': mime},
+        {'src': logo_url, 'sizes': '512x512', 'type': mime, 'purpose': 'any'},
+        {'src': logo_url, 'sizes': '512x512', 'type': mime, 'purpose': 'maskable'},
     ]
 
 
