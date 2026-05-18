@@ -292,6 +292,11 @@ def agenda_disponibilidad(conversacion, variables, config, endpoint=None) -> dic
 
     duracion = servicio.duracion_min
     ahora = timezone.now()
+    if timezone.is_naive(ahora):
+        try:
+            ahora = tz.localize(ahora)
+        except Exception:
+            ahora = timezone.make_aware(ahora, tz)
     todos = []
     for r in recursos:
         slots = _generar_slots_recurso(r, fecha_obj, duracion, tz)

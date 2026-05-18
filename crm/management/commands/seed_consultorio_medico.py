@@ -255,7 +255,7 @@ PASOS = [
             'valor':         '0',
             'etiqueta':      'Cualquiera',
             'pregunta':      '👨‍⚕️ ¿Tenés preferencia de médico?',
-            'etiqueta_si':   '✅ Cualquiera disponible',
+            'etiqueta_si':   '✅ Cualquier médico',
             'etiqueta_otra': '👨‍⚕️ Elegir médico',
             'salida_si':     'si',
             'salida_otra':   'otra',
