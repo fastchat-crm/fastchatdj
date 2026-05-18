@@ -74,6 +74,15 @@
         })[status] || status;
     }
 
+    function valOf(sel, fallback) {
+        var el = $(sel);
+        return el ? el.value : (fallback || '');
+    }
+    function checkedOf(sel) {
+        var el = $(sel);
+        return (el && el.checked) ? '1' : '0';
+    }
+
     var saveMeta = debounce(function () {
         setMetaStatus('saving');
         postAction('guardar_meta', {
@@ -81,6 +90,12 @@
             nombre: $('#dp-nombre').value,
             color: $('#dp-color').value,
             mensaje_saludo: $('#dp-saludo').value,
+            grupo_agenda_id: valOf('#dp-grupo-agenda'),
+            palabras_clave: valOf('#dp-palabras-clave'),
+            reset_triggers: valOf('#dp-reset-triggers'),
+            mensaje_reset: valOf('#dp-mensaje-reset'),
+            es_default: checkedOf('#dp-es-default'),
+            activo_tradicional: checkedOf('#dp-activo-tradicional'),
         }).then(function (resp) {
             if (!resp.ok) {
                 setMetaStatus('error');
@@ -111,10 +126,23 @@
     }, META_DEBOUNCE);
 
     function wireMeta() {
-        ['#dp-nombre', '#dp-color', '#dp-saludo'].forEach(function (sel) {
+        var textFields = [
+            '#dp-nombre', '#dp-color', '#dp-saludo',
+            '#dp-palabras-clave', '#dp-reset-triggers', '#dp-mensaje-reset',
+        ];
+        textFields.forEach(function (sel) {
             var el = $(sel);
             if (!el) return;
             el.addEventListener('input', function () {
+                setMetaStatus('dirty');
+                saveMeta();
+            });
+        });
+        var changeFields = ['#dp-grupo-agenda', '#dp-es-default', '#dp-activo-tradicional'];
+        changeFields.forEach(function (sel) {
+            var el = $(sel);
+            if (!el) return;
+            el.addEventListener('change', function () {
                 setMetaStatus('dirty');
                 saveMeta();
             });

@@ -65,6 +65,80 @@
                             <code>{{contacto.numero}}</code> <code>{{sesion.nombre}}</code>{% endverbatim %}
                         </div>
                     </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1">
+                            <i class="fa fa-calendar-check text-primary me-1"></i>
+                            Grupo de agenda
+                        </label>
+                        <select class="form-select" id="dp-grupo-agenda">
+                            <option value="">— Sin agenda —</option>
+                            {% for g in grupos_agenda %}
+                                <option value="{{ g.id }}" {% if filtro.grupo_agenda_id == g.id %}selected{% endif %}>
+                                    {{ g.nombre }} ({{ g.moneda }} · {{ g.zona_horaria }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            Opcional. Si está asignado, el flujo (funciones <code>agenda_*</code>)
+                            usa esta agenda sin preguntarle al cliente.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1">Palabras clave de entrada</label>
+                        <textarea class="form-control" id="dp-palabras-clave" rows="3"
+                                  placeholder="cita&#10;turno&#10;agendar">{{ filtro.palabras_clave|default:'' }}</textarea>
+                        <div class="form-text">
+                            Una por línea. Si el mensaje entrante contiene alguna, se enruta acá.
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1">
+                            <i class="fa fa-rotate-left text-warning me-1"></i>
+                            Triggers de reset
+                        </label>
+                        <textarea class="form-control" id="dp-reset-triggers" rows="3"
+                                  placeholder="reiniciar&#10;cancelar&#10;volver al inicio">{{ reset_triggers_text|default:'' }}</textarea>
+                        <div class="form-text">
+                            Una palabra/frase por línea. Si el cliente envía cualquiera, el flujo
+                            se reinicia desde el nodo de inicio.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1">Mensaje al reiniciar</label>
+                        <textarea class="form-control" id="dp-mensaje-reset" rows="3"
+                                  placeholder="🔄 Empezamos de nuevo. ¿En qué te ayudo?">{{ filtro.mensaje_reset|default:'' }}</textarea>
+                        <div class="form-text">
+                            Texto que el bot envía antes del saludo cuando se dispara un reset.
+                            Vacío = solo vuelve al saludo, sin mensaje extra.
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="form-check form-switch">
+                            <input type="checkbox" class="form-check-input" id="dp-es-default"
+                                   {% if filtro.es_default %}checked{% endif %}>
+                            <label class="form-check-label small fw-bold" for="dp-es-default">
+                                Departamento por defecto
+                            </label>
+                        </div>
+                        <small class="text-muted">
+                            Se usa cuando no hay match de palabras clave ni selección previa.
+                        </small>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check form-switch">
+                            <input type="checkbox" class="form-check-input" id="dp-activo-tradicional"
+                                   {% if filtro.activo_tradicional or not filtro %}checked{% endif %}>
+                            <label class="form-check-label small fw-bold" for="dp-activo-tradicional">
+                                Flujo tradicional activo
+                            </label>
+                        </div>
+                        <small class="text-muted">
+                            Si está desactivado, el depto no responde con flujo (sirve solo para handoff humano).
+                        </small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -194,5 +268,5 @@
 
 {% block jscript %}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="{% static 'js/dpchat_editor.js' %}?v=17"></script>
+    <script src="{% static 'js/dpchat_editor.js' %}?v=18"></script>
 {% endblock %}

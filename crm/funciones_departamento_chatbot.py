@@ -1230,10 +1230,30 @@ def _serializar_arbol_anidado(departamento, padre=None):
 def _guardar_meta(request):
     """action=guardar_meta. Crea o actualiza cabecera del departamento.
     pk=0 → crea uno nuevo y devuelve el id. Subsiguientes saves usan ese id."""
+    from agenda.models import GrupoAgenda
+
     pk = int(request.POST.get('pk') or 0)
     nombre = (request.POST.get('nombre') or '').strip()[:120]
     color = (request.POST.get('color') or '#6c757d').strip()[:20]
     mensaje = (request.POST.get('mensaje_saludo') or '').strip()
+    palabras = (request.POST.get('palabras_clave') or '').strip()
+    mensaje_reset = (request.POST.get('mensaje_reset') or '').strip()
+    reset_raw = request.POST.get('reset_triggers') or ''
+    reset_lista = [
+        line.strip().lower()
+        for line in reset_raw.splitlines()
+        if line.strip()
+    ]
+    es_default = request.POST.get('es_default') in ('1', 'true', 'on')
+    activo_tradicional = request.POST.get('activo_tradicional') in ('1', 'true', 'on')
+
+    grupo_obj = None
+    grupo_raw = (request.POST.get('grupo_agenda_id') or '').strip()
+    if grupo_raw and grupo_raw not in ('0', 'null', 'none'):
+        try:
+            grupo_obj = GrupoAgenda.objects.filter(pk=int(grupo_raw), status=True).first()
+        except (TypeError, ValueError):
+            grupo_obj = None
 
     if pk == 0:
         if len(nombre) < 2:
@@ -1241,7 +1261,12 @@ def _guardar_meta(request):
                 'ok': False,
                 'error': 'El nombre necesita al menos 2 caracteres para crear el departamento.',
             })
-        dep = DepartamentoChatBot(nombre=nombre, color=color, mensaje_saludo=mensaje)
+        dep = DepartamentoChatBot(
+            nombre=nombre, color=color, mensaje_saludo=mensaje,
+            palabras_clave=palabras, mensaje_reset=mensaje_reset,
+            reset_triggers=reset_lista, es_default=es_default,
+            activo_tradicional=activo_tradicional, grupo_agenda=grupo_obj,
+        )
         dep.save(request)
         log(f"Creó (autosave) departamento {dep}", request, "add", obj=dep.id)
         return JsonResponse({'ok': True, 'departamento_id': dep.id, 'created': True})
@@ -1253,6 +1278,12 @@ def _guardar_meta(request):
         dep.nombre = nombre
     dep.color = color
     dep.mensaje_saludo = mensaje
+    dep.palabras_clave = palabras
+    dep.mensaje_reset = mensaje_reset
+    dep.reset_triggers = reset_lista
+    dep.es_default = es_default
+    dep.activo_tradicional = activo_tradicional
+    dep.grupo_agenda = grupo_obj
     dep.save(request)
     return JsonResponse({'ok': True, 'departamento_id': dep.id, 'created': False})
 

@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block head %}
-    <link rel="stylesheet" href="{% static 'stylenew/dpto_a_agente_ia.css' %}">
+    <link rel="stylesheet" href="{% static 'stylenew/dpto_a_agente_ia.css' %}?v1.1">
 {% endblock %}
 {% block content %}
 
@@ -123,6 +123,12 @@
                             {% else %}
                                 <span class="badge bg-secondary-soft">
                                     <i class="fa fa-pause me-1"></i>Inactivo
+                                </span>
+                            {% endif %}
+                            {% if l.grupo_agenda %}
+                                <span class="badge bg-info-soft text-info"
+                                      title="Agenda asignada: {{ l.grupo_agenda.nombre }} · {{ l.grupo_agenda.moneda }} · {{ l.grupo_agenda.zona_horaria }}">
+                                    <i class="fa fa-calendar-check me-1"></i>{{ l.grupo_agenda.nombre|truncatechars:24 }}
                                 </span>
                             {% endif %}
                         </div>

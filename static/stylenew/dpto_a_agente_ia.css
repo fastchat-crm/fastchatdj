@@ -183,6 +183,10 @@
     background-color: #e5e7eb;
     color: #4b5563;
 }
+.dpchat-card__badges .bg-info-soft {
+    background-color: #dbeafe;
+    color: #1e40af;
+}
 
 .dpchat-card__saludo {
     margin: 0;

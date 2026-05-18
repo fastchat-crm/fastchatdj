@@ -291,11 +291,13 @@ def departamentoChatbotsView(request):
                         .values('id', 'nombre', 'base_url')
                     ))
                     if full_page:
+                        from agenda.models import GrupoAgenda
                         data.update({
                             'pagina_completa': True,
                             'titulo_pagina': f'Agregar {data["titulo"]}',
                             'ruta_post': request.path,
                             'filtro': None,
+                            'grupos_agenda': GrupoAgenda.objects.filter(status=True).order_by('nombre'),
                         })
                         return render(request, 'crm/departamento_chatbots/form_pagina.html', data)
                     template = get_template("crm/departamento_chatbots/form.html")
@@ -319,6 +321,7 @@ def departamentoChatbotsView(request):
                         # árbol, así cada card en el listado puede mostrar de qué
                         # nodo(s) viene. Una sola query agrupada por nodo_destino.
                         from collections import defaultdict
+                        from agenda.models import GrupoAgenda
                         arbol_plano = _serializar_arbol_opciones(filtro)
                         preds_por_nodo = defaultdict(list)
                         salidas_por_nodo = defaultdict(list)
@@ -353,6 +356,8 @@ def departamentoChatbotsView(request):
                             'validaciones_choices': OpcionDepartamentoChatBot.VALIDACIONES,
                             'endpoints_disponibles': EndpointApiChatbot.objects.filter(status=True).order_by('nombre'),
                             'funciones_metadata': funciones_metadata,
+                            'grupos_agenda': GrupoAgenda.objects.filter(status=True).order_by('nombre'),
+                            'reset_triggers_text': '\n'.join(filtro.get_reset_triggers()),
                         })
                         return render(request, 'crm/departamento_chatbots/form_pagina.html', data)
                     template = get_template("crm/departamento_chatbots/form.html")
@@ -651,7 +656,7 @@ def departamentoChatbotsView(request):
         # sola query con annotate; los conditional Count filtran status=True
         # para no contar soft-deleted.
         from django.db.models import Count
-        listado = model.objects.filter(filtros).annotate(
+        listado = model.objects.filter(filtros).select_related('grupo_agenda').annotate(
             count_nodos=Count(
                 'opciondepartamentochatbot',
                 filter=Q(opciondepartamentochatbot__status=True),

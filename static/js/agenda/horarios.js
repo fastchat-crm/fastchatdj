@@ -310,7 +310,7 @@
         });
         actualizarHintGenerador();
 
-        btnGenerar.addEventListener('click', function () {
+        btnGenerar.addEventListener('click', async function () {
             if (!recursoActual) {
                 Swal.fire('Elegí primero un recurso.', '', 'warning');
                 return;
@@ -333,16 +333,13 @@
                 return;
             }
             const slotMin = Math.max(STEP_MIN, Math.round((e - s) / c / STEP_MIN) * STEP_MIN);
-            let rebuildNeeded = false;
             if (s < toMin(dayStart)) {
                 dayStart = genStart.value;
                 dayStartInput.value = genStart.value;
-                rebuildNeeded = true;
             }
             if (e > toMin(dayEnd)) {
                 dayEnd = genEnd.value;
                 dayEndInput.value = genEnd.value;
-                rebuildNeeded = true;
             }
             if (genReplace && genReplace.checked) {
                 const setDias = new Set(dias);
@@ -353,25 +350,41 @@
                     return b.id || !setDias.has(b.day);
                 });
             }
+            let creados = 0;
             dias.forEach(function (d) {
-                blocks.push({
-                    _tempId: nextTempId--,
-                    day: d,
-                    start: genStart.value,
-                    end: genEnd.value,
-                    slot_min: slotMin,
-                });
+                for (let i = 0; i < c; i++) {
+                    const a = s + i * slotMin;
+                    const f = a + slotMin;
+                    if (f > e) break;
+                    blocks.push({
+                        _tempId: nextTempId--,
+                        day: d,
+                        start: toHHMM(a),
+                        end: toHHMM(f),
+                        slot_min: slotMin,
+                    });
+                    creados++;
+                }
             });
-            if (rebuildNeeded) {
-                buildGrid();
-                sincronizarUrl();
-            } else {
-                renderBlocks();
-            }
+            sincronizarUrl();
             if (modalQuickGen) modalQuickGen.hide();
+            pantallaespera();
+            const payload = blocks.filter(function (b) { return !b._deleted; })
+                .map(function (b) { return {day: b.day, start: b.start, end: b.end, slot_min: b.slot_min}; });
+            const j = await window.postAgendaEntity({
+                entity: 'horario', action: 'save', recurso_id: recursoActual,
+                blocks: JSON.stringify(payload),
+                slot_min: document.getElementById('slotMin').value || 30,
+            });
+            $.unblockUI();
+            if (j.error) {
+                Swal.fire(j.message || 'Error al guardar', '', 'error');
+                return;
+            }
+            await cargarRecurso(recursoActual);
             Swal.fire(
-                'Bloques generados',
-                'Se agregaron ' + dias.length + ' bloques (uno por día). Pulsá *Guardar* para confirmar.',
+                'Turnos generados',
+                creados + ' bloque(s) creados en ' + dias.length + ' día(s).',
                 'success'
             );
         });
