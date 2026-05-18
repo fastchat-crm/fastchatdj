@@ -255,11 +255,41 @@ def citasView(request):
     data['count_total'] = qs_base.count()
 
     if seccion == 'listado':
-        listado = qs_base.order_by('-inicio')
+        listado = qs_base.order_by('-id')
         data['list_count'] = listado.count()
         paginador(request, listado, 50, data, url_vars)
-        for t in data.get('listado') or []:
-            t.info_cliente = _parse_notas(t.notas)
+        items = data.get('listado') or []
+        contactos_ids = [t.contacto_id for t in items if t.contacto_id]
+        cedulas = []
+        info_por_turno = {}
+        for t in items:
+            info = _parse_notas(t.notas)
+            info_por_turno[t.id] = info
+            t.info_cliente = info
+            if info.get('cedula'):
+                cedulas.append(info['cedula'])
+        clientes_por_contacto = {}
+        clientes_por_cedula = {}
+        if contactos_ids or cedulas:
+            from crm.models import Cliente
+            cli_qs = Cliente.objects.filter(status=True).filter(
+                **({'contacto_origen_id__in': contactos_ids} if contactos_ids else {})
+            )
+            for c in cli_qs:
+                if c.contacto_origen_id and c.contacto_origen_id not in clientes_por_contacto:
+                    clientes_por_contacto[c.contacto_origen_id] = c
+                if c.cedula:
+                    clientes_por_cedula.setdefault(c.cedula, c)
+            if cedulas:
+                for c in Cliente.objects.filter(status=True, cedula__in=cedulas):
+                    clientes_por_cedula.setdefault(c.cedula, c)
+        for t in items:
+            cliente = clientes_por_contacto.get(t.contacto_id)
+            if not cliente:
+                cedula = (info_por_turno.get(t.id) or {}).get('cedula')
+                if cedula:
+                    cliente = clientes_por_cedula.get(cedula)
+            t.cliente = cliente
 
     return render(request, 'agenda/citas/listado.html', data)
 

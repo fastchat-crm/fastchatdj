@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block head %}
-    <link rel="stylesheet" href="/static/css/agenda/citas.css?v1.1">
+    <link rel="stylesheet" href="/static/css/agenda/citas.css?v1.2">
 {% endblock %}
 
 {% block content %}
@@ -92,8 +92,10 @@
                         <table class="table table-hover table-striped align-middle">
                             <thead>
                                 <tr>
+                                    <th>Creado</th>
                                     <th>Cuándo</th>
                                     <th>Cliente</th>
+                                    <th>Origen de contacto</th>
                                     <th>Servicio</th>
                                     <th>Recurso · Grupo</th>
                                     <th>Estado</th>
@@ -107,28 +109,54 @@
                             {% for t in listado %}
                                 <tr {% if cita_destacada_id and t.id == cita_destacada_id %}class="table-warning"{% endif %}>
                                     <td>
+                                        <small class="text-muted">{{ t.fecha_registro|date:"d/m/Y" }}</small><br>
+                                        <small class="text-muted">{{ t.fecha_registro|date:"H:i" }}</small>
+                                    </td>
+                                    <td>
                                         <span class="badge bg-light text-dark">#{{ t.id }}</span><br>
                                         <strong>{{ t.inicio|date:"l"|capfirst }}</strong><br>
                                         <strong>{{ t.inicio|date:"d/m/Y H:i" }}</strong><br>
                                         <small class="text-muted">→ {{ t.fin|date:"H:i" }}</small>
                                     </td>
                                     <td>
+                                        {% if t.cliente %}
+                                            <strong>{{ t.cliente.nombres }} {{ t.cliente.apellidos }}</strong>
+                                            {% if t.cliente.cedula %}
+                                                <br><small><i class="fa fa-id-card me-1 text-muted"></i>{{ t.cliente.cedula }}</small>
+                                            {% endif %}
+                                            {% if t.cliente.email %}
+                                                <br><small><i class="fa fa-envelope me-1 text-muted"></i>{{ t.cliente.email }}</small>
+                                            {% endif %}
+                                            {% if t.cliente.edad %}
+                                                <br><small><i class="fa fa-user-clock me-1 text-muted"></i>{{ t.cliente.edad }} años</small>
+                                            {% endif %}
+                                            {% if t.cliente.fecha_nacimiento %}
+                                                <br><small><i class="fa fa-birthday-cake me-1 text-muted"></i>{{ t.cliente.fecha_nacimiento|date:"d/m/Y" }}</small>
+                                            {% endif %}
+                                            {% if t.cliente.telefono %}
+                                                <br><small><i class="fa fa-mobile-alt me-1 text-muted"></i>{{ t.cliente.telefono }}</small>
+                                            {% endif %}
+                                        {% else %}
+                                            <small class="text-muted">No registrado</small>
+                                            {% if t.info_cliente.cedula %}
+                                                <br><small><i class="fa fa-id-card me-1 text-muted"></i>{{ t.info_cliente.cedula }}</small>
+                                            {% endif %}
+                                            {% if t.info_cliente.email %}
+                                                <br><small><i class="fa fa-envelope me-1 text-muted"></i>{{ t.info_cliente.email }}</small>
+                                            {% endif %}
+                                            {% if t.info_cliente.edad %}
+                                                <br><small><i class="fa fa-user-clock me-1 text-muted"></i>{{ t.info_cliente.edad }} años</small>
+                                            {% endif %}
+                                        {% endif %}
+                                    </td>
+                                    <td>
                                         <strong>{{ t.contacto.contacto_nombre|default:"—" }}</strong><br>
-                                        <small><i class="fa fa-phone me-1 text-muted"></i>{{ t.contacto.contacto_numero }}</small>
-                                        {% if t.info_cliente.cedula %}
-                                            <br><small><i class="fa fa-id-card me-1 text-muted"></i>{{ t.info_cliente.cedula }}</small>
+                                        <small><i class="fa-brands fa-whatsapp me-1 text-success"></i>{{ t.contacto.contacto_numero }}</small>
+                                        {% if t.contacto.sesion %}
+                                            <br><small class="text-muted"><i class="fa fa-plug me-1"></i>{{ t.contacto.sesion.nombre|default:t.contacto.sesion.numero }}</small>
                                         {% endif %}
-                                        {% if t.info_cliente.fecha_nac %}
-                                            <br><small><i class="fa fa-birthday-cake me-1 text-muted"></i>{{ t.info_cliente.fecha_nac }}</small>
-                                        {% endif %}
-                                        {% if t.info_cliente.email %}
-                                            <br><small><i class="fa fa-envelope me-1 text-muted"></i>{{ t.info_cliente.email }}</small>
-                                        {% endif %}
-                                        {% if t.info_cliente.edad %}
-                                            <br><small><i class="fa fa-user-clock me-1 text-muted"></i>{{ t.info_cliente.edad }} años</small>
-                                        {% endif %}
-                                        {% if t.info_cliente.motivo %}
-                                            <br><small class="text-muted">{{ t.info_cliente.motivo|truncatechars:80 }}</small>
+                                        {% if t.contacto.canal %}
+                                            <br><small class="text-muted"><i class="fa fa-tag me-1"></i>{{ t.contacto.canal }}</small>
                                         {% endif %}
                                     </td>
                                     <td>{{ t.servicio.nombre }}</td>
@@ -233,7 +261,7 @@
                                     </td>
                                 </tr>
                             {% empty %}
-                                <tr><td colspan="9" class="text-center text-muted">No se encontraron citas.</td></tr>
+                                <tr><td colspan="11" class="text-center text-muted">No se encontraron citas.</td></tr>
                             {% endfor %}
 
                             </tbody>
