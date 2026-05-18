@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Appointment confirmed</title>
+</head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#0f172a;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f1f5f9;padding:32px 12px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#ffffff;border-radius:14px;box-shadow:0 14px 32px rgba(15,23,42,0.08);overflow:hidden;">
+                    <tr>
+                        <td style="background:#2874A6;padding:28px 28px 22px;color:#ffffff;">
+                            <div style="font-size:13px;letter-spacing:.06em;text-transform:uppercase;opacity:.85;">{{ nombreempresa|default:"Appointment" }}</div>
+                            <div style="font-size:22px;font-weight:700;margin-top:6px;">Your appointment is confirmed</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:26px 28px 6px;">
+                            <p style="margin:0 0 14px;font-size:15px;line-height:1.5;">
+                                Hi <strong>{{ cliente_nombre|default:"there" }}</strong>, your appointment has been booked successfully. Here are the details:
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0 28px 6px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+                                <tr>
+                                    <td style="padding:10px 14px;background:#f8fafc;width:140px;color:#475569;font-size:13px;">Service</td>
+                                    <td style="padding:10px 14px;font-size:14px;font-weight:600;">{{ servicio_nombre }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px 14px;background:#f8fafc;color:#475569;font-size:13px;border-top:1px solid #e2e8f0;">Provider</td>
+                                    <td style="padding:10px 14px;font-size:14px;border-top:1px solid #e2e8f0;">{{ medico_nombre }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px 14px;background:#f8fafc;color:#475569;font-size:13px;border-top:1px solid #e2e8f0;">Date &amp; time</td>
+                                    <td style="padding:10px 14px;font-size:14px;border-top:1px solid #e2e8f0;">{{ fecha_fmt }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:10px 14px;background:#f8fafc;color:#475569;font-size:13px;border-top:1px solid #e2e8f0;">Duration</td>
+                                    <td style="padding:10px 14px;font-size:14px;border-top:1px solid #e2e8f0;">{{ duracion_min }} min</td>
+                                </tr>
+                                {% if precio_str %}
+                                <tr>
+                                    <td style="padding:10px 14px;background:#f8fafc;color:#475569;font-size:13px;border-top:1px solid #e2e8f0;">Price</td>
+                                    <td style="padding:10px 14px;font-size:14px;border-top:1px solid #e2e8f0;">{{ precio_str }}</td>
+                                </tr>
+                                {% endif %}
+                                {% if motivo %}
+                                <tr>
+                                    <td style="padding:10px 14px;background:#f8fafc;color:#475569;font-size:13px;border-top:1px solid #e2e8f0;">Reason</td>
+                                    <td style="padding:10px 14px;font-size:14px;border-top:1px solid #e2e8f0;">{{ motivo }}</td>
+                                </tr>
+                                {% endif %}
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:18px 28px 8px;">
+                            <p style="margin:0;font-size:13px;color:#475569;line-height:1.5;">
+                                You will receive a reminder {{ recordatorio_h|default:24 }} hours before your appointment. If you need to reschedule, just reply to the WhatsApp chat.
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:14px 28px 28px;">
+                            <p style="margin:0;font-size:12px;color:#94a3b8;">
+                                Confirmation #{{ turno_id }} · {{ nombreempresa|default:"Care team" }}
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

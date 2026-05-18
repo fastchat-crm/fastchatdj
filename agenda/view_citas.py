@@ -182,7 +182,10 @@ def citasView(request):
                     t.estado = nuevo
                     if observacion or estado_anterior != nuevo:
                         from django.utils import timezone as _tz
-                        stamp = _tz.localtime(_tz.now()).strftime('%Y-%m-%d %H:%M')
+                        ahora = _tz.now()
+                        if _tz.is_aware(ahora):
+                            ahora = _tz.localtime(ahora)
+                        stamp = ahora.strftime('%Y-%m-%d %H:%M')
                         linea = f'[{stamp}] {estado_anterior} → {nuevo}'
                         if observacion:
                             linea += f' · {observacion}'
@@ -262,7 +265,8 @@ def citasView(request):
 
 
 def _parse_notas(notas):
-    info = {'motivo': '', 'cedula': '', 'email': '', 'edad': '', 'fecha_nac': '', 'otros': []}
+    info = {'motivo': '', 'cedula': '', 'email': '', 'edad': '', 'fecha_nac': '',
+            'otros': [], 'historial': [], 'ultima_observacion': ''}
     if not notas:
         return info
     mapping = {
@@ -277,6 +281,9 @@ def _parse_notas(notas):
         linea = linea.strip()
         if not linea:
             continue
+        if linea.startswith('['):
+            info['historial'].append(linea)
+            continue
         if ':' not in linea:
             info['otros'].append(linea)
             continue
@@ -288,4 +295,8 @@ def _parse_notas(notas):
             info[destino] = valor
         else:
             info['otros'].append(linea)
+    for h in reversed(info['historial']):
+        if '·' in h:
+            info['ultima_observacion'] = h.split('·', 1)[1].strip()
+            break
     return info

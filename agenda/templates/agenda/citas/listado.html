@@ -97,10 +97,10 @@
                                     <th>Servicio</th>
                                     <th>Recurso · Grupo</th>
                                     <th>Estado</th>
+                                    <th>Observación</th>
                                     <th>Origen</th>
                                     <th>Precio</th>
-                                    <th>Recordatorio</th>
-                                    <th class="text-center" style="width:160px">Acción</th>
+                                    <th class="text-center" style="width:80px">Acción</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -138,37 +138,137 @@
                                         <small class="text-muted">{{ t.recurso.grupo_agenda.nombre }}</small>
                                     </td>
                                     <td>
-                                        <span class="badge bg-{% if t.estado == 'confirmed' %}primary{% elif t.estado == 'pending' %}warning text-dark{% elif t.estado == 'fulfilled' %}success{% elif t.estado == 'no_show' %}danger{% elif t.estado == 'rescheduled' %}info text-dark{% else %}secondary{% endif %}">
-                                            {{ t.get_estado_display }}
-                                        </span>
+                                        <b class="text-{% if t.estado == 'confirmed' %}primary{% elif t.estado == 'pending' %}warning{% elif t.estado == 'fulfilled' %}success{% elif t.estado == 'no_show' %}danger{% elif t.estado == 'rescheduled' %}info{% else %}secondary{% endif %}">
+                                            <i class="fa fa-circle me-1" style="font-size:.55rem;vertical-align:middle;"></i>{{ t.get_estado_display }}
+                                        </b>
+                                    </td>
+                                    <td>
+                                        {% if t.info_cliente.motivo %}
+                                            <small><i class="fa fa-comment-dots me-1 text-muted"></i>{{ t.info_cliente.motivo|truncatechars:140 }}</small>
+                                        {% endif %}
+                                        {% if t.info_cliente.ultima_observacion %}
+                                            <br><small class="text-muted"><i class="fa fa-history me-1"></i>{{ t.info_cliente.ultima_observacion|truncatechars:140 }}</small>
+                                        {% endif %}
+                                        {% if not t.info_cliente.motivo and not t.info_cliente.ultima_observacion %}
+                                            <small class="text-muted">—</small>
+                                        {% endif %}
                                     </td>
                                     <td><small>{{ t.get_origen_display }}</small></td>
                                     <td><strong>{{ t.precio_cobrado }}</strong> <small>{{ t.recurso.grupo_agenda.moneda }}</small></td>
-                                    <td>
-                                        {% if t.recordatorio_enviado %}
-                                            <i class="fa fa-check-circle text-success" title="Recordatorio enviado"></i>
-                                        {% else %}
-                                            <i class="fa fa-clock text-muted" title="Pendiente"></i>
-                                        {% endif %}
-                                    </td>
                                     <td class="text-center">
-                                        <div class="btn-group btn-group-sm">
-                                            <button type="button" class="btn btn-primary btn-cambio-estado"
-                                                    data-id="{{ t.id }}" data-estado="{{ t.estado }}">
-                                                <i class="fa fa-tag me-1"></i> Estado
+                                        <div class="dropdown">
+                                            <button class="btn btn-icon" type="button" data-bs-toggle="dropdown"
+                                                    style="background:none;border:none;">
+                                                <i class="fas fa-ellipsis-v"></i>
                                             </button>
-                                            <button class="btn btn-danger btn-del" data-id="{{ t.id }}" title="Eliminar">
-                                                <i class="fa fa-trash"></i>
-                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li><h6 class="dropdown-header">Gestionar</h6></li>
+                                                <li><a class="dropdown-item btn-ver-cita" href="javascript:void(0);"
+                                                       data-id="{{ t.id }}">
+                                                    <i class="fa fa-eye me-2 text-primary"></i> Ver cita
+                                                </a></li>
+                                                <li><a class="dropdown-item btn-cambio-estado" href="javascript:void(0);"
+                                                       data-id="{{ t.id }}" data-estado="{{ t.estado }}">
+                                                    <i class="fa fa-tag me-2 text-primary"></i> Cambiar estado
+                                                </a></li>
+                                                <li><a class="dropdown-item btn-historial" href="javascript:void(0);"
+                                                       data-id="{{ t.id }}">
+                                                    <i class="fa fa-history me-2 text-info"></i> Ver historial
+                                                </a></li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li><a class="dropdown-item btn-del" href="javascript:void(0);" data-id="{{ t.id }}">
+                                                    <i class="fa fa-trash me-2 text-danger"></i> Eliminar
+                                                </a></li>
+                                            </ul>
+                                        </div>
+                                        <div class="d-none" id="histTurno{{ t.id }}">
+                                            {% for h in t.info_cliente.historial %}
+                                                <div class="border-bottom py-1 small text-start">{{ h }}</div>
+                                            {% empty %}
+                                                <div class="text-muted small">Sin cambios de estado registrados.</div>
+                                            {% endfor %}
+                                        </div>
+                                        <div class="d-none" id="detalleTurno{{ t.id }}">
+                                            <dl class="row mb-0 small text-start">
+                                                <dt class="col-5">ID cita</dt><dd class="col-7">#{{ t.id }}</dd>
+                                                <dt class="col-5">Servicio</dt><dd class="col-7">{{ t.servicio.nombre }} ({{ t.servicio.duracion_min }} min)</dd>
+                                                <dt class="col-5">Recurso</dt><dd class="col-7">{{ t.recurso.nombre }}</dd>
+                                                <dt class="col-5">Grupo</dt><dd class="col-7">{{ t.recurso.grupo_agenda.nombre }}</dd>
+                                                <dt class="col-5">Inicio</dt><dd class="col-7">{{ t.inicio|date:"l d/m/Y H:i"|capfirst }}</dd>
+                                                <dt class="col-5">Fin</dt><dd class="col-7">{{ t.fin|date:"d/m/Y H:i" }}</dd>
+                                                <dt class="col-5">Precio</dt><dd class="col-7">{{ t.precio_cobrado }} {{ t.recurso.grupo_agenda.moneda }}</dd>
+                                                <dt class="col-5">Estado</dt><dd class="col-7">{{ t.get_estado_display }}</dd>
+                                                <dt class="col-5">Origen</dt><dd class="col-7">{{ t.get_origen_display }}</dd>
+                                                <dt class="col-5">Recordatorio</dt><dd class="col-7">{% if t.recordatorio_enviado %}Enviado{% else %}Pendiente{% endif %}</dd>
+                                                <dt class="col-5">Creado</dt><dd class="col-7">{{ t.fecha_registro|date:"d/m/Y H:i" }}</dd>
+                                                <dt class="col-12 mt-2"><span class="text-primary">Cliente</span></dt>
+                                                <dt class="col-5">Nombre</dt><dd class="col-7">{{ t.contacto.contacto_nombre|default:"—" }}</dd>
+                                                <dt class="col-5">Número</dt><dd class="col-7">{{ t.contacto.contacto_numero }}</dd>
+                                                {% if t.info_cliente.cedula %}
+                                                    <dt class="col-5">Cédula</dt><dd class="col-7">{{ t.info_cliente.cedula }}</dd>
+                                                {% endif %}
+                                                {% if t.info_cliente.email %}
+                                                    <dt class="col-5">Email</dt><dd class="col-7">{{ t.info_cliente.email }}</dd>
+                                                {% endif %}
+                                                {% if t.info_cliente.edad %}
+                                                    <dt class="col-5">Edad</dt><dd class="col-7">{{ t.info_cliente.edad }}</dd>
+                                                {% endif %}
+                                                {% if t.info_cliente.fecha_nac %}
+                                                    <dt class="col-5">F. Nac.</dt><dd class="col-7">{{ t.info_cliente.fecha_nac }}</dd>
+                                                {% endif %}
+                                                {% if t.info_cliente.motivo %}
+                                                    <dt class="col-12 mt-2"><span class="text-primary">Motivo</span></dt>
+                                                    <dd class="col-12">{{ t.info_cliente.motivo }}</dd>
+                                                {% endif %}
+                                                {% if t.info_cliente.historial %}
+                                                    <dt class="col-12 mt-2"><span class="text-primary">Historial de estados</span></dt>
+                                                    <dd class="col-12">
+                                                        {% for h in t.info_cliente.historial %}
+                                                            <div class="border-bottom py-1">{{ h }}</div>
+                                                        {% endfor %}
+                                                    </dd>
+                                                {% endif %}
+                                            </dl>
                                         </div>
                                     </td>
                                 </tr>
                             {% empty %}
                                 <tr><td colspan="9" class="text-center text-muted">No se encontraron citas.</td></tr>
                             {% endfor %}
+
                             </tbody>
                         </table>
                         {% include 'paginacion.html' %}
+                    </div>
+
+                    <div class="modal fade" id="modalHistorialCita" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Historial de cambios</h5>
+                                    <button class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body" id="historialBody"></div>
+                                <div class="modal-footer">
+                                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal fade" id="modalVerCita" tabindex="-1">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Detalle de la cita</h5>
+                                    <button class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body" id="verCitaBody"></div>
+                                <div class="modal-footer">
+                                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                 {% elif seccion == 'calendario' %}
@@ -309,6 +409,8 @@
 
         {% if seccion == 'listado' %}
         const modalEstadoCita = new bootstrap.Modal(document.getElementById('modalEstadoCita'));
+        const modalHistorialCita = new bootstrap.Modal(document.getElementById('modalHistorialCita'));
+        const modalVerCita = new bootstrap.Modal(document.getElementById('modalVerCita'));
         document.querySelectorAll('.btn-cambio-estado').forEach(b => b.addEventListener('click', () => {
             document.getElementById('cambioEstadoPk').value = b.dataset.id;
             document.getElementById('cambioEstadoSelect').value = b.dataset.estado;
@@ -317,6 +419,16 @@
             const cuando = row ? row.querySelector('td').innerText.replace(/\s+/g, ' ').trim() : '#' + b.dataset.id;
             document.getElementById('cambioEstadoLabel').value = cuando;
             modalEstadoCita.show();
+        }));
+        document.querySelectorAll('.btn-historial').forEach(b => b.addEventListener('click', () => {
+            const src = document.getElementById('histTurno' + b.dataset.id);
+            document.getElementById('historialBody').innerHTML = src ? src.innerHTML : '';
+            modalHistorialCita.show();
+        }));
+        document.querySelectorAll('.btn-ver-cita').forEach(b => b.addEventListener('click', () => {
+            const src = document.getElementById('detalleTurno' + b.dataset.id);
+            document.getElementById('verCitaBody').innerHTML = src ? src.innerHTML : '';
+            modalVerCita.show();
         }));
         document.getElementById('formCambioEstado').addEventListener('submit', async (ev) => {
             ev.preventDefault();

@@ -537,8 +537,21 @@ def agenda_registrar_turno(conversacion, variables, config, endpoint=None) -> di
                 'error': f'No se pudo guardar el turno: {e}'}
 
     try:
-        from agenda.notificaciones import notificar_turno_creado
+        from agenda.notificaciones import notificar_turno_creado, notificar_turno_cliente
         notificar_turno_creado(nuevo)
+        motivo_cli = (variables.get('motivo_limpio') or variables.get('motivo') or '').strip()
+        if motivo_cli.lower() in _PALABRAS_SALTAR:
+            motivo_cli = ''
+        nombres_cli = (variables.get('nombres') or '').strip()
+        apellidos_cli = (variables.get('apellidos') or '').strip()
+        notificar_turno_cliente(
+            nuevo,
+            email=(variables.get('email') or '').strip(),
+            cliente_nombre=(f'{nombres_cli} {apellidos_cli}').strip(),
+            motivo=motivo_cli,
+            moneda=variables.get('moneda') or '',
+            recordatorio_h=variables.get('recordatorio_h') or 24,
+        )
     except Exception:
         logger.exception('Notificación de turno %s falló', nuevo.id)
 

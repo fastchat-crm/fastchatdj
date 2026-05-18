@@ -80,3 +80,45 @@ def notificar_turno_creado(turno, request=None):
         except Exception:
             logger.exception('Email turno %s falló', turno.id)
     return True
+
+
+def notificar_turno_cliente(turno, email, cliente_nombre='', motivo='', moneda='', recordatorio_h=24):
+    email = (email or '').strip()
+    if not email:
+        return False
+    try:
+        from decimal import Decimal
+        from seguridad.models import Configuracion
+        servicio = turno.servicio
+        recurso = turno.recurso
+        try:
+            precio = Decimal(servicio.precio)
+        except Exception:
+            precio = Decimal('0')
+        grupo = getattr(recurso, 'grupo_agenda', None)
+        moneda_eff = moneda or getattr(grupo, 'moneda', '') or ''
+        precio_str = f'{precio} {moneda_eff}' if precio > 0 else ''
+        confi = Configuracion.get_instancia()
+        nombreempresa = getattr(confi, 'nombre_empresa', '') or 'Care team'
+        fecha_fmt = turno.inicio.strftime('%d/%m/%Y · %H:%M')
+        datos = {
+            'turno_id': turno.id,
+            'cliente_nombre': (cliente_nombre or '').strip() or 'there',
+            'servicio_nombre': servicio.nombre,
+            'medico_nombre': recurso.nombre,
+            'fecha_fmt': fecha_fmt,
+            'duracion_min': servicio.duracion_min,
+            'precio_str': precio_str,
+            'motivo': (motivo or '').strip(),
+            'recordatorio_h': recordatorio_h or 24,
+            'nombreempresa': nombreempresa,
+        }
+        send_html_mail(
+            f'Appointment confirmed · {fecha_fmt}',
+            'agenda/email_confirmacion_turno.html',
+            datos, [email], [],
+        )
+        return True
+    except Exception:
+        logger.exception('Email confirmación cliente falló (turno %s)', getattr(turno, 'id', '?'))
+        return False
