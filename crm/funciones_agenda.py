@@ -36,6 +36,13 @@ logger = logging.getLogger(__name__)
 _PALABRAS_SALTAR = {'-', 'saltar', 'skip', 'ninguno', 'ninguna', 'no'}
 
 
+def _hoy_local():
+    ahora = timezone.now()
+    if timezone.is_naive(ahora):
+        return ahora.date()
+    return timezone.localtime(ahora).date()
+
+
 def _to_int(v, default=0):
     try:
         if v in (None, ''):
@@ -130,7 +137,7 @@ def agenda_listar_dias(conversacion, variables, config, endpoint=None) -> dict:
         total = 7
     if total > 14:
         total = 14
-    hoy = timezone.localdate()
+    hoy = _hoy_local()
     dias = []
     for i in range(total):
         f = hoy + timedelta(days=i)
@@ -255,7 +262,7 @@ def agenda_disponibilidad(conversacion, variables, config, endpoint=None) -> dic
     except ValueError:
         return {'etiqueta': 'error', 'body': {}, 'status': 400,
                 'error': 'formato fecha inválido (YYYY-MM-DD)'}
-    hoy = timezone.localdate()
+    hoy = _hoy_local()
     if fecha_obj < hoy:
         return {'etiqueta': 'ok', 'body': {'turnos_disponibles': []},
                 'status': 200, 'error': ''}
