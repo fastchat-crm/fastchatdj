@@ -174,10 +174,19 @@ def citasView(request):
                 if action == 'mark_status':
                     pk = int(request.POST['pk'])
                     nuevo = request.POST.get('estado')
+                    observacion = (request.POST.get('observacion') or '').strip()
                     if nuevo not in dict(APPOINTMENT_STATUS_CHOICES):
                         return JsonResponse({'error': True, 'message': 'Estado inválido.'})
                     t = Turno.objects.get(pk=pk, status=True)
+                    estado_anterior = t.estado
                     t.estado = nuevo
+                    if observacion or estado_anterior != nuevo:
+                        from django.utils import timezone as _tz
+                        stamp = _tz.localtime(_tz.now()).strftime('%Y-%m-%d %H:%M')
+                        linea = f'[{stamp}] {estado_anterior} → {nuevo}'
+                        if observacion:
+                            linea += f' · {observacion}'
+                        t.notas = ((t.notas + '\n' + linea) if t.notas else linea)[:4000]
                     t.save(request=request)
                     log(f'Turno {t.id} marcado como {nuevo}', request, 'change', obj=t.id)
                     return JsonResponse({'error': False, 'reload': True})

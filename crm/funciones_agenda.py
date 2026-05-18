@@ -231,7 +231,7 @@ def _generar_slots_recurso(recurso, fecha_obj, duracion_min, tz):
         while cursor + timedelta(minutes=duracion_min) <= end_dt:
             fin = cursor + timedelta(minutes=duracion_min)
             if not en_block(cursor.time(), fin.time()):
-                slots.append((tz.localize(cursor), tz.localize(fin)))
+                slots.append((cursor, fin))
             cursor += timedelta(minutes=paso)
     return slots
 
@@ -292,11 +292,11 @@ def agenda_disponibilidad(conversacion, variables, config, endpoint=None) -> dic
 
     duracion = servicio.duracion_min
     ahora = timezone.now()
-    if timezone.is_naive(ahora):
+    if timezone.is_aware(ahora):
         try:
-            ahora = tz.localize(ahora)
+            ahora = timezone.make_naive(ahora, tz)
         except Exception:
-            ahora = timezone.make_aware(ahora, tz)
+            ahora = ahora.replace(tzinfo=None)
     todos = []
     for r in recursos:
         slots = _generar_slots_recurso(r, fecha_obj, duracion, tz)
@@ -416,11 +416,11 @@ def agenda_listar_mis_citas(conversacion, variables, config, endpoint=None) -> d
     except Exception:
         tz = timezone.get_current_timezone()
     ahora = timezone.now()
-    if timezone.is_naive(ahora):
+    if timezone.is_aware(ahora):
         try:
-            ahora = tz.localize(ahora)
+            ahora = timezone.make_naive(ahora, tz)
         except Exception:
-            ahora = timezone.make_aware(ahora, tz)
+            ahora = ahora.replace(tzinfo=None)
     qs = Turno.objects.filter(
         contacto=contacto, status=True,
         estado__in=('pending', 'confirmed'),
@@ -436,9 +436,9 @@ def agenda_listar_mis_citas(conversacion, variables, config, endpoint=None) -> d
             ini = t.inicio
             if timezone.is_aware(ini):
                 try:
-                    ini = ini.astimezone(tz)
+                    ini = timezone.make_naive(ini, tz)
                 except Exception:
-                    pass
+                    ini = ini.replace(tzinfo=None)
             fecha_fmt = ini.strftime('%d/%m/%Y · %H:%M')
             estado_lbl = '✅' if t.estado == 'confirmed' else '⏳'
             lineas.append(

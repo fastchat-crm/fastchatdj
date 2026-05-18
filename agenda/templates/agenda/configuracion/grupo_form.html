@@ -4,3 +4,14 @@
     <input type="hidden" name="pk" id="id_objeto" value="{{ pk|default:'' }}"/>
     <input type="hidden" name="entity" value="grupo"/>
 {% endblock %}
+
+{% block extra_js %}
+    <script>
+        $(function(){
+            let responsable = $('#id_responsable');
+            if (responsable.length) {
+                buscarUsuario(responsable);
+            }
+        })
+    </script>
+{% endblock %}

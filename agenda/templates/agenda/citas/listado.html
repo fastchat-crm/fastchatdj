@@ -11,7 +11,7 @@
                 <h4 class="mb-0">Citas</h4>
                 <small class="text-muted">{{ count_total|default:0 }} cita{{ count_total|default:0|pluralize:"s" }} encontrada{{ count_total|default:0|pluralize:"s" }}</small>
             </div>
-            <a href="/agenda/configuracion/" class="btn btn-outline-secondary btn-sm">
+            <a href="/agenda/configuracion/" class="btn btn-secondary btn-sm">
                 <i class="fa fa-cog me-1"></i> Configurar agenda
             </a>
         </div>
@@ -107,7 +107,9 @@
                             {% for t in listado %}
                                 <tr {% if cita_destacada_id and t.id == cita_destacada_id %}class="table-warning"{% endif %}>
                                     <td>
-                                        <strong>{{ t.inicio|date:"Y-m-d H:i" }}</strong><br>
+                                        <span class="badge bg-light text-dark">#{{ t.id }}</span><br>
+                                        <strong>{{ t.inicio|date:"l"|capfirst }}</strong><br>
+                                        <strong>{{ t.inicio|date:"d/m/Y H:i" }}</strong><br>
                                         <small class="text-muted">→ {{ t.fin|date:"H:i" }}</small>
                                     </td>
                                     <td>
@@ -151,17 +153,11 @@
                                     </td>
                                     <td class="text-center">
                                         <div class="btn-group btn-group-sm">
-                                            <button type="button" class="btn btn-outline-secondary dropdown-toggle"
-                                                    data-bs-toggle="dropdown">
-                                                Estado
+                                            <button type="button" class="btn btn-primary btn-cambio-estado"
+                                                    data-id="{{ t.id }}" data-estado="{{ t.estado }}">
+                                                <i class="fa fa-tag me-1"></i> Estado
                                             </button>
-                                            <ul class="dropdown-menu">
-                                                {% for code, label in status_choices %}
-                                                    <li><a class="dropdown-item btn-status" href="#"
-                                                           data-id="{{ t.id }}" data-status="{{ code }}">{{ label }}</a></li>
-                                                {% endfor %}
-                                            </ul>
-                                            <button class="btn btn-outline-danger btn-del" data-id="{{ t.id }}" title="Eliminar">
+                                            <button class="btn btn-danger btn-del" data-id="{{ t.id }}" title="Eliminar">
                                                 <i class="fa fa-trash"></i>
                                             </button>
                                         </div>
@@ -191,6 +187,45 @@
         </div>
     </div>
 
+    {% if seccion == 'listado' %}
+    <div class="modal fade" id="modalEstadoCita" tabindex="-1">
+        <div class="modal-dialog">
+            <form class="modal-content" id="formCambioEstado">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Cambiar estado de la cita</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="mark_status">
+                    <input type="hidden" name="pk" id="cambioEstadoPk">
+                    <div class="mb-3">
+                        <label class="form-label">Cita</label>
+                        <input type="text" id="cambioEstadoLabel" class="form-control" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nuevo estado <span class="text-danger">*</span></label>
+                        <select name="estado" id="cambioEstadoSelect" class="form-select" required>
+                            {% for code, label in status_choices %}
+                                <option value="{{ code }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Observación</label>
+                        <textarea name="observacion" id="cambioEstadoObs" class="form-control" rows="3"
+                                  placeholder="Comentario opcional (se anexa a las notas con fecha y estado)..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
     {% if seccion == 'calendario' %}
     <div class="modal fade" id="modalCita" tabindex="-1">
         <div class="modal-dialog">
@@ -201,10 +236,10 @@
                 </div>
                 <div class="modal-body" id="citaDetailBody"></div>
                 <div class="modal-footer flex-wrap">
-                    <button type="button" class="btn btn-outline-success btn-sm" data-status="confirmed">Confirmar</button>
-                    <button type="button" class="btn btn-outline-success btn-sm" data-status="fulfilled">Cumplida</button>
-                    <button type="button" class="btn btn-outline-danger btn-sm" data-status="no_show">No asistió</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" data-status="cancelled">Cancelar cita</button>
+                    <button type="button" class="btn btn-primary btn-sm" data-status="confirmed">Confirmar</button>
+                    <button type="button" class="btn btn-success btn-sm" data-status="fulfilled">Cumplida</button>
+                    <button type="button" class="btn btn-danger btn-sm" data-status="no_show">No asistió</button>
+                    <button type="button" class="btn btn-warning btn-sm" data-status="cancelled">Cancelar cita</button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
@@ -273,13 +308,29 @@
         }
 
         {% if seccion == 'listado' %}
-        document.querySelectorAll('.btn-status').forEach(a => a.addEventListener('click', async ev => {
+        const modalEstadoCita = new bootstrap.Modal(document.getElementById('modalEstadoCita'));
+        document.querySelectorAll('.btn-cambio-estado').forEach(b => b.addEventListener('click', () => {
+            document.getElementById('cambioEstadoPk').value = b.dataset.id;
+            document.getElementById('cambioEstadoSelect').value = b.dataset.estado;
+            document.getElementById('cambioEstadoObs').value = '';
+            const row = b.closest('tr');
+            const cuando = row ? row.querySelector('td').innerText.replace(/\s+/g, ' ').trim() : '#' + b.dataset.id;
+            document.getElementById('cambioEstadoLabel').value = cuando;
+            modalEstadoCita.show();
+        }));
+        document.getElementById('formCambioEstado').addEventListener('submit', async (ev) => {
             ev.preventDefault();
-            const j = await postCita({action: 'mark_status', pk: a.dataset.id, estado: a.dataset.status});
+            const j = await postCita({
+                action: 'mark_status',
+                pk: document.getElementById('cambioEstadoPk').value,
+                estado: document.getElementById('cambioEstadoSelect').value,
+                observacion: document.getElementById('cambioEstadoObs').value,
+            });
             const r = Array.isArray(j) ? j[0] : j;
             if (r.error) { Swal.fire(r.message || 'Error', '', 'error'); return; }
+            modalEstadoCita.hide();
             location.reload();
-        }));
+        });
         document.querySelectorAll('.btn-del').forEach(b => b.addEventListener('click', async () => {
             if (!confirm('¿Quitar esta cita del listado? (eliminación lógica)')) return;
             const j = await postCita({action: 'delete', id: b.dataset.id});
