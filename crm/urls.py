@@ -4,6 +4,7 @@ from . import api_captura_local
 from .view_actividad_economica import actividadEconomicaView
 from .view_agente_wizard import agente_wizard_view
 from .view_chat_agente import chat_agente_view
+from .view_cliente import clienteView
 from .view_endpoint_api import endpoint_api_view
 from .view_industria import industriaView
 from .view_mientrenamiento import entrenamiento_ia_view
@@ -16,6 +17,11 @@ crm_urls = (
         "nombre": "Mensajeria Instantanea",
         "url": 'departamentos_chatbots/',
         "vista": departamentoChatbotsView,
+    },
+    {
+        "nombre": "Clientes",
+        "url": 'cliente/',
+        "vista": clienteView,
     },
     {
         "nombre": "Endpoints API",

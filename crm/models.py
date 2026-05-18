@@ -1904,3 +1904,65 @@ class FaqAgente(ModeloBase):
 
     def __str__(self):
         return f"[{self.get_estado_display()}] {self.pregunta[:60]}"
+
+
+CLIENTE_SEXO_CHOICES = (
+    ('M', 'Masculino'),
+    ('F', 'Femenino'),
+    ('',  'No especificado'),
+)
+
+
+class Cliente(ModeloBase):
+    cedula = models.CharField('Cédula / Identificación', max_length=20, unique=True)
+    nombres = models.CharField('Nombres', max_length=150, blank=True, default='')
+    apellidos = models.CharField('Apellidos', max_length=150, blank=True, default='')
+    email = models.EmailField('Email', blank=True, default='')
+    telefono = models.CharField('Teléfono', max_length=30, blank=True, default='')
+    edad = models.PositiveSmallIntegerField('Edad', null=True, blank=True)
+    fecha_nacimiento = models.DateField('Fecha de nacimiento', null=True, blank=True)
+    sexo = models.CharField('Sexo', max_length=1, choices=CLIENTE_SEXO_CHOICES, blank=True, default='')
+    notas = models.TextField('Notas', blank=True, default='')
+
+    contacto_origen = models.ForeignKey(
+        'whatsapp.Contacto', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='clientes_originados',
+        verbose_name='Contacto de origen',
+    )
+    conversacion_origen = models.ForeignKey(
+        'whatsapp.ConversacionWhatsApp', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='clientes_originados',
+        verbose_name='Conversación de origen',
+    )
+    sesion_origen = models.ForeignKey(
+        'whatsapp.SesionWhatsApp', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='clientes_originados',
+        verbose_name='Sesión de origen',
+    )
+    departamento_origen = models.ForeignKey(
+        'crm.DepartamentoChatBot', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='clientes_originados',
+        verbose_name='Departamento (chatbot) de origen',
+    )
+    canal_origen = models.CharField(
+        'Canal de origen', max_length=30, blank=True, default='chatbot',
+        help_text='chatbot · cotizador · agenda · manual',
+    )
+
+    fecha_ultima_interaccion = models.DateTimeField(
+        'Última interacción', null=True, blank=True,
+    )
+
+    class Meta:
+        verbose_name = 'Cliente'
+        verbose_name_plural = 'Clientes'
+        ordering = ['-fecha_registro']
+        indexes = [
+            models.Index(fields=['cedula']),
+            models.Index(fields=['contacto_origen']),
+            models.Index(fields=['departamento_origen']),
+        ]
+
+    def __str__(self):
+        full = f'{self.nombres} {self.apellidos}'.strip()
+        return f'{self.cedula} · {full}' if full else self.cedula

@@ -8,3 +8,4 @@ class CrmConfig(AppConfig):
     def ready(self):
         from . import funciones_chatbot  # noqa: F401
         from . import funciones_agenda  # noqa: F401
+        from . import funciones_cliente  # noqa: F401

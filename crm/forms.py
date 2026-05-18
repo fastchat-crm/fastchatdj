@@ -6,7 +6,7 @@ from core.custom_forms import FormModeloBase
 from core.custom_models import ModelFormBase
 from crm.models import PerfilNegocioIA, ActividadEconomica, Industria, ProductoIA, ServicioIA, RespuestaEntrenadaIA, \
     DepartamentoChatBot, AgentesIA, ApiKeyIA, HerramientaAgente, FaqAgente, \
-    EndpointApiChatbot, CredencialApiChatbot
+    EndpointApiChatbot, CredencialApiChatbot, Cliente
 
 
 class PerfilNegocioIAForm(ModelFormBase):
@@ -474,6 +474,33 @@ class EndpointApiChatbotForm(ModelFormBase):
         self.fields['descripcion'].widget = forms.Textarea(attrs={
             'class': 'form-control', 'rows': 2, 'col': '12',
         })
+
+
+class ClienteForm(ModelFormBase):
+    class Meta:
+        model = Cliente
+        fields = (
+            'cedula', 'nombres', 'apellidos', 'email', 'telefono',
+            'edad', 'fecha_nacimiento', 'sexo', 'canal_origen',
+            'contacto_origen', 'conversacion_origen', 'sesion_origen',
+            'departamento_origen', 'notas',
+        )
+
+    def __init__(self, *args, **kwargs):
+        ver = kwargs.pop('ver') if 'ver' in kwargs else False
+        super().__init__(*args, **kwargs)
+        for k, _ in self.fields.items():
+            self.fields[k].widget.attrs['class'] = 'form-control'
+            self.fields[k].widget.attrs['col'] = '6'
+            if ver:
+                self.fields[k].widget.attrs['readonly'] = 'readonly'
+        self.fields['notas'].widget = forms.Textarea(attrs={
+            'class': 'form-control', 'rows': 3, 'col': '12',
+        })
+        for fk in ('contacto_origen', 'conversacion_origen',
+                   'sesion_origen', 'departamento_origen'):
+            self.fields[fk].widget.attrs['class'] = 'form-control select2'
+            self.fields[fk].required = False
 
 
 

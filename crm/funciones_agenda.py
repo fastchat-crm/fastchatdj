@@ -116,6 +116,36 @@ def agenda_listar_servicios(conversacion, variables, config, endpoint=None) -> d
             'status': 200, 'error': ''}
 
 
+_DIAS_ABREV = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+
+
+@registrar_funcion(
+    codigo='agenda_listar_dias',
+    descripcion='Próximos 7 días para que el usuario elija (id=YYYY-MM-DD).',
+    parametros={'dias_total': 'int — cantidad de días a mostrar (default 7)'},
+)
+def agenda_listar_dias(conversacion, variables, config, endpoint=None) -> dict:
+    total = _to_int(variables.get('dias_total') or config.get('dias_total') or 7) or 7
+    if total < 1:
+        total = 7
+    if total > 14:
+        total = 14
+    hoy = timezone.localdate()
+    dias = []
+    for i in range(total):
+        f = hoy + timedelta(days=i)
+        nombre = _DIAS_ABREV[f.weekday()]
+        if i == 0:
+            etiqueta = f'Hoy · {nombre} {f.strftime("%d/%m")}'
+        elif i == 1:
+            etiqueta = f'Mañana · {nombre} {f.strftime("%d/%m")}'
+        else:
+            etiqueta = f'{nombre} {f.strftime("%d/%m")}'
+        dias.append({'id': f.isoformat(), 'etiqueta': etiqueta})
+    return {'etiqueta': 'ok', 'body': {'dias': dias},
+            'status': 200, 'error': ''}
+
+
 @registrar_funcion(
     codigo='agenda_listar_recursos',
     descripcion='Recursos que ofrecen el servicio. Incluye opción "cualquiera" con id=0.',

@@ -240,7 +240,7 @@ PASOS = [
             'salida_si':     'si',
             'salida_otra':   'otra',
         },
-        'siguiente_si':   140,
+        'siguiente_si':   138,
         'siguiente_otra': 132,
     },
     {
@@ -264,19 +264,31 @@ PASOS = [
             'salida': '',
             'limite': 10,
         },
-        'siguiente': 140,
+        'siguiente': 138,
     },
 
-    # ── 140/150 — Fecha + disponibilidad ────────────────────────
+    # ── 138/140/150 — Día (7 próximos) + disponibilidad ─────────
     {
-        'id': 140, 'orden': 140, 'tipo': 'input_texto',
-        'codigo': 'pedir_fecha', 'nombre': 'Pedir fecha',
-        'mensaje': (
-            '📅 ¿Para qué *fecha* querés el turno?\n'
-            'Escribime la fecha en formato *YYYY-MM-DD* (ej: 2026-05-20).'
-        ),
+        'id': 138, 'orden': 138, 'tipo': 'llamada_funcion',
+        'codigo': 'fn_listar_dias', 'nombre': 'Listar próximos 7 días',
+        'funcion_codigo': 'agenda_listar_dias',
+        'metodo': 'POST', 'timeout_seg': 5, 'body': {},
+        'extrae_variables': {'$dias': '$.dias'},
+        'siguiente_ok': 140, 'siguiente_error': 900,
+    },
+    {
+        'id': 140, 'orden': 140, 'tipo': 'menu_botones',
+        'codigo': 'elegir_dia', 'nombre': 'Elegir día (próximos 7)',
+        'mensaje': '📅 ¿Para qué *día* querés el turno?',
         'guardar_en': 'fecha',
-        'validacion': r'^\d{4}-\d{2}-\d{2}$',
+        'opciones': [],
+        'opciones_fuente': {
+            'variable': 'variables.dias',
+            'campo_id': 'id',
+            'campo_etiqueta': 'etiqueta',
+            'salida': '',
+            'limite': 7,
+        },
         'siguiente': 150,
     },
     {
@@ -301,9 +313,9 @@ PASOS = [
         'codigo': 'sin_cupos', 'nombre': 'Sin cupos esa fecha',
         'mensaje': (
             '😕 No hay cupos disponibles para *{{variables.fecha}}*. '
-            'Probá con otra fecha.'
+            'Probá con otro día.'
         ),
-        'siguiente': 140,
+        'siguiente': 138,
     },
     {
         'id': 180, 'orden': 180, 'tipo': 'menu_botones',
@@ -358,10 +370,24 @@ PASOS = [
         'mensaje': '¿Confirmo el turno?',
         'guardar_en': 'confirma_turno',
         'opciones': [
-            {'etiqueta': '✅ Confirmar',     'valor': 'si',     'siguiente': 210},
-            {'etiqueta': '✏️ Cambiar fecha', 'valor': 'cambiar', 'siguiente': 140},
+            {'etiqueta': '✅ Confirmar',     'valor': 'si',     'siguiente': 207},
+            {'etiqueta': '✏️ Cambiar fecha', 'valor': 'cambiar', 'siguiente': 138},
             {'etiqueta': '❌ Cancelar',      'valor': 'cancelar', 'siguiente': 999},
         ],
+    },
+
+    # ── 207 — Persistir Cliente local (cédula UK) ──────────────
+    {
+        'id': 207, 'orden': 207, 'tipo': 'llamada_funcion',
+        'codigo': 'fn_cliente_upsert', 'nombre': 'Guardar Cliente + origen',
+        'funcion_codigo': 'cliente_upsert',
+        'metodo': 'POST', 'timeout_seg': 5,
+        'body': {'canal_origen': 'agenda'},
+        'extrae_variables': {
+            '$cliente_id':     '$.cliente_id',
+            '$cliente_creado': '$.cliente_creado',
+        },
+        'siguiente_ok': 210, 'siguiente_error': 210,
     },
 
     # ── 210 — Registrar turno ───────────────────────────────────
@@ -398,7 +424,7 @@ PASOS = [
             '⚠️ No pudimos reservar el turno (puede que el horario ya '
             'esté tomado). Probá con otro horario.'
         ),
-        'siguiente': 140,
+        'siguiente': 138,
     },
 
     # ── Salidas terminales ──────────────────────────────────────
@@ -414,7 +440,7 @@ PASOS = [
         'asigna': {
             'cedula': '', 'nombres': '', 'apellidos': '', 'email': '',
             'driver_age': '', 'encontrado_cli': '',
-            'servicio_id': '', 'recurso_id': '', 'fecha': '',
+            'servicio_id': '', 'recurso_id': '', 'fecha': '', 'dias': '',
             'slot_seleccionado': '', 'motivo': '', 'motivo_limpio': '',
             'turno_inicio_iso': '', 'turno_recurso_id': '',
             'resumen_texto': '', 'turno_id': '',
@@ -816,6 +842,6 @@ class Command(BaseCommand):
             f'   Conexiones        : {total_conns}\n'
             f'   Endpoint lookup   : {cliente_ep.nombre} -> {cliente_ep.base_url}\n'
             f'   Funciones agenda  : agenda_init, agenda_listar_servicios, '
-            f'agenda_listar_recursos, agenda_disponibilidad, agenda_armar_resumen, '
-            f'agenda_registrar_turno\n'
+            f'agenda_listar_recursos, agenda_listar_dias, agenda_disponibilidad, '
+            f'agenda_armar_resumen, agenda_registrar_turno\n'
         ))

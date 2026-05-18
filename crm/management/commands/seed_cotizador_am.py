@@ -315,11 +315,25 @@ PASOS = [
         ),
         'guardar_en': 'budget_intent',
         'opciones': [
-            {'etiqueta': '💵 Económico',        'valor': 'economico',       'siguiente': 210},
-            {'etiqueta': '⚖️ Equilibrado',      'valor': 'equilibrio',      'siguiente': 210},
-            {'etiqueta': '🛡️ Mayor protección', 'valor': 'alta_proteccion', 'siguiente': 210},
-            {'etiqueta': '📋 Ver todos',         'valor': 'todos',           'siguiente': 210},
+            {'etiqueta': '💵 Económico',        'valor': 'economico',       'siguiente': 205},
+            {'etiqueta': '⚖️ Equilibrado',      'valor': 'equilibrio',      'siguiente': 205},
+            {'etiqueta': '🛡️ Mayor protección', 'valor': 'alta_proteccion', 'siguiente': 205},
+            {'etiqueta': '📋 Ver todos',         'valor': 'todos',           'siguiente': 205},
         ],
+    },
+
+    # ── 205 — Persistir Cliente local (cédula UK) ──────────────
+    {
+        'id': 205, 'orden': 205, 'tipo': 'llamada_funcion',
+        'codigo': 'fn_cliente_upsert', 'nombre': 'Guardar Cliente + origen',
+        'funcion_codigo': 'cliente_upsert',
+        'metodo': 'POST', 'timeout_seg': 5,
+        'body': {'canal_origen': 'cotizador'},
+        'extrae_variables': {
+            '$cliente_id':       '$.cliente_id',
+            '$cliente_creado':   '$.cliente_creado',
+        },
+        'siguiente_ok': 210, 'siguiente_error': 210,
     },
 
     # ── 210 — Aviso "esperando cotización" ─────────────────────
