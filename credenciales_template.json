@@ -9,5 +9,6 @@
   "EMAIL_HOST_PASSWORD": "",
   "WKHTMLTOPDF_CMD": "",
   "GMAP_API_KEY": "",
+  "CHATBOT_ERROR_NOTIFY_EMAILS": ["hllerenaa1h@gmail.com"],
   "DEBUG": false
 }

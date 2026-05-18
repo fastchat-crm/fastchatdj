@@ -92,7 +92,8 @@
       "Bash(git rm *)",
       "Bash(git reset *)",
       "Bash(git *)",
-      "Bash(pycheck)"
+      "Bash(pycheck)",
+      "Bash(pycheck pwa/views.py pwa/context_processors.py pwa/notificaciones.py crm/motor_flujo_chatbot.py crm/management/commands/seed_consultorio_medico.py fastchatdj/settings.py)"
     ]
   },
   "hooks": {

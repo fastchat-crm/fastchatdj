@@ -385,10 +385,15 @@ def agendaConfiguracionView(request):
             return render(request, 'agenda/configuracion/excepcion_listado.html', data)
 
         if action_param == 'horarios':
-            data['recursos_para_horario'] = Recurso.objects.filter(
+            recursos_qs = Recurso.objects.filter(
                 grupo_agenda=grupo, status=True,
             ).order_by('orden', 'nombre')
-            data['recurso_inicial'] = request.GET.get('recurso', '')
+            data['recursos_para_horario'] = recursos_qs
+            recurso_param = request.GET.get('recurso', '')
+            if not recurso_param:
+                primero = recursos_qs.first()
+                recurso_param = str(primero.id) if primero else ''
+            data['recurso_inicial'] = recurso_param
             data['day_start_inicial'] = request.GET.get('day_start', '') or '06:00'
             data['day_end_inicial'] = request.GET.get('day_end', '') or '22:00'
             data['slot_inicial'] = request.GET.get('slot', '') or '30'

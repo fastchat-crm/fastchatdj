@@ -1,0 +1,163 @@
+{% if request.user.is_authenticated and vapid_key %}
+<div id="pushOptInSnack" class="push-snack" hidden role="alert" aria-live="polite">
+    <div class="push-snack__inner">
+        <div class="push-snack__icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 width="20" height="20">
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
+                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>
+            </svg>
+        </div>
+        <div class="push-snack__body">
+            <p class="push-snack__title">Enable notifications</p>
+            <p class="push-snack__subtitle">Get alerts about new messages and updates.</p>
+        </div>
+        <button type="button" class="push-snack__action" id="pushOptInBtn">Enable</button>
+        <button type="button" class="push-snack__close" id="pushOptInClose" aria-label="Close" title="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 width="16" height="16">
+                <path d="M18 6 6 18"></path><path d="m6 6 12 12"></path>
+            </svg>
+        </button>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const SNACK_KEY = 'push_optin_dismissed_at';
+        const COOLDOWN_HOURS = {{ pwa_install_cooldown_hours|default:10 }};
+        const VAPID_KEY = '{{ vapid_key|escapejs }}';
+        const SAVE_URL = '/webpush/save_information';
+        const snack = document.getElementById('pushOptInSnack');
+        const btnEnable = document.getElementById('pushOptInBtn');
+        const btnClose = document.getElementById('pushOptInClose');
+
+        if (!snack || !VAPID_KEY) return;
+        if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+
+        function dismissed() {
+            const ts = parseInt(localStorage.getItem(SNACK_KEY) || '0', 10);
+            if (!ts) return false;
+            const hours = (Date.now() - ts) / (1000 * 60 * 60);
+            return hours < COOLDOWN_HOURS;
+        }
+
+        function rememberDismiss() {
+            try { localStorage.setItem(SNACK_KEY, String(Date.now())); } catch (e) {}
+        }
+
+        function showSnack() {
+            snack.hidden = false;
+            requestAnimationFrame(() => snack.classList.add('is-visible'));
+        }
+
+        function hideSnack() {
+            snack.classList.remove('is-visible');
+            setTimeout(() => { snack.hidden = true; }, 240);
+        }
+
+        function urlB64ToUint8Array(b64) {
+            const padding = '='.repeat((4 - b64.length % 4) % 4);
+            const base64 = (b64 + padding).replace(/\-/g, '+').replace(/_/g, '/');
+            const raw = atob(base64);
+            const out = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+            return out;
+        }
+
+        function getCookie(name) {
+            const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+            return m ? m.pop() : '';
+        }
+
+        async function sendSubscription(sub, statusType) {
+            const browser = (navigator.userAgent.match(/(firefox|msie|chrome|safari|trident)/ig) || ['chrome'])[0].toLowerCase();
+            try {
+                await fetch(SAVE_URL, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        status_type: statusType,
+                        subscription: sub.toJSON(),
+                        browser: browser
+                    })
+                });
+            } catch (e) {}
+        }
+
+        async function subscribe() {
+            const reg = await navigator.serviceWorker.ready;
+            let sub = await reg.pushManager.getSubscription();
+            if (!sub) {
+                sub = await reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlB64ToUint8Array(VAPID_KEY)
+                });
+            }
+            await sendSubscription(sub, 'subscribe');
+            return sub;
+        }
+
+        async function evaluate() {
+            if (Notification.permission === 'denied') return;
+            if (Notification.permission === 'granted') {
+                try {
+                    const reg = await navigator.serviceWorker.ready;
+                    const existing = await reg.pushManager.getSubscription();
+                    if (existing) {
+                        await sendSubscription(existing, 'subscribe');
+                        return;
+                    }
+                    await subscribe();
+                } catch (e) {}
+                return;
+            }
+            if (dismissed()) return;
+            setTimeout(showSnack, 1500);
+        }
+
+        btnEnable.addEventListener('click', async () => {
+            btnEnable.disabled = true;
+            try {
+                const perm = await Notification.requestPermission();
+                if (perm === 'granted') {
+                    await subscribe();
+                    hideSnack();
+                } else {
+                    rememberDismiss();
+                    hideSnack();
+                }
+            } catch (e) {
+                rememberDismiss();
+                hideSnack();
+            } finally {
+                btnEnable.disabled = false;
+            }
+        });
+
+        btnClose.addEventListener('click', () => {
+            rememberDismiss();
+            hideSnack();
+        });
+
+        if (navigator.serviceWorker.controller) {
+            evaluate();
+        } else {
+            navigator.serviceWorker.ready.then(evaluate).catch(() => {});
+        }
+
+        navigator.serviceWorker.addEventListener('message', (event) => {
+            const data = event.data || {};
+            if (data.type === 'NOTIFICATION_CLICK' && data.url) {
+                try { window.location.href = data.url; } catch (e) {}
+            }
+        });
+    })();
+</script>
+{% endif %}

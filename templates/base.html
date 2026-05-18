@@ -30,6 +30,7 @@
     <meta name="islogged" content="{{ request.user.is_authenticated }}">
     {% include 'pwa/meta_tags.html' %}
     <link rel="stylesheet" href="/static/css/pwa/install_bar.css?v1.1">
+    <link rel="stylesheet" href="/static/css/pwa/push_optin.css?v1.0">
     {% block head %}{% endblock %}
     <script>
         {% if activar_cambio_clave %}
@@ -1678,5 +1679,6 @@
 </script>
 
 {% include 'pwa/install_bar.html' %}
+{% include 'pwa/push_optin.html' %}
 </body>
 </html>

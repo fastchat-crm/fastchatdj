@@ -31,12 +31,71 @@ import json
 import logging
 import re
 import time as _time
+import traceback as _traceback
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
 import requests
 
 logger = logging.getLogger(__name__)
+
+
+def _notificar_excepcion_chatbot(nodo, conversacion, etapa, error_msg='',
+                                  exc=None, traceback_text='', extra=None):
+    try:
+        from django.conf import settings as _settings
+        from django.core.mail import send_mail
+        destinatarios = getattr(_settings, 'CHATBOT_ERROR_NOTIFY_EMAILS', None) or []
+        if isinstance(destinatarios, str):
+            destinatarios = [destinatarios]
+        destinatarios = [d for d in destinatarios if d]
+        if not destinatarios:
+            return
+        tb_text = traceback_text or ''
+        if not tb_text and exc is not None:
+            tb_text = ''.join(_traceback.TracebackException.from_exception(exc).format())
+        depto = ''
+        contacto_num = ''
+        try:
+            estado = getattr(conversacion, 'estado_flujo', None)
+            depto = getattr(getattr(estado, 'departamento', None), 'nombre', '') or ''
+        except Exception:
+            pass
+        try:
+            contacto = getattr(conversacion, 'contacto', None)
+            contacto_num = (getattr(contacto, 'numero_telefono', '')
+                            or getattr(contacto, 'contacto_numero', '') or '')
+        except Exception:
+            pass
+        if exc is not None and not error_msg:
+            error_msg = f'{exc.__class__.__name__}: {exc}'
+        lineas = [
+            f'Etapa: {etapa}',
+            f'Departamento: {depto}',
+            f'Conversacion ID: {getattr(conversacion, "id", "?")}',
+            f'Contacto: {contacto_num}',
+            f'Nodo ID: {getattr(nodo, "id", "?")} ({getattr(nodo, "nombre", "?")})',
+            f'Tipo nodo: {getattr(nodo, "tipo", "?")}',
+            f'Codigo nodo: {getattr(nodo, "codigo", "?")}',
+            f'Error: {error_msg or "(sin mensaje)"}',
+        ]
+        if extra:
+            for k, v in (extra or {}).items():
+                try:
+                    lineas.append(f'{k}: {v}')
+                except Exception:
+                    pass
+        lineas.extend(['', 'Traceback:', tb_text or '(no disponible)'])
+        cuerpo = '\n'.join(lineas)
+        asunto = f'[Chatbot] Error nodo {getattr(nodo, "id", "?")} ({etapa})'
+        send_mail(
+            asunto, cuerpo,
+            getattr(_settings, 'DEFAULT_FROM_EMAIL', None) or 'no-reply@localhost',
+            destinatarios,
+            fail_silently=True,
+        )
+    except Exception as _e:
+        logger.warning('No se pudo enviar mail de error chatbot: %s', _e)
 
 # Tope duro para evitar bucles en la topología del flujo.
 MAX_NODOS_POR_TURNO = 25
@@ -395,10 +454,11 @@ def ejecutar_http(nodo, contexto: dict, _traza_extra: Optional[dict] = None):
             timeout=timeout_eff,
             **body_kwargs,
         )
-    except requests.RequestException as e:
+    except Exception as e:
         if _traza_extra is not None:
-            _traza_extra['exception'] = str(e)
-        return ('error', None, 0, str(e))
+            _traza_extra['exception'] = f'{e.__class__.__name__}: {e}'
+            _traza_extra['traceback'] = _traceback.format_exc()
+        return ('error', None, 0, f'{e.__class__.__name__}: {e}')
 
     try:
         parsed = resp.json()
@@ -1422,6 +1482,18 @@ class MotorFlujo:
                         logger.exception('Error enviando correo (nodo %s)', nodo.id)
             if etq == 'error' and err:
                 logger.warning('Nodo http %s falló: %s', nodo.id, err)
+                _notificar_excepcion_chatbot(
+                    nodo, self.conversation, etapa='http',
+                    error_msg=err,
+                    traceback_text=traza_extra.get('traceback', ''),
+                    extra={
+                        'url': traza_extra.get('url'),
+                        'metodo': traza_extra.get('metodo'),
+                        'query': traza_extra.get('query'),
+                        'request_body': traza_extra.get('request_body'),
+                        'response_body': traza_extra.get('response_body'),
+                    },
+                )
             return etq
 
         if tipo == 'funcion':
@@ -1456,6 +1528,11 @@ class MotorFlujo:
                         ) or {}
                     except Exception as ex:  # noqa: BLE001 — la función no debe romper el flujo
                         logger.exception('Función %s nodo %s lanzó: %s', codigo, nodo.id, ex)
+                        _notificar_excepcion_chatbot(
+                            nodo, self.conversation, etapa='funcion', exc=ex,
+                            extra={'funcion_codigo': codigo,
+                                   'variables': (self.estado.variables or {})},
+                        )
                         resultado = {
                             'etiqueta': 'error', 'body': {}, 'status': 0,
                             'error': f'{ex.__class__.__name__}: {str(ex)[:200]}',

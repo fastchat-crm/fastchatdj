@@ -161,7 +161,33 @@ class Notificacion(ModeloBase):
         return f"{dias} días, {horas} horas, {minutos} minutos, {segundos} segundos"
 
     def save(self, *args, **kwargs):
+        es_nuevo = self._state.adding
         super(Notificacion, self).save(*args, **kwargs)
+        if es_nuevo and self.destinatario_id:
+            self._disparar_webpush()
+
+    def _disparar_webpush(self):
+        try:
+            from pwa.notificaciones import enviar_push_usuario
+        except ImportError:
+            return
+        try:
+            head = (self.titulo or 'Nueva notificación').strip()[:120] or 'Nueva notificación'
+            body = (self.cuerpo or '').strip()[:200]
+            enviar_push_usuario(
+                self.destinatario,
+                head=head,
+                body=body,
+                url=(self.url or None),
+                tag=f'notif-{self.pk}',
+                require_interaction=(self.prioridad == 1),
+                extra={'tipo': self.tipo, 'prioridad': self.prioridad, 'notif_id': self.pk},
+            )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                'No se pudo disparar webpush para Notificacion %s', self.pk,
+            )
 
     class Meta:
         verbose_name = u"Notificación"

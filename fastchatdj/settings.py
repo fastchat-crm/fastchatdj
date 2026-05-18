@@ -67,6 +67,23 @@ with open(os.path.join(BASE_DIR, 'credenciales.json')) as json_file:
     META_CONFIG_ID      = data.get('META_CONFIG_ID', '')
     META_API_VERSION    = data.get('META_API_VERSION', 'v22.0')
 
+    _chatbot_emails = data.get('CHATBOT_ERROR_NOTIFY_EMAILS', ['hllerenaa1h@gmail.com'])
+    if isinstance(_chatbot_emails, str):
+        _chatbot_emails = [e.strip() for e in _chatbot_emails.split(',') if e.strip()]
+    CHATBOT_ERROR_NOTIFY_EMAILS = _chatbot_emails or []
+
+WEBPUSH_SETTINGS = {'VAPID_PUBLIC_KEY': '', 'VAPID_PRIVATE_KEY': '', 'VAPID_ADMIN_EMAIL': ''}
+try:
+    with open(os.path.join(BASE_DIR, 'constantes_vapid.json')) as _vapid_file:
+        _vapid_data = json.load(_vapid_file)
+        WEBPUSH_SETTINGS = {
+            'VAPID_PUBLIC_KEY': _vapid_data.get('VAPID_PUBLIC_KEY', ''),
+            'VAPID_PRIVATE_KEY': _vapid_data.get('VAPID_PRIVATE_KEY', ''),
+            'VAPID_ADMIN_EMAIL': _vapid_data.get('VAPID_ADMIN_EMAIL', ''),
+        }
+except (FileNotFoundError, ValueError):
+    pass
+
 WKHTMLTOPDF_CMD_OPTIONS = {'encoding': 'utf8', 'quiet': True, 'enable-local-file-access': True}
 
 

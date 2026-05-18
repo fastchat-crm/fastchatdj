@@ -15,6 +15,7 @@
 /.vscode
 /.vscode/**
 /vapid.json
+/constantes_vapid.json
 /__pychache__/
 /__pychache__/**
 **/__pycache__/**

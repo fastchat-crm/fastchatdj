@@ -156,6 +156,14 @@ PASOS = [
         'mensaje': '🎂 ¿Cuál es tu *edad*?',
         'guardar_en': 'driver_age',
         'validacion_tipo': 'numero',
+        'siguiente': 55,
+    },
+    {
+        'id': 55, 'orden': 55, 'tipo': 'input_texto',
+        'codigo': 'pedir_fecha_nac', 'nombre': 'Pedir fecha de nacimiento',
+        'mensaje': '🗓️ ¿Cuál es tu *fecha de nacimiento*? (formato DD/MM/AAAA)',
+        'guardar_en': 'fecha_nacimiento',
+        'validacion': r'^\d{2}/\d{2}/\d{4}$',
         'siguiente': 100,
     },
 
@@ -174,7 +182,7 @@ PASOS = [
         'codigo': 'email_vacio', 'nombre': '¿Email vacío?',
         'condiciones': [{'izq': '{{variables.email}}', 'op': 'vacio', 'der': ''}],
         'operador': 'and',
-        'siguiente_si': 71, 'siguiente_no': 80,
+        'siguiente_si': 71, 'siguiente_no': 72,
     },
     {
         'id': 71, 'orden': 71, 'tipo': 'input_texto',
@@ -185,11 +193,17 @@ PASOS = [
         'siguiente': 80,
     },
     {
+        'id': 72, 'orden': 72, 'tipo': 'respuesta_texto',
+        'codigo': 'mostrar_email', 'nombre': 'Mostrar correo del paciente',
+        'mensaje': '📧 Correo: *{{variables.email}}*',
+        'siguiente': 80,
+    },
+    {
         'id': 80, 'orden': 80, 'tipo': 'decision',
         'codigo': 'edad_vacia', 'nombre': '¿Edad vacía?',
         'condiciones': [{'izq': '{{variables.driver_age}}', 'op': 'vacio', 'der': ''}],
         'operador': 'and',
-        'siguiente_si': 81, 'siguiente_no': 100,
+        'siguiente_si': 81, 'siguiente_no': 82,
     },
     {
         'id': 81, 'orden': 81, 'tipo': 'input_texto',
@@ -197,6 +211,12 @@ PASOS = [
         'mensaje': '🎂 No tenemos tu edad. ¿Cuántos años tenés?',
         'guardar_en': 'driver_age',
         'validacion_tipo': 'numero',
+        'siguiente': 100,
+    },
+    {
+        'id': 82, 'orden': 82, 'tipo': 'respuesta_texto',
+        'codigo': 'mostrar_edad', 'nombre': 'Mostrar edad del paciente',
+        'mensaje': '🎂 Edad: *{{variables.driver_age}}*',
         'siguiente': 100,
     },
 
@@ -439,7 +459,7 @@ PASOS = [
         'codigo': 'reset_variables', 'nombre': 'Reset variables',
         'asigna': {
             'cedula': '', 'nombres': '', 'apellidos': '', 'email': '',
-            'driver_age': '', 'encontrado_cli': '',
+            'driver_age': '', 'fecha_nacimiento': '', 'encontrado_cli': '',
             'servicio_id': '', 'recurso_id': '', 'fecha': '', 'dias': '',
             'slot_seleccionado': '', 'motivo': '', 'motivo_limpio': '',
             'turno_inicio_iso': '', 'turno_recurso_id': '',
