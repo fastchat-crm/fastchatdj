@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block head %}
-    <link rel="stylesheet" href="/static/css/agenda/configuracion.css?v1.2">
+    <link rel="stylesheet" href="/static/css/agenda/configuracion.css?v1.3">
 {% endblock %}
 
 {% block content %}
@@ -44,64 +44,18 @@
                         <label class="form-label">Fin del día</label>
                         <input type="time" id="dayEnd" class="form-control" value="{{ day_end_inicial }}">
                     </div>
-                    <div class="col-md-2 d-flex gap-2 align-items-end">
-                        <button class="btn btn-outline-secondary btn-sm flex-fill" id="btnRebuildGrid" title="Redibujar">
+                    <div class="col-md-2 d-flex gap-1 align-items-end">
+                        <button class="btn btn-outline-secondary btn-sm" id="btnRebuildGrid" title="Redibujar">
                             <i class="fa fa-sync"></i>
+                        </button>
+                        <button class="btn btn-info btn-sm text-white flex-fill" id="btnOpenQuickGen"
+                                data-bs-toggle="modal" data-bs-target="#modalQuickGen"
+                                title="Generador rápido" disabled>
+                            <i class="fa fa-bolt"></i> Rápido
                         </button>
                         <button class="btn btn-success btn-sm flex-fill" id="btnSaveHorario" disabled>
                             <i class="fa fa-save"></i> Guardar
                         </button>
-                    </div>
-                </div>
-                <div class="card mb-3 border-info">
-                    <div class="card-header bg-info bg-opacity-10 py-2 d-flex justify-content-between align-items-center">
-                        <strong><i class="fa fa-magic me-1"></i> Generador rápido de turnos</strong>
-                        <small class="text-muted">Crea bloques iguales en los días que elijas — repartiendo el rango horario en N turnos.</small>
-                    </div>
-                    <div class="card-body py-3">
-                        <div class="row g-2 align-items-end">
-                            <div class="col-md-2">
-                                <label class="form-label small mb-1">Hora inicio</label>
-                                <input type="time" id="genStart" class="form-control form-control-sm" value="08:00">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label small mb-1">Hora fin</label>
-                                <input type="time" id="genEnd" class="form-control form-control-sm" value="17:00">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label small mb-1">Turnos por día</label>
-                                <input type="number" id="genCount" class="form-control form-control-sm" min="1" max="100" value="10">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small mb-1">Días</label>
-                                <div class="d-flex flex-wrap gap-1" id="genDays">
-                                    <input type="checkbox" class="btn-check gen-day" id="genD0" value="0" checked autocomplete="off">
-                                    <label class="btn btn-sm btn-outline-secondary" for="genD0">Lun</label>
-                                    <input type="checkbox" class="btn-check gen-day" id="genD1" value="1" checked autocomplete="off">
-                                    <label class="btn btn-sm btn-outline-secondary" for="genD1">Mar</label>
-                                    <input type="checkbox" class="btn-check gen-day" id="genD2" value="2" checked autocomplete="off">
-                                    <label class="btn btn-sm btn-outline-secondary" for="genD2">Mié</label>
-                                    <input type="checkbox" class="btn-check gen-day" id="genD3" value="3" checked autocomplete="off">
-                                    <label class="btn btn-sm btn-outline-secondary" for="genD3">Jue</label>
-                                    <input type="checkbox" class="btn-check gen-day" id="genD4" value="4" checked autocomplete="off">
-                                    <label class="btn btn-sm btn-outline-secondary" for="genD4">Vie</label>
-                                    <input type="checkbox" class="btn-check gen-day" id="genD5" value="5" autocomplete="off">
-                                    <label class="btn btn-sm btn-outline-secondary" for="genD5">Sáb</label>
-                                    <input type="checkbox" class="btn-check gen-day" id="genD6" value="6" autocomplete="off">
-                                    <label class="btn btn-sm btn-outline-secondary" for="genD6">Dom</label>
-                                </div>
-                            </div>
-                            <div class="col-md-2 d-flex flex-column gap-1">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="genReplace" checked>
-                                    <label class="form-check-label small" for="genReplace">Reemplazar existentes</label>
-                                </div>
-                                <button type="button" class="btn btn-info btn-sm text-white" id="btnGenerar" disabled>
-                                    <i class="fa fa-bolt me-1"></i> Generar
-                                </button>
-                            </div>
-                        </div>
-                        <div class="small text-muted mt-2" id="genHint"></div>
                     </div>
                 </div>
 
@@ -110,6 +64,73 @@
                     <small class="text-muted">Tip: el motor solo ofrece slots dentro de algún bloque de trabajo.</small>
                     <button class="btn btn-sm btn-outline-danger" id="btnClearAllBlocks" disabled>
                         <i class="fa fa-trash"></i> Borrar todos
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalQuickGen" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-info bg-opacity-10">
+                    <h5 class="modal-title">
+                        <i class="fa fa-bolt me-1"></i> Generador rápido de turnos
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-3">
+                        Crea bloques iguales en los días que elijas — repartiendo el rango horario en N turnos.
+                        Si el rango está fuera del horario visible, la grilla se ajusta automáticamente.
+                    </p>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Hora inicio</label>
+                            <input type="time" id="genStart" class="form-control" value="08:00">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Hora fin</label>
+                            <input type="time" id="genEnd" class="form-control" value="17:00">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Turnos por día</label>
+                            <input type="number" id="genCount" class="form-control" min="1" max="100" value="10">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Días</label>
+                            <div class="d-flex flex-wrap gap-1" id="genDays">
+                                <input type="checkbox" class="btn-check gen-day" id="genD0" value="0" checked autocomplete="off">
+                                <label class="btn btn-sm btn-outline-secondary" for="genD0">Lun</label>
+                                <input type="checkbox" class="btn-check gen-day" id="genD1" value="1" checked autocomplete="off">
+                                <label class="btn btn-sm btn-outline-secondary" for="genD1">Mar</label>
+                                <input type="checkbox" class="btn-check gen-day" id="genD2" value="2" checked autocomplete="off">
+                                <label class="btn btn-sm btn-outline-secondary" for="genD2">Mié</label>
+                                <input type="checkbox" class="btn-check gen-day" id="genD3" value="3" checked autocomplete="off">
+                                <label class="btn btn-sm btn-outline-secondary" for="genD3">Jue</label>
+                                <input type="checkbox" class="btn-check gen-day" id="genD4" value="4" checked autocomplete="off">
+                                <label class="btn btn-sm btn-outline-secondary" for="genD4">Vie</label>
+                                <input type="checkbox" class="btn-check gen-day" id="genD5" value="5" autocomplete="off">
+                                <label class="btn btn-sm btn-outline-secondary" for="genD5">Sáb</label>
+                                <input type="checkbox" class="btn-check gen-day" id="genD6" value="6" autocomplete="off">
+                                <label class="btn btn-sm btn-outline-secondary" for="genD6">Dom</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="genReplace" checked>
+                                <label class="form-check-label" for="genReplace">Reemplazar bloques existentes en esos días</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="alert alert-light border small mb-0" id="genHint"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-info text-white" id="btnGenerar">
+                        <i class="fa fa-bolt me-1"></i> Generar
                     </button>
                 </div>
             </div>
@@ -160,5 +181,5 @@
 {% block jscript %}
     <script src="/static/js/forms.js?version=1"></script>
     <script src="/static/js/agenda/configuracion.js?v1.1"></script>
-    <script src="/static/js/agenda/horarios.js?v1.1"></script>
+    <script src="/static/js/agenda/horarios.js?v1.2"></script>
 {% endblock %}

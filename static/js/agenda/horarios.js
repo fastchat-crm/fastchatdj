@@ -273,30 +273,33 @@
     });
 
     const btnGenerar = document.getElementById('btnGenerar');
+    const btnOpenQuickGen = document.getElementById('btnOpenQuickGen');
     const genStart = document.getElementById('genStart');
     const genEnd = document.getElementById('genEnd');
     const genCount = document.getElementById('genCount');
     const genReplace = document.getElementById('genReplace');
     const genHint = document.getElementById('genHint');
+    const modalQuickGenEl = document.getElementById('modalQuickGen');
+    const modalQuickGen = modalQuickGenEl ? new bootstrap.Modal(modalQuickGenEl) : null;
 
     function actualizarHintGenerador() {
-        if (!genStart || !genEnd || !genCount) return;
+        if (!genStart || !genEnd || !genCount || !genHint) return;
         const s = toMin(genStart.value || '');
         const e = toMin(genEnd.value || '');
         const c = parseInt(genCount.value, 10);
         if (isNaN(s) || isNaN(e) || isNaN(c) || e <= s || c < 1) {
-            genHint.textContent = '';
+            genHint.textContent = 'Completá un rango horario válido y la cantidad de turnos.';
             return;
         }
         const total = e - s;
         const slot = Math.max(STEP_MIN, Math.round(total / c / STEP_MIN) * STEP_MIN);
         const dias = Array.from(document.querySelectorAll('.gen-day:checked')).length;
-        genHint.textContent = c + ' turnos × ' + dias + ' días = ' + (c * dias) + ' slots. '
-            + 'Slot calculado: ' + slot + ' min.';
+        genHint.innerHTML = '<strong>' + c + '</strong> turnos × <strong>' + dias + '</strong> días = '
+            + '<strong>' + (c * dias) + '</strong> slots. '
+            + 'Slot calculado: <strong>' + slot + ' min</strong>.';
     }
 
     if (btnGenerar) {
-        btnGenerar.disabled = !recursoActual;
         ['change', 'input'].forEach(function (ev) {
             genStart.addEventListener(ev, actualizarHintGenerador);
             genEnd.addEventListener(ev, actualizarHintGenerador);
@@ -330,9 +333,25 @@
                 return;
             }
             const slotMin = Math.max(STEP_MIN, Math.round((e - s) / c / STEP_MIN) * STEP_MIN);
+            let rebuildNeeded = false;
+            if (s < toMin(dayStart)) {
+                dayStart = genStart.value;
+                dayStartInput.value = genStart.value;
+                rebuildNeeded = true;
+            }
+            if (e > toMin(dayEnd)) {
+                dayEnd = genEnd.value;
+                dayEndInput.value = genEnd.value;
+                rebuildNeeded = true;
+            }
             if (genReplace && genReplace.checked) {
-                blocks.forEach(function (b) { if (b.id) b._deleted = true; });
-                blocks = blocks.filter(function (b) { return b.id; });
+                const setDias = new Set(dias);
+                blocks.forEach(function (b) {
+                    if (setDias.has(b.day) && b.id) b._deleted = true;
+                });
+                blocks = blocks.filter(function (b) {
+                    return b.id || !setDias.has(b.day);
+                });
             }
             dias.forEach(function (d) {
                 blocks.push({
@@ -343,7 +362,13 @@
                     slot_min: slotMin,
                 });
             });
-            renderBlocks();
+            if (rebuildNeeded) {
+                buildGrid();
+                sincronizarUrl();
+            } else {
+                renderBlocks();
+            }
+            if (modalQuickGen) modalQuickGen.hide();
             Swal.fire(
                 'Bloques generados',
                 'Se agregaron ' + dias.length + ' bloques (uno por día). Pulsá *Guardar* para confirmar.',
@@ -353,7 +378,9 @@
     }
 
     function actualizarBotonGenerar() {
-        if (btnGenerar) btnGenerar.disabled = !selRecurso.value;
+        const disabled = !selRecurso.value;
+        if (btnGenerar) btnGenerar.disabled = disabled;
+        if (btnOpenQuickGen) btnOpenQuickGen.disabled = disabled;
     }
     selRecurso.addEventListener('change', actualizarBotonGenerar);
     actualizarBotonGenerar();

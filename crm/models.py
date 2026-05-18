@@ -1094,6 +1094,14 @@ class DepartamentoChatBot(ModeloBase):
         help_text='Si está desactivado, el departamento no responde con flujo (sirve sólo para handoff humano).'
     )
 
+    grupo_agenda = models.ForeignKey(
+        'agenda.GrupoAgenda', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='departamentos_chatbot',
+        verbose_name='Grupo de agenda',
+        help_text='Opcional. Si está asignado, el flujo usa esta agenda '
+                  '(servicios, recursos, disponibilidad) sin preguntar al cliente.',
+    )
+
     # ── Reset genérico del flujo ──────────────────────────────────
     # Triggers: si el cliente escribe (o toca un botón cuyo `valor` matchee)
     # alguno de estos textos en CUALQUIER paso, el motor limpia las variables

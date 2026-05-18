@@ -90,7 +90,8 @@
       "Bash(dir \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\\\\whatsapp\" /s /b /ad)",
       "Bash(pycheck agenda/models.py agenda/admin.py agenda/helpers.py agenda/views.py agenda/urls.py agenda/apps.py agenda/chatbot_handlers.py)",
       "Bash(git rm *)",
-      "Bash(git reset *)"
+      "Bash(git reset *)",
+      "Bash(git *)"
     ]
   },
   "hooks": {
