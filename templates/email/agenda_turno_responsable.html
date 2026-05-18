@@ -1,0 +1,53 @@
+{% extends 'email/emailbase.html' %}
+
+{% block titulo %}Nueva cita #{{ turno.id }}{% endblock %}
+{% block content %}
+    <div style="color:#333; font-family:Arial,Helvetica,sans-serif; padding:16px;">
+        <h2 style="margin:0 0 12px 0; font-size:18px; color:#0d6efd;">🩺 Nueva cita reservada</h2>
+        <p style="margin:0 0 8px 0;">Hola {{ responsable.get_full_name|default:responsable.username }},</p>
+        <p style="margin:0 0 16px 0;">Se reservó una nueva cita en el grupo <strong>{{ grupo.nombre }}</strong>.</p>
+
+        <table cellpadding="6" cellspacing="0" style="border-collapse:collapse; width:100%; font-size:14px;">
+            <tr style="background:#f5f7fb;">
+                <td style="width:40%;"><strong>Cita</strong></td>
+                <td>#{{ turno.id }}</td>
+            </tr>
+            <tr>
+                <td><strong>Servicio</strong></td>
+                <td>{{ turno.servicio.nombre }}</td>
+            </tr>
+            <tr style="background:#f5f7fb;">
+                <td><strong>Recurso</strong></td>
+                <td>{{ turno.recurso.nombre }}</td>
+            </tr>
+            <tr>
+                <td><strong>Cuándo</strong></td>
+                <td>{{ fecha_fmt }}</td>
+            </tr>
+            <tr style="background:#f5f7fb;">
+                <td><strong>Estado</strong></td>
+                <td>{{ turno.get_estado_display }} · {{ turno.get_origen_display }}</td>
+            </tr>
+            <tr>
+                <td><strong>Contacto</strong></td>
+                <td>{{ contacto_nombre }} ({{ contacto_numero }})</td>
+            </tr>
+            {% if notas %}
+            <tr style="background:#f5f7fb;">
+                <td><strong>Notas</strong></td>
+                <td><pre style="margin:0; font-family:inherit; white-space:pre-wrap;">{{ notas }}</pre></td>
+            </tr>
+            {% endif %}
+        </table>
+
+        <p style="margin:16px 0 8px 0;">
+            <a href="{{ url_detalle }}" style="display:inline-block; padding:10px 16px; background:#0d6efd; color:#fff; text-decoration:none; border-radius:4px;">
+                Ver esta cita
+            </a>
+            &nbsp;
+            <a href="{{ url_modulo }}" style="display:inline-block; padding:10px 16px; background:#6c757d; color:#fff; text-decoration:none; border-radius:4px;">
+                Abrir módulo de citas
+            </a>
+        </p>
+    </div>
+{% endblock %}

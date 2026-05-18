@@ -69,6 +69,12 @@ class GrupoAgenda(ModeloBase):
         'Zona horaria', max_length=64, default='America/Guayaquil',
         help_text='Nombre TZ database (ej. America/Guayaquil, UTC).'
     )
+    responsable = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='grupos_agenda_responsable',
+        verbose_name='Responsable',
+        help_text='Usuario que recibe correo y notificación interna al crearse un turno en este grupo.',
+    )
 
     class Meta:
         verbose_name = 'Grupo de agenda'

@@ -8,6 +8,8 @@ from django.utils.dateparse import parse_datetime
 
 from core.funciones import addData, log, paginador, secure_module
 
+from core.funciones import decrypt_sesion_id
+
 from .models import (
     ACTIVE_STATUSES,
     APPOINTMENT_STATUS_CHOICES,
@@ -16,6 +18,7 @@ from .models import (
     Servicio,
     Turno,
 )
+from .notificaciones import notificar_turno_creado
 
 
 STATUS_COLORS = {
@@ -162,6 +165,10 @@ def citasView(request):
                         return JsonResponse({'error': True, 'message': 'Ese horario ya está ocupado.'})
                     turno.save(request=request)
                     log(f'Turno {turno.id} creado (manual)', request, 'add', obj=turno.id)
+                    try:
+                        notificar_turno_creado(turno, request=request)
+                    except Exception:
+                        pass
                     return JsonResponse({'error': False, 'id': turno.id})
 
                 if action == 'mark_status':
@@ -200,6 +207,14 @@ def citasView(request):
         'recurso', 'recurso__grupo_agenda', 'servicio', 'contacto'
     )
     url_vars = f'&action={seccion}'
+
+    cita_token = (request.GET.get('cita') or '').strip()
+    cita_id = decrypt_sesion_id(cita_token) if cita_token else None
+    if cita_id:
+        qs_base = qs_base.filter(pk=cita_id)
+        url_vars += f'&cita={cita_token}'
+        data['cita_destacada_id'] = cita_id
+
     if grupo_actual:
         qs_base = qs_base.filter(recurso__grupo_agenda=grupo_actual)
         url_vars += f'&grupo={grupo_actual.id}'
@@ -231,5 +246,37 @@ def citasView(request):
         listado = qs_base.order_by('-inicio')
         data['list_count'] = listado.count()
         paginador(request, listado, 50, data, url_vars)
+        for t in data.get('listado') or []:
+            t.info_cliente = _parse_notas(t.notas)
 
     return render(request, 'agenda/citas/listado.html', data)
+
+
+def _parse_notas(notas):
+    info = {'motivo': '', 'cedula': '', 'email': '', 'edad': '', 'fecha_nac': '', 'otros': []}
+    if not notas:
+        return info
+    mapping = {
+        'motivo': 'motivo',
+        'cédula': 'cedula', 'cedula': 'cedula',
+        'email': 'email', 'correo': 'email',
+        'edad': 'edad',
+        'f. nac.': 'fecha_nac', 'f. nac': 'fecha_nac', 'fecha nac.': 'fecha_nac',
+        'fecha nacimiento': 'fecha_nac', 'fecha de nacimiento': 'fecha_nac',
+    }
+    for linea in (notas or '').splitlines():
+        linea = linea.strip()
+        if not linea:
+            continue
+        if ':' not in linea:
+            info['otros'].append(linea)
+            continue
+        clave, valor = linea.split(':', 1)
+        clave_l = clave.strip().lower()
+        valor = valor.strip()
+        destino = mapping.get(clave_l)
+        if destino:
+            info[destino] = valor
+        else:
+            info['otros'].append(linea)
+    return info

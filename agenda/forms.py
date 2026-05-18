@@ -12,7 +12,7 @@ from .models import (
 class GrupoAgendaForm(forms.ModelForm):
     class Meta:
         model = GrupoAgenda
-        fields = ['nombre', 'descripcion', 'moneda', 'recordatorio_horas_antes', 'zona_horaria']
+        fields = ['nombre', 'descripcion', 'moneda', 'recordatorio_horas_antes', 'zona_horaria', 'responsable']
         widgets = {
             'nombre': forms.TextInput(attrs={'class': 'form-control', 'maxlength': 120,
                                              'placeholder': 'Ej: Clínica Central, Estudio A'}),
@@ -22,13 +22,18 @@ class GrupoAgendaForm(forms.ModelForm):
             'recordatorio_horas_antes': forms.NumberInput(attrs={'class': 'form-control', 'min': 0, 'max': 240}),
             'zona_horaria': forms.TextInput(attrs={'class': 'form-control', 'maxlength': 64,
                                                    'placeholder': 'Ej: America/Guayaquil, UTC'}),
+            'responsable': forms.Select(attrs={'class': 'form-select'}),
         }
 
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
+        from autenticacion.models import Usuario
+        self.fields['responsable'].queryset = Usuario.objects.filter(is_active=True).order_by('first_name', 'last_name')
+        self.fields['responsable'].required = False
+        self.fields['responsable'].empty_label = '— Ninguno —'
         for field in self.fields.values():
-            field.required = field.required and field.label not in ('Descripción',)
+            field.required = field.required and field.label not in ('Descripción', 'Responsable')
 
     def save(self, commit=True):
         obj = super().save(commit=False)

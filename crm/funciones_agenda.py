@@ -396,6 +396,68 @@ def agenda_armar_resumen(conversacion, variables, config, endpoint=None) -> dict
 
 
 @registrar_funcion(
+    codigo='agenda_listar_mis_citas',
+    descripcion='Lista turnos futuros del contacto actual (pending/confirmed).',
+    parametros={
+        'limite': 'int — cantidad máxima a mostrar (default 5)',
+        'zona_horaria': 'string TZ name (default America/Guayaquil)',
+    },
+)
+def agenda_listar_mis_citas(conversacion, variables, config, endpoint=None) -> dict:
+    from agenda.models import Turno
+    contacto = getattr(conversacion, 'contacto', None)
+    if not contacto:
+        return {'etiqueta': 'error', 'body': {}, 'status': 400,
+                'error': 'conversación sin contacto'}
+    limite = _to_int(variables.get('limite') or config.get('limite') or 5) or 5
+    zona = variables.get('zona_horaria') or 'America/Guayaquil'
+    try:
+        tz = pytz.timezone(zona)
+    except Exception:
+        tz = timezone.get_current_timezone()
+    ahora = timezone.now()
+    if timezone.is_naive(ahora):
+        try:
+            ahora = tz.localize(ahora)
+        except Exception:
+            ahora = timezone.make_aware(ahora, tz)
+    qs = Turno.objects.filter(
+        contacto=contacto, status=True,
+        estado__in=('pending', 'confirmed'),
+        inicio__gte=ahora,
+    ).select_related('recurso', 'servicio').order_by('inicio')[:limite]
+    citas = list(qs)
+    total = len(citas)
+    if total == 0:
+        texto = '📅 No tenés *citas agendadas* a futuro.'
+    else:
+        lineas = ['📅 *Tus próximas citas:*']
+        for t in citas:
+            ini = t.inicio
+            if timezone.is_aware(ini):
+                try:
+                    ini = ini.astimezone(tz)
+                except Exception:
+                    pass
+            fecha_fmt = ini.strftime('%d/%m/%Y · %H:%M')
+            estado_lbl = '✅' if t.estado == 'confirmed' else '⏳'
+            lineas.append(
+                f'• {estado_lbl} {fecha_fmt} — {t.servicio.nombre} '
+                f'con {t.recurso.nombre}'
+            )
+        texto = '\n'.join(lineas)
+    return {
+        'etiqueta': 'ok',
+        'body': {
+            'citas_text': texto,
+            'total_citas': total,
+            'tiene_citas': total > 0,
+        },
+        'status': 200, 'error': '',
+    }
+
+
+@registrar_funcion(
     codigo='agenda_registrar_turno',
     descripcion='Crea/actualiza Contacto + crea Turno (origen=chatbot, estado=confirmed).',
     parametros={
@@ -449,6 +511,8 @@ def agenda_registrar_turno(conversacion, variables, config, endpoint=None) -> di
         notas_lineas.append(f'Email: {variables["email"]}')
     if variables.get('driver_age'):
         notas_lineas.append(f'Edad: {variables["driver_age"]}')
+    if variables.get('fecha_nacimiento'):
+        notas_lineas.append(f'F. Nac.: {variables["fecha_nacimiento"]}')
 
     nuevo = Turno(
         recurso=recurso,
@@ -471,6 +535,12 @@ def agenda_registrar_turno(conversacion, variables, config, endpoint=None) -> di
         logger.exception('Error guardando Turno: %s', e)
         return {'etiqueta': 'error', 'body': {}, 'status': 500,
                 'error': f'No se pudo guardar el turno: {e}'}
+
+    try:
+        from agenda.notificaciones import notificar_turno_creado
+        notificar_turno_creado(nuevo)
+    except Exception:
+        logger.exception('Notificación de turno %s falló', nuevo.id)
 
     fecha_fmt = inicio.strftime('%d/%m/%Y · %H:%M')
     return {

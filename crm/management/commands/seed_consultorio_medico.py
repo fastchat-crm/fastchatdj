@@ -211,13 +211,53 @@ PASOS = [
         'mensaje': '🎂 No tenemos tu edad. ¿Cuántos años tenés?',
         'guardar_en': 'driver_age',
         'validacion_tipo': 'numero',
-        'siguiente': 100,
+        'siguiente': 90,
     },
     {
         'id': 82, 'orden': 82, 'tipo': 'respuesta_texto',
         'codigo': 'mostrar_edad', 'nombre': 'Mostrar edad del paciente',
         'mensaje': '🎂 Edad: *{{variables.driver_age}}*',
-        'siguiente': 100,
+        'siguiente': 90,
+    },
+
+    # ── 90/91/92/93 — Menú "ver mis citas" o "agendar nuevo" ────
+    {
+        'id': 90, 'orden': 90, 'tipo': 'menu_botones',
+        'codigo': 'menu_accion', 'nombre': '¿Ver citas o agendar?',
+        'mensaje': '¿Qué querés hacer?',
+        'guardar_en': 'accion_principal',
+        'opciones': [
+            {'etiqueta': '📅 Ver mis citas', 'valor': 'ver',   'siguiente': 91},
+            {'etiqueta': '🆕 Agendar turno', 'valor': 'nuevo', 'siguiente': 100},
+        ],
+    },
+    {
+        'id': 91, 'orden': 91, 'tipo': 'llamada_funcion',
+        'codigo': 'fn_listar_mis_citas', 'nombre': 'Listar mis citas',
+        'funcion_codigo': 'agenda_listar_mis_citas',
+        'metodo': 'POST', 'timeout_seg': 10, 'body': {'limite': 5},
+        'extrae_variables': {
+            '$citas_text':   '$.citas_text',
+            '$total_citas':  '$.total_citas',
+            '$tiene_citas':  '$.tiene_citas',
+        },
+        'siguiente_ok': 92, 'siguiente_error': 900,
+    },
+    {
+        'id': 92, 'orden': 92, 'tipo': 'respuesta_texto',
+        'codigo': 'mostrar_mis_citas', 'nombre': 'Mostrar mis citas',
+        'mensaje': '{{variables.citas_text}}',
+        'siguiente': 93,
+    },
+    {
+        'id': 93, 'orden': 93, 'tipo': 'menu_botones',
+        'codigo': 'agendar_otra', 'nombre': '¿Agendar nueva?',
+        'mensaje': '¿Querés *agendar* una cita nueva?',
+        'guardar_en': 'agendar_nueva',
+        'opciones': [
+            {'etiqueta': '✅ Sí, agendar', 'valor': 'si', 'siguiente': 100},
+            {'etiqueta': '❌ No, gracias', 'valor': 'no', 'siguiente': 999},
+        ],
     },
 
     # ── 100/110 — Servicios ─────────────────────────────────────
@@ -460,6 +500,8 @@ PASOS = [
         'asigna': {
             'cedula': '', 'nombres': '', 'apellidos': '', 'email': '',
             'driver_age': '', 'fecha_nacimiento': '', 'encontrado_cli': '',
+            'accion_principal': '', 'agendar_nueva': '',
+            'citas_text': '', 'total_citas': '', 'tiene_citas': '',
             'servicio_id': '', 'recurso_id': '', 'fecha': '', 'dias': '',
             'slot_seleccionado': '', 'motivo': '', 'motivo_limpio': '',
             'turno_inicio_iso': '', 'turno_recurso_id': '',
