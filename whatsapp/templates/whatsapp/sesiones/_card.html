@@ -194,7 +194,7 @@
                     <div class="card-subinfo">
                         <i class="fa fa-layer-group"></i> Departamentos:
                         {% for d in deptos %}
-                            <span class="badge badge-primary">{{ d.nombre }}{% if d.id == sesion.departamento_default_id %} ★{% endif %}</span>{% if not forloop.last %} {% endif %}
+                            <span class="text-primary">{{ d.nombre }}{% if d.id == sesion.departamento_default_id %} ★{% endif %}</span>{% if not forloop.last %} {% endif %}
                         {% endfor %}
                     </div>
                 {% endif %}
