@@ -882,6 +882,16 @@ def formatear_nombres(cadena):
     return re.sub("\s+", " ", cadena.strip())
 
 
+def renderizar_texto_dinamico(template_str, variables_contexto):
+    from django.template import Template, Context
+    try:
+        django_template = Template(template_str)
+        contexto = Context(variables_contexto)
+        return django_template.render(contexto)
+    except Exception as e:
+        return f"Error processing template: {e}"
+
+
 def log(mensaje, request, accion, user=None, obj=None):
     if accion == "del":
         logaction = DELETION

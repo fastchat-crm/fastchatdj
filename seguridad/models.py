@@ -15,7 +15,7 @@ from autenticacion.models import Usuario
 from core.crypto import EncryptedTextField
 from core.custom_models import ModeloBase, NormalModel
 from core.models_utils import FileNameUploadToPath
-from core.validadores import solo_numeros
+from core.validadores import solo_numeros, FileMaxSizeInMbValidator
 from fastchatdj.settings import AUTH_USER_MODEL
 
 
@@ -471,3 +471,102 @@ class CronLogEjecucion(models.Model):
         verbose_name = 'Log de Ejecución'
         verbose_name_plural = 'Log de Ejecución'
         ordering = ('-fecha', 'pk')
+
+
+class CabMarketingMailing(ModeloBase):
+    name = models.CharField(null=True, blank=True, max_length=255, verbose_name=u'Name')
+    file = models.FileField(upload_to='marketingmailing/files/', blank=True, null=True, verbose_name=u'File',
+                            validators=[FileExtensionValidator(['xls', 'xlsx']), FileMaxSizeInMbValidator(10)])
+
+    def list_details(self):
+        return self.detailmarketingmailing_set.filter(status=True)
+
+    def __str__(self):
+        return f'{self.name}'
+
+    class Meta:
+        verbose_name = u"Mailing List"
+        verbose_name_plural = u"Mailing Lists"
+
+
+class DetailMarketingMailing(ModeloBase):
+    cab = models.ForeignKey(CabMarketingMailing, on_delete=models.PROTECT, verbose_name=u'Mailing List')
+    document = models.CharField(null=True, blank=True, max_length=100, verbose_name=u'Document')
+    first_name = models.CharField(null=True, blank=True, max_length=100, verbose_name=u'First Name')
+    last_name = models.CharField(null=True, blank=True, max_length=100, verbose_name=u'Last Name')
+    email = models.CharField(null=True, blank=True, max_length=100, verbose_name=u'Email')
+    emailinst = models.CharField(null=True, blank=True, max_length=100, verbose_name=u'Institutional Email')
+    correo_copia = models.CharField(null=True, blank=True, max_length=100, verbose_name=u'CC Email')
+    notified = models.BooleanField(default=False, verbose_name=u'Notified?')
+    date_notified = models.DateTimeField(blank=True, null=True, verbose_name='Notification Date')
+    user_notified = models.ForeignKey('autenticacion.Usuario', on_delete=models.PROTECT, verbose_name=u'Notified By', blank=True, null=True)
+
+    def get_notified(self):
+        return 'text-success fa fa-check-circle' if self.notified else 'text-danger fa fa-times-circle'
+
+    def email_list(self):
+        return [email for email in [self.email, self.emailinst] if email]
+
+    def datos(self):
+        return f'{self.last_name.upper()} {self.first_name.upper()}'
+
+    def __str__(self):
+        return f'{self.document} {self.email}'
+
+    class Meta:
+        verbose_name = u"Mailing List Detail"
+        verbose_name_plural = u"Mailing List Details"
+
+
+class TaskMarketingMail(ModeloBase):
+    cab = models.ForeignKey(CabMarketingMailing, on_delete=models.PROTECT, verbose_name=u'Mailing List')
+    title = models.CharField(null=True, blank=True, max_length=255, verbose_name=u'Email Subject')
+    body = models.TextField(verbose_name=u'Email Body', blank=True, null=True)
+    upload_image = models.BooleanField(default=False, verbose_name=u'Has Image?')
+    image = models.FileField(upload_to='marketingmailing/task/image', blank=True, null=True, verbose_name=u'Attached Image',
+                             validators=[FileExtensionValidator(['jpg', 'png', 'jpeg']), FileMaxSizeInMbValidator(4)])
+    envia_copia = models.BooleanField(default=False, verbose_name=u'Send CC?')
+    correo_copia = models.EmailField(null=True, blank=True, max_length=100, verbose_name=u'CC Email')
+    sent_status = models.BooleanField(default=False, verbose_name=u'Sent?')
+    sent_date = models.DateTimeField(blank=True, null=True, verbose_name=u'Sent Date')
+    sent_user = models.ForeignKey('autenticacion.Usuario', on_delete=models.PROTECT, verbose_name=u'Sent By', blank=True, null=True)
+
+    def get_status(self):
+        return 'text-success fa fa-check-circle' if self.sent_status else 'text-danger fa fa-times-circle'
+
+    def get_copia(self):
+        return 'text-success fa fa-check-circle' if self.envia_copia else 'text-danger fa fa-times-circle'
+
+    def list_details(self):
+        return self.detailtaskmarketingmail_set.filter(status=True)
+
+    def __str__(self):
+        return f'send task {self.cab.__str__()}'
+
+    class Meta:
+        verbose_name = u"Mail Send Task"
+        verbose_name_plural = u"Mail Send Tasks"
+
+
+class DetailTaskMarketingMail(ModeloBase):
+    task = models.ForeignKey(TaskMarketingMail, on_delete=models.PROTECT, verbose_name=u'Send Task')
+    detail = models.ForeignKey(DetailMarketingMailing, on_delete=models.PROTECT, verbose_name=u'Detail')
+    document = models.CharField(null=True, blank=True, max_length=100, verbose_name=u'Document')
+    first_name = models.CharField(null=True, blank=True, max_length=100, verbose_name=u'First Name')
+    last_name = models.CharField(null=True, blank=True, max_length=100, verbose_name=u'Last Name')
+    email = models.CharField(null=True, blank=True, max_length=100, verbose_name=u'Email')
+    emailinst = models.CharField(null=True, blank=True, max_length=100, verbose_name=u'Institutional Email')
+    notified = models.BooleanField(default=False, verbose_name=u'Notified?')
+
+    def get_notified(self):
+        return 'text-success fa fa-check-circle' if self.notified else 'text-danger fa fa-times-circle'
+
+    def datos(self):
+        return f'{self.last_name.upper() if self.last_name else ""} {self.first_name.upper() if self.first_name else ""}'
+
+    def __str__(self):
+        return f'{self.task.__str__()} {self.detail.__str__()}'
+
+    class Meta:
+        verbose_name = u"Mail Send Task Detail"
+        verbose_name_plural = u"Mail Send Task Details"

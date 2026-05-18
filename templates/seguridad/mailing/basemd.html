@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block content %}
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link {% if request.session.viewthpage == 1 %}active{% endif %}" href="{{ request.path }}">
+            <i class="fa fa-users me-1"></i> Mailing Lists
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.session.viewthpage == 2 %}active{% endif %}" href="{{ request.path }}?action=tareas">
+            <i class="fa fa-tasks me-1"></i> Send Tasks
+        </a>
+    </li>
+</ul>
+{% block subcontent %}{% endblock %}
+
+<div class="modal fade" id="modalDetalle" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <form method="post" enctype="multipart/form-data" action="{{ ruta }}" class="form">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalNombre"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body detalleProd"></div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block jscript %}
+<script src="/static/js/forms.js?version=1"></script>
+<script>
+    function formModal(id, text, action) {
+        pantallaespera();
+        $.ajax({
+            type: "GET",
+            url: "{{ request.path }}",
+            data: {action: action, id: id},
+            success: function (data) {
+                setTimeout($.unblockUI, 1);
+                if (data.result === true) {
+                    $('#modalNombre').html(text);
+                    $('.detalleProd').html(data.data);
+                    const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+                    modal.show();
+                } else {
+                    mensajeWarning(data.message);
+                }
+            },
+            error: function () {
+                setTimeout($.unblockUI, 1);
+                mensajeWarning("Connection error.");
+            },
+            dataType: "json"
+        });
+    }
+
+    function eliminarajax(pk, nombre, accion) {
+        Swal.fire({
+            title: `You are about to delete: ${nombre}`,
+            text: "This action is irreversible",
+            type: 'warning',
+            showCancelButton: true,
+            allowOutsideClick: false,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Yes, delete it!',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.value) {
+                pantallaespera();
+                $.ajax({
+                    type: 'POST',
+                    url: '{{ request.path }}',
+                    async: false,
+                    data: {
+                        csrfmiddlewaretoken: '{{ csrf_token }}',
+                        action: accion,
+                        id: pk,
+                    },
+                    dataType: "json",
+                    beforeSend: function () {
+                        pantallaespera();
+                    }
+                }).done(function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data.error === false) {
+                        location.reload();
+                    }
+                }).fail(function () {
+                    setTimeout($.unblockUI, 1);
+                    mensajeWarning('Server error');
+                });
+            }
+        });
+    }
+</script>
+{% block extra_jscript %}{% endblock %}
+{% endblock %}

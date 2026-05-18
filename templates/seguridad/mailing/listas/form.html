@@ -1,0 +1,33 @@
+<input type="hidden" name="action" value="{{ action }}">
+<div class="row">
+    {% for field in form %}
+    <div id="fieldset_{{ field.name }}"
+         class="col-lg-{{ field.field.widget.attrs.col|default:'12' }} mb-2">
+        <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}
+        <div class="form-text">{{ field.help_text }}</div>
+        {% endif %}
+        <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+    </div>
+    {% endfor %}
+</div>
+<div class="mb-3">
+    <a href="/static/files/formatocarga_mails_V2.xlsx" download class="btn btn-info btn-sm">
+        <i class="fa fa-download me-1"></i> Download Excel Template
+    </a>
+</div>
+<div class="d-flex justify-content-end">
+    <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
+        <i class="fa fa-window-close me-1"></i> Cancel
+    </button>
+    <button type="submit" id="submit" class="btn btn-success btn-sm">
+        <i class="fa fa-save me-1"></i> Save
+    </button>
+</div>
+{{ form.media }}
+<script>
+$(function () {
+    $('.dropify').dropify();
+});
+</script>

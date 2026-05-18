@@ -1,0 +1,131 @@
+{% extends "seguridad/mailing/basemd.html" %}
+
+{% block subcontent %}
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="mb-0">
+            <input type="hidden" name="action" value="tareas">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Search</label>
+                    <div class="input-group">
+                        <span class="input-group-text border-end-0">
+                            <i class="fa fa-search text-muted"></i>
+                        </span>
+                        <input type="text" class="form-control border-start-0"
+                               placeholder="Search..." name="criterio" value="{{ criterio }}">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Actions</label>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search me-1"></i>
+                        </button>
+                        {% if url_vars %}
+                        <a href="{{ request.path }}?action=tareas" class="btn btn-default">
+                            <i class="fas fa-times"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row align-items-center mb-3">
+    <div class="col-md-12">
+        <a href="javascript:void(0)" onclick="formModal(0, 'Add Send Task', 'addtarea')"
+           class="btn btn-success btn-sm">
+            <i class="fas fa-plus-circle me-2"></i> New Send Task
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped">
+                <thead>
+                <tr>
+                    <th class="text-center">ID</th>
+                    <th>List</th>
+                    <th>Subject</th>
+                    <th class="text-center">Image</th>
+                    <th class="text-center">Sent</th>
+                    <th class="text-center">Sent Date</th>
+                    <th class="text-center">Sent By</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for l in listado %}
+                <tr>
+                    <td class="text-center"><b>{{ l.id }}</b></td>
+                    <td>{{ l.cab.name }}</td>
+                    <td>{{ l.title }}</td>
+                    <td class="text-center">
+                        {% if l.upload_image %}
+                        <span class="badge bg-success">Yes</span>
+                        {% else %}
+                        <span class="badge bg-secondary">No</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if l.sent_status %}
+                        <span class="badge bg-success">Sent</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">Pending</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if l.sent_date %}{{ l.sent_date|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if l.sent_user %}{{ l.sent_user }}{% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td class="text-center">
+                        <div class="dropdown">
+                            <button class="btn btn-icon" type="button"
+                                    data-bs-toggle="dropdown" aria-expanded="false"
+                                    style="background:none;border:none;">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <a class="dropdown-item"
+                                       href="{{ request.path }}?action=detalletareas&id={{ l.pk }}">
+                                        <i class="fas fa-list me-2 text-info"></i> View Detail
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="javascript:void(0);"
+                                       onclick="formModal({{ l.pk }}, 'Edit Send Task', 'changetarea')">
+                                        <i class="fas fa-edit me-2 text-primary"></i> Edit
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="javascript:void(0);"
+                                       onclick="formModal({{ l.pk }}, 'Send Mailing: {{ l.title }}', 'sendlistmailing')">
+                                        <i class="fas fa-paper-plane me-2 text-success"></i> Send
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="javascript:void(0);"
+                                       onclick="eliminarajax({{ l.pk }}, '{{ l.title }}', 'deletetarea')">
+                                        <i class="fas fa-trash me-2 text-danger"></i> Delete
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% include "paginacion.html" %}
+        </div>
+    </div>
+</div>
+{% endblock %}

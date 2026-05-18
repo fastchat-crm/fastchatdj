@@ -1,0 +1,108 @@
+{% extends "seguridad/mailing/basemd.html" %}
+
+{% block subcontent %}
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" class="mb-0">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Search</label>
+                    <div class="input-group">
+                        <span class="input-group-text border-end-0">
+                            <i class="fa fa-search text-muted"></i>
+                        </span>
+                        <input type="text" class="form-control border-start-0"
+                               placeholder="Search..." name="criterio" value="{{ criterio }}">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Actions</label>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search me-1"></i>
+                        </button>
+                        {% if url_vars %}
+                        <a href="{{ request.path }}" class="btn btn-default">
+                            <i class="fas fa-times"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row align-items-center mb-3">
+    <div class="col-md-12">
+        <a href="javascript:void(0)" onclick="formModal(0, 'Add Mailing List', 'addlista')"
+           class="btn btn-success btn-sm">
+            <i class="fas fa-plus-circle me-2"></i> New Mailing List
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped">
+                <thead>
+                <tr>
+                    <th class="text-center">ID</th>
+                    <th>Name</th>
+                    <th class="text-center">Records</th>
+                    <th class="text-center">File</th>
+                    <th class="text-center">Date</th>
+                    <th class="text-center">Created By</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for l in listado %}
+                <tr>
+                    <td class="text-center"><b>{{ l.id }}</b></td>
+                    <td>{{ l.name }}</td>
+                    <td class="text-center">{{ l.list_details.count }}</td>
+                    <td class="text-center">
+                        {% if l.file %}
+                        <a href="/media/{{ l.file }}" target="_blank" class="btn btn-info btn-sm">
+                            <i class="fa fa-file-excel me-1"></i> Download
+                        </a>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">{{ l.fecha_registro|date:"d/m/Y" }}</td>
+                    <td class="text-center">{{ l.usuario_creacion }}</td>
+                    <td class="text-center">
+                        <div class="dropdown">
+                            <button class="btn btn-icon" type="button"
+                                    data-bs-toggle="dropdown" aria-expanded="false"
+                                    style="background:none;border:none;">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <a class="dropdown-item"
+                                       href="{{ request.path }}?action=detalle&id={{ l.pk }}">
+                                        <i class="fas fa-list me-2 text-info"></i> View Detail
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="javascript:void(0);"
+                                       onclick="eliminarajax({{ l.pk }}, '{{ l.name }}', 'deletelista')">
+                                        <i class="fas fa-trash me-2 text-danger"></i> Delete
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% include "paginacion.html" %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -14,6 +14,7 @@ from .view_modulo import modulo
 from .view_modulogrupo import modulo_grupo
 from .view_modulos_sistema import modulossistemaView
 from .docs.documentacion import documentacionView
+from .view_mailing import mailingView
 
 seguridad_urls = (
     {
@@ -75,6 +76,11 @@ seguridad_urls = (
         "nombre": "Documentación",
         "url": 'documentacion/',
         "vista": documentacionView,
+    },
+    {
+        "nombre": "Email Administration",
+        "url": 'administracion-mails/',
+        "vista": mailingView,
     },
 )
 

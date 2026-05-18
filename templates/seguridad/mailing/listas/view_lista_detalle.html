@@ -1,0 +1,54 @@
+{% extends "seguridad/mailing/basemd.html" %}
+
+{% block subcontent %}
+<div class="row align-items-center mb-3">
+    <div class="col">
+        <h5 class="mb-0">{{ subtitulo }}</h5>
+    </div>
+    <div class="col-auto">
+        <a href="{{ request.path }}" class="btn btn-default btn-sm">
+            <i class="fa fa-arrow-left me-1"></i> Back to Lists
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped">
+                <thead>
+                <tr>
+                    <th>Document</th>
+                    <th>Last Name</th>
+                    <th>First Name</th>
+                    <th>Email</th>
+                    <th>Institutional Email</th>
+                    <th>CC Email</th>
+                    <th class="text-center">Notified</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for l in listado %}
+                <tr>
+                    <td>{{ l.document }}</td>
+                    <td>{{ l.last_name }}</td>
+                    <td>{{ l.first_name }}</td>
+                    <td>{{ l.email }}</td>
+                    <td>{{ l.emailinst|default:"—" }}</td>
+                    <td>{{ l.correo_copia|default:"—" }}</td>
+                    <td class="text-center">
+                        {% if l.notified %}
+                        <span class="badge bg-success">Yes</span>
+                        {% else %}
+                        <span class="badge bg-secondary">No</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% include "paginacion.html" %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -7,7 +7,7 @@ from django.db.models.functions import Concat
 from autenticacion.models import Usuario
 from core.custom_models import ModelFormBase, FormBase
 from core.funciones import generar_nombre
-from seguridad.models import Configuracion, Modulo, ModuloGrupo, GroupModulo, Empresa, CredencialMetaApp
+from seguridad.models import Configuracion, Modulo, ModuloGrupo, GroupModulo, Empresa, CredencialMetaApp, CabMarketingMailing, TaskMarketingMail
 
 
 class ConfiguracionForm(ModelFormBase):
@@ -181,3 +181,36 @@ class EmpresaForm(FormBase):
             else:
                 empresa.responsables.clear()
         return empresa
+
+
+class CabMarketingMailingForm(ModelFormBase):
+    class Meta:
+        model = CabMarketingMailing
+        fields = ('name', 'file')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['file'].widget = forms.FileInput(attrs={'class': 'dropify', 'col': '12'})
+        self.fields['file'].required = True
+        self.fields['file'].help_text = u'Max size 10MB, .xls or .xlsx format'
+
+
+class MarketingMailSendForm(ModelFormBase):
+    class Meta:
+        model = TaskMarketingMail
+        fields = ('cab', 'title', 'body', 'envia_copia', 'correo_copia', 'image')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['cab'].widget.attrs['class'] = 'jselect2'
+        self.fields['cab'].queryset = CabMarketingMailing.objects.filter(status=True)
+        self.fields['body'].widget = forms.Textarea(attrs={'rows': '5', 'class': 'summernote'})
+        self.fields['image'].widget = forms.FileInput(attrs={'class': 'dropify', 'col': '12'})
+        self.fields['correo_copia'].widget.attrs['placeholder'] = 'Enter the CC email address'
+        self.fields['title'].widget.attrs['placeholder'] = 'Enter the email subject'
+
+
+class SendMailingForm(ModelFormBase):
+    class Meta:
+        model = TaskMarketingMail
+        fields = ()

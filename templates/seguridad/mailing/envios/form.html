@@ -1,0 +1,58 @@
+{{ form.media }}
+<link href="/static/assets/plugins/summernote/dist/summernote.css" rel="stylesheet">
+<script src="/static/assets/plugins/summernote/dist/summernote.min.js"></script>
+<input type="hidden" name="action" value="{{ action }}">
+{% if filtro %}<input type="hidden" name="pk" value="{{ filtro.pk }}">{% endif %}
+<div class="row">
+    {% for field in form %}
+    <div id="fieldset_{{ field.name }}"
+         class="col-lg-{{ field.field.widget.attrs.col|default:'12' }} mb-2">
+        <label class="form-label small mb-1" for="id_{{ field.name }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}
+        <div class="form-text">{{ field.help_text }}</div>
+        {% endif %}
+        <div class="invalid-feedback" id="errorMessage{{ field.name }}"></div>
+    </div>
+    {% endfor %}
+</div>
+<div class="d-flex justify-content-end mt-2">
+    <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
+        <i class="fa fa-window-close me-1"></i> Cancel
+    </button>
+    <button type="submit" id="submit" class="btn btn-success btn-sm">
+        <i class="fa fa-save me-1"></i> Save
+    </button>
+</div>
+<script>
+$(function () {
+    $('.jselect2').select2({
+        width: '100%',
+        dropdownParent: $('#modalDetalle')
+    });
+    $('.dropify').dropify();
+    $('#id_body').summernote({
+        placeholder: 'Write the email body here. Use {{ nombres }} to insert the recipient name.',
+        height: 200,
+        toolbar: [
+            ['style', ['bold', 'italic', 'underline', 'clear']],
+            ['font', ['strikethrough']],
+            ['color', ['color']],
+            ['para', ['ul', 'ol', 'paragraph']],
+            ['insert', ['link']],
+            ['view', ['fullscreen', 'codeview']]
+        ]
+    });
+    var copiaField = $('#fieldset_correo_copia');
+    var enviaCheckbox = $('#id_envia_copia');
+    function toggleCopia() {
+        if (enviaCheckbox.prop('checked')) {
+            copiaField.show();
+        } else {
+            copiaField.hide();
+        }
+    }
+    toggleCopia();
+    enviaCheckbox.on('change', toggleCopia);
+});
+</script>

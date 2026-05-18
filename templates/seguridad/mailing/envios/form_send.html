@@ -1,0 +1,53 @@
+<input type="hidden" name="action" value="{{ action }}">
+<input type="hidden" name="pk" value="{{ filtro.pk }}">
+<div class="card mb-3">
+    <div class="card-body">
+        <h6 class="mb-2"><i class="fa fa-envelope me-1"></i> Send Task Preview</h6>
+        <table class="table table-sm table-bordered mb-0">
+            <tr>
+                <th class="w-25">List</th>
+                <td>{{ filtro.cab.name }}</td>
+            </tr>
+            <tr>
+                <th>Subject</th>
+                <td>{{ filtro.title }}</td>
+            </tr>
+            <tr>
+                <th>Recipients</th>
+                <td>{{ filtro.cab.list_details.count }}</td>
+            </tr>
+            <tr>
+                <th>CC</th>
+                <td>
+                    {% if filtro.envia_copia %}
+                    {{ filtro.correo_copia }}
+                    {% else %}
+                    <span class="text-muted">None</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th>Image</th>
+                <td>
+                    {% if filtro.upload_image %}
+                    <span class="badge bg-success">Attached</span>
+                    {% else %}
+                    <span class="badge bg-secondary">None</span>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+    </div>
+</div>
+<div class="alert alert-warning d-flex align-items-center" role="alert">
+    <i class="fa fa-triangle-exclamation me-2"></i>
+    <div>This will send emails to all recipients in the list. You will be notified by email when the process finishes.</div>
+</div>
+<div class="d-flex justify-content-end">
+    <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
+        <i class="fa fa-window-close me-1"></i> Cancel
+    </button>
+    <button type="submit" id="submit" class="btn btn-success btn-sm">
+        <i class="fa fa-paper-plane me-1"></i> Send Now
+    </button>
+</div>
