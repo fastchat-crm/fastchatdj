@@ -65,6 +65,39 @@
 
             <div class="conex-data-block">
                 <div class="conex-data-head">
+                    <i class="fa fa-key text-warning me-1"></i>
+                    <span>Credenciales y vínculos</span>
+                </div>
+
+                <div class="form-row form-row-two">
+                    <div>
+                        <label>Business Account ID</label>
+                        <input type="text" value="{{ config_meta.business_account_id|default:'—' }}" readonly>
+                    </div>
+                    <div>
+                        <label>Alta manual</label>
+                        <input type="text"
+                               value="{% if config_meta.alta_manual %}Sí (carga manual de IDs){% else %}No (Embedded Signup){% endif %}"
+                               readonly>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <label>Access Token <small class="muted">(System User long-lived · cifrado con Fernet en BD)</small></label>
+                    <div class="cm-pwd-wrap">
+                        <input type="password" id="meta-token-view-{{ sesion.id }}"
+                               value="{{ config_meta.access_token|default:'' }}" readonly autocomplete="off">
+                        <button type="button" class="cm-pwd-toggle" tabindex="-1"
+                                data-token-eye="meta-token-view-{{ sesion.id }}"
+                                aria-label="Mostrar/ocultar">
+                            <i class="fa fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="conex-data-block">
+                <div class="conex-data-head">
                     <i class="fa fa-link text-primary me-1"></i>
                     <span>Webhook</span>
                 </div>
@@ -212,6 +245,20 @@
 {% if sesion.es_meta and config_meta %}
 <script>
     (function () {
+        document.querySelectorAll('[data-token-eye]').forEach(function (eye) {
+            eye.addEventListener('click', function () {
+                const inp = document.getElementById(eye.dataset.tokenEye);
+                if (!inp) return;
+                const showing = inp.type === 'password';
+                inp.type = showing ? 'text' : 'password';
+                const icon = eye.querySelector('i');
+                if (icon) {
+                    icon.classList.toggle('fa-eye', !showing);
+                    icon.classList.toggle('fa-eye-slash', showing);
+                }
+            });
+        });
+
         const $btn = document.getElementById('btn-resync-meta');
         if (!$btn) return;
         $btn.addEventListener('click', function () {
