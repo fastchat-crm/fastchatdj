@@ -68,6 +68,30 @@
     </div>
 </div>
 
+<div id="pwaManualSheet" class="pwa-ios-sheet" hidden>
+    <div class="pwa-ios-sheet__card">
+        <button type="button" class="pwa-ios-sheet__close" id="pwaManualClose" aria-label="Cerrar">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                <path d="M18 6 6 18"></path><path d="m6 6 12 12"></path>
+            </svg>
+        </button>
+        <h6 class="pwa-ios-sheet__title">Instalar la app</h6>
+        <ol class="pwa-ios-sheet__steps">
+            <li>En la barra de direcciones, tocá el ícono <strong>Instalar</strong>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                     width="16" height="16" style="vertical-align:-3px">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" x2="12" y1="15" y2="3"></line>
+                </svg>.</li>
+            <li>O abrí el menú <strong>⋮</strong> del navegador y elegí <strong>Instalar aplicación</strong>.</li>
+            <li>Confirmá tocando <strong>Instalar</strong>.</li>
+        </ol>
+    </div>
+</div>
+
 <script>
     (function () {
         const BAR_KEY = 'pwa_install_dismissed_at';
@@ -79,12 +103,15 @@
         const btnClose = document.getElementById('pwaInstallClose');
         const iosSheet = document.getElementById('pwaIosSheet');
         const btnIosClose = document.getElementById('pwaIosClose');
+        const manualSheet = document.getElementById('pwaManualSheet');
+        const btnManualClose = document.getElementById('pwaManualClose');
 
         if (!bar) return;
 
         let deferredPrompt = null;
         const params = new URLSearchParams(window.location.search);
         const force = params.get('pwa_force') === '1';
+        const supportsBip = 'onbeforeinstallprompt' in window;
 
         function isStandalone() {
             return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
@@ -123,6 +150,9 @@
             } else if (mode === 'ios') {
                 btnLabel.textContent = 'Cómo instalar';
                 subtitle.textContent = 'Agregalo a tu pantalla de inicio en 3 pasos.';
+            } else if (mode === 'manual') {
+                btnLabel.textContent = 'Instalar';
+                subtitle.textContent = 'Acceso rápido desde tu dispositivo.';
             } else {
                 return;
             }
@@ -146,25 +176,67 @@
             setTimeout(() => { iosSheet.hidden = true; }, 220);
         }
 
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            showBar('native');
-        });
+        function showManualSheet() {
+            manualSheet.hidden = false;
+            requestAnimationFrame(() => manualSheet.classList.add('is-visible'));
+        }
 
-        btnInstall.addEventListener('click', async () => {
-            const mode = bar.dataset.mode;
-            if (mode === 'native' && deferredPrompt) {
+        function hideManualSheet() {
+            manualSheet.classList.remove('is-visible');
+            setTimeout(() => { manualSheet.hidden = true; }, 220);
+        }
+
+        function waitForPrompt(timeoutMs) {
+            return new Promise(resolve => {
+                if (deferredPrompt) return resolve(true);
+                const handler = () => { cleanup(); resolve(true); };
+                function cleanup() {
+                    window.removeEventListener('beforeinstallprompt', handler);
+                    clearTimeout(timer);
+                }
+                window.addEventListener('beforeinstallprompt', handler);
+                const timer = setTimeout(() => { cleanup(); resolve(false); }, timeoutMs);
+            });
+        }
+
+        async function triggerNativeInstall() {
+            try {
                 deferredPrompt.prompt();
                 const choice = await deferredPrompt.userChoice;
                 deferredPrompt = null;
                 hideBar();
                 if (choice && choice.outcome === 'accepted') rememberDismiss();
+                return true;
+            } catch (e) {
+                deferredPrompt = null;
+                return false;
+            }
+        }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            if (bar.hidden || bar.dataset.mode === 'manual') showBar('native');
+        });
+
+        btnInstall.addEventListener('click', async () => {
+            const mode = bar.dataset.mode;
+            if (deferredPrompt) {
+                await triggerNativeInstall();
                 return;
             }
             if (mode === 'ios') {
                 showIosSheet();
+                return;
             }
+            btnInstall.disabled = true;
+            const got = await waitForPrompt(1500);
+            btnInstall.disabled = false;
+            if (got && deferredPrompt) {
+                await triggerNativeInstall();
+                return;
+            }
+            showManualSheet();
         });
 
         btnClose.addEventListener('click', () => {
@@ -177,16 +249,31 @@
             if (ev.target === iosSheet) hideIosSheet();
         });
 
+        btnManualClose.addEventListener('click', hideManualSheet);
+        manualSheet.addEventListener('click', (ev) => {
+            if (ev.target === manualSheet) hideManualSheet();
+        });
+
         window.addEventListener('appinstalled', () => {
             rememberDismiss();
             hideBar();
+            hideManualSheet();
             deferredPrompt = null;
         });
 
         if (force) {
-            setTimeout(() => showBar(deferredPrompt ? 'native' : 'ios'), 800);
+            setTimeout(() => {
+                if (deferredPrompt) showBar('native');
+                else if (isIOS()) showBar('ios');
+                else showBar('manual');
+            }, 800);
         } else if (isIOS() && isSafari() && !isStandalone() && !dismissed()) {
             setTimeout(() => showBar('ios'), 1200);
+        } else if (supportsBip && !isIOS() && !isStandalone() && !dismissed()) {
+            setTimeout(() => {
+                if (deferredPrompt) showBar('native');
+                else showBar('manual');
+            }, 3500);
         }
     })();
 </script>

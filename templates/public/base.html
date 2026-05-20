@@ -14,6 +14,7 @@
         <meta name="user_id" content="{{ request.user.pk }}">
     {% endif %}
     {% include 'pwa/meta_tags.html' %}
+    <link rel="stylesheet" href="/static/css/pwa/install_bar.css?v1.1">
     <meta name="islogged" content="{{ request.user.is_authenticated }}">
     <link href="{{ favicon }}" rel="shortcut icon"/>
     <link rel="stylesheet" href="/static/form-control.css?2.18">
@@ -545,7 +546,7 @@
 {#<script src="/static/webpush/registerSw.js?v=3.0"></script>#}
 {% block jscript %}
 {% endblock %}
-
+{% include 'pwa/install_bar.html' %}
 </body>
 
 </html>
