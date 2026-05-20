@@ -91,14 +91,19 @@
 
                 <div class="form-row">
                     <label>Access Token <small class="muted">(System User long-lived · cifrado con Fernet en BD)</small></label>
-                    <div class="cm-pwd-wrap">
+                    <div class="cm-pwd-wrap cm-pwd-wrap-two">
                         <input type="text" id="meta-token-view-{{ sesion.id }}" name="access_token"
                                data-edit-field="1"
                                data-real-token="{{ config_meta.access_token|default:'' }}"
                                value="" readonly autocomplete="off" spellcheck="false">
+                        <button type="button" class="cm-pwd-toggle cm-pwd-toggle-copy" tabindex="-1"
+                                data-copy-token="meta-token-view-{{ sesion.id }}"
+                                aria-label="Copiar token" title="Copiar token completo">
+                            <i class="fa fa-copy"></i>
+                        </button>
                         <button type="button" class="cm-pwd-toggle" tabindex="-1"
                                 id="meta-token-eye-{{ sesion.id }}"
-                                aria-label="Mostrar/ocultar token">
+                                aria-label="Mostrar/ocultar token" title="Mostrar/ocultar token">
                             <i class="fa fa-eye"></i>
                         </button>
                     </div>
@@ -128,9 +133,16 @@
 
                 <div class="form-row">
                     <label>Verify token <small class="muted">(para validar el webhook con Meta)</small></label>
-                    <input type="text"
-                           value="{{ config_meta.webhook_verify_token|default:'' }}"
-                           placeholder="(autogenerado al crear la sesión)" readonly>
+                    <div class="cm-pwd-wrap">
+                        <input type="text" id="meta-verify-token-{{ sesion.id }}"
+                               value="{{ config_meta.webhook_verify_token|default:'' }}"
+                               placeholder="(autogenerado al crear la sesión)" readonly>
+                        <button type="button" class="cm-pwd-toggle" tabindex="-1"
+                                data-copy-input="meta-verify-token-{{ sesion.id }}"
+                                aria-label="Copiar verify token" title="Copiar verify token">
+                            <i class="fa fa-copy"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -146,7 +158,7 @@
                         title="Vuelve a consultar Graph API y refresca display_phone, quality y tier.">
                     <i class="fa fa-rotate me-1"></i> Resincronizar con Meta
                 </button>
-                <a href="https://business.facebook.com/wa/manage/phone-numbers/?waba_id={{ config_meta.waba_id }}{% if config_meta.phone_number_id %}&phone_number_id={{ config_meta.phone_number_id }}{% endif %}{% if config_meta.business_account_id %}&business_id={{ config_meta.business_account_id }}{% endif %}"
+                <a href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers/?{% if config_meta.business_account_id %}business_id={{ config_meta.business_account_id }}&{% endif %}asset_id={{ config_meta.waba_id }}&nav_ref=whatsapp_manager&tab=phone-numbers{% if config_meta.phone_number_id %}&phone_number_id={{ config_meta.phone_number_id }}{% endif %}"
                    target="_blank" rel="noopener" class="conex-btn conex-btn-light btn-sm">
                     <i class="fa fa-external-link me-1"></i> Abrir en Meta Business
                 </a>
@@ -302,6 +314,51 @@
             const icon = tokenEye.querySelector('i');
             if (icon) icon.className = isMasked ? 'fa fa-eye' : 'fa fa-eye-slash';
         };
+
+        const flashIcon = function (btn, tempClass) {
+            const icon = btn.querySelector('i');
+            if (!icon) return;
+            const orig = icon.className;
+            icon.className = tempClass;
+            setTimeout(function () { icon.className = orig; }, 1100);
+        };
+
+        const copyToClipboard = function (text, btn) {
+            if (!text) return;
+            const done = function () { flashIcon(btn, 'fa fa-check text-success'); };
+            const fail = function () { flashIcon(btn, 'fa fa-triangle-exclamation text-danger'); };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(done).catch(fail);
+            } else {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    done();
+                } catch (e) { fail(); }
+            }
+        };
+
+        panel.querySelectorAll('[data-copy-token]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const inp = document.getElementById(btn.dataset.copyToken);
+                if (!inp) return;
+                copyToClipboard(inp.dataset.realToken || inp.value || '', btn);
+            });
+        });
+
+        panel.querySelectorAll('[data-copy-input]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const inp = document.getElementById(btn.dataset.copyInput);
+                if (!inp) return;
+                copyToClipboard(inp.value || '', btn);
+            });
+        });
 
         if (tokenEye && tokenInput) {
             tokenEye.addEventListener('click', function () {
