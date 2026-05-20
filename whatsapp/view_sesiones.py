@@ -29,7 +29,7 @@ from core.funciones import addData, log, secure_module
 
 from autenticacion.models import Usuario
 
-from .models import SesionWhatsApp, ConfigBaileys, PerfilSesionWhatsApp
+from .models import SesionWhatsApp, ConfigBaileys, ConfigMeta, PerfilSesionWhatsApp
 from .services import WhatsAppService
 
 import json
@@ -212,6 +212,106 @@ def _accion_meta_validar(request):
         'waba_id': cfg.waba_id,
         'phone_number_id': cfg.phone_number_id,
         'ultima_sincronizacion': cfg.ultima_sincronizacion.isoformat() if cfg.ultima_sincronizacion else None,
+    })
+
+
+def _accion_meta_test_credenciales(request):
+    """Dry-run against Graph with credentials provided in POST.
+
+    Used by the edit panel of the transport-data modal to verify new
+    credentials before persisting them. Does not touch the database.
+    """
+    from .meta_manual_view import _validar_con_graph
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
+    if not sesion or not sesion.es_meta:
+        return JsonResponse({'error': True, 'message': 'Only applies to Meta sessions.'})
+
+    waba_id = (request.POST.get('waba_id') or '').strip()
+    phone_number_id = (request.POST.get('phone_number_id') or '').strip()
+    access_token = (request.POST.get('access_token') or '').strip()
+    if not (waba_id and phone_number_id and access_token):
+        return JsonResponse({'error': True, 'message': 'WABA ID, Phone Number ID and Access Token are required.'})
+
+    res = _validar_con_graph(waba_id, phone_number_id, access_token)
+    if not res.get('ok'):
+        return JsonResponse({'error': True, 'message': res.get('error', 'Meta rejected the credentials.')})
+
+    return JsonResponse({
+        'error': False,
+        'message': 'Meta accepted the credentials.',
+        'waba_name': res.get('waba_name', ''),
+        'display_phone_number': res.get('display_phone_number', ''),
+        'verified_name': res.get('verified_name', ''),
+        'quality_rating': res.get('quality_rating', ''),
+    })
+
+
+def _accion_meta_actualizar_credenciales(request):
+    """Persist new credentials for an existing Meta session.
+
+    Re-validates against Graph, updates ConfigMeta, marks the session as
+    connected and re-subscribes the WABA to the Meta App.
+    """
+    from .meta_manual_view import _validar_con_graph, _suscribir_waba_a_app
+    from .sesiones_common import sincronizar_meta_desde_graph
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
+    if not sesion or not sesion.es_meta:
+        return JsonResponse({'error': True, 'message': 'Only applies to Meta sessions.'})
+    cfg = getattr(sesion, 'config_meta', None)
+    if not cfg:
+        return JsonResponse({'error': True, 'message': 'Session has no ConfigMeta loaded.'})
+
+    waba_id = (request.POST.get('waba_id') or '').strip()
+    phone_number_id = (request.POST.get('phone_number_id') or '').strip()
+    business_account_id = (request.POST.get('business_account_id') or '').strip()
+    display_phone_number = (request.POST.get('display_phone_number') or '').strip()
+    access_token = (request.POST.get('access_token') or '').strip()
+    if not (waba_id and phone_number_id and access_token):
+        return JsonResponse({'error': True, 'message': 'WABA ID, Phone Number ID and Access Token are required.'})
+
+    clash = ConfigMeta.objects.filter(phone_number_id=phone_number_id).exclude(sesion_id=sesion.id).first()
+    if clash:
+        return JsonResponse({
+            'error': True,
+            'message': f'Phone Number ID {phone_number_id} is already used by another session.',
+        })
+
+    chequeo = _validar_con_graph(waba_id, phone_number_id, access_token)
+    if not chequeo.get('ok'):
+        return JsonResponse({'error': True, 'message': chequeo.get('error', 'Meta rejected the credentials.')})
+
+    cfg.waba_id = waba_id
+    cfg.phone_number_id = phone_number_id
+    cfg.business_account_id = business_account_id or None
+    cfg.display_phone_number = display_phone_number or chequeo.get('display_phone_number') or cfg.display_phone_number
+    cfg.verified_name = chequeo.get('verified_name') or cfg.verified_name
+    cfg.quality_rating = chequeo.get('quality_rating') or cfg.quality_rating or 'UNKNOWN'
+    cfg.access_token = access_token
+    cfg.alta_manual = True
+    cfg.save(request)
+
+    sesion.numero = cfg.display_phone_number or sesion.numero
+    if sesion.estado != 'conectado':
+        sesion.estado = 'conectado'
+    sesion.save(request)
+
+    try:
+        sincronizar_meta_desde_graph(sesion, cfg)
+    except Exception as ex:
+        logger.warning("sincronizar_meta_desde_graph failed on credentials update: %s", ex)
+
+    sub_res = _suscribir_waba_a_app(waba_id, access_token)
+    log(f"Meta credentials updated for session {sesion.id}", request, "change", obj=sesion.id)
+
+    return JsonResponse({
+        'error': False,
+        'message': 'Credentials updated and connection re-tested successfully.',
+        'estado': sesion.estado,
+        'numero': sesion.numero,
+        'display_phone_number': cfg.display_phone_number or '',
+        'verified_name': cfg.verified_name or '',
+        'waba_suscrita': sub_res.get('ok'),
+        'waba_suscrita_error': sub_res.get('error') if not sub_res.get('ok') else None,
     })
 
 
@@ -597,6 +697,8 @@ _ACCIONES = {
     'disconnect':                  _accion_disconnect,
     'delete':                      _accion_delete,
     'meta_validar':                _accion_meta_validar,
+    'meta_test_credenciales':      _accion_meta_test_credenciales,
+    'meta_actualizar_credenciales': _accion_meta_actualizar_credenciales,
     'meta_plantilla_prueba':       _accion_meta_plantilla_prueba,
     'editar':                      _accion_editar,
     'toggle_activo':               _accion_toggle_activo,

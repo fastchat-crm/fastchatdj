@@ -2668,7 +2668,8 @@
     position: relative;
 }
 
-.cm-pwd-wrap .form-control {
+.cm-pwd-wrap .form-control,
+.cm-pwd-wrap input {
     padding-right: 2.4rem;
 }
 
@@ -2687,6 +2688,37 @@
 
 .cm-pwd-toggle:hover {
     color: #1f2937;
+}
+
+.cm-pwd-toggle {
+    z-index: 2;
+}
+
+.conex-data-feedback {
+    padding: .55rem .75rem;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    font-size: .85rem;
+    line-height: 1.35;
+}
+
+.conex-data-feedback.feedback-ok {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+}
+
+.conex-data-feedback.feedback-error {
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+
+.conex-data-block input:not([readonly]) {
+    background: #fff !important;
+    color: #111827 !important;
+    border-color: #93c5fd !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, .08);
 }
 
 /* ─── Cambiar foto de perfil (modal Meta) — usa Dropify global ─── */
