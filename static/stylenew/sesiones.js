@@ -1094,6 +1094,11 @@
                 if (!r.ok) return mostrarToast(r.message || 'No se pudo cargar el resumen.', 'err');
                 abrirDetail(r.html);
             });
+        } else if (action === 'post-conexion') {
+            fetchPartial('post_conexion_modal', sesionId).then(function (r) {
+                if (!r.ok) return mostrarToast(r.message || 'No se pudo abrir la guia.', 'err');
+                abrirDetail(r.html);
+            });
         } else if (action === 'plantilla-prueba') {
             fetchPartial('plantilla_modal', sesionId).then(function (r) {
                 if (!r.ok) return mostrarToast(r.message || 'No se pudo abrir la plantilla.', 'err');
