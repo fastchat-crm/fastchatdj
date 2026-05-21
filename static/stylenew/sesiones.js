@@ -1095,10 +1095,11 @@
                 abrirDetail(r.html);
             });
         } else if (action === 'post-conexion') {
-            fetchPartial('post_conexion_modal', sesionId).then(function (r) {
-                if (!r.ok) return mostrarToast(r.message || 'No se pudo abrir la guia.', 'err');
-                abrirDetail(r.html);
-            });
+            if (typeof formModal === 'function') {
+                formModal(sesionId, '<i class="fa fa-list-check me-1"></i> Configurar en Facebook — ' + nombre, 'post-conexion');
+            } else {
+                mostrarToast('formModal no disponible.', 'err');
+            }
         } else if (action === 'plantilla-prueba') {
             fetchPartial('plantilla_modal', sesionId).then(function (r) {
                 if (!r.ok) return mostrarToast(r.message || 'No se pudo abrir la plantilla.', 'err');

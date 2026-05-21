@@ -797,36 +797,6 @@ def _get_partial(request, accion):
         ).order_by('nombre') if cfg else []
         tpl = 'whatsapp/sesiones/_modal_plantilla_prueba.html'
 
-    elif accion == 'post_conexion_modal':
-        from django.conf import settings
-        from .common_meta import get_meta_app_credentials
-        from .models import PlantillaWhatsApp
-        if not sesion.es_meta:
-            return JsonResponse({'ok': False, 'message': 'Solo aplica a sesiones Meta.'})
-        cfg = getattr(sesion, 'config_meta', None)
-        if not cfg:
-            return JsonResponse({'ok': False, 'message': 'La sesion no tiene ConfigMeta cargada.'})
-        app_id, _ = get_meta_app_credentials()
-        bid = cfg.business_account_id or ''
-        if not bid:
-            try:
-                from seguridad.models import Configuracion, CredencialMetaApp
-                confi = Configuracion.get_instancia()
-                if confi and confi.pk:
-                    cred = CredencialMetaApp.objects.filter(configuracion=confi).first()
-                    if cred and cred.business_id:
-                        bid = cred.business_id
-            except Exception:
-                pass
-        ctx['cfg'] = cfg
-        ctx['app_id'] = app_id
-        ctx['bid'] = bid
-        ctx['webhook_url'] = getattr(settings, 'URL_GENERAL', '') + '/whatsapp/meta_webhook/'
-        ctx['n_plantillas_aprobadas'] = PlantillaWhatsApp.objects.filter(
-            config_meta=cfg, estado_meta='APPROVED', status=True,
-        ).count()
-        tpl = 'whatsapp/sesiones/_modal_post_conexion.html'
-
     else:
         return JsonResponse({'ok': False, 'message': 'Partial desconocido.'})
 
@@ -868,6 +838,49 @@ def sesionesView(request):
             )
             return JsonResponse({'result': True, 'data': html})
         except Exception as ex:
+            return JsonResponse({'result': False, 'message': str(ex)})
+
+    if accion_get == 'post-conexion':
+        try:
+            from django.conf import settings
+            from .common_meta import get_meta_app_credentials
+            from .models import PlantillaWhatsApp
+            pk = int(request.GET.get('id') or 0)
+            sesion = SesionWhatsApp.objects.filter(id=pk, usuario=request.user).first()
+            if not sesion:
+                return JsonResponse({'result': False, 'message': 'Sesion no encontrada.'})
+            if not sesion.es_meta:
+                return JsonResponse({'result': False, 'message': 'Solo aplica a sesiones Meta.'})
+            cfg = getattr(sesion, 'config_meta', None)
+            if not cfg:
+                return JsonResponse({'result': False, 'message': 'La sesion no tiene ConfigMeta cargada.'})
+            app_id, _ = get_meta_app_credentials()
+            bid = cfg.business_account_id or ''
+            if not bid:
+                try:
+                    from seguridad.models import Configuracion, CredencialMetaApp
+                    confi = Configuracion.get_instancia()
+                    if confi and confi.pk:
+                        cred = CredencialMetaApp.objects.filter(configuracion=confi).first()
+                        if cred and cred.business_id:
+                            bid = cred.business_id
+                except Exception:
+                    pass
+            ctx = {
+                'sesion': sesion,
+                'cfg': cfg,
+                'app_id': app_id,
+                'bid': bid,
+                'webhook_url': getattr(settings, 'URL_GENERAL', '') + '/whatsapp/meta_webhook/',
+                'n_plantillas_aprobadas': PlantillaWhatsApp.objects.filter(
+                    config_meta=cfg, estado_meta='APPROVED', status=True,
+                ).count(),
+                'request': request,
+            }
+            html = get_template('whatsapp/sesiones/_modal_post_conexion.html').render(ctx, request)
+            return JsonResponse({'result': True, 'data': html})
+        except Exception as ex:
+            logger.exception("Error en post-conexion: %s", ex)
             return JsonResponse({'result': False, 'message': str(ex)})
 
     if accion_get == 'buscarpersonas':
