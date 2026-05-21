@@ -3,7 +3,7 @@ from django.urls import re_path, path
 from .view_conversaciones_finalizadas import conversacionesFinalizadasView
 from .view_sesiones import sesionesView
 from .meta_oauth_view import meta_oauth_start, meta_oauth_callback
-from .meta_manual_view import meta_manual_validar, meta_manual_conectar, meta_webhook_info, meta_test_message
+from .meta_manual_view import meta_manual_validar, meta_manual_conectar, meta_test_message
 from .meta_diagnostico_view import meta_diagnostico, meta_suscribir_waba_action
 from .meta_webhook_log_view import meta_webhook_log, meta_webhook_log_poll, meta_webhook_log_detalle
 from .meta_webhook_hits_view import meta_webhook_hits, meta_webhook_hits_poll, meta_webhook_hit_detalle
@@ -101,7 +101,6 @@ urlpatterns = [
     path('meta/oauth/callback/', meta_oauth_callback, name='whatsapp_meta_oauth_callback'),
     path('meta/manual/validar/', meta_manual_validar, name='whatsapp_meta_manual_validar'),
     path('meta/manual/conectar/', meta_manual_conectar, name='whatsapp_meta_manual_conectar'),
-    path('meta/webhook-info/<int:sesion_id>/', meta_webhook_info, name='whatsapp_meta_webhook_info'),
     path('meta/test-message/<int:sesion_id>/', meta_test_message, name='whatsapp_meta_test_message'),
     path('sesiones/<int:sesion_id>/diagnostico/', meta_diagnostico, name='whatsapp_meta_diagnostico'),
     path('sesiones/<int:sesion_id>/suscribir-waba/', meta_suscribir_waba_action, name='whatsapp_meta_suscribir_waba'),

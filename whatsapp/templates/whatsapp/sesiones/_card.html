@@ -94,9 +94,6 @@
                     </button>
                     <div class="kebab-sep"></div>
                     <div class="kebab-heading">Meta Administración</div>
-                    <button type="button" class="kebab-item" data-action="webhook-info"><i class="fa fa-link"></i> Datos
-                        del webhook (Meta)
-                    </button>
                     <button type="button" class="kebab-item" data-action="plantilla-prueba"><i
                             class="fa fa-file-lines"></i> Enviar plantilla de prueba
                     </button>
@@ -209,12 +206,6 @@
         <a href="/whatsapp/conversaciones/?sesion={{ sesion.id|encrypt_id }}" class="btn-quick">
             <i class="fa fa-comments"></i> Conversaciones
         </a>
-        {% if sesion.es_meta %}
-            <button type="button" class="btn-quick btn-quick-info" data-action="webhook-info"
-                    title="Ver URL del webhook + verify token para configurar en Meta">
-                <i class="fa fa-link"></i> Webhook
-            </button>
-        {% endif %}
         {% if sesion.es_baileys and sesion.estado != 'conectado' %}
             <button type="button" class="btn-quick btn-quick-warn" data-action="baileys-reconnect">
                 <i class="fa fa-qrcode"></i> Escanear QR

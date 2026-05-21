@@ -111,43 +111,6 @@ def _validar_con_graph(waba_id: str, phone_number_id: str, access_token: str,
 
 
 @login_required
-def meta_webhook_info(request, sesion_id):
-    """Devuelve datos para configurar el webhook en Meta para esta sesión.
-
-    GET /whatsapp/meta/webhook-info/<sesion_id>/
-    → {
-        ok: bool,
-        webhook_url: 'https://dominio/whatsapp/meta_webhook/',
-        verify_token: '<random>',
-        app_id: '...',
-        waba_id: '...',
-        phone_number_id: '...',
-        meta_webhook_url: 'https://developers.facebook.com/apps/<app_id>/webhooks/',
-      }
-    """
-    from django.conf import settings
-    from .common_meta import get_meta_app_credentials
-    sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
-    if not sesion:
-        return JsonResponse({'ok': False, 'error': 'Sesión no encontrada o no es Meta.'})
-    config = getattr(sesion, 'config_meta', None)
-    if not config:
-        return JsonResponse({'ok': False, 'error': 'La sesión no tiene ConfigMeta cargada.'})
-    app_id, _ = get_meta_app_credentials()
-    return JsonResponse({
-        'ok': True,
-        'webhook_url': getattr(settings, 'URL_GENERAL', '') + '/whatsapp/meta_webhook/',
-        'verify_token': config.webhook_verify_token,
-        'app_id': app_id,
-        'waba_id': config.waba_id,
-        'phone_number_id': config.phone_number_id,
-        'display_phone_number': config.display_phone_number or '',
-        'meta_webhooks_url': f'https://developers.facebook.com/apps/{app_id}/webhooks/' if app_id else '',
-        'webhook_verificado_en': config.webhook_verificado_en.isoformat() if config.webhook_verificado_en else None,
-    })
-
-
-@login_required
 @require_POST
 @csrf_protect
 def meta_manual_validar(request):
