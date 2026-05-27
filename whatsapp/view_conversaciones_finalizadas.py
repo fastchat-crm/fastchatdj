@@ -14,7 +14,7 @@ from seguridad.templatetags.templatefunctions import encrypt
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp
 from .services import WhatsAppService, get_whatsapp_service
 from .permisos_sesion import (
-    sesiones_visibles,
+    sesiones_visibles_activas,
     rol_en_sesion,
     filtro_conversaciones_por_rol,
     puede_ver_conversacion,
@@ -51,8 +51,8 @@ def conversacionesFinalizadasView(request):
     }
     addData(request, data)
 
-    # Todas las sesiones visibles para el usuario (dueño, participante o superuser).
-    sesiones = sesiones_visibles(request.user).order_by('-ultima_conexion')
+    # Sesiones visibles y activas (status=True, activo=True, participa el usuario).
+    sesiones = sesiones_visibles_activas(request.user).order_by('-ultima_conexion')
     data['sesiones'] = sesiones
 
     # Sesión seleccionada (por defecto la primera)
@@ -299,7 +299,7 @@ def conversacionesFinalizadasView(request):
     filtro_clasificacion = request.GET.get('clasificacion', '').strip()
 
     filtros = Q(contacto__status=True, status=True,
-                contacto__sesion__in=sesiones_visibles(request.user),
+                contacto__sesion__in=sesiones_visibles_activas(request.user),
                 contacto__sesion__status=True,
                 estado_conversacion=1)
     url_vars = ''

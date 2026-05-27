@@ -13,6 +13,10 @@ def sesiones_visibles(usuario):
     ).distinct()
 
 
+def sesiones_visibles_activas(usuario):
+    return sesiones_visibles(usuario).filter(activo=True)
+
+
 def sesiones_vista_completa(usuario):
     qs = SesionWhatsApp.objects.filter(status=True)
     if getattr(usuario, 'is_superuser', False):
