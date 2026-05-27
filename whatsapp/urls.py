@@ -1,6 +1,7 @@
 from django.urls import re_path, path
 
 from .view_conversaciones_finalizadas import conversacionesFinalizadasView
+from .view_conversaciones_pendiente_reconexion import conversacionesPendienteReconexionView
 from .view_sesiones import sesionesView
 from .meta_oauth_view import meta_oauth_start, meta_oauth_callback
 from .meta_manual_view import meta_manual_validar, meta_manual_conectar, meta_test_message
@@ -26,6 +27,7 @@ from .view_pipeline import pipelineView
 from .view_campanas import campanasView
 from .view_horarios import horariosView
 from .view_analytics import analyticsView
+from .view_supervision import supervisionView
 from . import api_rest
 
 whatsapp_urls = (
@@ -43,6 +45,11 @@ whatsapp_urls = (
         "nombre": "Conversaciones finalizadas",
         "url": 'conversaciones-finalizadas/',
         "vista": conversacionesFinalizadasView,
+    },
+    {
+        "nombre": "Conversaciones pendiente reconexión",
+        "url": 'conversaciones-pendiente-reconexion/',
+        "vista": conversacionesPendienteReconexionView,
     },
     {
         "nombre": "Contactos",
@@ -88,6 +95,11 @@ whatsapp_urls = (
         "nombre": "Analytics",
         "url": 'analytics/',
         "vista": analyticsView,
+    },
+    {
+        "nombre": "Supervision",
+        "url": 'supervision/',
+        "vista": supervisionView,
     },
 )
 

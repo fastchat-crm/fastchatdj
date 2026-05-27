@@ -69,6 +69,9 @@
                 <a href="/whatsapp/conversaciones-finalizadas/" class="cs-tab-btn cs-tab-link bloqueo_pantalla" id="resolved_chats_tab">
                     <i class="fa fa-check-circle me-1"></i>Finalizadas
                 </a>
+                <a href="/whatsapp/conversaciones-pendiente-reconexion/" class="cs-tab-btn cs-tab-link bloqueo_pantalla" id="pending_reconnection_tab">
+                    <i class="fa fa-hourglass-half me-1"></i>Pendientes
+                </a>
             </div>
 
             <div class="cs-filter-bar" id="filtros-rapidos">
@@ -1041,15 +1044,6 @@
                     document.body.classList.add('chat-mobile-open');
                 }
             }, 600);
-        {% else %}
-            (function () {
-                var saved = null;
-                try { saved = localStorage.getItem('wa_last_conv_active'); } catch (e) {}
-                if (!saved) return;
-                setTimeout(function () {
-                    if (typeof cargarMensajes === 'function') cargarMensajes(saved);
-                }, 600);
-            })();
         {% endif %}
 
         function scrollToBottom(smooth = false) {
@@ -1750,10 +1744,8 @@
 
                     if (response.estado_active) {
                         $('#resolver-btn').removeClass('d-none').show();
-                        try { localStorage.setItem('wa_last_conv_active', String(conversacionId)); } catch (e) {}
                     } else {
                         $('#resolver-btn').addClass('d-none').hide();
-                        try { localStorage.removeItem('wa_last_conv_active'); } catch (e) {}
                     }
                     $('#dropdowns-btn').removeClass('d-none').show();
 
@@ -1845,7 +1837,6 @@
                 error: function(xhr, status, error) {
                     _cargandoMensajes = false;
                     console.error('[cargarMensajes] ajax error', status, error, xhr.responseText);
-                    try { localStorage.removeItem('wa_last_conv_active'); } catch (e) {}
                     $('#mensajes-container').removeClass('is-loading').html('<div class="p-3 text-center"><p class="text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error al cargar mensajes: ' + error + '</p></div>');
                 }
             });
@@ -1944,7 +1935,6 @@
                         $.unblockUI();
                         const data_ = data[0];
                         if (!data_.error) {
-                            try { localStorage.removeItem('wa_last_conv_active'); } catch (e) {}
                             window.location.href = data_.url;
                         } else {
                             console.error('[marcar-resuelto] backend error', data_);
@@ -2319,7 +2309,6 @@
                         $.unblockUI();
                         const data_ = data[0];
                         if (!data_.error) {
-                            try { localStorage.removeItem('wa_last_conv_active'); } catch (e) {}
                             window.location.href = data_.url;
                         } else {
                             console.error('[terminar-sin-despedida] backend error', data_);

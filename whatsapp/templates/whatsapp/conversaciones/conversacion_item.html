@@ -34,6 +34,12 @@
                     {% if conversacion.sentimiento %}
                         <span class="ci-badge badge bg-{{ conversacion.get_sentimiento_color }}">{{ conversacion.get_sentimiento_emoji }} {{ conversacion.get_sentimiento_display }}</span>
                     {% endif %}
+                    {% if conversacion.pendiente_reconexion %}
+                        <span class="ci-badge badge bg-warning text-dark" title="Reconnection template sent, awaiting reply"><i class="fa fa-hourglass-half me-1"></i>Pending reconnection</span>
+                    {% endif %}
+                    {% if conversacion.iniciada_por_plantilla %}
+                        <span class="ci-badge badge bg-info text-dark" title="Started from a reconnection template"><i class="fa fa-rotate me-1"></i>Via template</span>
+                    {% endif %}
                 </div>
                 <div class="ci-row1">
                     <span class="ci-name">
@@ -63,6 +69,26 @@
                         {% endwith %}
                     {% endif %}
                 </div>
+                {% if es_vista_completa %}
+                <div class="d-flex align-items-center justify-content-between mt-1 small">
+                    <span class="text-muted text-truncate me-2">
+                        <i class="fa fa-user-tie me-1"></i>{% if conversacion.asignado_a %}{{ conversacion.asignado_a.get_full_name }}{% else %}Unassigned{% endif %}
+                    </span>
+                    {% if conversacion.estado_conversacion == 0 %}
+                        {% if conversacion.sup_ultimo_remitente and conversacion.sup_ultimo_remitente == sesion_numero %}
+                            <span class="badge bg-success"><i class="fa fa-check me-1"></i>Responded</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark"><i class="fa fa-clock me-1"></i>Awaiting reply{% if conversacion.sup_fecha_ultimo %} · {{ conversacion.sup_fecha_ultimo|timesince }}{% endif %}</span>
+                        {% endif %}
+                    {% else %}
+                        {% if conversacion.primer_agente %}
+                            <span class="badge bg-secondary"><i class="fa fa-check me-1"></i>Responded</span>
+                        {% else %}
+                            <span class="badge bg-light text-dark border">No reply</span>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                {% endif %}
             </div>
         </div>
     </a>

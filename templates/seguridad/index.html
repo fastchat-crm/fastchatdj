@@ -235,6 +235,11 @@
                           </div>
                         {% endif %}
                       {% endif %}
+                      {% if s.ultima_conv %}
+                        <div class="card-subinfo">
+                          <i class="fa fa-clock"></i> Última conversación: <b>{{ s.ultima_conv|naturaltime }}</b>
+                        </div>
+                      {% endif %}
                     </div>
                   </div>
                 {% endfor %}

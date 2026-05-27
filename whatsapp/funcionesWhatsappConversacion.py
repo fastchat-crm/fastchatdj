@@ -324,3 +324,146 @@ def cambiar_nombre_contacto_post(request):
         [{'error': True, 'message': f'Error al guardar el nombre: {form.errors}'}],
         safe=False,
     )
+
+
+def listar_plantillas_meta(request):
+    """GET: lista plantillas Meta APPROVED de la sesión de una conversación.
+
+    Compartido por las vistas de finalizadas y pendiente-reconexión para poblar
+    el panel de plantillas.
+    """
+    from django.shortcuts import get_object_or_404
+    try:
+        pk = int(request.GET['pk'])
+        conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+        sesion = conversacion.sesion
+        if not getattr(sesion, 'es_meta', False):
+            return JsonResponse({'error': False, 'plantillas': [], 'motivo': 'sesion_no_meta'})
+        config = getattr(sesion, 'config_meta', None)
+        if not config:
+            return JsonResponse({'error': False, 'plantillas': [], 'motivo': 'sin_config_meta'})
+        plantillas = (
+            config.plantillas.filter(status=True, estado_meta='APPROVED')
+            .order_by('nombre', 'idioma')
+        )
+
+        def _preview(body, max_chars=140):
+            body = (body or '').strip()
+            return (body[:max_chars] + '…') if len(body) > max_chars else body
+
+        data_plantillas = [{
+            'id':        p.id,
+            'nombre':    p.nombre,
+            'idioma':    p.idioma,
+            'categoria': p.categoria,
+            'cuerpo':    p.cuerpo or '',
+            'preview':   _preview(p.cuerpo),
+            'footer':    p.footer or '',
+            'header_tipo':     p.header_tipo,
+            'header_contenido': p.header_contenido or '',
+            'variables': p.variables_json or [],
+            'botones':   p.botones_json or [],
+            'veces_enviada': p.veces_enviada,
+        } for p in plantillas]
+        return JsonResponse({'error': False, 'plantillas': data_plantillas})
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
+
+
+def enviar_plantilla_reconexion(request):
+    """POST: envía una plantilla Meta a una conversación finalizada como sonda
+    de reconexión.
+
+    La conversación NO se reactiva: queda finalizada (estado 1) marcada con
+    `pendiente_reconexion=True`. Si el cliente responde, el webhook entrante
+    crea una conversación nueva enlazada por `conv_origen` (ver
+    `ConversacionWhatsApp.obtener_o_crear_activa`). Compartido por las vistas de
+    finalizadas y pendiente-reconexión.
+    """
+    import json as _json
+    from django.shortcuts import get_object_or_404
+    from .models import PlantillaWhatsApp, MensajeWhatsApp
+    from .services import get_whatsapp_service
+
+    pk = int(request.POST['pk'])
+    plantilla_id = int(request.POST['plantilla_id'])
+    params_cuerpo = _json.loads(request.POST.get('params_cuerpo_json') or '[]')
+    params_header = _json.loads(request.POST.get('params_header_json') or '[]')
+
+    conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+
+    sesion = conversacion.sesion
+    if not getattr(sesion, 'es_meta', False):
+        return JsonResponse({'error': True, 'message': 'The session is not Meta.'})
+    config = getattr(sesion, 'config_meta', None)
+    if not config:
+        return JsonResponse({'error': True, 'message': 'Meta configuration not found.'})
+    plantilla = PlantillaWhatsApp.objects.filter(
+        pk=plantilla_id, config_meta=config, status=True, estado_meta='APPROVED'
+    ).first()
+    if not plantilla:
+        return JsonResponse({'error': True, 'message': 'Template unavailable or not approved.'})
+
+    service = get_whatsapp_service(sesion)
+    response = service.send_template(
+        sesion.session_id, conversacion.from_number,
+        plantilla_nombre=plantilla.nombre,
+        idioma=plantilla.idioma,
+        parametros_cuerpo=params_cuerpo if params_cuerpo else None,
+        parametros_header=params_header if params_header else None,
+        conversacion_id=conversacion.id,
+    )
+    if not response.get('success'):
+        return JsonResponse({
+            'error': True,
+            'message': f"Error sending template: {response.get('error', 'Unknown error')}",
+        })
+
+    def _render_cuerpo(body, params):
+        if not body:
+            return ''
+        out = body
+        for idx, val in enumerate(params or [], start=1):
+            out = out.replace('{{' + str(idx) + '}}', str(val))
+        return out
+
+    texto_final = _render_cuerpo(plantilla.cuerpo, params_cuerpo)
+    if plantilla.footer:
+        texto_final = f"{texto_final}\n\n_{plantilla.footer}_"
+
+    conversacion.pendiente_reconexion = True
+    conversacion.reconectada = False
+    conversacion.save(update_fields=['pendiente_reconexion', 'reconectada'])
+
+    mensaje = MensajeWhatsApp(
+        mensaje_id_externo=response.get('message_id'),
+        conversacion=conversacion,
+        remitente=sesion.numero,
+        mensaje=texto_final,
+        tipo='texto',
+        fecha=timezone.now(),
+        leido=True,
+        fecha_leido=timezone.now(),
+        agente=request.user,
+        ia_generado=False,
+    )
+    mensaje.save()
+
+    if not conversacion.primer_agente:
+        conversacion.primer_agente = request.user
+        conversacion.save(update_fields=['primer_agente'])
+
+    log(
+        f"Reconnection template '{plantilla.nombre}' sent on conversation {conversacion.id}; marked pending reconnection",
+        request, "add", obj=conversacion.id,
+    )
+
+    return JsonResponse({
+        'error': False,
+        'pendiente': True,
+        'message': 'Template sent. Conversation marked as pending reconnection.',
+        'mensaje_html': render_to_string(
+            'whatsapp/conversaciones/mensaje_enviado_partial.html',
+            {'mensaje': mensaje}, request=request,
+        ),
+    })

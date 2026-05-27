@@ -13,9 +13,10 @@ from core.custom_models import FormError
 from core.funciones import addData, paginador, secure_module, log, remover_caracteres_especiales_unicode, generar_nombre, leer_sesion_id, encrypt_sesion_id
 from core.funciones_adicionales import convertir_archivo_a_base64
 from core.funciones_excel_panda import export_query_to_excel
+from core.validadores import validate_file_size_3mb
 from seguridad.templatetags.templatefunctions import encrypt
 from .forms import ContactoForm, MensajeWhatsAppProgramadoForm, AddContactoForm
-from .models import Contacto, SesionWhatsApp, MensajeWhatsAppProgramado
+from .models import Contacto, SesionWhatsApp, MensajeWhatsAppProgramado, EtiquetaContacto
 from django.contrib import messages
 
 from .services import get_whatsapp_service
@@ -60,6 +61,93 @@ def contactoView(request):
                         res_json.append({'error': False, "reload": True})
                     else:
                         raise FormError(form)
+
+                elif action == 'importar':
+                    import pandas as pd
+                    sesion = SesionWhatsApp.objects.filter(
+                        pk=request.POST.get('sesion'), status=True, usuario=request.user,
+                    ).first()
+                    if not sesion:
+                        raise ValueError("Select a valid session.")
+                    archivo = request.FILES.get('archivo')
+                    if not archivo:
+                        raise ValueError("No file provided.")
+                    ext = (archivo.name or '').rsplit('.', 1)[-1].lower() if '.' in (archivo.name or '') else ''
+                    if ext not in ('xlsx', 'xls', 'csv'):
+                        raise ValueError("Allowed file types: xlsx, xls, csv.")
+                    validate_file_size_3mb(archivo)
+                    df = pd.read_csv(archivo, dtype=str) if ext == 'csv' else pd.read_excel(archivo, dtype=str)
+                    df.columns = [str(c).strip().lower() for c in df.columns]
+                    if 'numero' not in df.columns:
+                        raise ValueError("Missing required column: numero.")
+
+                    etiqueta_default = (request.POST.get('etiqueta') or '').strip()
+                    cache_etiquetas = {}
+
+                    def _get_etiqueta(nombre_tag):
+                        nombre_tag = (nombre_tag or '').strip()
+                        if not nombre_tag:
+                            return None
+                        clave = nombre_tag.lower()
+                        if clave in cache_etiquetas:
+                            return cache_etiquetas[clave]
+                        et = EtiquetaContacto.objects.filter(
+                            usuario_creacion=request.user, nombre__iexact=nombre_tag,
+                        ).first()
+                        if not et:
+                            et = EtiquetaContacto(nombre=nombre_tag)
+                            et.save(request)
+                        cache_etiquetas[clave] = et
+                        return et
+
+                    def _val(v):
+                        return '' if (v is None or str(v).strip().lower() == 'nan') else str(v).strip()
+
+                    creados = omitidos = fallidos = 0
+                    errores = []
+                    for idx, row in df.iterrows():
+                        fila = int(idx) + 2
+                        try:
+                            with transaction.atomic():
+                                numero = ''.join(c for c in str(row.get('numero') or '') if c.isdigit())
+                                if not (9 <= len(numero) <= 12):
+                                    fallidos += 1
+                                    errores.append({'fila': fila, 'motivo': 'Invalid phone number.'})
+                                    continue
+                                if Contacto.objects.filter(sesion=sesion, contacto_numero=numero).exists():
+                                    omitidos += 1
+                                    continue
+                                contacto = Contacto(
+                                    sesion=sesion,
+                                    contacto_numero=numero,
+                                    from_number=f'{numero}@s.whatsapp.net',
+                                    numero_telefono=numero,
+                                    contacto_nombre=_val(row.get('nombre')),
+                                    canal='whatsapp',
+                                    estado='activo',
+                                )
+                                contacto.save(request)
+                                tags = []
+                                if etiqueta_default:
+                                    tags.append(etiqueta_default)
+                                tags += [t for t in _val(row.get('etiquetas')).split(',') if t.strip()]
+                                for t in tags:
+                                    et = _get_etiqueta(t)
+                                    if et:
+                                        contacto.etiquetas.add(et)
+                                creados += 1
+                        except Exception as ex:
+                            fallidos += 1
+                            errores.append({'fila': fila, 'motivo': str(ex)})
+                    log(f"Importó contactos a sesión {sesion.id}: {creados} creados, {omitidos} omitidos, {fallidos} fallidos",
+                        request, "add", obj=sesion.id)
+                    return JsonResponse({
+                        'error': False,
+                        'creados': creados,
+                        'omitidos': omitidos,
+                        'fallidos': fallidos,
+                        'errores': errores[:50],
+                    })
 
                 elif action == 'change':
                     filtro = model.objects.get(pk=int(encrypt(request.POST['pk'])))

@@ -29,7 +29,7 @@ from core.funciones import addData, log, secure_module
 
 from autenticacion.models import Usuario
 
-from .models import SesionWhatsApp, ConfigBaileys, ConfigMeta, PerfilSesionWhatsApp
+from .models import SesionWhatsApp, ConfigBaileys, ConfigMeta, PerfilSesionWhatsApp, ROLES_SESION
 from .services import WhatsAppService
 
 import json
@@ -658,15 +658,20 @@ def _accion_guardar_usuarios(request):
         pk = int(request.POST['pk'])
         sesion = SesionWhatsApp.objects.get(pk=pk, usuario=request.user)
         ids_usuarios = json.loads(request.POST.get('usuarios', '[]'))
+        rol = request.POST.get('rol', 'asesor')
+        if rol not in dict(ROLES_SESION):
+            rol = 'asesor'
         usuarios_creados = []
         for uid in ids_usuarios:
             usuario = Usuario.objects.get(pk=uid)
             ya_existe = PerfilSesionWhatsApp.objects.filter(sesion=sesion, usuario=usuario, status=True).exists()
             if not ya_existe:
-                relacion = PerfilSesionWhatsApp.objects.create(sesion=sesion, usuario=usuario)
+                relacion = PerfilSesionWhatsApp.objects.create(sesion=sesion, usuario=usuario, rol=rol)
                 usuarios_creados.append({
                     'id': usuario.id,
                     'id_relacion': relacion.id,
+                    'rol': relacion.rol,
+                    'rol_label': relacion.get_rol_display(),
                     'nombre': usuario.full_name(),
                     'documento': usuario.documento,
                     'email': usuario.email,
@@ -677,6 +682,24 @@ def _accion_guardar_usuarios(request):
         return JsonResponse({'result': True, 'usuarios': usuarios_creados})
     except Exception as ex:
         return JsonResponse({'result': False, 'message': str(ex)})
+
+
+def _accion_cambiar_rol_usuario(request):
+    try:
+        rol = request.POST.get('rol', '')
+        if rol not in dict(ROLES_SESION):
+            return JsonResponse({'error': True, 'message': 'Invalid role.'})
+        filtro = PerfilSesionWhatsApp.objects.get(
+            pk=int(request.POST['id']), status=True, sesion__usuario=request.user,
+        )
+        filtro.rol = rol
+        filtro.save(request)
+        log(f"Rol cambiado en sesión {filtro.sesion_id}", request, "change", obj=filtro.id)
+        return JsonResponse({'error': False, 'rol': filtro.rol, 'rol_label': filtro.get_rol_display()})
+    except PerfilSesionWhatsApp.DoesNotExist:
+        return JsonResponse({'error': True, 'message': 'Relation not found.'})
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
 
 
 def _accion_eliminar_usuario(request):
@@ -707,6 +730,7 @@ _ACCIONES = {
     'menu_rapido_eliminar':        _accion_menu_rapido_eliminar,
     'menu_rapido_enviar':          _accion_menu_rapido_enviar,
     'guardar_usuarios':            _accion_guardar_usuarios,
+    'cambiar_rol_usuario':         _accion_cambiar_rol_usuario,
     'eliminar_usuario':            _accion_eliminar_usuario,
 }
 
@@ -833,7 +857,7 @@ def sesionesView(request):
             if not sesion:
                 return JsonResponse({'result': False, 'message': 'Sesión no encontrada.'})
             html = get_template('whatsapp/sesiones/_modal_usuarios.html').render(
-                {'sesion': sesion, 'filtro': sesion, 'request': request},
+                {'sesion': sesion, 'filtro': sesion, 'roles': ROLES_SESION, 'request': request},
                 request,
             )
             return JsonResponse({'result': True, 'data': html})

@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Max
 from django.shortcuts import render
 from django.utils import timezone
 
@@ -74,6 +74,10 @@ def index(request):
                     contacto__conversaciones__conversacion_finalizada=False,
                 ),
                 distinct=True,
+            ),
+            ultima_conv=Max(
+                'contacto__conversaciones__fecha_registro',
+                filter=Q(contacto__conversaciones__status=True),
             ),
         )
         .order_by('-ultima_conexion', '-fecha_registro')[:8]

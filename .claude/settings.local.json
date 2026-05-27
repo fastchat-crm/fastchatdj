@@ -95,7 +95,12 @@
       "Bash(pycheck)",
       "Bash(pycheck pwa/views.py pwa/context_processors.py pwa/notificaciones.py crm/motor_flujo_chatbot.py crm/management/commands/seed_consultorio_medico.py fastchatdj/settings.py)",
       "Bash(where pandoc *)",
-      "Bash(pip install *)"
+      "Bash(pip install *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(xargs -I {} basename {})",
+      "Bash(Get-ChildItem -Path \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\\\\whatsapp\" -File -Filter \"*.py\")",
+      "Bash(Sort-Object Name)"
     ]
   },
   "hooks": {

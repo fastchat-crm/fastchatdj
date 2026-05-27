@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+{% block head %}
+<link rel="stylesheet" href="/static/css/whatsapp/supervision.css?v1.0">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="mb-0">
+                    <i class="fa fa-gauge-high text-primary me-2"></i>Supervision
+                    {% if sesion_actual %}
+                        <span class="badge bg-primary ms-2">{{ sesion_actual.nombre|default:sesion_actual.numero }}</span>
+                    {% endif %}
+                </h4>
+                <small class="text-muted">
+                    {% if rango_modo == 'custom' %}From {{ fecha_desde }} to {{ fecha_hasta }}
+                    {% else %}Last {{ rango_dias }} days
+                    {% endif %}
+                </small>
+            </div>
+            <form method="GET" class="row g-2 align-items-end mb-0">
+                <div class="col-md-4">
+                    <label class="form-label small mb-1">Session</label>
+                    <select name="sesion" class="form-select select2">
+                        <option value="">All sessions</option>
+                        {% for s in sesiones %}
+                            <option value="{{ s.id }}" {% if sesion_sel == s.id %}selected{% endif %}>
+                                {{ s.nombre|default:s.numero }} · {{ s.get_proveedor_display }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Quick range</label>
+                    <select name="dias" class="form-select"
+                            onchange="if(this.value){document.getElementById('fDesde').value='';document.getElementById('fHasta').value='';this.form.submit();}">
+                        <option value="">— custom —</option>
+                        <option value="7"  {% if rango_modo == 'preset' and rango_dias == 7 %}selected{% endif %}>7 days</option>
+                        <option value="30" {% if rango_modo == 'preset' and rango_dias == 30 %}selected{% endif %}>30 days</option>
+                        <option value="60" {% if rango_modo == 'preset' and rango_dias == 60 %}selected{% endif %}>60 days</option>
+                        <option value="90" {% if rango_modo == 'preset' and rango_dias == 90 %}selected{% endif %}>90 days</option>
+                        <option value="180" {% if rango_modo == 'preset' and rango_dias == 180 %}selected{% endif %}>6 months</option>
+                        <option value="365" {% if rango_modo == 'preset' and rango_dias == 365 %}selected{% endif %}>1 year</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">From</label>
+                    <input type="date" name="desde" id="fDesde" class="form-control"
+                           value="{% if rango_modo == 'custom' %}{{ fecha_desde }}{% endif %}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">To</label>
+                    <input type="date" name="hasta" id="fHasta" class="form-control"
+                           value="{% if rango_modo == 'custom' %}{{ fecha_hasta }}{% endif %}">
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100">
+                        <i class="fa fa-filter me-1"></i> Apply
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-lg-7">
+            <div class="card h-100"><div class="card-body">
+                <h6 class="card-title"><i class="fa fa-filter text-primary me-1"></i>Lead funnel</h6>
+                <div id="funnel"></div>
+            </div></div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card h-100"><div class="card-body">
+                <h6 class="card-title"><i class="fa fa-coins text-success me-1"></i>Forecast</h6>
+                <div id="forecastKpis" class="row text-center mb-2"></div>
+                <canvas id="chartForecast"></canvas>
+            </div></div>
+        </div>
+    </div>
+
+    <div class="card mb-3"><div class="card-body">
+        <h6 class="card-title"><i class="fa fa-users text-info me-1"></i>Per-agent performance</h6>
+        <table class="table table-sm sv-table" id="tblAsesores"><thead>
+            <tr>
+                <th>Agent</th><th>Assigned</th><th>Responded</th><th>Response %</th>
+                <th>First reply</th><th>Clients</th><th>Awaiting</th>
+            </tr>
+        </thead><tbody></tbody></table>
+    </div></div>
+
+    <div class="card"><div class="card-body">
+        <h6 class="card-title"><i class="fa fa-coins me-1"></i>Forecast by stage</h6>
+        <table class="table table-sm sv-table" id="tblForecast"><thead>
+            <tr><th>Pipeline</th><th>Stage</th><th>Cards</th><th>Probability</th><th>Value</th><th>Weighted</th></tr>
+        </thead><tbody></tbody></table>
+    </div></div>
+
+</div>
+
+<script>
+async function load(){
+    const params = new URLSearchParams();
+    params.set('action', 'data');
+    {% if rango_modo == 'custom' %}
+        params.set('desde', '{{ fecha_desde }}');
+        params.set('hasta', '{{ fecha_hasta }}');
+    {% else %}
+        params.set('dias', '{{ rango_dias }}');
+    {% endif %}
+    {% if sesion_sel %}params.set('sesion', '{{ sesion_sel }}');{% endif %}
+
+    const r = await fetch('?' + params.toString());
+    if (!r.ok) {
+        document.getElementById('funnel').innerHTML =
+            '<div class="alert alert-danger">Error ' + r.status + ' loading data.</div>';
+        console.error('Supervision error:', await r.text());
+        return;
+    }
+    const d = await r.json();
+    if (d.error) {
+        document.getElementById('funnel').innerHTML =
+            '<div class="alert alert-danger">Error: ' + (d.message || 'unknown') + '</div>';
+        return;
+    }
+
+    document.getElementById('funnel').innerHTML = (d.funnel || []).map(s => `
+        <div class="sv-funnel-row">
+            <div class="sv-funnel-label"><span>${s.etiqueta}</span><span class="sv-funnel-n">${s.n} · ${s.pct}%</span></div>
+            <div class="progress"><div class="progress-bar bg-primary" role="progressbar" style="width:${s.pct}%"></div></div>
+        </div>`).join('');
+
+    const tba = document.querySelector('#tblAsesores tbody');
+    (d.asesores || []).forEach(a => {
+        tba.innerHTML += `<tr><td>${a.agente}</td><td>${a.asignadas}</td><td>${a.respondidas}</td>` +
+            `<td>${a.pct_respuesta}%</td><td>${fmtSeg(a.tiempo_primera_respuesta_seg)}</td>` +
+            `<td class="text-success">${a.clientes}</td><td class="text-warning">${a.sin_responder}</td></tr>`;
+    });
+    if (!(d.asesores || []).length) tba.innerHTML = '<tr><td colspan="7" class="text-muted text-center">No data</td></tr>';
+
+    document.getElementById('forecastKpis').innerHTML =
+        miniKpi('Weighted', (d.forecast_total_ponderado || 0).toFixed(2)) +
+        miniKpi('Gross', (d.forecast_total_bruto || 0).toFixed(2));
+
+    new Chart(document.getElementById('chartForecast'), {
+        type: 'bar',
+        data: {
+            labels: (d.forecast || []).map(x => x.etapa),
+            datasets: [{ label: 'Weighted', data: (d.forecast || []).map(x => x.ponderado), backgroundColor: '#198754' }],
+        },
+        options: { plugins: { legend: { display: false } } },
+    });
+
+    const tf = document.querySelector('#tblForecast tbody');
+    (d.forecast || []).forEach(r => {
+        tf.innerHTML += `<tr><td>${r.pipeline}</td><td>${r.etapa}</td><td>${r.n}</td>` +
+            `<td>${r.probabilidad}%</td><td>${r.moneda} ${r.total.toFixed(2)}</td>` +
+            `<td><strong>${r.moneda} ${r.ponderado.toFixed(2)}</strong></td></tr>`;
+    });
+    if (!(d.forecast || []).length) tf.innerHTML = '<tr><td colspan="6" class="text-muted text-center">No pipeline data</td></tr>';
+}
+function miniKpi(label, val){ return `<div class="col p-2"><div class="small text-muted">${label}</div><div class="fw-bold">${val}</div></div>`; }
+function fmtSeg(s){ if(!s) return '—'; if(s<60) return s+'s'; const m=Math.floor(s/60); const r=Math.round(s%60); return m+'m '+r+'s'; }
+load();
+</script>
+{% endblock %}

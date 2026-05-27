@@ -47,42 +47,25 @@
                 <a href="/whatsapp/conversaciones/" class="cs-tab-btn cs-tab-link bloqueo_pantalla">
                     <i class="fa fa-comment-dots me-1"></i>Abiertas
                 </a>
-                <a href="javascript:void(0)" class="cs-tab-btn active">
+                <a href="/whatsapp/conversaciones-finalizadas/" class="cs-tab-btn cs-tab-link bloqueo_pantalla">
                     <i class="fa fa-check-circle me-1"></i>Finalizadas
                 </a>
-                <a href="/whatsapp/conversaciones-pendiente-reconexion/" class="cs-tab-btn cs-tab-link bloqueo_pantalla">
+                <a href="javascript:void(0)" class="cs-tab-btn active">
                     <i class="fa fa-hourglass-half me-1"></i>Pendientes
                 </a>
             </div>
 
             <div class="cs-exp-filter-zone">
-                <button class="cs-exp-filter-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#filtros-panel" aria-expanded="{% if fecha_desde or fecha_hasta or filtro_sentimiento or filtro_clasificacion %}true{% else %}false{% endif %}">
+                <button class="cs-exp-filter-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#filtros-panel" aria-expanded="{% if filtro_clasificacion %}true{% else %}false{% endif %}">
                     <i class="fa fa-sliders me-1"></i>
                     Filtros avanzados
-                    {% if fecha_desde or fecha_hasta or filtro_sentimiento or filtro_clasificacion %}
+                    {% if filtro_clasificacion %}
                         <span class="cs-filter-dot"></span>
                     {% endif %}
                     <i class="fa fa-chevron-down ms-auto cs-filter-arrow"></i>
                 </button>
-                <div class="collapse {% if fecha_desde or fecha_hasta or filtro_sentimiento or filtro_clasificacion %}show{% endif %}" id="filtros-panel">
+                <div class="collapse {% if filtro_clasificacion %}show{% endif %}" id="filtros-panel">
                     <div class="cs-exp-filter-body">
-                        <div class="cs-field-group">
-                            <label class="cs-field-label">Desde</label>
-                            <input type="date" id="filtro-fecha-desde" class="cs-field-input" value="{{ fecha_desde }}">
-                        </div>
-                        <div class="cs-field-group">
-                            <label class="cs-field-label">Hasta</label>
-                            <input type="date" id="filtro-fecha-hasta" class="cs-field-input" value="{{ fecha_hasta }}">
-                        </div>
-                        <div class="cs-field-group">
-                            <label class="cs-field-label">Sentimiento</label>
-                            <select id="filtro-sentimiento" class="cs-field-input">
-                                <option value="">Todos</option>
-                                <option value="positivo" {% if filtro_sentimiento == 'positivo' %}selected{% endif %}>😊 Positivo</option>
-                                <option value="neutral"  {% if filtro_sentimiento == 'neutral'  %}selected{% endif %}>😐 Neutral</option>
-                                <option value="negativo" {% if filtro_sentimiento == 'negativo' %}selected{% endif %}>😟 Negativo</option>
-                            </select>
-                        </div>
                         <div class="cs-field-group">
                             <label class="cs-field-label">Etapa</label>
                             <select id="filtro-clasificacion" class="cs-field-input">
@@ -152,9 +135,9 @@
                         onclick="$('#control-respuestas-panel').toggleClass('d-none')" title="Control de respuestas">
                     <i class="fa fa-chart-bar"></i>
                 </button>
-                <div class="btn-group d-none" id="reactivar-btn">
-                    <a href="javascript:void(0)" class="btn btn-sm btn-success" id="marcar-reactivar" title="Reactivar conversación">
-                        <i class="fa fa-redo me-1"></i>Reactivar
+                <div class="btn-group d-none" id="descartar-btn">
+                    <a href="javascript:void(0)" class="btn btn-sm btn-outline-danger" id="descartar-pendiente" title="Descartar reconexión pendiente">
+                        <i class="fa fa-xmark me-1"></i>Descartar
                     </a>
                 </div>
                 <div class="dropdown d-inline d-none" id="dropdowns-btn">
@@ -208,9 +191,9 @@
 
         <div class="cm-messages" id="chat-messages">
             <div class="cm-empty-state" id="cm-empty-state">
-                <div class="cm-empty-icon"><i class="fa fa-archive"></i></div>
+                <div class="cm-empty-icon"><i class="fa fa-hourglass-half"></i></div>
                 <h5 class="cm-empty-title">Selecciona una conversación</h5>
-                <p class="cm-empty-sub">Elige una conversación finalizada para ver su historial.</p>
+                <p class="cm-empty-sub">Conversaciones con plantilla de reconexión enviada, esperando respuesta del cliente.</p>
             </div>
             <div class="chat-detail" id="mensajes-container"></div>
         </div>
@@ -218,16 +201,12 @@
         <div class="cm-composer" id="chat-footer" style="display:none;">
             {% csrf_token %}
             <input type="hidden" id="conversacion-id" value="">
-            <div id="bloqueo-reactivar-aviso" class="d-flex align-items-center gap-2 px-2 py-2 mb-2 rounded" style="background:#FEF9C3;border:1px solid #FDE68A;display:none!important;">
-                <i class="fa fa-hourglass-half text-warning"></i>
-                <span class="small text-warning fw-medium" id="bloqueo-reactivar-msg"></span>
-            </div>
             <div class="d-flex align-items-center gap-2" id="footer-plantillas-row">
                 <div class="flex-grow-1" style="font-size:.8rem;color:var(--chat-text-secondary);">
-                    <i class="fa fa-lock me-1 text-muted"></i>Conversación cerrada — reactívala enviando una plantilla aprobada de Meta.
+                    <i class="fa fa-hourglass-half me-1 text-warning"></i>Plantilla de reconexión enviada — esperando respuesta del cliente. Puedes reenviar otra plantilla aprobada.
                 </div>
                 <div style="position:relative;flex-shrink:0;">
-                    <button type="button" id="plantillas-btn" class="plantillas-btn-pill" title="Enviar plantilla aprobada para reactivar">
+                    <button type="button" id="plantillas-btn" class="plantillas-btn-pill" title="Enviar plantilla aprobada">
                         <i class="fa fa-layer-group me-1"></i>
                         <span class="plantillas-btn-label">Enviar plantilla</span>
                         <span class="badge-count" id="plantillas-badge" style="display:none;">0</span>
@@ -308,7 +287,7 @@
             <div class="modal-body text-center py-4 px-4">
                 <div class="mb-3"><i class="fa fa-satellite-dish fa-3x text-primary"></i></div>
                 <h5 class="mb-2">Aún no hay sesiones de WhatsApp</h5>
-                <p class="text-muted mb-4">Conecta al menos un canal para ver conversaciones finalizadas.</p>
+                <p class="text-muted mb-4">Conecta al menos un canal para ver conversaciones pendientes.</p>
                 <a href="/whatsapp/sesiones/" class="btn btn-primary"><i class="fa fa-plus me-1"></i>Conectar una sesión</a>
             </div>
         </div>
@@ -331,28 +310,20 @@ $(document).ready(function() {
     let _cargandoMensajes = false;
     let _SESION_ACTIVA = $('#sesion-selector option:selected').data('activo') === true;
 
-    // ── Filtros activos ────────────────────────────────────────────────
     let _filtros = {
         sesion_id: $('#sesion-selector').val(),
         criterio:  '{{ criterio|escapejs }}',
-        fecha_desde: '{{ fecha_desde|escapejs }}',
-        fecha_hasta: '{{ fecha_hasta|escapejs }}',
-        sentimiento: '{{ filtro_sentimiento|escapejs }}',
         clasificacion: '{{ filtro_clasificacion|default_if_none:""|escapejs }}',
     };
 
     function _buildUrl(extra) {
-        let url = '/whatsapp/conversaciones-finalizadas/?load_conversations=true';
+        let url = '/whatsapp/conversaciones-pendiente-reconexion/?load_conversations=true';
         if (_filtros.sesion_id)     url += '&sesion='        + _filtros.sesion_id;
         if (_filtros.criterio)      url += '&criterio='      + encodeURIComponent(_filtros.criterio);
-        if (_filtros.fecha_desde)   url += '&fecha_desde='   + _filtros.fecha_desde;
-        if (_filtros.fecha_hasta)   url += '&fecha_hasta='   + _filtros.fecha_hasta;
-        if (_filtros.sentimiento)   url += '&sentimiento='   + _filtros.sentimiento;
         if (_filtros.clasificacion) url += '&clasificacion=' + _filtros.clasificacion;
         return url;
     }
 
-    // ── WebSockets ─────────────────────────────────────────────────────
     function conectarWebSocket(id) {
         if (chatSocket) chatSocket.close();
         chatSocket = new ReconnectingWebSocket(
@@ -384,18 +355,12 @@ $(document).ready(function() {
         sessionSocket.onmessage = function(e) {
             const d = JSON.parse(e.data);
             if (d.type === 'new_message' || d.type === 'messages_update') {
-                const el = $(`#lista-conversaciones .conversacion-item[data-id="${d.conversacion_id}"]`);
-                if (el.length && d.html) {
-                    el.replaceWith(d.html);
-                } else {
-                    cargarConversaciones();
-                }
+                cargarConversaciones();
             }
         };
         cargarConversaciones();
     }
 
-    // Mostrar modal si no hay sesiones disponibles.
     const _sesionInicialId = $('#sesion-selector').val();
     if (!_sesionInicialId || isNaN(parseInt(_sesionInicialId, 10))) {
         const modalSinSesionesEl = document.getElementById('modalSinSesiones');
@@ -406,13 +371,11 @@ $(document).ready(function() {
         sessionWebSocket(_sesionInicialId);
     }
 
-    // ── Scroll ─────────────────────────────────────────────────────────
     function scrollToBottom() {
         const el = document.getElementById('chat-messages');
         if (el) el.scrollTop = el.scrollHeight;
     }
 
-    // ── Estadísticas ────────────────────────────────────────────────────
     function _renderExpiredStats(r) {
         $('#stat-duracion').text(r.duracion || '—');
         $('#stat-estado').html(r.estado_badge || '');
@@ -424,7 +387,6 @@ $(document).ready(function() {
         $('#stat-tokens-salida').text((r.tokens_salida || 0).toLocaleString());
         $('#stat-tokens-total').text((r.tokens_total || 0).toLocaleString());
         $('#stat-modelo').text(r.modelo_ia || '—');
-        // Control de respuestas
         $('#cr-ia-count').text(r.cr_ia || 0);
         $('#cr-agent-count').text(r.cr_agent || 0);
         var agentesHtml = '';
@@ -439,7 +401,6 @@ $(document).ready(function() {
         if (window._lastStatsData) _renderExpiredStats(window._lastStatsData);
     }
 
-    // ── Sesión ─────────────────────────────────────────────────────────
     $('#sesion-selector').on('change', function() {
         _SESION_ACTIVA = $(this).find('option:selected').data('activo') === true;
         _filtros.sesion_id = $(this).val();
@@ -464,7 +425,7 @@ $(document).ready(function() {
         document.body.classList.remove('chat-mobile-open');
         $('#mensajes-container').html('');
         $('#cm-empty-state').show();
-        $('#reactivar-btn, #ver-resumen-btn, #chat-footer, #dropdowns-btn, #btn-estadisticas, #btn-control-respuestas').addClass('d-none').hide();
+        $('#descartar-btn, #ver-resumen-btn, #chat-footer, #dropdowns-btn, #btn-estadisticas, #btn-control-respuestas').addClass('d-none').hide();
         $('#stats-panel, #control-respuestas-panel').addClass('d-none');
         $('#contacto-nombre').text('Selecciona una conversación');
         $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
@@ -476,7 +437,6 @@ $(document).ready(function() {
         conversacionActiva = null;
     }
 
-    // ── Cargar conversaciones ──────────────────────────────────────────
     function cargarConversaciones() {
         $('#lista-conversaciones').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 small text-muted">Cargando...</p></div>');
         $.ajax({
@@ -486,7 +446,7 @@ $(document).ready(function() {
             success: function(r) {
                 $('#lista-conversaciones').html(r.html);
                 if (!$('#lista-conversaciones .conversacion-item').length) {
-                    $('#lista-conversaciones').html('<div class="p-3 text-center text-muted small">Sin resultados</div>');
+                    $('#lista-conversaciones').html('<div class="p-3 text-center text-muted small">Sin pendientes de reconexión</div>');
                 }
                 if (conversacionActiva) {
                     $(`.conversacion-item[data-id="${conversacionActiva}"]`).addClass('active');
@@ -498,15 +458,14 @@ $(document).ready(function() {
         });
     }
 
-    // ── Cargar mensajes (con blockUI + anti-doble-click) ───────────────
     function cargarMensajes(id) {
         if (_cargandoMensajes || id == conversacionActiva) return;
         _cargandoMensajes = true;
         conversacionActiva = id;
-        try { localStorage.setItem('wa_last_conv_finalizada', String(id)); } catch (e) {}
+        try { localStorage.setItem('wa_last_conv_pendiente', String(id)); } catch (e) {}
 
         if (chatSocket) { chatSocket.close(); chatSocket = null; }
-        $('#reactivar-btn, #ver-resumen-btn, #btn-control-respuestas, #btn-estadisticas').addClass('d-none').hide();
+        $('#descartar-btn, #ver-resumen-btn, #btn-control-respuestas, #btn-estadisticas').addClass('d-none').hide();
         $('#control-respuestas-panel, #stats-panel').addClass('d-none');
         $('#cm-empty-state').hide();
         $('#mensajes-container')
@@ -514,7 +473,7 @@ $(document).ready(function() {
             .html('<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2 small text-muted mb-0">Cargando mensajes...</p></div>');
 
         $.ajax({
-            url: '/whatsapp/conversaciones-finalizadas/?action=ver_mensajes&pk=' + id,
+            url: '{{ request.path }}?action=ver_mensajes&pk=' + id,
             type: 'GET',
             success: function(r) {
                 _cargandoMensajes = false;
@@ -541,47 +500,22 @@ $(document).ready(function() {
                     return;
                 }
 
-                $('#marcar-reactivar, #ver-resumen, #cambiar-clasificacion').attr('data-id', id);
-                const _bloqueada = r.reactivar_bloqueada === true;
-                window._reactivarBloqueada = _bloqueada;
-                window._reactivarVenceEn = r.reactivar_vence_en || null;
-                if (r.estado_active || _bloqueada) {
-                    $('#reactivar-btn').addClass('d-none').hide();
-                } else {
-                    $('#reactivar-btn').removeClass('d-none').show();
-                }
+                $('#descartar-pendiente, #ver-resumen, #cambiar-clasificacion').attr('data-id', id);
+                $('#descartar-btn').removeClass('d-none').show();
                 $('#ver-resumen-btn').removeClass('d-none').show();
                 $('#dropdowns-btn').removeClass('d-none').show();
 
-                // Guardar datos para render lazy del panel estadísticas
                 window._lastStatsData = r;
                 _renderExpiredStats(r);
                 $('#control-respuestas-panel, #stats-panel').addClass('d-none');
                 $('#btn-control-respuestas, #btn-estadisticas').removeClass('d-none').show();
 
-                // Footer solo aparece si la sesion es Meta (unica forma de reenganchar)
                 $('#conversacion-id').val(r.conversacion_id);
                 if (r.es_meta === true) {
                     $('#chat-footer').removeClass('d-none').show();
-                    if (_bloqueada) {
-                        const venc = r.reactivar_vence_en ? new Date(r.reactivar_vence_en) : null;
-                        const vencTxt = venc ? venc.toLocaleString() : '';
-                        $('#bloqueo-reactivar-msg').text(
-                            'La ventana de ' + (r.reactivar_horas_ventana || 23) +
-                            'h para reactivar esta conversación ya venció' +
-                            (vencTxt ? ' (' + vencTxt + ')' : '') +
-                            '. Reactivala enviando una plantilla aprobada de Meta.'
-                        );
-                        $('#bloqueo-reactivar-aviso').show();
-                        $('#footer-plantillas-row').show();
-                        $('#plantillas-btn').addClass('visible');
-                        mostrarPlantillasSiMeta(true, r.conversacion_id);
-                    } else {
-                        $('#bloqueo-reactivar-aviso').hide();
-                        $('#footer-plantillas-row').show();
-                        $('#plantillas-btn').addClass('visible');
-                        mostrarPlantillasSiMeta(true, r.conversacion_id);
-                    }
+                    $('#footer-plantillas-row').show();
+                    $('#plantillas-btn').addClass('visible');
+                    mostrarPlantillasSiMeta(true, r.conversacion_id);
                 } else {
                     $('#chat-footer').addClass('d-none').hide();
                     mostrarPlantillasSiMeta(false, null);
@@ -594,14 +528,13 @@ $(document).ready(function() {
             },
             error: function(xhr, s, err) {
                 _cargandoMensajes = false;
-                console.error('[cargarMensajes finalizadas] ajax', s, err, xhr.responseText);
-                try { localStorage.removeItem('wa_last_conv_finalizada'); } catch (e) {}
+                console.error('[cargarMensajes pendiente] ajax', s, err, xhr.responseText);
+                try { localStorage.removeItem('wa_last_conv_pendiente'); } catch (e) {}
                 $('#mensajes-container').removeClass('is-loading').html(`<div class="p-3 text-center text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error: ${err}</div>`);
             }
         });
     }
 
-    // Click en conversación
     $(document).on('click', '.cargar-conversacion', function(e) {
         e.preventDefault();
         const id = $(this).data('id');
@@ -612,59 +545,52 @@ $(document).ready(function() {
         document.body.classList.add('chat-mobile-open');
     });
 
-    // Mobile back button: vuelve a la lista y deselecciona la conv activa
-    // (sino al tocar la misma card no recarga porque ya está como conversacionActiva).
     $(document).on('click', '#chat-back-btn', function() {
         _resetChat();
     });
 
-    // ── Búsqueda por contacto ──────────────────────────────────────────
     const _buscar = debounceFunction(function(e) {
         _filtros.criterio = $(e.target).val();
         cargarConversaciones();
     }, 500);
     $('#search-conversacion').on('keyup search', _buscar);
 
-    // ── Filtros de fecha/sentimiento ───────────────────────────────────
     $('#btn-aplicar-filtros').on('click', function() {
-        _filtros.fecha_desde   = $('#filtro-fecha-desde').val();
-        _filtros.fecha_hasta   = $('#filtro-fecha-hasta').val();
-        _filtros.sentimiento   = $('#filtro-sentimiento').val();
         _filtros.clasificacion = $('#filtro-clasificacion').val();
         cargarConversaciones();
     });
 
     $('#btn-limpiar-filtros').on('click', function() {
-        _filtros.fecha_desde = _filtros.fecha_hasta = _filtros.sentimiento = _filtros.criterio = _filtros.clasificacion = '';
-        $('#filtro-fecha-desde, #filtro-fecha-hasta').val('');
-        $('#filtro-sentimiento, #filtro-clasificacion').val('');
+        _filtros.criterio = _filtros.clasificacion = '';
+        $('#filtro-clasificacion').val('');
         $('#search-conversacion').val('');
         cargarConversaciones();
     });
 
-    // ── Reactivar ──────────────────────────────────────────────────────
-    $('#reactivar-btn').on('click', '#marcar-reactivar', function() {
-        const id = $(this).data('id');
+    $('#descartar-btn').on('click', '#descartar-pendiente', function() {
+        const id = $(this).data('id') || conversacionActiva;
         if (!id) return;
         Swal.fire({
-            title: '¿Reactivar esta conversación?',
+            title: '¿Descartar esta reconexión pendiente?',
+            text: 'La conversación seguirá en Finalizadas, pero saldrá de Pendientes.',
             type: 'question',
             showCancelButton: true,
-            confirmButtonText: 'Sí, reactivar',
+            confirmButtonText: 'Sí, descartar',
             cancelButtonText: 'Cancelar',
         }).then(result => {
             if (!result.value) return;
             pantallaespera();
-            $.post('{{ request.path }}', {action: 'marcar-reactivar', id, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()},
+            $.post('{{ request.path }}', {action: 'descartar-pendiente', id, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()},
                 function(data) {
                     $.unblockUI();
-                    const d = data[0];
-                    d.error ? alertaWarning(d.message) : (window.location.href = d.url);
+                    if (data.error) { alertaWarning(data.message); return; }
+                    if (typeof alertaSuccess === 'function') alertaSuccess('Reconexión pendiente descartada.');
+                    _resetChat();
+                    cargarConversaciones();
                 }, 'json');
         });
     });
 
-    // ── Ver resumen ────────────────────────────────────────────────────
     $('#ver-resumen-btn').on('click', '#ver-resumen', function() {
         const id = $(this).data('id');
         if (!id) return;
@@ -686,7 +612,6 @@ $(document).ready(function() {
         });
     });
 
-    // ── Acciones del dropdown (cambiar clasificación) ──────────────────
     $(document).on('click', '#dropdowns-btn .form_modal', function(e) {
         e.preventDefault();
         const id = $(this).attr('data-id') || conversacionActiva;
@@ -696,7 +621,6 @@ $(document).ready(function() {
         formModal(id, title, action);
     });
 
-    // Cargar conversación preseleccionada desde sesión
     {% if conversacion_selected %}
     cargarMensajes('{{ conversacion_selected.id }}');
     document.body.classList.add('chat-mobile-open');
@@ -713,7 +637,7 @@ $(document).ready(function() {
     {% if not conversacion_selected %}
     (function () {
         var saved = null;
-        try { saved = localStorage.getItem('wa_last_conv_finalizada'); } catch (e) {}
+        try { saved = localStorage.getItem('wa_last_conv_pendiente'); } catch (e) {}
         if (!saved) return;
         setTimeout(function () {
             if (typeof cargarMensajes === 'function') cargarMensajes(saved);
@@ -722,7 +646,7 @@ $(document).ready(function() {
     {% endif %}
     {% endif %}
 
-    // ====================== PLANTILLAS META (finalizadas → reactivar) =========================
+    // ====================== PLANTILLAS META (reenviar sonda) =========================
     const _convPath = '{{ request.path }}';
     {% verbatim %}
     let _plantillasCache = {};
@@ -986,8 +910,6 @@ $(document).ready(function() {
             if (typeof alertaSuccess === 'function') {
                 alertaSuccess(r.message || 'Plantilla enviada. Conversación marcada como pendiente de reconexión.');
             }
-            $('#reactivar-btn').addClass('d-none').hide();
-            cargarConversaciones();
         }).fail(function(xhr) {
             console.error('[plantillas] envio fail', xhr.status, xhr.responseText);
             alertaWarning('Error: ' + (xhr.responseText || xhr.status));
@@ -1005,13 +927,6 @@ $(document).ready(function() {
     });
     {% endverbatim %}
 });
-
-async function transcribirAudio(ctr) {
-    $(ctr).find('span').html('Transcribiendo');
-    $(ctr).find('i.fa-ellipsis').removeClass('d-none');
-    $(ctr).prop('disabled', true);
-    $.post('/whatsapp/conversaciones/', { action: 'transcribe_audio', id: ctr.dataset.id });
-}
 
 function formModal(id, text, action) {
     pantallaespera();
@@ -1035,6 +950,13 @@ function formModal(id, text, action) {
         },
         dataType: "json"
     });
+}
+
+async function transcribirAudio(ctr) {
+    $(ctr).find('span').html('Transcribiendo');
+    $(ctr).find('i.fa-ellipsis').removeClass('d-none');
+    $(ctr).prop('disabled', true);
+    $.post('/whatsapp/conversaciones/', { action: 'transcribe_audio', id: ctr.dataset.id });
 }
 
 const _fbCsrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';

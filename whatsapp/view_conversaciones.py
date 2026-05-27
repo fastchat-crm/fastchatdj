@@ -26,6 +26,14 @@ from .funcionesWhatsappConversacion import (
 )
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp, SENTIMIENTO_CHOICES
 from .services import WhatsAppService, get_whatsapp_service
+from .permisos_sesion import (
+    sesiones_visibles,
+    sesiones_vista_completa,
+    rol_en_sesion,
+    filtro_conversaciones_por_rol,
+    puede_ver_conversacion,
+    es_vista_completa,
+)
 
 
 @login_required
@@ -38,8 +46,8 @@ def conversacionesView(request):
     }
     addData(request, data)
 
-    # Todas las sesiones del usuario (incluye desconectadas para ver historial).
-    sesiones = SesionWhatsApp.objects.filter(usuario_id=request.user.id, status=True).order_by('-ultima_conexion')
+    # Todas las sesiones visibles para el usuario (dueño, participante o superuser).
+    sesiones = sesiones_visibles(request.user).order_by('-ultima_conexion')
     data['sesiones'] = sesiones
 
     # Sesión seleccionada (por defecto la primera)
@@ -72,7 +80,9 @@ def conversacionesView(request):
                 if conv_obj.contacto and conv_obj.contacto.sesion:
                     sesion_id = conv_obj.contacto.sesion.id
     if sesion_id:
-        sesion_seleccionada = get_object_or_404(SesionWhatsApp, id=sesion_id)
+        sesion_seleccionada = sesiones.filter(id=sesion_id).first()
+        if not sesion_seleccionada and sesiones.exists():
+            sesion_seleccionada = sesiones.first()
     elif sesiones.exists():
         sesion_seleccionada = sesiones.first()
     else:
@@ -80,6 +90,9 @@ def conversacionesView(request):
 
     data['sesion_seleccionada'] = sesion_seleccionada
     data['auto_open_conv_id'] = auto_open_conv_id
+    rol_sesion = rol_en_sesion(request.user, sesion_seleccionada)
+    data['rol_sesion'] = rol_sesion
+    data['es_vista_completa'] = es_vista_completa(request.user, sesion_seleccionada)
 
     # ====================== VER MENSAJES =========================
     if request.method == 'GET' and 'action' in request.GET:
@@ -87,6 +100,8 @@ def conversacionesView(request):
         if action == 'ver_mensajes':
             pk = int(request.GET['pk'])
             conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+            if not puede_ver_conversacion(request.user, conversacion):
+                return JsonResponse({'error': True, 'message': 'Not authorized.'})
             mensajes = MensajeWhatsApp.objects.filter(conversacion=conversacion).order_by('fecha')
             data['conversacion'] = conversacion
             data['mensajes'] = mensajes
@@ -209,6 +224,8 @@ def conversacionesView(request):
                     texto = request.POST.get('mensaje')
                     archivo = request.FILES.get('archivo')  # Obtener archivo si existe
                     conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+                    if not puede_ver_conversacion(request.user, conversacion):
+                        return JsonResponse({'error': True, 'message': 'Not authorized.'})
 
                     # Crear instancia del servicio segun proveedor de la sesion
                     service = get_whatsapp_service(conversacion.sesion)
@@ -626,7 +643,7 @@ def conversacionesView(request):
 
     filtros = Q(
         contacto__status=True, status=True,
-        contacto__sesion__usuario__id=request.user.id,
+        contacto__sesion__in=sesiones_visibles(request.user),
         contacto__sesion__status=True,
         estado_conversacion=0
     )
@@ -634,6 +651,7 @@ def conversacionesView(request):
 
     if sesion_seleccionada:
         filtros = filtros & Q(contacto__sesion=sesion_seleccionada)
+        filtros = filtros & filtro_conversaciones_por_rol(request.user, sesion_seleccionada)
         url_vars += f'&sesion={encrypt_sesion_id(sesion_seleccionada.id)}'
 
     if criterio:
@@ -671,9 +689,13 @@ def conversacionesView(request):
     data["ESTADOS_CLASIFICACION"] = ESTADOS_CLASIFICACION
 
     # Conteo global de conversaciones sin leer (para badge en header)
+    badge_scope = Q(contacto__sesion__in=sesiones_visibles(request.user)) & (
+        Q(contacto__sesion__in=sesiones_vista_completa(request.user))
+        | Q(asignado_a=request.user)
+    )
     data["total_sin_leer"] = ConversacionWhatsApp.objects.filter(
+        badge_scope,
         contacto__status=True, status=True,
-        contacto__sesion__usuario__id=request.user.id,
         estado_conversacion=0,
         mensajes__leido=False,
         mensajes__remitente=models.F('contacto__contacto_numero')
@@ -719,9 +741,33 @@ def conversacionesView(request):
                 _ultimo_remitente=django_models.F('_numero_sesion')
             )
 
+        mostrar_supervisor = es_vista_completa(request.user, sesion_seleccionada)
+        if mostrar_supervisor:
+            ultimo_remitente_sup = (
+                MensajeWhatsApp.objects
+                .filter(conversacion=OuterRef('pk'))
+                .order_by('-fecha')
+                .values('remitente')[:1]
+            )
+            ultima_fecha_sup = (
+                MensajeWhatsApp.objects
+                .filter(conversacion=OuterRef('pk'))
+                .order_by('-fecha')
+                .values('fecha')[:1]
+            )
+            qs = qs.annotate(
+                sup_ultimo_remitente=Subquery(ultimo_remitente_sup),
+                sup_fecha_ultimo=Subquery(ultima_fecha_sup),
+            )
+
         return JsonResponse({
             'html': render_to_string('whatsapp/conversaciones/conversaciones_partial.html',
-                                    {'conversaciones': qs, 'today': timezone.now().date()},
+                                    {
+                                        'conversaciones': qs,
+                                        'today': timezone.now().date(),
+                                        'es_vista_completa': mostrar_supervisor,
+                                        'sesion_numero': sesion_seleccionada.numero if sesion_seleccionada else '',
+                                    },
                                     request=request)
         })
 

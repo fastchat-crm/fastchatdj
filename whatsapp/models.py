@@ -158,6 +158,23 @@ class SesionWhatsApp(ModeloBase):
     def obtener_perfiles(self):
         return self.perfilsesionwhatsapp_set.filter(status=True).order_by('usuario__first_name')
 
+    def rol_de_usuario(self, usuario):
+        if not usuario or not getattr(usuario, 'id', None):
+            return None
+        if self.usuario_id == usuario.id:
+            return 'supervisor'
+        perfil = self.perfilsesionwhatsapp_set.filter(usuario_id=usuario.id, status=True).first()
+        return perfil.rol if perfil else None
+
+    def es_supervisor(self, usuario):
+        return self.rol_de_usuario(usuario) == 'supervisor'
+
+    def es_asesor(self, usuario):
+        return self.rol_de_usuario(usuario) == 'asesor'
+
+    def es_participante(self, usuario):
+        return self.rol_de_usuario(usuario) is not None
+
     def is_empty_session(self):
         from django.utils import timezone
         cb = getattr(self, 'config_baileys', None)
@@ -501,6 +518,19 @@ class ConversacionWhatsApp(ModeloBase):
         'Proveedor de atencion', max_length=20, choices=PROVEEDORES_SESION,
         blank=True, default='', db_index=True,
         help_text='Servicio con el que se atendio esta conversacion (baileys/meta/etc). Se congela al crearla.'
+    )
+
+    # Reconexión por plantilla. Cuando un agente envía una plantilla Meta a una
+    # conversación finalizada, esta NO se reactiva: queda en estado 1 marcada
+    # como sonda (pendiente_reconexion=True) hasta que el cliente responda. Al
+    # responder, el webhook crea una conversación nueva (iniciada_por_plantilla)
+    # enlazada por conv_origen, y esta sonda pasa a reconectada=True.
+    pendiente_reconexion = models.BooleanField('Pendiente de reconexión', default=False, db_index=True)
+    reconectada = models.BooleanField('Reconectada', default=False)
+    iniciada_por_plantilla = models.BooleanField('Iniciada por plantilla', default=False)
+    conv_origen = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='reconexiones', verbose_name='Conversación de origen',
     )
 
     class Meta:
@@ -879,11 +909,27 @@ class ConversacionWhatsApp(ModeloBase):
             return conv, False
         min_sesion = int(getattr(contacto.sesion, 'min_sesion', None) or 10)
         proveedor_snapshot = getattr(contacto.sesion, 'proveedor', '') or ''
+        # Si el contacto tiene una sonda de reconexión pendiente (plantilla
+        # enviada a una conversación finalizada), esta nueva conversación es la
+        # reconexión: la enlazamos y cerramos la sonda.
+        pendiente = (
+            cls.objects
+            .filter(contacto=contacto, estado_conversacion=1,
+                    pendiente_reconexion=True, reconectada=False)
+            .order_by('-fecha_fin_conversacion', '-id')
+            .first()
+        )
         conv = cls.objects.create(
             contacto=contacto,
             fecha_hora_expira=timezone.now() + relativedelta(minutes=min_sesion),
             proveedor_atencion=proveedor_snapshot,
+            iniciada_por_plantilla=bool(pendiente),
+            conv_origen=pendiente,
         )
+        if pendiente:
+            pendiente.pendiente_reconexion = False
+            pendiente.reconectada = True
+            pendiente.save(update_fields=['pendiente_reconexion', 'reconectada'])
         return conv, True
 
 
@@ -2264,9 +2310,16 @@ class EntregaWebhookSaliente(models.Model):
         ordering = ['-fecha']
 
 
+ROLES_SESION = (
+    ('asesor', 'Agent'),
+    ('supervisor', 'Supervisor'),
+)
+
+
 class PerfilSesionWhatsApp(ModeloBase):
     sesion = models.ForeignKey(SesionWhatsApp, on_delete=models.CASCADE, null=True, blank=True, verbose_name='Sesión WhatsApp')
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, verbose_name='Usuario')
+    rol = models.CharField(max_length=20, choices=ROLES_SESION, default='asesor', verbose_name='Role')
 
     class Meta:
         verbose_name = 'Perfil Sesión WhatsApp'
