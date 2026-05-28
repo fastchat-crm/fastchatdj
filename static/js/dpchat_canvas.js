@@ -217,6 +217,7 @@
         editor.precanvas.style.transform =
             'translate(' + editor.pos_x + 'px, ' + editor.pos_y + 'px) scale(' + editor.zoom + ')';
         editor.precanvas.style.transformOrigin = '0 0';
+        updateScrollbars();
     }
 
     container.addEventListener('wheel', function (e) {
@@ -227,6 +228,7 @@
             } else if (e.deltaY > 0) {
                 editor.zoom_out();
             }
+            setTimeout(updateScrollbars, 0);
             return;
         }
         if (e.shiftKey) {
@@ -237,6 +239,174 @@
         }
         applyPanTransform();
     }, { passive: false });
+
+    var stage = document.querySelector('.dpc-stage');
+    var handBtn = document.getElementById('dpcBtnHand');
+    var panMode = false;
+    var dragging = false;
+    var startX = 0;
+    var startY = 0;
+    var startPosX = 0;
+    var startPosY = 0;
+
+    function setPanMode(active) {
+        panMode = !!active;
+        if (stage) {
+            stage.classList.toggle('dpc-pan-mode', panMode);
+        }
+        if (handBtn) {
+            handBtn.classList.toggle('is-active', panMode);
+        }
+    }
+
+    if (handBtn) {
+        handBtn.addEventListener('click', function () { setPanMode(!panMode); });
+    }
+
+    container.addEventListener('mousedown', function (e) {
+        if (!panMode) { return; }
+        if (e.target.closest('.dpc-node-act')) { return; }
+        e.preventDefault();
+        e.stopPropagation();
+        dragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        startPosX = editor.pos_x;
+        startPosY = editor.pos_y;
+        if (stage) { stage.classList.add('dpc-grabbing'); }
+    }, true);
+
+    document.addEventListener('mousemove', function (e) {
+        if (!dragging) { return; }
+        editor.pos_x = startPosX + (e.clientX - startX);
+        editor.pos_y = startPosY + (e.clientY - startY);
+        applyPanTransform();
+    });
+
+    document.addEventListener('mouseup', function () {
+        if (!dragging) { return; }
+        dragging = false;
+        if (stage) { stage.classList.remove('dpc-grabbing'); }
+    });
+
+    var scrollH = document.getElementById('dpcScrollH');
+    var scrollV = document.getElementById('dpcScrollV');
+    var thumbH = document.getElementById('dpcScrollHThumb');
+    var thumbV = document.getElementById('dpcScrollVThumb');
+
+    function getBBox() {
+        var nodes = container.querySelectorAll('.drawflow-node');
+        if (!nodes.length) { return null; }
+        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        Array.prototype.forEach.call(nodes, function (el) {
+            var x = parseFloat(el.style.left) || 0;
+            var y = parseFloat(el.style.top) || 0;
+            var w = el.offsetWidth || NODE_W;
+            var h = el.offsetHeight || NODE_H;
+            if (x < minX) { minX = x; }
+            if (y < minY) { minY = y; }
+            if (x + w > maxX) { maxX = x + w; }
+            if (y + h > maxY) { maxY = y + h; }
+        });
+        var pad = 200;
+        return {
+            x: minX - pad,
+            y: minY - pad,
+            w: (maxX - minX) + 2 * pad,
+            h: (maxY - minY) + 2 * pad
+        };
+    }
+
+    function updateScrollbars() {
+        if (!scrollH || !scrollV || !thumbH || !thumbV) { return; }
+        var rect = container.getBoundingClientRect();
+        var bbox = getBBox();
+        if (!bbox) {
+            scrollH.style.display = 'none';
+            scrollV.style.display = 'none';
+            return;
+        }
+        var z = editor.zoom || 1;
+        var contentW = bbox.w * z;
+        var contentH = bbox.h * z;
+        var viewportW = rect.width;
+        var viewportH = rect.height;
+
+        if (contentW <= viewportW) {
+            scrollH.style.display = 'none';
+        } else {
+            scrollH.style.display = 'block';
+            var trackW = scrollH.clientWidth;
+            var thumbW = Math.max(40, trackW * (viewportW / contentW));
+            var origenVistaX = -(editor.pos_x + bbox.x * z);
+            var maxScrollX = contentW - viewportW;
+            var ratioX = maxScrollX > 0 ? Math.max(0, Math.min(1, origenVistaX / maxScrollX)) : 0;
+            thumbH.style.width = thumbW + 'px';
+            thumbH.style.left = ((trackW - thumbW) * ratioX) + 'px';
+        }
+
+        if (contentH <= viewportH) {
+            scrollV.style.display = 'none';
+        } else {
+            scrollV.style.display = 'block';
+            var trackH = scrollV.clientHeight;
+            var thumbHh = Math.max(40, trackH * (viewportH / contentH));
+            var origenVistaY = -(editor.pos_y + bbox.y * z);
+            var maxScrollY = contentH - viewportH;
+            var ratioY = maxScrollY > 0 ? Math.max(0, Math.min(1, origenVistaY / maxScrollY)) : 0;
+            thumbV.style.height = thumbHh + 'px';
+            thumbV.style.top = ((trackH - thumbHh) * ratioY) + 'px';
+        }
+    }
+
+    function bindScrollDrag(track, thumb, eje) {
+        if (!track || !thumb) { return; }
+        var draggingThumb = false;
+        var offset = 0;
+        thumb.addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            draggingThumb = true;
+            offset = (eje === 'x' ? e.clientX - thumb.getBoundingClientRect().left
+                                  : e.clientY - thumb.getBoundingClientRect().top);
+        });
+        document.addEventListener('mousemove', function (e) {
+            if (!draggingThumb) { return; }
+            var rect = track.getBoundingClientRect();
+            var bbox = getBBox();
+            if (!bbox) { return; }
+            var z = editor.zoom || 1;
+            if (eje === 'x') {
+                var trackW = rect.width;
+                var thumbW = thumb.offsetWidth;
+                var posInTrack = e.clientX - rect.left - offset;
+                posInTrack = Math.max(0, Math.min(trackW - thumbW, posInTrack));
+                var ratio = (trackW - thumbW) > 0 ? posInTrack / (trackW - thumbW) : 0;
+                var contentW = bbox.w * z;
+                var viewportW = container.getBoundingClientRect().width;
+                var maxScroll = contentW - viewportW;
+                editor.pos_x = -(ratio * maxScroll) - bbox.x * z;
+            } else {
+                var trackH = rect.height;
+                var thumbH = thumb.offsetHeight;
+                var posInTrackY = e.clientY - rect.top - offset;
+                posInTrackY = Math.max(0, Math.min(trackH - thumbH, posInTrackY));
+                var ratioY = (trackH - thumbH) > 0 ? posInTrackY / (trackH - thumbH) : 0;
+                var contentH = bbox.h * z;
+                var viewportH = container.getBoundingClientRect().height;
+                var maxScrollY = contentH - viewportH;
+                editor.pos_y = -(ratioY * maxScrollY) - bbox.y * z;
+            }
+            applyPanTransform();
+        });
+        document.addEventListener('mouseup', function () { draggingThumb = false; });
+    }
+
+    bindScrollDrag(scrollH, thumbH, 'x');
+    bindScrollDrag(scrollV, thumbV, 'y');
+
+    setTimeout(updateScrollbars, 50);
+    window.addEventListener('resize', updateScrollbars);
 
     var origRemoveNode = editor.removeNodeId.bind(editor);
     editor.removeNodeId = function (id) {

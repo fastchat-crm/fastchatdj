@@ -3,7 +3,7 @@
 {% block head %}
     <link rel="stylesheet" href="/static/lib/drawflow/drawflow.min.css">
     <link rel="stylesheet" href="/static/stylenew/dpchat_editor.css">
-    <link rel="stylesheet" href="/static/stylenew/dpchat_canvas.css?v1.2">
+    <link rel="stylesheet" href="/static/stylenew/dpchat_canvas.css?v1.3">
 {% endblock %}
 
 {% block content %}
@@ -32,16 +32,26 @@
         <div id="dp-canvas" class="dpc-canvas"></div>
 
         <div class="dpc-zoom">
-            <button type="button" class="dpc-zoom-btn" data-zoom="in" title="Acercar">
+            <button type="button" class="dpc-zoom-btn" id="dpcBtnHand" data-zoom="hand" title="Mover (mano)">
+                <i class="fa fa-hand"></i>
+            </button>
+            <button type="button" class="dpc-zoom-btn" data-zoom="in" title="Acercar (Ctrl+rueda)">
                 <i class="fa fa-plus"></i>
             </button>
             <button type="button" class="dpc-zoom-btn" data-zoom="reset" title="100%">100%</button>
-            <button type="button" class="dpc-zoom-btn" data-zoom="out" title="Alejar">
+            <button type="button" class="dpc-zoom-btn" data-zoom="out" title="Alejar (Ctrl+rueda)">
                 <i class="fa fa-minus"></i>
             </button>
             <button type="button" class="dpc-zoom-btn" data-zoom="fit" title="Auto organizar">
                 <i class="fa fa-wand-magic-sparkles"></i>
             </button>
+        </div>
+
+        <div class="dpc-scroll dpc-scroll-h" id="dpcScrollH">
+            <div class="dpc-scroll-thumb" id="dpcScrollHThumb"></div>
+        </div>
+        <div class="dpc-scroll dpc-scroll-v" id="dpcScrollV">
+            <div class="dpc-scroll-thumb" id="dpcScrollVThumb"></div>
         </div>
 
         <div class="dpc-empty" id="dpc-empty" hidden>
@@ -104,5 +114,5 @@
 {% block jscript %}
     <script src="/static/lib/drawflow/drawflow.min.js"></script>
     <script src="/static/lib/dagre/dagre.min.js"></script>
-    <script src="/static/js/dpchat_canvas.js?v1.4"></script>
+    <script src="/static/js/dpchat_canvas.js?v1.5"></script>
 {% endblock %}
