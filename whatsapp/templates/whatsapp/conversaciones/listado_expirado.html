@@ -32,7 +32,7 @@
 
         <div class="cs-top-zone">
 
-            <div class="cs-session-wrap">
+            <div class="cs-session-wrap" hidden>
                 <div class="cs-session-indicator {% if sesion_seleccionada.activo %}si-active{% else %}si-paused{% endif %}"></div>
                 <select id="sesion-selector" class="cs-session-select{% if sesion_seleccionada and not sesion_seleccionada.activo %} sesion-selector-pausada{% endif %}">
                     {% for sesion in sesiones %}
@@ -448,12 +448,12 @@ $(document).ready(function() {
     });
 
     $(document).on('click', '#btn-cambiar-sesion-pausada', function() {
-        var $sel = $('#sesion-selector');
-        if (!$sel.length) return;
-        $('html, body').animate({ scrollTop: $sel.offset().top - 90 }, 250);
-        $sel.addClass('flash-attention').focus();
-        try { $sel[0].showPicker && $sel[0].showPicker(); } catch (e) {}
-        setTimeout(function() { $sel.removeClass('flash-attention'); }, 1600);
+        var sel = document.getElementById('wa-global-sesion');
+        if (!sel) return;
+        sel.classList.add('flash-attention');
+        sel.focus();
+        try { sel.showPicker && sel.showPicker(); } catch (e) {}
+        setTimeout(function() { sel.classList.remove('flash-attention'); }, 1600);
     });
 
     function _resetChat() {

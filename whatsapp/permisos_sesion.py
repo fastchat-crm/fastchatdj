@@ -5,8 +5,8 @@ from .models import SesionWhatsApp
 
 def sesiones_visibles(usuario):
     qs = SesionWhatsApp.objects.filter(status=True)
-    # if getattr(usuario, 'is_superuser', False):
-    #     return qs
+    if getattr(usuario, 'is_superuser', False):
+        return qs
     return qs.filter(
         Q(usuario=usuario)
         | Q(perfilsesionwhatsapp__usuario=usuario, perfilsesionwhatsapp__status=True)

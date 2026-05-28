@@ -724,11 +724,39 @@ def decrypt_sesion_id(token, default=None):
         return default
 
 
-def leer_sesion_id(request, default=None):
-    """Lee el id de sesión desde request.GET, probando 'sesion' y 'sesion_id'.
-    Soporta valor cifrado (nuevo) o crudo (legacy, durante rollout)."""
+WA_SESION_ACTIVA_KEY = 'wa_sesion_id'
+
+
+def leer_sesion_id(request, default=None, persistir=True):
+    """Resuelve el id de sesión activa para la request.
+
+    Prioridad:
+      1. Querystring 'sesion'/'sesion_id' (deep-link). Acepta token cifrado o
+         id crudo. Si viene, además fija la sesión global en request.session.
+      2. Selección global del usuario en request.session[WA_SESION_ACTIVA_KEY].
+         Valor 0/None significa "Todas las sesiones" → se devuelve default.
+    """
     raw = request.GET.get('sesion') or request.GET.get('sesion_id') or ''
-    return decrypt_sesion_id(raw, default=default)
+    sid = decrypt_sesion_id(raw, default=None)
+    if sid is not None:
+        if persistir and hasattr(request, 'session'):
+            request.session[WA_SESION_ACTIVA_KEY] = sid
+        return sid
+    if hasattr(request, 'session'):
+        gsid = request.session.get(WA_SESION_ACTIVA_KEY)
+        if gsid:
+            return gsid
+    return default
+
+
+def set_wa_sesion_activa(request, sid):
+    """Fija la sesión global del usuario. sid entero válido, o 0 para 'Todas'."""
+    try:
+        sid = int(sid or 0)
+    except (TypeError, ValueError):
+        sid = 0
+    request.session[WA_SESION_ACTIVA_KEY] = sid
+    return sid
 
 
 def postFormJson(request, nombre_post_aud, Forms=(), link_listado='', varurl=""):

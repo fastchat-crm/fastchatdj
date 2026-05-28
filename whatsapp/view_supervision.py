@@ -21,8 +21,8 @@ def _tdsec(td):
 @secure_module
 def supervisionView(request):
     data = {
-        'titulo': 'Supervision',
-        'descripcion': 'Funnel, forecast and per-agent performance',
+        'titulo': 'Supervisión',
+        'descripcion': 'Embudo de prospectos, pronóstico de ventas y rendimiento por agente',
         'ruta': request.path,
     }
     addData(request, data)

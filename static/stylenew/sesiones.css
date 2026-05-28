@@ -3057,3 +3057,111 @@
     .pc-step { padding: .85rem .9rem; }
     .pc-step-num { flex-basis: 30px; height: 30px; font-size: .85rem; }
 }
+
+.card-block {
+    margin-top: .6rem;
+}
+
+.card-block-label {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .02em;
+    color: #9ca3af;
+    margin-bottom: .35rem;
+}
+
+.card-block-label i {
+    color: #9ca3af;
+}
+
+.card-block-count {
+    margin-left: auto;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 600;
+    color: #6b7280;
+    background: #f3f4f6;
+    padding: .05rem .4rem;
+    border-radius: 6px;
+}
+
+.card-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem;
+    max-height: 4.6rem;
+    overflow-y: auto;
+}
+
+.card-chips::-webkit-scrollbar {
+    width: 5px;
+}
+
+.card-chips::-webkit-scrollbar-thumb {
+    background: #e5e7eb;
+    border-radius: 4px;
+}
+
+.depto-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    padding: .18rem .5rem;
+    border-radius: 999px;
+    font-size: .73rem;
+    font-weight: 600;
+    background: #eef2ff;
+    color: #4338ca;
+    border: 1px solid #e0e7ff;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.depto-chip-default {
+    background: #fef9c3;
+    color: #854d0e;
+    border-color: #fde68a;
+}
+
+.depto-chip-default i {
+    color: #ca8a04;
+}
+
+.user-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    padding: .18rem .5rem;
+    border-radius: 999px;
+    font-size: .73rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.user-chip-supervisor {
+    background: #ecfdf5;
+    color: #047857;
+    border-color: #d1fae5;
+}
+
+.user-chip-agente {
+    background: #f1f5f9;
+    color: #334155;
+    border-color: #e2e8f0;
+}
+
+.user-chip i,
+.depto-chip i {
+    font-size: .68rem;
+    flex-shrink: 0;
+}

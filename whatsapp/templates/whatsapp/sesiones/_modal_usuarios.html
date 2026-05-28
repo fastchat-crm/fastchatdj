@@ -198,7 +198,7 @@ function guardarUsuariosSesion(pk) {
                         '</div></div>';
                     var rolHtml =
                         '<select class="form-select form-select-sm rol-sesion-select" onchange="cambiarRolSesionUsuario(' + user.id_relacion + ', this)">' +
-                        '<option value="asesor"' + (user.rol === 'asesor' ? ' selected' : '') + '>Agent</option>' +
+                        '<option value="asesor"' + (user.rol === 'asesor' ? ' selected' : '') + '>Agente</option>' +
                         '<option value="supervisor"' + (user.rol === 'supervisor' ? ' selected' : '') + '>Supervisor</option>' +
                         '</select>';
                     var accionHtml =

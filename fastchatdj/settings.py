@@ -152,6 +152,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'pwa.context_processors.pwa_settings',
+                'whatsapp.context_processors.selector_sesion',
             ],
         },
     },

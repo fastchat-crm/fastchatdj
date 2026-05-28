@@ -72,6 +72,8 @@ def index(request):
                 filter=Q(
                     contacto__conversaciones__status=True,
                     contacto__conversaciones__conversacion_finalizada=False,
+                    contacto__conversaciones__estado_conversacion=0,
+                    contacto__conversaciones__fecha_hora_expira__gte=ahora,
                 ),
                 distinct=True,
             ),
@@ -107,16 +109,16 @@ def index(request):
         status=True, sesion__usuario=persona, sesion__status=True,
     ).count()
 
-    convs_abiertas_total = ConversacionWhatsApp.objects.filter(
+    convs_abiertas_total = ConversacionWhatsApp.objects.sin_expirar.filter(
         status=True,
-        conversacion_finalizada=False,
+        contacto__status=True,
         contacto__sesion__usuario=persona,
         contacto__sesion__status=True,
     ).count()
 
-    convs_no_asignadas = ConversacionWhatsApp.objects.filter(
+    convs_no_asignadas = ConversacionWhatsApp.objects.sin_expirar.filter(
         status=True,
-        conversacion_finalizada=False,
+        contacto__status=True,
         asignado_a__isnull=True,
         contacto__sesion__usuario=persona,
         contacto__sesion__status=True,
@@ -142,7 +144,7 @@ def index(request):
     ).count()
 
     serie_7d = []
-    for i in range(6, -1, -1):
+    for i in range(0, 7):
         dia_ini = (ahora - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
         dia_fin = dia_ini + timedelta(days=1)
         n = MensajeWhatsApp.objects.filter(

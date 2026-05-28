@@ -149,17 +149,6 @@
             <input type="text" name="numero" class="form-control" value="{{ numero|default:'' }}" placeholder="593...">
         </div>
         <div class="col-md-3">
-            <label class="form-label small text-muted mb-1">Sesion</label>
-            <select name="sesion" class="form-select">
-                <option value="">Todas</option>
-                {% for s in sesiones %}
-                    <option value="{{ s.id }}" {% if sesion_sel == s.id %}selected{% endif %}>
-                        {{ s.numero|default:s.session_id }}{% if s.nombre %} — {{ s.nombre }}{% endif %}
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-3">
             <label class="form-label small text-muted mb-1">Etapa</label>
             <select name="etapa" class="form-select">
                 <option value="">Todas</option>

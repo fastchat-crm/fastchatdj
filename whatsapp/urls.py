@@ -3,6 +3,7 @@ from django.urls import re_path, path
 from .view_conversaciones_finalizadas import conversacionesFinalizadasView
 from .view_conversaciones_pendiente_reconexion import conversacionesPendienteReconexionView
 from .view_sesiones import sesionesView
+from .view_sesion_activa import set_sesion_activa
 from .meta_oauth_view import meta_oauth_start, meta_oauth_callback
 from .meta_manual_view import meta_manual_validar, meta_manual_conectar, meta_test_message
 from .meta_diagnostico_view import meta_diagnostico, meta_suscribir_waba_action
@@ -125,6 +126,7 @@ urlpatterns = [
     path('sesiones/<int:sesion_id>/profile-picture/', meta_actualizar_foto_perfil, name='whatsapp_meta_foto_perfil'),
     path('instagram_webhook/', instagram_webhook, name='whatsapp_instagram_webhook'),
     path('messenger_webhook/', messenger_webhook, name='whatsapp_messenger_webhook'),
+    path('sesion-activa/', set_sesion_activa, name='whatsapp_set_sesion_activa'),
     path('sync-contacts/', sync_contacts_view, name='sync_contacts'),
     path('whatsapp/update-profile/', update_profile_view, name='update_profile'),
 

@@ -34,22 +34,6 @@
                         <input type="text" name="q" value="{{ q_negocio }}" class="form-control"
                                placeholder="Nombre del negocio, nombre de sesión o número...">
                     </div>
-                    <div class="col-md-5">
-                        <label class="form-label small mb-1">
-                            <i class="fa fa-list me-1 text-muted"></i> Sesión a configurar
-                        </label>
-                        <select name="sesion" class="form-select select2" onchange="this.form.submit()">
-                            <option value="">— Selecciona una sesión —</option>
-                            {% for s in sesiones %}
-                                <option value="{{ s.id }}" {% if sesion_actual.id == s.id %}selected{% endif %}>
-                                    {{ s.nombre|default:s.numero }}
-                                    {% if s.usuario.perfil_ia.nombre_empresa %} —
-                                        {{ s.usuario.perfil_ia.nombre_empresa }}{% endif %}
-                                    ({{ s.get_proveedor_display }})
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
                     <div class="col-md-2">
                         <button class="btn btn-primary w-100">
                             <i class="fa fa-filter"></i> Aplicar

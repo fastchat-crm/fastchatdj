@@ -26,6 +26,7 @@ from .funciones_departamento_chatbot import (
     _serializar_arbol_opciones,
     _serializar_arbol_anidado,
     _serializar_para_preview,
+    _serializar_para_canvas,
     _build_meta_payload,
     _exportar_flujo_completo,
 )
@@ -365,14 +366,22 @@ def departamentoChatbotsView(request):
                 except Exception as ex:
                     return JsonResponse({"result": False, 'message': str(ex)})
 
-            elif action == 'diagrama':
-                # Diagrama del árbol de decisiones, full-page (no modal).
+            elif action == 'editor':
+                # Editor visual de flujo (canvas Drawflow), full-page.
                 try:
                     pk = int(request.GET['id'])
                     filtro = model.objects.get(pk=pk)
                     data["filtro"] = filtro
-                    data["arbol_anidado"] = _serializar_arbol_anidado(filtro)
-                    return render(request, 'crm/departamento_chatbots/diagrama.html', data)
+                    data["canvas_data"] = _serializar_para_canvas(filtro)
+                    return render(request, 'crm/departamento_chatbots/editor_canvas.html', data)
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
+
+            elif action == 'diagrama':
+                # Vista legacy de solo-lectura: redirige al nuevo editor visual.
+                try:
+                    pk = int(request.GET['id'])
+                    return redirect(f'{request.path}?action=editor&id={pk}')
                 except Exception as ex:
                     return JsonResponse({'result': False, 'message': str(ex)})
 

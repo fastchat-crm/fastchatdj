@@ -191,15 +191,42 @@
             {% endif %}
             {% with deptos=sesion.departamentos.all %}
                 {% if deptos %}
-                    <div class="card-subinfo">
-                        <i class="fa fa-layer-group"></i> Departamentos:
-                        {% for d in deptos %}
-                            <span class="text-primary">{{ d.nombre }}{% if d.id == sesion.departamento_default_id %} ★{% endif %}</span>{% if not forloop.last %} {% endif %}
-                        {% endfor %}
+                    <div class="card-block">
+                        <div class="card-block-label"><i class="fa fa-layer-group"></i> Departamentos</div>
+                        <div class="card-chips">
+                            {% for d in deptos %}
+                                <span class="depto-chip{% if d.id == sesion.departamento_default_id %} depto-chip-default{% endif %}" title="{% if d.id == sesion.departamento_default_id %}Flujo principal{% endif %}">
+                                    {% if d.id == sesion.departamento_default_id %}<i class="fa fa-star"></i> {% endif %}{{ d.nombre }}
+                                </span>
+                            {% endfor %}
+                        </div>
                     </div>
                 {% endif %}
             {% endwith %}
         {% endif %}
+
+        {% with usuarios=sesion.usuarios_asignados %}
+            {% if usuarios.total %}
+                <div class="card-block">
+                    <div class="card-block-label">
+                        <i class="fa fa-users"></i> Usuarios asignados
+                        <span class="card-block-count">{{ usuarios.supervisores|length }} sup · {{ usuarios.agentes|length }} ag</span>
+                    </div>
+                    <div class="card-chips">
+                        {% for p in usuarios.supervisores %}
+                            <span class="user-chip user-chip-supervisor" title="Supervisor">
+                                <i class="fa fa-user-shield"></i> {{ p.usuario.full_name|default:p.usuario.username }}
+                            </span>
+                        {% endfor %}
+                        {% for p in usuarios.agentes %}
+                            <span class="user-chip user-chip-agente" title="Agente">
+                                <i class="fa fa-headset"></i> {{ p.usuario.full_name|default:p.usuario.username }}
+                            </span>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+        {% endwith %}
     </div>
 
     <div class="card-footer">

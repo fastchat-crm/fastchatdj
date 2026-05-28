@@ -1,0 +1,62 @@
+{% extends 'base_lite.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/lib/drawflow/drawflow.min.css">
+    <link rel="stylesheet" href="/static/stylenew/dpchat_editor.css">
+    <link rel="stylesheet" href="/static/stylenew/dpchat_canvas.css?v1.0">
+{% endblock %}
+
+{% block content %}
+<div class="dpc-shell">
+    <div class="dpc-toolbar">
+        <a href="/crm/departamentos_chatbots/?action=change&id={{ filtro.pk }}&full=1"
+           class="btn btn-light btn-sm">
+            <i class="fa fa-arrow-left me-1"></i> Volver al editor
+        </a>
+        <div class="dpc-title">
+            <span class="dpc-dot" data-color="{{ filtro.color }}"></span>
+            <span class="dpc-title-text">{{ filtro.nombre }}</span>
+        </div>
+        <div class="dpc-toolbar-right">
+            <a href="/crm/departamentos_chatbots/?action=preview&id={{ filtro.pk }}"
+               class="btn btn-outline-success btn-sm">
+                <i class="fab fa-whatsapp me-1"></i> Preview
+            </a>
+        </div>
+    </div>
+
+    <div class="dpc-stage">
+        <div id="dp-canvas" class="dpc-canvas"></div>
+
+        <div class="dpc-zoom">
+            <button type="button" class="dpc-zoom-btn" data-zoom="in" title="Acercar">
+                <i class="fa fa-plus"></i>
+            </button>
+            <button type="button" class="dpc-zoom-btn" data-zoom="reset" title="100%">100%</button>
+            <button type="button" class="dpc-zoom-btn" data-zoom="out" title="Alejar">
+                <i class="fa fa-minus"></i>
+            </button>
+            <button type="button" class="dpc-zoom-btn" data-zoom="fit" title="Auto organizar">
+                <i class="fa fa-wand-magic-sparkles"></i>
+            </button>
+        </div>
+
+        <div class="dpc-empty" id="dpc-empty" hidden>
+            <i class="fa fa-diagram-project"></i>
+            <p>Este flujo aún no tiene pasos.</p>
+            <a href="/crm/departamentos_chatbots/?action=change&id={{ filtro.pk }}&full=1"
+               class="btn btn-primary btn-sm">
+                <i class="fa fa-plus me-1"></i> Agregar el primer paso
+            </a>
+        </div>
+    </div>
+</div>
+
+{{ canvas_data|json_script:"dp-canvas-data" }}
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/lib/drawflow/drawflow.min.js"></script>
+    <script src="/static/lib/dagre/dagre.min.js"></script>
+    <script src="/static/js/dpchat_canvas.js?v1.0"></script>
+{% endblock %}

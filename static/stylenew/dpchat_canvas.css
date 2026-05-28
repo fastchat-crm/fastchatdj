@@ -1,0 +1,212 @@
+.dpc-shell {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 1.5rem);
+}
+
+.dpc-toolbar {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .5rem .75rem;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    margin-bottom: .5rem;
+    flex-shrink: 0;
+}
+
+.dpc-title {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.dpc-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #16a34a;
+    flex-shrink: 0;
+}
+
+.dpc-title-text {
+    max-width: 420px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dpc-toolbar-right {
+    margin-left: auto;
+    display: flex;
+    gap: .4rem;
+}
+
+.dpc-stage {
+    position: relative;
+    flex: 1;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+    background:
+        radial-gradient(circle, #d8dee9 1px, transparent 1px) 0 0 / 22px 22px,
+        #f8fafc;
+}
+
+.dpc-canvas {
+    width: 100%;
+    height: 100%;
+}
+
+.dpc-zoom {
+    position: absolute;
+    left: 14px;
+    bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 6;
+}
+
+.dpc-zoom-btn {
+    width: 38px;
+    height: 38px;
+    border: 1px solid #e5e7eb;
+    background: #ffffff;
+    border-radius: 9px;
+    color: #475569;
+    font-size: .8rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dpc-zoom-btn:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+.dpc-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .6rem;
+    color: #94a3b8;
+    text-align: center;
+}
+
+.dpc-empty i {
+    font-size: 2.6rem;
+}
+
+.drawflow .drawflow-node {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    border-radius: 14px;
+    width: 230px;
+    box-shadow: none;
+}
+
+.drawflow .drawflow-node.selected .dpc-node {
+    box-shadow: 0 0 0 2px #6366f1, 0 6px 18px rgba(99, 102, 241, .25);
+}
+
+.dpc-node {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-top: 3px solid #94a3b8;
+    border-radius: 14px;
+    padding: .6rem .75rem;
+    width: 230px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, .08);
+    cursor: grab;
+}
+
+.dpc-node-head {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #64748b;
+}
+
+.dpc-node-tipo {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dpc-node-start {
+    margin-left: auto;
+    background: #dcfce7;
+    color: #15803d;
+    border-radius: 6px;
+    padding: 0 .35rem;
+    font-size: .6rem;
+}
+
+.dpc-node-name {
+    margin-top: .25rem;
+    font-size: .9rem;
+    font-weight: 600;
+    color: #1f2937;
+    word-break: break-word;
+}
+
+.dpc-node-resp {
+    margin-top: .25rem;
+    font-size: .75rem;
+    color: #6b7280;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.dpc-df-node.tipo-menu          .dpc-node { border-top-color: #8b5cf6; }
+.dpc-df-node.tipo-respuesta     .dpc-node { border-top-color: #16a34a; }
+.dpc-df-node.tipo-pregunta      .dpc-node { border-top-color: #f59e0b; }
+.dpc-df-node.tipo-http          .dpc-node { border-top-color: #3b82f6; }
+.dpc-df-node.tipo-funcion       .dpc-node { border-top-color: #5b21b6; }
+.dpc-df-node.tipo-condicional   .dpc-node { border-top-color: #ec4899; }
+.dpc-df-node.tipo-set_variable  .dpc-node { border-top-color: #06b6d4; }
+.dpc-df-node.tipo-cta_url       .dpc-node { border-top-color: #2563eb; }
+.dpc-df-node.tipo-ubicacion     .dpc-node { border-top-color: #6b21a8; }
+.dpc-df-node.tipo-handoff       .dpc-node { border-top-color: #f97316; }
+.dpc-df-node.tipo-agenda_turno  .dpc-node { border-top-color: #0d9488; }
+.dpc-df-node.tipo-loop          .dpc-node { border-top-color: #d97706; }
+.dpc-df-node.tipo-fin           .dpc-node { border-top-color: #64748b; }
+
+.drawflow .connection .main-path {
+    stroke: #b6c2d4;
+    stroke-width: 2.5px;
+}
+
+.drawflow .connection .main-path:hover {
+    stroke: #6366f1;
+}
+
+.drawflow-node .input,
+.drawflow-node .output {
+    background: #ffffff;
+    border: 2px solid #94a3b8;
+    width: 12px;
+    height: 12px;
+}
+
+.drawflow-node .output {
+    border-color: #6366f1;
+}

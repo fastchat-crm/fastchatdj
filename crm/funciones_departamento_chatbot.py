@@ -978,6 +978,79 @@ def _serializar_para_preview(departamento):
     }
 
 
+def _serializar_para_canvas(departamento):
+    """Grafo para el editor visual (Drawflow). A diferencia del preview, expone
+    `x`/`y` por nodo y un `conexion_id` por salida para edición directa.
+
+    Las aristas combinan el grafo moderno (`ConexionNodoChatbot`) con el árbol
+    legacy (`opcion_padre`) para que flujos viejos también se vean conectados.
+    """
+    from .models import ConexionNodoChatbot, TIPOS_NODO
+
+    nodos_qs = list(OpcionDepartamentoChatBot.objects.filter(
+        departamento=departamento, status=True,
+    ))
+    by_id = {n.id: n for n in nodos_qs}
+
+    conex_qs = ConexionNodoChatbot.objects.filter(
+        nodo_origen__departamento=departamento, status=True,
+    ).order_by('nodo_origen', 'orden', 'id')
+
+    edges = {}
+    for c in conex_qs:
+        edges[(c.nodo_origen_id, c.nodo_destino_id)] = {
+            'conexion_id': c.id,
+            'etiqueta': c.etiqueta or '',
+            'destino_id': c.nodo_destino_id,
+        }
+    for n in sorted(nodos_qs, key=lambda x: (x.orden, x.id)):
+        if n.opcion_padre_id and (n.opcion_padre_id, n.id) not in edges:
+            padre = by_id.get(n.opcion_padre_id)
+            etiqueta = n.nombre if (padre and padre.tipo_nodo == 'menu') else ''
+            edges[(n.opcion_padre_id, n.id)] = {
+                'conexion_id': None,
+                'etiqueta': etiqueta,
+                'destino_id': n.id,
+            }
+
+    salidas_by_origen = {}
+    for (origen, _destino), e in edges.items():
+        salidas_by_origen.setdefault(origen, []).append(e)
+
+    tipo_labels = dict(TIPOS_NODO)
+    nodos = []
+    for n in nodos_qs:
+        nodos.append({
+            'id': n.id,
+            'nombre': n.nombre or '',
+            'tipo': n.tipo_nodo,
+            'tipo_label': tipo_labels.get(n.tipo_nodo, n.tipo_nodo),
+            'respuesta': (n.respuesta or '')[:140],
+            'es_inicio': bool(n.es_inicio),
+            'x': float(n.posicion_x or 0),
+            'y': float(n.posicion_y or 0),
+            'salidas': salidas_by_origen.get(n.id, []),
+        })
+
+    inicio = next((n for n in nodos_qs if n.es_inicio), None)
+    if not inicio:
+        sin_padre = [n for n in nodos_qs if not n.opcion_padre_id]
+        sin_padre.sort(key=lambda x: (x.orden, x.id))
+        inicio = sin_padre[0] if sin_padre else None
+
+    return {
+        'departamento': {
+            'id': departamento.id,
+            'nombre': departamento.nombre,
+            'color': departamento.color or '#16a34a',
+            'activo_tradicional': bool(departamento.activo_tradicional),
+        },
+        'nodos': nodos,
+        'inicio_id': inicio.id if inicio else None,
+        'tipos': [{'value': v, 'label': l} for v, l in TIPOS_NODO],
+    }
+
+
 def _serializar_para_preview_LEGACY(departamento):
     """Versión nested anterior. Deprecada — el preview ahora usa flat map."""
     from .models import ConexionNodoChatbot

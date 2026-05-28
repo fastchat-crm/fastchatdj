@@ -24,17 +24,6 @@
                 </small>
             </div>
             <form method="GET" class="row g-2 align-items-end mb-0">
-                <div class="col-md-4">
-                    <label class="form-label small mb-1">Sesión</label>
-                    <select name="sesion" class="form-select select2">
-                        <option value="">Todas las sesiones</option>
-                        {% for s in sesiones %}
-                            <option value="{{ s.id }}" {% if sesion_sel == s.id %}selected{% endif %}>
-                                {{ s.nombre|default:s.numero }} · {{ s.get_proveedor_display }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
                 <div class="col-md-2">
                     <label class="form-label small mb-1">Rango rápido</label>
                     <select name="dias" class="form-select"

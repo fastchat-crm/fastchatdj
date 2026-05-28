@@ -158,6 +158,16 @@ class SesionWhatsApp(ModeloBase):
     def obtener_perfiles(self):
         return self.perfilsesionwhatsapp_set.filter(status=True).order_by('usuario__first_name')
 
+    def usuarios_asignados(self):
+        perfiles = [p for p in self.perfilsesionwhatsapp_set.all() if p.status]
+        supervisores = [p for p in perfiles if p.rol == 'supervisor']
+        agentes = [p for p in perfiles if p.rol == 'asesor']
+        return {
+            'supervisores': supervisores,
+            'agentes': agentes,
+            'total': len(perfiles),
+        }
+
     def rol_de_usuario(self, usuario):
         if not usuario or not getattr(usuario, 'id', None):
             return None
@@ -2311,7 +2321,7 @@ class EntregaWebhookSaliente(models.Model):
 
 
 ROLES_SESION = (
-    ('asesor', 'Agent'),
+    ('asesor', 'Agente'),
     ('supervisor', 'Supervisor'),
 )
 

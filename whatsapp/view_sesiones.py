@@ -943,7 +943,12 @@ def sesionesView(request):
     if criterio:
         filtros &= (Q(nombre__icontains=criterio) | Q(numero__icontains=criterio))
 
-    sesiones = SesionWhatsApp.objects.filter(filtros).select_related('config_meta').order_by('-fecha_registro')
+    sesiones = (
+        SesionWhatsApp.objects.filter(filtros)
+        .select_related('config_meta', 'agente_ia', 'departamento_default')
+        .prefetch_related('departamentos', 'perfilsesionwhatsapp_set__usuario')
+        .order_by('-fecha_registro')
+    )
     data['sesiones'] = sesiones
     data['total']    = sesiones.count()
 
