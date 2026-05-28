@@ -199,5 +199,5 @@ def modulo_grupo(request):
             url_vars += '&criterio=' + criterio
         modulos = ModuloGrupo.objects.filter(filtros)
         data["url_vars"] = url_vars
-        paginador(request, modulos.order_by('prioridad'), 10, data, url_vars)
+        paginador(request, modulos.order_by('prioridad'), 20, data, url_vars)
         return render(request, 'seguridad/modulogrupo/listado.html', data)
