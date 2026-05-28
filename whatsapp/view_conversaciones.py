@@ -143,6 +143,9 @@ def conversacionesView(request):
                 'es_meta': bool(getattr(conversacion.sesion, 'es_meta', False)),
                 'es_tradicional': (conversacion.sesion.modo_bot or '') == 'tradicional',
                 'referral': referral_data,
+                'clasificacion_id': conversacion.clasificacion,
+                'clasificacion_label': conversacion.get_clasificacion_display(),
+                'clasificacion_color': conversacion.get_estado_color_clasificacion(),
                 **_estadisticas_conversacion(conversacion),
             })
         elif action == 'ver_estadisticas':
@@ -760,11 +763,34 @@ def conversacionesView(request):
                 sup_fecha_ultimo=Subquery(ultima_fecha_sup),
             )
 
+        ultima_fecha_entrante = (
+            MensajeWhatsApp.objects
+            .filter(conversacion=OuterRef('pk'))
+            .exclude(remitente=OuterRef('contacto__sesion__numero'))
+            .order_by('-fecha')
+            .values('fecha')[:1]
+        )
+        qs = qs.annotate(
+            fecha_ultimo_entrante=Subquery(ultima_fecha_entrante),
+        )
+
+        from datetime import timedelta as _td
+        ahora_ts = timezone.now()
+        conv_list = list(qs)
+        for _c in conv_list:
+            if getattr(_c, 'atendida_por_meta', False) and getattr(_c, 'fecha_ultimo_entrante', None):
+                _c.vence_meta_en = _c.fecha_ultimo_entrante + _td(hours=24)
+                _c.vence_meta_expirada = _c.vence_meta_en <= ahora_ts
+            else:
+                _c.vence_meta_en = None
+                _c.vence_meta_expirada = False
+
         return JsonResponse({
             'html': render_to_string('whatsapp/conversaciones/conversaciones_partial.html',
                                     {
-                                        'conversaciones': qs,
-                                        'today': timezone.now().date(),
+                                        'conversaciones': conv_list,
+                                        'today': ahora_ts.date(),
+                                        'now': ahora_ts,
                                         'es_vista_completa': mostrar_supervisor,
                                         'sesion_numero': sesion_seleccionada.numero if sesion_seleccionada else '',
                                     },

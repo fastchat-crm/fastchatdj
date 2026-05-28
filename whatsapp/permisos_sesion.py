@@ -4,18 +4,18 @@ from .models import SesionWhatsApp
 
 
 def sesiones_visibles(usuario):
-    qs = SesionWhatsApp.objects.filter(status=True)
+    qs = SesionWhatsApp.objects.filter(status=True, activo=True)
     if getattr(usuario, 'is_superuser', False):
         return qs
     return qs.filter(usuario=usuario)
 
 
 def sesiones_visibles_activas(usuario):
-    return sesiones_visibles(usuario).filter(activo=True)
+    return sesiones_visibles(usuario)
 
 
 def sesiones_vista_completa(usuario):
-    qs = SesionWhatsApp.objects.filter(status=True)
+    qs = SesionWhatsApp.objects.filter(status=True, activo=True)
     if getattr(usuario, 'is_superuser', False):
         return qs
     return qs.filter(

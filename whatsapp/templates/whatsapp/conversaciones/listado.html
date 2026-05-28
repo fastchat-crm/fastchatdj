@@ -2,7 +2,7 @@
 {% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
-<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.5">
+<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.6">
 <link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
 {% endblock %}
 
@@ -151,6 +151,16 @@
                                 <span id="tokens-valor">0</span>
                                 <span class="text-muted" style="font-size:.65rem;" id="tokens-detalle"></span>
                             </span>
+                        </div>
+                        <!-- Classification inline selector -->
+                        <div class="d-none" id="clasificacion-inline-container">
+                            <select id="clasificacion-inline-select"
+                                    class="form-select form-select-sm clasificacion-inline-select"
+                                    title="Change classification">
+                                {% for val, label in ESTADOS_CLASIFICACION %}
+                                    <option value="{{ val }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                         <!-- Asignado a -->
                         <div class="d-none" id="asignado-container">
@@ -821,6 +831,57 @@
         }
     }
 
+    const _CLASIF_COLOR_PREFIX = 'badge-';
+    const _BADGE_PALETTE = ['badge-secondary', 'badge-info', 'badge-warning', 'badge-primary', 'badge-success', 'badge-danger'];
+    $(document).on('change', '#clasificacion-inline-select', function() {
+        const $sel = $(this);
+        const convId = $('#clasificacion-inline-container').data('conv-id');
+        if (!convId) return;
+        const prevVal = $sel.data('prev-val');
+        const newVal = $sel.val();
+        $sel.prop('disabled', true);
+        $.ajax({
+            url: '',
+            type: 'POST',
+            data: {
+                action: 'cambiar-clasificacion',
+                pk: convId,
+                clasificacion: newVal,
+                inline: '1',
+                csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()
+            },
+            dataType: 'json'
+        }).done(function(arr) {
+            $sel.prop('disabled', false);
+            const r = Array.isArray(arr) ? arr[0] : arr;
+            if (!r || r.error) {
+                if (typeof prevVal !== 'undefined') $sel.val(prevVal);
+                mensajeWarning((r && r.message) || 'Could not update classification.');
+                return;
+            }
+            $sel.data('prev-val', newVal);
+            const $card = $(`#lista-conversaciones .conversacion-item[data-id="${convId}"]`);
+            if ($card.length) {
+                const $badge = $card.find('.ci-badges .ci-badge.badge').filter(function() {
+                    for (const c of _BADGE_PALETTE) if ($(this).hasClass(c)) return true;
+                    return false;
+                }).first();
+                if ($badge.length) {
+                    _BADGE_PALETTE.forEach(c => $badge.removeClass(c));
+                    $badge.addClass(_CLASIF_COLOR_PREFIX + r.clasificacion_color)
+                          .text(r.clasificacion_label);
+                }
+            }
+        }).fail(function() {
+            $sel.prop('disabled', false);
+            if (typeof prevVal !== 'undefined') $sel.val(prevVal);
+            mensajeWarning('Server error updating classification.');
+        });
+    });
+    $(document).on('focus', '#clasificacion-inline-select', function() {
+        $(this).data('prev-val', $(this).val());
+    });
+
     let _bloquearCierreActual = false;
     function toggleBloquearCierre() {
         const id = $('#conversacion-id').val();
@@ -1414,7 +1475,7 @@
             sessionWebSocket(sesionId, filtroActivo);
             $('#mensajes-container').html('<div class="text-center p-5"><i class="fa fa-comments fa-4x text-muted mb-3"></i><p>Selecciona una conversación para ver los mensajes</p></div>');
             $('#chat-footer').hide();
-            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container').addClass('d-none');
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #clasificacion-inline-container').addClass('d-none');
             $('#stats-panel, #control-respuestas-panel').addClass('d-none');
             $('#contacto-nombre').text('Selecciona una conversación');
             $('#conv-id-badge').hide();
@@ -1487,7 +1548,7 @@
             $('#conv-id-badge').hide();
             $('#conv-fecha-inicio').hide();
             $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
-            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container').addClass('d-none').hide();
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #clasificacion-inline-container').addClass('d-none').hide();
             $('#stats-panel, #control-respuestas-panel, #menus-rapidos-bar').addClass('d-none');
             $('#chat-footer').addClass('d-none').hide();
             if (typeof resetHistorialCliente === 'function') resetHistorialCliente();
@@ -1708,7 +1769,7 @@
             if (chatSocket) { chatSocket.close(); chatSocket = null; }
 
             // Ocultar controles + empty state mientras carga
-            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #chat-footer').addClass('d-none').hide();
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #chat-footer, #clasificacion-inline-container').addClass('d-none').hide();
             $('#stats-panel, #control-respuestas-panel').addClass('d-none');
             $('#cm-empty-state').hide();
             $('#mensajes-container')
@@ -1771,6 +1832,15 @@
                         $('#asignado-container').removeClass('d-none').show();
                     } else {
                         $('#asignado-container').addClass('d-none').hide();
+                    }
+
+                    if (typeof response.clasificacion_id !== 'undefined') {
+                        $('#clasificacion-inline-select').val(String(response.clasificacion_id));
+                        $('#clasificacion-inline-container')
+                            .data('conv-id', conversacionId)
+                            .removeClass('d-none').show();
+                    } else {
+                        $('#clasificacion-inline-container').addClass('d-none').hide();
                     }
 
                     // Fecha inicio conversación

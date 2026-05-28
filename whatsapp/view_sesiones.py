@@ -401,11 +401,11 @@ def _accion_editar(request):
                 'form': [{'min_sesion': 'Valor inválido.'}],
             }], safe=False)
         min_sesion_val = int(min_sesion_raw)
-        if min_sesion_val < 1 or min_sesion_val > 720:
+        if min_sesion_val < 1 or min_sesion_val > 1440:
             return JsonResponse([{
                 'error': True,
-                'message': 'La duración de la sesión debe estar entre 1 y 720 minutos (12 horas).',
-                'form': [{'min_sesion': 'Rango permitido: 1 a 720.'}],
+                'message': 'La duración de la sesión debe estar entre 1 y 1440 minutos (24 horas).',
+                'form': [{'min_sesion': 'Rango permitido: 1 a 1440.'}],
             }], safe=False)
         sesion.min_sesion = min_sesion_val
     # Agente IA (opcional — llega como id o vacio)

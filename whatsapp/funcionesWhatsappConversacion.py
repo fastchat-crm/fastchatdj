@@ -218,10 +218,22 @@ def cambiar_clasificacion_post(request):
     except Exception as ex:
         return JsonResponse([{'error': True, 'message': f'No se encontró la conversación: {ex}'}], safe=False)
 
+    inline = request.POST.get('inline') == '1'
     form = CambiarClasificacionForm(request.POST, instance=filtro, request=request)
     if form.is_valid():
         form.save()
         log(f"Clasificación cambiada para la conversación {filtro.id}", request, 'edit', obj=filtro.id)
+        if inline:
+            filtro.refresh_from_db()
+            return JsonResponse([{
+                'error': False,
+                'reload': False,
+                'conversacion_id': filtro.id,
+                'clasificacion_id': filtro.clasificacion,
+                'clasificacion_label': filtro.get_clasificacion_display(),
+                'clasificacion_color': filtro.get_estado_color_clasificacion(),
+                'message': 'Classification updated.',
+            }], safe=False)
         messages.success(request, 'Clasificación cambiada correctamente.')
         return JsonResponse([{'error': False, 'reload': True}], safe=False)
     return JsonResponse(

@@ -155,6 +155,21 @@ class SessionRoomConsumer(AsyncWebsocketConsumer):
             ).select_related('contacto').first()
             if not conversacion:
                 return {'html': '', 'nombre': '', 'preview': ''}
+            from datetime import timedelta as _td
+            from django.utils import timezone as _tz
+            conversacion.vence_meta_en = None
+            conversacion.vence_meta_expirada = False
+            if getattr(conversacion, 'atendida_por_meta', False):
+                ultimo_ent = (
+                    conversacion.mensajes
+                    .exclude(remitente=conversacion.sesion.numero)
+                    .order_by('-fecha')
+                    .values_list('fecha', flat=True)
+                    .first()
+                )
+                if ultimo_ent:
+                    conversacion.vence_meta_en = ultimo_ent + _td(hours=24)
+                    conversacion.vence_meta_expirada = conversacion.vence_meta_en <= _tz.now()
             html = _render_partial_fresh(
                 'whatsapp/templates/whatsapp/conversaciones/conversacion_item.html',
                 {

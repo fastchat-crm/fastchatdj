@@ -40,6 +40,13 @@
                     {% if conversacion.iniciada_por_plantilla %}
                         <span class="ci-badge badge bg-info text-dark" title="Started from a reconnection template"><i class="fa fa-rotate me-1"></i>Via template</span>
                     {% endif %}
+                    {% if not show_date and conversacion.atendida_por_meta and conversacion.vence_meta_en %}
+                        {% if conversacion.vence_meta_expirada %}
+                            <span class="ci-badge badge bg-danger" title="Meta 24h customer-service window expired — only templates allowed"><i class="fa fa-hourglass-end me-1"></i>24h expired</span>
+                        {% else %}
+                            <span class="ci-badge badge bg-warning text-dark" title="Time remaining in the Meta 24h customer-service window"><i class="fa fa-clock me-1"></i>{{ conversacion.vence_meta_en|timeuntil }} left</span>
+                        {% endif %}
+                    {% endif %}
                 </div>
                 <div class="ci-row1">
                     <span class="ci-name">
@@ -56,8 +63,8 @@
                 <div class="ci-row2">
                     <span class="ci-snippet">
                         {% if show_date %}
-                            <i class="fa fa-calendar me-1" style="font-size:.68rem;"></i>
-                            {{ conversacion.fecha_registro|date:"d/m/Y" }}{% if conversacion.fecha_fin_conversacion %} — {{ conversacion.fecha_fin_conversacion|date:"d/m/Y" }}{% endif %} ·
+                            <i class="fa fa-calendar me-1 ci-calendar-icon"></i>
+                            {{ conversacion.fecha_registro|date:"d/m/Y H:i" }}{% if conversacion.fecha_fin_conversacion %} — <span class="ci-ended-at" title="Ended at">{{ conversacion.fecha_fin_conversacion|date:"d/m/Y H:i" }}</span>{% endif %} ·
                         {% endif %}
                         {{ conversacion.ultimo_mensaje|truncatechars:40 }}
                     </span>
