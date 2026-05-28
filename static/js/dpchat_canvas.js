@@ -210,13 +210,32 @@
         });
     });
 
+    function applyPanTransform() {
+        if (!editor.precanvas) {
+            return;
+        }
+        editor.precanvas.style.transform =
+            'translate(' + editor.pos_x + 'px, ' + editor.pos_y + 'px) scale(' + editor.zoom + ')';
+        editor.precanvas.style.transformOrigin = '0 0';
+    }
+
     container.addEventListener('wheel', function (e) {
         e.preventDefault();
-        if (e.deltaY < 0) {
-            editor.zoom_in();
-        } else if (e.deltaY > 0) {
-            editor.zoom_out();
+        if (e.ctrlKey || e.metaKey) {
+            if (e.deltaY < 0) {
+                editor.zoom_in();
+            } else if (e.deltaY > 0) {
+                editor.zoom_out();
+            }
+            return;
         }
+        if (e.shiftKey) {
+            editor.pos_x -= e.deltaY;
+        } else {
+            editor.pos_y -= e.deltaY;
+            editor.pos_x -= e.deltaX;
+        }
+        applyPanTransform();
     }, { passive: false });
 
     var origRemoveNode = editor.removeNodeId.bind(editor);
