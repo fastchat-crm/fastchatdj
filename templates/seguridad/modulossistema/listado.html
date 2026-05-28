@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block head %}
-    <link rel="stylesheet" href="/static/stylenew/modulossistema.css">
+    <link rel="stylesheet" href="/static/stylenew/modulossistema.css?v1.1">
 {% endblock %}
 {% block content %}
 
@@ -8,18 +8,37 @@
         <div class="card-body">
             <form method="GET" class="mb-0">
                 <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label">Búsqueda general</label>
+                    <div class="col-md-3">
+                        <label class="form-label">Search</label>
                         <div class="input-group">
                             <span class="input-group-text border-end-0">
                                 <i class="fa fa-search text-muted"></i>
                             </span>
                             <input type="text" class="form-control border-start-0"
-                                   placeholder="Buscar..." name="criterio" value="{{ criterio }}">
+                                   placeholder="Search..." name="criterio" value="{{ criterio }}">
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Acciones</label>
+                    <div class="col-md-3">
+                        <label class="form-label">In use</label>
+                        <select name="usadas" class="form-control">
+                            <option value="">All</option>
+                            <option value="1" {% if usadas == '1' %}selected{% endif %}>In use</option>
+                            <option value="0" {% if usadas == '0' %}selected{% endif %}>Not in use</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Sort by</label>
+                        <select name="orden" class="form-control">
+                            <option value="id_desc" {% if orden == 'id_desc' %}selected{% endif %}>ID desc (newest first)</option>
+                            <option value="id_asc" {% if orden == 'id_asc' %}selected{% endif %}>ID asc</option>
+                            <option value="nombre_asc" {% if orden == 'nombre_asc' %}selected{% endif %}>Name A-Z</option>
+                            <option value="nombre_desc" {% if orden == 'nombre_desc' %}selected{% endif %}>Name Z-A</option>
+                            <option value="fecha_desc" {% if orden == 'fecha_desc' %}selected{% endif %}>Date desc</option>
+                            <option value="fecha_asc" {% if orden == 'fecha_asc' %}selected{% endif %}>Date asc</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Actions</label>
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-search me-1"></i>
@@ -37,10 +56,14 @@
     </div>
 
     <div class="row align-items-center mb-3">
-        <div class="col-md-12 mb-2 mb-md-0">
-            <a href="javascript:void(0)" onclick="formModal(0, 'Adicionar Modulo', 'add')" class="btn btn-success btn-sm">
-                <i class="fas fa-plus-circle me-2"></i> Nuevo Modulo
+        <div class="col-md-12 mb-2 mb-md-0 d-flex gap-2 flex-wrap">
+            <a href="javascript:void(0)" onclick="formModal(0, 'Add Module', 'add')" class="btn btn-success btn-sm">
+                <i class="fas fa-plus-circle me-2"></i> New Module
             </a>
+            <a href="javascript:void(0)" onclick="extraerUrls()" class="btn btn-info btn-sm">
+                <i class="fas fa-magic me-2"></i> Extract new URLs
+            </a>
+            <span class="badge bg-secondary align-self-center">Total: {{ list_count }}</span>
         </div>
     </div>
 
@@ -50,11 +73,14 @@
                 <table id="tabla" class="table table-hover table-striped">
                     <thead>
                     <tr>
-                        <th class="text-center">Cod.</th>
-                        <th class="text-center">Orden</th>
-                        <th class="text-center">Nombre</th>
-                        <th class="text-center">Url</th>
-                        <th class="text-center">Acción</th>
+                        <th class="text-center">ID</th>
+                        <th class="text-center">Order</th>
+                        <th class="text-center">Name</th>
+                        <th class="text-center">URL</th>
+                        <th class="text-center">In use</th>
+                        <th class="text-center">Groups</th>
+                        <th class="text-center">Created</th>
+                        <th class="text-center">Action</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -65,28 +91,51 @@
                                 <input type="number" class="form-control form-control-sm orden-input"
                                        ida="{{ mod.id }}" vl="{{ mod.orden }}" value="{{ mod.orden }}" step="1">
                             </td>
-                            <td class="text-center">{{ mod.nombre }}</td>
-                            <td class="text-center">
+                            <td>
+                                {{ mod.nombre }}
+                                {% if mod.fecha_registro >= umbral_reciente %}
+                                    <span class="badge bg-success ms-1">New</span>
+                                {% endif %}
+                            </td>
+                            <td>
                                 <a href="{{ mod.url }}" target="_blank" class="text-primary">{{ mod.url }}</a>
+                            </td>
+                            <td class="text-center">
+                                {% if mod.id in ids_usadas %}
+                                    <span class="badge bg-primary">Yes</span>
+                                {% else %}
+                                    <span class="badge bg-light text-dark border">No</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% for g in mod.modulogrupo_set.all %}
+                                    {% if g.status %}
+                                        <span class="badge bg-info text-dark me-1 mb-1">{{ g.nombre }}</span>
+                                    {% endif %}
+                                {% empty %}
+                                    <span class="text-muted small">—</span>
+                                {% endfor %}
+                            </td>
+                            <td class="text-center small">
+                                {{ mod.fecha_registro|date:"Y-m-d H:i" }}
                             </td>
                             <td class="text-center">
                                 <div class="dropdown">
                                     <button class="btn btn-icon" type="button" id="dropdownMenuButton-{{ mod.pk }}"
-                                            data-bs-toggle="dropdown" aria-expanded="false"
-                                            style="background: none; border: none;">
+                                            data-bs-toggle="dropdown" aria-expanded="false">
                                         <i class="fas fa-ellipsis-v"></i>
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdownMenuButton-{{ mod.pk }}">
                                         <li>
                                             <a class="dropdown-item" href="javascript:void(0);"
-                                               onclick="formModal({{ mod.id }}, 'Editar {{ mod.nombre }}','change')">
-                                                <i class="fas fa-edit me-2 text-primary"></i>Editar
+                                               onclick="formModal({{ mod.id }}, 'Edit {{ mod.nombre }}','change')">
+                                                <i class="fas fa-edit me-2 text-primary"></i>Edit
                                             </a>
                                         </li>
                                         <li>
                                             <a class="dropdown-item" href="javascript:void(0);"
                                                onclick="eliminarajax({{ mod.pk }}, '{{ mod.nombre }}', 'delete')">
-                                                <i class="fas fa-trash me-2 text-danger"></i>Eliminar
+                                                <i class="fas fa-trash me-2 text-danger"></i>Delete
                                             </a>
                                         </li>
                                     </ul>
@@ -145,6 +194,49 @@
 {% block jscript %}
     <script src="/static/js/forms.js?version=1"></script>
     <script>
+        function extraerUrls() {
+            Swal.fire({
+                title: 'Extract new URLs from the system?',
+                text: 'Scans the URL dictionary and creates entries for any unregistered URLs.',
+                type: 'info',
+                showCancelButton: true,
+                allowOutsideClick: false,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Yes, extract',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (!result.value) return;
+                pantallaespera();
+                $.ajax({
+                    type: 'POST',
+                    url: '{{ ruta }}',
+                    data: {
+                        csrfmiddlewaretoken: '{{ csrf_token }}',
+                        action: 'extraer_urls'
+                    },
+                    dataType: 'json'
+                }).done(function (data) {
+                    setTimeout($.unblockUI, 1);
+                    if (data && data.error === false) {
+                        Swal.fire({
+                            title: 'Done',
+                            text: data.message || 'Extraction completed.',
+                            type: 'success',
+                            timer: 1800,
+                            showConfirmButton: false
+                        }).then(() => location.reload());
+                        setTimeout(() => location.reload(), 1900);
+                    } else {
+                        mensajeWarning((data && data.message) || 'Extraction failed.');
+                    }
+                }).fail(function () {
+                    setTimeout($.unblockUI, 1);
+                    mensajeWarning('Server error.');
+                });
+            });
+        }
+
         function formModal(id, text, action) {
             pantallaespera();
             $.ajax({

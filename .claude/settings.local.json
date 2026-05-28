@@ -99,7 +99,8 @@
       "Bash(pycheck seguridad/view_index.py)",
       "Bash(cd /d \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\")",
       "Bash(findstr /S /I \"leer_sesion_id\\\\|decrypt_sesion_id\\\\|request\\\\.GET.*sesion\" whatsapp\\\\*.py crm\\\\*.py agenda\\\\*.py)",
-      "Bash(findstr \"\\\\.py:\")"
+      "Bash(findstr \"\\\\.py:\")",
+      "Bash(where pycheck *)"
     ]
   },
   "hooks": {

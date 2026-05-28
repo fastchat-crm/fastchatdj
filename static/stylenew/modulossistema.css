@@ -8,3 +8,8 @@
 .orden-input::-webkit-outer-spin-button {
     opacity: 1;
 }
+
+.btn-icon {
+    background: none;
+    border: none;
+}

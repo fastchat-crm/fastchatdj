@@ -134,6 +134,30 @@ def modulossistemaView(request):
                         return HttpResponse(json.dumps({'result': False, 'mensaje': 'Orden inválido'}))
                     except Exception as ex:
                         return HttpResponse(json.dumps({'result': False, 'mensaje': str(ex)}))
+                elif action == 'extraer_urls':
+                    from fastchatdj.urls import urls_sistema
+                    nuevas = []
+                    existentes_urls = set(model.objects.values_list('url', flat=True))
+                    for u in urls_sistema:
+                        if not u.get("sub_urls"):
+                            continue
+                        for idx, su in enumerate(u["sub_urls"]):
+                            mod_url = "/{}{}".format(u["url"], su["url"])
+                            if mod_url in existentes_urls:
+                                continue
+                            mod_obj = model.objects.create(
+                                orden=idx,
+                                nombre=su["nombre"],
+                                url=mod_url,
+                            )
+                            existentes_urls.add(mod_url)
+                            nuevas.append(mod_obj.id)
+                    log(f"Extracted {len(nuevas)} new URLs from sistema", request, "add")
+                    return JsonResponse({
+                        'error': False,
+                        'creadas': len(nuevas),
+                        'message': f"{len(nuevas)} new URL(s) added." if nuevas else "No new URLs to add."
+                    })
         except ValueError as ex:
             res_json.append({'error': True,
                              "message": str(ex)
@@ -173,7 +197,19 @@ def modulossistemaView(request):
 
         criterio, filtros, url_vars =  request.GET.get('criterio', ''), Q(status=True), ''
         ister, homologacion, postulate = request.GET.get('ister',''), request.GET.get('homologacion',''), request.GET.get('postulate','')
+        usadas = request.GET.get('usadas', '')
+        orden = request.GET.get('orden', 'id_desc')
 
+        if usadas in ('1', '0'):
+            data['usadas'] = usadas
+            url_vars += f'&usadas={usadas}'
+            ids_usadas = list(
+                x for x in ModuloGrupo.objects.filter(status=True).values_list('modulos__id', flat=True).distinct() if x
+            )
+            if usadas == '1':
+                filtros = filtros & Q(id__in=ids_usadas)
+            else:
+                filtros = filtros & ~Q(id__in=ids_usadas)
         if ister:
             data['ister'] = ister
             url_vars += f'&ister={ister}'
@@ -212,8 +248,27 @@ def modulossistemaView(request):
         #                 orden = u["sub_urls"].index(su)
         #                 mod_obj = Modulo.objects.create(orden=orden, nombre=su["nombre"], url=mod_url)
         #                 log(f"Sistema creo modulo {mod_obj.__str__()}", request, "add")
-        qs_modulos = model.objects.filter(filtros)
+        orden_map = {
+            'id_desc': '-id',
+            'id_asc': 'id',
+            'nombre_asc': 'nombre',
+            'nombre_desc': '-nombre',
+            'fecha_asc': 'fecha_registro',
+            'fecha_desc': '-fecha_registro',
+        }
+        order_field = orden_map.get(orden, '-id')
+        data['orden'] = orden
+        if orden != 'id_desc':
+            url_vars += f'&orden={orden}'
+
+        qs_modulos = model.objects.filter(filtros).prefetch_related('modulogrupo_set').distinct()
         data["list_count"] = qs_modulos.count()
         data["url_vars"] = url_vars
-        paginador(request, qs_modulos.order_by('-id'), 20, data, url_vars)
+        from datetime import datetime, timedelta
+        data["umbral_reciente"] = datetime.now() - timedelta(days=7)
+        ids_usadas_set = set(
+            x for x in ModuloGrupo.objects.filter(status=True).values_list('modulos__id', flat=True).distinct() if x
+        )
+        data["ids_usadas"] = ids_usadas_set
+        paginador(request, qs_modulos.order_by(order_field), 20, data, url_vars)
         return render(request, 'seguridad/modulossistema/listado.html', data)
