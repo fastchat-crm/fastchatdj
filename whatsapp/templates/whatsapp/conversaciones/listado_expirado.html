@@ -2,7 +2,7 @@
 {% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
-<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.6">
+<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.7">
 <link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
 {% endblock %}
 
@@ -222,8 +222,30 @@
                 <i class="fa fa-hourglass-half text-warning"></i>
                 <span class="small text-warning fw-medium" id="bloqueo-reactivar-msg"></span>
             </div>
+            <div class="d-none align-items-center gap-2 mb-2 flex-wrap" id="finalizada-meta-row">
+                <div class="d-flex align-items-center gap-1">
+                    <label class="small text-muted mb-0 me-1" for="clasificacion-inline-select-fin">Classification</label>
+                    <select id="clasificacion-inline-select-fin"
+                            class="form-select form-select-sm clasificacion-inline-select"
+                            title="Change classification">
+                        {% for val, label in ESTADOS_CLASIFICACION %}
+                            <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="d-flex align-items-center gap-1 ms-2 finalizada-meta-pill" id="duracion-finalizada-pill">
+                    <i class="fa fa-hourglass-half text-muted"></i>
+                    <span class="small text-muted">Duration:</span>
+                    <span class="small fw-semibold" id="duracion-finalizada-valor">—</span>
+                </div>
+                <div class="d-flex align-items-center gap-1 ms-2 finalizada-meta-pill" id="fecha-finalizacion-pill">
+                    <i class="fa fa-flag-checkered text-muted"></i>
+                    <span class="small text-muted">Ended:</span>
+                    <span class="small fw-semibold" id="fecha-finalizacion-valor">—</span>
+                </div>
+            </div>
             <div class="d-flex align-items-center gap-2" id="footer-plantillas-row">
-                <div class="flex-grow-1" style="font-size:.8rem;color:var(--chat-text-secondary);">
+                <div class="flex-grow-1 finalizada-cerrada-label">
                     <i class="fa fa-lock me-1 text-muted"></i>Conversación cerrada — reactívala enviando una plantilla aprobada de Meta.
                 </div>
                 <div style="position:relative;flex-shrink:0;">
@@ -465,6 +487,7 @@ $(document).ready(function() {
         $('#mensajes-container').html('');
         $('#cm-empty-state').show();
         $('#reactivar-btn, #ver-resumen-btn, #chat-footer, #dropdowns-btn, #btn-estadisticas, #btn-control-respuestas').addClass('d-none').hide();
+        $('#finalizada-meta-row').addClass('d-none').removeClass('d-flex').removeData('conv-id');
         $('#stats-panel, #control-respuestas-panel').addClass('d-none');
         $('#contacto-nombre').text('Selecciona una conversación');
         $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
@@ -559,7 +582,18 @@ $(document).ready(function() {
                 $('#control-respuestas-panel, #stats-panel').addClass('d-none');
                 $('#btn-control-respuestas, #btn-estadisticas').removeClass('d-none').show();
 
-                // Footer solo aparece si la sesion es Meta (unica forma de reenganchar)
+                if (typeof r.clasificacion_id !== 'undefined') {
+                    $('#clasificacion-inline-select-fin')
+                        .val(String(r.clasificacion_id))
+                        .data('prev-val', String(r.clasificacion_id));
+                }
+                $('#duracion-finalizada-valor').text(r.duracion || '—');
+                $('#fecha-finalizacion-valor').text(r.fecha_fin_full || r.fecha_fin || '—');
+                $('#finalizada-meta-row')
+                    .data('conv-id', r.conversacion_id)
+                    .removeClass('d-none')
+                    .addClass('d-flex');
+
                 $('#conversacion-id').val(r.conversacion_id);
                 if (r.es_meta === true) {
                     $('#chat-footer').removeClass('d-none').show();
@@ -600,6 +634,55 @@ $(document).ready(function() {
             }
         });
     }
+
+    const _BADGE_PALETTE_FIN = ['badge-secondary', 'badge-info', 'badge-warning', 'badge-primary', 'badge-success', 'badge-danger'];
+    $(document).on('change', '#clasificacion-inline-select-fin', function() {
+        const $sel = $(this);
+        const convId = $('#finalizada-meta-row').data('conv-id') || $('#conversacion-id').val();
+        if (!convId) return;
+        const prevVal = $sel.data('prev-val');
+        const newVal = $sel.val();
+        $sel.prop('disabled', true);
+        $.ajax({
+            url: '',
+            type: 'POST',
+            data: {
+                action: 'cambiar-clasificacion',
+                pk: convId,
+                clasificacion: newVal,
+                inline: '1',
+                csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()
+            },
+            dataType: 'json'
+        }).done(function(arr) {
+            $sel.prop('disabled', false);
+            const r = Array.isArray(arr) ? arr[0] : arr;
+            if (!r || r.error) {
+                if (typeof prevVal !== 'undefined') $sel.val(prevVal);
+                if (typeof mensajeWarning === 'function') mensajeWarning((r && r.message) || 'Could not update classification.');
+                return;
+            }
+            $sel.data('prev-val', newVal);
+            const $card = $(`#lista-conversaciones .conversacion-item[data-id="${convId}"]`);
+            if ($card.length) {
+                const $badge = $card.find('.ci-badges .ci-badge.badge').filter(function() {
+                    for (const c of _BADGE_PALETTE_FIN) if ($(this).hasClass(c)) return true;
+                    return false;
+                }).first();
+                if ($badge.length) {
+                    _BADGE_PALETTE_FIN.forEach(c => $badge.removeClass(c));
+                    $badge.addClass('badge-' + r.clasificacion_color).text(r.clasificacion_label);
+                }
+            }
+        }).fail(function() {
+            $sel.prop('disabled', false);
+            if (typeof prevVal !== 'undefined') $sel.val(prevVal);
+            if (typeof mensajeWarning === 'function') mensajeWarning('Server error updating classification.');
+        });
+    });
+    $(document).on('focus', '#clasificacion-inline-select-fin', function() {
+        $(this).data('prev-val', $(this).val());
+    });
 
     // Click en conversación
     $(document).on('click', '.cargar-conversacion', function(e) {

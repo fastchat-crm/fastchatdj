@@ -124,6 +124,10 @@ def conversacionesFinalizadasView(request):
                     'reactivar_bloqueada': bloqueada,
                     'reactivar_vence_en': vence_en.isoformat() if vence_en else None,
                     'reactivar_horas_ventana': HORAS_VENTANA_REACTIVAR,
+                    'clasificacion_id': conversacion.clasificacion,
+                    'clasificacion_label': conversacion.get_clasificacion_display(),
+                    'clasificacion_color': conversacion.get_estado_color_clasificacion(),
+                    'fecha_fin_full': conversacion.fecha_fin_conversacion.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_fin_conversacion else '',
                     **_estadisticas_conversacion(conversacion),
                 })
             except Exception as ex:
