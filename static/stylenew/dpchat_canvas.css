@@ -176,6 +176,50 @@
     overflow: hidden;
 }
 
+.dpc-node-actions {
+    display: flex;
+    gap: .2rem;
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    opacity: 0;
+    transition: opacity .15s ease;
+}
+
+.dpc-node:hover .dpc-node-actions,
+.drawflow-node.selected .dpc-node-actions {
+    opacity: 1;
+}
+
+.dpc-node {
+    position: relative;
+}
+
+.dpc-node-act {
+    border: 0;
+    background: rgba(255, 255, 255, .92);
+    color: #475569;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .15);
+}
+
+.dpc-node-act:hover {
+    background: #e0e7ff;
+    color: #4338ca;
+}
+
+.dpc-node-act-danger:hover {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
 .dpc-df-node.tipo-menu          .dpc-node { border-top-color: #8b5cf6; }
 .dpc-df-node.tipo-respuesta     .dpc-node { border-top-color: #16a34a; }
 .dpc-df-node.tipo-pregunta      .dpc-node { border-top-color: #f59e0b; }

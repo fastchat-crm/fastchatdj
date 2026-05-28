@@ -985,7 +985,9 @@ def _serializar_para_canvas(departamento):
     Las aristas combinan el grafo moderno (`ConexionNodoChatbot`) con el árbol
     legacy (`opcion_padre`) para que flujos viejos también se vean conectados.
     """
-    from .models import ConexionNodoChatbot, TIPOS_NODO
+    from .models import ConexionNodoChatbot
+
+    TIPOS_NODO = OpcionDepartamentoChatBot.TIPOS_NODO
 
     nodos_qs = list(OpcionDepartamentoChatBot.objects.filter(
         departamento=departamento, status=True,

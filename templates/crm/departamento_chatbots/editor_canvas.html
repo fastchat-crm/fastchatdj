@@ -3,7 +3,7 @@
 {% block head %}
     <link rel="stylesheet" href="/static/lib/drawflow/drawflow.min.css">
     <link rel="stylesheet" href="/static/stylenew/dpchat_editor.css">
-    <link rel="stylesheet" href="/static/stylenew/dpchat_canvas.css?v1.0">
+    <link rel="stylesheet" href="/static/stylenew/dpchat_canvas.css?v1.2">
 {% endblock %}
 
 {% block content %}
@@ -18,6 +18,9 @@
             <span class="dpc-title-text">{{ filtro.nombre }}</span>
         </div>
         <div class="dpc-toolbar-right">
+            <button type="button" id="dpcBtnNuevo" class="btn btn-primary btn-sm">
+                <i class="fa fa-plus me-1"></i> Nuevo paso
+            </button>
             <a href="/crm/departamentos_chatbots/?action=preview&id={{ filtro.pk }}"
                class="btn btn-outline-success btn-sm">
                 <i class="fab fa-whatsapp me-1"></i> Preview
@@ -53,10 +56,53 @@
 </div>
 
 {{ canvas_data|json_script:"dp-canvas-data" }}
+
+<div class="modal fade" id="dpcFormModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="dpcFormTitle"><i class="fa fa-pen me-1 text-primary"></i> Editar paso</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form id="dpcFormNodo" autocomplete="off">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="guardar_opcion">
+                <input type="hidden" name="departamento_id" value="{{ filtro.pk }}">
+                <div class="modal-body" id="dpcFormBody">
+                    <div class="text-center text-muted py-4">
+                        <i class="fa fa-spinner fa-spin me-2"></i>Cargando…
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fa fa-save me-1"></i>Guardar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="dpcFichaModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title"><i class="fa fa-circle-info me-1 text-info"></i> Detalle y traza del paso</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" id="dpcFichaBody">
+                <div class="text-center text-muted py-4">
+                    <i class="fa fa-spinner fa-spin me-2"></i>Cargando…
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block jscript %}
     <script src="/static/lib/drawflow/drawflow.min.js"></script>
     <script src="/static/lib/dagre/dagre.min.js"></script>
-    <script src="/static/js/dpchat_canvas.js?v1.0"></script>
+    <script src="/static/js/dpchat_canvas.js?v1.3"></script>
 {% endblock %}
