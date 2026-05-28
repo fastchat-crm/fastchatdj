@@ -10,13 +10,7 @@
     var csrf = btn.dataset.csrf || '';
     var url = btn.dataset.url || '/whatsapp/sesion-activa/';
 
-    menu.addEventListener('click', function (ev) {
-        var item = ev.target.closest('.wa-sesion-item');
-        if (!item) {
-            return;
-        }
-        ev.preventDefault();
-        var sid = item.dataset.sesionId;
+    function cambiarSesion(item, sid) {
         var fd = new FormData();
         fd.append('sesion_id', sid);
         fd.append('csrfmiddlewaretoken', csrf);
@@ -37,5 +31,33 @@
         }).catch(function () {
             item.classList.remove('is-loading');
         });
+    }
+
+    menu.addEventListener('click', function (ev) {
+        var item = ev.target.closest('.wa-sesion-item');
+        if (!item) {
+            return;
+        }
+        ev.preventDefault();
+        if (item.classList.contains('is-active')) {
+            return;
+        }
+        var sid = item.dataset.sesionId;
+        var nameEl = item.querySelector('.wa-sesion-item-name');
+        var nombre = nameEl ? nameEl.textContent.trim() : '';
+        if (window.Swal && Swal.fire) {
+            Swal.fire({
+                title: 'Switch session?',
+                text: nombre ? 'The page will reload showing "' + nombre + '".' : 'The page will reload with the selected session.',
+                type: 'question', showCancelButton: true, allowOutsideClick: false,
+                confirmButtonText: 'Yes, switch', cancelButtonText: 'Cancel',
+            }).then(function (res) {
+                if (res && res.value) {
+                    cambiarSesion(item, sid);
+                }
+            });
+        } else if (window.confirm('Switch session?')) {
+            cambiarSesion(item, sid);
+        }
     });
 })();
