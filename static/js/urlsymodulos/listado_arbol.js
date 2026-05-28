@@ -21,11 +21,13 @@ jstreeGrupoUrls.jstree({
             "responsive": false
         },
         "check_callback": function (operation, node, node_parent, node_position, more) {
-            if (operation === 'move_node') {
-                var d = readJstreeData(node.id);
-                return node_parent.parent === '#' && node.children.length === 0 && !d.is_parent;
+            if (operation === 'move_node' || operation === 'copy_node') {
+                if (!node || !node_parent) return false;
+                if (node.parent === '#') return false;
+                if (!node_parent.parent || node_parent.parent !== '#') return false;
+                return true;
             }
-            return false;
+            return true;
         },
     },
     "types": {
@@ -36,7 +38,16 @@ jstreeGrupoUrls.jstree({
             "icon": "fa fa-file text-inverse fa-lg"
         }
     },
-    "plugins": ["wholerow", "noclose", "dnd", "types"]
+    "dnd": {
+        "copy": false,
+        "is_draggable": function (nodes) {
+            for (var i = 0; i < nodes.length; i++) {
+                if (!nodes[i].parent || nodes[i].parent === '#') return false;
+            }
+            return true;
+        }
+    },
+    "plugins": ["wholerow", "dnd", "types"]
 });
 
 jstreeGrupoUrls.bind("move_node.jstree", function (e, data) {
