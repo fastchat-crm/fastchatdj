@@ -11,7 +11,7 @@ from core.funciones import addData, secure_module, log, leer_sesion_id, encrypt_
 from seguridad.templatetags.templatefunctions import encrypt
 from .models import ConversacionWhatsApp, MensajeWhatsApp
 from .permisos_sesion import (
-    sesiones_visibles_activas,
+    sesiones_visibles,
     rol_en_sesion,
     filtro_conversaciones_por_rol,
     puede_ver_conversacion,
@@ -40,7 +40,7 @@ def conversacionesPendienteReconexionView(request):
     }
     addData(request, data)
 
-    sesiones = sesiones_visibles_activas(request.user).order_by('-ultima_conexion')
+    sesiones = sesiones_visibles(request.user).order_by('-ultima_conexion')
     data['sesiones'] = sesiones
 
     sesion_id = leer_sesion_id(request)
@@ -166,7 +166,7 @@ def conversacionesPendienteReconexionView(request):
     filtro_clasificacion = request.GET.get('clasificacion', '').strip()
 
     filtros = Q(contacto__status=True, status=True,
-                contacto__sesion__in=sesiones_visibles_activas(request.user),
+                contacto__sesion__in=sesiones_visibles(request.user),
                 contacto__sesion__status=True)
     url_vars = ''
 
