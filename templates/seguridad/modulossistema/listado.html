@@ -134,6 +134,12 @@
                                         </li>
                                         <li>
                                             <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="gestionarGrupos({{ mod.id }}, 'Add / remove groups - {{ mod.nombre }}')">
+                                                <i class="fas fa-layer-group me-2 text-info"></i>Add / remove groups
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
                                                onclick="eliminarajax({{ mod.pk }}, '{{ mod.nombre }}', 'delete')">
                                                 <i class="fas fa-trash me-2 text-danger"></i>Delete
                                             </a>
@@ -234,6 +240,32 @@
                     setTimeout($.unblockUI, 1);
                     mensajeWarning('Server error.');
                 });
+            });
+        }
+
+        function gestionarGrupos(id, text) {
+            pantallaespera();
+            $.ajax({
+                type: 'GET',
+                url: '{{ request.path }}',
+                data: {
+                    action: 'grupos_modulo',
+                    id: id
+                },
+                dataType: 'json'
+            }).done(function (data) {
+                setTimeout($.unblockUI, 1);
+                if (data && data.result === true) {
+                    $('#modalNombre').html(text);
+                    $('.detalleProdModal').html(data.data);
+                    const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+                    modal.show();
+                } else {
+                    mensajeWarning((data && data.message) || 'Module not found.');
+                }
+            }).fail(function () {
+                setTimeout($.unblockUI, 1);
+                mensajeWarning('Server error.');
             });
         }
 

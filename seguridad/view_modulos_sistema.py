@@ -134,6 +134,31 @@ def modulossistemaView(request):
                         return HttpResponse(json.dumps({'result': False, 'mensaje': 'Orden inválido'}))
                     except Exception as ex:
                         return HttpResponse(json.dumps({'result': False, 'mensaje': str(ex)}))
+                elif action == 'guardar_grupos_modulo':
+                    pk_modulo = int(request.POST.get('pk_modulo') or 0)
+                    grupos_ids = [int(g) for g in request.POST.getlist('c_grupos', []) if g.isdigit()]
+                    modulo = model.objects.filter(pk=pk_modulo, status=True).first()
+                    if not modulo:
+                        res_json.append({'error': True, 'message': 'Module not found.'})
+                    else:
+                        grupos_actuales = set(ModuloGrupo.objects.filter(modulos=modulo, status=True).values_list('pk', flat=True))
+                        grupos_nuevos = set(grupos_ids)
+                        a_agregar = grupos_nuevos - grupos_actuales
+                        a_quitar = grupos_actuales - grupos_nuevos
+                        for gid in a_agregar:
+                            mg = ModuloGrupo.objects.filter(pk=gid, status=True).first()
+                            if mg:
+                                mg.modulos.add(modulo)
+                        for gid in a_quitar:
+                            mg = ModuloGrupo.objects.filter(pk=gid, status=True).first()
+                            if mg:
+                                mg.modulos.remove(modulo)
+                        log(f"Synced groups for module {modulo.__str__()}: +{len(a_agregar)} / -{len(a_quitar)}", request, "change")
+                        res_json.append({
+                            'error': False,
+                            'message': f"Groups updated (+{len(a_agregar)} / -{len(a_quitar)}).",
+                            'reload': True
+                        })
                 elif action == 'extraer_urls':
                     from fastchatdj.urls import urls_sistema
                     nuevas = []
@@ -194,6 +219,17 @@ def modulossistemaView(request):
                 data["pk"] = pk
                 data["form"] = Formulario(instance=modulo, ver=True)
                 return render(request, 'seguridad/modulossistema/form.html', data)
+            elif action == 'grupos_modulo':
+                pk_modulo = int(request.GET.get('id') or 0)
+                modulo = model.objects.filter(pk=pk_modulo, status=True).first()
+                if not modulo:
+                    return JsonResponse({'result': False, 'message': 'Module not found.'})
+                grupos_actuales_ids = set(ModuloGrupo.objects.filter(modulos=modulo, status=True).values_list('pk', flat=True))
+                data['modulo'] = modulo
+                data['grupos'] = ModuloGrupo.objects.filter(status=True).order_by('prioridad', 'nombre')
+                data['grupos_actuales_ids'] = grupos_actuales_ids
+                template = get_template('seguridad/modulossistema/form_grupos.html')
+                return JsonResponse({'result': True, 'data': template.render(data)})
 
         criterio, filtros, url_vars =  request.GET.get('criterio', ''), Q(status=True), ''
         ister, homologacion, postulate = request.GET.get('ister',''), request.GET.get('homologacion',''), request.GET.get('postulate','')
