@@ -10,11 +10,11 @@
             </svg>
         </div>
         <div class="push-snack__body">
-            <p class="push-snack__title">Enable notifications</p>
-            <p class="push-snack__subtitle">Get alerts about new messages and updates.</p>
+            <p class="push-snack__title">¿Activar notificaciones?</p>
+            <p class="push-snack__subtitle">Recibí avisos de mensajes nuevos y novedades en este dispositivo.</p>
         </div>
-        <button type="button" class="push-snack__action" id="pushOptInBtn">Enable</button>
-        <button type="button" class="push-snack__close" id="pushOptInClose" aria-label="Close" title="Close">
+        <button type="button" class="push-snack__action" id="pushOptInBtn">Activar</button>
+        <button type="button" class="push-snack__close" id="pushOptInClose" aria-label="Cerrar" title="Cerrar">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
                  width="16" height="16">
@@ -106,18 +106,14 @@
 
         async function evaluate() {
             if (Notification.permission === 'denied') return;
-            if (Notification.permission === 'granted') {
-                try {
-                    const reg = await navigator.serviceWorker.ready;
-                    const existing = await reg.pushManager.getSubscription();
-                    if (existing) {
-                        await sendSubscription(existing, 'subscribe');
-                        return;
-                    }
-                    await subscribe();
-                } catch (e) {}
-                return;
-            }
+            try {
+                const reg = await navigator.serviceWorker.ready;
+                const existing = await reg.pushManager.getSubscription();
+                if (existing) {
+                    await sendSubscription(existing, 'subscribe');
+                    return;
+                }
+            } catch (e) {}
             if (dismissed()) return;
             setTimeout(showSnack, 1500);
         }
