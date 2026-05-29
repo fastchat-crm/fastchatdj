@@ -691,6 +691,28 @@ class ConversacionWhatsApp(ModeloBase):
         return self.proveedor_efectivo == 'messenger'
 
     @cached_property
+    def vence_meta_en(self):
+        if not self.atendida_por_meta:
+            return None
+        sesion = getattr(self, 'sesion', None)
+        if not sesion:
+            return None
+        ultimo_entrante = (
+            self.mensajes
+            .exclude(remitente=sesion.numero)
+            .order_by('-fecha')
+            .first()
+        )
+        if not ultimo_entrante or not ultimo_entrante.fecha:
+            return None
+        return ultimo_entrante.fecha + relativedelta(hours=24)
+
+    @property
+    def vence_meta_expirada(self):
+        vence = self.vence_meta_en
+        return bool(vence and timezone.now() > vence)
+
+    @cached_property
     def from_number(self):
         return self.contacto.from_number
 

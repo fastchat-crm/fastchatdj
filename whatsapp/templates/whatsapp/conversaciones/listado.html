@@ -2,7 +2,7 @@
 {% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
-<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.8">
+<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.9">
 <link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
 {% endblock %}
 
@@ -130,6 +130,12 @@
                 </div>
             </div>
             <div class="cm-header-right">
+                        <div class="d-none" id="meta-countdown-header">
+                            <span class="meta-countdown badge bg-warning text-dark" id="meta-countdown-badge"
+                                  title="Tiempo restante en la ventana de 24 horas de Meta">
+                                <i class="fa fa-clock me-1"></i><span class="meta-countdown-val">—</span>
+                            </span>
+                        </div>
                         <!-- Atribución (referral CTWA / IG ad) -->
                         <div class="d-none" id="referral-container">
                             <a id="referral-badge"
@@ -2653,6 +2659,62 @@
     };
     setInterval(window.tickMetaCountdowns, 30000);
     $(document).ready(window.tickMetaCountdowns);
+
+    function _sincronizarCountdownHeader(convId) {
+        var item = $('#lista-conversaciones [data-id="' + convId + '"]');
+        var src = item.find('.meta-countdown').first();
+        var hdr = $('#meta-countdown-header');
+        var badge = $('#meta-countdown-badge');
+        if (src.length) {
+            var vence = src.attr('data-vence');
+            badge.removeClass('bg-warning text-dark bg-danger');
+            if (vence) {
+                badge.attr('data-vence', vence).addClass('bg-warning text-dark');
+                badge.find('i').attr('class', 'fa fa-clock me-1');
+            } else {
+                badge.removeAttr('data-vence').addClass('bg-danger');
+                badge.find('i').attr('class', 'fa fa-hourglass-end me-1');
+                badge.find('.meta-countdown-val').text('Vencido');
+            }
+            hdr.removeClass('d-none').show();
+        } else {
+            badge.removeAttr('data-vence');
+            hdr.addClass('d-none').hide();
+        }
+        if (typeof window.tickMetaCountdowns === 'function') setTimeout(window.tickMetaCountdowns, 80);
+    }
+
+    function _headerVentanaVencida() {
+        var hdr = document.getElementById('meta-countdown-header');
+        if (!hdr || hdr.classList.contains('d-none')) return false;
+        var badge = document.getElementById('meta-countdown-badge');
+        if (!badge) return false;
+        var raw = badge.getAttribute('data-vence');
+        if (!raw) return true;
+        var ts = Date.parse(raw);
+        return !isNaN(ts) && (ts - Date.now() <= 0);
+    }
+
+    $(document).on('click', '.cargar-conversacion', function () {
+        _sincronizarCountdownHeader($(this).data('id'));
+    });
+
+    var _formEnviar = document.getElementById('form-enviar-mensaje');
+    if (_formEnviar) {
+        _formEnviar.addEventListener('submit', function (e) {
+            if (_headerVentanaVencida()) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                if (window.Swal) {
+                    Swal.fire('Ventana de 24 horas vencida',
+                        'No se puede enviar texto libre: pasaron más de 24 horas desde el último mensaje del cliente. Usa una plantilla aprobada de Meta para retomar la conversación.',
+                        'warning');
+                } else {
+                    alert('La ventana de 24 horas de Meta venció. Usa una plantilla aprobada para retomar la conversación.');
+                }
+            }
+        }, true);
+    }
 
     (function() {
         const IDLE_RELOAD_MS = 30 * 60 * 1000;

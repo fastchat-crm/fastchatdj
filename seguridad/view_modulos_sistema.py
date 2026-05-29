@@ -3,7 +3,7 @@ import sys
 from datetime import date
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render, redirect
 from django.template.loader import get_template
@@ -11,7 +11,7 @@ from django.template.loader import get_template
 from core.funciones import addData, mi_paginador, secure_module, log, paginador
 from core.funciones_adicionales import ordenar_modulos_url, salva_logs
 from seguridad.forms import ModuloForm
-from seguridad.models import Modulo, ModuloGrupo
+from seguridad.models import Modulo, ModuloGrupo, GroupModulo
 from django.contrib import messages
 
 
@@ -234,8 +234,18 @@ def modulossistemaView(request):
         criterio, filtros, url_vars =  request.GET.get('criterio', ''), Q(status=True), ''
         ister, homologacion, postulate = request.GET.get('ister',''), request.GET.get('homologacion',''), request.GET.get('postulate','')
         usadas = request.GET.get('usadas', '')
+        grupo_id = request.GET.get('grupo', '')
+        rol_id = request.GET.get('rol', '')
         orden = request.GET.get('orden', 'id_desc')
 
+        if grupo_id.isdigit():
+            data['grupo_sel'] = int(grupo_id)
+            url_vars += f'&grupo={grupo_id}'
+            filtros = filtros & Q(modulogrupo__id=int(grupo_id), modulogrupo__status=True)
+        if rol_id.isdigit():
+            data['rol_sel'] = int(rol_id)
+            url_vars += f'&rol={rol_id}'
+            filtros = filtros & Q(groupmodulo__id=int(rol_id), groupmodulo__status=True)
         if usadas in ('1', '0'):
             data['usadas'] = usadas
             url_vars += f'&usadas={usadas}'
@@ -297,7 +307,12 @@ def modulossistemaView(request):
         if orden != 'id_desc':
             url_vars += f'&orden={orden}'
 
-        qs_modulos = model.objects.filter(filtros).prefetch_related('modulogrupo_set').distinct()
+        qs_modulos = (
+            model.objects.filter(filtros)
+            .prefetch_related('modulogrupo_set', 'groupmodulo_set__group')
+            .annotate(roles_count=Count('groupmodulo', filter=Q(groupmodulo__status=True), distinct=True))
+            .distinct()
+        )
         data["list_count"] = qs_modulos.count()
         data["url_vars"] = url_vars
         from datetime import datetime, timedelta
@@ -306,5 +321,7 @@ def modulossistemaView(request):
             x for x in ModuloGrupo.objects.filter(status=True).values_list('modulos__id', flat=True).distinct() if x
         )
         data["ids_usadas"] = ids_usadas_set
+        data["grupos_filtro"] = ModuloGrupo.objects.filter(status=True).order_by('nombre')
+        data["roles_filtro"] = GroupModulo.objects.filter(status=True).select_related('group').order_by('group__name')
         paginador(request, qs_modulos.order_by(order_field), 20, data, url_vars)
         return render(request, 'seguridad/modulossistema/listado.html', data)

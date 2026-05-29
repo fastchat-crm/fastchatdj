@@ -141,6 +141,8 @@ def conversacionesView(request):
                 'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_registro else '',
                 'bloquear_cierre': conversacion.bloquear_cierre,
                 'es_meta': bool(getattr(conversacion.sesion, 'es_meta', False)),
+                'vence_meta': conversacion.vence_meta_en.isoformat() if conversacion.vence_meta_en else None,
+                'meta_bloqueada': conversacion.vence_meta_expirada,
                 'es_tradicional': (conversacion.sesion.modo_bot or '') == 'tradicional',
                 'referral': referral_data,
                 'clasificacion_id': conversacion.clasificacion,
@@ -229,6 +231,15 @@ def conversacionesView(request):
                     conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
                     if not puede_ver_conversacion(request.user, conversacion):
                         return JsonResponse({'error': True, 'message': 'Not authorized.'})
+
+                    from .funcionesWhatsappConversacion import _bloqueo_ventana_meta
+                    meta_bloqueada, _vence_meta = _bloqueo_ventana_meta(conversacion)
+                    if meta_bloqueada:
+                        return JsonResponse({
+                            'error': True,
+                            'requiere_plantilla': True,
+                            'message': 'La ventana de 24 horas de Meta venció. Para retomar la conversación debes enviar una plantilla aprobada.',
+                        })
 
                     # Crear instancia del servicio segun proveedor de la sesion
                     service = get_whatsapp_service(conversacion.sesion)

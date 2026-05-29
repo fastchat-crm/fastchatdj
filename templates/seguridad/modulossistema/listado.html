@@ -19,6 +19,24 @@
                         </div>
                     </div>
                     <div class="col-md-3">
+                        <label class="form-label">Grupo (sidebar)</label>
+                        <select name="grupo" class="form-control">
+                            <option value="">Todos los grupos</option>
+                            {% for g in grupos_filtro %}
+                                <option value="{{ g.id }}" {% if grupo_sel == g.id %}selected{% endif %}>{{ g.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Rol de usuario</label>
+                        <select name="rol" class="form-control">
+                            <option value="">Todos los roles</option>
+                            {% for r in roles_filtro %}
+                                <option value="{{ r.id }}" {% if rol_sel == r.id %}selected{% endif %}>{{ r.group.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label">In use</label>
                         <select name="usadas" class="form-control">
                             <option value="">All</option>
@@ -79,6 +97,7 @@
                         <th class="text-center">URL</th>
                         <th class="text-center">In use</th>
                         <th class="text-center">Groups</th>
+                        <th class="text-center">Roles</th>
                         <th class="text-center">Created</th>
                         <th class="text-center">Action</th>
                     </tr>
@@ -115,6 +134,20 @@
                                 {% empty %}
                                     <span class="text-muted small">—</span>
                                 {% endfor %}
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary mb-1" title="Cantidad de roles que usan esta URL">
+                                    <i class="fa fa-user-shield me-1"></i>{{ mod.roles_count }}
+                                </span>
+                                <div class="mt-1">
+                                    {% for gm in mod.groupmodulo_set.all %}
+                                        {% if gm.status %}
+                                            <span class="badge bg-warning text-dark me-1 mb-1">{{ gm.group.name }}</span>
+                                        {% endif %}
+                                    {% empty %}
+                                        <span class="text-muted small">—</span>
+                                    {% endfor %}
+                                </div>
                             </td>
                             <td class="text-center small">
                                 {{ mod.fecha_registro|date:"Y-m-d H:i" }}

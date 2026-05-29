@@ -1,4 +1,4 @@
-const CACHE_NAME = 'IMAEBS-V3';
+const CACHE_NAME = 'MENSAJERIA-VS';
 var urlsToCache = [
 ];
 
@@ -8,6 +8,7 @@ const addResourcesToCache = async () => {
 };
 
 addEventListener('install', function (event) {
+    self.skipWaiting();
     event.waitUntil(addResourcesToCache());
 });
 
@@ -36,6 +37,7 @@ const cacheFirst = async (request) => {
 // });
 
 const activateEvent = async () => {
+    await clients.claim();
     let refresh = false;
     const cacheList = await caches.keys();
     for(let c of cacheList){
@@ -63,8 +65,8 @@ var port;
 addEventListener('push', async function (event) {
     const eventInfo = event.data.text();
     const data = JSON.parse(eventInfo);
-    const head = data.head;
-    const body = data.body;
+    const head = data.head || data.title || 'fastchat';
+    const body = data.body || data.message || data.descripcion || '';
 
     if (data.btn_notificaciones) {
         var clientes = await clients.matchAll({includeUncontrolled: true, type: 'window'});
@@ -75,8 +77,8 @@ addEventListener('push', async function (event) {
 
     var DATANOT = {
         body: body,
-        icon: "/static/pwalogo/512x512.png",
-        badge: "/static/pwalogo/badge.png",
+        icon: data.icon || "/static/pwalogo/512x512.png",
+        badge: data.badge || "/static/pwalogo/badge.png",
         vibrate: [500, 110, 500, 500, 110, 500],
         data: {url: data.url ? data.url : ''},
         actions: [{action: "open_url", title: "Ver ahora"}],

@@ -102,7 +102,16 @@
       "Bash(findstr \"\\\\.py:\")",
       "Bash(where pycheck *)",
       "Bash(pycheck whatsapp/permisos_sesion.py)",
-      "Bash(node -c static/stylenew/selector_sesion_global.js)"
+      "Bash(node -c static/stylenew/selector_sesion_global.js)",
+      "PowerShell(Write-Output \"test123\"; \\(Get-Location\\).Path)",
+      "Bash(ls templates/whatsapp/)",
+      "Bash(ls -R templates/whatsapp/conversaciones*)",
+      "Bash(sed -n '1572,1700p' whatsapp/templates/whatsapp/conversaciones/listado.html)",
+      "Bash(sed -n '1790,1912p' whatsapp/templates/whatsapp/conversaciones/listado.html)",
+      "Bash(sed -n '330,405p' whatsapp/templates/whatsapp/conversaciones/listado.html)",
+      "Bash(ls templates/seguridad/modulossistema/)",
+      "Bash(ls seguridad/templates/seguridad/modulossistema/)",
+      "Bash(find . -path ./.venv -prune -o -name \"listado.html\" -path \"*modulossistema*\" -print)"
     ]
   },
   "hooks": {
