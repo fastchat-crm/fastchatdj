@@ -12,3 +12,65 @@
     cursor: not-allowed;
     opacity: .55;
 }
+
+.input-emoji-wrap {
+    position: relative;
+}
+
+.input-emoji-wrap textarea.input-con-emoji,
+.input-emoji-wrap input.input-con-emoji {
+    padding-right: 38px;
+}
+
+.btn-emoji-trigger {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+    line-height: 28px;
+    text-align: center;
+}
+
+.btn-emoji-trigger:hover {
+    background: #eef2ff;
+    border-color: #6366f1;
+}
+
+.emoji-popover {
+    position: fixed;
+    z-index: 2050;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, .15);
+    padding: 8px;
+    width: 280px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.emoji-popover-inner {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 2px;
+}
+
+.emoji-btn {
+    border: none;
+    background: transparent;
+    font-size: 1.1rem;
+    padding: 4px 0;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.emoji-btn:hover {
+    background: #eef2ff;
+}

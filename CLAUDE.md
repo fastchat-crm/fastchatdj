@@ -105,7 +105,9 @@ Always check the current version in the template before incrementing.
 
 ## Language & Copy
 
-All visible text in views and templates must be in **English**: `titulo`, alert messages, button labels, column headers, log messages, `messages.success/error`, and exception strings. Backend variable names may remain in Spanish (`criterio`, `filtro`, `listado`) for consistency with the existing codebase.
+Todo texto visible para el usuario en views y templates debe estar en **español**: `titulo`, mensajes de alertas y SweetAlert, labels de botones, encabezados de columnas, mensajes de log, `messages.success/error`, strings de excepciones, copys de ayuda, badges, tooltips y `JsonResponse({'message': ...})`. Los nombres de variables backend se mantienen en español (`criterio`, `filtro`, `listado`, `usuarios`) — siempre fue la convención. Términos técnicos universales (push, URL, endpoint, service worker, API, Meta, WhatsApp) no se traducen.
+
+Detalles y ejemplos en `.ai/docs/lenguaje.md`.
 
 ## Soft Delete
 

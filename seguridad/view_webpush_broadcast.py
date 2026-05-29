@@ -41,13 +41,58 @@ def webpush_broadcast(request):
         action = request.POST.get('action', '')
         try:
             with transaction.atomic():
+                if action == 'eliminar_dispositivo':
+                    try:
+                        from webpush.models import PushInformation
+                        pid = int(request.POST.get('id') or 0)
+                        pi = PushInformation.objects.filter(pk=pid).select_related('subscription', 'user').first()
+                        if not pi:
+                            return JsonResponse([{'error': True, 'message': 'Dispositivo no encontrado.'}], safe=False)
+                        sub = pi.subscription
+                        uid = pi.user_id
+                        pi.delete()
+                        try:
+                            if sub and not sub.webpush_info.exists():
+                                sub.delete()
+                        except Exception:
+                            pass
+                        log(f'Dispositivo push {pid} eliminado (usuario {uid})', request, 'del')
+                        return JsonResponse([{'error': False, 'message': 'Dispositivo eliminado.'}], safe=False)
+                    except Exception as ex:
+                        return JsonResponse([{'error': True, 'message': str(ex)}], safe=False)
+
+                if action == 'enviar_a_dispositivo':
+                    try:
+                        from webpush.models import PushInformation
+                        from pwa.notificaciones import _payload
+                        from webpush import utils as _wpu
+                        import json as _json
+                        pid = int(request.POST.get('id') or 0)
+                        pi = PushInformation.objects.filter(pk=pid).select_related('subscription', 'user').first()
+                        if not pi:
+                            return JsonResponse([{'error': True, 'message': 'Dispositivo no encontrado.'}], safe=False)
+                        titulo = (request.POST.get('titulo') or 'Notificación de prueba').strip()[:120]
+                        cuerpo = (request.POST.get('cuerpo') or 'Esta es una notificación de prueba.').strip()[:300]
+                        url_destino = (request.POST.get('url') or '/perfilpanel/').strip() or '/perfilpanel/'
+                        payload = _payload(titulo, cuerpo, url=url_destino,
+                                           tag=f'broadcast-dev-{pid}',
+                                           extra={'tipo': 'broadcast.dispositivo', 'from': request.user.id})
+                        try:
+                            _wpu._send_notification(pi.subscription, _json.dumps(payload), 60)
+                            log(f'Push de prueba a dispositivo {pid} ok', request, 'add')
+                            return JsonResponse([{'error': False, 'message': 'Enviado al dispositivo.'}], safe=False)
+                        except Exception as ex:
+                            return JsonResponse([{'error': True, 'message': f'Falló envío: {ex}'}], safe=False)
+                    except Exception as ex:
+                        return JsonResponse([{'error': True, 'message': str(ex)}], safe=False)
+
                 if action == 'enviar_prueba':
                     ids = [int(x) for x in (request.POST.get('ids') or '').split(',') if x.strip().isdigit()]
-                    titulo = (request.POST.get('titulo') or 'Test notification').strip()[:120]
-                    cuerpo = (request.POST.get('cuerpo') or 'This is a test push from Push broadcast.').strip()[:300]
+                    titulo = (request.POST.get('titulo') or '🔔 Notificación de prueba').strip()[:120]
+                    cuerpo = (request.POST.get('cuerpo') or '✅ Hola, esta es una notificación de prueba desde el panel de difusión push.').strip()[:300]
                     url_destino = (request.POST.get('url') or '/perfilpanel/').strip() or '/perfilpanel/'
                     if not ids:
-                        return JsonResponse([{'error': True, 'message': 'No users selected.'}], safe=False)
+                        return JsonResponse([{'error': True, 'message': 'No seleccionaste ningún usuario.'}], safe=False)
                     enviados = 0
                     fallaron = 0
                     try:
@@ -77,13 +122,13 @@ def webpush_broadcast(request):
                     }], safe=False)
 
                 if action == 'enviar_a_todos_con_push':
-                    titulo = (request.POST.get('titulo') or 'Test notification').strip()[:120]
-                    cuerpo = (request.POST.get('cuerpo') or 'Broadcast to every subscribed device.').strip()[:300]
+                    titulo = (request.POST.get('titulo') or '📣 Aviso para todos').strip()[:120]
+                    cuerpo = (request.POST.get('cuerpo') or '🚀 Mensaje masivo enviado a todos los dispositivos suscriptos.').strip()[:300]
                     url_destino = (request.POST.get('url') or '/perfilpanel/').strip() or '/perfilpanel/'
                     try:
                         from pwa.notificaciones import enviar_push_usuario
                     except Exception:
-                        return JsonResponse([{'error': True, 'message': 'PWA push module unavailable.'}], safe=False)
+                        return JsonResponse([{'error': True, 'message': 'Módulo de notificaciones PWA no disponible.'}], safe=False)
                     usuarios = (
                         Usuario.objects.filter(webpush_info__isnull=False, is_active=True)
                         .distinct()
@@ -175,6 +220,46 @@ def webpush_broadcast(request):
         )
     except Exception:
         data['sesiones_disponibles'] = []
+
+    dispositivos = []
+    try:
+        from urllib.parse import urlparse
+        from webpush.models import PushInformation
+        dev_user_filter = request.GET.get('dev_user') or ''
+        dev_qs = (
+            PushInformation.objects
+            .select_related('subscription', 'user')
+            .order_by('-id')
+        )
+        if dev_user_filter and dev_user_filter.isdigit():
+            dev_qs = dev_qs.filter(user_id=int(dev_user_filter))
+            data['dev_user'] = dev_user_filter
+        for d in dev_qs[:500]:
+            sub = d.subscription
+            endpoint = (sub.endpoint or '') if sub else ''
+            host = ''
+            if endpoint:
+                try:
+                    host = urlparse(endpoint).netloc
+                except Exception:
+                    host = endpoint[:40]
+            usuario_nombre = ''
+            usuario_username = ''
+            if d.user_id:
+                usuario_nombre = (d.user.get_full_name() or '').strip() or d.user.username
+                usuario_username = d.user.username
+            dispositivos.append({
+                'id': d.id,
+                'user_id': d.user_id,
+                'usuario_nombre': usuario_nombre,
+                'usuario_username': usuario_username,
+                'browser': (sub.browser if sub else '') or 'Desconocido',
+                'host': host,
+                'endpoint_preview': (endpoint[:60] + '…') if len(endpoint) > 60 else endpoint,
+            })
+    except Exception:
+        pass
+    data['dispositivos'] = dispositivos
 
     paginador(request, usuarios, 25, data, url_vars)
     return render(request, 'seguridad/webpush_broadcast/listado.html', data)
