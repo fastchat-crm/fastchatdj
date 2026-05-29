@@ -4,11 +4,59 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+_ICONOS_CACHE = {'icon': None, 'badge': None, 'cargado': False}
+
+
+def _resolver_iconos_plataforma():
+    if _ICONOS_CACHE['cargado']:
+        return _ICONOS_CACHE['icon'], _ICONOS_CACHE['badge']
+    icon_url = None
+    badge_url = None
+    try:
+        from seguridad.models import Configuracion
+        confi = Configuracion.get_instancia()
+        if confi:
+            if confi.logo_sistema:
+                try:
+                    icon_url = confi.logo_sistema.url
+                except Exception:
+                    icon_url = None
+            if confi.ico:
+                try:
+                    badge_url = confi.ico.url
+                except Exception:
+                    badge_url = None
+            if not badge_url:
+                badge_url = icon_url
+    except Exception:
+        pass
+    if not icon_url:
+        icon_url = '/static/images/icons/icon-192x192.png'
+    if not badge_url:
+        badge_url = '/static/images/icons/icon-96x96.png'
+    _ICONOS_CACHE['icon'] = icon_url
+    _ICONOS_CACHE['badge'] = badge_url
+    _ICONOS_CACHE['cargado'] = True
+    return icon_url, badge_url
+
+
+def invalidar_iconos_cache():
+    _ICONOS_CACHE['icon'] = None
+    _ICONOS_CACHE['badge'] = None
+    _ICONOS_CACHE['cargado'] = False
+
+
 def _payload(head, body, url=None, icon=None, badge=None, image=None, tag=None,
              require_interaction=False, extra=None):
     data = {'head': head, 'body': body}
     if url:
         data['url'] = url
+    if not icon or not badge:
+        plat_icon, plat_badge = _resolver_iconos_plataforma()
+        if not icon:
+            icon = plat_icon
+        if not badge:
+            badge = plat_badge
     if icon:
         data['icon'] = icon
     if badge:

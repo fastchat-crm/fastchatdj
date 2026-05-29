@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block head %}
-    <link rel="stylesheet" href="/static/stylenew/webpush_broadcast.css?v1.1">
+    <link rel="stylesheet" href="/static/stylenew/webpush_broadcast.css?v1.2">
 {% endblock %}
 {% block content %}
 
@@ -113,7 +113,7 @@
                             </thead>
                             <tbody>
                             {% for u in listado %}
-                                <tr>
+                                <tr data-user-id="{{ u.id }}">
                                     <td>
                                         <input type="checkbox" class="form-check-input chkUsuario"
                                                value="{{ u.id }}" {% if u.n_devices == 0 %}disabled title="Sin dispositivos suscriptos"{% endif %}>
@@ -124,23 +124,49 @@
                                     </td>
                                     <td><code class="small">{{ u.documento|default:'—' }}</code></td>
                                     <td class="small">{{ u.email|default:'—' }}</td>
-                                    <td class="text-center">
-                                        {% if u.n_devices %}
-                                            <span class="badge bg-success">{{ u.n_devices }}</span>
+                                    <td>
+                                        {% if u.webpush_info.all %}
+                                            <div class="d-flex flex-wrap gap-1 align-items-center">
+                                                <span class="badge bg-success" title="Cantidad de dispositivos">{{ u.n_devices }}</span>
+                                                {% for pi in u.webpush_info.all %}
+                                                    <span class="badge badge-dev"
+                                                          title="Endpoint: {{ pi.subscription.endpoint|truncatechars:80 }}">
+                                                        <i class="fa fa-mobile-alt me-1"></i>{{ pi.subscription.browser|default:'—'|capfirst }}
+                                                        <button type="button" class="btn-revoke-inline ms-1"
+                                                                title="Eliminar este dispositivo"
+                                                                onclick="eliminarDispositivo({{ pi.id }}, '{{ u.get_full_name|default:u.username|escapejs }}')">
+                                                            <i class="fa fa-times"></i>
+                                                        </button>
+                                                    </span>
+                                                {% endfor %}
+                                            </div>
                                         {% else %}
                                             <span class="badge bg-light text-dark border">0</span>
                                         {% endif %}
                                     </td>
-                                    <td class="text-center">
-                                        {% if u.n_sesiones_responsable %}
-                                            <span class="badge bg-primary" title="Sesiones donde el usuario es responsable">{{ u.n_sesiones_responsable }}</span>
+                                    <td>
+                                        {% if u.sesionwhatsapp_set.all %}
+                                            <div class="d-flex flex-wrap gap-1">
+                                                {% for s in u.sesionwhatsapp_set.all %}
+                                                    <span class="badge bg-primary" title="Responsable de la sesión #{{ s.id }}">
+                                                        <i class="fab fa-whatsapp me-1"></i>{{ s.nombre|default:s.numero|default:s.id }}
+                                                    </span>
+                                                {% endfor %}
+                                            </div>
                                         {% else %}
                                             <span class="text-muted small">—</span>
                                         {% endif %}
                                     </td>
-                                    <td class="text-center">
-                                        {% if u.n_sesiones_miembro %}
-                                            <span class="badge bg-info text-dark" title="Sesiones donde el usuario es parte del equipo">{{ u.n_sesiones_miembro }}</span>
+                                    <td>
+                                        {% if u.perfilsesionwhatsapp_set.all %}
+                                            <div class="d-flex flex-wrap gap-1">
+                                                {% for ps in u.perfilsesionwhatsapp_set.all %}
+                                                    <span class="badge bg-info text-dark" title="Rol: {{ ps.rol|default:'miembro' }}">
+                                                        <i class="fa fa-user-tag me-1"></i>{{ ps.sesion.nombre|default:ps.sesion.numero|default:ps.sesion.id }}
+                                                        <small class="ms-1 opacity-75">({{ ps.rol|default:'miembro' }})</small>
+                                                    </span>
+                                                {% endfor %}
+                                            </div>
                                         {% else %}
                                             <span class="text-muted small">—</span>
                                         {% endif %}
@@ -434,7 +460,10 @@
                     const r = Array.isArray(arr) ? arr[0] : arr;
                     if (r && r.error === false) {
                         if (typeof mensajeSuccess === 'function') mensajeSuccess(r.message || 'Eliminado.');
-                        setTimeout(function() { location.reload(); }, 500);
+                        $('[data-dev-id="' + id + '"]').fadeOut(250, function() { $(this).remove(); });
+                        $('.badge-dev').filter(function() {
+                            return $(this).find('.btn-revoke-inline[onclick*="' + id + ','+'"]').length > 0;
+                        }).fadeOut(250, function() { $(this).remove(); });
                     } else if (typeof mensajeWarning === 'function') {
                         mensajeWarning((r && r.message) || 'No se pudo eliminar.');
                     }

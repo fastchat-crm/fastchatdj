@@ -195,6 +195,32 @@ def webpush_broadcast(request):
         url_vars += '&solo_con_push=1'
         filtros &= Q(webpush_info__isnull=False)
 
+    from django.db.models import Prefetch
+    try:
+        from whatsapp.models import PerfilSesionWhatsApp as _PSW
+        prefetch_psw = Prefetch(
+            'perfilsesionwhatsapp_set',
+            queryset=_PSW.objects.filter(status=True).select_related('sesion'),
+        )
+    except Exception:
+        prefetch_psw = None
+    try:
+        from whatsapp.models import SesionWhatsApp as _SW
+        prefetch_sw = Prefetch(
+            'sesionwhatsapp_set',
+            queryset=_SW.objects.filter(status=True),
+        )
+    except Exception:
+        prefetch_sw = None
+    try:
+        from webpush.models import PushInformation as _PI
+        prefetch_pi = Prefetch(
+            'webpush_info',
+            queryset=_PI.objects.select_related('subscription'),
+        )
+    except Exception:
+        prefetch_pi = None
+
     usuarios = (
         Usuario.objects.filter(filtros)
         .annotate(
@@ -209,6 +235,9 @@ def webpush_broadcast(request):
         .order_by('last_name', 'first_name')
         .distinct()
     )
+    prefetches = [p for p in (prefetch_psw, prefetch_sw, prefetch_pi) if p is not None]
+    if prefetches:
+        usuarios = usuarios.prefetch_related(*prefetches)
     data['url_vars'] = url_vars
     data['gruposrol'] = Group.objects.all().order_by('name')
 
