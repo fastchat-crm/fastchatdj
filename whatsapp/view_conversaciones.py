@@ -413,21 +413,19 @@ def conversacionesView(request):
                             )
                         except Exception:
                             pass
-                        # Notificar al agente asignado vía Notificacion
                         if asignado:
                             try:
-                                from seguridad.models import Notificacion
-                                contacto_nombre = filtro.contacto.contacto_nombre or filtro.contacto.from_number
-                                Notificacion.objects.create(
-                                    usuario=asignado,
-                                    titulo='Conversación asignada',
-                                    mensaje=f'Se te asignó la conversación con {contacto_nombre}.',
-                                    url='/whatsapp/conversaciones/',
-                                    prioridad=2,
-                                    tipo=1,
+                                from crm.helpers_asignacion import notificar_agente_asignado
+                                notificar_agente_asignado(
+                                    filtro, asignado,
+                                    motivo='manual',
+                                    asignador=request.user,
                                 )
                             except Exception:
-                                pass
+                                import logging as _lg
+                                _lg.getLogger(__name__).exception(
+                                    'No se pudo notificar al agente asignado conv=%s', filtro.id,
+                                )
                         nombre_asignado = asignado.get_full_name() if asignado else ''
                         # Mensaje de handoff al cliente (si la sesión tiene mensaje configurado)
                         if asignado:

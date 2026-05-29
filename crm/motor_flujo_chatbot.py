@@ -1617,6 +1617,11 @@ class MotorFlujo:
             self.handoff = True
             self.estado.en_handoff = True
             self.estado.save()
+            try:
+                from crm.helpers_asignacion import auto_asignar_agente
+                auto_asignar_agente(self.conversation, motivo='handoff')
+            except Exception:
+                logger.exception('Auto-asignación fallida en handoff conv=%s', self.conversation.id)
             self._trace('handoff', 'Transferido a agente humano', True, {'nodo_id': nodo.id})
             return ''
 

@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
-
+{% block head %}
+    <link rel="stylesheet" href="/static/stylenew/perfilpanel.css?v1.0">
+{% endblock %}
 {% block content %}
 
     <div class="row justify-content-center">
@@ -76,11 +78,11 @@
                 </li>
                 <li class="nav-item">
                     <a class="nav-link fw-medium" data-bs-toggle="tab" href="#pushnotifs" role="tab"
-                       aria-selected="false"><i class="iconoir-bell"></i> Notificaciones Push</a>
+                       aria-selected="false"><i class="iconoir-bell"></i> Notificaciones push</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link fw-medium" data-bs-toggle="tab" href="#sesionesactivas" role="tab"
-                       aria-selected="false"><i class="iconoir-laptop"></i> Sesiones Activas</a>
+                       aria-selected="false"><i class="iconoir-laptop"></i> Sesiones activas</a>
                 </li>
             </ul>
             <div class="tab-content">
@@ -262,32 +264,33 @@
                     {{ request.user.last_login }}
                 </div>
 
-                <div class="tab-pane p-3" id="pushnotifs" role="tabpanel">
-                    <div class="card">
-                        <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-                            <h4 class="card-title mb-0"><i class="iconoir-bell me-1"></i> Push notification subscriptions</h4>
-                            <div class="d-flex flex-wrap gap-2">
-                                <span class="badge bg-light text-dark border" id="pushPermStatus">Permission: <span id="pushPermVal">—</span></span>
+                <div class="tab-pane p-2" id="pushnotifs" role="tabpanel">
+                    <div class="card card-compact">
+                        <div class="card-header py-2 px-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                            <h6 class="card-title mb-0"><i class="iconoir-bell me-1"></i> Notificaciones push</h6>
+                            <div class="d-flex flex-wrap gap-1 align-items-center">
+                                <span class="badge bg-light text-dark border small" id="pushPermStatus">Permiso: <span id="pushPermVal">—</span></span>
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="btnProbarPush" title="Enviar una notificación de prueba a tus dispositivos">
+                                    <i class="iconoir-bell"></i> Probar push
+                                </button>
                                 <button type="button" class="btn btn-success btn-sm" id="btnEnablePush">
-                                    <i class="iconoir-bell"></i> Enable on this device
+                                    <i class="iconoir-bell"></i> Activar en este dispositivo
                                 </button>
                             </div>
                         </div>
-                        <div class="card-body pt-3">
-                            <p class="text-muted small mb-3">
-                                These are the browsers/devices currently allowed to receive push notifications for your account.
-                                The service worker must be registered (already loaded with the PWA) and you must grant permission once per device.
-                                Works on Android Chrome, Desktop Chrome/Edge/Firefox/Safari, and iOS 16.4+ (installed to home screen).
+                        <div class="card-body py-2 px-3">
+                            <p class="text-muted small mb-2">
+                                Navegadores y dispositivos que pueden recibir notificaciones push de tu cuenta. Funciona en Android, escritorio (Chrome/Edge/Firefox/Safari) e iOS 16.4+ con la app instalada en pantalla de inicio.
                             </p>
                             <div class="table-responsive">
-                                <table class="theDataTable table table-striped table-hover">
+                                <table class="theDataTable table table-sm table-striped table-hover compact-table mb-0">
                                     <thead>
                                     <tr>
                                         <th>#</th>
-                                        <th>Browser</th>
-                                        <th>Endpoint host</th>
-                                        <th>Preview</th>
-                                        <th class="text-end">Action</th>
+                                        <th>Navegador</th>
+                                        <th>Host</th>
+                                        <th>Endpoint</th>
+                                        <th class="text-end">Acción</th>
                                     </tr>
                                     </thead>
                                     <tbody>
@@ -300,13 +303,13 @@
                                             <td class="text-end">
                                                 <button type="button" class="btn btn-danger btn-sm"
                                                         onclick="eliminarPushSub({{ sub.id }})">
-                                                    <i class="iconoir-trash"></i> Revoke
+                                                    <i class="iconoir-trash"></i> Revocar
                                                 </button>
                                             </td>
                                         </tr>
                                     {% empty %}
                                         <tr>
-                                            <td colspan="5" class="text-center text-muted py-3">No active push subscriptions yet. Click <b>Enable on this device</b> to subscribe.</td>
+                                            <td colspan="5" class="text-center text-muted py-2 small">Aún no hay dispositivos suscriptos. Tocá <b>Activar en este dispositivo</b> para empezar.</td>
                                         </tr>
                                     {% endfor %}
                                     </tbody>
@@ -316,46 +319,48 @@
                     </div>
                 </div>
 
-                <div class="tab-pane p-3" id="sesionesactivas" role="tabpanel">
-                    <div class="card">
-                        <div class="card-header">
-                            <h4 class="card-title mb-0"><i class="iconoir-laptop me-1"></i> Active connections (sessions)</h4>
+                <div class="tab-pane p-2" id="sesionesactivas" role="tabpanel">
+                    <div class="card card-compact">
+                        <div class="card-header py-2 px-3">
+                            <h6 class="card-title mb-0"><i class="iconoir-laptop me-1"></i> Sesiones activas</h6>
                         </div>
-                        <div class="card-body pt-3">
-                            <p class="text-muted small mb-3">
-                                Every device that signed in with your account. Revoke any session to force that device to log in again.
+                        <div class="card-body py-2 px-3">
+                            <p class="text-muted small mb-2">
+                                Cada dispositivo que inició sesión con tu cuenta. Revocá cualquier sesión para forzar el login otra vez en ese dispositivo.
                             </p>
                             <div class="table-responsive">
-                                <table class="theDataTable table table-striped table-hover">
+                                <table class="theDataTable table table-sm table-striped table-hover compact-table mb-0">
                                     <thead>
                                     <tr>
                                         <th>#</th>
-                                        <th>Device</th>
+                                        <th>Dispositivo</th>
                                         <th>IP</th>
-                                        <th>Location</th>
-                                        <th>Connected</th>
-                                        <th>Expires</th>
-                                        <th class="text-end">Action</th>
+                                        <th>Ubicación</th>
+                                        <th>Conectado</th>
+                                        <th>Expira</th>
+                                        <th class="text-end">Acción</th>
                                     </tr>
                                     </thead>
                                     <tbody>
                                     {% for s in active_sessions %}
-                                        <tr data-session-id="{{ s.id }}">
+                                        <tr data-session-id="{{ s.id }}" class="{% if s.is_current %}sesion-actual{% endif %}{% if not s.vigente %} sesion-expirada{% endif %}">
                                             <td>
                                                 {{ s.id }}
                                                 {% if s.is_current %}
-                                                    <span class="badge bg-success ms-1">Current</span>
+                                                    <span class="badge bg-success ms-1"><i class="iconoir-check me-1"></i>Actual</span>
                                                 {% endif %}
                                             </td>
                                             <td class="small">{{ s.dispositivo }}</td>
                                             <td><code class="small">{{ s.ip }}</code></td>
                                             <td class="small">{{ s.areageografica }}</td>
-                                            <td class="small">{{ s.fecha_conexion|date:"Y-m-d H:i" }}</td>
+                                            <td class="small">{{ s.fecha_conexion|date:"d/m/Y H:i" }}</td>
                                             <td class="small">
                                                 {% if s.expira %}
-                                                    {{ s.expira|date:"Y-m-d H:i" }}
-                                                    {% if not s.vigente %}
-                                                        <span class="badge bg-secondary ms-1">Expired</span>
+                                                    {{ s.expira|date:"d/m/Y H:i" }}
+                                                    {% if s.vigente %}
+                                                        <span class="badge bg-success-soft text-success ms-1">Vigente</span>
+                                                    {% else %}
+                                                        <span class="badge bg-secondary ms-1">Expirada</span>
                                                     {% endif %}
                                                 {% else %}
                                                     —
@@ -364,13 +369,13 @@
                                             <td class="text-end">
                                                 <button type="button" class="btn btn-danger btn-sm"
                                                         onclick="eliminarSessionUser({{ s.id }}, {{ s.is_current|yesno:'true,false' }})">
-                                                    <i class="iconoir-log-out"></i> Revoke
+                                                    <i class="iconoir-log-out"></i> Revocar
                                                 </button>
                                             </td>
                                         </tr>
                                     {% empty %}
                                         <tr>
-                                            <td colspan="7" class="text-center text-muted py-3">No active sessions tracked.</td>
+                                            <td colspan="7" class="text-center text-muted py-2 small">No hay sesiones registradas.</td>
                                         </tr>
                                     {% endfor %}
                                     </tbody>
@@ -585,24 +590,24 @@
         }
 
         window.eliminarPushSub = function(id) {
-            _swalConfirm('Revoke this push subscription?', 'This device will stop receiving notifications.', 'Yes, revoke').then(function(ok) {
+            _swalConfirm('¿Revocar esta suscripción?', 'Este dispositivo dejará de recibir notificaciones push.', 'Sí, revocar').then(function(ok) {
                 if (!ok) return;
                 _csrfPost({action: 'delete_push_subscription', id: id}).done(function(arr) {
                     const r = Array.isArray(arr) ? arr[0] : arr;
                     if (r && r.error === false) {
-                        if (typeof mensajeSuccess === 'function') mensajeSuccess(r.message || 'Removed.');
-                        setTimeout(function() { location.reload(); }, 500);
+                        if (typeof mensajeSuccess === 'function') mensajeSuccess(r.message || 'Suscripción eliminada.');
+                        $('tr[data-sub-id="' + id + '"]').fadeOut(250, function() { $(this).remove(); });
                     } else if (typeof mensajeWarning === 'function') {
-                        mensajeWarning((r && r.message) || 'Failed.');
+                        mensajeWarning((r && r.message) || 'No se pudo eliminar.');
                     }
                 });
             });
         };
 
         window.eliminarSessionUser = function(id, isCurrent) {
-            const title = isCurrent ? 'Sign out of THIS device?' : 'Revoke this session?';
-            const text = isCurrent ? 'You will be logged out from this browser.' : 'That device will need to sign in again.';
-            _swalConfirm(title, text, 'Yes, revoke').then(function(ok) {
+            const title = isCurrent ? '¿Cerrar sesión en ESTE dispositivo?' : '¿Revocar esta sesión?';
+            const text = isCurrent ? 'Vas a cerrar sesión en este navegador.' : 'Ese dispositivo tendrá que volver a iniciar sesión.';
+            _swalConfirm(title, text, 'Sí, revocar').then(function(ok) {
                 if (!ok) return;
                 _csrfPost({action: 'delete_session_user', id: id}).done(function(arr) {
                     const r = Array.isArray(arr) ? arr[0] : arr;
@@ -611,27 +616,51 @@
                             window.location.href = '/login/';
                             return;
                         }
-                        if (typeof mensajeSuccess === 'function') mensajeSuccess(r.message || 'Session ended.');
-                        setTimeout(function() { location.reload(); }, 500);
+                        if (typeof mensajeSuccess === 'function') mensajeSuccess(r.message || 'Sesión revocada.');
+                        $('tr[data-session-id="' + id + '"]').fadeOut(250, function() { $(this).remove(); });
                     } else if (typeof mensajeWarning === 'function') {
-                        mensajeWarning((r && r.message) || 'Failed.');
+                        mensajeWarning((r && r.message) || 'No se pudo revocar.');
                     }
                 });
             });
         };
 
+        $('#btnProbarPush').on('click', function() {
+            const $btn = $(this);
+            const orig = $btn.html();
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Enviando...');
+            _csrfPost({
+                action: 'probar_push',
+                titulo: '🔔 Notificación de prueba',
+                cuerpo: '✅ Esta es una notificación de prueba para tu cuenta.'
+            }).done(function(arr) {
+                const r = Array.isArray(arr) ? arr[0] : arr;
+                if (r && r.error === false) {
+                    if (typeof mensajeSuccess === 'function') mensajeSuccess(r.message || 'Enviada.');
+                } else if (typeof mensajeWarning === 'function') {
+                    mensajeWarning((r && r.message) || 'No se pudo enviar la notificación.');
+                }
+            }).fail(function() {
+                if (typeof mensajeWarning === 'function') mensajeWarning('Error de red al probar el push.');
+            }).always(function() {
+                $btn.prop('disabled', false).html(orig);
+            });
+        });
+
         (function() {
             const $btn = $('#btnEnablePush');
             const $permVal = $('#pushPermVal');
+            const PERM_LABEL = {granted: 'Concedido', denied: 'Bloqueado', default: 'Sin pedir'};
             function _refreshPermLabel() {
-                if (!('Notification' in window)) { $permVal.text('Unsupported'); return; }
-                $permVal.text(Notification.permission || 'default');
+                if (!('Notification' in window)) { $permVal.text('No soportado'); return; }
+                const p = Notification.permission || 'default';
+                $permVal.text(PERM_LABEL[p] || p);
             }
             _refreshPermLabel();
 
             const supported = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
             if (!supported || !_VAPID) {
-                $btn.prop('disabled', true).attr('title', 'Push not supported on this browser/device.');
+                $btn.prop('disabled', true).attr('title', 'Push no soportado en este navegador/dispositivo.');
                 return;
             }
 
@@ -668,7 +697,7 @@
                     const perm = await Notification.requestPermission();
                     _refreshPermLabel();
                     if (perm !== 'granted') {
-                        if (typeof mensajeWarning === 'function') mensajeWarning('Permission denied — enable notifications in your browser settings.');
+                        if (typeof mensajeWarning === 'function') mensajeWarning('Permiso denegado. Habilitá las notificaciones en la configuración del navegador.');
                         $btn.prop('disabled', false);
                         return;
                     }
@@ -679,7 +708,7 @@
                         try { reg = await navigator.serviceWorker.register('/serviceworker.js', {scope: '/'}); reg = await navigator.serviceWorker.ready; } catch (e2) {}
                     }
                     if (!reg) {
-                        if (typeof mensajeWarning === 'function') mensajeWarning('Service worker not ready.');
+                        if (typeof mensajeWarning === 'function') mensajeWarning('El service worker no está listo.');
                         $btn.prop('disabled', false);
                         return;
                     }
@@ -691,10 +720,10 @@
                         });
                     }
                     await _sendSub(sub);
-                    if (typeof mensajeSuccess === 'function') mensajeSuccess('Push notifications enabled on this device.');
+                    if (typeof mensajeSuccess === 'function') mensajeSuccess('Notificaciones activadas en este dispositivo.');
                     setTimeout(function() { location.reload(); }, 600);
                 } catch (e) {
-                    if (typeof mensajeWarning === 'function') mensajeWarning('Could not enable: ' + (e && e.message ? e.message : 'unknown error'));
+                    if (typeof mensajeWarning === 'function') mensajeWarning('No se pudo activar: ' + (e && e.message ? e.message : 'error desconocido'));
                     $btn.prop('disabled', false);
                 }
             });

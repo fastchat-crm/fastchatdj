@@ -39,6 +39,25 @@ def perfilView(request):
             action = request.POST['action']
             try:
                 with transaction.atomic():
+                    if action == 'probar_push':
+                        try:
+                            from pwa.notificaciones import enviar_push_usuario
+                            titulo = (request.POST.get('titulo') or '🔔 Notificación de prueba').strip()[:120]
+                            cuerpo = (request.POST.get('cuerpo') or '✅ Esta es una notificación de prueba para tu cuenta.').strip()[:300]
+                            ok = enviar_push_usuario(
+                                request.user,
+                                head=titulo,
+                                body=cuerpo,
+                                url='/perfilpanel/',
+                                tag='perfil-prueba',
+                                extra={'tipo': 'perfil.prueba'},
+                            )
+                            return JsonResponse([{
+                                'error': not ok,
+                                'message': 'Push de prueba enviado a tus dispositivos.' if ok else 'No tienes dispositivos suscriptos o el envío falló.',
+                            }], safe=False)
+                        except Exception as ex:
+                            return JsonResponse([{'error': True, 'message': str(ex)}], safe=False)
                     if action == 'delete_push_subscription':
                         try:
                             from webpush.models import PushInformation
@@ -154,7 +173,8 @@ def perfilView(request):
         data['push_subscriptions'] = push_subs
 
         active_sessions = []
-        current_key = request.session.session_key
+        current_key = request.session.session_key or ''
+        ahora_aware = timezone.now()
         try:
             qs_su = (
                 SessionUser.objects
@@ -163,9 +183,22 @@ def perfilView(request):
                 .order_by('-fecha_conexion')
             )
             for s in qs_su:
-                sess = s.session
-                expira = sess.expire_date if sess else None
-                vigente = bool(sess and s.is_not_expired())
+                try:
+                    sess = s.session
+                except Exception:
+                    sess = None
+                expira = getattr(sess, 'expire_date', None)
+                vigente = False
+                if expira:
+                    try:
+                        if timezone.is_aware(expira):
+                            vigente = expira > ahora_aware
+                        else:
+                            from datetime import datetime as _dt_naive
+                            vigente = expira > _dt_naive.now()
+                    except Exception:
+                        vigente = False
+                sess_key = getattr(sess, 'session_key', '') if sess else ''
                 active_sessions.append({
                     'id': s.id,
                     'dispositivo': (s.dispositivo or '—')[:80],
@@ -174,10 +207,11 @@ def perfilView(request):
                     'fecha_conexion': s.fecha_conexion,
                     'expira': expira,
                     'vigente': vigente,
-                    'is_current': bool(sess and sess.session_key == current_key),
+                    'is_current': bool(sess_key and current_key and sess_key == current_key),
                 })
         except Exception:
-            pass
+            import logging as _lg
+            _lg.getLogger(__name__).exception('Error cargando sesiones activas del perfil')
         data['active_sessions'] = active_sessions
 
         formPersona = EditPersonaForm(instance=request.user)

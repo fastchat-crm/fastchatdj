@@ -1,0 +1,61 @@
+.card-compact .card-title {
+    font-size: .92rem;
+    font-weight: 600;
+}
+
+.card-compact .card-header {
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.compact-table {
+    font-size: .82rem;
+}
+
+.compact-table thead th {
+    padding: .35rem .5rem;
+    background: #f3f4f6;
+    color: #4b5563;
+    font-weight: 600;
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.compact-table tbody td {
+    padding: .4rem .5rem;
+    vertical-align: middle;
+}
+
+.compact-table .badge {
+    font-size: .68rem;
+    padding: .2rem .45rem;
+    font-weight: 500;
+}
+
+.compact-table code.small {
+    font-size: .72rem;
+}
+
+.compact-table .btn-sm {
+    padding: .15rem .5rem;
+    font-size: .72rem;
+}
+
+.sesion-actual {
+    background: #ecfdf5 !important;
+    border-left: 3px solid #10b981;
+}
+
+.sesion-actual td:first-child {
+    font-weight: 600;
+}
+
+.sesion-expirada {
+    opacity: .55;
+}
+
+.bg-success-soft {
+    background: #d1fae5 !important;
+}
