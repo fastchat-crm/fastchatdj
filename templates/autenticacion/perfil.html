@@ -273,6 +273,11 @@
                                 <button type="button" class="btn btn-outline-primary btn-sm" id="btnProbarPush" title="Enviar una notificación de prueba a tus dispositivos">
                                     <i class="iconoir-bell"></i> Probar push
                                 </button>
+                                {% if push_subscriptions %}
+                                    <button type="button" class="btn btn-outline-danger btn-sm" id="btnEliminarTodasPush" title="Eliminar todas las conexiones push de tu cuenta">
+                                        <i class="iconoir-trash"></i> Eliminar todas
+                                    </button>
+                                {% endif %}
                                 <button type="button" class="btn btn-success btn-sm" id="btnEnablePush">
                                     <i class="iconoir-bell"></i> Activar en este dispositivo
                                 </button>
@@ -624,6 +629,28 @@
                 });
             });
         };
+
+        $('#btnEliminarTodasPush').on('click', function() {
+            const $btn = $(this);
+            _swalConfirm('¿Eliminar todas las conexiones push?', 'Todos tus dispositivos dejarán de recibir notificaciones push.', 'Sí, eliminar todas').then(function(ok) {
+                if (!ok) return;
+                const orig = $btn.html();
+                $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i> Eliminando...');
+                _csrfPost({action: 'delete_all_push_subscriptions'}).done(function(arr) {
+                    const r = Array.isArray(arr) ? arr[0] : arr;
+                    if (r && r.error === false) {
+                        if (typeof mensajeSuccess === 'function') mensajeSuccess(r.message || 'Conexiones eliminadas.');
+                        setTimeout(function() { location.reload(); }, 600);
+                    } else {
+                        $btn.prop('disabled', false).html(orig);
+                        if (typeof mensajeWarning === 'function') mensajeWarning((r && r.message) || 'No se pudo eliminar.');
+                    }
+                }).fail(function() {
+                    $btn.prop('disabled', false).html(orig);
+                    if (typeof mensajeWarning === 'function') mensajeWarning('Error de red al eliminar las conexiones.');
+                });
+            });
+        });
 
         $('#btnProbarPush').on('click', function() {
             const $btn = $(this);

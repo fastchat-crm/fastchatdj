@@ -707,7 +707,7 @@ class ConversacionWhatsApp(ModeloBase):
             return None
         return ultimo_entrante.fecha + relativedelta(hours=24)
 
-    @property
+    @cached_property
     def vence_meta_expirada(self):
         vence = self.vence_meta_en
         return bool(vence and timezone.now() > vence)

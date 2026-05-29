@@ -76,6 +76,31 @@ def perfilView(request):
                             return JsonResponse([{'error': False, 'message': 'Push subscription removed.', 'reload': True}], safe=False)
                         except Exception as ex:
                             return JsonResponse([{'error': True, 'message': str(ex)}], safe=False)
+                    if action == 'delete_all_push_subscriptions':
+                        try:
+                            from webpush.models import PushInformation
+                            qs = PushInformation.objects.filter(user=request.user).select_related('subscription')
+                            subs = {}
+                            total = 0
+                            for pi in qs:
+                                if pi.subscription_id and pi.subscription_id not in subs:
+                                    subs[pi.subscription_id] = pi.subscription
+                                pi.delete()
+                                total += 1
+                            for sub in subs.values():
+                                try:
+                                    if sub and not sub.webpush_info.exists():
+                                        sub.delete()
+                                except Exception:
+                                    pass
+                            log(f'All push subscriptions removed by user ({total})', request, 'del')
+                            if total:
+                                mensaje = f'Se eliminaron {total} conexión(es) push.'
+                            else:
+                                mensaje = 'No hay conexiones push para eliminar.'
+                            return JsonResponse([{'error': False, 'message': mensaje, 'reload': True}], safe=False)
+                        except Exception as ex:
+                            return JsonResponse([{'error': True, 'message': str(ex)}], safe=False)
                     if action == 'delete_session_user':
                         try:
                             sid = int(request.POST.get('id') or 0)

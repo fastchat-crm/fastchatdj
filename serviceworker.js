@@ -62,30 +62,37 @@ addEventListener('activate', function (event) {
 
 var port;
 
-addEventListener('push', async function (event) {
-    const eventInfo = event.data.text();
-    const data = JSON.parse(eventInfo);
-    const head = data.head || data.title || 'fastchat';
-    const body = data.body || data.message || data.descripcion || '';
-
-    if (data.btn_notificaciones) {
-        var clientes = await clients.matchAll({includeUncontrolled: true, type: 'window'});
-        for (const client of clientes) {
-            client.postMessage(data);
+addEventListener('push', function (event) {
+    event.waitUntil((async function () {
+        let data = {};
+        try {
+            data = event.data ? JSON.parse(event.data.text()) : {};
+        } catch (e) {
+            data = {head: 'fastchat', body: (event.data && event.data.text()) || ''};
         }
-    }
 
-    var DATANOT = {
-        body: body,
-        icon: data.icon || "/static/pwalogo/512x512.png",
-        badge: data.badge || "/static/pwalogo/badge.png",
-        vibrate: [500, 110, 500, 500, 110, 500],
-        data: {url: data.url ? data.url : ''},
-        actions: [{action: "open_url", title: "Ver ahora"}],
-        requireInteraction: true
-    };
+        const head = data.head || data.title || 'fastchat';
+        const body = data.body || data.message || data.descripcion || '';
 
-    self.registration.showNotification(head, DATANOT);
+        if (data.btn_notificaciones) {
+            const clientes = await clients.matchAll({includeUncontrolled: true, type: 'window'});
+            for (const client of clientes) {
+                client.postMessage(data);
+            }
+        }
+
+        const DATANOT = {
+            body: body,
+            icon: data.icon || "/static/pwalogo/512x512.png",
+            badge: data.badge || "/static/pwalogo/badge.png",
+            vibrate: [500, 110, 500, 500, 110, 500],
+            data: {url: data.url ? data.url : ''},
+            actions: [{action: "open_url", title: "Ver ahora"}],
+            requireInteraction: true
+        };
+
+        await self.registration.showNotification(head, DATANOT);
+    })());
 });
 
 self.onmessage = async function (event) {

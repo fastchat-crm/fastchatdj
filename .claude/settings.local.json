@@ -111,7 +111,8 @@
       "Bash(sed -n '330,405p' whatsapp/templates/whatsapp/conversaciones/listado.html)",
       "Bash(ls templates/seguridad/modulossistema/)",
       "Bash(ls seguridad/templates/seguridad/modulossistema/)",
-      "Bash(find . -path ./.venv -prune -o -name \"listado.html\" -path \"*modulossistema*\" -print)"
+      "Bash(find . -path ./.venv -prune -o -name \"listado.html\" -path \"*modulossistema*\" -print)",
+      "PowerShell(python -m py_compile autenticacion/view_perfil.py fastchatdj/settings.py; if \\($?\\) { \"OK sintaxis\" })"
     ]
   },
   "hooks": {
