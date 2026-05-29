@@ -3165,3 +3165,52 @@
     font-size: .68rem;
     flex-shrink: 0;
 }
+
+
+.conex-bulk-bar {
+    margin: 8px 0 14px;
+    padding: 10px 14px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+}
+
+.conex-bulk-cb-wrap {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 5;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 4px 6px;
+    cursor: pointer;
+    display: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
+}
+
+.conex-card-bulk-mode {
+    position: relative;
+}
+
+.conex-card-bulk-mode .conex-bulk-cb-wrap {
+    display: inline-flex;
+}
+
+.conex-bulk-cb {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.conex-btn-warning {
+    background: #f59e0b;
+    color: #fff;
+    border-color: #f59e0b;
+}
+
+.conex-btn-warning:hover {
+    background: #d97706;
+    border-color: #d97706;
+}
+

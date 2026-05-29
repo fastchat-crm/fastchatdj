@@ -148,9 +148,74 @@ def _accion_delete(request):
             pass
     sesion.status = False
     sesion.estado = 'desconectado'
-    sesion.save(update_fields=['status', 'estado'])
-    log(f"Sesion {sesion.id} eliminada", request, "del", obj=sesion.id)
+    sesion.save(
+        request=request,
+        update_fields=['status', 'estado', 'fecha_modificacion', 'usuario_modificacion'],
+    )
+    log(f"Sesion {sesion.id} eliminada (soft) status=False", request, "del", obj=sesion.id)
     return JsonResponse({'error': False, 'message': 'Sesión eliminada.'})
+
+
+def _accion_delete_pausadas_huerfanas(request):
+    qs = (
+        SesionWhatsApp.objects.filter(status=True, usuario=request.user, activo=False)
+        .annotate(_nc=Count('contacto'))
+        .filter(_nc=0)
+    )
+    ids = list(qs.values_list('id', flat=True))
+    if not ids:
+        return JsonResponse({'error': False, 'eliminadas': 0, 'message': 'No orphan paused sessions to delete.'})
+    eliminadas = 0
+    for sesion in qs:
+        if sesion.es_baileys:
+            try:
+                WhatsAppService().close_session(sesion.session_id)
+            except Exception:
+                pass
+        sesion.status = False
+        sesion.estado = 'desconectado'
+        sesion.save(
+            request=request,
+            update_fields=['status', 'estado', 'fecha_modificacion', 'usuario_modificacion'],
+        )
+        eliminadas += 1
+    log(f"Bulk delete pausadas huerfanas: {eliminadas} sesiones (ids={ids})", request, "del")
+    return JsonResponse({
+        'error': False,
+        'eliminadas': eliminadas,
+        'message': f'{eliminadas} paused orphan session(s) deleted.'
+    })
+
+
+def _accion_delete_bulk(request):
+    raw = request.POST.get('ids') or ''
+    try:
+        ids = [int(x) for x in raw.split(',') if x.strip().isdigit()]
+    except Exception:
+        ids = []
+    if not ids:
+        return JsonResponse({'error': True, 'message': 'No session ids provided.'})
+    qs = SesionWhatsApp.objects.filter(id__in=ids, status=True, usuario=request.user)
+    eliminadas = 0
+    for sesion in qs:
+        if sesion.es_baileys:
+            try:
+                WhatsAppService().close_session(sesion.session_id)
+            except Exception:
+                pass
+        sesion.status = False
+        sesion.estado = 'desconectado'
+        sesion.save(
+            request=request,
+            update_fields=['status', 'estado', 'fecha_modificacion', 'usuario_modificacion'],
+        )
+        eliminadas += 1
+    log(f"Bulk delete sesiones: {eliminadas} (ids={ids})", request, "del")
+    return JsonResponse({
+        'error': False,
+        'eliminadas': eliminadas,
+        'message': f'{eliminadas} session(s) deleted.'
+    })
 
 
 def _accion_baileys_verificar(request):
@@ -719,6 +784,8 @@ _ACCIONES = {
     'baileys_verificar':           _accion_baileys_verificar,
     'disconnect':                  _accion_disconnect,
     'delete':                      _accion_delete,
+    'delete_bulk':                 _accion_delete_bulk,
+    'delete_pausadas_huerfanas':   _accion_delete_pausadas_huerfanas,
     'meta_validar':                _accion_meta_validar,
     'meta_test_credenciales':      _accion_meta_test_credenciales,
     'meta_actualizar_credenciales': _accion_meta_actualizar_credenciales,
@@ -957,6 +1024,13 @@ def sesionesView(request):
         pendientes=Count('id', filter=Q(estado='pendiente')),
         desconectadas=Count('id', filter=Q(estado='desconectado')),
         errores=Count('id', filter=Q(estado='error')),
+        pausadas=Count('id', filter=Q(activo=False), distinct=True),
+    )
+    stats['pausadas_huerfanas'] = (
+        SesionWhatsApp.objects.filter(status=True, usuario=request.user, activo=False)
+        .annotate(_nc=Count('contacto'))
+        .filter(_nc=0)
+        .count()
     )
     data['stats'] = stats
     data['criterio'] = criterio

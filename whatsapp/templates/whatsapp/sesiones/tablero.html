@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block head %}
-    <link rel="stylesheet" href="{% static 'stylenew/sesiones.css' %}?v1.5">
+    <link rel="stylesheet" href="/static/stylenew/sesiones.css?v1.6">
 {% endblock %}
 
 {% block content %}
@@ -46,6 +46,32 @@
             <button class="conex-chip" data-filtro="error">
                 <span class="dot dot-err"></span> Con incidencias <span class="n">{{ stats.errores }}</span>
             </button>
+            <button class="conex-chip" data-filtro="pausadas" data-attr="activo" data-val="0">
+                <i class="fa fa-pause-circle text-warning"></i> Pausadas <span class="n">{{ stats.pausadas }}</span>
+            </button>
+        </div>
+
+        <div class="conex-bulk-bar d-none" id="conex-bulk-bar">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span class="small text-muted">
+                    <i class="fa fa-info-circle me-1"></i>
+                    Paused sessions: <b>{{ stats.pausadas }}</b> · Orphan (no contacts): <b>{{ stats.pausadas_huerfanas }}</b>
+                </span>
+                <button type="button" class="conex-btn conex-btn-light btn-sm" id="conex-bulk-select-all">
+                    <i class="fa fa-check-square me-1"></i> Select all visible
+                </button>
+                <button type="button" class="conex-btn conex-btn-light btn-sm" id="conex-bulk-clear">
+                    <i class="fa fa-square me-1"></i> Clear
+                </button>
+                <button type="button" class="conex-btn conex-btn-danger btn-sm" id="conex-bulk-delete" disabled>
+                    <i class="fa fa-trash me-1"></i> Delete selected (<span id="conex-bulk-count">0</span>)
+                </button>
+                {% if stats.pausadas_huerfanas %}
+                    <button type="button" class="conex-btn conex-btn-warning btn-sm" id="conex-bulk-delete-orphans">
+                        <i class="fa fa-broom me-1"></i> Delete all orphan paused ({{ stats.pausadas_huerfanas }})
+                    </button>
+                {% endif %}
+            </div>
         </div>
 
         {# ───────── Grid de cards ───────── #}

@@ -42,9 +42,11 @@
                     {% endif %}
                     {% if not show_date and conversacion.atendida_por_meta and conversacion.vence_meta_en %}
                         {% if conversacion.vence_meta_expirada %}
-                            <span class="ci-badge badge bg-danger" title="Meta 24h customer-service window expired — only templates allowed"><i class="fa fa-hourglass-end me-1"></i>24h expired</span>
+                            <span class="ci-badge meta-countdown bg-danger" title="Ventana 24h vencida"><i class="fa fa-hourglass-end me-1"></i><span class="meta-countdown-val">Vencido</span></span>
                         {% else %}
-                            <span class="ci-badge badge bg-warning text-dark" title="Time remaining in the Meta 24h customer-service window"><i class="fa fa-clock me-1"></i>{{ conversacion.vence_meta_en|timeuntil }} left</span>
+                            <span class="ci-badge meta-countdown bg-warning text-dark"
+                                  data-vence="{{ conversacion.vence_meta_en.isoformat }}"
+                                  title="Tiempo restante en la ventana 24h de Meta"><i class="fa fa-clock me-1"></i><span class="meta-countdown-val">{{ conversacion.vence_meta_en|timeuntil }}</span></span>
                         {% endif %}
                     {% endif %}
                 </div>

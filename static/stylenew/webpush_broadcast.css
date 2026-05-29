@@ -1,0 +1,14 @@
+.display-6 {
+    font-size: 1.8rem;
+    line-height: 1.1;
+}
+
+#tabla code.small {
+    font-size: .78rem;
+}
+
+.chkUsuario:disabled + label,
+.chkUsuario:disabled {
+    cursor: not-allowed;
+    opacity: .55;
+}

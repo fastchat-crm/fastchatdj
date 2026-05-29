@@ -2,7 +2,7 @@
 {% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
-<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.7">
+<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.8">
 <link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
 {% endblock %}
 
@@ -1061,10 +1061,10 @@
                     } else {
                         cargarConversaciones($('#sesion-selector').val(), $('#search-conversacion').val(), filtroActivo);
                     }
-                    // Re-marcar la conv activa (replaceWith pierde la clase)
                     if (conversacionActiva) {
                         $(`.conversacion-item[data-id="${conversacionActiva}"]`).addClass('active');
                     }
+                    if (typeof window.tickMetaCountdowns === 'function') window.tickMetaCountdowns();
                     // Sonido + toast + notif nativa solo para entrantes del cliente
                     if (!data.from_me) {
                         notificarNuevoMensaje(data.contacto_nombre || 'Nuevo mensaje', {
@@ -1735,16 +1735,15 @@
                 success: function(response) {
                     $('#lista-conversaciones').html(response.html);
 
-                    // Si hay una conversación activa, marcarla
                     if (conversacionActiva) {
                         const $reactivated = $(`.conversacion-item[data-id="${conversacionActiva}"]`).addClass('active');
                         $reactivated[0]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
                     }
 
-                    // Si no hay conversaciones, mostrar mensaje
                     if ($('#lista-conversaciones .conversacion-item').length === 0) {
                         $('#lista-conversaciones').html('<div class="p-3 text-center"><p class="text-muted">No hay conversaciones disponibles</p></div>');
                     }
+                    if (typeof window.tickMetaCountdowns === 'function') window.tickMetaCountdowns();
                 },
                 error: function(xhr, status, error) {
                     $('#lista-conversaciones').html('<div class="p-3 text-center"><p class="text-danger">Error al cargar conversaciones: ' + error + '</p></div>');
@@ -2615,5 +2614,57 @@
             }
         }).catch(err => { console.error('[feedback] network error', err); });
     }
+
+    function _fmtMetaRemain(ts) {
+        const ms = ts - Date.now();
+        if (ms <= 0) return null;
+        const sec = Math.floor(ms / 1000);
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s = sec % 60;
+        if (h >= 24) {
+            const d = Math.floor(h / 24);
+            return d + 'd ' + (h % 24) + 'h';
+        }
+        if (h > 0) return h + 'h ' + m + 'm';
+        if (m > 0) return m + 'm ' + s + 's';
+        return s + 's';
+    }
+
+    window.tickMetaCountdowns = function() {
+        document.querySelectorAll('.meta-countdown[data-vence]').forEach(function(el) {
+            const raw = el.getAttribute('data-vence');
+            if (!raw) return;
+            const ts = Date.parse(raw);
+            if (isNaN(ts)) return;
+            const valEl = el.querySelector('.meta-countdown-val');
+            const txt = _fmtMetaRemain(ts);
+            if (txt === null) {
+                el.classList.remove('bg-warning', 'text-dark');
+                el.classList.add('bg-danger');
+                el.removeAttribute('data-vence');
+                const icon = el.querySelector('i.fa');
+                if (icon) icon.className = 'fa fa-hourglass-end me-1';
+                if (valEl) valEl.textContent = 'Vencido';
+            } else if (valEl) {
+                valEl.textContent = txt;
+            }
+        });
+    };
+    setInterval(window.tickMetaCountdowns, 30000);
+    $(document).ready(window.tickMetaCountdowns);
+
+    (function() {
+        const IDLE_RELOAD_MS = 30 * 60 * 1000;
+        let _lastActivity = Date.now();
+        const _markActive = function() { _lastActivity = Date.now(); };
+        ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart', 'scroll', 'visibilitychange']
+            .forEach(function(ev) { window.addEventListener(ev, _markActive, { passive: true }); });
+        setInterval(function() {
+            if (document.visibilityState === 'hidden') return;
+            if (Date.now() - _lastActivity < IDLE_RELOAD_MS) return;
+            try { window.location.reload(); } catch (e) {}
+        }, 60000);
+    })();
 </script>
 {% endblock %}

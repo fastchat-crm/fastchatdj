@@ -616,7 +616,45 @@
         });
     }
 
-    // ---------- Filtros chip ----------
+    function _updateBulkCount() {
+        var n = document.querySelectorAll('.conex-card .conex-bulk-cb:checked').length;
+        var elN = document.getElementById('conex-bulk-count');
+        var btn = document.getElementById('conex-bulk-delete');
+        if (elN) elN.textContent = String(n);
+        if (btn) btn.disabled = (n === 0);
+    }
+
+    function _ensureBulkCheckbox(card) {
+        if (card.querySelector('.conex-bulk-cb-wrap')) return;
+        var wrap = document.createElement('label');
+        wrap.className = 'conex-bulk-cb-wrap';
+        wrap.title = 'Select for bulk delete';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'conex-bulk-cb';
+        cb.setAttribute('data-sesion-id', card.getAttribute('data-sesion-id') || '');
+        cb.addEventListener('click', function (e) { e.stopPropagation(); });
+        cb.addEventListener('change', _updateBulkCount);
+        wrap.appendChild(cb);
+        card.appendChild(wrap);
+    }
+
+    function _setBulkMode(on) {
+        var bar = document.getElementById('conex-bulk-bar');
+        if (bar) bar.classList.toggle('d-none', !on);
+        document.querySelectorAll('.conex-card').forEach(function (card) {
+            if (on) {
+                _ensureBulkCheckbox(card);
+                card.classList.add('conex-card-bulk-mode');
+            } else {
+                card.classList.remove('conex-card-bulk-mode');
+                var cb = card.querySelector('.conex-bulk-cb');
+                if (cb) cb.checked = false;
+            }
+        });
+        _updateBulkCount();
+    }
+
     document.querySelectorAll('.conex-chip').forEach(function (chip) {
         chip.addEventListener('click', function () {
             document.querySelectorAll('.conex-chip').forEach(function (c) {
@@ -624,12 +662,106 @@
             });
             chip.classList.add('active');
             var f = chip.getAttribute('data-filtro');
+            var attr = chip.getAttribute('data-attr');
+            var val = chip.getAttribute('data-val');
             document.querySelectorAll('.conex-card').forEach(function (card) {
-                var est = card.getAttribute('data-estado');
-                card.style.display = (f === 'todas' || est === f) ? '' : 'none';
+                var show;
+                if (f === 'todas') {
+                    show = true;
+                } else if (attr) {
+                    show = card.getAttribute('data-' + attr) === val;
+                } else {
+                    show = card.getAttribute('data-estado') === f;
+                }
+                card.style.display = show ? '' : 'none';
             });
+            _setBulkMode(f === 'pausadas');
         });
     });
+
+    var bulkSelectAll = document.getElementById('conex-bulk-select-all');
+    if (bulkSelectAll) bulkSelectAll.addEventListener('click', function () {
+        document.querySelectorAll('.conex-card').forEach(function (card) {
+            if (card.style.display === 'none') return;
+            var cb = card.querySelector('.conex-bulk-cb');
+            if (cb) cb.checked = true;
+        });
+        _updateBulkCount();
+    });
+
+    var bulkClear = document.getElementById('conex-bulk-clear');
+    if (bulkClear) bulkClear.addEventListener('click', function () {
+        document.querySelectorAll('.conex-card .conex-bulk-cb').forEach(function (cb) {
+            cb.checked = false;
+        });
+        _updateBulkCount();
+    });
+
+    var bulkDelete = document.getElementById('conex-bulk-delete');
+    if (bulkDelete) bulkDelete.addEventListener('click', function () {
+        var ids = Array.from(document.querySelectorAll('.conex-card .conex-bulk-cb:checked'))
+            .map(function (cb) { return cb.getAttribute('data-sesion-id'); })
+            .filter(function (x) { return !!x; });
+        if (!ids.length) return;
+        var msg = 'Soft-delete ' + ids.length + ' session(s)? They will be marked status=False.';
+        if (typeof Swal === 'undefined') {
+            if (!confirm(msg)) return;
+            _doBulkDelete(ids);
+        } else {
+            Swal.fire({
+                title: msg,
+                text: 'This action sets status=False (recoverable manually in DB).',
+                type: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, delete',
+                cancelButtonText: 'Cancel'
+            }).then(function (r) { if (r.value) _doBulkDelete(ids); });
+        }
+    });
+
+    function _doBulkDelete(ids) {
+        postAccion({ action: 'delete_bulk', ids: ids.join(',') }).then(function (r) {
+            if (r && r.error) {
+                mostrarToast(r.message || 'Bulk delete failed.', 'err');
+                return;
+            }
+            mostrarToast((r && r.message) || 'Deleted.', 'ok');
+            setTimeout(function () { window.location.reload(); }, 600);
+        });
+    }
+
+    var bulkDeleteOrphans = document.getElementById('conex-bulk-delete-orphans');
+    if (bulkDeleteOrphans) bulkDeleteOrphans.addEventListener('click', function () {
+        var msg = 'Soft-delete ALL paused orphan sessions (no contacts)?';
+        if (typeof Swal === 'undefined') {
+            if (!confirm(msg)) return;
+            _doBulkOrphan();
+        } else {
+            Swal.fire({
+                title: msg,
+                text: 'Removes every paused session that has zero contacts.',
+                type: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, clean up',
+                cancelButtonText: 'Cancel'
+            }).then(function (r) { if (r.value) _doBulkOrphan(); });
+        }
+    });
+
+    function _doBulkOrphan() {
+        postAccion({ action: 'delete_pausadas_huerfanas' }).then(function (r) {
+            if (r && r.error) {
+                mostrarToast(r.message || 'Cleanup failed.', 'err');
+                return;
+            }
+            mostrarToast((r && r.message) || 'Cleanup done.', 'ok');
+            setTimeout(function () { window.location.reload(); }, 600);
+        });
+    }
 
     // ---------- Modal: Eco / Test envío (Meta) ----------
     var ecoModal = document.getElementById('eco-modal');
