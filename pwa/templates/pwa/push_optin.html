@@ -91,6 +91,25 @@
             } catch (e) {}
         }
 
+        async function isRegistered(sub) {
+            try {
+                const res = await fetch('/pwa/push-estado/', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({endpoint: sub.endpoint})
+                });
+                if (!res.ok) return true;
+                const data = await res.json();
+                return !!data.registered;
+            } catch (e) {
+                return true;
+            }
+        }
+
         async function subscribe() {
             const reg = await navigator.serviceWorker.ready;
             let sub = await reg.pushManager.getSubscription();
@@ -109,8 +128,7 @@
             try {
                 const reg = await navigator.serviceWorker.ready;
                 const existing = await reg.pushManager.getSubscription();
-                if (existing) {
-                    await sendSubscription(existing, 'subscribe');
+                if (existing && await isRegistered(existing)) {
                     return;
                 }
             } catch (e) {}
