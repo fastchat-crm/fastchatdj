@@ -1,0 +1,45 @@
+.chat-asistente {
+    height: 340px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 10px;
+    background: #f8f9fa;
+}
+
+.chat-asistente .chat-burbuja {
+    max-width: 80%;
+    padding: 8px 12px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+    font-size: .85rem;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.chat-asistente .chat-ia {
+    background: #e9ecef;
+    color: #212529;
+    border-bottom-left-radius: 2px;
+}
+
+.chat-asistente .chat-user {
+    background: #0d6efd;
+    color: #fff;
+    margin-left: auto;
+    border-bottom-right-radius: 2px;
+}
+
+.chat-asistente .chat-typing {
+    color: #6c757d;
+    font-style: italic;
+}
+
+.chat-borrador {
+    border: 1px dashed #198754;
+    border-radius: 6px;
+    padding: 6px 10px;
+    background: #f0fdf4;
+    color: #14532d;
+}

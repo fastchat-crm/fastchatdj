@@ -142,18 +142,39 @@ ChatBot tradicional
   `nodo_actual`, `variables`, `intentos`, `en_handoff`, `finalizado`.
 - **En handoff** (`en_handoff=True`) el motor no responde hasta que un humano
   libere la conversación.
+- **Navegación de menús por texto/número**: al elegir una opción de un menú de
+  varias opciones (árbol `opcion_padre`), el motor navega al **hijo elegido**
+  puntualmente (no al primero). Lo resuelve `_hijo_menu_elegido` + `_avanzar`
+  — clave para Baileys, donde no hay `boton_id` interactivo.
 
 ---
 
 ## 6. Generación de flujos con IA
 
-- `crm/funciones_departamento_chatbot.py:_generar_departamento_con_ia` (action
-  `generar_con_ia`) → delega en `agents_ai/ai_actions/dpchatbots_crm.py:generar`.
-  Crea `DepartamentoChatBot` + árbol de nodos `menu`/`respuesta`/`cta_url` desde
-  una descripción libre. **No** toca asesores.
+- **Generador rápido** (botón "Menú rápido"):
+  `crm/funciones_departamento_chatbot.py:_generar_departamento_con_ia` (action
+  `generar_con_ia`) → `agents_ai/ai_actions/dpchatbots_crm.py:generar`. Crea
+  `DepartamentoChatBot` + árbol de nodos `menu`/`respuesta`/`cta_url` desde una
+  descripción libre.
+- **Asistente Q&A** (botón "Armar proceso (Q&A)"):
+  `_generar_departamento_wizard` (action `generar_con_ia_wizard`) →
+  `dpchatbots_crm.generar_wizard`. Toma respuestas guiadas (objetivo, datos a
+  pedir, opciones de menú, cuándo handoff) y arma un proceso **pregunta→respuesta**
+  con nodos `pregunta` (captura + validación: email/cédula/teléfono/fecha/número)
+  y `handoff`. Persistencia: `_crear_nodos_wizard` (respeta el `tipo` explícito
+  de cada nodo). Prompt: `dpchatbots_wizard` en `agents_ai/ai_actions/prompts.py`.
+  UI: modal `modalCrearConIA` en `templates/crm/departamento_chatbots/view.html`.
+- **Asistente conversacional (chat)** (botón "Asistente IA (chat)"):
+  `_wizard_chat` (action `wizard_chat`) → `dpchatbots_crm.conversar` (multi-turno:
+  recibe historial + borrador, devuelve `{respuesta, flujo, listo}`) y
+  `_wizard_crear` (action `wizard_crear`) → `dpchatbots_crm.crear_desde_borrador`.
+  El frontend mantiene el historial y el borrador y los reenvía cada turno (el
+  servidor es sin estado). Prompt: `dpchatbots_chat`. Persistencia compartida:
+  `_persistir_flujo` + `_crear_nodos_wizard`. UI: modal `modalAsistenteChat` +
+  `static/css/crm/asistente_chat.css`.
 - `explicar_flujo` genera/cachea una explicación narrativa del flujo existente.
 
-Ambos están desacoplados del modelo de asesores: el refactor de asignación no
+Todos están desacoplados del modelo de asesores: el refactor de asignación no
 los afecta.
 
 ---

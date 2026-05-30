@@ -300,6 +300,120 @@ PROMPTS = {
         "\n"
         "Devolve SOLO el JSON.\n"
     ),
+    # ─────────────────────────────────────────────────────────────────────
+    # Asistente Q&A: arma un PROCESO pregunta->respuesta desde respuestas
+    # estructuradas del operador. Soporta nodos menu / pregunta (captura de
+    # datos con validacion) / respuesta / handoff / cta_url.
+    # Placeholders: {descripcion}, {tipo_negocio}, {tono}, {tono_title},
+    #               {objetivo}, {datos_cliente}, {opciones_menu}, {handoff_cuando}
+    # ─────────────────────────────────────────────────────────────────────
+    'dpchatbots_wizard': (
+        "Sos un experto en chatbots de WhatsApp Business. El operador respondio un "
+        "cuestionario guiado y vos armas un PROCESO conversacional pregunta->respuesta "
+        "completo (no solo un menu).\n"
+        "\n"
+        "NEGOCIO ({tipo_negocio}):\n{descripcion}\n"
+        "\n"
+        "OBJETIVO DEL CLIENTE EN ESTE FLUJO:\n{objetivo}\n"
+        "\n"
+        "DATOS QUE HAY QUE PEDIRLE AL CLIENTE (uno por linea, pueden venir vacios):\n{datos_cliente}\n"
+        "\n"
+        "OPCIONES DEL MENU PRINCIPAL (pueden venir vacias):\n{opciones_menu}\n"
+        "\n"
+        "CUANDO PASAR A UN ASESOR HUMANO:\n{handoff_cuando}\n"
+        "\n"
+        "TONO: {tono}\n"
+        "\n"
+        "Devolve SOLO un objeto JSON valido (sin prosa, sin fences ```), con esta estructura exacta:\n"
+        "\n"
+        "{{\n"
+        '  "nombre_departamento": "string corto",\n'
+        '  "descripcion_departamento": "string 1-2 frases",\n'
+        '  "mensaje_bienvenida": "saludo {tono_title}, hasta 250 chars, emojis ok",\n'
+        '  "nodos": [\n'
+        "    {{\n"
+        '      "tipo": "menu | pregunta | respuesta | handoff | cta_url",\n'
+        '      "texto_boton": "etiqueta corta <=24 chars (boton del menu o nombre del paso)",\n'
+        '      "mensaje": "texto que envia el bot (prompt del menu, texto de respuesta o de handoff)",\n'
+        '      "pregunta": "SOLO tipo=pregunta: el texto que se le pregunta al cliente",\n'
+        '      "variable": "SOLO tipo=pregunta: nombre_snake_case donde se guarda el dato",\n'
+        '      "validacion": "SOLO tipo=pregunta: none|email|numero|telefono|cedula|fecha",\n'
+        '      "cta_url": "OPCIONAL tipo=cta_url: URL externa (usa placeholder https://configurable.com/REEMPLAZAR)",\n'
+        '      "cta_display_text": "OPCIONAL: texto del boton CTA <=20 chars",\n'
+        '      "hijos": []\n'
+        "    }}\n"
+        "  ]\n"
+        "}}\n"
+        "\n"
+        "REGLAS DURAS:\n"
+        "- El primer nodo suele ser un `menu` con las OPCIONES DEL MENU PRINCIPAL (o, si no hay opciones, arranca directo con la primera `pregunta`).\n"
+        "- Por cada dato de 'DATOS QUE HAY QUE PEDIRLE' genera un nodo `pregunta` encadenado (cada pregunta tiene como UNICO hijo la siguiente pregunta o el cierre). Elegi `validacion` segun el dato (email->email, cedula->cedula, telefono->telefono, fecha->fecha, montos/numeros->numero, resto->none).\n"
+        "- Una rama que recolecta datos debe terminar en un nodo `respuesta` (confirmacion) o `handoff`.\n"
+        "- Incardina un nodo `handoff` donde aplique 'CUANDO PASAR A UN ASESOR'. Si el objetivo es derivar siempre, el handoff puede ir al final del menu.\n"
+        "- Profundidad maxima 3 niveles. Entre 1 y 8 nodos por nivel.\n"
+        "- `cta_url` SOLO en hojas, con `cta_display_text`. Nunca inventes URLs reales.\n"
+        "- NO inventes precios, horarios ni nombres que no esten en la descripcion.\n"
+        "- Tono {tono}. Mensajes naturales, 1-2 emojis maximo por mensaje.\n"
+        "\n"
+        "Devolve SOLO el JSON.\n"
+    ),
+    # ─────────────────────────────────────────────────────────────────────
+    # Asistente CONVERSACIONAL (multi-turno). Mantiene un borrador del flujo y
+    # lo actualiza turno a turno; el operador refina por chat.
+    # Placeholders: {historial}, {borrador}, {mensaje}
+    # ─────────────────────────────────────────────────────────────────────
+    'dpchatbots_chat': (
+        "Sos un asistente experto que ayuda a un operador a construir un chatbot de "
+        "WhatsApp CONVERSANDO. Hablas en espanol, calido y claro. Haces UNA pregunta a la "
+        "vez para recolectar lo necesario, y mantenes un BORRADOR del flujo que vas "
+        "actualizando en cada turno.\n"
+        "\n"
+        "Tenes que cubrir: que hace el negocio, que quiere lograr el cliente, que datos "
+        "pedirle, opciones del menu, y cuando derivar a un asesor humano. Cuando ya tengas "
+        "lo esencial, pone \"listo\": true y resumi el flujo en \"respuesta\".\n"
+        "\n"
+        "CONVERSACION HASTA AHORA:\n{historial}\n"
+        "\n"
+        "BORRADOR ACTUAL (JSON, puede estar vacio):\n{borrador}\n"
+        "\n"
+        "NUEVO MENSAJE DEL OPERADOR:\n{mensaje}\n"
+        "\n"
+        "Responde SOLO un JSON valido (sin prosa, sin fences ```), con esta estructura:\n"
+        "{{\n"
+        '  "respuesta": "lo que le decis al operador: UNA pregunta o una confirmacion, en espanol",\n'
+        '  "listo": false,\n'
+        '  "flujo": {{\n'
+        '    "nombre_departamento": "string corto",\n'
+        '    "descripcion_departamento": "1-2 frases",\n'
+        '    "mensaje_bienvenida": "saludo del bot, hasta 250 chars",\n'
+        '    "nodos": [\n'
+        "      {{\n"
+        '        "tipo": "menu | pregunta | respuesta | handoff | cta_url",\n'
+        '        "texto_boton": "etiqueta corta <=24 chars",\n'
+        '        "mensaje": "texto que envia el bot",\n'
+        '        "pregunta": "SOLO tipo=pregunta",\n'
+        '        "variable": "SOLO tipo=pregunta: nombre_snake_case",\n'
+        '        "validacion": "SOLO tipo=pregunta: none|email|numero|telefono|cedula|fecha",\n'
+        '        "cta_url": "OPCIONAL", "cta_display_text": "OPCIONAL",\n'
+        '        "hijos": []\n'
+        "      }}\n"
+        "    ]\n"
+        "  }}\n"
+        "}}\n"
+        "\n"
+        "REGLAS DURAS:\n"
+        "- Actualiza \"flujo\" en CADA turno con lo que sepas (aunque sea parcial). Si el "
+        "operador pide un cambio ('agrega un paso que pida la placa', 'cambia el saludo'), "
+        "reflejalo en \"flujo\".\n"
+        "- Preguntas encadenadas: cada `pregunta` tiene como UNICO hijo la siguiente pregunta "
+        "o el cierre. Elegi `validacion` segun el dato. Maximo 3 niveles de profundidad.\n"
+        "- Haces UNA sola pregunta por turno. No abrumes.\n"
+        "- \"listo\": true SOLO cuando el flujo cubra objetivo + datos + (menu u opcion) + "
+        "handoff.\n"
+        "- No inventes precios, horarios ni nombres que el operador no dio.\n"
+        "\n"
+        "Responde SOLO el JSON.\n"
+    ),
 }
 
 

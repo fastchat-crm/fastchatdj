@@ -527,6 +527,7 @@ class MotorFlujo:
         # True cuando _elegir_departamento determina que hay >1 depto activo y
         # ninguno matcheó → caller debe presentar meta-menú al usuario.
         self.pendiente_seleccion = False
+        self._hijo_menu_elegido = None
         # Timeline de trazabilidad — lista de dicts consumida por las vistas de prueba.
         # Se popula siempre (overhead despreciable) para permitir debugging en prod.
         self.trace: list[dict] = []
@@ -804,6 +805,8 @@ class MotorFlujo:
         return None
 
     def _avanzar(self, etiqueta: str):
+        hijo_especifico = getattr(self, '_hijo_menu_elegido', None)
+        self._hijo_menu_elegido = None
         nodo = self.estado.nodo_actual
         if not nodo:
             return None
@@ -812,6 +815,12 @@ class MotorFlujo:
             return conn.nodo_destino
         # Fallback legacy: árbol por opcion_padre cuando la etiqueta es default
         if etiqueta == '':
+            # Menú de varias opciones elegido por texto/número: navegar al hijo
+            # elegido puntualmente, no al primero del árbol.
+            if hijo_especifico:
+                esp = nodo.subopciones.filter(status=True, id=hijo_especifico).first()
+                if esp:
+                    return esp
             return nodo.subopciones.filter(status=True).order_by('orden').first()
         # Si no hay conexión específica, caer a la default
         conn_def = nodo.salidas.filter(status=True, etiqueta='').order_by('orden').first()
@@ -1457,8 +1466,10 @@ class MotorFlujo:
                                'valor': valor_a_guardar if valor_a_guardar is not None else '(no asignado)',
                                'es_default_si': es_default_si,
                                'es_default_otra': es_default_otra})
-            # Salida explícita o fallback por etiqueta del hijo legacy
-            return elegida.get('salida') or ''
+            # Salida explícita o, si no hay, navegación al hijo elegido puntual
+            salida_menu = elegida.get('salida') or ''
+            self._hijo_menu_elegido = elegida.get('_hijo_id') if not salida_menu else None
+            return salida_menu
 
         if tipo == 'set_variable':
             ctx = self.contexto()

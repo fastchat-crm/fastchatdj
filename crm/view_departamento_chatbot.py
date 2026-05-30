@@ -16,6 +16,9 @@ from .forms import IndustriaForm, ActividadEconomicaForm, DepartamentoChatBotFor
 from .funciones_departamento_chatbot import (
     sincronizar_opciones,
     _generar_departamento_con_ia,
+    _generar_departamento_wizard,
+    _wizard_chat,
+    _wizard_crear,
     _duplicar_info,
     _duplicar_departamento,
     _guardar_meta,
@@ -125,6 +128,12 @@ def departamentoChatbotsView(request):
                     res_json={"error":False}
                 elif action == 'generar_con_ia':
                     return _generar_departamento_con_ia(request)
+                elif action == 'generar_con_ia_wizard':
+                    return _generar_departamento_wizard(request)
+                elif action == 'wizard_chat':
+                    return _wizard_chat(request)
+                elif action == 'wizard_crear':
+                    return _wizard_crear(request)
                 elif action == 'crear_agente_desde_dpto':
                     from agents_ai.ai_actions.agentes_crm import crear_desde_depto
                     return crear_desde_depto(request)

@@ -1,3 +1,5 @@
+import json
+
 from django.db import transaction
 from django.http import JsonResponse
 
@@ -122,6 +124,123 @@ def _generar_departamento_con_ia(request):
 
     log(
         f"Generó departamento '{resultado['nombre']}' con IA ({resultado['opciones_count']} opciones)",
+        request, "add", obj=resultado['departamento_id'],
+    )
+    return JsonResponse({
+        'error': False,
+        'nombre': resultado['nombre'],
+        'departamento_id': resultado['departamento_id'],
+        'opciones_count': resultado['opciones_count'],
+    })
+
+
+def _generar_departamento_wizard(request):
+    """Action: generar_con_ia_wizard. Asistente Q&A: toma las respuestas del
+    cuestionario guiado y arma un proceso pregunta->respuesta completo."""
+    from seguridad.models import Configuracion
+    from agents_ai.ai_actions import IAActionError
+    from agents_ai.ai_actions import dpchatbots_crm
+
+    confi = Configuracion.get_instancia()
+    if not confi or not getattr(confi, 'ia_features_activas', False) or not confi.token_ia_id:
+        return JsonResponse({
+            'error': True,
+            'message': 'Features de IA del sistema deshabilitadas. Configurá un token IA en Configuración.',
+        })
+
+    try:
+        resultado = dpchatbots_crm.generar_wizard(
+            descripcion=request.POST.get('descripcion'),
+            tipo_negocio=request.POST.get('tipo_negocio'),
+            tono=request.POST.get('tono') or 'amable',
+            objetivo=request.POST.get('objetivo'),
+            datos_cliente=request.POST.get('datos_cliente'),
+            opciones_menu=request.POST.get('opciones_menu'),
+            handoff_cuando=request.POST.get('handoff_cuando'),
+            apikey_obj=confi.token_ia,
+            usuario=request.user,
+        )
+    except IAActionError as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': f'Error generando proceso: {ex}'})
+
+    log(
+        f"Generó proceso Q&A '{resultado['nombre']}' con IA ({resultado['opciones_count']} nodos)",
+        request, "add", obj=resultado['departamento_id'],
+    )
+    return JsonResponse({
+        'error': False,
+        'nombre': resultado['nombre'],
+        'departamento_id': resultado['departamento_id'],
+        'opciones_count': resultado['opciones_count'],
+    })
+
+
+def _wizard_chat(request):
+    """Action: wizard_chat. Un turno del asistente conversacional. El frontend
+    mantiene el historial y el borrador y los reenvía en cada turno."""
+    from seguridad.models import Configuracion
+    from agents_ai.ai_actions import IAActionError
+    from agents_ai.ai_actions import dpchatbots_crm
+
+    confi = Configuracion.get_instancia()
+    if not confi or not getattr(confi, 'ia_features_activas', False) or not confi.token_ia_id:
+        return JsonResponse({
+            'error': True,
+            'message': 'Features de IA del sistema deshabilitadas. Configurá un token IA en Configuración.',
+        })
+
+    try:
+        historial = json.loads(request.POST.get('historial') or '[]')
+    except (ValueError, TypeError):
+        historial = []
+    borrador_raw = (request.POST.get('borrador') or '').strip()
+    try:
+        borrador = json.loads(borrador_raw) if borrador_raw else None
+    except (ValueError, TypeError):
+        borrador = None
+
+    try:
+        resultado = dpchatbots_crm.conversar(
+            historial=historial,
+            mensaje=request.POST.get('mensaje'),
+            borrador=borrador,
+            apikey_obj=confi.token_ia,
+            usuario=request.user,
+        )
+    except IAActionError as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': f'Error en el asistente: {ex}'})
+
+    return JsonResponse({
+        'error': False,
+        'respuesta': resultado['respuesta'],
+        'flujo': resultado['flujo'],
+        'listo': resultado['listo'],
+    })
+
+
+def _wizard_crear(request):
+    """Action: wizard_crear. Persiste el flujo acordado en el chat."""
+    from agents_ai.ai_actions import IAActionError
+    from agents_ai.ai_actions import dpchatbots_crm
+
+    try:
+        flujo = json.loads(request.POST.get('flujo') or '{}')
+    except (ValueError, TypeError):
+        return JsonResponse({'error': True, 'message': 'Borrador inválido.'})
+
+    try:
+        resultado = dpchatbots_crm.crear_desde_borrador(flujo=flujo, usuario=request.user)
+    except IAActionError as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': f'Error creando el departamento: {ex}'})
+
+    log(
+        f"Creó departamento '{resultado['nombre']}' desde chat IA ({resultado['opciones_count']} nodos)",
         request, "add", obj=resultado['departamento_id'],
     )
     return JsonResponse({
