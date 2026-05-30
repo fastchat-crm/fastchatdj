@@ -19,6 +19,8 @@ from .funciones_departamento_chatbot import (
     _generar_departamento_wizard,
     _wizard_chat,
     _wizard_crear,
+    _wizard_cargar_borrador,
+    _wizard_actualizar,
     _duplicar_info,
     _duplicar_departamento,
     _guardar_meta,
@@ -134,6 +136,8 @@ def departamentoChatbotsView(request):
                     return _wizard_chat(request)
                 elif action == 'wizard_crear':
                     return _wizard_crear(request)
+                elif action == 'wizard_actualizar':
+                    return _wizard_actualizar(request)
                 elif action == 'crear_agente_desde_dpto':
                     from agents_ai.ai_actions.agentes_crm import crear_desde_depto
                     return crear_desde_depto(request)
@@ -581,6 +585,9 @@ def departamentoChatbotsView(request):
                 data["pk"] = pk
                 data["form"] = Formulario(instance=filtro, ver=True)
                 return render(request, 'crm/departamento_chatbots/form.html', data)
+
+            elif action == 'wizard_cargar_borrador':
+                return _wizard_cargar_borrador(request)
 
         criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True), ''
         if criterio:

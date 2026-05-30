@@ -379,6 +379,96 @@ def crear_desde_borrador(*, flujo, usuario) -> dict:
 
 
 # ============================================================================
+# Editar un departamento existente por chat (cargar como borrador + reemplazar)
+# ============================================================================
+_TIPOS_BORRADOR = {'menu', 'pregunta', 'respuesta', 'handoff', 'cta_url'}
+
+
+def _arbol_a_nodos_borrador(arbol) -> list:
+    """Convierte el árbol de `obtener_arbol_opciones()` al esquema de nodos del
+    asistente (reverso de `_crear_nodos_wizard`). Solo cubre el árbol por
+    `opcion_padre`; flujos con aristas complejas del canvas se aproximan."""
+    out = []
+    for n in arbol:
+        cfg = n.get('config') or {}
+        tipo = n.get('tipo_nodo') or 'respuesta'
+        if tipo not in _TIPOS_BORRADOR:
+            tipo = 'menu' if n.get('hijos') else 'respuesta'
+        nd = {
+            'tipo': tipo,
+            'texto_boton': n.get('nombre') or '',
+            'mensaje': cfg.get('mensaje') or n.get('respuesta') or '',
+        }
+        if tipo == 'pregunta':
+            nd['pregunta'] = cfg.get('pregunta') or n.get('respuesta') or ''
+            nd['variable'] = n.get('variable_destino') or ''
+            nd['validacion'] = n.get('validacion_tipo') or 'none'
+        if cfg.get('cta_url'):
+            nd['tipo'] = 'cta_url'
+            nd['cta_url'] = cfg.get('cta_url')
+            nd['cta_display_text'] = cfg.get('cta_display_text') or ''
+        hijos = n.get('hijos') or []
+        if hijos:
+            nd['hijos'] = _arbol_a_nodos_borrador(hijos)
+        out.append(nd)
+    return out
+
+
+def serializar_a_borrador(depto) -> dict:
+    """Vuelca un DepartamentoChatBot existente al esquema de borrador del
+    asistente, para precargarlo en el chat de edición."""
+    return {
+        'nombre_departamento': depto.nombre,
+        'descripcion_departamento': '',
+        'mensaje_bienvenida': depto.mensaje_saludo or '',
+        'nodos': _arbol_a_nodos_borrador(depto.obtener_arbol_opciones()),
+    }
+
+
+def actualizar_desde_borrador(*, departamento_id, flujo, usuario) -> dict:
+    """Reemplaza el flujo de un departamento existente con el borrador del chat:
+    soft-delete de nodos y aristas previas, recrea desde el borrador y resetea
+    los estados de conversación en vuelo de ese depto."""
+    from crm.models import (
+        DepartamentoChatBot, OpcionDepartamentoChatBot,
+        ConexionNodoChatbot, EstadoFlujoChatbot,
+    )
+    if not isinstance(flujo, dict):
+        raise IAActionError('Borrador inválido.')
+    depto = DepartamentoChatBot.objects.filter(id=departamento_id, status=True).first()
+    if not depto:
+        raise IAActionError('Departamento no encontrado.')
+    nodos = flujo.get('nodos') or []
+    if not isinstance(nodos, list) or not nodos:
+        raise IAActionError('El borrador todavía no tiene pasos definidos.')
+    nombre = (flujo.get('nombre_departamento') or '').strip() or depto.nombre
+    bienvenida = (flujo.get('mensaje_bienvenida') or '').strip()
+
+    with transaction.atomic():
+        ConexionNodoChatbot.objects.filter(
+            nodo_origen__departamento=depto, status=True,
+        ).update(status=False)
+        OpcionDepartamentoChatBot.objects.filter(
+            departamento=depto, status=True,
+        ).update(status=False)
+        EstadoFlujoChatbot.objects.filter(
+            departamento=depto, status=True,
+        ).update(nodo_actual=None, intentos=0)
+
+        depto.nombre = nombre[:100]
+        if bienvenida:
+            depto.mensaje_saludo = bienvenida
+        depto.save()
+        opciones_count = _crear_nodos_wizard(depto, nodos, parent=None)
+
+    return {
+        'departamento_id': depto.id,
+        'nombre': depto.nombre,
+        'opciones_count': opciones_count,
+    }
+
+
+# ============================================================================
 # Explicación narrativa de un flujo existente (cache + regeneración bajo demanda)
 # ============================================================================
 def _serializar_flujo_para_prompt(depto) -> str:

@@ -251,6 +251,60 @@ def _wizard_crear(request):
     })
 
 
+def _wizard_cargar_borrador(request):
+    """Action GET: wizard_cargar_borrador. Serializa el flujo de un depto
+    existente al esquema de borrador, para precargarlo en el chat de edición."""
+    from agents_ai.ai_actions import dpchatbots_crm
+    try:
+        pk = int(request.GET.get('id') or 0)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': True, 'message': 'ID inválido.'})
+    filtro = DepartamentoChatBot.objects.filter(pk=pk, status=True).first()
+    if not filtro:
+        return JsonResponse({'error': True, 'message': 'Departamento no encontrado.'})
+    try:
+        borrador = dpchatbots_crm.serializar_a_borrador(filtro)
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': f'No se pudo cargar el flujo: {ex}'})
+    return JsonResponse({'error': False, 'flujo': borrador, 'nombre': filtro.nombre})
+
+
+def _wizard_actualizar(request):
+    """Action POST: wizard_actualizar. Reemplaza el flujo del depto con el
+    borrador acordado en el chat de edición."""
+    from agents_ai.ai_actions import IAActionError
+    from agents_ai.ai_actions import dpchatbots_crm
+
+    try:
+        flujo = json.loads(request.POST.get('flujo') or '{}')
+    except (ValueError, TypeError):
+        return JsonResponse({'error': True, 'message': 'Borrador inválido.'})
+    try:
+        pk = int(request.POST.get('departamento_id') or 0)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': True, 'message': 'ID inválido.'})
+
+    try:
+        resultado = dpchatbots_crm.actualizar_desde_borrador(
+            departamento_id=pk, flujo=flujo, usuario=request.user,
+        )
+    except IAActionError as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': f'Error actualizando el departamento: {ex}'})
+
+    log(
+        f"Editó por chat el departamento '{resultado['nombre']}' ({resultado['opciones_count']} nodos)",
+        request, "edit", obj=resultado['departamento_id'],
+    )
+    return JsonResponse({
+        'error': False,
+        'nombre': resultado['nombre'],
+        'departamento_id': resultado['departamento_id'],
+        'opciones_count': resultado['opciones_count'],
+    })
+
+
 # ============================================================================
 # Generar AgentesIA (snapshot) a partir de un DepartamentoChatBot. Operación
 # determinista, no llama a LLM: vuelca saludo, árbol de opciones, endpoints

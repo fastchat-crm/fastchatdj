@@ -172,6 +172,14 @@ ChatBot tradicional
   servidor es sin estado). Prompt: `dpchatbots_chat`. Persistencia compartida:
   `_persistir_flujo` + `_crear_nodos_wizard`. UI: modal `modalAsistenteChat` +
   `static/css/crm/asistente_chat.css`.
+- **Editar un departamento por chat** (menú ⋮ → "Editar con chat (IA)"):
+  GET `wizard_cargar_borrador` → `dpchatbots_crm.serializar_a_borrador` precarga
+  el flujo actual como borrador (reverso de `_crear_nodos_wizard`, solo árbol
+  `opcion_padre`). Al guardar, POST `wizard_actualizar` →
+  `dpchatbots_crm.actualizar_desde_borrador`: **reemplaza** el flujo (soft-delete
+  de nodos + aristas, recrea desde el borrador, resetea `EstadoFlujoChatbot` en
+  vuelo del depto). Limitación: flujos con aristas complejas del canvas se
+  aproximan al serializar — para esos, editar en el canvas.
 - `explicar_flujo` genera/cachea una explicación narrativa del flujo existente.
 
 Todos están desacoplados del modelo de asesores: el refactor de asignación no

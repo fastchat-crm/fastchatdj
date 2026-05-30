@@ -85,6 +85,14 @@
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end"
                                     aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                                    {% if ia_disponible %}
+                                    <li>
+                                        <a class="dropdown-item" href="javascript:void(0);"
+                                           onclick="abrirAsistenteChat({{ l.pk }}, '{{ l.nombre|escapejs }}')">
+                                            <i class="fa fa-comments me-2 text-primary"></i>Editar con chat (IA)
+                                        </a>
+                                    </li>
+                                    {% endif %}
                                     <li>
                                         <a class="dropdown-item" href="javascript:void(0);"
                                            onclick="abrirModalGenerarAgente({{ l.pk }}, '{{ l.nombre|escapejs }}')">
@@ -1094,21 +1102,47 @@
         let _chatModalInstance = null;
         let _chatHistorial = [];
         let _chatBorrador = null;
+        let _chatEditDeptId = null;
 
-        function abrirAsistenteChat() {
+        async function abrirAsistenteChat(deptId, deptNombre) {
             const el = document.getElementById('modalAsistenteChat');
             if (!el) return;
             if (!_chatModalInstance) _chatModalInstance = new bootstrap.Modal(el);
             _chatHistorial = [];
             _chatBorrador = null;
+            _chatEditDeptId = deptId || null;
             document.getElementById('chat-mensajes').innerHTML = '';
             document.getElementById('chat-input').value = '';
             const info = document.getElementById('chat-borrador-info');
             info.classList.add('d-none');
             info.innerHTML = '';
-            document.getElementById('chat-crear').disabled = true;
-            _chatBurbuja('ia', '¡Hola! Soy tu asistente para crear el chatbot. Contame: ¿qué hace tu negocio y qué querés que resuelva este flujo?');
+            const crear = document.getElementById('chat-crear');
+            crear.disabled = true;
+            crear.innerHTML = _chatEditDeptId
+                ? '<i class="fa fa-floppy-disk me-1"></i> Guardar cambios'
+                : '<i class="fa fa-circle-check me-1"></i> Crear departamento';
             _chatModalInstance.show();
+
+            if (_chatEditDeptId) {
+                _chatBurbuja('ia', 'Cargando el flujo actual de "' + (deptNombre || 'este departamento') + '"…');
+                try {
+                    const r = await fetch('{{ request.path }}?action=wizard_cargar_borrador&id=' + _chatEditDeptId, {
+                        headers: {'X-Requested-With': 'XMLHttpRequest'}, credentials: 'same-origin',
+                    });
+                    const data = await r.json();
+                    if (data.error) {
+                        _chatBurbuja('ia', '⚠️ ' + (data.message || 'No se pudo cargar el flujo.'));
+                        return;
+                    }
+                    _chatBorrador = data.flujo || null;
+                    _chatActualizarBorrador(false);
+                    _chatBurbuja('ia', 'Listo, cargué el flujo de "' + (data.nombre || '') + '". ¿Qué querés cambiar? Ej: "agregá un paso que pida la placa", "quitá la opción de promociones", "cambiá el saludo".');
+                } catch (ex) {
+                    _chatBurbuja('ia', '⚠️ Error de red al cargar: ' + ex.message);
+                }
+            } else {
+                _chatBurbuja('ia', '¡Hola! Soy tu asistente para crear el chatbot. Contame: ¿qué hace tu negocio y qué querés que resuelva este flujo?');
+            }
         }
 
         function _chatBurbuja(rol, texto) {
@@ -1184,11 +1218,16 @@
             const crear = document.getElementById('chat-crear');
             const orig = crear.innerHTML;
             crear.disabled = true;
-            crear.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Creando…';
+            crear.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Guardando…';
             const fd = new FormData();
-            fd.append('action', 'wizard_crear');
             fd.append('csrfmiddlewaretoken', document.querySelector('input[name=csrfmiddlewaretoken]').value);
             fd.append('flujo', JSON.stringify(_chatBorrador));
+            if (_chatEditDeptId) {
+                fd.append('action', 'wizard_actualizar');
+                fd.append('departamento_id', _chatEditDeptId);
+            } else {
+                fd.append('action', 'wizard_crear');
+            }
             try {
                 const r = await fetch('{{ request.path }}', {
                     method: 'POST', body: fd,
@@ -1198,10 +1237,11 @@
                 if (data.error) {
                     crear.disabled = false;
                     crear.innerHTML = orig;
-                    _chatBurbuja('ia', '⚠️ ' + (data.message || 'Error al crear.'));
+                    _chatBurbuja('ia', '⚠️ ' + (data.message || 'Error al guardar.'));
                     return;
                 }
-                _chatBurbuja('ia', '✅ Departamento "' + (data.nombre || '') + '" creado con ' + (data.opciones_count || 0) + ' nodos. Recargando…');
+                const verbo = _chatEditDeptId ? 'actualizado' : 'creado';
+                _chatBurbuja('ia', '✅ Departamento "' + (data.nombre || '') + '" ' + verbo + ' con ' + (data.opciones_count || 0) + ' nodos. Recargando…');
                 setTimeout(() => window.location.reload(), 1400);
             } catch (ex) {
                 crear.disabled = false;
