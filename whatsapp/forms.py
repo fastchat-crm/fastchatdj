@@ -305,25 +305,27 @@ class AsignarAgenteForm(ModelFormBase):
         super().__init__(*args, **kwargs)
 
         sesion = None
-        conversacion = self.instance if (self.instance and self.instance.pk) else None
         try:
-            if conversacion is not None:
-                sesion = conversacion.contacto.sesion
+            if self.instance and self.instance.pk:
+                sesion = self.instance.contacto.sesion
         except Exception:
             sesion = None
 
-        # Pool por departamento (fuente única). El asesor pertenece al
-        # departamento de la conversación; si no resolvió uno, a los
-        # departamentos de la sesión. Idéntico pool que usa la auto-asignación.
-        ids_pool = []
-        if conversacion is not None:
-            try:
-                from crm.helpers_asignacion import agentes_candidatos
-                ids_pool = [u.id for u in agentes_candidatos(conversacion)]
-            except Exception:
-                ids_pool = []
+        # Pool por sesión/número (fuente única). El asesor se configura en la
+        # sesión vía PerfilSesionWhatsApp (supervisor o agente). Idéntico pool
+        # que usa la auto-asignación.
+        from .models import PerfilSesionWhatsApp, ROLES_SESION
+        roles_map = {}
+        if sesion is not None:
+            roles_choices = dict(ROLES_SESION)
+            perfiles = list(
+                PerfilSesionWhatsApp.objects
+                .filter(sesion=sesion, status=True)
+                .values_list('usuario_id', 'rol')
+            )
+            ids_pool = [uid for uid, _ in perfiles]
+            roles_map = {uid: roles_choices.get(rol, rol) for uid, rol in perfiles}
 
-        if ids_pool:
             agentes = Usuario.objects.filter(
                 is_active=True, id__in=ids_pool
             ).annotate(
@@ -342,7 +344,7 @@ class AsignarAgenteForm(ModelFormBase):
             queryset=agentes,
             required=False,
             label='Asignar a',
-            roles_map={},
+            roles_map=roles_map,
         )
         self.fields['asignado_a'].widget.attrs['class'] = 'jselect2'
         self.fields['asignado_a'].widget.attrs['col'] = '12'

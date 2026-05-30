@@ -290,9 +290,6 @@ def _duplicar_info(request):
     count_opciones = OpcionDepartamentoChatBot.objects.filter(
         departamento=dpto, status=True,
     ).count()
-    count_usuarios = PerfilDepartamentoChatBot.objects.filter(
-        departamento=dpto, status=True,
-    ).count()
     count_conexiones = ConexionNodoChatbot.objects.filter(
         nodo_origen__departamento=dpto, status=True,
     ).count()
@@ -313,7 +310,6 @@ def _duplicar_info(request):
             'count_opciones': count_opciones,
             'count_conexiones': count_conexiones,
             'count_endpoints': count_endpoints,
-            'count_usuarios': count_usuarios,
             'nombre_sugerido': f"{dpto.nombre} - COPIA",
         },
     })
@@ -323,8 +319,7 @@ def _duplicar_departamento(request):
     """Action: duplicar. Clona DepartamentoChatBot completo:
       1. Nuevo Departamento con los mismos campos (es_default forzado a False).
       2. Clona OpcionDepartamentoChatBot manteniendo árbol (opcion_padre).
-      3. Clona ConexionNodoChatbot remapeando origen/destino.
-      4. Clona PerfilDepartamentoChatBot (asignaciones de usuarios)."""
+      3. Clona ConexionNodoChatbot remapeando origen/destino."""
     try:
         dpto_id = int(request.POST.get('id') or 0)
     except (TypeError, ValueError):
@@ -408,22 +403,9 @@ def _duplicar_departamento(request):
             ).save(request)
             count_conex_clonadas += 1
 
-        # Pase 4 — clonar usuarios asignados
-        perfiles = PerfilDepartamentoChatBot.objects.filter(
-            departamento=dpto, status=True,
-        )
-        count_usuarios_clonados = 0
-        for p in perfiles:
-            PerfilDepartamentoChatBot(
-                departamento=nuevo,
-                usuario=p.usuario,
-            ).save(request)
-            count_usuarios_clonados += 1
-
     log(
         f"Duplicó departamento '{dpto.nombre}' → '{nuevo.nombre}' "
-        f"({len(mapeo_nodos)} nodos, {count_conex_clonadas} conexiones, "
-        f"{count_usuarios_clonados} usuarios)",
+        f"({len(mapeo_nodos)} nodos, {count_conex_clonadas} conexiones)",
         request, "add", obj=nuevo.id,
     )
     return JsonResponse({
@@ -432,7 +414,6 @@ def _duplicar_departamento(request):
         'departamento_nombre': nuevo.nombre,
         'nodos': len(mapeo_nodos),
         'conexiones': count_conex_clonadas,
-        'usuarios': count_usuarios_clonados,
         'mensaje': f"Departamento duplicado como '{nuevo.nombre}'.",
     })
 

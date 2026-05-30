@@ -1178,9 +1178,6 @@ class DepartamentoChatBot(ModeloBase):
 
         return construir(hijos_por_padre.get(None, []))
 
-    def obtener_perfiles(self):
-        return self.perfildepartamentochatbot_set.filter(status=True).order_by('usuario__first_name')
-
     def nodo_inicio(self):
         return self.opciondepartamentochatbot_set.filter(es_inicio=True, status=True).first() \
             or self.opciondepartamentochatbot_set.filter(opcion_padre__isnull=True, status=True).order_by('orden').first()
@@ -1505,18 +1502,6 @@ class EstadoFlujoChatbot(ModeloBase):
         self.intentos = 0
         self.finalizado = False
         self.en_handoff = False
-
-
-class PerfilDepartamentoChatBot(ModeloBase):
-    departamento = models.ForeignKey(DepartamentoChatBot, on_delete=models.SET_NULL, null=True, blank=True)
-    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE)
-
-    class Meta:
-        verbose_name = 'Perfil Negocio ChatBot'
-        verbose_name_plural = 'Perfiles Negocios ChatBot'
-
-    def __str__(self):
-        return f"{self.usuario.get_full_name()} - {self.departamento.nombre if self.departamento else 'Sin departamento'}"
 
 
 # ---------------------------------------------------------------------------

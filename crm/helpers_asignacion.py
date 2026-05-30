@@ -6,24 +6,22 @@ Se invoca desde:
 - Cualquier action manual que asigne / reasigne (UI), si querés unificar la
   notificación (push + email + interna).
 
-Fuente única de verdad de "qué asesor atiende" = el DEPARTAMENTO (cola).
-Los asesores pertenecen a departamentos vía `PerfilDepartamentoChatBot`. La
-disponibilidad (`whatsapp.DisponibilidadAgente`) es un filtro ortogonal, no un
-pool aparte.
+Fuente única de verdad de "qué asesor atiende" = el NÚMERO/SESIÓN.
+Los asesores se configuran en la sesión vía `PerfilSesionWhatsApp` (roles
+'supervisor' y 'asesor' — ambos reciben asignación). La disponibilidad
+(`whatsapp.DisponibilidadAgente`) es un filtro ortogonal, no un pool aparte.
+Los departamentos definen solo el flujo del bot, NO quién atiende.
 
 Política de auto-asignación:
 1. Si la conversación ya tiene `asignado_a` → no se cambia.
-2. Pool de candidatos = asesores del departamento resuelto para la conversación.
-   Si la conversación no resolvió departamento (p.ej. sesión IA), se usa la
-   unión de asesores de los departamentos de la sesión.
+2. Pool de candidatos = asesores de la sesión (`PerfilSesionWhatsApp`).
 3. Se filtra por disponibilidad (`disponible=True`, carga < `max_conversaciones`).
    Un asesor SIN registro de `DisponibilidadAgente` se considera disponible.
 4. Se elige al de menor carga (empate → quien lleva más tiempo sin asignación).
 5. Si no hay candidatos → no asigna (devuelve `None`).
 
-Fallback de migración: si el departamento no tiene asesores configurados, se
-cae al pool legacy de `DisponibilidadAgente` por sesión para no romper sesiones
-que aún no migraron a membresía por departamento.
+Fallback de migración: si la sesión no tiene asesores en `PerfilSesionWhatsApp`,
+se cae al pool legacy de `DisponibilidadAgente` por sesión.
 
 Cuando hay asignación, se dispara:
 - Notificación interna (`seguridad.Notificacion`) — su `save()` también
@@ -71,39 +69,18 @@ def _resolver_departamento(conversacion):
     return DepartamentoChatBot.objects.filter(es_default=True, status=True).first()
 
 
-def _agentes_del_departamento(depto):
-    if not depto:
-        return []
-    try:
-        from crm.models import PerfilDepartamentoChatBot
-    except Exception:
-        return []
-    rels = (
-        PerfilDepartamentoChatBot.objects
-        .filter(departamento=depto, status=True, usuario__is_active=True)
-        .select_related('usuario')
-    )
-    return [r.usuario for r in rels if r.usuario_id]
-
-
 def _agentes_de_sesion(sesion):
-    """Unión de asesores de todos los departamentos de la sesión (incluido el
-    `departamento_default`). Fallback cuando la conversación no resolvió un
-    departamento concreto — p.ej. sesiones IA sin flujo tradicional."""
+    """Asesores configurados en la sesión/número vía `PerfilSesionWhatsApp`.
+    Incluye ambos roles ('supervisor' y 'asesor') — todos reciben asignación."""
     if not sesion:
         return []
     try:
-        from crm.models import PerfilDepartamentoChatBot
+        from whatsapp.models import PerfilSesionWhatsApp
     except Exception:
         return []
-    depto_ids = list(sesion.departamentos.filter(status=True).values_list('id', flat=True))
-    if getattr(sesion, 'departamento_default_id', None):
-        depto_ids.append(sesion.departamento_default_id)
-    if not depto_ids:
-        return []
     rels = (
-        PerfilDepartamentoChatBot.objects
-        .filter(departamento_id__in=depto_ids, status=True, usuario__is_active=True)
+        PerfilSesionWhatsApp.objects
+        .filter(sesion=sesion, status=True, usuario__is_active=True)
         .select_related('usuario')
     )
     agentes, vistos = [], set()
@@ -143,13 +120,10 @@ def _agentes_legacy_disponibilidad(conversacion):
 
 def agentes_candidatos(conversacion):
     """Pool de asesores elegibles para una conversación (sin ordenar ni filtrar
-    por carga). Departamento primero; si no hay, la unión de la sesión; si nada,
-    el pool legacy de disponibilidad."""
-    depto = _resolver_departamento(conversacion)
-    agentes = _agentes_del_departamento(depto)
-    if not agentes:
-        sesion = getattr(getattr(conversacion, 'contacto', None), 'sesion', None)
-        agentes = _agentes_de_sesion(sesion)
+    por carga): los configurados en la sesión/número. Si la sesión no tiene
+    ninguno, cae al pool legacy de disponibilidad."""
+    sesion = getattr(getattr(conversacion, 'contacto', None), 'sesion', None)
+    agentes = _agentes_de_sesion(sesion)
     if not agentes:
         agentes = _agentes_legacy_disponibilidad(conversacion)
     return agentes
@@ -207,6 +181,26 @@ def candidatos_ordenados(conversacion):
 
     elegibles.sort(key=lambda it: (it[1], it[2]))
     return [(u, carga) for (u, carga, _ult) in elegibles]
+
+
+def asesores_disponibles_sesion(conversacion):
+    """Asesores de la sesión/número que están DISPONIBLES. Para las
+    notificaciones del flujo: mismo pool que la asignación, pero SIN filtrar por
+    carga máxima — se avisa a todo el equipo que esté online. Un asesor sin
+    registro de `DisponibilidadAgente` se considera disponible."""
+    agentes = agentes_candidatos(conversacion)
+    if not agentes:
+        return []
+    try:
+        from whatsapp.models import DisponibilidadAgente
+        offline = set(
+            DisponibilidadAgente.objects.filter(
+                usuario__in=agentes, status=True, disponible=False,
+            ).values_list('usuario_id', flat=True)
+        )
+    except Exception:
+        offline = set()
+    return [u for u in agentes if u.id not in offline]
 
 
 def _marcar_ultima_asignacion(usuario):

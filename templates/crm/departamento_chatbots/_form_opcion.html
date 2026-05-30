@@ -449,16 +449,15 @@
                                {% if opcion.config.envia_correo %}checked{% endif %}>
                         <label class="form-check-label small fw-bold" for="dp_envia_correo">
                             <i class="fa fa-envelope text-info me-1"></i>
-                            Envía correo a asesores del departamento al ejecutar este paso
+                            Notifica a los asesores disponibles del número al ejecutar este paso
                         </label>
                     </div>
                     <small class="text-muted d-block mt-1">
-                        Cuando el HTTP responde 2xx, se manda automáticamente un correo a
-                        TODOS los usuarios activos asignados al departamento
-                        (<code>PerfilDepartamentoChatBot.status=True</code>) con un link a
-                        la conversación. Útil para notificar handoff, cotización terminada,
-                        cita agendada, etc. Si no hay asesores con email, el flujo del
-                        cliente sigue normal y solo queda log.
+                        Cuando el HTTP responde 2xx, se notifica (correo + notificación interna)
+                        a los asesores <b>disponibles configurados en la sesión/número de
+                        WhatsApp</b>, con un link a la conversación. Útil para handoff,
+                        cotización terminada, cita agendada, etc. Si no hay asesores
+                        disponibles con email, el flujo del cliente sigue normal y solo queda log.
                     </small>
                     <small class="text-muted d-block mt-2">
                         <i class="fa fa-circle-info me-1"></i>

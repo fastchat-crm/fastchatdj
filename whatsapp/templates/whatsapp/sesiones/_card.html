@@ -213,16 +213,22 @@
                         <span class="card-block-count">{{ usuarios.supervisores|length }} sup · {{ usuarios.agentes|length }} ag</span>
                     </div>
                     <div class="card-chips">
-                        {% for p in usuarios.supervisores %}
-                            <span class="user-chip user-chip-supervisor" title="Supervisor">
-                                <i class="fa fa-user-shield"></i> {{ p.usuario.full_name|default:p.usuario.username }}
-                            </span>
+                        {% for p in usuarios.visibles %}
+                            {% if p.rol == 'supervisor' %}
+                                <span class="user-chip user-chip-supervisor" title="Supervisor: {{ p.usuario.full_name|default:p.usuario.username }}">
+                                    <i class="fa fa-user-shield"></i> {{ p.usuario.full_name|default:p.usuario.username }}
+                                </span>
+                            {% else %}
+                                <span class="user-chip user-chip-agente" title="Agente: {{ p.usuario.full_name|default:p.usuario.username }}">
+                                    <i class="fa fa-headset"></i> {{ p.usuario.full_name|default:p.usuario.username }}
+                                </span>
+                            {% endif %}
                         {% endfor %}
-                        {% for p in usuarios.agentes %}
-                            <span class="user-chip user-chip-agente" title="Agente">
-                                <i class="fa fa-headset"></i> {{ p.usuario.full_name|default:p.usuario.username }}
+                        {% if usuarios.extra %}
+                            <span class="user-chip user-chip-extra" title="{{ usuarios.extra_titulo }}">
+                                +{{ usuarios.extra }} más
                             </span>
-                        {% endfor %}
+                        {% endif %}
                     </div>
                 </div>
             {% endif %}

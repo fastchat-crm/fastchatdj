@@ -162,10 +162,24 @@ class SesionWhatsApp(ModeloBase):
         perfiles = [p for p in self.perfilsesionwhatsapp_set.all() if p.status]
         supervisores = [p for p in perfiles if p.rol == 'supervisor']
         agentes = [p for p in perfiles if p.rol == 'asesor']
+        ordenados = supervisores + agentes
+        limite = 4
+        visibles = ordenados[:limite]
+        restantes = ordenados[limite:]
+
+        def _nombre(perfil):
+            nombre = getattr(perfil.usuario, 'full_name', '') or ''
+            if callable(nombre):
+                nombre = nombre()
+            return (nombre or '').strip() or perfil.usuario.username
+
         return {
             'supervisores': supervisores,
             'agentes': agentes,
             'total': len(perfiles),
+            'visibles': visibles,
+            'extra': len(restantes),
+            'extra_titulo': ', '.join(_nombre(p) for p in restantes),
         }
 
     def rol_de_usuario(self, usuario):
