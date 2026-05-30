@@ -113,7 +113,12 @@
       "Bash(ls seguridad/templates/seguridad/modulossistema/)",
       "Bash(find . -path ./.venv -prune -o -name \"listado.html\" -path \"*modulossistema*\" -print)",
       "PowerShell(python -m py_compile autenticacion/view_perfil.py fastchatdj/settings.py; if \\($?\\) { \"OK sintaxis\" })",
-      "PowerShell(python -m py_compile pwa/views.py pwa/urls.py; if \\($?\\) { \"OK sintaxis\" })"
+      "PowerShell(python -m py_compile pwa/views.py pwa/urls.py; if \\($?\\) { \"OK sintaxis\" })",
+      "Bash(Get-ChildItem -Path \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(pycheck crm/motor_flujo_chatbot.py)",
+      "Bash(Get-ChildItem -Path \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\" -Recurse -Filter \"*seed*\" -Type File)",
+      "Bash(Select-Object FullName)"
     ]
   },
   "hooks": {

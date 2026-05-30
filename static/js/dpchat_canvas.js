@@ -62,6 +62,29 @@
         fin: 'fa-flag-checkered'
     };
 
+    var TIPO_COLOR = {
+        menu: '#8b5cf6', respuesta: '#16a34a', pregunta: '#f59e0b', http: '#3b82f6',
+        funcion: '#5b21b6', condicional: '#ec4899', set_variable: '#06b6d4',
+        cta_url: '#2563eb', ubicacion: '#6b21a8', handoff: '#f97316',
+        agenda_turno: '#0d9488', loop: '#d97706', fin: '#64748b'
+    };
+
+    var TIPO_AYUDA = {
+        menu: 'Botones interactive. Las opciones salen de los nodos hijos, de la tabla inline o de una variable (opciones_fuente).',
+        respuesta: 'Envía un texto al cliente. Puede anexar un botón CTA con URL externa.',
+        pregunta: 'Pide un dato y lo guarda en la variable destino. Soporta validación y reintentos.',
+        http: 'Llama una API: endpoint + método + path. Extrae datos de la respuesta a variables. Salidas ok / error.',
+        funcion: 'Ejecuta una función Python interna (funcion_codigo) sin saltos de red. Salidas ok / error.',
+        condicional: 'Evalúa condiciones sobre las variables y ramifica por las aristas true / false.',
+        set_variable: 'Asigna una lista de variable = expresión y avanza por la salida default.',
+        cta_url: 'Mensaje con un único botón que abre una URL externa (pago, formulario, web).',
+        ubicacion: 'Envía una ubicación (lat/lng) que el cliente abre en su mapa.',
+        handoff: 'Deriva la conversación a un asesor humano.',
+        agenda_turno: 'Reservar, cancelar o reagendar un turno usando la agenda de la sesión (grupo_agenda).',
+        loop: 'Itera N veces. Salida body en cada vuelta, done al terminar. El índice queda en {{variables.i}}.',
+        fin: 'Cierra la conversación.'
+    };
+
     function escapeHtml(s) {
         return (s || '').replace(/[&<>"]/g, function (c) {
             return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
@@ -118,14 +141,24 @@
         var resp = n.respuesta
             ? '<div class="dpc-node-resp">' + escapeHtml(n.respuesta) + '</div>'
             : '';
+        var accion = n.accion
+            ? '<div class="dpc-node-accion"><i class="fa fa-bolt"></i> ' + escapeHtml(n.accion) + '</div>'
+            : '';
+        var flags = (n.flags && n.flags.length)
+            ? '<div class="dpc-node-flags">' + n.flags.map(function (f) {
+                  return '<span class="dpc-node-flag">' + escapeHtml(f) + '</span>';
+              }).join('') + '</div>'
+            : '';
         return '' +
-            '<div class="dpc-node tipo-' + n.tipo + '" data-nodo-id="' + n.id + '">' +
+            '<div class="dpc-node tipo-' + n.tipo + '" data-nodo-id="' + n.id + '" data-tipo="' + n.tipo + '">' +
             '  <div class="dpc-node-head">' +
             '    <i class="fa ' + icon + '"></i>' +
             '    <span class="dpc-node-tipo">' + escapeHtml(n.tipo_label) + '</span>' +
             inicio +
             '  </div>' +
             '  <div class="dpc-node-name">' + escapeHtml(n.nombre || '(sin nombre)') + '</div>' +
+            accion +
+            flags +
             resp +
             '  <div class="dpc-node-actions">' +
             '    <button type="button" class="dpc-node-act" data-act="edit" data-nodo-id="' + n.id + '" title="Editar">' +
@@ -524,6 +557,83 @@
               }).catch(function () {
                   notifyError('Error de red al eliminar.');
               });
+        });
+    }
+
+    setupLeyendaYFiltros();
+
+    function setupLeyendaYFiltros() {
+        var tipos = (G.tipos || []).filter(function (t) { return true; });
+        var labelByTipo = {};
+        tipos.forEach(function (t) { labelByTipo[t.value] = t.label; });
+
+        var legendBody = document.getElementById('dpcLegendBody');
+        if (legendBody) {
+            legendBody.innerHTML = tipos.map(function (t) {
+                var color = TIPO_COLOR[t.value] || '#94a3b8';
+                var icon = TIPO_ICON[t.value] || 'fa-circle';
+                var ayuda = TIPO_AYUDA[t.value] || '';
+                return '<div class="dpc-legend-item">' +
+                    '<span class="dpc-legend-swatch" style="background:' + color + '"></span>' +
+                    '<div class="dpc-legend-text">' +
+                    '<span class="dpc-legend-tipo"><i class="fa ' + icon + '"></i> ' + escapeHtml(t.label) + '</span>' +
+                    '<span class="dpc-legend-ayuda">' + escapeHtml(ayuda) + '</span>' +
+                    '</div></div>';
+            }).join('');
+        }
+
+        var legend = document.getElementById('dpcLegend');
+        var btnLeyenda = document.getElementById('dpcBtnLeyenda');
+        var btnClose = document.getElementById('dpcLegendClose');
+        if (btnLeyenda && legend) {
+            btnLeyenda.addEventListener('click', function () {
+                legend.hidden = !legend.hidden;
+                btnLeyenda.classList.toggle('is-active', !legend.hidden);
+            });
+        }
+        if (btnClose && legend) {
+            btnClose.addEventListener('click', function () {
+                legend.hidden = true;
+                if (btnLeyenda) { btnLeyenda.classList.remove('is-active'); }
+            });
+        }
+
+        var filtros = document.getElementById('dpcFiltros');
+        if (!filtros) { return; }
+        var presentes = [];
+        var vistos = {};
+        (G.nodos || []).forEach(function (n) {
+            if (!vistos[n.tipo]) { vistos[n.tipo] = true; presentes.push(n.tipo); }
+        });
+        if (presentes.length < 2) { return; }
+
+        var chips = ['<button type="button" class="dpc-chip is-active" data-tipo="">Todos</button>'];
+        presentes.forEach(function (tp) {
+            var color = TIPO_COLOR[tp] || '#94a3b8';
+            chips.push('<button type="button" class="dpc-chip" data-tipo="' + tp + '">' +
+                '<span class="dpc-chip-dot" style="background:' + color + '"></span>' +
+                escapeHtml(labelByTipo[tp] || tp) + '</button>');
+        });
+        filtros.innerHTML = chips.join('');
+
+        filtros.addEventListener('click', function (e) {
+            var chip = e.target.closest('.dpc-chip');
+            if (!chip) { return; }
+            var tipo = chip.getAttribute('data-tipo') || '';
+            Array.prototype.forEach.call(filtros.querySelectorAll('.dpc-chip'), function (c) {
+                c.classList.toggle('is-active', c === chip);
+            });
+            aplicarFiltro(tipo);
+        });
+    }
+
+    function aplicarFiltro(tipo) {
+        var nodes = container.querySelectorAll('.drawflow-node');
+        Array.prototype.forEach.call(nodes, function (el) {
+            var inner = el.querySelector('.dpc-node');
+            var t = inner ? inner.getAttribute('data-tipo') : '';
+            var match = !tipo || t === tipo;
+            el.classList.toggle('dpc-dim', !match);
         });
     }
 

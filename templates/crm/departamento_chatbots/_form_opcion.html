@@ -19,13 +19,22 @@
 {% endif %}
 
 <div class="alert alert-light border py-2 small mb-2">
-    <strong>Tipos disponibles:</strong>
-    <span class="badge bg-primary">Menú</span> sus hijos = botones interactive (≤3 button, &gt;3 list) ·
-    <span class="badge bg-success">Respuesta</span> texto plano ·
-    <span class="badge" style="background:#2563eb">cta_url</span> botón con link externo (1 sólo) ·
-    <span class="badge" style="background:#6b21a8">Ubicación</span> mapa pulsable ·
-    <span class="badge bg-info text-dark">Handoff</span> deriva a humano ·
-    <span class="badge bg-secondary">Fin</span> cierra flujo.
+    <strong>Tipos disponibles y qué configura cada uno:</strong>
+    <div class="row g-1 mt-1">
+        <div class="col-md-6"><span class="badge" style="background:#8b5cf6">Menú</span> botones (hijos, inline u opciones_fuente)</div>
+        <div class="col-md-6"><span class="badge bg-success">Respuesta</span> texto plano (+ botón CTA opcional)</div>
+        <div class="col-md-6"><span class="badge" style="background:#f59e0b">Pregunta</span> pide dato y lo guarda en variable destino</div>
+        <div class="col-md-6"><span class="badge" style="background:#3b82f6">HTTP</span> llama API: endpoint, método, path, extraer</div>
+        <div class="col-md-6"><span class="badge" style="background:#5b21b6">Función</span> ejecuta código interno: funcion_codigo, body</div>
+        <div class="col-md-6"><span class="badge" style="background:#ec4899">Condicional</span> ramifica por <code>true</code>/<code>false</code></div>
+        <div class="col-md-6"><span class="badge" style="background:#06b6d4">Asignar variable</span> setea variables</div>
+        <div class="col-md-6"><span class="badge" style="background:#2563eb">cta_url</span> botón con link externo (1 sólo)</div>
+        <div class="col-md-6"><span class="badge" style="background:#6b21a8">Ubicación</span> mapa pulsable (lat/lng)</div>
+        <div class="col-md-6"><span class="badge" style="background:#0d9488">Agenda</span> reservar/cancelar/reagendar turno</div>
+        <div class="col-md-6"><span class="badge" style="background:#d97706">Bucle</span> itera N veces (<code>body</code>/<code>done</code>)</div>
+        <div class="col-md-6"><span class="badge" style="background:#f97316">Handoff</span> deriva a asesor humano</div>
+        <div class="col-md-6"><span class="badge bg-secondary">Fin</span> cierra el flujo</div>
+    </div>
 </div>
 
 <div class="row g-2">
@@ -911,6 +920,82 @@
                 <input type="text" name="ubicacion_direccion" class="form-control form-control-sm"
                        value="{{ opcion.config.address|default:'' }}"
                        placeholder="Av. García Moreno y 9 de Octubre" maxlength="200">
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 dp-tipo-block" data-show-when="agenda_turno" style="display:none;">
+        <div class="alert alert-info py-2 small mb-2" style="background:#ccfbf1;border-color:#5eead4;">
+            <i class="fa fa-calendar-check me-1" style="color:#0d9488;"></i>
+            <strong>Agenda de turnos:</strong> el motor conduce el flujo de reserva,
+            cancelación o reagenda usando la agenda asignada a la sesión
+            (<code>grupo_agenda</code>). Servicios, recursos y horarios se configuran
+            en el módulo Agenda — acá solo eliges qué hace este paso.
+        </div>
+        <div class="row g-2 p-2" style="background:#f0fdfa;border-radius:6px;">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Sub-acción <span class="text-danger">*</span></label>
+                {% with sub_actual=opcion.config.sub_action|default:'reservar' %}
+                    <select name="agenda_sub_action" class="form-select form-select-sm">
+                        <option value="reservar"  {% if sub_actual == 'reservar' %}selected{% endif %}>Reservar turno</option>
+                        <option value="cancelar"  {% if sub_actual == 'cancelar' %}selected{% endif %}>Cancelar turno</option>
+                        <option value="reagendar" {% if sub_actual == 'reagendar' %}selected{% endif %}>Reagendar turno</option>
+                    </select>
+                {% endwith %}
+                <small class="text-muted">Determina el flujo de pasos que guía el bot.</small>
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+                <small class="text-muted">
+                    Salidas: dejá una salida con etiqueta <code>cancelado</code> para el camino
+                    cuando el cliente abandona, y una salida <em>vacía</em> (default) para el éxito.
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 dp-tipo-block" data-show-when="loop" style="display:none;">
+        <div class="alert alert-warning py-2 small mb-2" style="background:#fffbeb;border-color:#fcd34d;">
+            <i class="fa fa-rotate me-1" style="color:#d97706;"></i>
+            <strong>Bucle / iteración:</strong> repite los nodos del cuerpo N veces.
+            En cada vuelta avanza por la salida <code>body</code>; al terminar, por
+            <code>done</code>. El contador queda disponible como
+            {% verbatim %}<code>{{variables.i}}</code>{% endverbatim %} para nombrar variables por iteración
+            (ej: <code>cedula_m1</code>, <code>cedula_m2</code>…).
+        </div>
+        <div class="row g-2 p-2" style="background:#fffbeb;border-radius:6px;">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Número de iteraciones <span class="text-danger">*</span></label>
+                <input type="text" name="loop_iterations_expr" class="form-control form-control-sm font-monospace"
+                       value="{{ opcion.config.iterations_expr|default:'' }}"
+                       placeholder="{{ '{{variables.num_dependientes}}' }}">
+                <small class="text-muted">Número o expresión que resuelve a un entero.</small>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Variable contador</label>
+                <input type="text" name="loop_index_var" class="form-control form-control-sm font-monospace"
+                       value="{{ opcion.config.index_var|default:'i' }}"
+                       placeholder="i" maxlength="40">
+                <small class="text-muted">Nombre del índice.</small>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1">Índice inicial</label>
+                <input type="number" name="loop_base_index" class="form-control form-control-sm"
+                       value="{{ opcion.config.base_index|default:1 }}" step="1">
+                <small class="text-muted">0 o 1.</small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Etiqueta salida "cuerpo"</label>
+                <input type="text" name="loop_body_label" class="form-control form-control-sm font-monospace"
+                       value="{{ opcion.config.body_label|default:'body' }}"
+                       placeholder="body" maxlength="50">
+                <small class="text-muted">Arista que se sigue en cada iteración.</small>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-bold mb-1">Etiqueta salida "fin"</label>
+                <input type="text" name="loop_done_label" class="form-control form-control-sm font-monospace"
+                       value="{{ opcion.config.done_label|default:'done' }}"
+                       placeholder="done" maxlength="50">
+                <small class="text-muted">Arista que se sigue al terminar.</small>
             </div>
         </div>
     </div>

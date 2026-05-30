@@ -32,6 +32,7 @@ import logging
 import re
 import time as _time
 import traceback as _traceback
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -298,6 +299,20 @@ def normalizar_numero(texto: str) -> str:
         elif sep == ',':
             t = t.replace(',', '.')
     return signo + t
+
+
+def _normalizar_texto(texto: str) -> str:
+    """Minúsculas, sin tildes y sin espacios sobrantes.
+
+    Sirve para comparar la entrada del cliente contra etiquetas/keywords sin
+    que una tilde o una mayúscula rompa la coincidencia: 'informacion' debe
+    matchear 'Información', 'BECAS' debe matchear 'becas'.
+    """
+    t = (texto or '').strip().lower()
+    if not t:
+        return ''
+    t = unicodedata.normalize('NFKD', t)
+    return ''.join(c for c in t if not unicodedata.combining(c))
 
 
 def validar_entrada(tipo: str, expresion: str, texto: str) -> bool:
@@ -751,12 +766,12 @@ class MotorFlujo:
 
     def _elegir_departamento(self):
         deptos = self._departamentos_activos()
-        txt = self.texto.lower()
+        txt = _normalizar_texto(self.texto)
 
-        # 1) palabras clave
+        # 1) palabras clave (sin tildes ni mayúsculas, para no fallar por acentos)
         for d in deptos:
             palabras = d.get_palabras_clave()
-            if palabras and any(p in txt for p in palabras):
+            if palabras and any((np := _normalizar_texto(p)) and np in txt for p in palabras):
                 return d
 
         # 2) selector numérico (compat con el menú clásico de departamentos)
@@ -801,6 +816,37 @@ class MotorFlujo:
         # Si no hay conexión específica, caer a la default
         conn_def = nodo.salidas.filter(status=True, etiqueta='').order_by('orden').first()
         return conn_def.nodo_destino if conn_def else None
+
+    # ── Anti-rebobinado (botones viejos de WhatsApp) ─────────────────
+
+    def _destinos_directos(self, nodo) -> set:
+        """IDs de nodos directamente alcanzables desde `nodo` (aristas de salida
+        + subopciones legacy). Sirve para distinguir un botón legítimo del nodo
+        actual de un botón viejo de un menú anterior."""
+        ids = set()
+        if not nodo:
+            return ids
+        for c in nodo.salidas.filter(status=True):
+            if c.nodo_destino_id:
+                ids.add(c.nodo_destino_id)
+        for h in nodo.subopciones.filter(status=True):
+            ids.add(h.id)
+        return ids
+
+    def _marcar_historial(self, nodo):
+        """Registra el nodo en el historial de visitados de la conversación.
+        Lo usa la guarda anti-rebobinado: si el cliente toca un botón viejo del
+        chat de WhatsApp cuyo nodo YA pasó, el flujo no se reinicia desde ahí."""
+        if not nodo:
+            return
+        hist = list((self.estado.variables or {}).get('__historial') or [])
+        if hist and hist[-1] == nodo.id:
+            return
+        hist.append(nodo.id)
+        if len(hist) > 100:
+            hist = hist[-100:]
+        self.estado.set_variable('__historial', hist)
+        self.estado.save()
 
     # ── Reset configurable por depto ─────────────────────────────────
 
@@ -874,6 +920,23 @@ class MotorFlujo:
                     except (ValueError, IndexError):
                         pass
             if objetivo:
+                # Anti-rebobinado: si el botón apunta a un nodo que YA pasó (está
+                # en el historial) y NO es alcanzable desde el nodo actual, es un
+                # botón viejo del chat de WhatsApp. No reiniciar el flujo desde
+                # ahí — reorientar al cliente al punto donde va.
+                historial = (self.estado.variables or {}).get('__historial') or []
+                actual_id = getattr(self.estado.nodo_actual, 'id', None)
+                if (objetivo.id != actual_id and objetivo.id in historial
+                        and objetivo.id not in self._destinos_directos(self.estado.nodo_actual)):
+                    self._trace('boton_obsoleto',
+                                f'Botón obsoleto ignorado: "{objetivo.nombre}" ya fue visitado',
+                                True, {'boton_id': self.boton_id, 'destino_id': objetivo.id,
+                                       'actual_id': actual_id})
+                    nodo_actual = self.estado.nodo_actual
+                    if nodo_actual and nodo_actual.tipo_nodo in ('menu', 'pregunta'):
+                        self.enviar('Esa opción ya la procesamos. Sigamos por aquí:')
+                        self._presentar_nodo_input(nodo_actual)
+                    return
                 self._trace('salto_boton_id', f'Salto directo a "{objetivo.nombre}"',
                             True, {'boton_id': self.boton_id, 'destino_id': objetivo.id,
                                    'desde_id': getattr(self.estado.nodo_actual, 'id', None)})
@@ -988,16 +1051,17 @@ class MotorFlujo:
         asigna el departamento y arranca su nodo de inicio."""
         deptos = self._departamentos_activos()
         t = self.texto.strip()
-        t_low = t.lower()
+        t_norm = _normalizar_texto(t)
         elegido = None
 
         if t.isdigit():
             idx = int(t) - 1
             if 0 <= idx < len(deptos):
                 elegido = deptos[idx]
-        if not elegido:
+        if not elegido and t_norm:
             for d in deptos:
-                if d.nombre.lower() == t_low or t_low in d.nombre.lower():
+                dn = _normalizar_texto(d.nombre)
+                if dn == t_norm or t_norm in dn:
                     elegido = d
                     break
 
@@ -1050,6 +1114,7 @@ class MotorFlujo:
                 return
 
             nodo = self.estado.nodo_actual
+            self._marcar_historial(nodo)
             tipo = nodo.tipo_nodo
             pide_input = tipo in ('pregunta', 'menu')
 
@@ -1078,9 +1143,39 @@ class MotorFlujo:
                 'siguiente_id': siguiente.id if siguiente else None,
                 'siguiente_nombre': getattr(siguiente, 'nombre', None),
             })
+            if siguiente is None and etiqueta == 'timeout':
+                # Se agotaron los reintentos y el nodo no tiene salida 'timeout'
+                # configurada → handoff en vez de dejar al cliente en silencio.
+                self._trace('timeout_sin_arista',
+                            'Reintentos agotados sin salida "timeout" → handoff',
+                            True, {'desde_id': nodo.id})
+                self._forzar_handoff('reintentos_agotados')
+                return
             self.estado.nodo_actual = siguiente
             self.estado.intentos = 0
             self.estado.save()
+
+    # ── Handoff forzado (sin nodo handoff) ───────────────────────────
+
+    def _forzar_handoff(self, motivo='timeout', mensaje=None):
+        """Transfiere a un agente humano sin requerir un nodo `handoff`.
+        Se usa cuando se agotan los reintentos y el flujo no tiene una salida
+        'timeout' — evita dejar al cliente atascado en silencio."""
+        msg = (mensaje or getattr(self.session, 'mensaje_handoff', '')
+               or 'No pude entender tu respuesta. Te comunico con un asesor para continuar.')
+        if msg:
+            self.enviar(msg)
+        self.handoff = True
+        self.estado.en_handoff = True
+        self.estado.save()
+        try:
+            from crm.helpers_asignacion import auto_asignar_agente
+            auto_asignar_agente(self.conversation, motivo=motivo)
+        except Exception:
+            logger.exception('Auto-asignación fallida (%s) conv=%s',
+                             motivo, self.conversation.id)
+        self._trace('handoff_auto', f'Handoff automático ({motivo})', True,
+                    {'motivo': motivo})
 
     # ── Presentación de nodos de input ───────────────────────────────
 
@@ -1247,6 +1342,7 @@ class MotorFlujo:
                     return 'timeout'
                 self.estado.save()
                 self.enviar(nodo.mensaje_error or 'Dato inválido, intenta de nuevo.')
+                self._presentar_nodo_input(nodo)
                 return None
             if nodo.variable_destino:
                 valor = self.texto
@@ -1272,7 +1368,7 @@ class MotorFlujo:
                             False, {'nodo_id': nodo.id})
                 return ''
             t = self.texto.strip()
-            t_low = t.lower()
+            t_norm = _normalizar_texto(t)
             elegida = None
             # Pase 0: boton_id de Meta interactive (más confiable que texto).
             if self.boton_id:
@@ -1303,19 +1399,19 @@ class MotorFlujo:
                 if 0 <= idx < len(opciones):
                     elegida = opciones[idx]
             else:
-                # Pase 1: match exacto contra etiqueta o valor (case-insensitive).
+                # Pase 1: match exacto contra etiqueta o valor (sin tildes/mayúsculas).
                 # Pase 2: substring del valor o etiqueta (cubre "becas" → "Información de becas").
                 for op in opciones:
-                    et = str(op.get('etiqueta', '')).lower()
-                    va = str(op.get('valor', '')).lower()
-                    if t_low == et or (va and t_low == va):
+                    et = _normalizar_texto(str(op.get('etiqueta', '')))
+                    va = _normalizar_texto(str(op.get('valor', '')))
+                    if t_norm and (t_norm == et or (va and t_norm == va)):
                         elegida = op
                         break
                 if not elegida:
                     for op in opciones:
-                        et = str(op.get('etiqueta', '')).lower()
-                        va = str(op.get('valor', '')).lower()
-                        if (va and va in t_low) or (et and t_low in et):
+                        et = _normalizar_texto(str(op.get('etiqueta', '')))
+                        va = _normalizar_texto(str(op.get('valor', '')))
+                        if (va and va in t_norm) or (et and t_norm in et):
                             elegida = op
                             break
             if not elegida:
@@ -1328,7 +1424,8 @@ class MotorFlujo:
                     self.estado.save()
                     return 'timeout'
                 self.estado.save()
-                self.enviar(nodo.mensaje_error or 'Opción no válida. Elige el número de la opción.')
+                self.enviar(nodo.mensaje_error or 'Opción no válida. Estas son las opciones disponibles:')
+                self._presentar_nodo_input(nodo)
                 return None
             valor_elegido = elegida.get('valor', elegida.get('etiqueta', ''))
             # Atajo "valor por defecto": si el cliente eligió la opción Sí del

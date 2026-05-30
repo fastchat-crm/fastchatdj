@@ -978,6 +978,67 @@ def _serializar_para_preview(departamento):
     }
 
 
+def _resumen_accion_nodo(n):
+    """Resumen corto de QUÉ ejecuta el nodo, para el subtítulo en el diagrama.
+    Se calcula desde `tipo_nodo` + `config` para que el editor visual muestre
+    la acción real sin tener que abrir cada nodo."""
+    cfg = n.config or {}
+    t = n.tipo_nodo
+    if t == 'http':
+        base = f"{cfg.get('metodo') or 'GET'} {cfg.get('path') or ''}".strip()
+        if n.endpoint_id and getattr(n, 'endpoint', None):
+            base = f"{base} · {n.endpoint.nombre}".strip(' ·')
+        return base or 'Llamada HTTP'
+    if t == 'funcion':
+        return 'fn: ' + (cfg.get('funcion_codigo') or '—')
+    if t == 'condicional':
+        conds = cfg.get('condiciones') or []
+        return f"{len(conds)} condición(es) · {(cfg.get('operador') or 'and').upper()}"
+    if t == 'set_variable':
+        return f"{len(cfg.get('asignaciones') or [])} asignación(es)"
+    if t == 'menu':
+        fuente = cfg.get('opciones_fuente') or {}
+        if fuente.get('variable'):
+            return 'opciones desde ' + fuente['variable']
+        n_inline = len(cfg.get('opciones') or [])
+        if n_inline:
+            return f"{n_inline} opción(es) inline"
+        return 'botones desde hijos'
+    if t == 'cta_url':
+        return (cfg.get('display_text') or 'Botón') + ' → URL externa'
+    if t == 'ubicacion':
+        return cfg.get('name') or 'Ubicación / mapa'
+    if t == 'handoff':
+        return 'Deriva a asesor humano'
+    if t == 'agenda_turno':
+        sub = {'reservar': 'Reservar', 'cancelar': 'Cancelar', 'reagendar': 'Reagendar'}
+        return 'Agenda: ' + sub.get((cfg.get('sub_action') or 'reservar'), 'Reservar')
+    if t == 'loop':
+        return 'Itera ' + str(cfg.get('iterations_expr') or '?')
+    if t == 'pregunta':
+        return ('Guarda → ' + n.variable_destino) if n.variable_destino else 'Pregunta al usuario'
+    if t == 'fin':
+        return 'Cierra la conversación'
+    if t == 'respuesta':
+        return 'Texto + botón URL' if cfg.get('cta_url') else 'Envía texto'
+    return ''
+
+
+def _flags_nodo(n):
+    """Banderas/badges cortos para el subtítulo (efectos colaterales)."""
+    cfg = n.config or {}
+    flags = []
+    if cfg.get('envia_correo'):
+        flags.append('correo')
+    if cfg.get('notificar_asesor'):
+        flags.append('asesor')
+    if n.variable_destino and n.tipo_nodo not in ('pregunta',):
+        flags.append('→' + n.variable_destino)
+    if n.validacion_tipo and n.validacion_tipo != 'none':
+        flags.append(n.validacion_tipo)
+    return flags
+
+
 def _serializar_para_canvas(departamento):
     """Grafo para el editor visual (Drawflow). A diferencia del preview, expone
     `x`/`y` por nodo y un `conexion_id` por salida para edición directa.
@@ -991,7 +1052,7 @@ def _serializar_para_canvas(departamento):
 
     nodos_qs = list(OpcionDepartamentoChatBot.objects.filter(
         departamento=departamento, status=True,
-    ))
+    ).select_related('endpoint'))
     by_id = {n.id: n for n in nodos_qs}
 
     conex_qs = ConexionNodoChatbot.objects.filter(
@@ -1028,6 +1089,8 @@ def _serializar_para_canvas(departamento):
             'tipo': n.tipo_nodo,
             'tipo_label': tipo_labels.get(n.tipo_nodo, n.tipo_nodo),
             'respuesta': (n.respuesta or '')[:140],
+            'accion': _resumen_accion_nodo(n),
+            'flags': _flags_nodo(n),
             'es_inicio': bool(n.es_inicio),
             'x': float(n.posicion_x or 0),
             'y': float(n.posicion_y or 0),
@@ -1726,6 +1789,30 @@ def _guardar_opcion(request):
                 opcion.endpoint = None
         else:
             opcion.endpoint = None
+    elif opcion.tipo_nodo == 'agenda_turno':
+        # Nodo de agenda: solo elige la sub-acción. La agenda concreta
+        # (servicios/recursos/horarios) se configura a nivel de sesión vía
+        # `grupo_agenda`. Salidas típicas: vacío (ok), `cancelado`.
+        sub = (request.POST.get('agenda_sub_action') or 'reservar').strip().lower()
+        if sub not in ('reservar', 'cancelar', 'reagendar'):
+            sub = 'reservar'
+        opcion.config = {'sub_action': sub}
+        opcion.endpoint = None
+    elif opcion.tipo_nodo == 'loop':
+        # Bucle: itera N veces. Salidas: `body` (cada iteración) y `done`
+        # (al terminar). `index_var` expone el contador a los nodos del cuerpo.
+        cfg = {}
+        iter_expr = (request.POST.get('loop_iterations_expr') or '').strip()
+        cfg['iterations_expr'] = iter_expr
+        cfg['index_var'] = (request.POST.get('loop_index_var') or 'i').strip() or 'i'
+        try:
+            cfg['base_index'] = int(request.POST.get('loop_base_index') or 1)
+        except (TypeError, ValueError):
+            cfg['base_index'] = 1
+        cfg['body_label'] = (request.POST.get('loop_body_label') or 'body').strip() or 'body'
+        cfg['done_label'] = (request.POST.get('loop_done_label') or 'done').strip() or 'done'
+        opcion.config = cfg
+        opcion.endpoint = None
     else:
         # Tipos sin form específico (respuesta, pregunta, fin, handoff) →
         # el textarea "Mensaje al cliente" se guarda en `opcion.respuesta`

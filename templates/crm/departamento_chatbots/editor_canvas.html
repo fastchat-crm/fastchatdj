@@ -3,7 +3,7 @@
 {% block head %}
     <link rel="stylesheet" href="/static/lib/drawflow/drawflow.min.css">
     <link rel="stylesheet" href="/static/stylenew/dpchat_editor.css">
-    <link rel="stylesheet" href="/static/stylenew/dpchat_canvas.css?v1.3">
+    <link rel="stylesheet" href="/static/stylenew/dpchat_canvas.css?v1.4">
 {% endblock %}
 
 {% block content %}
@@ -18,6 +18,9 @@
             <span class="dpc-title-text">{{ filtro.nombre }}</span>
         </div>
         <div class="dpc-toolbar-right">
+            <button type="button" id="dpcBtnLeyenda" class="btn btn-outline-secondary btn-sm">
+                <i class="fa fa-circle-info me-1"></i> Leyenda
+            </button>
             <button type="button" id="dpcBtnNuevo" class="btn btn-primary btn-sm">
                 <i class="fa fa-plus me-1"></i> Nuevo paso
             </button>
@@ -30,6 +33,22 @@
 
     <div class="dpc-stage">
         <div id="dp-canvas" class="dpc-canvas"></div>
+
+        <div class="dpc-filtros" id="dpcFiltros"></div>
+
+        <aside class="dpc-legend" id="dpcLegend" hidden>
+            <div class="dpc-legend-head">
+                <strong><i class="fa fa-circle-info me-1"></i> Tipos de paso y cómo configurarlos</strong>
+                <button type="button" class="dpc-legend-close" id="dpcLegendClose" aria-label="Cerrar">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="dpc-legend-body" id="dpcLegendBody"></div>
+            <div class="dpc-legend-foot">
+                Cada paso muestra <i class="fa fa-bolt"></i> la acción que ejecuta.
+                Tocá un chip de arriba para resaltar pasos por tipo.
+            </div>
+        </aside>
 
         <div class="dpc-zoom">
             <button type="button" class="dpc-zoom-btn" id="dpcBtnHand" data-zoom="hand" title="Mover (mano)">
@@ -114,5 +133,5 @@
 {% block jscript %}
     <script src="/static/lib/drawflow/drawflow.min.js"></script>
     <script src="/static/lib/dagre/dagre.min.js"></script>
-    <script src="/static/js/dpchat_canvas.js?v1.5"></script>
+    <script src="/static/js/dpchat_canvas.js?v1.6"></script>
 {% endblock %}

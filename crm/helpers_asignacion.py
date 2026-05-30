@@ -6,12 +6,24 @@ Se invoca desde:
 - Cualquier action manual que asigne / reasigne (UI), si querés unificar la
   notificación (push + email + interna).
 
-Política de auto-asignación (orden de prioridad):
+Fuente única de verdad de "qué asesor atiende" = el DEPARTAMENTO (cola).
+Los asesores pertenecen a departamentos vía `PerfilDepartamentoChatBot`. La
+disponibilidad (`whatsapp.DisponibilidadAgente`) es un filtro ortogonal, no un
+pool aparte.
+
+Política de auto-asignación:
 1. Si la conversación ya tiene `asignado_a` → no se cambia.
-2. Si la sesión tiene `usuario` (responsable de la sesión) → ese usuario.
-3. Si el departamento del flujo tiene `PerfilDepartamentoChatBot` activos →
-   uno al azar entre los que tienen email **o** suscripción push.
-4. Si nada de lo anterior matchea → no asigna (devuelve `None`).
+2. Pool de candidatos = asesores del departamento resuelto para la conversación.
+   Si la conversación no resolvió departamento (p.ej. sesión IA), se usa la
+   unión de asesores de los departamentos de la sesión.
+3. Se filtra por disponibilidad (`disponible=True`, carga < `max_conversaciones`).
+   Un asesor SIN registro de `DisponibilidadAgente` se considera disponible.
+4. Se elige al de menor carga (empate → quien lleva más tiempo sin asignación).
+5. Si no hay candidatos → no asigna (devuelve `None`).
+
+Fallback de migración: si el departamento no tiene asesores configurados, se
+cae al pool legacy de `DisponibilidadAgente` por sesión para no romper sesiones
+que aún no migraron a membresía por departamento.
 
 Cuando hay asignación, se dispara:
 - Notificación interna (`seguridad.Notificacion`) — su `save()` también
@@ -21,7 +33,6 @@ Cuando hay asignación, se dispara:
 from __future__ import annotations
 
 import logging
-import random
 
 from django.conf import settings
 from django.utils import timezone
@@ -73,6 +84,142 @@ def _agentes_del_departamento(depto):
         .select_related('usuario')
     )
     return [r.usuario for r in rels if r.usuario_id]
+
+
+def _agentes_de_sesion(sesion):
+    """Unión de asesores de todos los departamentos de la sesión (incluido el
+    `departamento_default`). Fallback cuando la conversación no resolvió un
+    departamento concreto — p.ej. sesiones IA sin flujo tradicional."""
+    if not sesion:
+        return []
+    try:
+        from crm.models import PerfilDepartamentoChatBot
+    except Exception:
+        return []
+    depto_ids = list(sesion.departamentos.filter(status=True).values_list('id', flat=True))
+    if getattr(sesion, 'departamento_default_id', None):
+        depto_ids.append(sesion.departamento_default_id)
+    if not depto_ids:
+        return []
+    rels = (
+        PerfilDepartamentoChatBot.objects
+        .filter(departamento_id__in=depto_ids, status=True, usuario__is_active=True)
+        .select_related('usuario')
+    )
+    agentes, vistos = [], set()
+    for r in rels:
+        if r.usuario_id and r.usuario_id not in vistos:
+            vistos.add(r.usuario_id)
+            agentes.append(r.usuario)
+    return agentes
+
+
+def _agentes_legacy_disponibilidad(conversacion):
+    """Pool legacy por `DisponibilidadAgente` de la sesión. Solo se usa como
+    último recurso de migración: cuando ningún departamento de la sesión tiene
+    asesores configurados, evita que el round-robin existente deje de asignar."""
+    sesion = getattr(getattr(conversacion, 'contacto', None), 'sesion', None)
+    if not sesion:
+        return []
+    try:
+        from whatsapp.models import DisponibilidadAgente
+    except Exception:
+        return []
+    agentes, vistos = [], set()
+    qs = (
+        DisponibilidadAgente.objects
+        .filter(disponible=True, status=True, usuario__is_active=True)
+        .select_related('usuario').prefetch_related('sesiones')
+    )
+    for disp in qs:
+        ses_ids = list(disp.sesiones.values_list('id', flat=True))
+        if ses_ids and sesion.id not in ses_ids:
+            continue
+        if disp.usuario_id and disp.usuario_id not in vistos:
+            vistos.add(disp.usuario_id)
+            agentes.append(disp.usuario)
+    return agentes
+
+
+def agentes_candidatos(conversacion):
+    """Pool de asesores elegibles para una conversación (sin ordenar ni filtrar
+    por carga). Departamento primero; si no hay, la unión de la sesión; si nada,
+    el pool legacy de disponibilidad."""
+    depto = _resolver_departamento(conversacion)
+    agentes = _agentes_del_departamento(depto)
+    if not agentes:
+        sesion = getattr(getattr(conversacion, 'contacto', None), 'sesion', None)
+        agentes = _agentes_de_sesion(sesion)
+    if not agentes:
+        agentes = _agentes_legacy_disponibilidad(conversacion)
+    return agentes
+
+
+def _carga_abierta(usuario):
+    """Cantidad de conversaciones abiertas asignadas al usuario."""
+    try:
+        from whatsapp.models import ConversacionWhatsApp
+        return ConversacionWhatsApp.objects.filter(
+            asignado_a=usuario, conversacion_finalizada=False, status=True,
+        ).count()
+    except Exception:
+        return 0
+
+
+def candidatos_ordenados(conversacion):
+    """FUENTE ÚNICA de selección de asesor. Devuelve [(usuario, carga)] ya
+    filtrado por disponibilidad y ordenado por carga ascendente (empate →
+    quien lleva más tiempo sin recibir asignación).
+
+    La usan por igual el handoff del flujo, el round-robin y el dropdown manual.
+    """
+    agentes = agentes_candidatos(conversacion)
+    if not agentes:
+        return []
+    try:
+        from whatsapp.models import DisponibilidadAgente
+        disp_map = {
+            d.usuario_id: d
+            for d in DisponibilidadAgente.objects.filter(usuario__in=agentes, status=True)
+        }
+    except Exception:
+        disp_map = {}
+
+    minimo = timezone.datetime.min
+    try:
+        minimo = minimo.replace(tzinfo=timezone.get_current_timezone())
+    except Exception:
+        pass
+
+    elegibles = []
+    for u in agentes:
+        carga = _carga_abierta(u)
+        disp = disp_map.get(u.id)
+        if disp is not None:
+            if not disp.disponible:
+                continue
+            if disp.max_conversaciones and carga >= disp.max_conversaciones:
+                continue
+            ultima = disp.ultimo_asignado_en or minimo
+        else:
+            ultima = minimo
+        elegibles.append((u, carga, ultima))
+
+    elegibles.sort(key=lambda it: (it[1], it[2]))
+    return [(u, carga) for (u, carga, _ult) in elegibles]
+
+
+def _marcar_ultima_asignacion(usuario):
+    """Actualiza `DisponibilidadAgente.ultimo_asignado_en` del asesor elegido
+    (si tiene registro) para que la rotación por antigüedad sea justa entre
+    handoff y round-robin."""
+    try:
+        from whatsapp.models import DisponibilidadAgente
+        DisponibilidadAgente.objects.filter(usuario=usuario).update(
+            ultimo_asignado_en=timezone.now()
+        )
+    except Exception:
+        pass
 
 
 def _ultimo_mensaje_cliente(conv):
@@ -175,23 +322,11 @@ def auto_asignar_agente(conversacion, motivo='handoff', asignador=None):
     if getattr(conversacion, 'asignado_a_id', None):
         return conversacion.asignado_a
 
-    sesion = getattr(conversacion.contacto, 'sesion', None)
-    candidato = None
-
-    if sesion and getattr(sesion, 'usuario_id', None):
-        candidato = sesion.usuario
-
-    if not candidato:
-        depto = _resolver_departamento(conversacion)
-        agentes = _agentes_del_departamento(depto)
-        if agentes:
-            try:
-                candidato = random.choice(agentes)
-            except Exception:
-                candidato = agentes[0] if agentes else None
-
-    if not candidato:
+    candidatos = candidatos_ordenados(conversacion)
+    if not candidatos:
+        logger.info('Auto-asignación sin candidatos disponibles conv=%s', conversacion.id)
         return None
+    candidato, carga = candidatos[0]
 
     try:
         conversacion.asignado_a = candidato
@@ -207,13 +342,15 @@ def auto_asignar_agente(conversacion, motivo='handoff', asignador=None):
                          conversacion.id, getattr(candidato, 'id', None))
         return None
 
+    _marcar_ultima_asignacion(candidato)
+
     try:
         from whatsapp.models import HistorialAsignacion
         HistorialAsignacion.objects.create(
             conversacion=conversacion,
             asignado_a=candidato,
             asignado_por=asignador,
-            nota=f'Asignación automática ({motivo}).',
+            nota=f'Asignación automática ({motivo}). Carga previa: {carga}.',
         )
     except Exception:
         logger.exception('No se pudo crear HistorialAsignacion conv=%s', conversacion.id)
