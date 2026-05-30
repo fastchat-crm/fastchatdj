@@ -4,6 +4,7 @@
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
 <link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.9">
 <link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
+<link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.0">
 {% endblock %}
 
 {% block content %}
@@ -396,6 +397,25 @@
                                     </div>
                                 </div>
                             </div>
+
+                    <div style="position:relative;flex-shrink:0;">
+                        <button type="button" id="respuestas-btn" title="Respuestas rápidas guardadas">
+                            <i class="fa fa-clipboard-list"></i>
+                            <span class="badge-count" id="respuestas-badge" style="display:none;">0</span>
+                        </button>
+                        <div id="respuestas-panel">
+                            <div class="rp-header">
+                                <span><i class="fa fa-clipboard-list me-1"></i>Respuestas rápidas</span>
+                                <button type="button" class="rp-close" id="respuestas-close" title="Cerrar">&times;</button>
+                            </div>
+                            <div class="rp-search">
+                                <input type="search" id="respuestas-search" placeholder="Buscar respuesta...">
+                            </div>
+                            <div class="rp-list" id="respuestas-list">
+                                <div class="rp-empty">Cargando...</div>
+                            </div>
+                        </div>
+                    </div>
 
                     <input type="text" class="form-control border-0 cm-text-input" name="mensaje" id="footer-mensaje-input"
                            placeholder="Escribe un mensaje...">
@@ -1390,6 +1410,105 @@
         cargarMenusRapidos();
         $('#sesion-selector').on('change.menusrapidos', cargarMenusRapidos);
 
+        // ================ Respuestas rápidas (texto guardado) ================
+        // Se cargan por sesión y se insertan en la caja de mensaje para editar.
+        var _respuestasCache = [];
+
+        function cargarRespuestasRapidas() {
+            var sesionId = $('#sesion-selector').val();
+            if (!sesionId) { _respuestasCache = []; _actualizarBadgeRespuestas(); return; }
+            _mrPostSesionAction('respuesta_rapida_listar', {sesion_id: sesionId}).then(function (r) {
+                _respuestasCache = (r && !r.error) ? (r.items || []) : [];
+                _actualizarBadgeRespuestas();
+                renderRespuestasRapidas();
+                if (conversacionActiva) {
+                    $('#respuestas-btn').toggleClass('visible', _respuestasCache.length > 0);
+                }
+            }).catch(function () { _respuestasCache = []; _actualizarBadgeRespuestas(); });
+        }
+
+        function _actualizarBadgeRespuestas() {
+            var badge = document.getElementById('respuestas-badge');
+            if (!badge) return;
+            if (_respuestasCache.length) {
+                badge.textContent = _respuestasCache.length;
+                badge.style.display = '';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        function renderRespuestasRapidas(filtro) {
+            var cont = document.getElementById('respuestas-list');
+            if (!cont) return;
+            var q = (filtro || '').trim().toLowerCase();
+            var items = _respuestasCache.filter(function (r) {
+                if (!q) return true;
+                return (r.titulo || '').toLowerCase().indexOf(q) !== -1 ||
+                       (r.cuerpo || '').toLowerCase().indexOf(q) !== -1;
+            });
+            if (!items.length) {
+                cont.innerHTML = '<div class="rp-empty">' +
+                    (_respuestasCache.length ? 'Sin coincidencias.' : 'No hay respuestas guardadas para esta sesión.') +
+                    '</div>';
+                return;
+            }
+            cont.innerHTML = items.map(function (r) {
+                return '<div class="rp-item" data-resp-id="' + r.id + '">' +
+                    '<div class="rp-item-titulo">' + escHtmlMr(r.titulo) + '</div>' +
+                    '<div class="rp-item-cuerpo">' + escHtmlMr(r.cuerpo) + '</div>' +
+                '</div>';
+            }).join('');
+        }
+
+        function abrirPanelRespuestas() {
+            renderRespuestasRapidas($('#respuestas-search').val());
+            document.getElementById('respuestas-panel').classList.add('open');
+            setTimeout(function () { $('#respuestas-search').focus(); }, 50);
+        }
+
+        function cerrarPanelRespuestas() {
+            var p = document.getElementById('respuestas-panel');
+            if (p) p.classList.remove('open');
+        }
+
+        $('#respuestas-btn').on('click', function (e) {
+            e.preventDefault();
+            var p = document.getElementById('respuestas-panel');
+            if (p.classList.contains('open')) { cerrarPanelRespuestas(); return; }
+            abrirPanelRespuestas();
+        });
+
+        $('#respuestas-close').on('click', cerrarPanelRespuestas);
+
+        $('#respuestas-search').on('input', function () {
+            renderRespuestasRapidas($(this).val());
+        });
+
+        $(document).on('click', '#respuestas-list .rp-item', function () {
+            var id = $(this).data('resp-id');
+            var resp = (_respuestasCache || []).find(function (r) { return String(r.id) === String(id); });
+            if (!resp) return;
+            var input = document.getElementById('footer-mensaje-input');
+            if (input) {
+                input.value = resp.cuerpo || '';
+                input.focus();
+                input.dispatchEvent(new Event('input', {bubbles: true}));
+            }
+            cerrarPanelRespuestas();
+        });
+
+        document.addEventListener('click', function (e) {
+            var panel = document.getElementById('respuestas-panel');
+            var btn = document.getElementById('respuestas-btn');
+            if (!panel || !panel.classList.contains('open')) return;
+            if (panel.contains(e.target) || (btn && btn.contains(e.target))) return;
+            cerrarPanelRespuestas();
+        });
+
+        cargarRespuestasRapidas();
+        $('#sesion-selector').on('change.respuestasrapidas', cargarRespuestasRapidas);
+
         // Webhook API modal (solo superuser — el botón ya viene oculto si no lo es)
         window.copiarTexto = function(elId) {
             var el = document.getElementById(elId);
@@ -1776,6 +1895,8 @@
             // Ocultar controles + empty state mientras carga
             $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #chat-footer, #clasificacion-inline-container').addClass('d-none').hide();
             $('#stats-panel, #control-respuestas-panel').addClass('d-none');
+            $('#respuestas-btn').removeClass('visible');
+            cerrarPanelRespuestas();
             $('#cm-empty-state').hide();
             $('#mensajes-container')
                 .addClass('is-loading')
@@ -1900,6 +2021,9 @@
                     // Mostrar footer para enviar mensajes
                     $('#chat-footer').removeClass('d-none').show();
                     $('#conversacion-id').val(response.conversacion_id);
+
+                    // Boton de respuestas rápidas — visible si la sesión tiene respuestas guardadas
+                    $('#respuestas-btn').toggleClass('visible', _respuestasCache.length > 0);
 
                     // Boton de plantillas Meta — visible solo si la sesion es Meta Y hay plantillas aprobadas
                     mostrarPlantillasSiMeta(response.es_meta === true, response.conversacion_id);

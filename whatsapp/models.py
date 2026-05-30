@@ -1139,6 +1139,33 @@ class MenuRapidoSesion(ModeloBase):
         return f'{self.sesion_id} · {self.nombre}'
 
 
+class RespuestaRapidaSesion(ModeloBase):
+    """Mensaje de texto guardado y reutilizable por sesión.
+
+    El operador registra respuestas frecuentes (ej. "Saludo inicial",
+    "Datos de pago", "Horario de atención"). Mientras atiende una
+    conversación, abre el panel de respuestas rápidas en el composer,
+    elige una y su texto se carga en la caja de mensaje para editarlo
+    antes de enviar. No se envía automáticamente.
+    """
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='respuestas_rapidas', verbose_name='Sesión',
+    )
+    titulo = models.CharField('Título', max_length=80,
+                              help_text='Nombre corto para identificar la respuesta (ej. Saludo inicial).')
+    cuerpo = models.TextField('Mensaje', default='',
+                              help_text='Texto que se cargará en la caja de mensaje para editar y enviar.')
+
+    class Meta:
+        verbose_name = 'Respuesta rápida de sesión'
+        verbose_name_plural = 'Respuestas rápidas de sesión'
+        ordering = ['titulo']
+
+    def __str__(self):
+        return f'{self.sesion_id} · {self.titulo}'
+
+
 class MensajeWhatsAppProgramado(ModeloBase):
     contacto = models.ForeignKey(Contacto, on_delete=models.CASCADE, related_name='mensajes_programados')
     fecha = models.DateField(verbose_name='Fecha de envío programado', blank=True, null=True)

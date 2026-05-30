@@ -603,6 +603,72 @@ def _accion_menu_rapido_eliminar(request):
     return JsonResponse({'error': False, 'message': 'Menú eliminado.'})
 
 
+def _accion_respuesta_rapida_listar(request):
+    """Lista las respuestas rápidas (texto guardado) de una sesión para el
+    panel del composer en /whatsapp/conversaciones/."""
+    from .models import RespuestaRapidaSesion
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
+    items = list(
+        RespuestaRapidaSesion.objects.filter(sesion=sesion, status=True).order_by('titulo')
+        .values('id', 'titulo', 'cuerpo')
+    )
+    return JsonResponse({'error': False, 'sesion_id': sesion.id, 'items': items})
+
+
+def _accion_respuesta_rapida_guardar(request):
+    """Crea o actualiza una respuesta rápida. Si vino `id`, edita; si no, crea."""
+    from .models import RespuestaRapidaSesion
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
+    titulo = (request.POST.get('titulo') or '').strip()
+    if not titulo:
+        return JsonResponse({'error': True, 'message': 'El título es obligatorio.'})
+    cuerpo = (request.POST.get('cuerpo') or '').strip()
+    if not cuerpo:
+        return JsonResponse({'error': True, 'message': 'El mensaje es obligatorio.'})
+
+    defaults = {
+        'sesion': sesion,
+        'titulo': titulo[:80],
+        'cuerpo': cuerpo[:4096],
+    }
+    resp_id = request.POST.get('id') or ''
+    if resp_id.isdigit():
+        resp = RespuestaRapidaSesion.objects.filter(id=int(resp_id), sesion=sesion).first()
+        if not resp:
+            return JsonResponse({'error': True, 'message': 'Respuesta no encontrada.'})
+        for k, v in defaults.items():
+            setattr(resp, k, v)
+        resp.save()
+        creado = False
+    else:
+        resp = RespuestaRapidaSesion.objects.create(**defaults)
+        creado = True
+    log(f"Respuesta rápida {'creada' if creado else 'actualizada'}: sesion={sesion.id} resp={resp.id}",
+        request, "add" if creado else "change", obj=resp.id)
+    return JsonResponse({
+        'error': False, 'creado': creado, 'respuesta_id': resp.id,
+        'message': 'Respuesta guardada.',
+    })
+
+
+def _accion_respuesta_rapida_eliminar(request):
+    from .models import RespuestaRapidaSesion
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
+    resp = RespuestaRapidaSesion.objects.filter(id=request.POST.get('id'), sesion=sesion).first()
+    if not resp:
+        return JsonResponse({'error': True, 'message': 'Respuesta no encontrada.'})
+    resp.status = False
+    resp.save()
+    log(f"Respuesta rápida eliminada: {resp.id}", request, "del", obj=resp.id)
+    return JsonResponse({'error': False, 'message': 'Respuesta eliminada.'})
+
+
 def _accion_menu_rapido_enviar(request):
     """Envía un menú rápido a una conversación activa. Auto-detecta canal:
     Meta → interactive buttons (≤3) o list (>3). Baileys → texto numerado."""
@@ -796,6 +862,9 @@ _ACCIONES = {
     'menu_rapido_guardar':         _accion_menu_rapido_guardar,
     'menu_rapido_eliminar':        _accion_menu_rapido_eliminar,
     'menu_rapido_enviar':          _accion_menu_rapido_enviar,
+    'respuesta_rapida_listar':     _accion_respuesta_rapida_listar,
+    'respuesta_rapida_guardar':    _accion_respuesta_rapida_guardar,
+    'respuesta_rapida_eliminar':   _accion_respuesta_rapida_eliminar,
     'guardar_usuarios':            _accion_guardar_usuarios,
     'cambiar_rol_usuario':         _accion_cambiar_rol_usuario,
     'eliminar_usuario':            _accion_eliminar_usuario,
@@ -887,6 +956,13 @@ def _get_partial(request, accion):
             config_meta=cfg, estado_meta='APPROVED', status=True,
         ).order_by('nombre') if cfg else []
         tpl = 'whatsapp/sesiones/_modal_plantilla_prueba.html'
+
+    elif accion == 'respuestas_rapidas_modal':
+        from .models import RespuestaRapidaSesion
+        ctx['respuestas'] = RespuestaRapidaSesion.objects.filter(
+            sesion=sesion, status=True,
+        ).order_by('titulo')
+        tpl = 'whatsapp/sesiones/_modal_respuestas_rapidas.html'
 
     else:
         return JsonResponse({'ok': False, 'message': 'Partial desconocido.'})

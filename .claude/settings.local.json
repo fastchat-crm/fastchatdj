@@ -118,7 +118,10 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(pycheck crm/motor_flujo_chatbot.py)",
       "Bash(Get-ChildItem -Path \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\" -Recurse -Filter \"*seed*\" -Type File)",
-      "Bash(Select-Object FullName)"
+      "Bash(Select-Object FullName)",
+      "Bash(Get-ChildItem -Path \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(Get-ChildItem -Path \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\\\\whatsapp\" -Recurse -File)"
     ]
   },
   "hooks": {
