@@ -29,6 +29,7 @@
 Deep-dive technical references for specific modules live under `.ai/docs/`. **Always read the relevant doc before touching the corresponding module** — they capture views, templates, JS, WebSocket flows, and business rules that aren't obvious from the code alone.
 
 - `.ai/docs/conversaciones.md` — `whatsapp/conversaciones/` and `whatsapp/conversaciones-finalizadas/`: views, helpers, GET/POST actions, listing filters, partials, JS patterns, WebSocket consumers (`ChatConsumer`, `SessionRoomConsumer`), webhook → broadcast flow, 6h reactivation window, Meta template flow, and rules for adding actions/filters/panels/message types.
+- `.ai/docs/asignacion_asesores.md` — single source of truth for **who attends** a conversation (the WhatsApp session via `PerfilSesionWhatsApp`, not departments), the assignment chain (`candidatos_ordenados`), workload + availability selection, flow notifications, and the traditional chatbot motor (`motor_flujo_chatbot.py`): accent-insensitive matching, re-show on invalid input, timeout→handoff, anti-rewind. Read before touching asesor assignment or the flow engine.
 
 ## Server & Background Jobs
 

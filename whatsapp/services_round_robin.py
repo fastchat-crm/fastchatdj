@@ -1,15 +1,14 @@
 """Enrutador round-robin de conversaciones a agentes humanos.
 
-Criterios:
-  1. Solo considera agentes con `DisponibilidadAgente.disponible=True`.
-  2. Respeta `max_conversaciones` (no asigna más carga).
-  3. Filtra por `sesiones` (si el agente tiene lista explícita; vacío = todas).
-  4. Elige el agente con menos conversaciones abiertas — empate: el que lleva
-     más tiempo sin recibir asignación.
-  5. Registra la decisión en `AsignacionAutomatica` para auditoría.
+El pool de candidatos y el orden los provee la fuente única
+`crm.helpers_asignacion.candidatos_ordenados` (asesores de la SESIÓN/número vía
+`PerfilSesionWhatsApp`, filtrados por `DisponibilidadAgente.disponible` y
+`max_conversaciones`, ordenados por menor carga y luego por antigüedad de
+asignación). Este módulo solo agrega lo propio del round-robin:
 
-Thread-safety: usa `select_for_update()` dentro de una transaction para evitar
-que dos requests concurrentes asignen la misma conversación dos veces.
+  1. Lock transaccional (`select_for_update`) para evitar doble asignación
+     concurrente de la misma conversación.
+  2. Traza de la decisión en `AsignacionAutomatica`.
 """
 from __future__ import annotations
 
