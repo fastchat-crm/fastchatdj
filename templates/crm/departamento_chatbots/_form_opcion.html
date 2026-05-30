@@ -966,7 +966,7 @@
                 <label class="form-label small fw-bold mb-1">Número de iteraciones <span class="text-danger">*</span></label>
                 <input type="text" name="loop_iterations_expr" class="form-control form-control-sm font-monospace"
                        value="{{ opcion.config.iterations_expr|default:'' }}"
-                       placeholder="{{ '{{variables.num_dependientes}}' }}">
+                       placeholder="{% verbatim %}{{variables.num_dependientes}}{% endverbatim %}">
                 <small class="text-muted">Número o expresión que resuelve a un entero.</small>
             </div>
             <div class="col-md-3">
