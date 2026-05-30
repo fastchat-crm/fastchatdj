@@ -209,8 +209,15 @@
             {% if usuarios.total %}
                 <div class="card-block">
                     <div class="card-block-label">
-                        <i class="fa fa-users"></i> Usuarios asignados
-                        <span class="card-block-count">{{ usuarios.supervisores|length }} sup · {{ usuarios.agentes|length }} ag</span>
+                        <span><i class="fa fa-users"></i> Asesores asignados</span>
+                        <span class="asesor-counts">
+                            <span class="asesor-count asesor-count-sup" title="Supervisores que atienden">
+                                <i class="fa fa-user-shield"></i>{{ usuarios.supervisores|length }}
+                            </span>
+                            <span class="asesor-count asesor-count-ag" title="Agentes que atienden">
+                                <i class="fa fa-headset"></i>{{ usuarios.agentes|length }}
+                            </span>
+                        </span>
                     </div>
                     <div class="card-chips">
                         {% for p in usuarios.visibles %}
