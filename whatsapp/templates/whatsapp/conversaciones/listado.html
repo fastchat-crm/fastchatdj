@@ -4,7 +4,7 @@
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
 <link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.9">
 <link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
-<link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.0">
+<link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.1">
 {% endblock %}
 
 {% block content %}
@@ -355,17 +355,21 @@
                         <div id="emoji-picker-popup"></div>
                     </div>
 
+                    <button type="button" id="respuestas-btn" title="Respuestas rápidas guardadas">
+                        <i class="fa fa-clipboard-list"></i>
+                        <span class="badge-count" id="respuestas-badge" style="display:none;">0</span>
+                    </button>
+
                     <label for="archivo" class="cm-attach-label" title="Adjuntar archivo">
                         <i class="fa fa-paperclip"></i>
                     </label>
                     <input type="file" id="archivo" name="archivo" style="display:none;"
                            accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar">
 
-                    <div style="position:relative;flex-shrink:0;">
-                        <button type="button" id="plantillas-btn" title="Enviar plantilla Meta pre-aprobada">
-                            <i class="fa fa-layer-group"></i>
-                            <span class="badge-count" id="plantillas-badge" style="display:none;">0</span>
-                        </button>
+                    <button type="button" id="plantillas-btn" title="Enviar plantilla Meta pre-aprobada">
+                        <i class="fa fa-layer-group"></i>
+                        <span class="badge-count" id="plantillas-badge" style="display:none;">0</span>
+                    </button>
                                 <div id="plantillas-panel">
                                     <div class="pp-header">
                                         <span><i class="fa fa-layer-group me-1"></i>Plantillas aprobadas</span>
@@ -396,26 +400,6 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-
-                    <div style="position:relative;flex-shrink:0;">
-                        <button type="button" id="respuestas-btn" title="Respuestas rápidas guardadas">
-                            <i class="fa fa-clipboard-list"></i>
-                            <span class="badge-count" id="respuestas-badge" style="display:none;">0</span>
-                        </button>
-                        <div id="respuestas-panel">
-                            <div class="rp-header">
-                                <span><i class="fa fa-clipboard-list me-1"></i>Respuestas rápidas</span>
-                                <button type="button" class="rp-close" id="respuestas-close" title="Cerrar">&times;</button>
-                            </div>
-                            <div class="rp-search">
-                                <input type="search" id="respuestas-search" placeholder="Buscar respuesta...">
-                            </div>
-                            <div class="rp-list" id="respuestas-list">
-                                <div class="rp-empty">Cargando...</div>
-                            </div>
-                        </div>
-                    </div>
 
                     <input type="text" class="form-control border-0 cm-text-input" name="mensaje" id="footer-mensaje-input"
                            placeholder="Escribe un mensaje...">
@@ -438,6 +422,25 @@
     </main>
 
 </div>
+
+    <div class="modal fade" id="modalRespuestasRapidas" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title"><i class="fa fa-clipboard-list text-success me-2"></i>Respuestas rápidas</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="rp-search mb-2">
+                        <input type="search" id="respuestas-search" class="form-control form-control-sm" placeholder="Buscar respuesta...">
+                    </div>
+                    <div class="rp-list" id="respuestas-list">
+                        <div class="rp-empty">Cargando...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -1422,7 +1425,7 @@
                 _actualizarBadgeRespuestas();
                 renderRespuestasRapidas();
                 if (conversacionActiva) {
-                    $('#respuestas-btn').toggleClass('visible', _respuestasCache.length > 0);
+                    $('#respuestas-btn').addClass('visible');
                 }
             }).catch(function () { _respuestasCache = []; _actualizarBadgeRespuestas(); });
         }
@@ -1449,7 +1452,8 @@
             });
             if (!items.length) {
                 cont.innerHTML = '<div class="rp-empty">' +
-                    (_respuestasCache.length ? 'Sin coincidencias.' : 'No hay respuestas guardadas para esta sesión.') +
+                    (_respuestasCache.length ? 'Sin coincidencias.'
+                        : 'No hay respuestas guardadas para esta sesión.<br><small class="text-muted">Creálas en Sesiones → ⋮ → Respuestas rápidas.</small>') +
                     '</div>';
                 return;
             }
@@ -1461,27 +1465,36 @@
             }).join('');
         }
 
-        function abrirPanelRespuestas() {
-            renderRespuestasRapidas($('#respuestas-search').val());
-            document.getElementById('respuestas-panel').classList.add('open');
-            setTimeout(function () { $('#respuestas-search').focus(); }, 50);
+        var _modalRespuestas = null;
+
+        function _getModalRespuestas() {
+            if (!_modalRespuestas) {
+                var el = document.getElementById('modalRespuestasRapidas');
+                if (el) _modalRespuestas = bootstrap.Modal.getOrCreateInstance(el);
+            }
+            return _modalRespuestas;
         }
 
-        function cerrarPanelRespuestas() {
-            var p = document.getElementById('respuestas-panel');
-            if (p) p.classList.remove('open');
+        function abrirModalRespuestas() {
+            var m = _getModalRespuestas();
+            if (!m) return;
+            $('#respuestas-search').val('');
+            renderRespuestasRapidas('');
+            m.show();
+            setTimeout(function () { $('#respuestas-search').focus(); }, 250);
+        }
+
+        function cerrarModalRespuestas() {
+            var m = _getModalRespuestas();
+            if (m) m.hide();
         }
 
         $('#respuestas-btn').on('click', function (e) {
             e.preventDefault();
-            var p = document.getElementById('respuestas-panel');
-            if (p.classList.contains('open')) { cerrarPanelRespuestas(); return; }
-            abrirPanelRespuestas();
+            abrirModalRespuestas();
         });
 
-        $('#respuestas-close').on('click', cerrarPanelRespuestas);
-
-        $('#respuestas-search').on('input', function () {
+        $(document).on('input', '#respuestas-search', function () {
             renderRespuestasRapidas($(this).val());
         });
 
@@ -1495,15 +1508,7 @@
                 input.focus();
                 input.dispatchEvent(new Event('input', {bubbles: true}));
             }
-            cerrarPanelRespuestas();
-        });
-
-        document.addEventListener('click', function (e) {
-            var panel = document.getElementById('respuestas-panel');
-            var btn = document.getElementById('respuestas-btn');
-            if (!panel || !panel.classList.contains('open')) return;
-            if (panel.contains(e.target) || (btn && btn.contains(e.target))) return;
-            cerrarPanelRespuestas();
+            cerrarModalRespuestas();
         });
 
         cargarRespuestasRapidas();
@@ -1896,7 +1901,7 @@
             $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #chat-footer, #clasificacion-inline-container').addClass('d-none').hide();
             $('#stats-panel, #control-respuestas-panel').addClass('d-none');
             $('#respuestas-btn').removeClass('visible');
-            cerrarPanelRespuestas();
+            cerrarModalRespuestas();
             $('#cm-empty-state').hide();
             $('#mensajes-container')
                 .addClass('is-loading')
@@ -2022,8 +2027,8 @@
                     $('#chat-footer').removeClass('d-none').show();
                     $('#conversacion-id').val(response.conversacion_id);
 
-                    // Boton de respuestas rápidas — visible si la sesión tiene respuestas guardadas
-                    $('#respuestas-btn').toggleClass('visible', _respuestasCache.length > 0);
+                    // Boton de respuestas rápidas — visible al abrir cualquier conversación
+                    $('#respuestas-btn').addClass('visible');
 
                     // Boton de plantillas Meta — visible solo si la sesion es Meta Y hay plantillas aprobadas
                     mostrarPlantillasSiMeta(response.es_meta === true, response.conversacion_id);

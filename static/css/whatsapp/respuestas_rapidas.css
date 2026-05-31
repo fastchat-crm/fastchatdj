@@ -1,17 +1,17 @@
 #respuestas-btn {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
-    background: #f0f2f5;
-    border: none;
-    color: #16a34a;
+    background: var(--chat-surface, #f0f2f5);
+    border: 1px solid var(--chat-border, #e4e6eb);
+    color: var(--chat-text-secondary, #16a34a);
     cursor: pointer;
     flex-shrink: 0;
     display: none;
     align-items: center;
     justify-content: center;
-    font-size: 1rem;
-    transition: background .15s;
+    font-size: .9rem;
+    transition: background .15s, color .15s;
     position: relative;
 }
 
@@ -20,7 +20,8 @@
 }
 
 #respuestas-btn:hover {
-    background: #e4e6eb;
+    background: var(--chat-border, #e4e6eb);
+    color: #16a34a;
 }
 
 #respuestas-btn .badge-count {
@@ -36,125 +37,43 @@
     line-height: 1.2;
 }
 
-#respuestas-panel {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(.97);
-    width: 460px;
-    max-width: 94vw;
-    max-height: 78vh;
-    background: #fff;
-    border: 1px solid #dde1e7;
-    border-radius: 14px;
-    box-shadow: 0 18px 48px rgba(0, 0, 0, .28);
-    z-index: 1090;
-    display: none;
-    flex-direction: column;
-    overflow: hidden;
-    opacity: 0;
-    transition: transform .16s ease-out, opacity .16s ease-out;
-}
-
-#respuestas-panel.open {
-    display: flex;
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 1;
-}
-
-body:has(#respuestas-panel.open)::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, .55);
-    z-index: 1085;
-    animation: respuestas-backdrop-fade .14s ease-out;
-}
-
-@keyframes respuestas-backdrop-fade {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-#respuestas-panel .rp-header {
-    padding: 10px 14px;
-    background: linear-gradient(135deg, #16a34a, #047857);
-    color: #fff;
-    font-size: .85rem;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-#respuestas-panel .rp-close {
-    background: transparent;
-    border: none;
-    color: #fff;
-    opacity: .8;
-    cursor: pointer;
-    font-size: .9rem;
-    padding: 0 2px;
-}
-
-#respuestas-panel .rp-close:hover { opacity: 1; }
-
-#respuestas-panel .rp-search {
-    padding: 8px 10px;
-    border-bottom: 1px solid #eceff3;
-}
-
-#respuestas-panel .rp-search input {
-    width: 100%;
-    border: 1px solid #dde1e7;
-    border-radius: 20px;
-    padding: 6px 12px;
-    font-size: .82rem;
-    outline: none;
-    background: #f7f8fa;
-}
-
-#respuestas-panel .rp-search input:focus {
-    border-color: #16a34a;
-    background: #fff;
-}
-
-#respuestas-panel .rp-list {
-    flex: 1 1 auto;
+#modalRespuestasRapidas .rp-list {
+    max-height: 60vh;
     overflow-y: auto;
-    padding: 6px 0;
 }
 
-#respuestas-panel .rp-empty {
-    padding: 18px 14px;
+#modalRespuestasRapidas .rp-empty {
+    padding: 24px 14px;
     text-align: center;
     color: #8a8f98;
-    font-size: .8rem;
-}
-
-#respuestas-panel .rp-item {
-    padding: 10px 14px;
-    border-bottom: 1px solid #f0f2f5;
-    cursor: pointer;
-    transition: background .12s;
-}
-
-#respuestas-panel .rp-item:last-child { border-bottom: none; }
-
-#respuestas-panel .rp-item:hover {
-    background: #ecfdf3;
-}
-
-#respuestas-panel .rp-item-titulo {
     font-size: .85rem;
+}
+
+#modalRespuestasRapidas .rp-item {
+    padding: 10px 12px;
+    border: 1px solid #eceff3;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: background .12s, border-color .12s;
+}
+
+#modalRespuestasRapidas .rp-item:hover {
+    background: #ecfdf3;
+    border-color: #16a34a;
+}
+
+#modalRespuestasRapidas .rp-item-titulo {
+    font-size: .88rem;
     font-weight: 600;
     color: #111b21;
     margin-bottom: 2px;
 }
 
-#respuestas-panel .rp-item-cuerpo {
-    font-size: .78rem;
+#modalRespuestasRapidas .rp-item-cuerpo {
+    font-size: .8rem;
     color: #667781;
+    white-space: pre-wrap;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
