@@ -4,7 +4,7 @@
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
 <link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.9">
 <link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
-<link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.1">
+<link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.2">
 {% endblock %}
 
 {% block content %}
@@ -131,6 +131,7 @@
                 </div>
             </div>
             <div class="cm-header-right">
+                    <div class="cm-header-info">
                         <div class="d-none" id="meta-countdown-header">
                             <span class="meta-countdown badge bg-warning text-dark" id="meta-countdown-badge"
                                   title="Tiempo restante en la ventana de 24 horas de Meta">
@@ -175,6 +176,8 @@
                                 <i class="fa fa-user-circle me-1"></i><span id="asignado-nombre">—</span>
                             </span>
                         </div>
+                    </div>
+                    <div class="cm-header-acciones">
                         <!-- Toggle bot -->
                         <div class="d-none" id="bot-toggle-container">
                             <button class="btn btn-sm" id="btn-toggle-bot" title="Activar/pausar el bot (chatbot tradicional o agente IA) en esta conversación"
@@ -240,6 +243,7 @@
                                 </a>
                             </div>
                         </div>
+                    </div>
             </div>
         </div>
 
@@ -431,11 +435,33 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="rp-search mb-2">
-                        <input type="search" id="respuestas-search" class="form-control form-control-sm" placeholder="Buscar respuesta...">
+                    <div id="rp-vista-lista">
+                        <div class="d-flex gap-2 mb-2">
+                            <input type="search" id="respuestas-search" class="form-control form-control-sm flex-grow-1" placeholder="Buscar respuesta...">
+                            <button type="button" id="rp-nueva-btn" class="btn btn-sm btn-success flex-shrink-0">
+                                <i class="fa fa-plus me-1"></i>Nueva
+                            </button>
+                        </div>
+                        <div class="rp-list" id="respuestas-list">
+                            <div class="rp-empty">Cargando...</div>
+                        </div>
                     </div>
-                    <div class="rp-list" id="respuestas-list">
-                        <div class="rp-empty">Cargando...</div>
+                    <div id="rp-vista-form" class="d-none">
+                        <input type="hidden" id="rp-edit-id" value="">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Título</label>
+                            <input type="text" id="rp-edit-titulo" class="form-control form-control-sm" maxlength="80" placeholder="Ej: Saludo inicial">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Mensaje</label>
+                            <textarea id="rp-edit-cuerpo" class="form-control form-control-sm" rows="4" maxlength="4096" placeholder="Texto que se cargará en la caja de mensaje."></textarea>
+                        </div>
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" id="rp-cancelar-btn" class="btn btn-sm btn-light">Cancelar</button>
+                            <button type="button" id="rp-guardar-btn" class="btn btn-sm btn-success">
+                                <i class="fa fa-save me-1"></i>Guardar
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1419,11 +1445,11 @@
 
         function cargarRespuestasRapidas() {
             var sesionId = $('#sesion-selector').val();
-            if (!sesionId) { _respuestasCache = []; _actualizarBadgeRespuestas(); return; }
-            _mrPostSesionAction('respuesta_rapida_listar', {sesion_id: sesionId}).then(function (r) {
+            if (!sesionId) { _respuestasCache = []; _actualizarBadgeRespuestas(); return Promise.resolve(); }
+            return _mrPostSesionAction('respuesta_rapida_listar', {sesion_id: sesionId}).then(function (r) {
                 _respuestasCache = (r && !r.error) ? (r.items || []) : [];
                 _actualizarBadgeRespuestas();
-                renderRespuestasRapidas();
+                renderRespuestasRapidas($('#respuestas-search').val());
                 if (conversacionActiva) {
                     $('#respuestas-btn').addClass('visible');
                 }
@@ -1458,9 +1484,15 @@
                 return;
             }
             cont.innerHTML = items.map(function (r) {
-                return '<div class="rp-item" data-resp-id="' + r.id + '">' +
-                    '<div class="rp-item-titulo">' + escHtmlMr(r.titulo) + '</div>' +
-                    '<div class="rp-item-cuerpo">' + escHtmlMr(r.cuerpo) + '</div>' +
+                return '<div class="rp-item d-flex align-items-start gap-2" data-resp-id="' + r.id + '">' +
+                    '<div class="rp-item-main flex-grow-1" data-resp-id="' + r.id + '" title="Cargar en la caja de mensaje">' +
+                        '<div class="rp-item-titulo">' + escHtmlMr(r.titulo) + '</div>' +
+                        '<div class="rp-item-cuerpo">' + escHtmlMr(r.cuerpo) + '</div>' +
+                    '</div>' +
+                    '<div class="rp-item-acc flex-shrink-0 d-flex gap-1">' +
+                        '<button type="button" class="btn btn-sm btn-light rp-edit-item" data-id="' + r.id + '" title="Editar"><i class="fa fa-pen"></i></button>' +
+                        '<button type="button" class="btn btn-sm btn-light rp-del-item" data-id="' + r.id + '" title="Eliminar"><i class="fa fa-trash text-danger"></i></button>' +
+                    '</div>' +
                 '</div>';
             }).join('');
         }
@@ -1475,10 +1507,30 @@
             return _modalRespuestas;
         }
 
+        function _rpMostrarLista() {
+            $('#rp-vista-form').addClass('d-none');
+            $('#rp-vista-lista').removeClass('d-none');
+        }
+
+        function _rpMostrarForm(resp) {
+            $('#rp-edit-id').val(resp ? resp.id : '');
+            $('#rp-edit-titulo').val(resp ? resp.titulo : '');
+            if (resp) {
+                $('#rp-edit-cuerpo').val(resp.cuerpo || '');
+            } else {
+                var inp = document.getElementById('footer-mensaje-input');
+                $('#rp-edit-cuerpo').val(inp ? (inp.value || '') : '');
+            }
+            $('#rp-vista-lista').addClass('d-none');
+            $('#rp-vista-form').removeClass('d-none');
+            setTimeout(function () { $('#rp-edit-titulo').focus(); }, 50);
+        }
+
         function abrirModalRespuestas() {
             var m = _getModalRespuestas();
             if (!m) return;
             $('#respuestas-search').val('');
+            _rpMostrarLista();
             renderRespuestasRapidas('');
             m.show();
             setTimeout(function () { $('#respuestas-search').focus(); }, 250);
@@ -1498,7 +1550,7 @@
             renderRespuestasRapidas($(this).val());
         });
 
-        $(document).on('click', '#respuestas-list .rp-item', function () {
+        $(document).on('click', '#respuestas-list .rp-item-main', function () {
             var id = $(this).data('resp-id');
             var resp = (_respuestasCache || []).find(function (r) { return String(r.id) === String(id); });
             if (!resp) return;
@@ -1509,6 +1561,50 @@
                 input.dispatchEvent(new Event('input', {bubbles: true}));
             }
             cerrarModalRespuestas();
+        });
+
+        $('#rp-nueva-btn').on('click', function () { _rpMostrarForm(null); });
+        $('#rp-cancelar-btn').on('click', _rpMostrarLista);
+
+        $(document).on('click', '#respuestas-list .rp-edit-item', function (e) {
+            e.stopPropagation();
+            var id = $(this).data('id');
+            var resp = (_respuestasCache || []).find(function (r) { return String(r.id) === String(id); });
+            if (resp) _rpMostrarForm(resp);
+        });
+
+        $(document).on('click', '#respuestas-list .rp-del-item', function (e) {
+            e.stopPropagation();
+            var id = $(this).data('id');
+            var sesionId = $('#sesion-selector').val();
+            var doDelete = function () {
+                _mrPostSesionAction('respuesta_rapida_eliminar', {sesion_id: sesionId, id: id}).then(function (r) {
+                    if (r.error) { if (typeof toastr !== 'undefined') toastr.error(r.message || 'Error'); return; }
+                    cargarRespuestasRapidas();
+                });
+            };
+            if (window.Swal) {
+                Swal.fire({
+                    title: '¿Eliminar respuesta?', type: 'warning', showCancelButton: true,
+                    confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33',
+                }).then(function (res) { if (res.value) doDelete(); });
+            } else if (confirm('¿Eliminar respuesta?')) { doDelete(); }
+        });
+
+        $('#rp-guardar-btn').on('click', function () {
+            var sesionId = $('#sesion-selector').val();
+            if (!sesionId) { if (typeof toastr !== 'undefined') toastr.warning('Seleccioná una sesión.'); return; }
+            var titulo = $('#rp-edit-titulo').val().trim();
+            var cuerpo = $('#rp-edit-cuerpo').val().trim();
+            if (!titulo) { $('#rp-edit-titulo').focus(); if (typeof toastr !== 'undefined') toastr.warning('El título es obligatorio.'); return; }
+            if (!cuerpo) { $('#rp-edit-cuerpo').focus(); if (typeof toastr !== 'undefined') toastr.warning('El mensaje es obligatorio.'); return; }
+            _mrPostSesionAction('respuesta_rapida_guardar', {
+                sesion_id: sesionId, id: $('#rp-edit-id').val() || '', titulo: titulo, cuerpo: cuerpo,
+            }).then(function (r) {
+                if (r.error) { if (typeof toastr !== 'undefined') toastr.error(r.message || 'Error al guardar'); return; }
+                if (typeof toastr !== 'undefined') toastr.success(r.message || 'Guardado');
+                cargarRespuestasRapidas().then(_rpMostrarLista);
+            });
         });
 
         cargarRespuestasRapidas();
