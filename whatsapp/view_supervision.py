@@ -1,13 +1,16 @@
 from django.contrib.auth.decorators import login_required
-from django.db.models import Avg, Count, F, Q, Sum
+from django.db.models import Avg, Count, F, OuterRef, Q, Subquery, Sum
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.utils import timezone
 
 from core.funciones import addData, secure_module
 from .models import (
     ConversacionEnPipeline,
     ConversacionWhatsApp,
     EstadisticasConversacion,
+    MensajeWhatsApp,
+    SesionWhatsApp,
 )
 from .permisos_sesion import sesiones_vista_completa
 from .view_analytics import _rango_fechas, _sesion_filtro
@@ -38,6 +41,14 @@ def supervisionView(request):
     )
     if sesion_id:
         conv_qs = conv_qs.filter(contacto__sesion_id=sesion_id)
+
+    if request.GET.get('action') == 'live':
+        try:
+            return _data_live(request, sesiones_scope, sesion_id)
+        except Exception as ex:
+            import logging
+            logging.getLogger(__name__).exception('Error generando data live supervision')
+            return JsonResponse({'error': True, 'message': str(ex)}, status=500)
 
     if request.GET.get('action') == 'data' or request.GET.get('format') == 'json':
         try:
@@ -150,4 +161,104 @@ def _data_json(request, conv_qs, sesiones_scope, sesion_id):
         'forecast': forecast,
         'forecast_total_bruto': round(total_bruto, 2),
         'forecast_total_ponderado': round(total_ponderado, 2),
+    })
+
+
+def _data_live(request, sesiones_scope, sesion_id):
+    """Estado en vivo de las conversaciones abiertas (estado_conversacion=0).
+
+    Para cada asesor con conversaciones abiertas asignadas, cuenta cuántas
+    están esperando su respuesta (el último mensaje es del cliente, no de la
+    sesión) y desde hace cuánto. No depende del rango de fechas: las abiertas
+    son siempre el estado actual.
+    """
+    DEMORA_ALERTA_SEG = 600  # 10 min sin responder ⇒ se marca como demorada
+
+    abiertas_qs = ConversacionWhatsApp.objects.filter(
+        status=True,
+        contacto__sesion__in=sesiones_scope,
+        estado_conversacion=0,
+    )
+    if sesion_id:
+        abiertas_qs = abiertas_qs.filter(contacto__sesion_id=sesion_id)
+
+    ultimo_remitente = (
+        MensajeWhatsApp.objects.filter(conversacion=OuterRef('pk'))
+        .order_by('-fecha').values('remitente')[:1]
+    )
+    ultima_fecha = (
+        MensajeWhatsApp.objects.filter(conversacion=OuterRef('pk'))
+        .order_by('-fecha').values('fecha')[:1]
+    )
+    numero_sesion = SesionWhatsApp.objects.filter(
+        pk=OuterRef('contacto__sesion_id')
+    ).values('numero')[:1]
+
+    abiertas_qs = abiertas_qs.annotate(
+        _ult_rem=Subquery(ultimo_remitente),
+        _ult_fecha=Subquery(ultima_fecha),
+        _num_sesion=Subquery(numero_sesion),
+    ).select_related('asignado_a')
+
+    ahora = timezone.now()
+    por_asesor = {}
+    sin_asignar = {'abiertas': 0, 'esperando': 0, 'espera_max_seg': 0}
+    total_abiertas = 0
+    total_esperando = 0
+    total_demoradas = 0
+
+    for c in abiertas_qs:
+        total_abiertas += 1
+        esperando = bool(c._ult_rem) and c._ult_rem != c._num_sesion
+        espera_seg = 0
+        if esperando and c._ult_fecha:
+            espera_seg = max(0, (ahora - c._ult_fecha).total_seconds())
+        demorada = esperando and espera_seg >= DEMORA_ALERTA_SEG
+
+        if esperando:
+            total_esperando += 1
+        if demorada:
+            total_demoradas += 1
+
+        if c.asignado_a_id:
+            destino = por_asesor.get(c.asignado_a_id)
+            if destino is None:
+                nombre = ''
+                if c.asignado_a:
+                    nombre = f"{c.asignado_a.first_name or ''} {c.asignado_a.last_name or ''}".strip()
+                    if not nombre:
+                        nombre = c.asignado_a.username or '—'
+                destino = {
+                    'agente_id': c.asignado_a_id, 'agente': nombre or '—',
+                    'abiertas': 0, 'esperando': 0, 'demoradas': 0, 'espera_max_seg': 0,
+                }
+                por_asesor[c.asignado_a_id] = destino
+        else:
+            destino = sin_asignar
+
+        destino['abiertas'] += 1
+        if esperando:
+            destino['esperando'] += 1
+            destino['espera_max_seg'] = max(destino['espera_max_seg'], espera_seg)
+        if demorada and c.asignado_a_id:
+            destino['demoradas'] += 1
+
+    asesores = sorted(
+        por_asesor.values(),
+        key=lambda a: (a['esperando'], a['espera_max_seg'], a['abiertas']),
+        reverse=True,
+    )
+    for a in asesores:
+        a['espera_max_seg'] = round(a['espera_max_seg'], 1)
+    sin_asignar['espera_max_seg'] = round(sin_asignar['espera_max_seg'], 1)
+
+    return JsonResponse({
+        'sesion_filtro': sesion_id,
+        'demora_alerta_seg': DEMORA_ALERTA_SEG,
+        'asesores_activos': len(por_asesor),
+        'total_abiertas': total_abiertas,
+        'total_esperando': total_esperando,
+        'total_demoradas': total_demoradas,
+        'sin_asignar': sin_asignar,
+        'asesores': asesores,
     })

@@ -72,6 +72,22 @@
         </div>
     </div>
 
+    <div class="card mb-3 border-info"><div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <h6 class="card-title mb-0"><i class="fa fa-headset text-info me-1"></i>Atención en vivo — conversaciones abiertas</h6>
+            <span class="small text-muted" id="liveActualizado">Actualizando…</span>
+        </div>
+        <div class="row g-2 text-center mb-3" id="liveKpis"></div>
+        <div class="table-responsive">
+            <table class="table table-sm sv-table align-middle mb-0" id="tblLive"><thead>
+                <tr>
+                    <th>Agente</th><th>Abiertas</th><th>Esperando respuesta</th>
+                    <th>Demoradas</th><th>Espera más antigua</th>
+                </tr>
+            </thead><tbody></tbody></table>
+        </div>
+    </div></div>
+
     <div class="row g-3 mb-3">
         <div class="col-lg-7">
             <div class="card h-100"><div class="card-body">
@@ -170,6 +186,71 @@ async function load(){
 }
 function miniKpi(label, val){ return `<div class="col p-2"><div class="small text-muted">${label}</div><div class="fw-bold">${val}</div></div>`; }
 function fmtSeg(s){ if(!s) return '—'; if(s<60) return s+'s'; const m=Math.floor(s/60); const r=Math.round(s%60); return m+'m '+r+'s'; }
+
+function liveKpi(label, val, cls){
+    return `<div class="col"><div class="border rounded py-2 h-100">` +
+        `<div class="h4 mb-0 fw-bold ${cls || ''}">${val}</div>` +
+        `<div class="small text-muted">${label}</div></div></div>`;
+}
+
+async function loadLive(){
+    const params = new URLSearchParams();
+    params.set('action', 'live');
+    {% if sesion_sel %}params.set('sesion', '{{ sesion_sel }}');{% endif %}
+
+    let d;
+    try {
+        const r = await fetch('?' + params.toString());
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        d = await r.json();
+    } catch (e) {
+        document.getElementById('liveActualizado').textContent = 'Error al actualizar';
+        return;
+    }
+    if (d.error) {
+        document.getElementById('liveActualizado').textContent = 'Error: ' + (d.message || 'desconocido');
+        return;
+    }
+
+    const minAlerta = Math.round((d.demora_alerta_seg || 600) / 60);
+    document.getElementById('liveKpis').innerHTML =
+        liveKpi('Asesores con abiertas', d.asesores_activos || 0) +
+        liveKpi('Conversaciones abiertas', d.total_abiertas || 0) +
+        liveKpi('Esperando respuesta', d.total_esperando || 0, (d.total_esperando ? 'text-warning' : '')) +
+        liveKpi('Demoradas (&gt;' + minAlerta + 'm)', d.total_demoradas || 0, (d.total_demoradas ? 'text-danger' : '')) +
+        liveKpi('Sin asignar', (d.sin_asignar && d.sin_asignar.abiertas) || 0, ((d.sin_asignar && d.sin_asignar.abiertas) ? 'text-danger' : ''));
+
+    const tbl = document.querySelector('#tblLive tbody');
+    let filas = '';
+    (d.asesores || []).forEach(a => {
+        const espCls = a.esperando ? 'text-warning fw-bold' : 'text-muted';
+        const demCls = a.demoradas ? 'text-danger fw-bold' : 'text-muted';
+        const tCls = a.espera_max_seg >= (d.demora_alerta_seg || 600) ? 'text-danger fw-bold'
+                   : (a.esperando ? 'text-warning' : 'text-muted');
+        filas += `<tr><td>${a.agente}</td>` +
+            `<td>${a.abiertas}</td>` +
+            `<td class="${espCls}">${a.esperando}</td>` +
+            `<td class="${demCls}">${a.demoradas}</td>` +
+            `<td class="${tCls}">${fmtSeg(a.espera_max_seg)}</td></tr>`;
+    });
+    const sa = d.sin_asignar || {};
+    if (sa.abiertas) {
+        const tCls = sa.espera_max_seg >= (d.demora_alerta_seg || 600) ? 'text-danger fw-bold' : 'text-warning';
+        filas += `<tr class="table-light"><td><em>Sin asignar</em></td>` +
+            `<td>${sa.abiertas}</td>` +
+            `<td class="text-warning fw-bold">${sa.esperando}</td>` +
+            `<td>—</td>` +
+            `<td class="${tCls}">${fmtSeg(sa.espera_max_seg)}</td></tr>`;
+    }
+    tbl.innerHTML = filas || '<tr><td colspan="5" class="text-muted text-center">No hay conversaciones abiertas</td></tr>';
+
+    const ahora = new Date();
+    document.getElementById('liveActualizado').textContent =
+        'Actualizado ' + ahora.toLocaleTimeString();
+}
+
 load();
+loadLive();
+setInterval(loadLive, 30000);
 </script>
 {% endblock %}
