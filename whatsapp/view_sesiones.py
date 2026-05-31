@@ -844,6 +844,47 @@ def _accion_eliminar_usuario(request):
         return JsonResponse({'error': True, 'message': str(ex)})
 
 
+def _accion_ads_guardar_config(request):
+    """Guarda la cuenta publicitaria y el token de anuncios en ConfigMeta."""
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id') or request.POST.get('id'),
+                                           usuario=request.user).first()
+    if not sesion or not sesion.es_meta:
+        return JsonResponse({'error': True, 'message': 'Sesión Meta no encontrada.'})
+    cfg = getattr(sesion, 'config_meta', None)
+    if not cfg:
+        return JsonResponse({'error': True, 'message': 'La sesión no tiene configuración Meta.'})
+    cfg.ad_account_id = (request.POST.get('ad_account_id') or '').strip()[:64]
+    nuevo_token = (request.POST.get('ads_access_token') or '').strip()
+    if nuevo_token:
+        cfg.ads_access_token = nuevo_token
+    cfg.save()
+    log(f"Config de anuncios actualizada: sesion={sesion.id}", request, "change", obj=sesion.id)
+    return JsonResponse({'error': False, 'message': 'Configuración de anuncios guardada.'})
+
+
+def _accion_ads_probar(request):
+    """Verifica la conexión a la Marketing API con la cuenta publicitaria."""
+    from .services_ads import MetaAdsService
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id') or request.POST.get('id'),
+                                           usuario=request.user).first()
+    if not sesion or not sesion.es_meta:
+        return JsonResponse({'error': True, 'message': 'Sesión Meta no encontrada.'})
+    cfg = getattr(sesion, 'config_meta', None)
+    if not cfg:
+        return JsonResponse({'error': True, 'message': 'La sesión no tiene configuración Meta.'})
+    res = MetaAdsService(cfg).probar_conexion()
+    if res.get('error'):
+        return JsonResponse({'error': True, 'message': res.get('message') or 'No se pudo conectar.'})
+    return JsonResponse({
+        'error': False,
+        'message': 'Conexión OK.',
+        'name': res.get('name'),
+        'currency': res.get('currency'),
+        'amount_spent': res.get('amount_spent'),
+        'business_name': res.get('business_name'),
+    })
+
+
 _ACCIONES = {
     'baileys_start':               _accion_baileys_start,
     'baileys_status':              _accion_baileys_status,
@@ -858,6 +899,8 @@ _ACCIONES = {
     'meta_plantilla_prueba':       _accion_meta_plantilla_prueba,
     'editar':                      _accion_editar,
     'toggle_activo':               _accion_toggle_activo,
+    'ads_guardar_config':          _accion_ads_guardar_config,
+    'ads_probar':                  _accion_ads_probar,
     'menu_rapido_listar':          _accion_menu_rapido_listar,
     'menu_rapido_guardar':         _accion_menu_rapido_guardar,
     'menu_rapido_eliminar':        _accion_menu_rapido_eliminar,
@@ -963,6 +1006,13 @@ def _get_partial(request, accion):
             sesion=sesion, status=True,
         ).order_by('titulo')
         tpl = 'whatsapp/sesiones/_modal_respuestas_rapidas.html'
+
+    elif accion == 'ads_config_modal':
+        cfg = getattr(sesion, 'config_meta', None)
+        ctx['config_meta'] = cfg
+        ctx['ad_account_id'] = getattr(cfg, 'ad_account_id', '') if cfg else ''
+        ctx['tiene_token_ads'] = bool(getattr(cfg, 'ads_access_token', '')) if cfg else False
+        tpl = 'whatsapp/sesiones/_modal_ads_config.html'
 
     else:
         return JsonResponse({'ok': False, 'message': 'Partial desconocido.'})

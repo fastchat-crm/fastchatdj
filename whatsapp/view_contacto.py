@@ -22,6 +22,37 @@ from django.contrib import messages
 from .services import get_whatsapp_service
 
 
+def _campos_para_contacto(contacto):
+    """Lista [{def, valor}] de campos personalizados definidos, con el valor
+    del contacto (o '' si no tiene)."""
+    from .models import CampoPersonalizadoContacto, ValorCampoContacto
+    defs = CampoPersonalizadoContacto.objects.filter(status=True).order_by('orden', 'nombre')
+    valores = {}
+    if contacto and contacto.pk:
+        valores = {
+            v.campo_id: v.valor
+            for v in ValorCampoContacto.objects.filter(contacto=contacto, status=True)
+        }
+    return [{'def': d, 'valor': valores.get(d.id, '')} for d in defs]
+
+
+def _guardar_campos_personalizados(request, contacto):
+    """Persiste los valores de campos personalizados enviados como
+    `campo_pers_<id>` en el POST."""
+    from .models import CampoPersonalizadoContacto, ValorCampoContacto
+    for d in CampoPersonalizadoContacto.objects.filter(status=True):
+        key = f'campo_pers_{d.id}'
+        if key not in request.POST:
+            continue
+        valor = (request.POST.get(key) or '').strip()
+        vc = ValorCampoContacto.objects.filter(campo=d, contacto=contacto, status=True).first()
+        if vc:
+            vc.valor = valor
+            vc.save()
+        elif valor:
+            ValorCampoContacto.objects.create(campo=d, contacto=contacto, valor=valor)
+
+
 @login_required
 @secure_module
 def contactoView(request):
@@ -56,6 +87,7 @@ def contactoView(request):
                             imagen_base64 = convertir_archivo_a_base64(file)
                             form.instance.contacto_foto = imagen_base64
                         form.save()
+                        _guardar_campos_personalizados(request, form.instance)
                         log(f"Registro un contacto {form.instance.__str__()}", request, "add", obj=form.instance.id)
                         messages.success(request, f"Contacto {form.instance.contacto_nombre} registrado correctamente")
                         res_json.append({'error': False, "reload": True})
@@ -160,6 +192,7 @@ def contactoView(request):
                             imagen_base64 = convertir_archivo_a_base64(file)
                             form.instance.contacto_foto = imagen_base64
                         form.save()
+                        _guardar_campos_personalizados(request, form.instance)
                         log(f"Edito un contacto  {form.instance.__str__()}", request, "change", obj=form.instance.id)
                         res_json.append({'error': False, "reload": True})
                     else:
@@ -285,6 +318,7 @@ def contactoView(request):
                     data["form"] = form = AddContactoForm()
                     form.fields['sesion'].queryset = SesionWhatsApp.objects.filter(status=True, usuario=request.user).distinct()
                     form.fields['numero_telefono'].initial = '593'
+                    data["campos_personalizados"] = _campos_para_contacto(None)
                     template = get_template("whatsapp/contacto/form.html")
                     return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:
@@ -297,6 +331,7 @@ def contactoView(request):
                     data["filtro"] = filtro
                     data["pk"] = pk
                     data["form"] = Formulario(instance=filtro)
+                    data["campos_personalizados"] = _campos_para_contacto(filtro)
                     template = get_template("whatsapp/contacto/form.html")
                     return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:

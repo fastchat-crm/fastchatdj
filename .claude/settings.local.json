@@ -121,7 +121,9 @@
       "Bash(Select-Object FullName)",
       "Bash(Get-ChildItem -Path \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\" -Directory)",
       "Bash(Select-Object Name)",
-      "Bash(Get-ChildItem -Path \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\\\\whatsapp\" -Recurse -File)"
+      "Bash(Get-ChildItem -Path \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\\\\whatsapp\" -Recurse -File)",
+      "Bash(powershell.exe -NoProfile -Command \"Add-Content -Path 'C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\\\\requirements.txt' -Value 'sentry-sdk==2.20.0' -Encoding Unicode\")",
+      "PowerShell(Set-Content *)"
     ]
   },
   "hooks": {

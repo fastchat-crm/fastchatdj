@@ -425,6 +425,12 @@ ESTADOS_CONVERSACION = (
     (1, 'Cerrado'),
 )
 
+ESTADOS_ATENCION = (
+    ('abierta', 'Abierta'),
+    ('pendiente', 'Pendiente'),
+    ('resuelta', 'Resuelta'),
+)
+
 ESTADO_MENSAJE_CHOICES = (
     ("MENU_DEPARTAMENTOS", "Menú Departamentos"),
     ("DEPARTAMENTO_ESCOGIDO", "Departamento Escogido"),
@@ -485,6 +491,14 @@ class ConversacionWhatsApp(ModeloBase):
         related_name='conversaciones_asignadas', verbose_name='Asignado a'
     )
     fecha_asignacion = models.DateTimeField('Fecha de asignación', null=True, blank=True)
+    estado_atencion = models.CharField(
+        'Estado de atención', max_length=12, choices=ESTADOS_ATENCION, default='abierta',
+        help_text='Flujo de inbox: abierta → pendiente (esperando) → resuelta. Independiente del cierre técnico.'
+    )
+    snooze_hasta = models.DateTimeField(
+        'Pospuesta hasta', null=True, blank=True,
+        help_text='Si está en el futuro, la conversación se oculta del inbox hasta esa fecha (un cron la reabre).'
+    )
     nota_interna = models.TextField('Nota interna', blank=True, default='')
     primer_agente = models.ForeignKey(
         Usuario, on_delete=models.SET_NULL, null=True, blank=True,
@@ -1166,6 +1180,82 @@ class RespuestaRapidaSesion(ModeloBase):
         return f'{self.sesion_id} · {self.titulo}'
 
 
+class RespuestaRapidaGlobal(ModeloBase):
+    """Respuesta rápida reutilizable en TODAS las sesiones, invocable por /atajo.
+
+    A diferencia de `RespuestaRapidaSesion` (atada a una sesión), estas viven
+    a nivel plataforma. El operador escribe `/atajo ` en la caja de mensaje y
+    el texto se expande para editarlo antes de enviar. No se envía solo.
+    """
+    atajo = models.CharField(
+        'Atajo', max_length=40,
+        help_text="Se invoca escribiendo /atajo en el chat (sin la barra). Ej: saludo, pago, horario."
+    )
+    titulo = models.CharField('Título', max_length=80,
+                              help_text='Nombre corto para identificar la respuesta.')
+    cuerpo = models.TextField('Mensaje', default='',
+                              help_text='Texto que reemplaza al /atajo en la caja de mensaje.')
+
+    class Meta:
+        verbose_name = 'Respuesta rápida global'
+        verbose_name_plural = 'Respuestas rápidas globales'
+        ordering = ['atajo']
+
+    def __str__(self):
+        return f'/{self.atajo} — {self.titulo}'
+
+
+class CampoPersonalizadoContacto(ModeloBase):
+    """Definición de un campo personalizado para contactos (a nivel plataforma).
+
+    Permite extender la ficha del contacto sin tocar el modelo. Cada definición
+    genera un input en el formulario de contacto; el valor por contacto vive en
+    `ValorCampoContacto`.
+    """
+    TIPOS = (
+        ('texto', 'Texto'),
+        ('numero', 'Número'),
+        ('fecha', 'Fecha'),
+        ('booleano', 'Sí / No'),
+        ('opciones', 'Lista de opciones'),
+    )
+    nombre = models.CharField('Nombre / etiqueta', max_length=80)
+    clave = models.SlugField('Clave interna', max_length=60, unique=True,
+                             help_text='Identificador sin espacios (ej. cumpleanos, nivel_membresia).')
+    tipo = models.CharField('Tipo', max_length=12, choices=TIPOS, default='texto')
+    opciones = models.JSONField('Opciones', default=list, blank=True,
+                                help_text='Solo para tipo "Lista de opciones": ["A","B","C"].')
+    orden = models.PositiveSmallIntegerField('Orden', default=0)
+
+    class Meta:
+        verbose_name = 'Campo personalizado de contacto'
+        verbose_name_plural = 'Campos personalizados de contacto'
+        ordering = ['orden', 'nombre']
+
+    def __str__(self):
+        return f'{self.nombre} ({self.tipo})'
+
+
+class ValorCampoContacto(ModeloBase):
+    """Valor de un campo personalizado para un contacto concreto."""
+    campo = models.ForeignKey(
+        CampoPersonalizadoContacto, on_delete=models.CASCADE,
+        related_name='valores', verbose_name='Campo',
+    )
+    contacto = models.ForeignKey(
+        Contacto, on_delete=models.CASCADE,
+        related_name='valores_personalizados', verbose_name='Contacto',
+    )
+    valor = models.TextField('Valor', blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Valor de campo personalizado'
+        verbose_name_plural = 'Valores de campos personalizados'
+
+    def __str__(self):
+        return f'{self.contacto_id} · {self.campo_id} = {self.valor[:30]}'
+
+
 class MensajeWhatsAppProgramado(ModeloBase):
     contacto = models.ForeignKey(Contacto, on_delete=models.CASCADE, related_name='mensajes_programados')
     fecha = models.DateField(verbose_name='Fecha de envío programado', blank=True, null=True)
@@ -1471,12 +1561,49 @@ class ConfigMeta(ModeloBase):
                   '(modo previo a Tech Provider). False si pasó por el popup OAuth.'
     )
 
+    # Marketing API (anuncios Click-to-WhatsApp)
+    ad_account_id = models.CharField(
+        'Cuenta publicitaria (act_XXXX)', max_length=64, blank=True, default='',
+        help_text='ID de la cuenta de anuncios de Meta (formato act_XXXXXXXX). '
+                  'Necesario para traer nombres de campaña/anuncio y gasto vía Marketing API.'
+    )
+    ads_access_token = EncryptedTextField(
+        'Token de anuncios (opcional)', blank=True, default='',
+        help_text='Token con scope ads_read. Si se deja vacío se usa access_token '
+                  '(siempre que ese token tenga permiso de anuncios).'
+    )
+    ads_ultima_sincronizacion = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         verbose_name = 'Configuracion Meta'
         verbose_name_plural = 'Configuraciones Meta'
 
     def __str__(self):
         return f"Meta · WABA {self.waba_id} · {self.display_phone_number or self.phone_number_id}"
+
+
+class AnuncioMetaCache(ModeloBase):
+    """Caché de nombres de anuncio/campaña resueltos vía Marketing API.
+
+    Evita pegarle a la Graph API en cada apertura de conversación o cada carga
+    de Analytics: una vez resuelto un `ad_id`, guardamos sus nombres legibles y
+    los reusamos hasta que se vuelvan a refrescar.
+    """
+    ad_id = models.CharField('Ad ID', max_length=100, unique=True, db_index=True)
+    ad_name = models.CharField('Nombre del anuncio', max_length=300, blank=True, default='')
+    adset_id = models.CharField('Adset ID', max_length=100, blank=True, default='')
+    adset_name = models.CharField('Nombre del adset', max_length=300, blank=True, default='')
+    campaign_id = models.CharField('Campaign ID', max_length=100, blank=True, default='', db_index=True)
+    campaign_name = models.CharField('Nombre de la campaña', max_length=300, blank=True, default='')
+    effective_status = models.CharField('Estado del anuncio', max_length=40, blank=True, default='')
+    ultima_sync = models.DateTimeField('Última sincronización', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Caché de anuncio Meta'
+        verbose_name_plural = 'Caché de anuncios Meta'
+
+    def __str__(self):
+        return f'{self.ad_id} · {self.campaign_name or self.ad_name or "—"}'
 
 
 CATEGORIAS_PLANTILLA = (
@@ -2354,6 +2481,10 @@ class WebhookSaliente(ModeloBase):
     fallos_consecutivos = models.PositiveIntegerField('Fallos consecutivos', default=0)
     ultimo_error = models.TextField(blank=True, default='')
     ultima_entrega = models.DateTimeField(null=True, blank=True)
+    proximo_intento = models.DateTimeField(
+        'Próximo intento permitido', null=True, blank=True,
+        help_text='Backoff exponencial: hasta esta fecha no se reintenta tras fallos consecutivos.'
+    )
 
     class Meta:
         verbose_name = 'Webhook saliente'

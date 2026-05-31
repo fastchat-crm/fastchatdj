@@ -47,6 +47,36 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.send_presence_update(self.conversacion_id)
         elif message_type == 'quitPresenceUpdate':
             await self.quit_presence_update(self.conversacion_id)
+        elif message_type == 'agenteEscribiendo':
+            await self.broadcast_presencia(True)
+        elif message_type == 'agenteDejoEscribir':
+            await self.broadcast_presencia(False)
+
+    async def broadcast_presencia(self, activo):
+        """Avisa a los OTROS agentes en esta conversación que alguien está
+        respondiendo (detección de colisión). Efímero: no toca BD."""
+        u = self.user
+        if not u or not getattr(u, 'id', None):
+            return
+        nombre = ((getattr(u, 'first_name', '') or '') + ' ' + (getattr(u, 'last_name', '') or '')).strip()
+        nombre = nombre or getattr(u, 'username', 'Agente')
+        await self.channel_layer.group_send(self.room_group_name, {
+            'type': 'presencia_agente',
+            'usuario_id': u.id,
+            'nombre': nombre,
+            'activo': bool(activo),
+        })
+
+    async def presencia_agente(self, event):
+        # No mostrarse a uno mismo: solo se notifica a los demás agentes.
+        if event.get('usuario_id') == getattr(self.user, 'id', None):
+            return
+        await self.send(text_data=json.dumps({
+            'type': 'presencia_agente',
+            'usuario_id': event.get('usuario_id'),
+            'nombre': event.get('nombre'),
+            'activo': event.get('activo'),
+        }))
 
 
     @database_sync_to_async

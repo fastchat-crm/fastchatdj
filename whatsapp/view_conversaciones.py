@@ -1,3 +1,5 @@
+import logging
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.db import models, transaction
@@ -24,7 +26,7 @@ from .funcionesWhatsappConversacion import (
     _tokens_conversacion,
     HORAS_VENTANA_REACTIVAR,
 )
-from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp, SENTIMIENTO_CHOICES
+from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp, SENTIMIENTO_CHOICES, RespuestaRapidaGlobal
 from .services import WhatsAppService, get_whatsapp_service
 from .permisos_sesion import (
     sesiones_visibles,
@@ -34,6 +36,170 @@ from .permisos_sesion import (
     puede_ver_conversacion,
     es_vista_completa,
 )
+
+
+def _reenviar_mensaje(request):
+    """Reenvía un mensaje saliente que quedó en estado 'fallido'.
+    Provider-agnostic: reusa el servicio de la sesión (Baileys o Meta)."""
+    try:
+        msg_id = int(request.POST.get('id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'error': True, 'message': 'ID inválido'})
+
+    mensaje = (
+        MensajeWhatsApp.objects
+        .select_related('conversacion__sesion', 'conversacion__contacto')
+        .filter(pk=msg_id).first()
+    )
+    if not mensaje:
+        return JsonResponse({'error': True, 'message': 'Mensaje no encontrado'})
+
+    conversacion = mensaje.conversacion
+    sesion = conversacion.sesion
+    if not puede_ver_conversacion(request.user, conversacion):
+        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+    if mensaje.remitente != (sesion.numero or '') or mensaje.estado_envio != 'fallido':
+        return JsonResponse({'error': True, 'message': 'Solo se reenvían mensajes salientes fallidos.'})
+
+    from .funcionesWhatsappConversacion import _bloqueo_ventana_meta
+    meta_bloqueada, _vence = _bloqueo_ventana_meta(conversacion)
+    if meta_bloqueada:
+        return JsonResponse({
+            'error': True, 'requiere_plantilla': True,
+            'message': 'La ventana de 24h de Meta venció. Usa una plantilla aprobada.',
+        })
+
+    service = get_whatsapp_service(sesion)
+    media_map = {'imagen': 'image', 'audio': 'audio', 'video': 'video', 'documento': 'document'}
+    try:
+        if mensaje.tipo in media_map and mensaje.archivo:
+            mensaje.archivo.open('rb')
+            file_bytes = mensaje.archivo.read()
+            mensaje.archivo.close()
+            response = service.send_media_message(
+                sesion.session_id, conversacion.from_number, caption=mensaje.mensaje,
+                file_content=file_bytes, filename=mensaje.archivo.name.split('/')[-1],
+                media_type=media_map[mensaje.tipo], conversacion_id=conversacion.id,
+            )
+        else:
+            response = service.send_text_message(
+                sesion.session_id, conversacion.from_number, mensaje.mensaje,
+                conversacion_id=conversacion.id,
+            )
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': f'Error al reenviar: {ex}'})
+
+    if not response.get('success', False):
+        return JsonResponse({
+            'error': True,
+            'message': f"No se pudo reenviar: {response.get('error', 'Error desconocido')}",
+            'requiere_plantilla': bool(response.get('requiere_plantilla')),
+            'cuenta_degradada': bool(response.get('cuenta_degradada')),
+        })
+
+    mensaje.mensaje_id_externo = response.get('message_id') or mensaje.mensaje_id_externo
+    mensaje.estado_envio = 'enviado'
+    mensaje.error_envio = ''
+    mensaje.save(update_fields=['mensaje_id_externo', 'estado_envio', 'error_envio'])
+    return JsonResponse({
+        'error': False,
+        'mensaje_html': render_to_string(
+            'whatsapp/conversaciones/mensaje_enviado_partial.html',
+            {'mensaje': mensaje}, request=request),
+    })
+
+
+def _editar_eliminar_mensaje(request, action):
+    """Edita o elimina (revoke) un mensaje saliente. Solo sesiones Baileys —
+    Meta Cloud API no expone editar/eliminar."""
+    try:
+        msg_id = int(request.POST.get('id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'error': True, 'message': 'ID inválido'})
+    mensaje = (
+        MensajeWhatsApp.objects
+        .select_related('conversacion__sesion', 'conversacion__contacto')
+        .filter(pk=msg_id).first()
+    )
+    if not mensaje:
+        return JsonResponse({'error': True, 'message': 'Mensaje no encontrado'})
+    conversacion = mensaje.conversacion
+    sesion = conversacion.sesion
+    if not puede_ver_conversacion(request.user, conversacion):
+        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+    if not getattr(sesion, 'es_baileys', False):
+        return JsonResponse({'error': True, 'message': 'Editar/eliminar solo está disponible en sesiones Baileys. Meta no lo permite.'})
+    if mensaje.remitente != (sesion.numero or ''):
+        return JsonResponse({'error': True, 'message': 'Solo se editan/eliminan mensajes propios (salientes).'})
+    if mensaje.eliminado:
+        return JsonResponse({'error': True, 'message': 'El mensaje ya fue eliminado.'})
+    if not mensaje.mensaje_id_externo:
+        return JsonResponse({'error': True, 'message': 'El mensaje no tiene id externo de WhatsApp — no se puede modificar.'})
+
+    service = get_whatsapp_service(sesion)
+    if action == 'editar_mensaje':
+        nuevo = (request.POST.get('texto') or '').strip()
+        if not nuevo:
+            return JsonResponse({'error': True, 'message': 'El nuevo texto no puede estar vacío.'})
+        resp = service.edit_message(sesion.session_id, conversacion.from_number, mensaje.mensaje_id_externo, nuevo)
+        if not resp.get('success'):
+            return JsonResponse({'error': True, 'message': resp.get('error', 'No se pudo editar.')})
+        mensaje.mensaje = nuevo
+        mensaje.editado = True
+        mensaje.save(update_fields=['mensaje', 'editado'])
+    else:
+        resp = service.delete_message(sesion.session_id, conversacion.from_number, mensaje.mensaje_id_externo)
+        if not resp.get('success'):
+            return JsonResponse({'error': True, 'message': resp.get('error', 'No se pudo eliminar.')})
+        mensaje.eliminado = True
+        mensaje.save(update_fields=['eliminado'])
+
+    return JsonResponse({
+        'error': False,
+        'mensaje_html': render_to_string(
+            'whatsapp/conversaciones/mensaje_enviado_partial.html',
+            {'mensaje': mensaje}, request=request),
+    })
+
+
+def _gestionar_atencion(request, action):
+    """Estados de inbox (abierta/pendiente/resuelta) y snooze (posponer)."""
+    from .models import ESTADOS_ATENCION
+    try:
+        pk = int(request.POST.get('pk') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'error': True, 'message': 'ID inválido'})
+    conversacion = ConversacionWhatsApp.objects.filter(pk=pk).select_related('contacto__sesion').first()
+    if not conversacion:
+        return JsonResponse({'error': True, 'message': 'Conversación no encontrada'})
+    if not puede_ver_conversacion(request.user, conversacion):
+        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+
+    if action == 'cambiar_estado_atencion':
+        estado = (request.POST.get('estado') or '').strip()
+        validos = {v for v, _ in ESTADOS_ATENCION}
+        if estado not in validos:
+            return JsonResponse({'error': True, 'message': 'Estado inválido'})
+        conversacion.estado_atencion = estado
+        conversacion.save(update_fields=['estado_atencion'])
+        return JsonResponse({'error': False, 'estado_atencion': estado})
+
+    if action == 'posponer_conversacion':
+        try:
+            minutos = int(request.POST.get('minutos') or 60)
+        except (TypeError, ValueError):
+            minutos = 60
+        minutos = max(1, min(minutos, 60 * 24 * 14))
+        conversacion.snooze_hasta = timezone.now() + timezone.timedelta(minutes=minutos)
+        conversacion.estado_atencion = 'pendiente'
+        conversacion.save(update_fields=['snooze_hasta', 'estado_atencion'])
+        return JsonResponse({'error': False, 'snooze_hasta': conversacion.snooze_hasta.isoformat()})
+
+    # reabrir_conversacion
+    conversacion.snooze_hasta = None
+    conversacion.estado_atencion = 'abierta'
+    conversacion.save(update_fields=['snooze_hasta', 'estado_atencion'])
+    return JsonResponse({'error': False})
 
 
 @login_required
@@ -120,7 +286,23 @@ def conversacionesView(request):
                     'adset_id':    conversacion.adset_id or '',
                     'campaign_id': conversacion.campaign_id or '',
                     'ctwa_clid':   conversacion.ctwa_clid or '',
+                    'ad_name':       '',
+                    'campaign_name': '',
+                    'adset_name':    '',
                 }
+                # Resolver nombres legibles vía Marketing API (cache-first).
+                # Best-effort: cualquier fallo no rompe la apertura del chat.
+                if conversacion.ad_id:
+                    try:
+                        from .services_ads import resolver_anuncio
+                        _cfg = getattr(conversacion.sesion, 'config_meta', None)
+                        _cache = resolver_anuncio(_cfg, conversacion.ad_id)
+                        if _cache:
+                            referral_data['ad_name'] = _cache.ad_name or ''
+                            referral_data['campaign_name'] = _cache.campaign_name or ''
+                            referral_data['adset_name'] = _cache.adset_name or ''
+                    except Exception:
+                        logging.getLogger(__name__).exception('Error resolviendo anuncio CTWA')
             return JsonResponse({
                 'html': render_to_string('whatsapp/conversaciones/mensajes_partial.html', data, request=request),
                 'conversacion_id': conversacion.id,
@@ -274,11 +456,42 @@ def conversacionesView(request):
                         )
 
                     if not response.get('success', False):
+                        # Precondiciones (ventana 24h / cuenta degradada): no se
+                        # persiste, el frontend abre el panel de plantillas.
+                        if response.get('requiere_plantilla') or response.get('cuenta_degradada'):
+                            return JsonResponse({
+                                'error': True,
+                                'message': f"Error al enviar mensaje: {response.get('error', 'Error desconocido')}",
+                                'requiere_plantilla': bool(response.get('requiere_plantilla')),
+                                'cuenta_degradada': bool(response.get('cuenta_degradada')),
+                            })
+                        # Falla genérica (red caída, timeout del proveedor, etc.):
+                        # guardamos el mensaje como 'fallido' para que el agente
+                        # pueda reenviarlo de un click desde el chat.
+                        mensaje = MensajeWhatsApp(
+                            conversacion=conversacion,
+                            remitente=conversacion.sesion.numero,
+                            mensaje=texto,
+                            tipo=tipo_mensaje,
+                            fecha=timezone.now(),
+                            leido=True,
+                            fecha_leido=timezone.now(),
+                            agente=request.user,
+                            ia_generado=False,
+                            estado_envio='fallido',
+                            error_envio=str(response.get('error', 'Fallo de envío'))[:500],
+                        )
+                        if archivo:
+                            from django.core.files.base import ContentFile
+                            mensaje.archivo.save(archivo.name, ContentFile(file_bytes), save=False)
+                        mensaje.save()
                         return JsonResponse({
-                            'error': True,
-                            'message': f"Error al enviar mensaje: {response.get('error', 'Error desconocido')}",
-                            'requiere_plantilla': bool(response.get('requiere_plantilla')),
-                            'cuenta_degradada': bool(response.get('cuenta_degradada')),
+                            'error': False,
+                            'fallido': True,
+                            'message': f"No se pudo enviar: {response.get('error', 'Error')}. Quedó como fallido — puedes reenviarlo.",
+                            'mensaje_html': render_to_string(
+                                'whatsapp/conversaciones/mensaje_enviado_partial.html',
+                                {'mensaje': mensaje}, request=request),
                         })
 
                     # Guardamos en BD
@@ -315,6 +528,12 @@ def conversacionesView(request):
                                                         {'mensaje': mensaje},
                                                         request=request)
                     })
+                elif action == 'reenviar_mensaje':
+                    return _reenviar_mensaje(request)
+                elif action in ('cambiar_estado_atencion', 'posponer_conversacion', 'reabrir_conversacion'):
+                    return _gestionar_atencion(request, action)
+                elif action in ('editar_mensaje', 'eliminar_mensaje'):
+                    return _editar_eliminar_mensaje(request, action)
                 elif action == 'enviar_plantilla_meta':
                     # Envia una plantilla Meta pre-aprobada. Util cuando la
                     # ventana 24h expiro o para reenganchar conversaciones.
@@ -810,5 +1029,10 @@ def conversacionesView(request):
     from .models import PipelineVenta as _PV
     data['pipelines_disponibles'] = (
         _PV.objects.filter(status=True).prefetch_related('etapas').order_by('-es_default', 'nombre')
+    )
+    # Respuestas rápidas globales (invocables con /atajo en el composer).
+    data['atajos_globales'] = list(
+        RespuestaRapidaGlobal.objects.filter(status=True)
+        .values('atajo', 'titulo', 'cuerpo')
     )
     return render(request, 'whatsapp/conversaciones/listado.html', data)

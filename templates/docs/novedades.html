@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/stylenew/docs.css">
+{% endblock %}
+
+{% block content %}
+<div class="docs-page">
+
+    <aside class="docs-sidebar">
+        <div class="docs-sidebar-search">
+            <i class="fa fa-search"></i>
+            <input type="text" placeholder="Buscar en la documentación...">
+        </div>
+        {% for seccion in sidebar %}
+            <div class="docs-sb-group">
+                <h6 class="docs-sb-title">{{ seccion.titulo }}</h6>
+                {% if seccion.items %}
+                    <ul class="docs-sb-list">
+                        {% for item in seccion.items %}
+                            <li>
+                                <a href="/seguridad/documentacion/?pagina={{ item.slug }}"
+                                   class="docs-sb-item {% if item.slug == slug_actual %}active{% endif %}">
+                                    {{ item.nombre }}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <span class="docs-sb-empty">Próximamente</span>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </aside>
+
+    <main class="docs-main">
+
+        <nav class="docs-breadcrumb" aria-label="breadcrumb">
+            {% for crumb in breadcrumb %}
+                {% if crumb.url %}
+                    <a href="{{ crumb.url }}">{{ crumb.nombre }}</a>
+                {% else %}
+                    <span>{{ crumb.nombre }}</span>
+                {% endif %}
+                {% if not forloop.last %}<i class="fa fa-chevron-right docs-bc-sep"></i>{% endif %}
+            {% endfor %}
+        </nav>
+
+        <article class="docs-article">
+
+            <header class="docs-hero">
+                <h1><i class="fa fa-bolt me-2 text-primary"></i> Novedades de la plataforma</h1>
+                <p class="docs-hero-lead">
+                    Funciones nuevas agregadas para mejorar la operación diaria, la confiabilidad
+                    y el seguimiento de las conversaciones.
+                </p>
+            </header>
+
+            <section class="mb-4">
+                <h2 class="h4 mb-3"><i class="fa fa-comments text-success me-2"></i>En el chat</h2>
+
+                <div class="mb-3">
+                    <h3 class="h6"><i class="fa fa-rotate-right text-danger me-1"></i> Reenviar mensaje</h3>
+                    <p>Si un mensaje no se envía (se cayó internet o falló el proveedor) queda marcado como
+                       <strong>fallido</strong> con un botón <em>Reenviar</em>. Funciona en Baileys y Meta.</p>
+                </div>
+
+                <div class="mb-3">
+                    <h3 class="h6"><i class="fa fa-pen text-muted me-1"></i> Editar y eliminar mensajes <span class="badge bg-secondary">solo Baileys</span></h3>
+                    <p>En sesiones Baileys podés <strong>editar</strong> o <strong>eliminar para todos</strong> un mensaje ya enviado,
+                       desde los botones de la burbuja. En Meta no está disponible (la API oficial no lo permite).</p>
+                </div>
+
+                <div class="mb-3">
+                    <h3 class="h6"><i class="fa fa-user-pen text-warning me-1"></i> Detección de colisión</h3>
+                    <p>Si otro agente está escribiendo en la misma conversación, aparece un aviso
+                       <em>"X está respondiendo…"</em> para que dos personas no contesten lo mismo.</p>
+                </div>
+
+                <div class="mb-3">
+                    <h3 class="h6"><i class="fa fa-bolt text-primary me-1"></i> Respuestas rápidas con /atajo</h3>
+                    <p>Escribí <code>/saludo&nbsp;</code> en la caja de mensaje y el texto se expande solo.
+                       Los atajos se administran en el panel de administración (globales, sirven en todas las sesiones).</p>
+                </div>
+
+                <div class="mb-3">
+                    <h3 class="h6"><i class="fa fa-hourglass-half text-secondary me-1"></i> Posponer y estados</h3>
+                    <p>Desde el menú (⋮) de la conversación: marcar <strong>pendiente</strong> / <strong>resuelta</strong>,
+                       o <strong>posponer</strong> (1h, 4h). La conversación pospuesta se reabre automáticamente al vencer el plazo.</p>
+                </div>
+            </section>
+
+            <section class="mb-4">
+                <h2 class="h4 mb-3"><i class="fa fa-address-card text-info me-2"></i>Contactos</h2>
+                <div class="mb-3">
+                    <h3 class="h6"><i class="fa fa-sliders me-1"></i> Campos personalizados</h3>
+                    <p>Se pueden definir campos extra para la ficha del contacto (cumpleaños, nivel, curso, etc.)
+                       sin tocar el código. Los campos se definen en administración y aparecen en el formulario del contacto.</p>
+                </div>
+            </section>
+
+            <section class="mb-4">
+                <h2 class="h4 mb-3"><i class="fa fa-shield-halved text-primary me-2"></i>Confiabilidad y monitoreo</h2>
+
+                <div class="mb-3">
+                    <h3 class="h6"><i class="fa fa-heart-pulse text-danger me-1"></i> Health check</h3>
+                    <p>La URL <code>/health/</code> responde si la aplicación, la base de datos y Redis están funcionando
+                       (útil para monitoreo automático). Devuelve <code>200</code> si todo está bien o <code>503</code> si algo falla.</p>
+                </div>
+
+                <div class="mb-3">
+                    <h3 class="h6"><i class="fa fa-envelope-circle-check text-success me-1"></i> Aviso por correo ante fallos</h3>
+                    <p>Si un proceso programado (campañas, recordatorios, reconexión de sesiones, etc.) falla, se envía un
+                       <strong>correo automático</strong> a los responsables. Está deduplicado: máximo un correo cada 3 horas por el mismo error.</p>
+                </div>
+
+                <div class="mb-3">
+                    <h3 class="h6"><i class="fa fa-arrows-rotate text-secondary me-1"></i> Reintentos de webhooks salientes</h3>
+                    <p>Los webhooks salientes reintentan con espera creciente si el destino está caído y se desactivan tras
+                       varios fallos, para que un servicio externo roto no afecte a fastchat.
+                       Ver <a href="/seguridad/documentacion/?pagina=webhooks">Webhooks</a>.</p>
+                </div>
+            </section>
+
+        </article>
+    </main>
+</div>
+{% endblock %}

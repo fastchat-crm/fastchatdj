@@ -30,7 +30,7 @@
 - [ ] **P0/S** Mover secretos de `credenciales.json` a variables de entorno / vault.
 - [ ] **P0/S** Sacar SendGrid API key del settings en claro.
 - [ ] **P0/S** Eliminar email hardcodeado `COTIZADOR_DEBUG_EMAIL` → config en settings/BD.
-- [ ] **P1/M** Integrar monitoreo de errores (Sentry) + health check endpoint.
+- [x] **P1/M** Health check endpoint (`/health/`). ~~Sentry~~ descartado por ahora (no se necesita a esa escala).
 - [ ] **P1/M** Auditar listados con `select_related`/`prefetch_related` (N+1 en conversaciones/contactos).
 - [ ] **P2/S** Backoff exponencial en `WebhookSaliente` (reintentos + expiración).
 - [ ] **P2/M** Suite mínima de tests (motor de flujo, webhook Meta, asignación).
@@ -142,3 +142,14 @@
 > Registrar aquí cada cierre relevante (fecha — qué — quién).
 
 - 2026-05-31 — Creado el estudio del proyecto (`estudio_proyecto.md`) y este plan.
+- 2026-05-31 — Fase 0: health check (`/health/`), backoff webhooks salientes (`whatsapp/webhooks_salientes.py` + campo `proximo_intento`), tests mínimos (`crm/tests.py`, `whatsapp/tests.py`). N+1 ya estaba resuelto.
+- 2026-05-31 — Sentry REVERTIDO por decisión (no se necesita a esa escala): quitado de `settings.py`, `requirements.txt` y guía borrada. El health check se mantiene.
+- 2026-05-31 — Alternativa liviana de alertas (sin Sentry, sin crons nuevos): `logCron(exito=False)` ahora manda correo a `CHATBOT_ERROR_NOTIFY_EMAILS` al fallar un proceso. Deduplicado 1/3h. Cubre los 7 crons existentes automáticamente.
+- 2026-05-31 — Reenviar mensaje fallido (acción `reenviar_mensaje` + botón en chat + persistencia de fallidos).
+- 2026-05-31 — Fase 1.1 Detección de colisión (WebSocket `presencia_agente` en `ChatConsumer` + banner "X está respondiendo").
+- 2026-05-31 — Fase 1.3 Respuestas rápidas globales (`RespuestaRapidaGlobal` + admin + expansión `/atajo` en composer).
+- 2026-05-31 — Fase 1.2 Snooze + estados: backend listo (campos `estado_atencion`/`snooze_hasta`, acciones, cron `reabrir_pospuestas.py`). PENDIENTE: botones UI en el chat + ocultar pospuestas del listado.
+- 2026-05-31 — Editar/eliminar mensaje (solo Baileys): `services.edit_message`/`delete_message` + acciones + botones en chat.
+- 2026-05-31 — Fase 1.2 Snooze + estados: UI completa (dropdown en chat: pendiente/resuelta/posponer/reabrir).
+- 2026-05-31 — Fase 1.4 Campos personalizados de contacto: modelos `CampoPersonalizadoContacto`/`ValorCampoContacto` + admin + sección en el form de contacto. COMPLETO.
+- PENDIENTE — Migraciones: `makemigrations whatsapp` (campos nuevos: `proximo_intento`, `estado_atencion`, `snooze_hasta`, modelo `RespuestaRapidaGlobal`).

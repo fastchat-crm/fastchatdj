@@ -225,6 +225,22 @@
                                     <i class="fa fa-lock me-2 text-warning" id="icon-bloquear-cierre"></i>
                                     <span id="label-bloquear-cierre">Bloquear cierre automático</span>
                                 </a>
+                                <div class="dropdown-divider"></div>
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="setEstadoAtencion('pendiente')" title="Marcar como pendiente">
+                                    <i class="fa fa-hourglass-half me-2 text-warning"></i> Marcar pendiente
+                                </a>
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="setEstadoAtencion('resuelta')" title="Marcar como resuelta">
+                                    <i class="fa fa-circle-check me-2 text-success"></i> Marcar resuelta
+                                </a>
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="posponerConversacion(60)" title="Posponer 1 hora">
+                                    <i class="fa fa-clock me-2 text-secondary"></i> Posponer 1h
+                                </a>
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="posponerConversacion(240)" title="Posponer 4 horas">
+                                    <i class="fa fa-clock me-2 text-secondary"></i> Posponer 4h
+                                </a>
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="reabrirConversacion()" title="Reabrir (quitar pospuesta/estado)">
+                                    <i class="fa fa-rotate-left me-2 text-primary"></i> Reabrir
+                                </a>
                                 <a class="dropdown-item d-none" href="javascript:void(0)" id="btn-reiniciar-flujo"
                                    onclick="reiniciarFlujoChatbot()"
                                    title="Reiniciar el flujo del chatbot tradicional desde el nodo de inicio">
@@ -406,7 +422,7 @@
                                 </div>
 
                     <input type="text" class="form-control border-0 cm-text-input" name="mensaje" id="footer-mensaje-input"
-                           placeholder="Escribe un mensaje...">
+                           placeholder="Escribe un mensaje...  (usa /atajo para respuestas rápidas)">
 
                     <button type="submit" id="footer-send-btn" class="cm-send-btn">
                         <i class="fa fa-paper-plane"></i>
@@ -414,6 +430,8 @@
                 </div>
             </form>
         </div>
+
+        {{ atajos_globales|json_script:"atajos-globales-data" }}
 
         <div id="offline-overlay" class="offline-overlay d-none">
             <div class="offline-overlay-card">
@@ -962,6 +980,30 @@
         bootstrap.Modal.getOrCreateInstance(modalEl).show();
     }
 
+    function setEstadoAtencion(estado) {
+        const id = $('#conversacion-id').val();
+        if (!id) return;
+        $.post('', { action: 'cambiar_estado_atencion', pk: id, estado: estado, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
+            .done(function (r) { if (r.error) { alertaWarning(r.message || 'No se pudo cambiar el estado.'); } })
+            .fail(function () { alertaWarning('Error de red.'); });
+    }
+
+    function posponerConversacion(minutos) {
+        const id = $('#conversacion-id').val();
+        if (!id) return;
+        $.post('', { action: 'posponer_conversacion', pk: id, minutos: minutos, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
+            .done(function (r) { if (r.error) { alertaWarning(r.message || 'No se pudo posponer.'); } })
+            .fail(function () { alertaWarning('Error de red.'); });
+    }
+
+    function reabrirConversacion() {
+        const id = $('#conversacion-id').val();
+        if (!id) return;
+        $.post('', { action: 'reabrir_conversacion', pk: id, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
+            .done(function (r) { if (r.error) { alertaWarning(r.message || 'No se pudo reabrir.'); } })
+            .fail(function () { alertaWarning('Error de red.'); });
+    }
+
     $(document).on('click', '#btn-confirmar-reiniciar-flujo', function() {
         const id = $('#conversacion-id').val();
         if (!id) return;
@@ -1074,6 +1116,8 @@
                     if (data.from_me) {
                         setTimeout(refrescarEstadisticas, 1000);
                     }
+                } else if (data.type === 'presencia_agente') {
+                    mostrarPresenciaAgente(data);
                 }
             };
 
@@ -1831,6 +1875,68 @@
               event: "sendPresenceUpdate"
             }));
             quitPresenceUpdate();
+            notificarAgenteEscribiendo();
+        });
+
+        let _presenciaTimer = null;
+        let _presenciaActiva = false;
+        function notificarAgenteEscribiendo() {
+            if (!chatSocket) return;
+            if (!_presenciaActiva) {
+                chatSocket.send(JSON.stringify({ event: 'agenteEscribiendo' }));
+                _presenciaActiva = true;
+            }
+            clearTimeout(_presenciaTimer);
+            _presenciaTimer = setTimeout(function () {
+                if (chatSocket) { chatSocket.send(JSON.stringify({ event: 'agenteDejoEscribir' })); }
+                _presenciaActiva = false;
+            }, 4000);
+        }
+
+        let _presenciaOcultarTimer = null;
+        function mostrarPresenciaAgente(data) {
+            let banner = document.getElementById('agente-presencia');
+            const cont = document.getElementById('mensajes-container');
+            if (!cont) return;
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'agente-presencia';
+                banner.className = 'alert alert-warning py-1 px-2 small mb-1 d-none';
+                cont.parentNode.insertBefore(banner, cont);
+            }
+            if (data.activo) {
+                banner.innerHTML = '<i class="fa fa-user-pen me-1"></i><strong>' +
+                    (data.nombre || 'Otro agente') + '</strong> está respondiendo…';
+                banner.classList.remove('d-none');
+                clearTimeout(_presenciaOcultarTimer);
+                _presenciaOcultarTimer = setTimeout(function () {
+                    banner.classList.add('d-none');
+                }, 8000);
+            } else {
+                banner.classList.add('d-none');
+            }
+        }
+
+        let _atajosGlobales = {};
+        (function cargarAtajosGlobales() {
+            try {
+                const el = document.getElementById('atajos-globales-data');
+                if (!el) return;
+                (JSON.parse(el.textContent || '[]') || []).forEach(function (a) {
+                    if (a && a.atajo) { _atajosGlobales[String(a.atajo).toLowerCase()] = a.cuerpo || ''; }
+                });
+            } catch (e) { /* sin atajos */ }
+        })();
+
+        $(document).on('keyup', '#footer-mensaje-input', function () {
+            const inp = this;
+            const m = (inp.value || '').match(/^\/(\w+)\s$/);
+            if (!m) return;
+            const cuerpo = _atajosGlobales[m[1].toLowerCase()];
+            if (cuerpo !== undefined) {
+                inp.value = cuerpo;
+                inp.focus();
+            }
         });
 
         // Enviar mensaje
@@ -1870,6 +1976,10 @@
                         form.find('input[name="archivo"]').val('');
                         $('#footer-file-preview').addClass('d-none');
 
+                        if (response.fallido) {
+                            alertaWarning(response.message || 'El mensaje no se envió y quedó como fallido. Puedes reenviarlo.');
+                        }
+
                         // Scroll al final
                         setTimeout(() => {
                             scrollToBottom();
@@ -1893,6 +2003,81 @@
                         .html('<i class="fa fa-paper-plane"></i>');
                 }
             });
+        });
+
+        $(document).on('click', '.btn-reenviar', function () {
+            const btn = $(this);
+            const msgId = btn.data('msg-id');
+            const original = btn.html();
+            btn.prop('disabled', true)
+                .html('<span class="spinner-border spinner-border-sm" role="status" style="width:11px;height:11px;border-width:2px;"></span>');
+            const fd = new FormData();
+            fd.append('action', 'reenviar_mensaje');
+            fd.append('id', msgId);
+            fd.append('csrfmiddlewaretoken', $('input[name="csrfmiddlewaretoken"]').first().val());
+            $.ajax({
+                url: '/whatsapp/conversaciones/',
+                type: 'POST',
+                data: fd,
+                processData: false,
+                contentType: false,
+                success: function (response) {
+                    if (!response.error && response.mensaje_html) {
+                        btn.closest('.msg-row').replaceWith(response.mensaje_html);
+                    } else {
+                        alertaWarning('No se pudo reenviar: ' + (response.message || 'error'));
+                        btn.prop('disabled', false).html(original);
+                        if (response.requiere_plantilla && $('#plantillas-btn').hasClass('visible')) {
+                            $('#plantillas-btn').trigger('click');
+                        }
+                    }
+                },
+                error: function () {
+                    alertaWarning('Error de red al reenviar.');
+                    btn.prop('disabled', false).html(original);
+                }
+            });
+        });
+
+        function _postAccionMensaje(extraData, btn, original) {
+            const fd = new FormData();
+            Object.keys(extraData).forEach(k => fd.append(k, extraData[k]));
+            fd.append('csrfmiddlewaretoken', $('input[name="csrfmiddlewaretoken"]').first().val());
+            $.ajax({
+                url: '/whatsapp/conversaciones/',
+                type: 'POST', data: fd, processData: false, contentType: false,
+                success: function (response) {
+                    if (!response.error && response.mensaje_html) {
+                        btn.closest('.msg-row').replaceWith(response.mensaje_html);
+                    } else {
+                        alertaWarning(response.message || 'No se pudo procesar.');
+                        if (btn) btn.prop('disabled', false).html(original);
+                    }
+                },
+                error: function () {
+                    alertaWarning('Error de red.');
+                    if (btn) btn.prop('disabled', false).html(original);
+                }
+            });
+        }
+
+        $(document).on('click', '.btn-editar-mensaje', function () {
+            const btn = $(this);
+            const actual = btn.data('texto') || '';
+            const nuevo = window.prompt('Editar mensaje (solo Baileys):', actual);
+            if (nuevo === null) return;
+            if (!nuevo.trim()) { alertaWarning('El texto no puede estar vacío.'); return; }
+            const original = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" style="width:11px;height:11px;border-width:2px;"></span>');
+            _postAccionMensaje({ action: 'editar_mensaje', id: btn.data('msg-id'), texto: nuevo }, btn, original);
+        });
+
+        $(document).on('click', '.btn-eliminar-mensaje', function () {
+            const btn = $(this);
+            if (!window.confirm('¿Eliminar este mensaje para todos? (solo Baileys)')) return;
+            const original = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" style="width:11px;height:11px;border-width:2px;"></span>');
+            _postAccionMensaje({ action: 'eliminar_mensaje', id: btn.data('msg-id') }, btn, original);
         });
 
         function actualizarMensaje(mensajeId, accion, nuevoContenido) {
@@ -2121,9 +2306,10 @@
                     var $refBadge = $('#referral-badge');
                     var ref = response.referral;
                     if (ref) {
-                        // Label corto: usa headline si hay, sino "Anuncio"
-                        var label = ref.headline ? ref.headline.slice(0, 40) : 'Anuncio';
-                        if (ref.headline && ref.headline.length > 40) label += '…';
+                        // Label corto: campaña > headline > "Anuncio"
+                        var labelBase = ref.campaign_name || ref.headline || 'Anuncio';
+                        var label = labelBase.slice(0, 40);
+                        if (labelBase.length > 40) label += '…';
                         $('#referral-label').text(label);
 
                         // Link al post/ad source si Meta lo entrega
@@ -2135,12 +2321,15 @@
 
                         // Tooltip rico con la info completa
                         var tooltipHtml = '';
-                        if (ref.headline) tooltipHtml += '<b>' + $('<div>').text(ref.headline).html() + '</b><br>';
-                        if (ref.body)     tooltipHtml += '<small>' + $('<div>').text(ref.body).html() + '</small><br>';
-                        if (ref.source_type)   tooltipHtml += '<i>Fuente:</i> ' + ref.source_type + '<br>';
-                        if (ref.media_type)    tooltipHtml += '<i>Media:</i> ' + ref.media_type + '<br>';
-                        if (ref.campaign_id)   tooltipHtml += '<i>Campaign:</i> <code>' + ref.campaign_id + '</code><br>';
-                        if (ref.ad_id)         tooltipHtml += '<i>Ad:</i> <code>' + ref.ad_id + '</code><br>';
+                        var escTip = function (s) { return $('<div>').text(s == null ? '' : s).html(); };
+                        if (ref.campaign_name) tooltipHtml += '<b>Campaña:</b> ' + escTip(ref.campaign_name) + '<br>';
+                        if (ref.ad_name)       tooltipHtml += '<b>Anuncio:</b> ' + escTip(ref.ad_name) + '<br>';
+                        if (ref.headline) tooltipHtml += '<b>' + escTip(ref.headline) + '</b><br>';
+                        if (ref.body)     tooltipHtml += '<small>' + escTip(ref.body) + '</small><br>';
+                        if (ref.source_type)   tooltipHtml += '<i>Fuente:</i> ' + escTip(ref.source_type) + '<br>';
+                        if (ref.media_type)    tooltipHtml += '<i>Media:</i> ' + escTip(ref.media_type) + '<br>';
+                        if (!ref.campaign_name && ref.campaign_id) tooltipHtml += '<i>Campaign:</i> <code>' + escTip(ref.campaign_id) + '</code><br>';
+                        if (!ref.ad_name && ref.ad_id)             tooltipHtml += '<i>Ad:</i> <code>' + escTip(ref.ad_id) + '</code><br>';
                         if (!tooltipHtml) tooltipHtml = 'Vino de un anuncio de Meta';
 
                         // Recrear tooltip de Bootstrap (destruye el viejo si existe)

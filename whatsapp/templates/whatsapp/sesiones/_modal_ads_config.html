@@ -1,0 +1,99 @@
+<div class="detail-wrap" data-ads-sesion="{{ sesion.id }}">
+  <div class="detail-head">
+    <div>
+      <h5>Anuncios de Meta — {{ sesion.nombre }}</h5>
+      <p class="muted">Conectá la cuenta publicitaria para medir las conversaciones que entran por anuncios Click-to-WhatsApp (nombres de campaña, gasto, resultados).</p>
+    </div>
+    <button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>
+  </div>
+
+  <div class="detail-body">
+    <div class="form-row">
+      <label>Cuenta publicitaria (act_XXXX)</label>
+      <input type="text" id="ads-account-id" value="{{ ad_account_id }}" placeholder="act_1234567890">
+      <small class="muted">La encontrás en el Administrador de Anuncios → Configuración de la cuenta.</small>
+    </div>
+
+    <div class="form-row">
+      <label>Token de anuncios (opcional)</label>
+      <input type="password" id="ads-token" placeholder="{% if tiene_token_ads %}•••••• (ya hay uno guardado){% else %}Pegá un token con scope ads_read{% endif %}">
+      <small class="muted">Dejalo vacío para reusar el token de WhatsApp (debe tener permiso <code>ads_read</code>). Pegá uno solo si el de WhatsApp no alcanza.</small>
+    </div>
+
+    <div id="ads-test-resultado" class="alert d-none mt-2 mb-0"></div>
+
+    <div class="detail-actions">
+      <button type="button" class="conex-btn conex-btn-light" id="ads-probar-btn">
+        <i class="fa fa-satellite-dish me-1"></i> Probar conexión
+      </button>
+      <button type="button" class="conex-btn conex-btn-primary" id="ads-guardar-btn">
+        <i class="fa fa-save me-1"></i> Guardar
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var wrap = document.querySelector('.detail-wrap[data-ads-sesion]');
+    if (!wrap) return;
+    var sesionId = wrap.getAttribute('data-ads-sesion');
+
+    function csrf() {
+      var el = document.querySelector('input[name=csrfmiddlewaretoken]');
+      return el ? el.value : '';
+    }
+
+    function post(action, params) {
+      var fd = new FormData();
+      fd.append('csrfmiddlewaretoken', csrf());
+      fd.append('action', action);
+      fd.append('sesion_id', sesionId);
+      Object.keys(params || {}).forEach(function (k) { fd.append(k, params[k]); });
+      return fetch('/whatsapp/sesiones/', {
+        method: 'POST', body: fd, credentials: 'same-origin',
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+      }).then(function (r) { return r.json(); });
+    }
+
+    function mostrarResultado(tipo, html) {
+      var box = document.getElementById('ads-test-resultado');
+      box.className = 'alert mt-2 mb-0 alert-' + (tipo === 'ok' ? 'success' : 'danger');
+      box.innerHTML = html;
+      box.classList.remove('d-none');
+    }
+
+    document.getElementById('ads-probar-btn').addEventListener('click', function () {
+      if (typeof pantallaespera === 'function') pantallaespera();
+      post('ads_guardar_config', {
+        ad_account_id: document.getElementById('ads-account-id').value,
+        ads_access_token: document.getElementById('ads-token').value,
+      }).then(function () {
+        return post('ads_probar', {});
+      }).then(function (r) {
+        setTimeout($.unblockUI, 1);
+        if (r.error) { mostrarResultado('err', '<i class="fa fa-times-circle me-1"></i>' + (r.message || 'No se pudo conectar.')); return; }
+        var det = [];
+        if (r.name) det.push('<b>' + r.name + '</b>');
+        if (r.currency) det.push(r.currency);
+        if (r.amount_spent) det.push('Gastado: ' + r.amount_spent);
+        mostrarResultado('ok', '<i class="fa fa-check-circle me-1"></i>Conexión OK. ' + det.join(' · '));
+      }).catch(function () {
+        setTimeout($.unblockUI, 1);
+        mostrarResultado('err', 'Error de conexión.');
+      });
+    });
+
+    document.getElementById('ads-guardar-btn').addEventListener('click', function () {
+      if (typeof pantallaespera === 'function') pantallaespera();
+      post('ads_guardar_config', {
+        ad_account_id: document.getElementById('ads-account-id').value,
+        ads_access_token: document.getElementById('ads-token').value,
+      }).then(function (r) {
+        setTimeout($.unblockUI, 1);
+        if (r.error) { if (typeof mensajeWarning === 'function') mensajeWarning(r.message || 'Error'); return; }
+        if (typeof mensajeExito === 'function') mensajeExito(r.message || 'Guardado'); else if (window.toastr) toastr.success(r.message || 'Guardado');
+      });
+    });
+  })();
+</script>

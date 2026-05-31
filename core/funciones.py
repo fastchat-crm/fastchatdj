@@ -999,6 +999,31 @@ def logCron(proceso, detalle, exito=False):
             detalle=detalle,
             conexito=exito
         )
+        # Aviso por correo solo ante fallo (y solo cuando es un log nuevo, así la
+        # deduplicación de 3h evita spam). No agrega crons: es event-driven.
+        if not exito:
+            _notificar_fallo_cron(proceso, detalle)
+
+
+def _notificar_fallo_cron(proceso, detalle):
+    """Manda un correo a los responsables cuando un proceso/cron falla.
+    Best-effort: si el correo falla, no rompe el logueo del cron."""
+    try:
+        from django.conf import settings
+        from django.core.mail import send_mail
+        destinatarios = getattr(settings, 'CHATBOT_ERROR_NOTIFY_EMAILS', []) or []
+        if not destinatarios:
+            return
+        asunto = f'[fastchat] Falló el proceso: {proceso}'
+        cuerpo = (
+            f'El proceso "{proceso}" reportó un fallo.\n\n'
+            f'Detalle:\n{detalle}\n\n'
+            f'Fecha: {timezone.now():%Y-%m-%d %H:%M}\n\n'
+            f'Aviso automático. Se deduplica: máximo 1 correo cada 3h por el mismo error.'
+        )
+        send_mail(asunto, cuerpo, settings.DEFAULT_FROM_EMAIL, destinatarios, fail_silently=True)
+    except Exception:
+        pass
 
 
 def notificacion(titulo, cuerpo, destinatario, url, prioridad, tipo=1, request=None):

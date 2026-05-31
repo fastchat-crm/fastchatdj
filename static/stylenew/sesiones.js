@@ -1122,6 +1122,11 @@
                 if (!r.ok) return mostrarToast(r.message || 'No se pudo abrir.', 'err');
                 abrirDetail(r.html);
             });
+        } else if (action === 'ads-config') {
+            fetchPartial('ads_config_modal', sesionId).then(function (r) {
+                if (!r.ok) return mostrarToast(r.message || 'No se pudo abrir.', 'err');
+                abrirDetail(r.html);
+            });
         } else if (action === 'test-eco') {
             abrirEco(sesionId, nombre);
         } else if (action === 'cambiar-foto') {

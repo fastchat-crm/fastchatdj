@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/stylenew/docs.css">
+{% endblock %}
+
+{% block content %}
+<div class="docs-page">
+
+    <aside class="docs-sidebar">
+        <div class="docs-sidebar-search">
+            <i class="fa fa-search"></i>
+            <input type="text" placeholder="Buscar en la documentación...">
+        </div>
+        {% for seccion in sidebar %}
+            <div class="docs-sb-group">
+                <h6 class="docs-sb-title">{{ seccion.titulo }}</h6>
+                {% if seccion.items %}
+                    <ul class="docs-sb-list">
+                        {% for item in seccion.items %}
+                            <li>
+                                <a href="/seguridad/documentacion/?pagina={{ item.slug }}"
+                                   class="docs-sb-item {% if item.slug == slug_actual %}active{% endif %}">
+                                    {{ item.nombre }}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <span class="docs-sb-empty">Próximamente</span>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </aside>
+
+    <main class="docs-main">
+
+        <nav class="docs-breadcrumb" aria-label="breadcrumb">
+            {% for crumb in breadcrumb %}
+                {% if crumb.url %}
+                    <a href="{{ crumb.url }}">{{ crumb.nombre }}</a>
+                {% else %}
+                    <span>{{ crumb.nombre }}</span>
+                {% endif %}
+                {% if not forloop.last %}<i class="fa fa-chevron-right docs-bc-sep"></i>{% endif %}
+            {% endfor %}
+        </nav>
+
+        <article class="docs-article">
+
+            <header class="docs-hero">
+                <h1><i class="fa fa-plug me-2 text-primary"></i> Webhooks</h1>
+                <p class="docs-hero-lead">
+                    Un webhook es un aviso automático entre sistemas vía HTTP. fastchat usa dos tipos:
+                    <strong>entrantes</strong> (otros nos avisan, ej. llegó un mensaje de WhatsApp) y
+                    <strong>salientes</strong> (nosotros avisamos a apps externas cuando pasa algo).
+                </p>
+            </header>
+
+            <section class="mb-4">
+                <h2 class="h4 mb-2"><i class="fa fa-arrow-right-to-bracket text-success me-2"></i>Webhooks entrantes</h2>
+                <p class="text-muted">Otros sistemas nos mandan un <code>POST</code>. Así recibimos mensajes y eventos.</p>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>URL</th>
+                                <th>Quién lo llama</th>
+                                <th>Función</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1</td>
+                                <td><code>/whatsapp/webhook_handler/</code></td>
+                                <td>Node Baileys</td>
+                                <td>Eventos de WhatsApp <strong>no oficial</strong>: mensajes entrantes, código QR, conexión lista, confirmaciones (ACK).</td>
+                            </tr>
+                            <tr>
+                                <td>2</td>
+                                <td><code>/whatsapp/webhook_handler/batch/</code></td>
+                                <td>Node Baileys</td>
+                                <td>Igual que el anterior pero recibe <strong>varios eventos en lote</strong> (más eficiente).</td>
+                            </tr>
+                            <tr>
+                                <td>3</td>
+                                <td><code>/whatsapp/meta_webhook/</code></td>
+                                <td>Meta Cloud API</td>
+                                <td>WhatsApp <strong>oficial</strong>: mensajes, estados (enviado / entregado / leído) y cambios de estado de plantillas. Valida firma HMAC e identifica la sesión por <code>phone_number_id</code>.</td>
+                            </tr>
+                            <tr>
+                                <td>4</td>
+                                <td><code>/whatsapp/instagram_webhook/</code></td>
+                                <td>Meta (Instagram)</td>
+                                <td>Mensajes directos (DM) de <strong>Instagram</strong>.</td>
+                            </tr>
+                            <tr>
+                                <td>5</td>
+                                <td><code>/whatsapp/messenger_webhook/</code></td>
+                                <td>Meta (Messenger)</td>
+                                <td>Mensajes de <strong>Facebook Messenger</strong>.</td>
+                            </tr>
+                            <tr>
+                                <td>6</td>
+                                <td><code>/whatsapp/heartbeat/</code></td>
+                                <td>Node Baileys</td>
+                                <td>"Latido": el servicio Node avisa periódicamente que <strong>sigue vivo</strong>, para detectar caídas de sesión.</td>
+                            </tr>
+                            <tr>
+                                <td>7</td>
+                                <td><code>/whatsapp/trace/</code></td>
+                                <td>WebService externo</td>
+                                <td>Recibe <strong>trazas / logs</strong> personalizados de un proceso externo, para auditoría.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="alert alert-light border small">
+                    <i class="fa fa-shield-halved text-success me-1"></i>
+                    Los webhooks de Meta llegan firmados con <code>X-Hub-Signature-256</code> (HMAC-SHA256).
+                    fastchat valida la firma con el <em>app secret</em> antes de procesar; si no coincide, rechaza el evento.
+                </div>
+            </section>
+
+            <section class="mb-4">
+                <h2 class="h4 mb-2"><i class="fa fa-arrow-right-from-bracket text-primary me-2"></i>Webhook saliente</h2>
+                <p class="text-muted">fastchat manda un <code>POST</code> a una URL externa cuando ocurre un evento. Es el "Zapier nativo".</p>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Qué</th>
+                                <th>Función</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>8</td>
+                                <td><strong>Webhook saliente</strong> <span class="badge bg-secondary">configurable</span></td>
+                                <td>La URL la define el cliente (no es fija). Se suscribe a eventos (ej. <code>conversacion.nueva</code>, <code>mensaje.entrante</code>) y recibe el JSON cuando ocurren.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <h3 class="h6 mt-3">¿Para qué sirve?</h3>
+                <ul>
+                    <li>Crear automáticamente el lead en tu CRM / sistema de matrículas.</li>
+                    <li>Enviar los datos a Google Sheets, Zapier, Make o n8n sin programar.</li>
+                    <li>Avisar a ventas por Slack / Discord cuando entra un interesado.</li>
+                    <li>Disparar facturación cuando una conversación se marca como cliente.</li>
+                </ul>
+                <h3 class="h6 mt-3">Confiabilidad (backoff)</h3>
+                <p>
+                    Si la URL externa está caída, fastchat reintenta con espera creciente
+                    (1&nbsp;min → 2 → 4… hasta un tope de 6&nbsp;h) y, tras 8 fallos seguidos,
+                    <strong>desactiva</strong> el webhook para no afectar al sistema. Un envío exitoso
+                    reinicia el contador. Cada intento queda registrado. Si definís un <code>secret</code>,
+                    el cuerpo va firmado con HMAC en el header <code>X-FC-Signature</code>.
+                </p>
+                <div class="alert alert-warning small">
+                    <i class="fa fa-circle-info me-1"></i>
+                    El motor del webhook saliente y su backoff ya están construidos. Para activarlo de punta
+                    a punta falta enlazarlo a los eventos del sistema (un paso de configuración técnica).
+                </div>
+            </section>
+
+            <section class="mb-4">
+                <h2 class="h4 mb-2"><i class="fa fa-magnifying-glass-chart text-info me-2"></i>Auditoría (no son webhooks)</h2>
+                <p class="text-muted">Estas son pantallas del panel para <strong>ver</strong> los webhooks, no receptores.</p>
+                <ul>
+                    <li><code>/whatsapp/sesiones/&lt;id&gt;/webhook-log/</code> — eventos Meta recibidos por sesión (procesados / con error).</li>
+                    <li><code>/whatsapp/meta/webhook-hits/</code> — hits HTTP crudos del webhook Meta (status, IP, firma, cuerpo) para depuración técnica.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2 class="h4 mb-2">Resumen</h2>
+                <ul class="mb-0">
+                    <li><strong>Recibir mensajes</strong> de clientes → webhooks 1 a 5 (según canal / proveedor).</li>
+                    <li><strong>Salud del Baileys</strong> → webhook 6 (heartbeat).</li>
+                    <li><strong>Logs externos</strong> → webhook 7 (trace).</li>
+                    <li><strong>Integrar con otras apps</strong> → webhook 8 (saliente).</li>
+                </ul>
+            </section>
+
+        </article>
+    </main>
+</div>
+{% endblock %}

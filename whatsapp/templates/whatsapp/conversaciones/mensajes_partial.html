@@ -85,6 +85,24 @@
                                 <i class="fa fa-check-double text-muted"></i>
                             {% endif %}
                         </span>
+                        {% if mensaje.estado_envio == 'fallido' %}
+                            <button type="button" class="btn btn-link btn-sm p-0 text-danger btn-reenviar"
+                                    data-msg-id="{{ mensaje.id }}" title="Reenviar mensaje">
+                                <i class="fa fa-rotate-right"></i> Reenviar
+                            </button>
+                        {% endif %}
+                        {% if conversacion.sesion.es_baileys and not mensaje.eliminado %}
+                            {% if mensaje.tipo == 'texto' %}
+                                <button type="button" class="btn btn-link btn-sm p-0 text-muted btn-editar-mensaje"
+                                        data-msg-id="{{ mensaje.id }}" data-texto="{{ mensaje.mensaje }}" title="Editar (Baileys)">
+                                    <i class="fa fa-pen"></i>
+                                </button>
+                            {% endif %}
+                            <button type="button" class="btn btn-link btn-sm p-0 text-muted btn-eliminar-mensaje"
+                                    data-msg-id="{{ mensaje.id }}" title="Eliminar para todos (Baileys)">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        {% endif %}
                     </div>
                 </div>
 

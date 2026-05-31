@@ -222,6 +222,17 @@ def _data_json(request, conv_qs, msgs_qs, sesion_id, dias, desde_dt, hasta_dt):
                )
                .order_by('-total')[:20]
     )
+    # Enriquecer con nombres legibles desde la caché (sin pegarle a Meta).
+    try:
+        from .services_ads import nombres_de_anuncios
+        _nombres = nombres_de_anuncios([r['ad_id'] for r in roi_ctwa if r.get('ad_id')])
+        for r in roi_ctwa:
+            info = _nombres.get(r.get('ad_id') or '', {})
+            r['ad_name'] = info.get('ad_name', '')
+            r['campaign_name'] = info.get('campaign_name', '')
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception('Error enriqueciendo roi_ctwa con nombres')
 
     # ----- Pipeline forecast -----
     pipeline_qs = ConversacionEnPipeline.objects.filter(

@@ -5,9 +5,13 @@
     <div class="msg-col" style="min-width:0;">
         <span class="msg-sender msg-sender-agent"><i class="fa fa-headset me-1"></i>Agent</span>
         <div class="msg-bubble msg-bubble-out">
+            {% if mensaje.eliminado %}
+                <p class="mb-0 msg-deleted" style="opacity:.65;font-style:italic;"><i class="fa fa-ban me-1"></i>Mensaje eliminado</p>
+            {% else %}
             {% if mensaje.mensaje %}
                 <p class="mb-0 wa-msg">{{ mensaje.mensaje|whatsapp_format }}</p>
             {% endif %}
+            {% if mensaje.editado %}<span class="msg-edited-badge" style="font-size:.63rem;color:#999;"><i class="fa fa-edit"></i> editado</span>{% endif %}
             {% with url=mensaje.get_archivo_url %}
             {% if url %}
                 {% if mensaje.tipo == 'imagen' %}
@@ -25,11 +29,24 @@
                 {% endif %}
             {% endif %}
             {% endwith %}
+            {% endif %}
             <div class="msg-meta d-flex align-items-center justify-content-end gap-2">
+                {% if mensaje.conversacion.sesion.es_baileys and not mensaje.eliminado %}
+                    {% if mensaje.tipo == 'texto' %}
+                        <button type="button" class="btn btn-link btn-sm p-0 text-muted btn-editar-mensaje"
+                                data-msg-id="{{ mensaje.id }}" data-texto="{{ mensaje.mensaje }}" title="Editar (Baileys)">
+                            <i class="fa fa-pen"></i>
+                        </button>
+                    {% endif %}
+                    <button type="button" class="btn btn-link btn-sm p-0 text-muted btn-eliminar-mensaje"
+                            data-msg-id="{{ mensaje.id }}" title="Eliminar para todos (Baileys)">
+                        <i class="fa fa-trash"></i>
+                    </button>
+                {% endif %}
                 <span class="msg-time">{{ mensaje.fecha|date:"H:i" }}</span>
                 <span class="msg-ack" data-msg-id="{{ mensaje.id }}" style="font-size:.65rem;">
                     {% if mensaje.estado_envio == 'fallido' %}
-                        <i class="fa fa-exclamation-triangle text-danger"></i>
+                        <i class="fa fa-exclamation-triangle text-danger" title="{{ mensaje.error_envio|default:'Fallo de envío' }}"></i>
                     {% elif mensaje.estado_envio == 'leido' %}
                         <i class="fa fa-check-double text-primary" title="Read"></i>
                     {% elif mensaje.estado_envio == 'entregado' %}
@@ -40,6 +57,12 @@
                         <i class="fa fa-clock text-muted"></i>
                     {% endif %}
                 </span>
+                {% if mensaje.estado_envio == 'fallido' %}
+                    <button type="button" class="btn btn-link btn-sm p-0 text-danger btn-reenviar"
+                            data-msg-id="{{ mensaje.id }}" title="Reenviar mensaje">
+                        <i class="fa fa-rotate-right"></i> Reenviar
+                    </button>
+                {% endif %}
             </div>
         </div>
     </div>

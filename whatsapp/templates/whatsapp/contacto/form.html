@@ -20,6 +20,44 @@
 
     {% endif %}
 {% endblock %}
+{% block extra_input %}
+    {% if campos_personalizados %}
+        <div class="col-12 mt-2">
+            <hr>
+            <h6 class="text-muted"><i class="fa fa-sliders me-1"></i> Campos personalizados</h6>
+            <div class="row">
+                {% for cp in campos_personalizados %}
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label small fw-bold mb-1">{{ cp.def.nombre }}</label>
+                        {% if cp.def.tipo == 'opciones' %}
+                            <select name="campo_pers_{{ cp.def.id }}" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                {% for op in cp.def.opciones %}
+                                    <option value="{{ op }}" {% if op == cp.valor %}selected{% endif %}>{{ op }}</option>
+                                {% endfor %}
+                            </select>
+                        {% elif cp.def.tipo == 'booleano' %}
+                            <select name="campo_pers_{{ cp.def.id }}" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                <option value="si" {% if cp.valor == 'si' %}selected{% endif %}>Sí</option>
+                                <option value="no" {% if cp.valor == 'no' %}selected{% endif %}>No</option>
+                            </select>
+                        {% elif cp.def.tipo == 'numero' %}
+                            <input type="number" step="any" name="campo_pers_{{ cp.def.id }}"
+                                   class="form-control form-control-sm" value="{{ cp.valor }}">
+                        {% elif cp.def.tipo == 'fecha' %}
+                            <input type="date" name="campo_pers_{{ cp.def.id }}"
+                                   class="form-control form-control-sm" value="{{ cp.valor }}">
+                        {% else %}
+                            <input type="text" name="campo_pers_{{ cp.def.id }}"
+                                   class="form-control form-control-sm" value="{{ cp.valor }}">
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}
 {% block extra_js %}
     <script>
         $(function () {

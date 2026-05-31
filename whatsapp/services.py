@@ -249,6 +249,47 @@ class WhatsAppService:
                 'error': f"Error de conexión: {str(e)}"
             }
 
+    def edit_message(self, session_id, to, message_id, new_text):
+        """Edita un mensaje ya enviado (solo Baileys). POST /message/edit.
+
+        Manda las claves en camelCase y snake_case para tolerar ambas
+        convenciones del microservicio Node.
+        """
+        data = {
+            'sessionId': session_id, 'session_id': session_id,
+            'to': to,
+            'messageId': message_id, 'message_id': message_id,
+            'newText': new_text, 'new_text': new_text, 'text': new_text,
+        }
+        try:
+            response = requests.post(
+                f"{self.base_url}/message/edit", headers=self.headers, json=data
+            )
+            if response.status_code == 200:
+                return {'success': True}
+            return {'success': False,
+                    'error': f"Error al editar: {response.status_code} - {response.text}"}
+        except Exception as e:
+            return {'success': False, 'error': f"Error de conexión: {str(e)}"}
+
+    def delete_message(self, session_id, to, message_id):
+        """Elimina (revoke) un mensaje ya enviado (solo Baileys). POST /message/delete."""
+        data = {
+            'sessionId': session_id, 'session_id': session_id,
+            'to': to,
+            'messageId': message_id, 'message_id': message_id,
+        }
+        try:
+            response = requests.post(
+                f"{self.base_url}/message/delete", headers=self.headers, json=data
+            )
+            if response.status_code == 200:
+                return {'success': True}
+            return {'success': False,
+                    'error': f"Error al eliminar: {response.status_code} - {response.text}"}
+        except Exception as e:
+            return {'success': False, 'error': f"Error de conexión: {str(e)}"}
+
     def send_presence_update(self, session_id, to):
         """
         Envía un mensaje de texto a través de WhatsApp
