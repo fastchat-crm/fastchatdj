@@ -4,7 +4,7 @@
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
 <link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.9">
 <link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
-<link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.2">
+<link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.3">
 {% endblock %}
 
 {% block content %}
@@ -453,8 +453,12 @@
                             <input type="text" id="rp-edit-titulo" class="form-control form-control-sm" maxlength="80" placeholder="Ej: Saludo inicial">
                         </div>
                         <div class="mb-2">
-                            <label class="form-label small mb-1">Mensaje</label>
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <label class="form-label small mb-0">Mensaje</label>
+                                <button type="button" id="rp-emoji-btn" class="btn btn-sm btn-light py-0" title="Insertar emoji">😊</button>
+                            </div>
                             <textarea id="rp-edit-cuerpo" class="form-control form-control-sm" rows="4" maxlength="4096" placeholder="Texto que se cargará en la caja de mensaje."></textarea>
+                            <div id="rp-emoji-popup" class="rp-emoji-inline d-none"></div>
                         </div>
                         <div class="d-flex justify-content-end gap-2">
                             <button type="button" id="rp-cancelar-btn" class="btn btn-sm btn-light">Cancelar</button>
@@ -1508,11 +1512,13 @@
         }
 
         function _rpMostrarLista() {
+            $('#rp-emoji-popup').addClass('d-none');
             $('#rp-vista-form').addClass('d-none');
             $('#rp-vista-lista').removeClass('d-none');
         }
 
         function _rpMostrarForm(resp) {
+            $('#rp-emoji-popup').addClass('d-none');
             $('#rp-edit-id').val(resp ? resp.id : '');
             $('#rp-edit-titulo').val(resp ? resp.titulo : '');
             if (resp) {
@@ -1565,6 +1571,39 @@
 
         $('#rp-nueva-btn').on('click', function () { _rpMostrarForm(null); });
         $('#rp-cancelar-btn').on('click', _rpMostrarLista);
+
+        var _rpEmojiBuilt = false;
+        function _rpBuildEmojiPicker() {
+            if (_rpEmojiBuilt) return;
+            var popup = document.getElementById('rp-emoji-popup');
+            if (!popup || typeof _emojis === 'undefined') return;
+            var html = '';
+            for (var cat in _emojis) {
+                if (!Object.prototype.hasOwnProperty.call(_emojis, cat)) continue;
+                html += '<div class="emoji-cat-title">' + cat + '</div><div class="emoji-grid">';
+                html += _emojis[cat].map(function (e) { return '<span class="e" data-e="' + e + '">' + e + '</span>'; }).join('');
+                html += '</div>';
+            }
+            popup.innerHTML = html;
+            _rpEmojiBuilt = true;
+        }
+
+        $('#rp-emoji-btn').on('click', function (e) {
+            e.stopPropagation();
+            _rpBuildEmojiPicker();
+            $('#rp-emoji-popup').toggleClass('d-none');
+        });
+
+        $(document).on('click', '#rp-emoji-popup .e', function () {
+            var emoji = this.getAttribute('data-e');
+            if (!emoji) return;
+            var ta = document.getElementById('rp-edit-cuerpo');
+            if (!ta) return;
+            var start = ta.selectionStart, end = ta.selectionEnd, val = ta.value;
+            ta.value = val.slice(0, start) + emoji + val.slice(end);
+            ta.selectionStart = ta.selectionEnd = start + emoji.length;
+            ta.focus();
+        });
 
         $(document).on('click', '#respuestas-list .rp-edit-item', function (e) {
             e.stopPropagation();
