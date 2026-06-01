@@ -1,11 +1,29 @@
 <div class="modal fade" id="modalImportarContactos" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fa fa-file-import me-2"></i>Import contacts</h5>
+                <h5 class="modal-title"><i class="fa fa-file-import me-2"></i>Importar contactos</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
+                <div class="alert alert-info" role="alert">
+                    <div class="d-flex">
+                        <i class="fa fa-circle-info me-2 mt-1"></i>
+                        <div>
+                            <p class="fw-semibold mb-1">Antes de importar, ten en cuenta:</p>
+                            <ul class="mb-2 ps-3">
+                                <li>El archivo debe seguir la estructura del formato: la columna <b>numero</b> es obligatoria, mientras que <b>nombre</b> y <b>etiquetas</b> son opcionales.</li>
+                                <li>El <b>numero</b> debe incluir el código de país y contener entre 9 y 12 dígitos (ej.: <b>593987654321</b>).</li>
+                                <li>Para asignar varias etiquetas, sepáralas con comas (ej.: <b>Cliente,VIP</b>).</li>
+                                <li>Los números que ya existan en la sesión seleccionada se omitirán automáticamente.</li>
+                                <li>Formatos permitidos: .xlsx, .xls o .csv, con un peso máximo de 3 MB.</li>
+                            </ul>
+                            <a href="/static/formatos/formato_cargar_contactos.xlsx" class="btn btn-link btn-sm p-0" download>
+                                <i class="fa fa-download me-1"></i>Descargar formato
+                            </a>
+                        </div>
+                    </div>
+                </div>
                 <form id="formImportarContactos" enctype="multipart/form-data">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="importar">
