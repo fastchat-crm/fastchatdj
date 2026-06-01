@@ -222,6 +222,62 @@ def meta_manual_conectar(request):
 @login_required
 @require_POST
 @csrf_protect
+def meta_registrar_numero(request, sesion_id):
+    """Registra el número en Cloud API (POST /{phone_number_id}/register).
+
+    Un número recién cargado en Cloud API queda en estado PENDING y todo envío
+    falla con (#133010) Account not registered. Este endpoint lo registra con
+    el PIN de verificación en dos pasos (6 dígitos). Tras un registro OK, Meta
+    pasa el número a CONNECTED y los envíos funcionan.
+
+    POST /whatsapp/sesiones/<sesion_id>/registrar-numero/
+    Body: pin=<6 dígitos>
+    """
+    sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
+    if not sesion:
+        return JsonResponse({'ok': False, 'error': 'Sesión no encontrada o no es Meta.'})
+
+    config = getattr(sesion, 'config_meta', None)
+    if not config:
+        return JsonResponse({'ok': False, 'error': 'La sesión no tiene ConfigMeta.'})
+    if not (config.access_token and config.phone_number_id):
+        return JsonResponse({'ok': False, 'error': 'Falta access_token o phone_number_id en la sesión.'})
+
+    pin = (request.POST.get('pin') or '').strip()
+    if not (pin.isdigit() and len(pin) == 6):
+        return JsonResponse({'ok': False, 'error': 'El PIN debe ser de 6 dígitos.'})
+
+    try:
+        r = requests.post(
+            build_graph_url(f'/{config.phone_number_id}/register'),
+            headers={'Authorization': f'Bearer {config.access_token}'},
+            json={'messaging_product': 'whatsapp', 'pin': pin},
+            timeout=15,
+        )
+    except Exception as ex:
+        return JsonResponse({'ok': False, 'error': f'No pude llamar a Graph: {ex}'})
+
+    if r.status_code != 200:
+        try:
+            err = r.json().get('error', {}).get('message', r.text[:300])
+        except Exception:
+            err = r.text[:300]
+        return JsonResponse({'ok': False, 'error': f'Meta rechazó el registro: {err}'})
+
+    # Best-effort: refrescar metadata (status pasa a CONNECTED) desde Graph.
+    try:
+        sincronizar_meta_desde_graph(sesion, config)
+    except Exception as ex:
+        logger.warning("sincronizar_meta_desde_graph falló tras registro: %s", ex)
+
+    logger.info("Número registrado en Cloud API: phone_number_id=%s (sesión %s)",
+                config.phone_number_id, sesion.id)
+    return JsonResponse({'ok': True, 'message': 'Número registrado en Cloud API. Ya podés enviar mensajes.'})
+
+
+@login_required
+@require_POST
+@csrf_protect
 def meta_test_message(request, sesion_id):
     """Envía un mensaje de eco/prueba desde una sesión Meta a un número destino.
 

@@ -129,10 +129,20 @@ def _verificar_webhook(request):
                        (token or '')[:8])
         return HttpResponse('forbidden', content_type='text/plain', status=403)
 
-    config.webhook_verificado_en = timezone.now()
+    # El webhook de Meta es a nivel APP (un solo endpoint + app_secret org-level
+    # compartido por todas las WABAs). Por eso Meta solo expone un verify token
+    # en el panel, pero cada ConfigMeta guarda el suyo. Un handshake exitoso
+    # verifica el endpoint para TODAS las sesiones, no solo la que casó el token
+    # — así el diagnóstico no deja números en "Pendiente" para siempre.
+    ahora = timezone.now()
+    ConfigMeta.objects.filter(
+        webhook_verificado_en__isnull=True,
+    ).exclude(pk=config.pk).update(webhook_verificado_en=ahora)
+    config.webhook_verificado_en = ahora
     config.save(update_fields=['webhook_verificado_en'])
 
-    logger.info("Meta webhook verificado para ConfigMeta id=%s (WABA %s)",
+    logger.info("Meta webhook verificado (handshake casó ConfigMeta id=%s, WABA %s); "
+                "marcadas todas las sesiones pendientes como verificadas.",
                 config.id, config.waba_id)
     return HttpResponse(challenge, content_type='text/plain', status=200)
 

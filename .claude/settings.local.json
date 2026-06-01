@@ -123,7 +123,12 @@
       "Bash(Select-Object Name)",
       "Bash(Get-ChildItem -Path \"C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\\\\whatsapp\" -Recurse -File)",
       "Bash(powershell.exe -NoProfile -Command \"Add-Content -Path 'C:\\\\DESARROLLO_PROYECTOS\\\\fastchat\\\\fastchatdj\\\\requirements.txt' -Value 'sentry-sdk==2.20.0' -Encoding Unicode\")",
-      "PowerShell(Set-Content *)"
+      "PowerShell(Set-Content *)",
+      "Bash(pycheck whatsapp/meta_manual_view.py whatsapp/urls.py)",
+      "PowerShell(python -m py_compile whatsapp/meta_manual_view.py whatsapp/urls.py; if \\($?\\) { \"OK sintaxis\" })",
+      "PowerShell(python -m py_compile whatsapp/meta_webhook_view.py; if \\($?\\) { \"OK sintaxis\" })",
+      "PowerShell(python -m py_compile whatsapp/meta_diagnostico_view.py whatsapp/urls.py; if \\($?\\) { \"OK sintaxis\" })",
+      "PowerShell(python -m py_compile whatsapp/meta_diagnostico_view.py whatsapp/meta_manual_view.py whatsapp/meta_webhook_view.py whatsapp/urls.py; if \\($?\\) { \"OK sintaxis Python\" })"
     ]
   },
   "hooks": {

@@ -222,12 +222,38 @@ def meta_diagnostico(request, sesion_id: int):
     salud_total_ok = sum(1 for s in salud if s['ok'])
     salud_total = len(salud)
 
+    # ── Datos para el panel de webhook (FIX 2) + detalle de la sesión ──
+    from django.urls import reverse
+    from meta.credenciales import get_meta_app_credentials
+
+    webhook_url = request.build_absolute_uri(reverse('whatsapp_meta_webhook'))
+    try:
+        meta_app_id, _meta_app_secret = get_meta_app_credentials()
+    except Exception:
+        meta_app_id, _meta_app_secret = '', ''
+    meta_app_secret_ok = bool(_meta_app_secret)
+
+    def _mask_token(tok) -> str:
+        """Enmascara credenciales: muestra solo los últimos 4 caracteres."""
+        tok = str(tok or '')
+        if not tok:
+            return ''
+        return f'••••{tok[-4:]}' if len(tok) > 4 else '••••'
+
+    access_token_mask = _mask_token(config.access_token) if config else ''
+    ads_access_token_mask = _mask_token(config.ads_access_token) if config else ''
+
     contexto = {
         'titulo':       f'Diagnóstico · {sesion.nombre or sesion.numero or "sesión"}',
         'descripcion':  'Estado completo de la conexión Meta Cloud API.',
         'ruta':         request.path,
         'sesion':       sesion,
         'config':       config,
+        'webhook_url':            webhook_url,
+        'meta_app_id':            meta_app_id,
+        'meta_app_secret_ok':     meta_app_secret_ok,
+        'access_token_mask':      access_token_mask,
+        'ads_access_token_mask':  ads_access_token_mask,
         'phone_info':   phone_info,
         'subscribed':   subscribed,
         'eventos_24h':            eventos_24h,
@@ -275,3 +301,69 @@ def meta_suscribir_waba_action(request, sesion_id: int):
     if res.get('ok'):
         return JsonResponse({'ok': True, 'message': 'WABA suscrita correctamente.'})
     return JsonResponse({'ok': False, 'error': res.get('error') or 'Meta rechazó la suscripción.'})
+
+
+@login_required
+def meta_configurar_webhook_action(request, sesion_id: int):
+    """Endpoint AJAX: configura el webhook de la Meta App vía Graph (FIX 2).
+
+    Hace POST /{app_id}/subscriptions con object=whatsapp_business_account,
+    callback_url y verify_token. Esto equivale al botón "Verify and Save" del
+    panel de Meta: al recibirlo, Meta dispara el handshake GET contra nuestro
+    endpoint, que marca todas las sesiones como verificadas.
+
+    El webhook es a nivel APP, así que con configurarlo una vez alcanza para
+    todos los números. Usa las credenciales App-level (app_id/app_secret) del
+    singleton CredencialMetaApp.
+    """
+    from django.http import JsonResponse
+    from django.urls import reverse
+    from meta.credenciales import get_meta_app_credentials
+
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Solo POST.'})
+
+    sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
+    if not sesion:
+        return JsonResponse({'ok': False, 'error': 'Sesión no encontrada o no es Meta.'})
+    config = getattr(sesion, 'config_meta', None)
+    if not config:
+        return JsonResponse({'ok': False, 'error': 'La sesión no tiene ConfigMeta.'})
+    if not config.webhook_verify_token:
+        return JsonResponse({'ok': False, 'error': 'La sesión no tiene verify token.'})
+
+    app_id, app_secret = get_meta_app_credentials()
+    if not (app_id and app_secret):
+        return JsonResponse({
+            'ok': False,
+            'error': 'Faltan App ID / App Secret de la Meta App. Cargalos en Seguridad → Credenciales Meta App.',
+        })
+
+    callback_url = request.build_absolute_uri(reverse('whatsapp_meta_webhook'))
+    try:
+        r = requests.post(
+            build_graph_url(f'/{app_id}/subscriptions'),
+            params={
+                'object': 'whatsapp_business_account',
+                'callback_url': callback_url,
+                'verify_token': config.webhook_verify_token,
+                'fields': 'messages,message_template_status_update',
+                'access_token': f'{app_id}|{app_secret}',
+            },
+            timeout=15,
+        )
+    except Exception as ex:
+        return JsonResponse({'ok': False, 'error': f'No pude llamar a Graph: {ex}'})
+
+    if r.status_code != 200:
+        try:
+            err = r.json().get('error', {}).get('message', r.text[:300])
+        except Exception:
+            err = r.text[:300]
+        return JsonResponse({'ok': False, 'error': f'Meta rechazó la configuración: {err}'})
+
+    logger.info("Webhook app-level configurado vía Graph (app_id=%s, callback=%s)", app_id, callback_url)
+    return JsonResponse({
+        'ok': True,
+        'message': 'Webhook configurado en Meta. El handshake debería marcar las sesiones como verificadas.',
+    })
