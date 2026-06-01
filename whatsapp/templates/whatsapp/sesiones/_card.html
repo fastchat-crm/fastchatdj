@@ -257,6 +257,12 @@
                 <i class="fa fa-qrcode"></i> Escanear QR
             </button>
         {% endif %}
+        {% if sesion.es_meta and sesion.config_meta and not sesion.config_meta.webhook_verificado_en %}
+            <button type="button" class="btn-quick btn-quick-warn" data-action="post-conexion"
+                    title="Faltan pasos para dejar el número en producción">
+                <i class="fa fa-list-check"></i> Completar configuración
+            </button>
+        {% endif %}
     </div>
 
 </div>

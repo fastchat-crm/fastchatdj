@@ -15,6 +15,20 @@
         </div>
     </div>
 
+    <div class="pc-critico">
+        <div class="pc-critico-icon"><i class="fa fa-triangle-exclamation"></i></div>
+        <div class="pc-critico-body">
+            <h6>Paso crítico — Registrar el número en Cloud API</h6>
+            <p>Si los envíos fallan con <code>(#133010) Account not registered</code>, el número está
+                en estado <b>PENDING</b> y falta registrarlo con el PIN de 6 dígitos. Hacelo con un click
+                desde el <b>Diagnóstico</b> de la sesión (botón "Registrar número"). Sin este paso no se
+                envían ni reciben mensajes.</p>
+            <a href="/whatsapp/sesiones/{{ sesion.id }}/diagnostico/" class="pc-open-btn">
+                <i class="fa fa-stethoscope"></i> Ir al Diagnóstico para registrar
+            </a>
+        </div>
+    </div>
+
     <ol class="pc-steps">
 
         <li class="pc-step {% if cfg.webhook_verificado_en %}is-done{% endif %}">
@@ -52,6 +66,9 @@
                         <i class="fa fa-up-right-from-square"></i> Abrir Webhook en Meta
                     </a>
                 {% endif %}
+                <p class="pc-where mt-2"><i class="fa fa-bolt"></i> <b>Atajo:</b> el
+                    <a href="/whatsapp/sesiones/{{ sesion.id }}/diagnostico/">Diagnóstico</a> tiene un botón
+                    "Configurar webhook en Meta" que hace este paso con un click (no hace falta tocar el panel).</p>
             </div>
         </li>
 

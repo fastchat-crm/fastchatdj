@@ -3052,6 +3052,27 @@
 }
 .pc-tip i { color: #ca8a04; margin-top: 2px; font-size: 1rem; }
 
+.pc-critico {
+    display: flex;
+    gap: .75rem;
+    align-items: flex-start;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #7f1d1d;
+    padding: .85rem 1rem;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+}
+.pc-critico-icon i { color: #dc2626; font-size: 1.3rem; margin-top: 2px; }
+.pc-critico-body h6 { margin: 0 0 .35rem 0; font-size: .9rem; font-weight: 700; }
+.pc-critico-body p { margin: 0 0 .6rem 0; font-size: .84rem; line-height: 1.5; }
+.pc-critico-body code {
+    background: rgba(220, 38, 38, .12);
+    padding: 0 .3rem;
+    border-radius: 4px;
+    font-size: .8rem;
+}
+
 @media (max-width: 600px) {
     .pc-fields-2col li { flex: 0 0 100%; }
     .pc-step { padding: .85rem .9rem; }
