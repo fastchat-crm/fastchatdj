@@ -356,9 +356,10 @@
         if (valConectar) valConectar.disabled = true;
     }
 
-    function valRenderOk(data) {
+    function valRenderOk(data, modo) {
+        var esRevalidar = modo === 'revalidar';
         if (valStatusDot) valStatusDot.className = 'man-val-status-dot is-ok';
-        if (valTitle) valTitle.textContent = 'Credenciales válidas';
+        if (valTitle) valTitle.textContent = esRevalidar ? 'Credenciales revalidadas' : 'Credenciales válidas';
 
         var qrColor = (data.quality_rating || 'UNKNOWN').toLowerCase();
         var qrBadge = qrColor === 'green' ? 'is-green'
@@ -380,6 +381,9 @@
             rows += '<div class="man-val-row"><span class="man-val-key"><i class="fa fa-star"></i> Quality rating</span><span class="man-val-val"><span class="man-val-pill ' + qrBadge + '">' + data.quality_rating + '</span></span></div>';
         }
 
+        var hint = esRevalidar
+            ? '<div class="man-val-hint"><i class="fa fa-circle-check"></i> Los datos quedaron sincronizados con Meta. Podés cerrar esta ventana.</div>'
+            : '<div class="man-val-hint"><i class="fa fa-lightbulb"></i> Pulsá <b>Conectar sesión</b> para guardar y empezar a recibir mensajes.</div>';
         if (valBody) {
             valBody.innerHTML =
                 '<div class="man-val-msg is-ok">' +
@@ -387,9 +391,9 @@
                 '<div><b>Meta confirmó los IDs y el token.</b><p>Lo que detectamos:</p></div>' +
                 '</div>' +
                 '<div class="man-val-grid">' + rows + '</div>' +
-                '<div class="man-val-hint"><i class="fa fa-lightbulb"></i> Pulsá <b>Conectar sesión</b> para guardar y empezar a recibir mensajes.</div>';
+                hint;
         }
-        if (valConectar) valConectar.disabled = false;
+        if (valConectar && !esRevalidar) valConectar.disabled = false;
 
         // Autocompletar el "Número visible" del form si el campo está vacío.
         if (data.display_phone_number) {
@@ -1090,7 +1094,7 @@
                         verified_name: r.verified_name,
                         display_phone_number: r.display_phone_number,
                         quality_rating: r.quality_rating,
-                    });
+                    }, 'revalidar');
                     // Inyectar info extra abajo
                     var body = document.getElementById('man-val-body');
                     if (body && (r.messaging_limit_tier || r.ultima_sincronizacion)) {
