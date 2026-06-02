@@ -318,6 +318,7 @@ def departamentoChatbotsView(request):
                             cod: {k: v for k, v in meta.items() if k != 'callable'}
                             for cod, meta in FUNCIONES_REGISTRADAS.items()
                         }
+                        funciones_en_uso = {}
                         for item in arbol_plano:
                             opc = item['opcion']
                             opc.predecesores_grafo = preds_por_nodo.get(opc.id, [])
@@ -325,7 +326,15 @@ def departamentoChatbotsView(request):
                             if opc.tipo_nodo == 'funcion':
                                 cod = (opc.config or {}).get('funcion_codigo') or ''
                                 opc.funcion_meta = funciones_metadata.get(cod)
+                                if cod:
+                                    meta_fn = funciones_metadata.get(cod) or {}
+                                    funciones_en_uso[cod] = meta_fn.get('descripcion') or cod
+                        funciones_en_uso = [
+                            {'codigo': cod, 'descripcion': desc}
+                            for cod, desc in sorted(funciones_en_uso.items())
+                        ]
                         data.update({
+                            'funciones_en_uso': funciones_en_uso,
                             'pagina_completa': True,
                             'titulo_pagina': f'Editar {filtro}',
                             'ruta_post': request.path,
