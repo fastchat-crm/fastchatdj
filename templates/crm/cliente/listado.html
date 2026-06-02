@@ -61,8 +61,9 @@
                         <th>Nombre completo</th>
                         <th>Email</th>
                         <th>Teléfono</th>
+                        <th>Ciudad</th>
                         <th>Canal</th>
-                        <th>Contacto origen</th>
+                        <th>Números de origen</th>
                         <th>Departamento origen</th>
                         <th>Alta</th>
                         <th class="text-center">Acción</th>
@@ -75,8 +76,17 @@
                             <td>{{ l.nombres }} {{ l.apellidos }}</td>
                             <td>{{ l.email|default:'—' }}</td>
                             <td>{{ l.telefono|default:'—' }}</td>
+                            <td>{{ l.ciudad|default:'—' }}</td>
                             <td><span class="badge bg-info">{{ l.canal_origen|default:'—' }}</span></td>
-                            <td>{{ l.contacto_origen|default:'—' }}</td>
+                            <td>
+                                {% for o in l.origenes.all %}
+                                    <span class="badge bg-light text-dark border" title="Sesión: {{ o.sesion.nombre|default:o.sesion.numero|default:'—' }} · {{ o.veces }} vez(es) · {{ o.fecha_ultima|date:'Y-m-d H:i'|default:'' }}">
+                                        <i class="fab fa-whatsapp text-success"></i> {{ o.numero|default:'—' }}{% if o.veces > 1 %} ×{{ o.veces }}{% endif %}
+                                    </span>
+                                {% empty %}
+                                    {{ l.telefono|default:'—' }}
+                                {% endfor %}
+                            </td>
                             <td>{{ l.departamento_origen|default:'—' }}</td>
                             <td>{{ l.fecha_registro|date:'Y-m-d H:i' }}</td>
                             <td class="text-center">
@@ -105,7 +115,7 @@
                             </td>
                         </tr>
                     {% empty %}
-                        <tr><td colspan="9" class="text-center text-muted py-4">No hay clientes registrados.</td></tr>
+                        <tr><td colspan="11" class="text-center text-muted py-4">No hay clientes registrados.</td></tr>
                     {% endfor %}
                     </tbody>
                 </table>

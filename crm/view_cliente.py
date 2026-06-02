@@ -119,7 +119,7 @@ def clienteView(request):
     listado = model.objects.filter(filtros).select_related(
         'contacto_origen', 'conversacion_origen',
         'sesion_origen', 'departamento_origen',
-    )
+    ).prefetch_related('origenes', 'origenes__sesion')
     data['list_count'] = listado.count()
     data['url_vars'] = url_vars
     data['canales'] = (

@@ -935,7 +935,7 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
         'correo':           'string — email',
         'edad':             'int',
         'fecha_nacimiento': 'string YYYY-MM-DD (opcional)',
-        'ciudad':           'string (se guarda en notas)',
+        'ciudad':           'string (se guarda en el campo Cliente.ciudad)',
         'path_inscripcion': 'opcional — path SAGEST para el POST best-effort',
         'body':             'opcional — body del POST SAGEST',
     },
@@ -945,7 +945,7 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
 def registrar_inscripcion_buceo(conversacion, variables, config, endpoint=None) -> dict:
     """Registra la pre-inscripción como Cliente local (fuente de verdad) y, si
     hay endpoint + path, intenta replicarla en SAGEST sin bloquear el flujo."""
-    from crm.models import Cliente
+    from crm.models import Cliente, ClienteOrigen
 
     def _txt(k):
         return str(variables.get(k) or '').strip()
@@ -982,12 +982,11 @@ def registrar_inscripcion_buceo(conversacion, variables, config, endpoint=None) 
         departamento = None
 
     ciudad = _txt('ciudad')
-    notas = f'Curso: Buceo Industrial & Subacuático (PRE_INSCRITO).'
-    if ciudad:
-        notas += f' Ciudad: {ciudad}.'
+    notas = 'Curso: Buceo Industrial & Subacuático (PRE_INSCRITO).'
 
     try:
         from django.utils import timezone
+        ahora = timezone.now()
         cliente, creado = Cliente.objects.update_or_create(
             cedula=cedula,
             defaults={
@@ -995,17 +994,44 @@ def registrar_inscripcion_buceo(conversacion, variables, config, endpoint=None) 
                 'apellidos': _txt('apellidos') or '',
                 'email': _txt('correo') or '',
                 'telefono': telefono,
+                'ciudad': ciudad,
                 'edad': edad,
                 'fecha_nacimiento': fnac,
                 'notas': notas,
+                # contacto/conversación/sesión "de origen" = el más reciente.
+                # El histórico completo vive en ClienteOrigen (abajo).
                 'contacto_origen': contacto,
                 'conversacion_origen': conversacion,
                 'sesion_origen': sesion,
                 'departamento_origen': departamento,
                 'canal_origen': 'chatbot',
-                'fecha_ultima_interaccion': timezone.now(),
+                'fecha_ultima_interaccion': ahora,
             },
         )
+
+        # Registrar el origen (número/sesión) sin perder los anteriores:
+        # 1 fila por (cliente, número, sesión). Si repite, suma `veces`.
+        if telefono:
+            origen, origen_creado = ClienteOrigen.objects.get_or_create(
+                cliente=cliente, numero=telefono, sesion=sesion,
+                defaults={
+                    'contacto': contacto,
+                    'conversacion': conversacion,
+                    'departamento': departamento,
+                    'canal': 'chatbot',
+                    'veces': 1,
+                    'fecha_ultima': ahora,
+                },
+            )
+            if not origen_creado:
+                origen.veces = (origen.veces or 0) + 1
+                origen.fecha_ultima = ahora
+                origen.conversacion = conversacion or origen.conversacion
+                origen.contacto = contacto or origen.contacto
+                origen.departamento = departamento or origen.departamento
+                origen.save(update_fields=[
+                    'veces', 'fecha_ultima', 'conversacion', 'contacto', 'departamento',
+                ])
     except Exception as ex:
         logger.exception('registrar_inscripcion_buceo: fallo guardando Cliente cedula=%s', cedula)
         return {'etiqueta': 'error', 'body': {}, 'status': 0,

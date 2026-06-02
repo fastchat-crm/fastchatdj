@@ -476,7 +476,7 @@ class ClienteForm(ModelFormBase):
     class Meta:
         model = Cliente
         fields = (
-            'cedula', 'nombres', 'apellidos', 'email', 'telefono',
+            'cedula', 'nombres', 'apellidos', 'email', 'telefono', 'ciudad',
             'edad', 'fecha_nacimiento', 'sexo', 'canal_origen',
             'contacto_origen', 'conversacion_origen', 'sesion_origen',
             'departamento_origen', 'notas',

@@ -1904,6 +1904,7 @@ class Cliente(ModeloBase):
     apellidos = models.CharField('Apellidos', max_length=150, blank=True, default='')
     email = models.EmailField('Email', blank=True, default='')
     telefono = models.CharField('Teléfono', max_length=30, blank=True, default='')
+    ciudad = models.CharField('Ciudad', max_length=120, blank=True, default='')
     edad = models.PositiveSmallIntegerField('Edad', null=True, blank=True)
     fecha_nacimiento = models.DateField('Fecha de nacimiento', null=True, blank=True)
     sexo = models.CharField('Sexo', max_length=1, choices=CLIENTE_SEXO_CHOICES, blank=True, default='')
@@ -1951,3 +1952,51 @@ class Cliente(ModeloBase):
     def __str__(self):
         full = f'{self.nombres} {self.apellidos}'.strip()
         return f'{self.cedula} · {full}' if full else self.cedula
+
+
+class ClienteOrigen(ModeloBase):
+    """Cada número / sesión / conversación distinta desde la que un Cliente nos
+    escribió. Permite ver TODOS los orígenes, no solo el más reciente.
+
+    Se acumula 1 fila por combinación (cliente, número, sesión): si el mismo
+    cliente vuelve a escribir desde el mismo número/sesión, se incrementa `veces`
+    y se actualiza `fecha_ultima` en vez de duplicar.
+    """
+    cliente = models.ForeignKey(
+        Cliente, on_delete=models.CASCADE, related_name='origenes',
+        verbose_name='Cliente',
+    )
+    numero = models.CharField('Número de origen', max_length=50, blank=True, default='')
+    contacto = models.ForeignKey(
+        'whatsapp.Contacto', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+', verbose_name='Contacto',
+    )
+    conversacion = models.ForeignKey(
+        'whatsapp.ConversacionWhatsApp', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+', verbose_name='Conversación',
+    )
+    sesion = models.ForeignKey(
+        'whatsapp.SesionWhatsApp', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+', verbose_name='Sesión',
+    )
+    departamento = models.ForeignKey(
+        'crm.DepartamentoChatBot', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+', verbose_name='Departamento',
+    )
+    canal = models.CharField('Canal', max_length=30, blank=True, default='chatbot')
+    veces = models.PositiveIntegerField('Veces que escribió', default=1)
+    fecha_ultima = models.DateTimeField('Última vez', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Origen de cliente'
+        verbose_name_plural = 'Orígenes de cliente'
+        ordering = ['-fecha_ultima']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cliente', 'numero', 'sesion'],
+                name='uniq_cliente_origen',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.cliente_id} · {self.numero or "?"}'
