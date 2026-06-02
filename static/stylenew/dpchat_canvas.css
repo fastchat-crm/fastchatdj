@@ -39,6 +39,44 @@
     text-overflow: ellipsis;
 }
 
+.dpc-search {
+    position: relative;
+    flex: 0 1 280px;
+    min-width: 160px;
+}
+
+.dpc-search .form-control {
+    padding-left: 2rem;
+    padding-right: 2rem;
+}
+
+.dpc-search-icon {
+    position: absolute;
+    left: .65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af;
+    pointer-events: none;
+    font-size: .8rem;
+}
+
+.dpc-search-clear {
+    position: absolute;
+    right: .35rem;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: .15rem .35rem;
+    line-height: 1;
+}
+
+.dpc-search-clear:hover {
+    color: #4b5563;
+}
+
 .dpc-toolbar-right {
     margin-left: auto;
     display: flex;

@@ -132,7 +132,8 @@
       "Bash(node --check static/stylenew/sesiones.js)",
       "Bash(node --check serviceworker.js)",
       "Bash(sed -i 's#dpchat_canvas.css?v1.4#dpchat_canvas.css?v1.5#; s#dpchat_canvas.js?v1.6#dpchat_canvas.js?v1.7#' templates/crm/departamento_chatbots/editor_canvas.html)",
-      "Bash(node --check static/js/dpchat_canvas.js)"
+      "Bash(node --check static/js/dpchat_canvas.js)",
+      "Bash(node --check static/js/dpchat_editor.js)"
     ]
   },
   "hooks": {

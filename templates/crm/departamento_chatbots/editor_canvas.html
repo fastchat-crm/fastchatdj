@@ -3,7 +3,7 @@
 {% block head %}
     <link rel="stylesheet" href="/static/lib/drawflow/drawflow.min.css">
     <link rel="stylesheet" href="/static/stylenew/dpchat_editor.css">
-    <link rel="stylesheet" href="/static/stylenew/dpchat_canvas.css?v1.5">
+    <link rel="stylesheet" href="/static/stylenew/dpchat_canvas.css?v1.6">
 {% endblock %}
 
 {% block content %}
@@ -16,6 +16,14 @@
         <div class="dpc-title">
             <span class="dpc-dot" data-color="{{ filtro.color }}"></span>
             <span class="dpc-title-text">{{ filtro.nombre }}</span>
+        </div>
+        <div class="dpc-search">
+            <i class="fa fa-search dpc-search-icon"></i>
+            <input type="text" id="dpcBuscar" class="form-control form-control-sm"
+                   placeholder="Buscar por nombre o función interna…" autocomplete="off">
+            <button type="button" class="dpc-search-clear" id="dpcBuscarClear" title="Limpiar" hidden>
+                <i class="fa fa-times"></i>
+            </button>
         </div>
         <div class="dpc-toolbar-right">
             <button type="button" id="dpcBtnLeyenda" class="btn btn-outline-secondary btn-sm">
@@ -133,5 +141,5 @@
 {% block jscript %}
     <script src="/static/lib/drawflow/drawflow.min.js"></script>
     <script src="/static/lib/dagre/dagre.min.js"></script>
-    <script src="/static/js/dpchat_canvas.js?v1.7"></script>
+    <script src="/static/js/dpchat_canvas.js?v1.8"></script>
 {% endblock %}

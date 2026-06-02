@@ -2,7 +2,7 @@
 {% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
-<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.9">
+<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v2.0">
 <link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
 <link rel="stylesheet" href="/static/css/whatsapp/ficha_cliente.css?v1.1">
 <link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.3">
@@ -192,11 +192,24 @@
                                 <i class="fa fa-check-circle"></i> Terminar
                             </a>
                         </div>
-                        <div class="dropdown d-inline d-none" id="dropdowns-btn">
-                            <a href="javascript:void(0)" class="btn btn-sm btn-default" data-bs-toggle="dropdown" data-bs-strategy="fixed">
+                        <div class="d-inline d-none" id="dropdowns-btn">
+                            <a href="javascript:void(0)" class="btn btn-sm btn-default"
+                               role="button" data-bs-toggle="offcanvas" data-bs-target="#convAccionesOffcanvas"
+                               aria-controls="convAccionesOffcanvas" title="Acciones de la conversación">
                                 <i class="fa fa-ellipsis-v"></i>
                             </a>
-                            <div class="dropdown-menu dropdown-menu-end">
+                        </div>
+                        <div class="offcanvas offcanvas-end cs-acciones-offcanvas" tabindex="-1"
+                             id="convAccionesOffcanvas" aria-labelledby="convAccionesOffcanvasLabel"
+                             data-bs-scroll="true">
+                            <div class="offcanvas-header">
+                                <h5 class="offcanvas-title" id="convAccionesOffcanvasLabel">
+                                    <i class="fa fa-ellipsis-v me-2 text-muted"></i> Acciones de la conversación
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+                            </div>
+                            <div class="offcanvas-body">
+                                <div class="cs-oc-section">Datos del contacto</div>
                                 <a href="javascript:void(0)" class="dropdown-item form_modal" id="cambiar-nombre-contacto" title="Cambiar nombre de contacto">
                                     <i class="fa fa-user-edit me-2"></i> Cambiar nombre de contacto
                                 </a>
@@ -218,7 +231,8 @@
                                 <a class="dropdown-item" href="javascript:void(0)" id="ver-logs-conversacion" title="Ver logs / trazas de esta conversación">
                                     <i class="fa fa-clipboard-list me-2 text-secondary"></i> Logs de esta conversación
                                 </a>
-                                <div class="dropdown-divider"></div>
+
+                                <div class="cs-oc-section">Paneles</div>
                                 <a class="dropdown-item" href="javascript:void(0)"
                                    onclick="toggleEstadisticasPanel()">
                                     <i class="fa fa-chart-line me-2 text-primary"></i> Estadísticas
@@ -232,7 +246,8 @@
                                     <i class="fa fa-lock me-2 text-warning" id="icon-bloquear-cierre"></i>
                                     <span id="label-bloquear-cierre">Bloquear cierre automático</span>
                                 </a>
-                                <div class="dropdown-divider"></div>
+
+                                <div class="cs-oc-section">Estado de atención</div>
                                 <a class="dropdown-item" href="javascript:void(0)" onclick="setEstadoAtencion('pendiente')" title="Marcar como pendiente">
                                     <i class="fa fa-hourglass-half me-2 text-warning"></i> Marcar pendiente
                                 </a>
@@ -253,14 +268,16 @@
                                    title="Reiniciar el flujo del chatbot tradicional desde el nodo de inicio">
                                     <i class="fa fa-redo me-2 text-primary"></i> Reiniciar flujo del chatbot
                                 </a>
+
                                 {% if request.user.is_superuser %}
-                                    <div class="dropdown-divider"></div>
+                                    <div class="cs-oc-section">Avanzado</div>
                                     <a class="dropdown-item" href="javascript:void(0)" id="ver-webhook-conv"
                                        onclick="abrirWebhookConv()" title="Endpoint para inyectar mensajes desde un proceso externo">
-                                        <i class="fa fa-plug me-2 text-success"></i> Ver webhook API <span class="badge bg-success ms-1" style="font-size:.62rem;">SUPERUSER</span>
+                                        <i class="fa fa-plug me-2 text-success"></i> Ver webhook API <span class="badge bg-success ms-1 cs-oc-badge">SUPERUSER</span>
                                     </a>
                                 {% endif %}
-                                <div class="dropdown-divider"></div>
+
+                                <div class="cs-oc-section cs-oc-section-danger">Finalizar</div>
                                 <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida" title="Terminar sin despedida">
                                     <i class="fa fa-times me-2 text-danger"></i> Terminar sin despedida
                                 </a>
@@ -2447,6 +2464,13 @@
             const title = $(this).attr('title');
             const action = $(this).attr('id');
             formModal(id, title, action);
+        });
+
+        $('#convAccionesOffcanvas').on('click', '.dropdown-item', function () {
+            const el = document.getElementById('convAccionesOffcanvas');
+            if (!el || !window.bootstrap) { return; }
+            const oc = bootstrap.Offcanvas.getOrCreateInstance(el);
+            if (oc) { oc.hide(); }
         });
 
         $(document).on('click', '#ver-logs-conversacion', function(e) {

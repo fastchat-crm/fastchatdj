@@ -517,3 +517,44 @@
     color: #fff;
 }
 
+.cs-acciones-offcanvas {
+    width: 340px;
+    max-width: 88vw;
+}
+
+.cs-acciones-offcanvas .offcanvas-body {
+    padding: .5rem .25rem 1rem;
+}
+
+.cs-acciones-offcanvas .dropdown-item {
+    border-radius: 8px;
+    padding: .55rem .75rem;
+    white-space: normal;
+}
+
+.cs-acciones-offcanvas .dropdown-item:active {
+    color: inherit;
+    background-color: #f1f5f9;
+}
+
+.cs-oc-section {
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #94a3b8;
+    padding: .85rem .75rem .25rem;
+}
+
+.cs-oc-section:first-child {
+    padding-top: .25rem;
+}
+
+.cs-oc-section-danger {
+    color: #dc2626;
+}
+
+.cs-oc-badge {
+    font-size: .62rem;
+}
+

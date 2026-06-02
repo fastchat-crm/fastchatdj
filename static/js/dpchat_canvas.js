@@ -251,7 +251,7 @@
             return;
         }
         editor.precanvas.style.transform =
-            'translate(' + editor.pos_x + 'px, ' + editor.pos_y + 'px) scale(' + editor.zoom + ')';
+            'translate(' + editor.canvas_x + 'px, ' + editor.canvas_y + 'px) scale(' + editor.zoom + ')';
         editor.precanvas.style.transformOrigin = '0 0';
         updateScrollbars();
     }
@@ -268,10 +268,10 @@
             return;
         }
         if (e.shiftKey) {
-            editor.pos_x -= e.deltaY;
+            editor.canvas_x -= e.deltaY;
         } else {
-            editor.pos_y -= e.deltaY;
-            editor.pos_x -= e.deltaX;
+            editor.canvas_y -= e.deltaY;
+            editor.canvas_x -= e.deltaX;
         }
         applyPanTransform();
     }, { passive: false });
@@ -307,15 +307,15 @@
         dragging = true;
         startX = e.clientX;
         startY = e.clientY;
-        startPosX = editor.pos_x;
-        startPosY = editor.pos_y;
+        startPosX = editor.canvas_x;
+        startPosY = editor.canvas_y;
         if (stage) { stage.classList.add('dpc-grabbing'); }
     }, true);
 
     document.addEventListener('mousemove', function (e) {
         if (!dragging) { return; }
-        editor.pos_x = startPosX + (e.clientX - startX);
-        editor.pos_y = startPosY + (e.clientY - startY);
+        editor.canvas_x = startPosX + (e.clientX - startX);
+        editor.canvas_y = startPosY + (e.clientY - startY);
         applyPanTransform();
     });
 
@@ -374,7 +374,7 @@
             scrollH.style.display = 'block';
             var trackW = scrollH.clientWidth;
             var thumbW = Math.max(40, trackW * (viewportW / contentW));
-            var origenVistaX = -(editor.pos_x + bbox.x * z);
+            var origenVistaX = -(editor.canvas_x + bbox.x * z);
             var maxScrollX = contentW - viewportW;
             var ratioX = maxScrollX > 0 ? Math.max(0, Math.min(1, origenVistaX / maxScrollX)) : 0;
             thumbH.style.width = thumbW + 'px';
@@ -387,7 +387,7 @@
             scrollV.style.display = 'block';
             var trackH = scrollV.clientHeight;
             var thumbHh = Math.max(40, trackH * (viewportH / contentH));
-            var origenVistaY = -(editor.pos_y + bbox.y * z);
+            var origenVistaY = -(editor.canvas_y + bbox.y * z);
             var maxScrollY = contentH - viewportH;
             var ratioY = maxScrollY > 0 ? Math.max(0, Math.min(1, origenVistaY / maxScrollY)) : 0;
             thumbV.style.height = thumbHh + 'px';
@@ -421,7 +421,7 @@
                 var contentW = bbox.w * z;
                 var viewportW = container.getBoundingClientRect().width;
                 var maxScroll = contentW - viewportW;
-                editor.pos_x = -(ratio * maxScroll) - bbox.x * z;
+                editor.canvas_x = -(ratio * maxScroll) - bbox.x * z;
             } else {
                 var trackH = rect.height;
                 var thumbH = thumb.offsetHeight;
@@ -431,7 +431,7 @@
                 var contentH = bbox.h * z;
                 var viewportH = container.getBoundingClientRect().height;
                 var maxScrollY = contentH - viewportH;
-                editor.pos_y = -(ratioY * maxScrollY) - bbox.y * z;
+                editor.canvas_y = -(ratioY * maxScrollY) - bbox.y * z;
             }
             applyPanTransform();
         });
@@ -563,7 +563,11 @@
         });
     }
 
+    var filtroTipoActual = '';
+    var filtroTextoActual = '';
+
     setupLeyendaYFiltros();
+    wireBuscador();
 
     function setupLeyendaYFiltros() {
         var tipos = (G.tipos || []).filter(function (t) { return true; });
@@ -626,17 +630,45 @@
             Array.prototype.forEach.call(filtros.querySelectorAll('.dpc-chip'), function (c) {
                 c.classList.toggle('is-active', c === chip);
             });
-            aplicarFiltro(tipo);
+            filtroTipoActual = tipo;
+            aplicarFiltros();
         });
     }
 
-    function aplicarFiltro(tipo) {
+    function wireBuscador() {
+        var input = document.getElementById('dpcBuscar');
+        var clear = document.getElementById('dpcBuscarClear');
+        if (!input) { return; }
+        input.addEventListener('input', function () {
+            filtroTextoActual = (input.value || '').toLowerCase().trim();
+            if (clear) { clear.hidden = !filtroTextoActual; }
+            aplicarFiltros();
+        });
+        if (clear) {
+            clear.addEventListener('click', function () {
+                input.value = '';
+                filtroTextoActual = '';
+                clear.hidden = true;
+                aplicarFiltros();
+                input.focus();
+            });
+        }
+    }
+
+    function aplicarFiltros() {
         var nodes = container.querySelectorAll('.drawflow-node');
         Array.prototype.forEach.call(nodes, function (el) {
             var inner = el.querySelector('.dpc-node');
             var t = inner ? inner.getAttribute('data-tipo') : '';
-            var match = !tipo || t === tipo;
-            el.classList.toggle('dpc-dim', !match);
+            var matchTipo = !filtroTipoActual || t === filtroTipoActual;
+            var matchTexto = true;
+            if (filtroTextoActual) {
+                var nombre = (el.querySelector('.dpc-node-name') || {}).textContent || '';
+                var accion = (el.querySelector('.dpc-node-accion') || {}).textContent || '';
+                var hay = (nombre + ' ' + accion).toLowerCase();
+                matchTexto = hay.indexOf(filtroTextoActual) >= 0;
+            }
+            el.classList.toggle('dpc-dim', !(matchTipo && matchTexto));
         });
     }
 
