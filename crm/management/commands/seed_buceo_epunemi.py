@@ -292,23 +292,17 @@ PASOS = [
     },
     {
         'id': ID_REGISTRAR, 'orden': 130, 'tipo': 'llamada_funcion',
-        'codigo': 'registrar_cliente', 'nombre': 'Registrar Cliente en CRM',
-        'funcion_codigo': 'registrar_inscripcion_buceo',
-        'envia_correo': True,
-        'timeout_seg': 30,
-        # path_inscripcion + body: intento best-effort a SAGEST (no bloquea).
-        'path_inscripcion': 'inscripcion_buceo/',
-        'body': {
-            'cedula':           '{{variables.cedula}}',
-            'nombres':          '{{variables.nombres}}',
-            'apellidos':        '{{variables.apellidos}}',
-            'fecha_nacimiento': '{{variables.fecha_nacimiento}}',
-            'edad':             '{{variables.edad}}',
-            'correo':           '{{variables.correo}}',
-            'ciudad':           '{{variables.ciudad}}',
-            'curso':            'BUCEO_INDUSTRIAL_SUBACUATICO',
-            'canal':            'whatsapp_bot',
-            'estado':           'PRE_INSCRITO',
+        'codigo': 'fn_cliente_upsert', 'nombre': 'Guardar Cliente + origen',
+        # Función GENÉRICA del CRM (crm.funciones_cliente): get_or_create por
+        # cédula, no pisa el origen, registra ciudad y ClienteOrigen. La misma
+        # que usan agenda/cotizador. Lee cedula/nombres/apellidos/correo/edad/
+        # fecha_nacimiento/ciudad de las variables del flujo.
+        'funcion_codigo': 'cliente_upsert',
+        'timeout_seg': 5,
+        'body': {'canal_origen': 'chatbot'},
+        'extrae_variables': {
+            '$cliente_id':     '$.cliente_id',
+            '$cliente_creado': '$.cliente_creado',
         },
         'siguiente_ok': ID_CONFIRMACION, 'siguiente_error': ID_ERR_REGISTRO,
     },
