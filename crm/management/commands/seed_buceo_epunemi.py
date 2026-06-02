@@ -84,6 +84,41 @@ ID_ERR_REGISTRO = 970
 ID_HANDOFF_ASESOR = 990
 
 
+# Posiciones (x, y) para el editor visual. Columnas:
+#   izquierda (40)  = captura manual
+#   centro (440)    = camino feliz (de arriba a abajo)
+#   derecha (840)   = nodos informativos (vuelven al menú)
+#   extrema (1240)  = terminales (fin / handoff)
+COORDS = {
+    ID_SALUDO:          (440, 40),
+    ID_PEDIR_CEDULA:    (440, 180),
+    ID_HTTP_CEDULA:     (440, 320),
+    ID_EVAL_EDAD:       (440, 460),
+    ID_MENU:            (440, 620),
+    ID_PREGUNTA_INSC:   (440, 900),
+    ID_DEC_CORREO:      (440, 1040),
+    ID_PEDIR_CORREO:    (440, 1180),
+    ID_PEDIR_CIUDAD:    (440, 1320),
+    ID_REGISTRAR:       (440, 1460),
+    ID_CONFIRMACION:    (440, 1600),
+    # Informativos (derecha)
+    ID_INFO_CURSO:      (840, 540),
+    ID_REQUISITOS:      (840, 680),
+    ID_COSTOS:          (840, 820),
+    ID_DURACION:        (840, 960),
+    # Captura manual (izquierda)
+    ID_MAN_NOMBRES:     (40, 320),
+    ID_MAN_APELLIDOS:   (40, 460),
+    ID_MAN_EDAD:        (40, 600),
+    ID_MAN_CORREO:      (40, 740),
+    # Terminales (extrema derecha)
+    ID_MENOR_EDAD:      (1240, 460),
+    ID_DESPEDIDA_NO:    (1240, 900),
+    ID_HANDOFF_ASESOR:  (1240, 1040),
+    ID_ERR_REGISTRO:    (1240, 1460),
+}
+
+
 PASOS = [
     {
         'id': ID_SALUDO, 'orden': 10, 'tipo': 'respuesta_texto',
@@ -319,8 +354,13 @@ PASOS = [
     },
 
     {
-        'id': ID_CONFIRMACION, 'orden': 140, 'tipo': 'handoff_humano',
-        'codigo': 'confirmacion', 'nombre': 'Pre-inscripción OK + asesor',
+        'id': ID_CONFIRMACION, 'orden': 140, 'tipo': 'fin_conversacion',
+        'codigo': 'confirmacion', 'nombre': 'Pre-inscripción OK (fin)',
+        'notificar_asesor': True,
+        'mensaje_asesor': (
+            'Nueva pre-inscripción al curso de Buceo Industrial. Contactar al '
+            'cliente para coordinar el pago de la inscripción ($500) y el apto médico.'
+        ),
         'mensaje': (
             '✅ ¡Listo, *{{variables.nombres}} {{variables.apellidos}}*! Tu '
             'pre-inscripción quedó registrada. 🎉\n\n'
@@ -547,11 +587,20 @@ class Command(BaseCommand):
 
         endpoint_obj = eps.get('rest') if t in ('llamada_http', 'llamada_funcion') else None
 
+        pos_x, pos_y = COORDS.get(paso['id'], (0, 0))
+
+        cfg = self._config_para(paso)
+        # Flag por-nodo: notificar a los asesores disponibles de la sesión
+        # (email + campanita), independiente del handoff. Sirve en cualquier tipo.
+        if paso.get('notificar_asesor'):
+            cfg['notificar_asesor'] = True
+            cfg['mensaje_asesor'] = paso.get('mensaje_asesor', '') or ''
+
         return OpcionDepartamentoChatBot.objects.create(
             departamento=depto,
             nombre=paso.get('nombre') or paso.get('codigo', ''),
             tipo_nodo=TIPO_MAP[t],
-            config=self._config_para(paso),
+            config=cfg,
             es_inicio=bool(paso.get('es_inicio')),
             endpoint=endpoint_obj,
             variable_destino=paso.get('guardar_en', '') or '',
@@ -560,6 +609,8 @@ class Command(BaseCommand):
             mensaje_error=paso.get('mensaje_error', '') or '',
             reintentos_max=3,
             orden=paso.get('orden', 0),
+            posicion_x=pos_x,
+            posicion_y=pos_y,
         )
 
     def _crear_conexiones(self, mapa, paso):
