@@ -1,6 +1,24 @@
 .ficha-cliente-wrap {
     padding: .25rem;
 }
+.ficha-multi-aviso {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1e3a8a;
+    border-radius: 8px;
+    padding: .5rem .75rem;
+    font-size: .85rem;
+    margin-bottom: .75rem;
+}
+.ficha-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+.ficha-card:last-child {
+    margin-bottom: 0;
+}
 .ficha-head {
     display: flex;
     align-items: center;

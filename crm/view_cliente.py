@@ -93,11 +93,13 @@ def clienteView(request):
 
         if action == 'ver':
             pk = int(request.GET['id'])
-            filtro = model.objects.get(pk=pk)
+            filtro = (
+                model.objects.prefetch_related('origenes__sesion', 'origenes__departamento')
+                .get(pk=pk)
+            )
             data['pk'] = pk
             data['filtro'] = filtro
-            data['form'] = Formulario(instance=filtro, ver=True)
-            return render(request, 'crm/cliente/form.html', data)
+            return render(request, 'crm/cliente/detalle.html', data)
 
     criterio = request.GET.get('criterio', '').strip()
     canal = (request.GET.get('canal') or '').strip()

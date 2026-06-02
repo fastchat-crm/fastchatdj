@@ -146,24 +146,20 @@ def conversacionesFinalizadasView(request):
                 from crm.models import Cliente
                 conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['id']))
                 contacto_conv = conv.contacto
-                cliente = (
+                clientes = list(
                     Cliente.objects.filter(
                         Q(conversacion_origen=conv) | Q(origenes__conversacion=conv),
                         status=True,
-                    ).distinct().first()
+                    ).distinct().prefetch_related('origenes__sesion', 'origenes__departamento')
                 )
-                if not cliente and contacto_conv:
-                    cliente = (
+                if not clientes and contacto_conv:
+                    clientes = list(
                         Cliente.objects.filter(
                             Q(contacto_origen=contacto_conv) | Q(origenes__contacto=contacto_conv),
                             status=True,
-                        ).distinct().first()
+                        ).distinct().prefetch_related('origenes__sesion', 'origenes__departamento')
                     )
-                ctx = {
-                    'cliente': cliente,
-                    'conv': conv,
-                    'origenes': list(cliente.origenes.select_related('sesion', 'departamento').all()) if cliente else [],
-                }
+                ctx = {'clientes': clientes, 'conv': conv}
                 template = get_template('whatsapp/conversaciones/_modal_ficha_cliente.html')
                 return JsonResponse({'result': True, 'data': template.render(ctx, request)})
             except Exception as ex:
