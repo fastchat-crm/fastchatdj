@@ -15,6 +15,17 @@
         </div>
     </div>
 
+    {% if numero_conectado %}
+    <div class="pc-critico pc-critico-ok">
+        <div class="pc-critico-icon"><i class="fa fa-circle-check"></i></div>
+        <div class="pc-critico-body">
+            <h6>Número registrado en Cloud API (CONNECTED)</h6>
+            <p>El número ya está registrado y operativo: envía y recibe mensajes. No necesitás
+                registrarlo de nuevo. Si querés revisar el estado en detalle, abrí el
+                <b>Diagnóstico</b> de la sesión.</p>
+        </div>
+    </div>
+    {% else %}
     <div class="pc-critico">
         <div class="pc-critico-icon"><i class="fa fa-triangle-exclamation"></i></div>
         <div class="pc-critico-body">
@@ -28,6 +39,7 @@
             </a>
         </div>
     </div>
+    {% endif %}
 
     <ol class="pc-steps">
 

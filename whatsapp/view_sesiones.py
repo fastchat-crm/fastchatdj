@@ -1083,11 +1083,22 @@ def sesionesView(request):
                             bid = cred.business_id
                 except Exception:
                     pass
+            # Status real del número en Meta: para no mostrar el "Paso crítico —
+            # Registrar" cuando el número ya está CONNECTED (envía/recibe OK).
+            numero_conectado = False
+            try:
+                from .meta_diagnostico_view import _consultar_phone_number
+                _pi = _consultar_phone_number(cfg)
+                if _pi.get('ok'):
+                    numero_conectado = (_pi.get('data') or {}).get('status') == 'CONNECTED'
+            except Exception:
+                pass
             ctx = {
                 'sesion': sesion,
                 'cfg': cfg,
                 'app_id': app_id,
                 'bid': bid,
+                'numero_conectado': numero_conectado,
                 'webhook_url': getattr(settings, 'URL_GENERAL', '') + '/whatsapp/meta_webhook/',
                 'n_plantillas_aprobadas': PlantillaWhatsApp.objects.filter(
                     config_meta=cfg, estado_meta='APPROVED', status=True,
@@ -1144,9 +1155,9 @@ def sesionesView(request):
             conv_abiertas=Count(
                 'contacto__conversaciones',
                 filter=Q(
-                    contacto__conversaciones__estado_atencion='abierta',
-                    contacto__conversaciones__conversacion_finalizada=False,
+                    contacto__conversaciones__estado_conversacion=0,
                     contacto__conversaciones__status=True,
+                    contacto__status=True,
                 ),
                 distinct=True,
             )

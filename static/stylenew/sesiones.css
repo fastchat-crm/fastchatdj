@@ -3039,7 +3039,7 @@
 .pc-open-btn:hover { background: #1d4ed8; }
 
 .pc-tip {
-    display: flex;
+    /*display: flex;*/
     gap: .65rem;
     align-items: flex-start;
     background: #fef9c3;
@@ -3072,6 +3072,12 @@
     border-radius: 4px;
     font-size: .8rem;
 }
+.pc-critico.pc-critico-ok {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #065f46;
+}
+.pc-critico.pc-critico-ok .pc-critico-icon i { color: #10b981; }
 
 @media (max-width: 600px) {
     .pc-fields-2col li { flex: 0 0 100%; }

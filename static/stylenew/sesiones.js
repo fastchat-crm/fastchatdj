@@ -490,19 +490,26 @@
             ? '<a href="' + escaparHtml(metaUrl) + '" target="_blank" rel="noopener" class="cn-meta-link">' +
               '<i class="fa fa-up-right-from-square"></i> Validar / ver estado del nombre en Meta</a>'
             : '';
-        return '<div class="valcx-wrap">' +
-            '<h5 class="valcx-title"><i class="fa fa-signature"></i> Cambiar nombre del número</h5>' +
-            '<p class="cn-help">Este es el <b>Display Name</b> que ven los clientes en WhatsApp. ' +
-            'Meta lo revisa (minutos a días) y debe reflejar tu marca/negocio — nombres genéricos o de ' +
-            'rol suelen rechazarse. El número sigue operando con el nombre actual durante la revisión.</p>' +
-            '<label class="cn-label" for="cn-input">Nuevo nombre para mostrar</label>' +
-            '<input type="text" id="cn-input" class="form-control" maxlength="60" autocomplete="off" ' +
-            'value="' + escaparHtml(nombreActual || '') + '">' +
-            '<button type="button" class="conex-btn conex-btn-primary valcx-cta" id="cn-enviar">' +
-            '<i class="fa fa-paper-plane"></i> Enviar a revisión de Meta</button>' +
-            linkMeta +
-            '<div id="cn-result" class="valcx-verdict" hidden></div>' +
-            '</div>';
+        return '<div class="detail-wrap">' +
+            '<div class="detail-head">' +
+                '<div><h5><i class="fa fa-signature me-1 text-primary"></i> Cambiar nombre del número</h5>' +
+                '<p class="muted">Display Name que ven los clientes en WhatsApp</p></div>' +
+                '<button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>' +
+            '</div>' +
+            '<div class="detail-body">' +
+                '<p class="cn-help">Meta lo revisa (minutos a días) y debe reflejar tu marca/negocio — nombres ' +
+                'genéricos o de rol suelen rechazarse. El número sigue operando con el nombre actual durante la revisión.</p>' +
+                '<div class="conex-data-block">' +
+                    '<label class="cn-label" for="cn-input">Nuevo nombre para mostrar</label>' +
+                    '<input type="text" id="cn-input" class="form-control" maxlength="60" autocomplete="off" ' +
+                    'value="' + escaparHtml(nombreActual || '') + '">' +
+                    '<button type="button" class="conex-btn conex-btn-primary valcx-cta" id="cn-enviar">' +
+                    '<i class="fa fa-paper-plane"></i> Enviar a revisión de Meta</button>' +
+                    linkMeta +
+                    '<div id="cn-result" class="valcx-verdict" hidden></div>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
     }
 
     function renderValidacionConexion(data) {
@@ -531,14 +538,19 @@
                 escaparHtml(data.diagnostico_url) + '"><i class="fa fa-stethoscope"></i> Ver diagnóstico</a>';
         }
 
-        return '<div class="valcx-wrap">' +
-            '<h5 class="valcx-title"><i class="fa fa-clipboard-check"></i> Validación de conexión · ' +
-                escaparHtml(data.sesion_nombre) + '</h5>' +
-            '<ul class="valcx-steps">' + filas + '</ul>' +
-            '<div class="valcx-verdict ' + verdClase + '"><i class="fa ' + verdIcono + '"></i> ' +
-                escaparHtml(data.verdicto) + '</div>' +
-            accionBtn +
-            '</div>';
+        return '<div class="detail-wrap">' +
+            '<div class="detail-head">' +
+                '<div><h5><i class="fa fa-clipboard-check me-1 text-primary"></i> Validación de conexión</h5>' +
+                '<p class="muted">Sesión <b>' + escaparHtml(data.sesion_nombre) + '</b> · chequeos contra Meta</p></div>' +
+                '<button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>' +
+            '</div>' +
+            '<div class="detail-body">' +
+                '<ul class="valcx-steps">' + filas + '</ul>' +
+                '<div class="valcx-verdict ' + verdClase + '"><i class="fa ' + verdIcono + '"></i> ' +
+                    escaparHtml(data.verdicto) + '</div>' +
+                accionBtn +
+            '</div>' +
+        '</div>';
     }
 
     // ---------- Re-attach forms.js (handler global de POST + AJAX) ----------
