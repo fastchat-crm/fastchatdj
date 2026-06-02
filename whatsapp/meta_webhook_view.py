@@ -202,6 +202,62 @@ def _render_info(request, estado='landing', status_code=200, mensaje_error=None)
 # Evento (POST)
 # ---------------------------------------------------------------------------
 
+def _alerta_webhook_debug(payload: dict, phone_number_id, config, evento):
+    """[DEBUG TEMPORAL] Manda un mail a hllerenaa1h@gmail.com cada vez que llega
+    algo al webhook, con el detalle para identificar a qué número pertenece.
+
+    Sirve para diagnosticar por qué un número no recibe: confirma si Meta
+    realmente manda eventos para ese phone_number_id y si matchea un ConfigMeta.
+
+    REMOVER cuando termine el diagnóstico (borrar esta función y su llamada en
+    _procesar_evento).
+    """
+    import threading
+    from django.core.mail import send_mail
+    from django.conf import settings
+
+    def _enviar():
+        try:
+            entrantes = []
+            estados = []
+            for entry in payload.get('entry') or []:
+                for change in entry.get('changes') or []:
+                    value = change.get('value') or {}
+                    for m in value.get('messages') or []:
+                        entrantes.append(f"  from={m.get('from')} tipo={m.get('type')} "
+                                         f"texto={(m.get('text') or {}).get('body', '')[:80]}")
+                    for s in value.get('statuses') or []:
+                        estados.append(f"  status={s.get('status')} dest={s.get('recipient_id')}")
+
+            if config:
+                match = f"SÍ → sesión id={config.sesion_id} ({getattr(config.sesion, 'nombre', '')})"
+            else:
+                match = "NO — config_meta_no_encontrada (huérfano)"
+
+            cuerpo = (
+                f"Llegó un evento al webhook Meta.\n\n"
+                f"Fecha: {timezone.now():%Y-%m-%d %H:%M:%S}\n"
+                f"phone_number_id: {phone_number_id}\n"
+                f"Matchea ConfigMeta: {match}\n"
+                f"Tipo de evento: {evento.tipo_evento}\n"
+                f"Firma válida: {evento.firma_valida}\n"
+                f"Evento id: {evento.id}\n\n"
+                f"Mensajes entrantes:\n" + ("\n".join(entrantes) if entrantes else "  (ninguno)") + "\n\n"
+                f"Statuses (ACK salientes):\n" + ("\n".join(estados) if estados else "  (ninguno)") + "\n"
+            )
+            asunto = f"[Webhook Meta] phone_number_id={phone_number_id or 'N/A'} · match={'SI' if config else 'NO'}"
+            send_mail(
+                asunto, cuerpo,
+                getattr(settings, 'DEFAULT_FROM_EMAIL', None),
+                ['hllerenaa1h@gmail.com'],
+                fail_silently=True,
+            )
+        except Exception as ex:
+            logger.warning("Alerta debug webhook falló: %s", ex)
+
+    threading.Thread(target=_enviar, daemon=True).start()
+
+
 def _procesar_evento(request):
     raw_body = request.body
     try:
@@ -224,6 +280,8 @@ def _procesar_evento(request):
         firma_valida=firma_valida,
         procesado=False,
     )
+
+    _alerta_webhook_debug(payload, phone_number_id, config, evento)
 
     if not firma_valida and app_secret_org:
         evento.error_procesamiento = 'firma_hmac_invalida'
