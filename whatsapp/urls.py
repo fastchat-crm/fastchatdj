@@ -2,7 +2,7 @@ from django.urls import re_path, path
 
 from .view_conversaciones_finalizadas import conversacionesFinalizadasView
 from .view_conversaciones_pendiente_reconexion import conversacionesPendienteReconexionView
-from .view_sesiones import sesionesView
+from .view_sesiones import sesionesView, mensajes_rapidos_view
 from .view_sesion_activa import set_sesion_activa
 from .meta_oauth_view import meta_oauth_start, meta_oauth_callback
 from .meta_manual_view import (
@@ -64,7 +64,7 @@ whatsapp_urls = (
         "vista": contactoView,
     },
     {
-        "nombre": "Trazas IA",
+        "nombre": "Trazas / Logs (IA y conversaciones)",
         "url": 'trazas/',
         "vista": trazasView,
     },
@@ -121,6 +121,7 @@ urlpatterns = [
     path('meta/manual/validar/', meta_manual_validar, name='whatsapp_meta_manual_validar'),
     path('meta/manual/conectar/', meta_manual_conectar, name='whatsapp_meta_manual_conectar'),
     path('meta/test-message/<int:sesion_id>/', meta_test_message, name='whatsapp_meta_test_message'),
+    path('sesiones/<int:sesion_id>/mensajes-rapidos/', mensajes_rapidos_view, name='whatsapp_mensajes_rapidos'),
     path('sesiones/<int:sesion_id>/registrar-numero/', meta_registrar_numero, name='whatsapp_meta_registrar_numero'),
     path('sesiones/<int:sesion_id>/request-code/', meta_request_code, name='whatsapp_meta_request_code'),
     path('sesiones/<int:sesion_id>/verify-code/', meta_verify_code, name='whatsapp_meta_verify_code'),

@@ -38,6 +38,44 @@ from .permisos_sesion import (
 )
 
 
+def _clientes_de_conversacion(conv):
+    """Devuelve TODOS los Clientes (CRM) registrados desde una conversación.
+
+    Una conversación/contacto puede registrar varios clientes (el titular
+    inscribe a otras personas). Busca de forma robusta por:
+      - conversacion_origen / origenes.conversacion = esta conversación
+      - contacto_origen / origenes.contacto = el contacto de la conversación
+      - cédula(s) capturada(s) en las variables del flujo (cubre el caso de
+        cédula ya existente, donde el origen FK quedó en una conversación previa).
+    """
+    from crm.models import Cliente
+
+    cond = Q(conversacion_origen=conv) | Q(origenes__conversacion=conv)
+    contacto = getattr(conv, 'contacto', None)
+    if contacto:
+        cond |= Q(contacto_origen=contacto) | Q(origenes__contacto=contacto)
+
+    try:
+        estado = getattr(conv, 'estado_flujo', None)
+        variables = (estado.variables or {}) if estado else {}
+        cedulas = [
+            str(v).strip()
+            for k, v in variables.items()
+            if 'cedula' in k.lower() and str(v or '').strip()
+        ]
+        if cedulas:
+            cond |= Q(cedula__in=cedulas)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            'No pude leer cédulas del flujo conv#%s', getattr(conv, 'id', '?'))
+
+    return list(
+        Cliente.objects.filter(cond, status=True)
+        .distinct()
+        .prefetch_related('origenes__sesion', 'origenes__departamento')
+    )
+
+
 def _reenviar_mensaje(request):
     """Reenvía un mensaje saliente que quedó en estado 'fallido'.
     Provider-agnostic: reusa el servicio de la sesión (Baileys o Meta)."""
@@ -361,22 +399,7 @@ def conversacionesView(request):
             try:
                 from crm.models import Cliente
                 conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['id']))
-                contacto_conv = conv.contacto
-                # Una conversación/contacto puede haber registrado VARIOS clientes
-                # (el titular inscribió a otras personas). Los listamos todos.
-                clientes = list(
-                    Cliente.objects.filter(
-                        Q(conversacion_origen=conv) | Q(origenes__conversacion=conv),
-                        status=True,
-                    ).distinct().prefetch_related('origenes__sesion', 'origenes__departamento')
-                )
-                if not clientes and contacto_conv:
-                    clientes = list(
-                        Cliente.objects.filter(
-                            Q(contacto_origen=contacto_conv) | Q(origenes__contacto=contacto_conv),
-                            status=True,
-                        ).distinct().prefetch_related('origenes__sesion', 'origenes__departamento')
-                    )
+                clientes = _clientes_de_conversacion(conv)
                 ctx = {'clientes': clientes, 'conv': conv}
                 template = get_template('whatsapp/conversaciones/_modal_ficha_cliente.html')
                 return JsonResponse({'result': True, 'data': template.render(ctx, request)})

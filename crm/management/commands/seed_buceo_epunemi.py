@@ -62,6 +62,7 @@ ID_SALUDO = 10
 ID_PEDIR_CEDULA = 20
 ID_HTTP_CEDULA = 30
 ID_EVAL_EDAD = 40
+ID_CONFIRMA_DATOS = 45
 ID_MENU = 50
 ID_INFO_CURSO = 60
 ID_REQUISITOS = 70
@@ -78,6 +79,9 @@ ID_MAN_NOMBRES = 300
 ID_MAN_APELLIDOS = 310
 ID_MAN_EDAD = 320
 ID_MAN_CORREO = 330
+# Corrección de nombres/apellidos (desde el nodo de confirmación)
+ID_FIX_NOMBRES = 340
+ID_FIX_APELLIDOS = 350
 ID_MENOR_EDAD = 950
 ID_DESPEDIDA_NO = 960
 ID_ERR_REGISTRO = 970
@@ -94,6 +98,9 @@ COORDS = {
     ID_PEDIR_CEDULA:    (440, 180),
     ID_HTTP_CEDULA:     (440, 320),
     ID_EVAL_EDAD:       (440, 460),
+    ID_CONFIRMA_DATOS:  (640, 460),
+    ID_FIX_NOMBRES:     (640, 600),
+    ID_FIX_APELLIDOS:   (640, 740),
     ID_MENU:            (440, 620),
     ID_PREGUNTA_INSC:   (440, 900),
     ID_DEC_CORREO:      (440, 1040),
@@ -154,7 +161,40 @@ PASOS = [
         'id': ID_EVAL_EDAD, 'orden': 40, 'tipo': 'decision',
         'codigo': 'eval_edad', 'nombre': '¿Mayor de edad?',
         'condicion': '{{variables.edad}} >= 18',
-        'siguiente_si': ID_MENU, 'siguiente_no': ID_MENOR_EDAD,
+        'siguiente_si': ID_CONFIRMA_DATOS, 'siguiente_no': ID_MENOR_EDAD,
+    },
+
+    {
+        'id': ID_CONFIRMA_DATOS, 'orden': 45, 'tipo': 'menu_botones',
+        'codigo': 'confirma_datos', 'nombre': 'Confirmar nombres/apellidos',
+        'mensaje': (
+            'Antes de continuar, confirmemos tus datos:\n\n'
+            '👤 *{{variables.nombres}} {{variables.apellidos}}*\n\n'
+            '¿Están correctos?'
+        ),
+        'guardar_en': 'confirma_datos',
+        'opciones': [
+            {'etiqueta': '✅ Sí, correctos', 'valor': 'si',       'siguiente': ID_MENU},
+            {'etiqueta': '✏️ Corregir',      'valor': 'corregir', 'siguiente': ID_FIX_NOMBRES},
+        ],
+    },
+    {
+        'id': ID_FIX_NOMBRES, 'orden': 340, 'tipo': 'input_texto',
+        'codigo': 'fix_nombres', 'nombre': 'Corregir nombres',
+        'mensaje': '👤 Escribe tus *nombres* correctamente:',
+        'guardar_en': 'nombres',
+        'validacion': r'^[A-Za-zÁÉÍÓÚáéíóúüÜñÑ\s\-]{2,}$',
+        'mensaje_error': '⚠️ Escribe tus nombres (solo letras):',
+        'siguiente': ID_FIX_APELLIDOS,
+    },
+    {
+        'id': ID_FIX_APELLIDOS, 'orden': 350, 'tipo': 'input_texto',
+        'codigo': 'fix_apellidos', 'nombre': 'Corregir apellidos',
+        'mensaje': '👤 Ahora tus *apellidos*:',
+        'guardar_en': 'apellidos',
+        'validacion': r'^[A-Za-zÁÉÍÓÚáéíóúüÜñÑ\s\-]{2,}$',
+        'mensaje_error': '⚠️ Escribe tus apellidos (solo letras):',
+        'siguiente': ID_CONFIRMA_DATOS,
     },
 
     {

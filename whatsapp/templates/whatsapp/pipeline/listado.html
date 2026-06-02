@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% block head %}
     <link rel="stylesheet" href="/static/css/whatsapp/pipeline.css?v1.5">
+    <link rel="stylesheet" href="/static/css/whatsapp/ficha_cliente.css?v1.1">
 {% endblock %}
 
 {% block content %}
@@ -670,6 +671,11 @@ function pipeRenderVerCard(j){
     const notaHtml = card.nota
         ? '<div class="pipe-conv-summary" style="background:#eff6ff; border-color:#bfdbfe; color:#1e3a8a;"><div class="pipe-conv-summary-title"><i class="fa fa-note-sticky me-1"></i>Observación de la card</div>' + pipeEscape(card.nota) + '</div>'
         : '';
+    const fichasHtml = (j.clientes_count > 0)
+        ? '<button type="button" class="btn btn-sm btn-outline-primary mb-2" id="pipeFichasToggle">' +
+              '<i class="fa fa-id-card me-1"></i>Ver ficha(s) de cliente (' + j.clientes_count + ')</button>' +
+          '<div id="pipeFichasBox" style="display:none; margin-bottom:.75rem;">' + (j.clientes_html || '') + '</div>'
+        : '';
 
     const html =
         '<div class="pipe-conv-header">' +
@@ -692,11 +698,19 @@ function pipeRenderVerCard(j){
         '</div>' +
         notaHtml +
         resumenHtml +
+        fichasHtml +
         '<div class="small fw-semibold text-muted mb-2 mt-2"><i class="fa fa-comments me-1"></i>Últimos ' + msgs.length + ' mensajes</div>' +
         '<div class="pipe-conv-messages">' + mensajesHtml + '</div>' +
         pipeRenderComentarios(card.id, j.comentarios || []);
 
     document.getElementById('pipeVerCardBody').innerHTML = html;
+    const $fichasToggle = document.getElementById('pipeFichasToggle');
+    if ($fichasToggle) {
+        $fichasToggle.addEventListener('click', function () {
+            const box = document.getElementById('pipeFichasBox');
+            if (box) { box.style.display = box.style.display === 'none' ? 'block' : 'none'; }
+        });
+    }
     const $ir = document.getElementById('pipeVerCardIr');
     $ir.href = conv.url_ir || '#';
     document.getElementById('pipeVerCardIrTexto').textContent = conv.finalizada

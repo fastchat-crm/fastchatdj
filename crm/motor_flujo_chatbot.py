@@ -1590,18 +1590,24 @@ class MotorFlujo:
                         logger.exception('Error enviando correo (nodo %s)', nodo.id)
             if etq == 'error' and err:
                 logger.warning('Nodo http %s falló: %s', nodo.id, err)
-                _notificar_excepcion_chatbot(
-                    nodo, self.conversation, etapa='http',
-                    error_msg=err,
-                    traceback_text=traza_extra.get('traceback', ''),
-                    extra={
-                        'url': traza_extra.get('url'),
-                        'metodo': traza_extra.get('metodo'),
-                        'query': traza_extra.get('query'),
-                        'request_body': traza_extra.get('request_body'),
-                        'response_body': traza_extra.get('response_body'),
-                    },
-                )
+                # Email SOLO para fallas técnicas reales (red/timeout → hay
+                # traceback). Los errores de negocio (HTTP 4xx / success:false,
+                # ej. "cédula no encontrada") NO mandan correo: ya quedan en la
+                # traza (/whatsapp/trazas/) y el flujo los maneja con su rama
+                # `error`. Esto evita el spam de mails por casos esperados.
+                if traza_extra.get('traceback'):
+                    _notificar_excepcion_chatbot(
+                        nodo, self.conversation, etapa='http',
+                        error_msg=err,
+                        traceback_text=traza_extra.get('traceback', ''),
+                        extra={
+                            'url': traza_extra.get('url'),
+                            'metodo': traza_extra.get('metodo'),
+                            'query': traza_extra.get('query'),
+                            'request_body': traza_extra.get('request_body'),
+                            'response_body': traza_extra.get('response_body'),
+                        },
+                    )
             return etq
 
         if tipo == 'funcion':

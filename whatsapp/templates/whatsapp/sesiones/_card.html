@@ -72,9 +72,10 @@
                 </button>
                 <a href="/whatsapp/horarios/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
                         class="fa fa-business-time"></i> Horarios</a>
-                <button type="button" class="kebab-item" data-action="respuestas-rapidas"><i
-                        class="fa fa-clipboard-list"></i> Respuestas rápidas
-                </button>
+                <a href="/whatsapp/sesiones/{{ sesion.id }}/mensajes-rapidos/?tab=respuestas" class="kebab-item"><i
+                        class="fa fa-clipboard-list"></i> Respuestas rápidas</a>
+                <a href="/whatsapp/sesiones/{{ sesion.id }}/mensajes-rapidos/?tab=menus" class="kebab-item"><i
+                        class="fa fa-list-ul"></i> Menús rápidos</a>
                 {% if sesion.es_meta %}
                     <div class="kebab-sep"></div>
                     <div class="kebab-heading">Meta Cloud API</div>

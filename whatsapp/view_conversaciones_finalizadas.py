@@ -143,22 +143,9 @@ def conversacionesFinalizadasView(request):
                 return JsonResponse({"result": False, 'message': str(ex)})
         elif action == 'ficha_cliente':
             try:
-                from crm.models import Cliente
+                from .view_conversaciones import _clientes_de_conversacion
                 conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['id']))
-                contacto_conv = conv.contacto
-                clientes = list(
-                    Cliente.objects.filter(
-                        Q(conversacion_origen=conv) | Q(origenes__conversacion=conv),
-                        status=True,
-                    ).distinct().prefetch_related('origenes__sesion', 'origenes__departamento')
-                )
-                if not clientes and contacto_conv:
-                    clientes = list(
-                        Cliente.objects.filter(
-                            Q(contacto_origen=contacto_conv) | Q(origenes__contacto=contacto_conv),
-                            status=True,
-                        ).distinct().prefetch_related('origenes__sesion', 'origenes__departamento')
-                    )
+                clientes = _clientes_de_conversacion(conv)
                 ctx = {'clientes': clientes, 'conv': conv}
                 template = get_template('whatsapp/conversaciones/_modal_ficha_cliente.html')
                 return JsonResponse({'result': True, 'data': template.render(ctx, request)})

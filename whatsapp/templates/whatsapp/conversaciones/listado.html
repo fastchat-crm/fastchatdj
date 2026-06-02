@@ -215,6 +215,9 @@
                                 <a class="dropdown-item form_modal" href="javascript:void(0)" id="ficha_cliente" title="Ficha del cliente">
                                     <i class="fa fa-id-card me-2 text-primary"></i> Ficha del cliente
                                 </a>
+                                <a class="dropdown-item" href="javascript:void(0)" id="ver-logs-conversacion" title="Ver logs / trazas de esta conversación">
+                                    <i class="fa fa-clipboard-list me-2 text-secondary"></i> Logs de esta conversación
+                                </a>
                                 <div class="dropdown-divider"></div>
                                 <a class="dropdown-item" href="javascript:void(0)"
                                    onclick="toggleEstadisticasPanel()">
@@ -2444,6 +2447,13 @@
             const title = $(this).attr('title');
             const action = $(this).attr('id');
             formModal(id, title, action);
+        });
+
+        $(document).on('click', '#ver-logs-conversacion', function(e) {
+            e.preventDefault();
+            const id = $(this).attr('data-id') || conversacionActiva;
+            if (!id) { return; }
+            window.open('/whatsapp/trazas/?conversacion=' + id, '_blank');
         });
 
         $('#marcar-resuelto').on('click', function(e) {

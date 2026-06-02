@@ -1178,10 +1178,18 @@ def _resumen_accion_nodo(n):
     return ''
 
 
+# Funciones (funcion_codigo) que persisten un Cliente en el CRM. Si agregás
+# otra función que guarde cliente, sumá su código acá para que el diagrama la
+# identifique con el badge "👤 Cliente".
+FUNCIONES_REGISTRAN_CLIENTE = {'cliente_upsert', 'registrar_inscripcion_buceo'}
+
+
 def _flags_nodo(n):
     """Banderas/badges cortos para el subtítulo (efectos colaterales)."""
     cfg = n.config or {}
     flags = []
+    if n.tipo_nodo == 'funcion' and (cfg.get('funcion_codigo') or '') in FUNCIONES_REGISTRAN_CLIENTE:
+        flags.append('👤 Cliente')
     if cfg.get('envia_correo'):
         flags.append('correo')
     if cfg.get('notificar_asesor'):

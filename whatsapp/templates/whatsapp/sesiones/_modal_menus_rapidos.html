@@ -1,0 +1,216 @@
+<div class="detail-wrap" data-mr-sesion="{{ sesion.id }}">
+  <div class="detail-head">
+    <div>
+      <h5>Menús rápidos — {{ sesion.nombre }}</h5>
+      <p class="muted">Mensajes tipo menú (botones/lista) guardados para esta sesión. En el chat se insertan con un clic.</p>
+    </div>
+    <button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>
+  </div>
+
+  <div class="detail-body">
+    <div class="rr-lista" id="mr-lista">
+      {% if menus %}
+        {% for m in menus %}
+          <div class="rr-item" data-mr-id="{{ m.id }}"
+               data-mr-nombre="{{ m.nombre|escape }}" data-mr-cuerpo="{{ m.cuerpo|escape }}"
+               data-mr-header="{{ m.header|escape }}" data-mr-footer="{{ m.footer|escape }}"
+               data-mr-opciones="{{ m.opciones|escapejs }}">
+            <div class="rr-item-info">
+              <div class="rr-item-titulo">{{ m.nombre }} <span class="muted">({{ m.opciones|length }} opción/es)</span></div>
+              <div class="rr-item-cuerpo">{{ m.cuerpo }}</div>
+            </div>
+            <div class="rr-item-acciones">
+              <button type="button" class="conex-btn conex-btn-light mr-edit" data-id="{{ m.id }}"><i class="fa fa-pen"></i></button>
+              <button type="button" class="conex-btn conex-btn-light mr-del" data-id="{{ m.id }}"><i class="fa fa-trash"></i></button>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="rr-empty" id="mr-empty">Aún no hay menús rápidos. Creá el primero abajo.</div>
+      {% endif %}
+    </div>
+
+    <hr>
+
+    <div class="rr-form">
+      <input type="hidden" id="mr-form-id" value="">
+      <div class="form-row">
+        <label>Nombre (interno)</label>
+        <input type="text" id="mr-form-nombre" maxlength="80" placeholder="Ej: Menú de bienvenida">
+      </div>
+      <div class="form-row">
+        <label>Encabezado (opcional)</label>
+        <input type="text" id="mr-form-header" maxlength="60" placeholder="Texto en negrita arriba (máx 60)">
+      </div>
+      <div class="form-row">
+        <label>Cuerpo del mensaje</label>
+        <textarea id="mr-form-cuerpo" rows="3" maxlength="1024" placeholder="Texto principal del menú."></textarea>
+      </div>
+      <div class="form-row">
+        <label>Pie (opcional)</label>
+        <input type="text" id="mr-form-footer" maxlength="60" placeholder="Texto chico abajo (máx 60)">
+      </div>
+
+      <div class="form-row">
+        <label>Opciones / botones (máx 10)</label>
+        <div id="mr-opciones-lista"></div>
+        <button type="button" class="conex-btn conex-btn-light" id="mr-add-opcion">
+          <i class="fa fa-plus me-1"></i> Agregar opción
+        </button>
+      </div>
+
+      <div class="detail-actions">
+        <button type="button" class="conex-btn conex-btn-light" id="mr-form-cancelar">Limpiar</button>
+        <button type="button" class="conex-btn conex-btn-primary" id="mr-form-guardar">
+          <i class="fa fa-save me-1"></i> Guardar menú
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var wrap = document.querySelector('.detail-wrap[data-mr-sesion]');
+    if (!wrap) return;
+    var sesionId = wrap.getAttribute('data-mr-sesion');
+    var lista = document.getElementById('mr-lista');
+    var inpId = document.getElementById('mr-form-id');
+    var inpNombre = document.getElementById('mr-form-nombre');
+    var inpHeader = document.getElementById('mr-form-header');
+    var inpCuerpo = document.getElementById('mr-form-cuerpo');
+    var inpFooter = document.getElementById('mr-form-footer');
+    var opcionesBox = document.getElementById('mr-opciones-lista');
+
+    function csrf() {
+      var el = document.querySelector('input[name=csrfmiddlewaretoken]');
+      return el ? el.value : '';
+    }
+    function post(action, params) {
+      var fd = new FormData();
+      fd.append('csrfmiddlewaretoken', csrf());
+      fd.append('action', action);
+      Object.keys(params || {}).forEach(function (k) { fd.append(k, params[k]); });
+      return fetch('/whatsapp/sesiones/', {
+        method: 'POST', body: fd, credentials: 'same-origin',
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+      }).then(function (r) { return r.json(); });
+    }
+    function esc(s) {
+      return String(s || '').replace(/[&<>"]/g, function (c) {
+        return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c];
+      });
+    }
+
+    function filaOpcion(etiqueta, valor) {
+      var row = document.createElement('div');
+      row.className = 'mr-opcion-row';
+      row.innerHTML =
+        '<input type="text" class="mr-op-etq" maxlength="24" placeholder="Texto del botón (máx 24)" value="' + esc(etiqueta) + '">' +
+        '<input type="text" class="mr-op-val" maxlength="256" placeholder="Valor (lo que se envía)" value="' + esc(valor) + '">' +
+        '<button type="button" class="conex-btn conex-btn-light mr-op-del"><i class="fa fa-times"></i></button>';
+      row.querySelector('.mr-op-del').addEventListener('click', function () { row.remove(); });
+      return row;
+    }
+    function addOpcion(etq, val) { opcionesBox.appendChild(filaOpcion(etq || '', val || '')); }
+    function leerOpciones() {
+      var out = [];
+      opcionesBox.querySelectorAll('.mr-opcion-row').forEach(function (row) {
+        var etq = row.querySelector('.mr-op-etq').value.trim();
+        var val = row.querySelector('.mr-op-val').value.trim() || etq;
+        if (etq) out.push({etiqueta: etq, valor: val});
+      });
+      return out;
+    }
+
+    document.getElementById('mr-add-opcion').addEventListener('click', function () { addOpcion(); });
+
+    function render(items) {
+      if (!items.length) {
+        lista.innerHTML = '<div class="rr-empty" id="mr-empty">Aún no hay menús rápidos. Creá el primero abajo.</div>';
+        return;
+      }
+      lista.innerHTML = items.map(function (m) {
+        var opsJson = esc(JSON.stringify(m.opciones || []));
+        return '<div class="rr-item" data-mr-id="' + m.id + '" data-mr-nombre="' + esc(m.nombre) + '"' +
+          ' data-mr-cuerpo="' + esc(m.cuerpo) + '" data-mr-header="' + esc(m.header) + '"' +
+          ' data-mr-footer="' + esc(m.footer) + '" data-mr-opciones="' + opsJson + '">' +
+          '<div class="rr-item-info"><div class="rr-item-titulo">' + esc(m.nombre) +
+            ' <span class="muted">(' + (m.opciones || []).length + ' opción/es)</span></div>' +
+            '<div class="rr-item-cuerpo">' + esc(m.cuerpo) + '</div></div>' +
+          '<div class="rr-item-acciones">' +
+            '<button type="button" class="conex-btn conex-btn-light mr-edit" data-id="' + m.id + '"><i class="fa fa-pen"></i></button> ' +
+            '<button type="button" class="conex-btn conex-btn-light mr-del" data-id="' + m.id + '"><i class="fa fa-trash"></i></button>' +
+          '</div></div>';
+      }).join('');
+    }
+    function recargar() {
+      return post('menu_rapido_listar', {sesion_id: sesionId}).then(function (r) {
+        if (!r.error) render(r.items || []);
+      });
+    }
+    function resetForm() {
+      inpId.value = ''; inpNombre.value = ''; inpHeader.value = '';
+      inpCuerpo.value = ''; inpFooter.value = ''; opcionesBox.innerHTML = '';
+      addOpcion();
+    }
+    document.getElementById('mr-form-cancelar').addEventListener('click', resetForm);
+
+    document.getElementById('mr-form-guardar').addEventListener('click', function () {
+      var nombre = inpNombre.value.trim();
+      var opciones = leerOpciones();
+      if (!nombre) { if (typeof mensajeWarning === 'function') mensajeWarning('El nombre es obligatorio.'); inpNombre.focus(); return; }
+      if (!opciones.length) { if (typeof mensajeWarning === 'function') mensajeWarning('Agregá al menos una opción.'); return; }
+      if (typeof pantallaespera === 'function') pantallaespera();
+      post('menu_rapido_guardar', {
+        sesion_id: sesionId, id: inpId.value || '', nombre: nombre,
+        header: inpHeader.value.trim(), cuerpo: inpCuerpo.value.trim(),
+        footer: inpFooter.value.trim(), opciones: JSON.stringify(opciones),
+      }).then(function (r) {
+        setTimeout($.unblockUI, 1);
+        if (r.error) { if (typeof mensajeWarning === 'function') mensajeWarning(r.message || 'Error al guardar'); return; }
+        resetForm(); recargar();
+        if (typeof mensajeExito === 'function') mensajeExito(r.message || 'Guardado');
+      });
+    });
+
+    lista.addEventListener('click', function (e) {
+      var edit = e.target.closest('.mr-edit');
+      if (edit) {
+        var item = edit.closest('.rr-item');
+        inpId.value = item.getAttribute('data-mr-id');
+        inpNombre.value = item.getAttribute('data-mr-nombre');
+        inpHeader.value = item.getAttribute('data-mr-header');
+        inpCuerpo.value = item.getAttribute('data-mr-cuerpo');
+        inpFooter.value = item.getAttribute('data-mr-footer');
+        opcionesBox.innerHTML = '';
+        var ops = [];
+        try { ops = JSON.parse(item.getAttribute('data-mr-opciones') || '[]'); } catch (err) { ops = []; }
+        if (ops.length) { ops.forEach(function (o) { addOpcion(o.etiqueta, o.valor); }); } else { addOpcion(); }
+        inpNombre.focus();
+        return;
+      }
+      var del = e.target.closest('.mr-del');
+      if (del) {
+        var id = del.getAttribute('data-id');
+        var confirmar = function () {
+          post('menu_rapido_eliminar', {sesion_id: sesionId, id: id}).then(function (r) {
+            if (r.error) { if (typeof mensajeWarning === 'function') mensajeWarning(r.message || 'Error'); return; }
+            recargar();
+          });
+        };
+        if (window.Swal) {
+          Swal.fire({
+            title: '¿Eliminar menú?', type: 'warning', showCancelButton: true,
+            confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33',
+          }).then(function (res) { if (res.value) confirmar(); });
+        } else if (confirm('¿Eliminar menú?')) { confirmar(); }
+      }
+    });
+
+    resetForm();
+    // Recargamos vía AJAX al iniciar para reconstruir la lista con JSON válido
+    // en data-mr-opciones (el render server-side dejaría repr de Python).
+    recargar();
+  })();
+</script>

@@ -21,7 +21,7 @@ import uuid
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.template.loader import get_template
 from django.urls import reverse
 
@@ -603,6 +603,30 @@ def _accion_menu_rapido_eliminar(request):
     return JsonResponse({'error': False, 'message': 'Menú eliminado.'})
 
 
+@login_required
+def mensajes_rapidos_view(request, sesion_id):
+    """Página de configuración de mensajes rápidos de una sesión: respuestas
+    rápidas + menús rápidos, cada uno con su listado y CRUD (no modal).
+    Estilo /agenda/configuracion/. El CRUD usa las acciones AJAX existentes.
+    """
+    from .models import RespuestaRapidaSesion, MenuRapidoSesion
+    sesion = SesionWhatsApp.objects.filter(id=sesion_id, usuario=request.user).first()
+    if not sesion:
+        return redirect('/whatsapp/sesiones/')
+    data = {
+        'titulo': f'Mensajes rápidos · {sesion.nombre or sesion.numero}',
+        'ruta': request.path,
+        'sesion': sesion,
+        'respuestas': RespuestaRapidaSesion.objects.filter(
+            sesion=sesion, status=True).order_by('titulo'),
+        'menus': MenuRapidoSesion.objects.filter(
+            sesion=sesion, status=True).order_by('nombre'),
+        'tab': (request.GET.get('tab') or 'respuestas'),
+    }
+    addData(request, data)
+    return render(request, 'whatsapp/sesiones/mensajes_rapidos.html', data)
+
+
 def _accion_respuesta_rapida_listar(request):
     """Lista las respuestas rápidas (texto guardado) de una sesión para el
     panel del composer en /whatsapp/conversaciones/."""
@@ -1006,6 +1030,13 @@ def _get_partial(request, accion):
             sesion=sesion, status=True,
         ).order_by('titulo')
         tpl = 'whatsapp/sesiones/_modal_respuestas_rapidas.html'
+
+    elif accion == 'menus_rapidos_modal':
+        from .models import MenuRapidoSesion
+        ctx['menus'] = MenuRapidoSesion.objects.filter(
+            sesion=sesion, status=True,
+        ).order_by('nombre')
+        tpl = 'whatsapp/sesiones/_modal_menus_rapidos.html'
 
     elif accion == 'ads_config_modal':
         cfg = getattr(sesion, 'config_meta', None)

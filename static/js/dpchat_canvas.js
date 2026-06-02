@@ -103,10 +103,13 @@
     }
 
     var pos = {};
-    var faltanPos = G.nodos.every(function (n) { return !n.x && !n.y; });
-    if (faltanPos && window.dagre) {
+    // Layout automático estilo n8n: siempre corremos dagre en sentido LR
+    // (izquierda→derecha) — los puertos de Drawflow son horizontales (entrada a
+    // la izq, salida a la der), así las conexiones quedan limpias y curvas en vez
+    // de cruzarse. No persistimos posiciones, es solo el render visual.
+    if (window.dagre) {
         var g = new dagre.graphlib.Graph();
-        g.setGraph({ rankdir: 'TB', nodesep: 55, ranksep: 95, marginx: 50, marginy: 40 });
+        g.setGraph({ rankdir: 'LR', nodesep: 45, ranksep: 130, marginx: 60, marginy: 40 });
         g.setDefaultEdgeLabel(function () { return {}; });
         G.nodos.forEach(function (n) {
             g.setNode(String(n.id), { width: NODE_W, height: NODE_H });

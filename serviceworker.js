@@ -107,11 +107,30 @@ self.onmessage = async function (event) {
 }
 
 addEventListener('notificationclick', function (event) {
-    switch (event.action) {
-        case 'open_url':
-            if (event.notification.data.url) {
-                clients.openWindow(event.notification.data.url); //which we got from above
-            }
-            break;
+    // Cerrar la notificación siempre (tanto click en el cuerpo como en la acción).
+    event.notification.close();
+
+    // El click en el CUERPO de la notificación llega con event.action === ''
+    // (string vacío). Antes solo se manejaba la acción 'open_url' del botón
+    // "Ver ahora", por eso al tocar la notificación no abría nada. Ahora
+    // cubrimos ambos casos.
+    if (event.action && event.action !== 'open_url') {
+        return;
     }
+
+    var url = (event.notification.data && event.notification.data.url) || '';
+    if (!url) {
+        return;
+    }
+
+    event.waitUntil((async function () {
+        // Si ya hay una pestaña abierta en esa URL, la enfocamos; si no, abrimos.
+        const ventanas = await clients.matchAll({type: 'window', includeUncontrolled: true});
+        for (const cliente of ventanas) {
+            if (cliente.url === url && 'focus' in cliente) {
+                return cliente.focus();
+            }
+        }
+        return clients.openWindow(url);
+    })());
 }, false);

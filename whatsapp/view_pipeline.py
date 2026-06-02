@@ -210,6 +210,12 @@ def pipelineView(request):
                             'fecha': m.fecha.strftime('%d/%m/%Y %H:%M') if m.fecha else '',
                         })
                     from core.funciones import encrypt_sesion_id
+                    from django.template.loader import get_template
+                    from .view_conversaciones import _clientes_de_conversacion
+                    _clientes = _clientes_de_conversacion(conv)
+                    clientes_html = get_template(
+                        'whatsapp/conversaciones/_modal_ficha_cliente.html'
+                    ).render({'clientes': _clientes, 'conv': conv}, request)
                     finalizada = bool(conv.conversacion_finalizada)
                     conv_token = encrypt_sesion_id(conv.id)
                     if finalizada:
@@ -247,6 +253,8 @@ def pipelineView(request):
                             'usuario': (card.usuario_creacion.get_full_name() if card.usuario_creacion else '—') or (card.usuario_creacion.username if card.usuario_creacion else '—'),
                         },
                         'comentarios': comentarios,
+                        'clientes_html': clientes_html,
+                        'clientes_count': len(_clientes),
                         'conversacion': {
                             'id': conv.id,
                             'nombre': contacto.contacto_nombre or contacto_numero,

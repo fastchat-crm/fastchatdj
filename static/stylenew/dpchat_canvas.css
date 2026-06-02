@@ -192,6 +192,28 @@
     box-shadow: 0 0 0 2px #6366f1, 0 6px 18px rgba(99, 102, 241, .25);
 }
 
+/* Conexiones estilo n8n: curvas suaves, grises, resaltan al pasar el mouse. */
+.drawflow .connection .main-path {
+    stroke: #b0b8c4;
+    stroke-width: 2.5px;
+    fill: none;
+    transition: stroke .15s ease;
+}
+.drawflow .connection .main-path:hover {
+    stroke: #6366f1;
+    stroke-width: 3px;
+    cursor: pointer;
+}
+/* Puntos de conexión más discretos */
+.drawflow .drawflow-node .input,
+.drawflow .drawflow-node .output {
+    background: #ffffff;
+    border: 2px solid #b0b8c4;
+    width: 12px;
+    height: 12px;
+}
+.drawflow .drawflow-node .output { border-color: #6366f1; }
+
 .dpc-node {
     background: #ffffff;
     border: 1px solid #e5e7eb;
