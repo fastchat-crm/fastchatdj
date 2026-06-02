@@ -509,7 +509,20 @@ def meta_cambiar_nombre_action(request, sesion_id: int):
         'ok': True,
         'message': f'Cambio a "{nuevo}" enviado a revisión de Meta. El número sigue operando '
                    'con el nombre actual hasta que Meta lo apruebe (name_status PENDING_REVIEW).',
+        'meta_url': _url_meta_numero(config),
     })
+
+
+def _url_meta_numero(config: ConfigMeta) -> str:
+    """Deep-link al número en WhatsApp Manager (para revisar/validar el nombre)."""
+    business_id = config.business_account_id or _business_id_org()
+    url = 'https://business.facebook.com/latest/whatsapp_manager/phone_numbers/?'
+    if business_id:
+        url += f'business_id={business_id}&'
+    url += f'asset_id={config.waba_id}&nav_ref=whatsapp_manager&tab=phone-numbers'
+    if config.phone_number_id:
+        url += f'&phone_number_id={config.phone_number_id}'
+    return url
 
 
 @login_required

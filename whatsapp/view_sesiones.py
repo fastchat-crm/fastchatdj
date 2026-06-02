@@ -1144,6 +1144,7 @@ def sesionesView(request):
             conv_abiertas=Count(
                 'contacto__conversaciones',
                 filter=Q(
+                    contacto__conversaciones__estado_atencion='abierta',
                     contacto__conversaciones__conversacion_finalizada=False,
                     contacto__conversaciones__status=True,
                 ),

@@ -128,7 +128,8 @@
       "PowerShell(python -m py_compile whatsapp/meta_manual_view.py whatsapp/urls.py; if \\($?\\) { \"OK sintaxis\" })",
       "PowerShell(python -m py_compile whatsapp/meta_webhook_view.py; if \\($?\\) { \"OK sintaxis\" })",
       "PowerShell(python -m py_compile whatsapp/meta_diagnostico_view.py whatsapp/urls.py; if \\($?\\) { \"OK sintaxis\" })",
-      "PowerShell(python -m py_compile whatsapp/meta_diagnostico_view.py whatsapp/meta_manual_view.py whatsapp/meta_webhook_view.py whatsapp/urls.py; if \\($?\\) { \"OK sintaxis Python\" })"
+      "PowerShell(python -m py_compile whatsapp/meta_diagnostico_view.py whatsapp/meta_manual_view.py whatsapp/meta_webhook_view.py whatsapp/urls.py; if \\($?\\) { \"OK sintaxis Python\" })",
+      "Bash(node --check static/stylenew/sesiones.js)"
     ]
   },
   "hooks": {

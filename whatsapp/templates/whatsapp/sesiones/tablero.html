@@ -671,6 +671,21 @@
         <div class="detail-panel" id="conex-detail-content" role="dialog"></div>
     </div>
 
+    {# ───────── Offcanvas lateral de acciones de sesión ───────── #}
+    <div class="acc-oc-backdrop" id="acc-offcanvas-backdrop" aria-hidden="true"></div>
+    <aside class="acc-oc" id="acc-offcanvas" role="dialog" aria-label="Acciones de la sesión" aria-hidden="true">
+        <div class="acc-oc-header">
+            <div class="acc-oc-titlewrap">
+                <i class="fa fa-bolt"></i>
+                <h5 id="acc-offcanvas-title">Acciones</h5>
+            </div>
+            <button type="button" class="acc-oc-close" id="acc-offcanvas-close" aria-label="Cerrar">
+                <i class="fa fa-times"></i>
+            </button>
+        </div>
+        <div class="acc-oc-body" id="acc-offcanvas-body"></div>
+    </aside>
+
     {# ───────── Modal Eco / Test envío (Meta) ───────── #}
     <div class="man-val-backdrop" id="eco-modal" aria-hidden="true">
         <div class="man-val-panel" role="dialog" aria-labelledby="eco-modal-title" style="max-width:520px">

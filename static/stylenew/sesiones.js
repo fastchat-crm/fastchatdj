@@ -485,7 +485,11 @@
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    function renderCambiarNombre(nombreActual) {
+    function renderCambiarNombre(nombreActual, metaUrl) {
+        var linkMeta = metaUrl
+            ? '<a href="' + escaparHtml(metaUrl) + '" target="_blank" rel="noopener" class="cn-meta-link">' +
+              '<i class="fa fa-up-right-from-square"></i> Validar / ver estado del nombre en Meta</a>'
+            : '';
         return '<div class="valcx-wrap">' +
             '<h5 class="valcx-title"><i class="fa fa-signature"></i> Cambiar nombre del número</h5>' +
             '<p class="cn-help">Este es el <b>Display Name</b> que ven los clientes en WhatsApp. ' +
@@ -496,6 +500,7 @@
             'value="' + escaparHtml(nombreActual || '') + '">' +
             '<button type="button" class="conex-btn conex-btn-primary valcx-cta" id="cn-enviar">' +
             '<i class="fa fa-paper-plane"></i> Enviar a revisión de Meta</button>' +
+            linkMeta +
             '<div id="cn-result" class="valcx-verdict" hidden></div>' +
             '</div>';
     }
@@ -572,25 +577,46 @@
         if (modal && modal.classList.contains('open')) return cerrarModal();
     });
 
-    // ---------- Kebab menu ----------
+    // ---------- Offcanvas lateral de acciones ----------
+    function abrirAccionesOffcanvas(card) {
+        var oc = document.getElementById('acc-offcanvas');
+        var bd = document.getElementById('acc-offcanvas-backdrop');
+        var body = document.getElementById('acc-offcanvas-body');
+        var title = document.getElementById('acc-offcanvas-title');
+        var menu = card ? card.querySelector('[data-kebab-menu]') : null;
+        if (!oc || !body || !menu) return;
+        oc.setAttribute('data-sesion-id', card.getAttribute('data-sesion-id') || '');
+        oc.setAttribute('data-sesion-nombre', card.getAttribute('data-sesion-nombre') || '');
+        oc.setAttribute('data-sesion-numero', card.getAttribute('data-sesion-numero') || '');
+        oc.setAttribute('data-meta-url', card.getAttribute('data-meta-url') || '');
+        if (title) title.textContent = card.getAttribute('data-sesion-nombre') || 'Acciones';
+        body.innerHTML = menu.innerHTML;
+        oc.classList.add('open');
+        oc.setAttribute('aria-hidden', 'false');
+        if (bd) { bd.classList.add('open'); bd.setAttribute('aria-hidden', 'false'); }
+    }
+
+    function cerrarAccionesOffcanvas() {
+        var oc = document.getElementById('acc-offcanvas');
+        var bd = document.getElementById('acc-offcanvas-backdrop');
+        if (oc) { oc.classList.remove('open'); oc.setAttribute('aria-hidden', 'true'); }
+        if (bd) { bd.classList.remove('open'); bd.setAttribute('aria-hidden', 'true'); }
+    }
+
     document.addEventListener('click', function (e) {
         var toggle = e.target.closest('[data-kebab-toggle]');
         if (toggle) {
-            var menu = toggle.parentElement.querySelector('[data-kebab-menu]');
-            // Cerrar todos los demás
-            document.querySelectorAll('[data-kebab-menu]').forEach(function (m) {
-                if (m !== menu) m.classList.remove('open');
-            });
-            if (menu) menu.classList.toggle('open');
+            var card = toggle.closest('.conex-card');
+            if (card) abrirAccionesOffcanvas(card);
             e.stopPropagation();
             return;
         }
-        // Click fuera: cerrar todos
-        if (!e.target.closest('[data-kebab-menu]')) {
-            document.querySelectorAll('[data-kebab-menu]').forEach(function (m) {
-                m.classList.remove('open');
-            });
+        if (e.target.closest('#acc-offcanvas-close') || e.target.closest('#acc-offcanvas-backdrop')) {
+            cerrarAccionesOffcanvas();
         }
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') cerrarAccionesOffcanvas();
     });
 
     // ---------- Baileys QR ----------
@@ -1093,17 +1119,18 @@
         if (!btn) return;
         // Ignorar el toggle activa/pausa — lo maneja el listener `change`.
         if (btn.getAttribute('data-action') === 'toggle-activo') return;
-        var card = btn.closest('.conex-card');
-        if (!card) return;
-        var sesionId = card.getAttribute('data-sesion-id');
-        var nombre = card.getAttribute('data-sesion-nombre') || '';
-        var numero = card.getAttribute('data-sesion-numero') || '';
+        // El contexto puede venir de la card o del offcanvas lateral (donde
+        // se clonan las acciones). Tomamos el que aplique.
+        var ctx = btn.closest('.conex-card') || btn.closest('#acc-offcanvas');
+        if (!ctx) return;
+        var card = ctx;
+        var sesionId = ctx.getAttribute('data-sesion-id');
+        var nombre = ctx.getAttribute('data-sesion-nombre') || '';
+        var numero = ctx.getAttribute('data-sesion-numero') || '';
         var action = btn.getAttribute('data-action');
 
-        // Cerrar kebab abierto
-        document.querySelectorAll('[data-kebab-menu]').forEach(function (m) {
-            m.classList.remove('open');
-        });
+        // Cerrar el offcanvas de acciones al elegir una.
+        cerrarAccionesOffcanvas();
 
         if (action === 'editar') {
             fetchPartial('editar_modal', sesionId).then(function (r) {
@@ -1200,7 +1227,7 @@
                         '<i class="fa fa-circle-xmark"></i> Error de red al validar.</div></div>');
                 });
         } else if (action === 'cambiar-nombre') {
-            abrirDetail(renderCambiarNombre(nombre));
+            abrirDetail(renderCambiarNombre(nombre, card.getAttribute('data-meta-url') || ''));
             var cnBtn = document.getElementById('cn-enviar');
             var cnInput = document.getElementById('cn-input');
             var cnResult = document.getElementById('cn-result');
@@ -1232,21 +1259,35 @@
                     .then(function (data) {
                         cnBtn.disabled = false;
                         cnBtn.innerHTML = orig;
-                        cnResult.hidden = false;
-                        if (data.ok) {
-                            cnResult.className = 'valcx-verdict is-ok';
-                            cnResult.innerHTML = '<i class="fa fa-circle-check"></i> ' + (data.message || 'Enviado a revisión.');
+                        var linkHtml = data.meta_url
+                            ? '<br><br><a href="' + escaparHtml(data.meta_url) + '" target="_blank" rel="noopener" ' +
+                              'class="conex-btn conex-btn-primary" style="text-decoration:none">' +
+                              '<i class="fa fa-up-right-from-square"></i> Validar/ver estado en Meta</a>'
+                            : '';
+                        if (window.Swal && Swal.fire) {
+                            Swal.fire({
+                                type: data.ok ? 'success' : 'error',
+                                title: data.ok ? 'Enviado a revisión de Meta' : 'No se pudo cambiar',
+                                html: escaparHtml(data.ok ? data.message : (data.error || 'Error.')) + linkHtml,
+                                confirmButtonText: 'Entendido',
+                            });
                         } else {
-                            cnResult.className = 'valcx-verdict is-bad';
-                            cnResult.innerHTML = '<i class="fa fa-circle-xmark"></i> ' + (data.error || 'No se pudo cambiar.');
+                            cnResult.hidden = false;
+                            cnResult.className = 'valcx-verdict ' + (data.ok ? 'is-ok' : 'is-bad');
+                            cnResult.innerHTML = (data.ok ? '<i class="fa fa-circle-check"></i> ' : '<i class="fa fa-circle-xmark"></i> ') +
+                                escaparHtml(data.ok ? data.message : (data.error || 'Error.')) + linkHtml;
                         }
                     })
                     .catch(function () {
                         cnBtn.disabled = false;
                         cnBtn.innerHTML = orig;
-                        cnResult.hidden = false;
-                        cnResult.className = 'valcx-verdict is-bad';
-                        cnResult.innerHTML = '<i class="fa fa-circle-xmark"></i> Error de red.';
+                        if (window.Swal && Swal.fire) {
+                            Swal.fire({type: 'error', title: 'Error de red', confirmButtonText: 'Cerrar'});
+                        } else {
+                            cnResult.hidden = false;
+                            cnResult.className = 'valcx-verdict is-bad';
+                            cnResult.innerHTML = '<i class="fa fa-circle-xmark"></i> Error de red.';
+                        }
                     });
             });
         } else if (action === 'datos-transporte') {
