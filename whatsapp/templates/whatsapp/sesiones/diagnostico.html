@@ -3,7 +3,7 @@
 
 {% block head %}
     <link rel="stylesheet" href="{% static 'stylenew/sesiones.css' %}">
-    <link rel="stylesheet" href="{% static 'stylenew/diagnostico.css' %}?v1.1">
+    <link rel="stylesheet" href="{% static 'stylenew/diagnostico.css' %}?v1.2">
     <link rel="stylesheet" href="{% static 'stylenew/json-pretty.css' %}">
     <script src="{% static 'javascript/json-pretty.js' %}"></script>
 {% endblock %}
@@ -188,6 +188,38 @@
                                     uno, elegí un PIN nuevo.</p>
                             </div>
                         </div>
+                        {% if phone_info.data.status == 'PENDING' %}
+                            <div class="diag-warn-box">
+                                <i class="fa fa-mobile-screen"></i>
+                                <div>
+                                    <b>Paso 1 — Verificar propiedad del número.</b>
+                                    <p>El número está en <code>PENDING</code>. Pedí el código de verificación: Meta
+                                        lo envía por SMS o llamada al número. Después ingresalo para confirmar.</p>
+                                </div>
+                            </div>
+                            <div class="diag-registrar-row">
+                                <select id="request-code-metodo" class="form-control">
+                                    <option value="SMS">SMS</option>
+                                    <option value="VOICE">Llamada de voz</option>
+                                </select>
+                                <button type="button" class="conex-btn diag-action-btn" id="btn-request-code"
+                                        data-sesion-id="{{ sesion.id }}">
+                                    <i class="fa fa-paper-plane"></i> Pedir código
+                                </button>
+                            </div>
+                            <div id="request-code-result" class="diag-action-result" hidden></div>
+                            <div class="diag-registrar-row">
+                                <input type="text" id="verify-code" class="form-control" inputmode="numeric"
+                                       maxlength="6" placeholder="Código recibido (6 dígitos)" autocomplete="off">
+                                <button type="button" class="conex-btn diag-action-btn" id="btn-verify-code"
+                                        data-sesion-id="{{ sesion.id }}">
+                                    <i class="fa fa-check-double"></i> Verificar código
+                                </button>
+                            </div>
+                            <div id="verify-code-result" class="diag-action-result" hidden></div>
+                            <hr class="diag-sep">
+                            <p class="diag-step-label"><b>Paso 2 — Registrar con un PIN de 6 dígitos.</b></p>
+                        {% endif %}
                         <div class="diag-registrar-row">
                             <input type="text" id="registrar-pin" class="form-control" inputmode="numeric"
                                    maxlength="6" placeholder="PIN de 6 dígitos" autocomplete="off">
@@ -801,6 +833,101 @@
                         } else {
                             resultBox.className = 'diag-action-result is-error';
                             resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> ' + (data.error || 'Falló el registro.');
+                        }
+                    })
+                    .catch(function () {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        resultBox.className = 'diag-action-result is-error';
+                        resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> Error de red.';
+                    });
+            });
+        })();
+
+        (function () {
+            var btn = document.getElementById('btn-request-code');
+            if (!btn) return;
+            var metodoSel = document.getElementById('request-code-metodo');
+            var resultBox = document.getElementById('request-code-result');
+            var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+            btn.addEventListener('click', function () {
+                if (btn.disabled) return;
+                var orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Solicitando...';
+                resultBox.hidden = true;
+                var fd = new FormData();
+                fd.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+                fd.append('metodo', metodoSel ? metodoSel.value : 'SMS');
+                fetch('/whatsapp/sesiones/' + btn.getAttribute('data-sesion-id') + '/request-code/', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'X-CSRFToken': csrf ? csrf.value : '', 'X-Requested-With': 'XMLHttpRequest'},
+                    credentials: 'same-origin',
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        if (data.ok) {
+                            resultBox.className = 'diag-action-result is-ok';
+                            resultBox.innerHTML = '<i class="fa fa-circle-check"></i> ' + (data.message || 'Código enviado.');
+                        } else {
+                            resultBox.className = 'diag-action-result is-error';
+                            resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> ' + (data.error || 'Falló la solicitud.');
+                        }
+                    })
+                    .catch(function () {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        resultBox.className = 'diag-action-result is-error';
+                        resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> Error de red.';
+                    });
+            });
+        })();
+
+        (function () {
+            var btn = document.getElementById('btn-verify-code');
+            if (!btn) return;
+            var codeInput = document.getElementById('verify-code');
+            var resultBox = document.getElementById('verify-code-result');
+            var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+            btn.addEventListener('click', function () {
+                if (btn.disabled) return;
+                var code = (codeInput.value || '').trim();
+                if (!/^\d{6}$/.test(code)) {
+                    resultBox.hidden = false;
+                    resultBox.className = 'diag-action-result is-error';
+                    resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> El código debe ser de 6 dígitos.';
+                    return;
+                }
+                var orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Verificando...';
+                resultBox.hidden = true;
+                var fd = new FormData();
+                fd.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+                fd.append('code', code);
+                fetch('/whatsapp/sesiones/' + btn.getAttribute('data-sesion-id') + '/verify-code/', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'X-CSRFToken': csrf ? csrf.value : '', 'X-Requested-With': 'XMLHttpRequest'},
+                    credentials: 'same-origin',
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        if (data.ok) {
+                            resultBox.className = 'diag-action-result is-ok';
+                            resultBox.innerHTML = '<i class="fa fa-circle-check"></i> ' + (data.message || 'Número verificado.');
+                        } else {
+                            resultBox.className = 'diag-action-result is-error';
+                            resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> ' + (data.error || 'Falló la verificación.');
                         }
                     })
                     .catch(function () {

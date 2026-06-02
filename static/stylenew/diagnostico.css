@@ -688,6 +688,15 @@
     color: inherit;
     opacity: .8;
 }
+.diag-registrar-row select.form-control {
+    max-width: 200px;
+    letter-spacing: normal;
+}
+.diag-step-label {
+    margin-top: .75rem;
+    margin-bottom: 0;
+    font-size: .85rem;
+}
 
 /* ─── Campos copiables (callback URL / verify token) ─── */
 .diag-copy-field {

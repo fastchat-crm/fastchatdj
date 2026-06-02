@@ -801,9 +801,13 @@
         ecoResultado.innerHTML = html;
     }
 
-    function abrirEco(sesionId, nombre) {
+    function abrirEco(sesionId, nombre, numero) {
         ecoSesionId = sesionId;
-        if (ecoFromLabel) ecoFromLabel.textContent = nombre || ('sesión #' + sesionId);
+        if (ecoFromLabel) {
+            var etiqueta = nombre || ('sesión #' + sesionId);
+            if (numero) etiqueta += ' (' + numero + ')';
+            ecoFromLabel.textContent = etiqueta;
+        }
         if (ecoNumero) ecoNumero.value = '';
         if (ecoMensaje) ecoMensaje.value = 'Hola! Este es un mensaje de prueba desde el CRM. Si lo recibís, la conexión funciona.';
         if (ecoResultado) ecoResultado.classList.add('d-none');
@@ -1037,6 +1041,7 @@
         if (!card) return;
         var sesionId = card.getAttribute('data-sesion-id');
         var nombre = card.getAttribute('data-sesion-nombre') || '';
+        var numero = card.getAttribute('data-sesion-numero') || '';
         var action = btn.getAttribute('data-action');
 
         // Cerrar kebab abierto
@@ -1132,7 +1137,7 @@
                 abrirDetail(r.html);
             });
         } else if (action === 'test-eco') {
-            abrirEco(sesionId, nombre);
+            abrirEco(sesionId, nombre, numero);
         } else if (action === 'cambiar-foto') {
             abrirCambiarFoto(sesionId, nombre);
         } else if (action === 'baileys-verificar') {

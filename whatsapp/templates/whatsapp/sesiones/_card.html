@@ -2,6 +2,7 @@
 {# Card individual de sesion en el tablero. Reusable como partial (AJAX poll). #}
 <div class="conex-card{% if not sesion.activo %} conex-card-pausada{% endif %}" data-sesion-id="{{ sesion.id }}"
      data-sesion-nombre="{{ sesion.nombre|default:sesion.numero|escape }}"
+     data-sesion-numero="{% if sesion.es_meta and sesion.config_meta and sesion.config_meta.display_phone_number %}{{ sesion.config_meta.display_phone_number|escape }}{% elif sesion.numero %}+{{ sesion.numero|escape }}{% endif %}"
      data-estado="{{ sesion.estado }}"
      data-activo="{{ sesion.activo|yesno:'1,0' }}"
      data-proveedor="{{ sesion.proveedor }}">

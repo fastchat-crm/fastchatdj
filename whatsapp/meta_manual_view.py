@@ -278,6 +278,118 @@ def meta_registrar_numero(request, sesion_id):
 @login_required
 @require_POST
 @csrf_protect
+def meta_request_code(request, sesion_id):
+    """Solicita el código de verificación del número (POST /{phone_number_id}/request_code).
+
+    Un número en estado PENDING necesita verificar la propiedad antes de poder
+    registrarse. Este endpoint le pide a Meta que envíe un código de 6 dígitos
+    por SMS o voz al número. Luego se confirma con meta_verify_code.
+
+    POST /whatsapp/sesiones/<sesion_id>/request-code/
+    Body: metodo=SMS|VOICE (default SMS), idioma=<locale> (default es_ES)
+    """
+    sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
+    if not sesion:
+        return JsonResponse({'ok': False, 'error': 'Sesión no encontrada o no es Meta.'})
+
+    config = getattr(sesion, 'config_meta', None)
+    if not config:
+        return JsonResponse({'ok': False, 'error': 'La sesión no tiene ConfigMeta.'})
+    if not (config.access_token and config.phone_number_id):
+        return JsonResponse({'ok': False, 'error': 'Falta access_token o phone_number_id en la sesión.'})
+
+    metodo = (request.POST.get('metodo') or 'SMS').strip().upper()
+    if metodo not in ('SMS', 'VOICE'):
+        metodo = 'SMS'
+    idioma = (request.POST.get('idioma') or 'es_ES').strip()
+
+    try:
+        r = requests.post(
+            build_graph_url(f'/{config.phone_number_id}/request_code'),
+            headers={'Authorization': f'Bearer {config.access_token}'},
+            json={'code_method': metodo, 'language': idioma},
+            timeout=15,
+        )
+    except Exception as ex:
+        return JsonResponse({'ok': False, 'error': f'No pude llamar a Graph: {ex}'})
+
+    if r.status_code != 200:
+        try:
+            err = r.json().get('error', {}).get('message', r.text[:300])
+        except Exception:
+            err = r.text[:300]
+        return JsonResponse({'ok': False, 'error': f'Meta rechazó la solicitud: {err}'})
+
+    logger.info("Código de verificación solicitado vía %s: phone_number_id=%s (sesión %s)",
+                metodo, config.phone_number_id, sesion.id)
+    via = 'SMS' if metodo == 'SMS' else 'llamada de voz'
+    return JsonResponse({
+        'ok': True,
+        'message': f'Código enviado por {via}. Ingresalo abajo para verificar el número.',
+    })
+
+
+@login_required
+@require_POST
+@csrf_protect
+def meta_verify_code(request, sesion_id):
+    """Confirma el código de verificación del número (POST /{phone_number_id}/verify_code).
+
+    Recibe el código de 6 dígitos que Meta envió por SMS/voz en meta_request_code
+    y verifica la propiedad del número. Tras un verify OK, el número queda listo
+    para registrarse con meta_registrar_numero.
+
+    POST /whatsapp/sesiones/<sesion_id>/verify-code/
+    Body: code=<6 dígitos>
+    """
+    sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
+    if not sesion:
+        return JsonResponse({'ok': False, 'error': 'Sesión no encontrada o no es Meta.'})
+
+    config = getattr(sesion, 'config_meta', None)
+    if not config:
+        return JsonResponse({'ok': False, 'error': 'La sesión no tiene ConfigMeta.'})
+    if not (config.access_token and config.phone_number_id):
+        return JsonResponse({'ok': False, 'error': 'Falta access_token o phone_number_id en la sesión.'})
+
+    code = (request.POST.get('code') or '').strip()
+    if not (code.isdigit() and len(code) == 6):
+        return JsonResponse({'ok': False, 'error': 'El código debe ser de 6 dígitos.'})
+
+    try:
+        r = requests.post(
+            build_graph_url(f'/{config.phone_number_id}/verify_code'),
+            headers={'Authorization': f'Bearer {config.access_token}'},
+            json={'code': code},
+            timeout=15,
+        )
+    except Exception as ex:
+        return JsonResponse({'ok': False, 'error': f'No pude llamar a Graph: {ex}'})
+
+    if r.status_code != 200:
+        try:
+            err = r.json().get('error', {}).get('message', r.text[:300])
+        except Exception:
+            err = r.text[:300]
+        return JsonResponse({'ok': False, 'error': f'Meta rechazó el código: {err}'})
+
+    # Best-effort: refrescar metadata desde Graph (status puede avanzar).
+    try:
+        sincronizar_meta_desde_graph(sesion, config)
+    except Exception as ex:
+        logger.warning("sincronizar_meta_desde_graph falló tras verify_code: %s", ex)
+
+    logger.info("Número verificado: phone_number_id=%s (sesión %s)",
+                config.phone_number_id, sesion.id)
+    return JsonResponse({
+        'ok': True,
+        'message': 'Número verificado. Ahora registralo con un PIN de 6 dígitos.',
+    })
+
+
+@login_required
+@require_POST
+@csrf_protect
 def meta_test_message(request, sesion_id):
     """Envía un mensaje de eco/prueba desde una sesión Meta a un número destino.
 

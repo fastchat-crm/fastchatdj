@@ -5,7 +5,10 @@ from .view_conversaciones_pendiente_reconexion import conversacionesPendienteRec
 from .view_sesiones import sesionesView
 from .view_sesion_activa import set_sesion_activa
 from .meta_oauth_view import meta_oauth_start, meta_oauth_callback
-from .meta_manual_view import meta_manual_validar, meta_manual_conectar, meta_test_message, meta_registrar_numero
+from .meta_manual_view import (
+    meta_manual_validar, meta_manual_conectar, meta_test_message, meta_registrar_numero,
+    meta_request_code, meta_verify_code,
+)
 from .meta_diagnostico_view import meta_diagnostico, meta_suscribir_waba_action, meta_configurar_webhook_action
 from .meta_webhook_log_view import meta_webhook_log, meta_webhook_log_poll, meta_webhook_log_detalle
 from .meta_webhook_hits_view import meta_webhook_hits, meta_webhook_hits_poll, meta_webhook_hit_detalle
@@ -116,6 +119,8 @@ urlpatterns = [
     path('meta/manual/conectar/', meta_manual_conectar, name='whatsapp_meta_manual_conectar'),
     path('meta/test-message/<int:sesion_id>/', meta_test_message, name='whatsapp_meta_test_message'),
     path('sesiones/<int:sesion_id>/registrar-numero/', meta_registrar_numero, name='whatsapp_meta_registrar_numero'),
+    path('sesiones/<int:sesion_id>/request-code/', meta_request_code, name='whatsapp_meta_request_code'),
+    path('sesiones/<int:sesion_id>/verify-code/', meta_verify_code, name='whatsapp_meta_verify_code'),
     path('sesiones/<int:sesion_id>/diagnostico/', meta_diagnostico, name='whatsapp_meta_diagnostico'),
     path('sesiones/<int:sesion_id>/suscribir-waba/', meta_suscribir_waba_action, name='whatsapp_meta_suscribir_waba'),
     path('sesiones/<int:sesion_id>/configurar-webhook/', meta_configurar_webhook_action, name='whatsapp_meta_configurar_webhook'),
