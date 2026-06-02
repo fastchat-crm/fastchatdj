@@ -68,11 +68,16 @@ ID_REQUISITOS = 70
 ID_COSTOS = 80
 ID_DURACION = 90
 ID_PREGUNTA_INSC = 100
+ID_DEC_CORREO = 105
 ID_PEDIR_CORREO = 110
 ID_PEDIR_CIUDAD = 120
-ID_HTTP_REGISTRAR = 130
+ID_REGISTRAR = 130
 ID_CONFIRMACION = 140
-ID_ERR_CEDULA = 900
+# Captura manual (cuando la API no trae datos)
+ID_MAN_NOMBRES = 300
+ID_MAN_APELLIDOS = 310
+ID_MAN_EDAD = 320
+ID_MAN_CORREO = 330
 ID_MENOR_EDAD = 950
 ID_DESPEDIDA_NO = 960
 ID_ERR_REGISTRO = 970
@@ -108,7 +113,7 @@ PASOS = [
             '$fecha_nacimiento': '$.data.fecha_nacimiento',
             '$edad':             '$.data.edad',
         },
-        'siguiente_ok': ID_EVAL_EDAD, 'siguiente_error': ID_ERR_CEDULA,
+        'siguiente_ok': ID_EVAL_EDAD, 'siguiente_error': ID_MAN_NOMBRES,
     },
     {
         'id': ID_EVAL_EDAD, 'orden': 40, 'tipo': 'decision',
@@ -220,10 +225,17 @@ PASOS = [
         ),
         'guardar_en': 'quiere_inscribirse',
         'opciones': [
-            {'etiqueta': '✅ Sí, inscribirme',   'valor': 'si',     'siguiente': ID_PEDIR_CORREO},
+            {'etiqueta': '✅ Sí, inscribirme',   'valor': 'si',     'siguiente': ID_DEC_CORREO},
             {'etiqueta': '❌ No por ahora',       'valor': 'no',     'siguiente': ID_DESPEDIDA_NO},
             {'etiqueta': '👨‍💼 Hablar con asesor', 'valor': 'asesor', 'siguiente': ID_HANDOFF_ASESOR},
         ],
+    },
+    {
+        'id': ID_DEC_CORREO, 'orden': 105, 'tipo': 'decision',
+        'codigo': 'correo_vacio', 'nombre': '¿Falta el correo?',
+        'condiciones': [{'izq': '{{variables.correo}}', 'op': 'vacio', 'der': ''}],
+        'operador': 'and',
+        'siguiente_si': ID_PEDIR_CORREO, 'siguiente_no': ID_PEDIR_CIUDAD,
     },
     {
         'id': ID_PEDIR_CORREO, 'orden': 110, 'tipo': 'input_texto',
@@ -241,14 +253,16 @@ PASOS = [
         'guardar_en': 'ciudad',
         'validacion': r'^.{2,}$',
         'mensaje_error': '⚠️ Escribe el nombre de tu ciudad:',
-        'siguiente': ID_HTTP_REGISTRAR,
+        'siguiente': ID_REGISTRAR,
     },
     {
-        'id': ID_HTTP_REGISTRAR, 'orden': 130, 'tipo': 'llamada_http',
-        'codigo': 'http_registrar', 'nombre': 'POST inscripcion_buceo',
-        'metodo': 'POST', 'path': 'inscripcion_buceo/',
-        'timeout_seg': 30,
+        'id': ID_REGISTRAR, 'orden': 130, 'tipo': 'llamada_funcion',
+        'codigo': 'registrar_cliente', 'nombre': 'Registrar Cliente en CRM',
+        'funcion_codigo': 'registrar_inscripcion_buceo',
         'envia_correo': True,
+        'timeout_seg': 30,
+        # path_inscripcion + body: intento best-effort a SAGEST (no bloquea).
+        'path_inscripcion': 'inscripcion_buceo/',
         'body': {
             'cedula':           '{{variables.cedula}}',
             'nombres':          '{{variables.nombres}}',
@@ -262,6 +276,46 @@ PASOS = [
             'estado':           'PRE_INSCRITO',
         },
         'siguiente_ok': ID_CONFIRMACION, 'siguiente_error': ID_ERR_REGISTRO,
+    },
+
+    {
+        'id': ID_MAN_NOMBRES, 'orden': 300, 'tipo': 'input_texto',
+        'codigo': 'man_nombres', 'nombre': 'Captura manual: nombres',
+        'mensaje': (
+            '😕 No pude validar esa cédula automáticamente. No te preocupes, '
+            'sigamos con tus datos.\n\n👤 ¿Cuáles son tus *nombres*?'
+        ),
+        'guardar_en': 'nombres',
+        'validacion': r'^[A-Za-zÁÉÍÓÚáéíóúüÜñÑ\s\-]{2,}$',
+        'mensaje_error': '⚠️ Escribe tus nombres (solo letras):',
+        'siguiente': ID_MAN_APELLIDOS,
+    },
+    {
+        'id': ID_MAN_APELLIDOS, 'orden': 310, 'tipo': 'input_texto',
+        'codigo': 'man_apellidos', 'nombre': 'Captura manual: apellidos',
+        'mensaje': '👤 ¿Y tus *apellidos*?',
+        'guardar_en': 'apellidos',
+        'validacion': r'^[A-Za-zÁÉÍÓÚáéíóúüÜñÑ\s\-]{2,}$',
+        'mensaje_error': '⚠️ Escribe tus apellidos (solo letras):',
+        'siguiente': ID_MAN_EDAD,
+    },
+    {
+        'id': ID_MAN_EDAD, 'orden': 320, 'tipo': 'input_texto',
+        'codigo': 'man_edad', 'nombre': 'Captura manual: edad',
+        'mensaje': '🎂 ¿Cuál es tu *edad*? (solo el número, ej: 25)',
+        'guardar_en': 'edad',
+        'validacion': r'^\d{1,3}$',
+        'mensaje_error': '⚠️ Escribe tu edad en números (ej: 25):',
+        'siguiente': ID_MAN_CORREO,
+    },
+    {
+        'id': ID_MAN_CORREO, 'orden': 330, 'tipo': 'input_texto',
+        'codigo': 'man_correo', 'nombre': 'Captura manual: correo',
+        'mensaje': '📧 ¿Cuál es tu *correo electrónico*?',
+        'guardar_en': 'correo',
+        'validacion': r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+        'mensaje_error': '⚠️ Ese correo no parece válido. Escríbelo de nuevo:',
+        'siguiente': ID_EVAL_EDAD,
     },
 
     {
@@ -283,22 +337,6 @@ PASOS = [
         ),
     },
 
-    {
-        'id': ID_ERR_CEDULA, 'orden': 900, 'tipo': 'menu_botones',
-        'codigo': 'err_cedula', 'nombre': 'Cédula no encontrada',
-        'mensaje': (
-            '😕 No pude encontrar datos para esa cédula o el servicio no '
-            'respondió.\n\nVerifica el número e inténtalo otra vez. Si el '
-            'problema continúa, un asesor puede ayudarte.\n\n'
-            '1️⃣ Reintentar cédula\n'
-            '2️⃣ Hablar con un asesor'
-        ),
-        'guardar_en': 'opcion_err_cedula',
-        'opciones': [
-            {'etiqueta': '🔁 Reintentar cédula',  'valor': 'reintentar', 'siguiente': ID_PEDIR_CEDULA},
-            {'etiqueta': '👨‍💼 Hablar con asesor', 'valor': 'asesor',     'siguiente': ID_HANDOFF_ASESOR},
-        ],
-    },
     {
         'id': ID_MENOR_EDAD, 'orden': 950, 'tipo': 'fin_conversacion',
         'codigo': 'menor_edad', 'nombre': 'Menor de edad',
@@ -346,6 +384,7 @@ TIPO_MAP = {
     'respuesta_texto':  'respuesta',
     'input_texto':      'pregunta',
     'llamada_http':     'http',
+    'llamada_funcion':  'funcion',
     'decision':         'condicional',
     'menu_botones':     'menu',
     'asignar_variable': 'set_variable',
@@ -480,6 +519,18 @@ class Command(BaseCommand):
             if paso.get('envia_correo'):
                 cfg['envia_correo'] = True
             return cfg
+        if t == 'llamada_funcion':
+            cfg = {
+                'funcion_codigo': paso.get('funcion_codigo', ''),
+                'body': paso.get('body') or {},
+                'extraer': _normalizar_extraer(paso.get('extrae_variables')),
+                'timeout_seg': paso.get('timeout_seg', 30),
+            }
+            if paso.get('path_inscripcion'):
+                cfg['path_inscripcion'] = paso['path_inscripcion']
+            if paso.get('envia_correo'):
+                cfg['envia_correo'] = True
+            return cfg
         return {}
 
     def _crear_nodo(self, depto, eps, paso):
@@ -490,7 +541,7 @@ class Command(BaseCommand):
             validacion_tipo = 'regex'
             validacion_expr = paso['validacion']
 
-        endpoint_obj = eps.get('rest') if t == 'llamada_http' else None
+        endpoint_obj = eps.get('rest') if t in ('llamada_http', 'llamada_funcion') else None
 
         return OpcionDepartamentoChatBot.objects.create(
             departamento=depto,
@@ -534,7 +585,7 @@ class Command(BaseCommand):
                 )
             return
 
-        if t == 'llamada_http':
+        if t in ('llamada_http', 'llamada_funcion'):
             if paso.get('siguiente_ok') in mapa:
                 ConexionNodoChatbot.objects.create(
                     nodo_origen=origen, nodo_destino=mapa[paso['siguiente_ok']],
