@@ -4,6 +4,7 @@
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
 <link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.9">
 <link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
+<link rel="stylesheet" href="/static/css/whatsapp/ficha_cliente.css?v1.0">
 <link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.3">
 {% endblock %}
 
@@ -210,6 +211,9 @@
                                 </a>
                                 <a class="dropdown-item" href="javascript:void(0)" id="ver-historial-cliente" title="Ver conversaciones pasadas del cliente">
                                     <i class="fa fa-history me-2 text-secondary"></i> Historial del cliente
+                                </a>
+                                <a class="dropdown-item form_modal" href="javascript:void(0)" id="ficha_cliente" title="Ficha del cliente">
+                                    <i class="fa fa-id-card me-2 text-primary"></i> Ficha del cliente
                                 </a>
                                 <div class="dropdown-divider"></div>
                                 <a class="dropdown-item" href="javascript:void(0)"
@@ -2207,6 +2211,7 @@
                             '#asignar-conversacion',
                             '#terminar-sin-despedida',
                             '#marcar-resuelto',
+                            '#ficha_cliente',
                             ]
 
         function cargarMensajes(conversacionId) {

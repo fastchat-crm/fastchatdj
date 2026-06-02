@@ -1,0 +1,73 @@
+.ficha-cliente-wrap {
+    padding: .25rem;
+}
+.ficha-head {
+    display: flex;
+    align-items: center;
+    gap: .85rem;
+    margin-bottom: 1rem;
+}
+.ficha-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #eff6ff;
+    color: #2563eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+.ficha-nombre {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+.ficha-sub {
+    font-size: .85rem;
+    color: #64748b;
+}
+.ficha-datos {
+    margin-bottom: 1rem;
+}
+.ficha-datos label {
+    display: block;
+    font-size: .72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #94a3b8;
+    margin-bottom: .1rem;
+}
+.ficha-datos > div > div {
+    font-size: .9rem;
+    color: #1e293b;
+    word-break: break-word;
+}
+.ficha-titulo-origenes {
+    font-size: .9rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 1rem 0 .5rem;
+}
+.ficha-footer {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: flex-end;
+}
+.ficha-vacia {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: #64748b;
+}
+.ficha-vacia i {
+    font-size: 2rem;
+    color: #cbd5e1;
+    margin-bottom: .75rem;
+}
+.ficha-vacia p {
+    margin: 0 0 .25rem;
+    font-size: .95rem;
+}

@@ -141,6 +141,33 @@ def conversacionesFinalizadasView(request):
                 return JsonResponse({"result": True, 'data': template.render(data)})
             except Exception as ex:
                 return JsonResponse({"result": False, 'message': str(ex)})
+        elif action == 'ficha_cliente':
+            try:
+                from crm.models import Cliente
+                conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['id']))
+                contacto_conv = conv.contacto
+                cliente = (
+                    Cliente.objects.filter(
+                        Q(conversacion_origen=conv) | Q(origenes__conversacion=conv),
+                        status=True,
+                    ).distinct().first()
+                )
+                if not cliente and contacto_conv:
+                    cliente = (
+                        Cliente.objects.filter(
+                            Q(contacto_origen=contacto_conv) | Q(origenes__contacto=contacto_conv),
+                            status=True,
+                        ).distinct().first()
+                    )
+                ctx = {
+                    'cliente': cliente,
+                    'conv': conv,
+                    'origenes': list(cliente.origenes.select_related('sesion', 'departamento').all()) if cliente else [],
+                }
+                template = get_template('whatsapp/conversaciones/_modal_ficha_cliente.html')
+                return JsonResponse({'result': True, 'data': template.render(ctx, request)})
+            except Exception as ex:
+                return JsonResponse({'result': False, 'message': str(ex)})
         elif action == 'cambiar-clasificacion':
             return cambiar_clasificacion_get(request)
         elif action == 'cambiar-nombre-contacto':

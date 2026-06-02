@@ -179,9 +179,18 @@ def pipelineView(request):
                     mensajes = []
                     contacto_numero = contacto.contacto_numero
                     contacto_nombre = contacto.contacto_nombre or contacto_numero or 'Client'
+                    # Dirección igual que el inbox (mensajes_partial.html): saliente
+                    # si el remitente es el número de la sesión, o si lo generó IA /
+                    # sistema / un agente. El resto es entrante del cliente. Comparar
+                    # contra el contacto falla porque Meta guarda el remitente
+                    # entrante con sufijo (@s.whatsapp.net) y no matchea.
+                    sesion_numero = (conv.sesion.numero or '') if conv.sesion_id else ''
                     for m in reversed(list(mensajes_qs)):
-                        es_entrante = (m.remitente == contacto_numero)
-                        tipo_msg = 'in' if es_entrante else ('ia' if m.ia_generado else 'out')
+                        es_saliente = (
+                            (sesion_numero and m.remitente == sesion_numero)
+                            or m.ia_generado or m.es_automatico or bool(m.agente_id)
+                        )
+                        tipo_msg = ('ia' if m.ia_generado else 'out') if es_saliente else 'in'
                         if tipo_msg == 'in':
                             remitente_label = contacto_nombre
                         elif tipo_msg == 'ia':
