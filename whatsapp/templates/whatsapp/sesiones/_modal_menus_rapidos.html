@@ -1,69 +1,52 @@
 <div class="detail-wrap" data-mr-sesion="{{ sesion.id }}">
-  <div class="detail-head">
-    <div>
-      <h5>Menús rápidos — {{ sesion.nombre }}</h5>
-      <p class="muted">Mensajes tipo menú (botones/lista) guardados para esta sesión. En el chat se insertan con un clic.</p>
-    </div>
-    <button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>
+  <div class="mr-toolbar">
+    <p class="muted mb-0">Mensajes tipo menú (botones/lista) guardados para esta sesión. En el chat se insertan con un clic.</p>
+    <button type="button" class="conex-btn conex-btn-primary" id="mr-add-btn">
+      <i class="fa fa-plus me-1"></i> Agregar menú
+    </button>
   </div>
 
-  <div class="detail-body">
-    <div class="rr-lista" id="mr-lista">
-      {% if menus %}
-        {% for m in menus %}
-          <div class="rr-item" data-mr-id="{{ m.id }}"
-               data-mr-nombre="{{ m.nombre|escape }}" data-mr-cuerpo="{{ m.cuerpo|escape }}"
-               data-mr-header="{{ m.header|escape }}" data-mr-footer="{{ m.footer|escape }}"
-               data-mr-opciones="{{ m.opciones|escapejs }}">
-            <div class="rr-item-info">
-              <div class="rr-item-titulo">{{ m.nombre }} <span class="muted">({{ m.opciones|length }} opción/es)</span></div>
-              <div class="rr-item-cuerpo">{{ m.cuerpo }}</div>
-            </div>
-            <div class="rr-item-acciones">
-              <button type="button" class="conex-btn conex-btn-light mr-edit" data-id="{{ m.id }}"><i class="fa fa-pen"></i></button>
-              <button type="button" class="conex-btn conex-btn-light mr-del" data-id="{{ m.id }}"><i class="fa fa-trash"></i></button>
-            </div>
+  <div class="rr-lista" id="mr-lista"></div>
+
+  <div class="modal fade" id="mrFormModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="mr-form-titulo-modal">Nuevo menú rápido</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="mr-form-id" value="">
+          <div class="mb-3">
+            <label class="form-label">Nombre (interno)</label>
+            <input type="text" id="mr-form-nombre" class="form-control" maxlength="80" placeholder="Ej: Menú de bienvenida">
           </div>
-        {% endfor %}
-      {% else %}
-        <div class="rr-empty" id="mr-empty">Aún no hay menús rápidos. Creá el primero abajo.</div>
-      {% endif %}
-    </div>
-
-    <hr>
-
-    <div class="rr-form">
-      <input type="hidden" id="mr-form-id" value="">
-      <div class="form-row">
-        <label>Nombre (interno)</label>
-        <input type="text" id="mr-form-nombre" maxlength="80" placeholder="Ej: Menú de bienvenida">
-      </div>
-      <div class="form-row">
-        <label>Encabezado (opcional)</label>
-        <input type="text" id="mr-form-header" maxlength="60" placeholder="Texto en negrita arriba (máx 60)">
-      </div>
-      <div class="form-row">
-        <label>Cuerpo del mensaje</label>
-        <textarea id="mr-form-cuerpo" rows="3" maxlength="1024" placeholder="Texto principal del menú."></textarea>
-      </div>
-      <div class="form-row">
-        <label>Pie (opcional)</label>
-        <input type="text" id="mr-form-footer" maxlength="60" placeholder="Texto chico abajo (máx 60)">
-      </div>
-
-      <div class="form-row">
-        <label>Opciones / botones (máx 10)</label>
-        <div id="mr-opciones-lista"></div>
-        <button type="button" class="conex-btn conex-btn-light" id="mr-add-opcion">
-          <i class="fa fa-plus me-1"></i> Agregar opción
-        </button>
-      </div>
-
-      <div class="detail-actions">
-        <button type="button" class="conex-btn conex-btn-light" id="mr-form-cancelar">Limpiar</button>
-        <button type="button" class="conex-btn conex-btn-primary" id="mr-form-guardar">
-          <i class="fa fa-save me-1"></i> Guardar menú
-        </button>
+          <div class="mb-3">
+            <label class="form-label">Encabezado (opcional)</label>
+            <input type="text" id="mr-form-header" class="form-control" maxlength="60" placeholder="Texto en negrita arriba (máx 60)">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Cuerpo del mensaje</label>
+            <textarea id="mr-form-cuerpo" class="form-control" rows="3" maxlength="1024" placeholder="Texto principal del menú."></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Pie (opcional)</label>
+            <input type="text" id="mr-form-footer" class="form-control" maxlength="60" placeholder="Texto chico abajo (máx 60)">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Opciones / botones (máx 10)</label>
+            <div id="mr-opciones-lista"></div>
+            <button type="button" class="conex-btn conex-btn-light" id="mr-add-opcion">
+              <i class="fa fa-plus me-1"></i> Agregar opción
+            </button>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary btn-sm" id="mr-form-guardar">
+            <i class="fa fa-save me-1"></i> Guardar menú
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -81,6 +64,12 @@
     var inpCuerpo = document.getElementById('mr-form-cuerpo');
     var inpFooter = document.getElementById('mr-form-footer');
     var opcionesBox = document.getElementById('mr-opciones-lista');
+    var tituloModal = document.getElementById('mr-form-titulo-modal');
+    var modalEl = document.getElementById('mrFormModal');
+    var modal = (window.bootstrap && bootstrap.Modal) ? new bootstrap.Modal(modalEl) : null;
+
+    function abrirModal() { if (modal) modal.show(); else modalEl.style.display = 'block'; }
+    function cerrarModal() { if (modal) modal.hide(); else modalEl.style.display = 'none'; }
 
     function csrf() {
       var el = document.querySelector('input[name=csrfmiddlewaretoken]');
@@ -101,13 +90,12 @@
         return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c];
       });
     }
-
     function filaOpcion(etiqueta, valor) {
       var row = document.createElement('div');
       row.className = 'mr-opcion-row';
       row.innerHTML =
-        '<input type="text" class="mr-op-etq" maxlength="24" placeholder="Texto del botón (máx 24)" value="' + esc(etiqueta) + '">' +
-        '<input type="text" class="mr-op-val" maxlength="256" placeholder="Valor (lo que se envía)" value="' + esc(valor) + '">' +
+        '<input type="text" class="form-control form-control-sm mr-op-etq" maxlength="24" placeholder="Texto del botón (máx 24)" value="' + esc(etiqueta) + '">' +
+        '<input type="text" class="form-control form-control-sm mr-op-val" maxlength="256" placeholder="Valor (lo que se envía)" value="' + esc(valor) + '">' +
         '<button type="button" class="conex-btn conex-btn-light mr-op-del"><i class="fa fa-times"></i></button>';
       row.querySelector('.mr-op-del').addEventListener('click', function () { row.remove(); });
       return row;
@@ -122,12 +110,11 @@
       });
       return out;
     }
-
     document.getElementById('mr-add-opcion').addEventListener('click', function () { addOpcion(); });
 
     function render(items) {
       if (!items.length) {
-        lista.innerHTML = '<div class="rr-empty" id="mr-empty">Aún no hay menús rápidos. Creá el primero abajo.</div>';
+        lista.innerHTML = '<div class="rr-empty">Aún no hay menús rápidos. Agregá el primero con el botón de arriba.</div>';
         return;
       }
       lista.innerHTML = items.map(function (m) {
@@ -149,27 +136,29 @@
         if (!r.error) render(r.items || []);
       });
     }
-    function resetForm() {
+
+    document.getElementById('mr-add-btn').addEventListener('click', function () {
       inpId.value = ''; inpNombre.value = ''; inpHeader.value = '';
       inpCuerpo.value = ''; inpFooter.value = ''; opcionesBox.innerHTML = '';
       addOpcion();
-    }
-    document.getElementById('mr-form-cancelar').addEventListener('click', resetForm);
+      tituloModal.textContent = 'Nuevo menú rápido';
+      abrirModal();
+      setTimeout(function () { inpNombre.focus(); }, 200);
+    });
 
     document.getElementById('mr-form-guardar').addEventListener('click', function () {
       var nombre = inpNombre.value.trim();
       var opciones = leerOpciones();
       if (!nombre) { if (typeof mensajeWarning === 'function') mensajeWarning('El nombre es obligatorio.'); inpNombre.focus(); return; }
       if (!opciones.length) { if (typeof mensajeWarning === 'function') mensajeWarning('Agregá al menos una opción.'); return; }
-      if (typeof pantallaespera === 'function') pantallaespera();
       post('menu_rapido_guardar', {
         sesion_id: sesionId, id: inpId.value || '', nombre: nombre,
         header: inpHeader.value.trim(), cuerpo: inpCuerpo.value.trim(),
         footer: inpFooter.value.trim(), opciones: JSON.stringify(opciones),
       }).then(function (r) {
-        setTimeout($.unblockUI, 1);
         if (r.error) { if (typeof mensajeWarning === 'function') mensajeWarning(r.message || 'Error al guardar'); return; }
-        resetForm(); recargar();
+        cerrarModal();
+        recargar();
         if (typeof mensajeExito === 'function') mensajeExito(r.message || 'Guardado');
       });
     });
@@ -187,7 +176,8 @@
         var ops = [];
         try { ops = JSON.parse(item.getAttribute('data-mr-opciones') || '[]'); } catch (err) { ops = []; }
         if (ops.length) { ops.forEach(function (o) { addOpcion(o.etiqueta, o.valor); }); } else { addOpcion(); }
-        inpNombre.focus();
+        tituloModal.textContent = 'Editar menú rápido';
+        abrirModal();
         return;
       }
       var del = e.target.closest('.mr-del');
@@ -208,9 +198,6 @@
       }
     });
 
-    resetForm();
-    // Recargamos vía AJAX al iniciar para reconstruir la lista con JSON válido
-    // en data-mr-opciones (el render server-side dejaría repr de Python).
     recargar();
   })();
 </script>

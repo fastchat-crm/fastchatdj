@@ -21,6 +21,19 @@
 }
 
 /* Filas de opciones del menú rápido */
+.mr-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+.mr-toolbar .muted {
+    font-size: .85rem;
+    flex: 1;
+    min-width: 200px;
+}
 .mr-opcion-row {
     display: flex;
     gap: .5rem;

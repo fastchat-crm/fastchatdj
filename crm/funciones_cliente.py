@@ -152,18 +152,19 @@ def cliente_upsert(conversacion, variables, config, endpoint=None) -> dict:
             return {'etiqueta': 'error', 'body': {}, 'status': 500,
                     'error': f'no se pudo actualizar cliente: {ex}'}
 
-    # Registrar el origen (número/sesión) SIN perder los anteriores: 1 fila por
-    # (cliente, número, sesión). Si repite, suma `veces` y refresca fecha — NO
-    # pisa la conversación original (así la ficha de esa conversación sigue
-    # encontrando al cliente).
-    if telefono:
+    # Registrar el origen POR CONVERSACIÓN: 1 fila por (cliente, conversación).
+    # Un mismo cliente puede venir de 4-5 conversaciones distintas — cada una
+    # queda como su propia fila con su número/sesión. Si la misma conversación
+    # vuelve a registrarlo, solo suma `veces`.
+    if conversacion is not None:
         try:
             from .models import ClienteOrigen
             origen, ocre = ClienteOrigen.objects.get_or_create(
-                cliente=cliente, numero=telefono, sesion=sesion,
+                cliente=cliente, conversacion=conversacion,
                 defaults={
+                    'numero': telefono,
                     'contacto': contacto,
-                    'conversacion': conversacion,
+                    'sesion': sesion,
                     'departamento': depto,
                     'canal': canal,
                     'veces': 1,
@@ -173,7 +174,9 @@ def cliente_upsert(conversacion, variables, config, endpoint=None) -> dict:
             if not ocre:
                 origen.veces = (origen.veces or 0) + 1
                 origen.fecha_ultima = ahora
-                origen.save(update_fields=['veces', 'fecha_ultima'])
+                if telefono and not origen.numero:
+                    origen.numero = telefono
+                origen.save(update_fields=['veces', 'fecha_ultima', 'numero'])
         except Exception:
             logger.exception('No se pudo registrar ClienteOrigen (cedula=%s)', cedula)
 

@@ -1,49 +1,54 @@
 <div class="detail-wrap" data-rr-sesion="{{ sesion.id }}">
-  <div class="detail-head">
-    <div>
-      <h5>Respuestas rápidas — {{ sesion.nombre }}</h5>
-      <p class="muted">Mensajes de texto guardados para esta sesión. En el chat se cargan en la caja de mensaje para editarlos antes de enviar.</p>
-    </div>
-    <button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>
+  <div class="mr-toolbar">
+    <p class="muted mb-0">Mensajes de texto guardados para esta sesión. En el chat se cargan en la caja de mensaje para editarlos antes de enviar.</p>
+    <button type="button" class="conex-btn conex-btn-primary" id="rr-add-btn">
+      <i class="fa fa-plus me-1"></i> Agregar respuesta
+    </button>
   </div>
 
-  <div class="detail-body">
-    <div class="rr-lista" id="rr-lista">
-      {% if respuestas %}
-        {% for r in respuestas %}
-          <div class="rr-item" data-rr-id="{{ r.id }}" data-rr-titulo="{{ r.titulo }}" data-rr-cuerpo="{{ r.cuerpo }}">
-            <div class="rr-item-info">
-              <div class="rr-item-titulo">{{ r.titulo }}</div>
-              <div class="rr-item-cuerpo">{{ r.cuerpo }}</div>
-            </div>
-            <div class="rr-item-acciones">
-              <button type="button" class="conex-btn conex-btn-light rr-edit" data-id="{{ r.id }}"><i class="fa fa-pen"></i></button>
-              <button type="button" class="conex-btn conex-btn-light rr-del" data-id="{{ r.id }}"><i class="fa fa-trash"></i></button>
-            </div>
+  <div class="rr-lista" id="rr-lista">
+    {% if respuestas %}
+      {% for r in respuestas %}
+        <div class="rr-item" data-rr-id="{{ r.id }}" data-rr-titulo="{{ r.titulo }}" data-rr-cuerpo="{{ r.cuerpo }}">
+          <div class="rr-item-info">
+            <div class="rr-item-titulo">{{ r.titulo }}</div>
+            <div class="rr-item-cuerpo">{{ r.cuerpo }}</div>
           </div>
-        {% endfor %}
-      {% else %}
-        <div class="rr-empty" id="rr-empty">Aún no hay respuestas rápidas. Creá la primera abajo.</div>
-      {% endif %}
-    </div>
+          <div class="rr-item-acciones">
+            <button type="button" class="conex-btn conex-btn-light rr-edit" data-id="{{ r.id }}"><i class="fa fa-pen"></i></button>
+            <button type="button" class="conex-btn conex-btn-light rr-del" data-id="{{ r.id }}"><i class="fa fa-trash"></i></button>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="rr-empty" id="rr-empty">Aún no hay respuestas rápidas. Agregá la primera con el botón de arriba.</div>
+    {% endif %}
+  </div>
 
-    <hr>
-
-    <div class="rr-form">
-      <input type="hidden" id="rr-form-id" value="">
-      <div class="form-row">
-        <label>Título</label>
-        <input type="text" id="rr-form-titulo" maxlength="80" placeholder="Ej: Saludo inicial">
-      </div>
-      <div class="form-row">
-        <label>Mensaje</label>
-        <textarea id="rr-form-cuerpo" rows="4" maxlength="4096" placeholder="Texto que se cargará en la caja de mensaje."></textarea>
-      </div>
-      <div class="detail-actions">
-        <button type="button" class="conex-btn conex-btn-light" id="rr-form-cancelar">Limpiar</button>
-        <button type="button" class="conex-btn conex-btn-primary" id="rr-form-guardar">
-          <i class="fa fa-save me-1"></i> Guardar respuesta
-        </button>
+  <div class="modal fade" id="rrFormModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="rr-form-titulo-modal">Nueva respuesta rápida</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="rr-form-id" value="">
+          <div class="mb-3">
+            <label class="form-label">Título</label>
+            <input type="text" id="rr-form-titulo" class="form-control" maxlength="80" placeholder="Ej: Saludo inicial">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Mensaje</label>
+            <textarea id="rr-form-cuerpo" class="form-control" rows="4" maxlength="4096" placeholder="Texto que se cargará en la caja de mensaje."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary btn-sm" id="rr-form-guardar">
+            <i class="fa fa-save me-1"></i> Guardar
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -58,12 +63,17 @@
     var inpId = document.getElementById('rr-form-id');
     var inpTitulo = document.getElementById('rr-form-titulo');
     var inpCuerpo = document.getElementById('rr-form-cuerpo');
+    var tituloModal = document.getElementById('rr-form-titulo-modal');
+    var modalEl = document.getElementById('rrFormModal');
+    var modal = (window.bootstrap && bootstrap.Modal) ? new bootstrap.Modal(modalEl) : null;
+
+    function abrirModal() { if (modal) modal.show(); else modalEl.style.display = 'block'; }
+    function cerrarModal() { if (modal) modal.hide(); else modalEl.style.display = 'none'; }
 
     function csrf() {
       var el = document.querySelector('input[name=csrfmiddlewaretoken]');
       return el ? el.value : '';
     }
-
     function post(action, params) {
       var fd = new FormData();
       fd.append('csrfmiddlewaretoken', csrf());
@@ -74,60 +84,51 @@
         headers: {'X-Requested-With': 'XMLHttpRequest'},
       }).then(function (r) { return r.json(); });
     }
-
     function esc(s) {
       return String(s || '').replace(/[&<>"]/g, function (c) {
         return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c];
       });
     }
-
     function render(items) {
       if (!items.length) {
-        lista.innerHTML = '<div class="rr-empty" id="rr-empty">Aún no hay respuestas rápidas. Creá la primera abajo.</div>';
+        lista.innerHTML = '<div class="rr-empty" id="rr-empty">Aún no hay respuestas rápidas. Agregá la primera con el botón de arriba.</div>';
         return;
       }
       lista.innerHTML = items.map(function (r) {
         return '<div class="rr-item" data-rr-id="' + r.id + '" data-rr-titulo="' + esc(r.titulo) + '" data-rr-cuerpo="' + esc(r.cuerpo) + '">' +
-          '<div class="rr-item-info">' +
-            '<div class="rr-item-titulo">' + esc(r.titulo) + '</div>' +
-            '<div class="rr-item-cuerpo">' + esc(r.cuerpo) + '</div>' +
-          '</div>' +
+          '<div class="rr-item-info"><div class="rr-item-titulo">' + esc(r.titulo) + '</div>' +
+          '<div class="rr-item-cuerpo">' + esc(r.cuerpo) + '</div></div>' +
           '<div class="rr-item-acciones">' +
             '<button type="button" class="conex-btn conex-btn-light rr-edit" data-id="' + r.id + '"><i class="fa fa-pen"></i></button> ' +
             '<button type="button" class="conex-btn conex-btn-light rr-del" data-id="' + r.id + '"><i class="fa fa-trash"></i></button>' +
-          '</div>' +
-        '</div>';
+          '</div></div>';
       }).join('');
     }
-
     function recargar() {
       return post('respuesta_rapida_listar', {sesion_id: sesionId}).then(function (r) {
         if (!r.error) render(r.items || []);
       });
     }
 
-    function resetForm() {
-      inpId.value = '';
-      inpTitulo.value = '';
-      inpCuerpo.value = '';
-    }
-
-    document.getElementById('rr-form-cancelar').addEventListener('click', resetForm);
+    document.getElementById('rr-add-btn').addEventListener('click', function () {
+      inpId.value = ''; inpTitulo.value = ''; inpCuerpo.value = '';
+      tituloModal.textContent = 'Nueva respuesta rápida';
+      abrirModal();
+      setTimeout(function () { inpTitulo.focus(); }, 200);
+    });
 
     document.getElementById('rr-form-guardar').addEventListener('click', function () {
       var titulo = inpTitulo.value.trim();
       var cuerpo = inpCuerpo.value.trim();
       if (!titulo) { if (typeof mensajeWarning === 'function') mensajeWarning('El título es obligatorio.'); inpTitulo.focus(); return; }
       if (!cuerpo) { if (typeof mensajeWarning === 'function') mensajeWarning('El mensaje es obligatorio.'); inpCuerpo.focus(); return; }
-      if (typeof pantallaespera === 'function') pantallaespera();
       post('respuesta_rapida_guardar', {
         sesion_id: sesionId, id: inpId.value || '', titulo: titulo, cuerpo: cuerpo,
       }).then(function (r) {
-        setTimeout($.unblockUI, 1);
         if (r.error) { if (typeof mensajeWarning === 'function') mensajeWarning(r.message || 'Error al guardar'); return; }
-        resetForm();
+        cerrarModal();
         recargar();
-        if (typeof mensajeExito === 'function') mensajeExito(r.message || 'Guardado'); else if (window.toastr) toastr.success(r.message || 'Guardado');
+        if (typeof mensajeExito === 'function') mensajeExito(r.message || 'Guardado');
       });
     });
 
@@ -138,7 +139,8 @@
         inpId.value = item.getAttribute('data-rr-id');
         inpTitulo.value = item.getAttribute('data-rr-titulo');
         inpCuerpo.value = item.getAttribute('data-rr-cuerpo');
-        inpTitulo.focus();
+        tituloModal.textContent = 'Editar respuesta rápida';
+        abrirModal();
         return;
       }
       var del = e.target.closest('.rr-del');

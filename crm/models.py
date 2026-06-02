@@ -1955,12 +1955,13 @@ class Cliente(ModeloBase):
 
 
 class ClienteOrigen(ModeloBase):
-    """Cada número / sesión / conversación distinta desde la que un Cliente nos
-    escribió. Permite ver TODOS los orígenes, no solo el más reciente.
+    """Cada CONVERSACIÓN distinta desde la que se registró/atendió a un Cliente.
 
-    Se acumula 1 fila por combinación (cliente, número, sesión): si el mismo
-    cliente vuelve a escribir desde el mismo número/sesión, se incrementa `veces`
-    y se actualiza `fecha_ultima` en vez de duplicar.
+    Un mismo cliente (cédula) puede originarse de varias conversaciones (4-5),
+    posiblemente desde distintos números/sesiones. Guardamos 1 fila por
+    (cliente, conversación) — así se ven TODAS las conversaciones de origen, cada
+    una con su número/sesión. Si la misma conversación vuelve a registrarlo, se
+    incrementa `veces`.
     """
     cliente = models.ForeignKey(
         Cliente, on_delete=models.CASCADE, related_name='origenes',
@@ -1993,8 +1994,8 @@ class ClienteOrigen(ModeloBase):
         ordering = ['-fecha_ultima']
         constraints = [
             models.UniqueConstraint(
-                fields=['cliente', 'numero', 'sesion'],
-                name='uniq_cliente_origen',
+                fields=['cliente', 'conversacion'],
+                name='uniq_cliente_origen_conv',
             ),
         ]
 

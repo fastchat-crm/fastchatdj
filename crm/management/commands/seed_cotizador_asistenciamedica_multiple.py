@@ -93,6 +93,7 @@ BODY_RESUMEN_SHOW = 452
 
 ID_BUDGET = 500
 ID_ESPERANDO = 510
+ID_PERSISTIR_CLIENTE = 515
 ID_FN = 520
 ID_OK = 530
 ID_ERR = 540
@@ -452,7 +453,20 @@ PASOS = [
             '⏳ Estamos analizando tu perfil y preparando la mejor '
             'recomendación...'
         ),
-        'siguiente': ID_FN,
+        'siguiente': ID_PERSISTIR_CLIENTE,
+    },
+    {
+        'id': ID_PERSISTIR_CLIENTE, 'orden': ID_PERSISTIR_CLIENTE, 'tipo': 'llamada_funcion',
+        'codigo': 'fn_cliente_upsert', 'nombre': 'Guardar Cliente + origen',
+        'funcion_codigo': 'cliente_upsert',
+        'metodo': 'POST', 'timeout_seg': 5,
+        'body': {'canal_origen': 'cotizador'},
+        'extrae_variables': {
+            '$cliente_id':     '$.cliente_id',
+            '$cliente_creado': '$.cliente_creado',
+        },
+        # No bloquea la cotización si falla el guardado local.
+        'siguiente_ok': ID_FN, 'siguiente_error': ID_FN,
     },
     {
         'id': ID_FN, 'orden': ID_FN, 'tipo': 'llamada_funcion',

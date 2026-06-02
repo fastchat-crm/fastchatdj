@@ -1,8 +1,10 @@
 {% extends 'base.html' %}
-{% block content %}
+{% block head %}
+    <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.0">
     <link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.3">
-    <link rel="stylesheet" href="/static/css/whatsapp/mensajes_rapidos.css?v1.0">
-
+    <link rel="stylesheet" href="/static/css/whatsapp/mensajes_rapidos.css?v1.2">
+{% endblock %}
+{% block content %}
     {% csrf_token %}
 
     <div class="card mb-3 mr-page">
