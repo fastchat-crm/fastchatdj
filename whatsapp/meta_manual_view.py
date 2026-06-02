@@ -200,12 +200,32 @@ def meta_manual_conectar(request):
     except Exception as ex:
         logger.warning("sincronizar_meta_desde_graph fallo en alta manual: %s", ex)
 
-    # Auto-suscribir la WABA a la app: sin esto, el webhook a nivel app no
-    # recibe eventos de esta WABA específica. Si falla, devolvemos hint para
-    # que el operador corra el curl manualmente desde el modal de webhook.
-    sub_res = _suscribir_waba_a_app(waba_id, access_token)
+    # Auto-corregir el waba_id: si el número NO pertenece a la WABA que cargó el
+    # operador (típico copy-paste de la WABA de otro número), detectamos la WABA
+    # real y la guardamos. Sin esto, los entrantes nunca llegan al webhook.
+    waba_efectiva = config.waba_id
+    waba_corregida = False
+    try:
+        from .meta_diagnostico_view import _numero_en_su_waba, _descubrir_waba_real
+        pertenece = _numero_en_su_waba(config)
+        if pertenece.get('ok') and not pertenece.get('pertenece'):
+            real = _descubrir_waba_real(config)
+            if real.get('ok') and real.get('waba_id'):
+                logger.info("Alta manual: waba_id corregido %s → %s (sesión %s)",
+                            config.waba_id, real['waba_id'], sesion.id)
+                config.waba_id = real['waba_id']
+                config.save()
+                waba_efectiva = real['waba_id']
+                waba_corregida = True
+    except Exception as ex:
+        logger.warning("Auto-corrección de waba_id falló en alta manual: %s", ex)
+
+    # Auto-suscribir la WABA (ya corregida si hizo falta) a la app: sin esto, el
+    # webhook a nivel app no recibe eventos de esta WABA específica. Si falla,
+    # devolvemos hint para que el operador corra el curl manual desde el modal.
+    sub_res = _suscribir_waba_a_app(waba_efectiva, access_token)
     if sub_res.get('ok'):
-        logger.info("WABA %s auto-suscrita a la Meta App.", waba_id)
+        logger.info("WABA %s auto-suscrita a la Meta App.", waba_efectiva)
 
     return JsonResponse({
         'ok': True,
@@ -216,6 +236,8 @@ def meta_manual_conectar(request):
         'webhook_verify_token': config.webhook_verify_token,
         'waba_suscrita': sub_res.get('ok'),
         'waba_suscrita_error': sub_res.get('error') if not sub_res.get('ok') else None,
+        'waba_corregida': waba_corregida,
+        'waba_id': waba_efectiva,
     })
 
 

@@ -146,6 +146,108 @@ def _descubrir_waba_real(config: ConfigMeta, timeout: int = 15) -> dict:
     return {'ok': False, 'error': f'No encontré el número {objetivo} en ninguna WABA del negocio.'}
 
 
+def _validar_conexion(config: ConfigMeta) -> dict:
+    """Corre los chequeos de conexión contra Graph y devuelve pasos estructurados
+    (estilo el script prueba_conexion_meta) para mostrar en un modal: qué pasa y
+    en qué punto falla. Identifica acciones correctivas disponibles en el diagnóstico.
+
+    Devuelve {pasos: [{label, ok, detalle, accion}], waba_mal, waba_real, verdicto}.
+    """
+    pasos = []
+    waba_mal = False
+    waba_real = ''
+
+    # 1) Estado del número en Meta
+    info = _consultar_phone_number(config)
+    if not info.get('ok'):
+        pasos.append({'label': 'Número leído en Meta', 'ok': False,
+                      'detalle': info.get('error') or 'No se pudo consultar el número.', 'accion': ''})
+    else:
+        d = info['data']
+        status = (d.get('status') or '').upper()
+        platform = d.get('platform_type') or '(no informado)'
+        conectado = status == 'CONNECTED'
+        detalle = f"status={status or '?'} · platform_type={platform} · calidad={d.get('quality_rating', '?')}"
+        accion = '' if conectado else 'registrar'
+        if conectado and platform not in ('CLOUD_API', '(no informado)'):
+            detalle += ' — platform_type ≠ CLOUD_API: posible coexistencia con la app.'
+        pasos.append({'label': 'Número CONNECTED en Cloud API', 'ok': conectado,
+                      'detalle': detalle, 'accion': accion})
+
+    # 2) El número pertenece a su WABA (detección del waba_id mal cargado)
+    en_waba = _numero_en_su_waba(config)
+    if not en_waba.get('ok'):
+        pasos.append({'label': 'Número pertenece a su WABA', 'ok': None,
+                      'detalle': en_waba.get('error') or 'No se pudo verificar.', 'accion': ''})
+    elif en_waba.get('pertenece'):
+        pasos.append({'label': 'Número pertenece a su WABA', 'ok': True,
+                      'detalle': f'El número está en la WABA guardada ({config.waba_id}).', 'accion': ''})
+    else:
+        waba_mal = True
+        real = _descubrir_waba_real(config)
+        if real.get('ok'):
+            waba_real = real['waba_id']
+            detalle = (f'El número NO está en la WABA guardada ({config.waba_id}). '
+                       f'WABA real: {waba_real} ("{real.get("name", "")}"). '
+                       'Por eso los entrantes no llegan.')
+        else:
+            detalle = (f'El número NO está en la WABA guardada ({config.waba_id}). '
+                       f'No pude detectar la real: {real.get("error", "")}')
+        pasos.append({'label': 'Número pertenece a su WABA', 'ok': False,
+                      'detalle': detalle, 'accion': 'corregir-waba'})
+
+    # 3) WABA suscrita a la app
+    subs = _consultar_subscribed_apps(config)
+    if not subs.get('ok'):
+        pasos.append({'label': 'WABA suscrita a la app', 'ok': None,
+                      'detalle': subs.get('error') or 'No se pudo verificar.', 'accion': ''})
+    else:
+        suscrita = subs.get('count', 0) > 0
+        pasos.append({'label': 'WABA suscrita a la app', 'ok': suscrita,
+                      'detalle': (f'{subs.get("count", 0)} app(s) suscrita(s).' if suscrita
+                                  else 'Ninguna app suscrita a esta WABA — los entrantes no llegan.'),
+                      'accion': '' if suscrita else 'suscribir-waba'})
+
+    # 4) Webhook verificado en Meta
+    pasos.append({'label': 'Webhook verificado en Meta', 'ok': bool(config.webhook_verificado_en),
+                  'detalle': (f'Verificado el {config.webhook_verificado_en:%Y-%m-%d %H:%M}'
+                              if config.webhook_verificado_en else 'Pendiente — Meta nunca hizo handshake.'),
+                  'accion': '' if config.webhook_verificado_en else 'configurar-webhook'})
+
+    fallas = [p for p in pasos if p.get('ok') is False]
+    if not fallas:
+        verdicto = 'Todo OK. La conexión está bien configurada.'
+    elif waba_mal:
+        verdicto = ('La WABA guardada es incorrecta — es la causa típica de "envía pero no '
+                    'recibe". Corregila desde el diagnóstico con un clic.')
+    else:
+        verdicto = f'Hay {len(fallas)} punto(s) a corregir. Andá al diagnóstico para ejecutarlos.'
+
+    return {'pasos': pasos, 'waba_mal': waba_mal, 'waba_real': waba_real,
+            'verdicto': verdicto, 'falla': bool(fallas)}
+
+
+@login_required
+def meta_validar_conexion_action(request, sesion_id: int):
+    """Endpoint AJAX: corre la validación de conexión y devuelve los pasos para
+    el modal. El front muestra qué punto falla y enlaza al diagnóstico."""
+    from django.http import JsonResponse
+
+    sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
+    if not sesion:
+        return JsonResponse({'ok': False, 'error': 'Sesión no encontrada o no es Meta.'})
+    config = getattr(sesion, 'config_meta', None)
+    if not config:
+        return JsonResponse({'ok': False, 'error': 'La sesión no tiene ConfigMeta.'})
+
+    res = _validar_conexion(config)
+    res['ok'] = True
+    res['sesion_id'] = sesion.id
+    res['sesion_nombre'] = sesion.nombre or sesion.numero or f'Sesión {sesion.id}'
+    res['diagnostico_url'] = f'/whatsapp/sesiones/{sesion.id}/diagnostico/'
+    return JsonResponse(res)
+
+
 @login_required
 @secure_module
 def meta_diagnostico(request, sesion_id: int):
@@ -355,6 +457,59 @@ def meta_diagnostico(request, sesion_id: int):
     }
     addData(request, contexto)
     return render(request, 'whatsapp/sesiones/diagnostico.html', contexto)
+
+
+@login_required
+def meta_cambiar_nombre_action(request, sesion_id: int):
+    """Endpoint AJAX: solicita el cambio de Display Name del número a Meta.
+
+    POST /{phone_number_id} con new_display_name. La respuesta exitosa solo
+    significa "enviado a revisión" (name_status pasa a PENDING_REVIEW), NO
+    aprobado. Por eso NO sobreescribimos el verified_name del CRM acá — eso lo
+    hace la sync con Graph cuando Meta aprueba (name_status=APPROVED).
+    """
+    from django.http import JsonResponse
+
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Solo POST.'})
+
+    sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
+    if not sesion:
+        return JsonResponse({'ok': False, 'error': 'Sesión no encontrada o no es Meta.'})
+    config = getattr(sesion, 'config_meta', None)
+    if not config:
+        return JsonResponse({'ok': False, 'error': 'La sesión no tiene ConfigMeta.'})
+    if not (config.access_token and config.phone_number_id):
+        return JsonResponse({'ok': False, 'error': 'Falta access_token o phone_number_id.'})
+
+    nuevo = (request.POST.get('nombre') or '').strip()
+    if len(nuevo) < 3:
+        return JsonResponse({'ok': False, 'error': 'El nombre debe tener al menos 3 caracteres.'})
+
+    try:
+        r = requests.post(
+            build_graph_url(f'/{config.phone_number_id}'),
+            headers={'Authorization': f'Bearer {config.access_token}'},
+            json={'new_display_name': nuevo},
+            timeout=20,
+        )
+    except Exception as ex:
+        return JsonResponse({'ok': False, 'error': f'No pude llamar a Graph: {ex}'})
+
+    if r.status_code != 200:
+        try:
+            err = r.json().get('error', {}).get('message', r.text[:300])
+        except Exception:
+            err = r.text[:300]
+        return JsonResponse({'ok': False, 'error': f'Meta rechazó el cambio: {err}'})
+
+    logger.info("Display name solicitado: '%s' para phone_number_id=%s (sesión %s)",
+                nuevo, config.phone_number_id, sesion.id)
+    return JsonResponse({
+        'ok': True,
+        'message': f'Cambio a "{nuevo}" enviado a revisión de Meta. El número sigue operando '
+                   'con el nombre actual hasta que Meta lo apruebe (name_status PENDING_REVIEW).',
+    })
 
 
 @login_required

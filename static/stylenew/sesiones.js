@@ -480,6 +480,62 @@
         rebindFormsJs();
     }
 
+    function escaparHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function renderCambiarNombre(nombreActual) {
+        return '<div class="valcx-wrap">' +
+            '<h5 class="valcx-title"><i class="fa fa-signature"></i> Cambiar nombre del número</h5>' +
+            '<p class="cn-help">Este es el <b>Display Name</b> que ven los clientes en WhatsApp. ' +
+            'Meta lo revisa (minutos a días) y debe reflejar tu marca/negocio — nombres genéricos o de ' +
+            'rol suelen rechazarse. El número sigue operando con el nombre actual durante la revisión.</p>' +
+            '<label class="cn-label" for="cn-input">Nuevo nombre para mostrar</label>' +
+            '<input type="text" id="cn-input" class="form-control" maxlength="60" autocomplete="off" ' +
+            'value="' + escaparHtml(nombreActual || '') + '">' +
+            '<button type="button" class="conex-btn conex-btn-primary valcx-cta" id="cn-enviar">' +
+            '<i class="fa fa-paper-plane"></i> Enviar a revisión de Meta</button>' +
+            '<div id="cn-result" class="valcx-verdict" hidden></div>' +
+            '</div>';
+    }
+
+    function renderValidacionConexion(data) {
+        var filas = (data.pasos || []).map(function (p) {
+            var icono, clase;
+            if (p.ok === true) { icono = 'fa-circle-check'; clase = 'is-ok'; }
+            else if (p.ok === false) { icono = 'fa-circle-xmark'; clase = 'is-bad'; }
+            else { icono = 'fa-circle-question'; clase = 'is-warn'; }
+            return '<li class="valcx-step ' + clase + '">' +
+                '<i class="fa ' + icono + '"></i>' +
+                '<div class="valcx-step-body"><span class="valcx-step-label">' + escaparHtml(p.label) + '</span>' +
+                '<span class="valcx-step-detail">' + escaparHtml(p.detalle) + '</span></div>' +
+                '</li>';
+        }).join('');
+
+        var verdClase = data.falla ? (data.waba_mal ? 'is-warn' : 'is-bad') : 'is-ok';
+        var verdIcono = data.falla ? 'fa-triangle-exclamation' : 'fa-circle-check';
+
+        var accionBtn = '';
+        if (data.falla) {
+            accionBtn = '<a class="conex-btn conex-btn-primary valcx-cta" href="' +
+                escaparHtml(data.diagnostico_url) + '"><i class="fa fa-wrench"></i> ' +
+                'Ir al diagnóstico a ejecutar correcciones</a>';
+        } else {
+            accionBtn = '<a class="conex-btn conex-btn-ghost valcx-cta" href="' +
+                escaparHtml(data.diagnostico_url) + '"><i class="fa fa-stethoscope"></i> Ver diagnóstico</a>';
+        }
+
+        return '<div class="valcx-wrap">' +
+            '<h5 class="valcx-title"><i class="fa fa-clipboard-check"></i> Validación de conexión · ' +
+                escaparHtml(data.sesion_nombre) + '</h5>' +
+            '<ul class="valcx-steps">' + filas + '</ul>' +
+            '<div class="valcx-verdict ' + verdClase + '"><i class="fa ' + verdIcono + '"></i> ' +
+                escaparHtml(data.verdicto) + '</div>' +
+            accionBtn +
+            '</div>';
+    }
+
     // ---------- Re-attach forms.js (handler global de POST + AJAX) ----------
     // forms.js bindea `$('form:not(...)').submit(...)` al cargar — los forms
     // dentro de partials AJAX no estaban presentes en ese momento. Quitamos
@@ -1120,6 +1176,78 @@
                         }
                     }
                 }
+            });
+        } else if (action === 'validar-conexion') {
+            abrirDetail('<div class="valcx-wrap"><div class="valcx-loading">' +
+                '<i class="fa fa-spinner fa-spin"></i> Validando conexión con Meta...</div></div>');
+            fetch('/whatsapp/sesiones/' + sesionId + '/validar-conexion/', {
+                method: 'GET',
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
+                credentials: 'same-origin',
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.ok) {
+                        abrirDetail('<div class="valcx-wrap"><div class="valcx-verdict is-bad">' +
+                            '<i class="fa fa-circle-xmark"></i> ' + (data.error || 'No se pudo validar.') +
+                            '</div></div>');
+                        return;
+                    }
+                    abrirDetail(renderValidacionConexion(data));
+                })
+                .catch(function () {
+                    abrirDetail('<div class="valcx-wrap"><div class="valcx-verdict is-bad">' +
+                        '<i class="fa fa-circle-xmark"></i> Error de red al validar.</div></div>');
+                });
+        } else if (action === 'cambiar-nombre') {
+            abrirDetail(renderCambiarNombre(nombre));
+            var cnBtn = document.getElementById('cn-enviar');
+            var cnInput = document.getElementById('cn-input');
+            var cnResult = document.getElementById('cn-result');
+            if (cnInput) cnInput.focus();
+            if (cnBtn) cnBtn.addEventListener('click', function () {
+                if (cnBtn.disabled) return;
+                var nuevo = (cnInput.value || '').trim();
+                if (nuevo.length < 3) {
+                    cnResult.hidden = false;
+                    cnResult.className = 'valcx-verdict is-bad';
+                    cnResult.innerHTML = '<i class="fa fa-circle-xmark"></i> El nombre debe tener al menos 3 caracteres.';
+                    return;
+                }
+                var orig = cnBtn.innerHTML;
+                cnBtn.disabled = true;
+                cnBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Enviando a Meta...';
+                cnResult.hidden = true;
+                var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+                var fd = new FormData();
+                fd.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+                fd.append('nombre', nuevo);
+                fetch('/whatsapp/sesiones/' + sesionId + '/cambiar-nombre/', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'X-CSRFToken': csrf ? csrf.value : '', 'X-Requested-With': 'XMLHttpRequest'},
+                    credentials: 'same-origin',
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        cnBtn.disabled = false;
+                        cnBtn.innerHTML = orig;
+                        cnResult.hidden = false;
+                        if (data.ok) {
+                            cnResult.className = 'valcx-verdict is-ok';
+                            cnResult.innerHTML = '<i class="fa fa-circle-check"></i> ' + (data.message || 'Enviado a revisión.');
+                        } else {
+                            cnResult.className = 'valcx-verdict is-bad';
+                            cnResult.innerHTML = '<i class="fa fa-circle-xmark"></i> ' + (data.error || 'No se pudo cambiar.');
+                        }
+                    })
+                    .catch(function () {
+                        cnBtn.disabled = false;
+                        cnBtn.innerHTML = orig;
+                        cnResult.hidden = false;
+                        cnResult.className = 'valcx-verdict is-bad';
+                        cnResult.innerHTML = '<i class="fa fa-circle-xmark"></i> Error de red.';
+                    });
             });
         } else if (action === 'datos-transporte') {
             fetchPartial('datos_transporte_modal', sesionId).then(function (r) {

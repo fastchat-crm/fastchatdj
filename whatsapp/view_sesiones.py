@@ -1140,6 +1140,16 @@ def sesionesView(request):
         SesionWhatsApp.objects.filter(filtros)
         .select_related('config_meta', 'agente_ia', 'departamento_default')
         .prefetch_related('departamentos', 'perfilsesionwhatsapp_set__usuario')
+        .annotate(
+            conv_abiertas=Count(
+                'contacto__conversaciones',
+                filter=Q(
+                    contacto__conversaciones__conversacion_finalizada=False,
+                    contacto__conversaciones__status=True,
+                ),
+                distinct=True,
+            )
+        )
         .order_by('-fecha_registro')
     )
     data['sesiones'] = sesiones

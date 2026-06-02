@@ -7,6 +7,12 @@
      data-activo="{{ sesion.activo|yesno:'1,0' }}"
      data-proveedor="{{ sesion.proveedor }}">
 
+    <div class="card-bell{% if sesion.conv_abiertas %} has-abiertas{% endif %}"
+         title="{{ sesion.conv_abiertas|default:0 }} conversación(es) abierta(s)">
+        <i class="fa fa-bell"></i>
+        <span class="card-bell-count">{{ sesion.conv_abiertas|default:0 }}</span>
+    </div>
+
     <div class="card-top">
         <div class="card-avatar">
             {% if sesion.es_baileys and sesion.config_baileys.foto %}
@@ -79,6 +85,12 @@
                     </button>
                     <button type="button" class="kebab-item" data-action="meta-validar"><i
                             class="fa fa-satellite-dish text-success"></i> Revalidar número con Meta
+                    </button>
+                    <button type="button" class="kebab-item" data-action="validar-conexion"><i
+                            class="fa fa-clipboard-check text-success"></i> Validar conexión (chequeos)
+                    </button>
+                    <button type="button" class="kebab-item" data-action="cambiar-nombre"><i
+                            class="fa fa-signature"></i> Cambiar nombre del número
                     </button>
                     <button type="button" class="kebab-item" data-action="datos-transporte"><i
                             class="fa fa-id-card"></i> Datos del transporte (Meta)

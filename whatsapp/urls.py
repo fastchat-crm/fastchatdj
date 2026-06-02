@@ -11,7 +11,7 @@ from .meta_manual_view import (
 )
 from .meta_diagnostico_view import (
     meta_diagnostico, meta_suscribir_waba_action, meta_configurar_webhook_action,
-    meta_corregir_waba_action,
+    meta_corregir_waba_action, meta_validar_conexion_action, meta_cambiar_nombre_action,
 )
 from .meta_webhook_log_view import meta_webhook_log, meta_webhook_log_poll, meta_webhook_log_detalle
 from .meta_webhook_hits_view import meta_webhook_hits, meta_webhook_hits_poll, meta_webhook_hit_detalle
@@ -127,6 +127,8 @@ urlpatterns = [
     path('sesiones/<int:sesion_id>/diagnostico/', meta_diagnostico, name='whatsapp_meta_diagnostico'),
     path('sesiones/<int:sesion_id>/suscribir-waba/', meta_suscribir_waba_action, name='whatsapp_meta_suscribir_waba'),
     path('sesiones/<int:sesion_id>/corregir-waba/', meta_corregir_waba_action, name='whatsapp_meta_corregir_waba'),
+    path('sesiones/<int:sesion_id>/validar-conexion/', meta_validar_conexion_action, name='whatsapp_meta_validar_conexion'),
+    path('sesiones/<int:sesion_id>/cambiar-nombre/', meta_cambiar_nombre_action, name='whatsapp_meta_cambiar_nombre'),
     path('sesiones/<int:sesion_id>/configurar-webhook/', meta_configurar_webhook_action, name='whatsapp_meta_configurar_webhook'),
     path('sesiones/<int:sesion_id>/webhook-log/', meta_webhook_log, name='whatsapp_meta_webhook_log'),
     path('sesiones/<int:sesion_id>/webhook-log/poll/', meta_webhook_log_poll, name='whatsapp_meta_webhook_log_poll'),

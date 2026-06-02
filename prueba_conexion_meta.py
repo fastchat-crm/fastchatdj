@@ -144,7 +144,7 @@ def check_token(config: ConfigMeta, app_id: str, app_secret: str) -> None:
              'Meta App o token de otra app). No es critico.')
 
 
-def check_phone_number(config: ConfigMeta) -> None:
+def check_phone_number(config: ConfigMeta) -> dict:
     title('2. ESTADO DEL NUMERO  (GET /{PHONE_NUMBER_ID})')
     fields = ('display_phone_number,verified_name,quality_rating,'
               'code_verification_status,name_status,status,platform_type,'
@@ -154,7 +154,7 @@ def check_phone_number(config: ConfigMeta) -> None:
     if code != 200:
         fail(f'No se pudo leer el numero (HTTP {code})')
         info(json.dumps(data.get('error', data), ensure_ascii=False))
-        return
+        return {}
 
     ok('Numero leido desde Meta:')
     info(f"status            : {data.get('status')}")
@@ -179,6 +179,7 @@ def check_phone_number(config: ConfigMeta) -> None:
     if platform and platform not in ('CLOUD_API',):
         warn(f'platform_type = {platform} -> posible COEXISTENCIA con la app de '
              'WhatsApp (la app se come los entrantes).')
+    return {'status': status, 'platform_type': platform}
 
 
 def check_waba_numbers(config: ConfigMeta, phone_id_ok: str) -> None:
@@ -238,17 +239,17 @@ def _obtener_business_id() -> str:
         return ''
 
 
-def descubrir_waba_real(config: ConfigMeta) -> None:
+def descubrir_waba_real(config: ConfigMeta) -> dict:
     """Escanea las WABAs del negocio y reporta cual contiene realmente el
     phone_number_id de la sesion. Util cuando el waba_id guardado en el CRM
-    no coincide con la WABA real del numero."""
+    no coincide con la WABA real del numero. Devuelve {mismatch, waba_real, name}."""
     title('3b. DESCUBRIR LA WABA REAL DEL NUMERO')
     business_id = _obtener_business_id()
     if not business_id:
         warn('No hay Business Manager ID en Credenciales Meta App; no puedo escanear.')
         info('Cargalo en Seguridad -> Credenciales Meta App, o buscala a mano en '
              'WhatsApp Manager (que WABA contiene a este numero).')
-        return
+        return {}
 
     objetivo = str(config.phone_number_id)
     encontrada = None
@@ -274,13 +275,14 @@ def descubrir_waba_real(config: ConfigMeta) -> None:
     if not encontrada:
         warn(f'No encontre el numero {objetivo} en ninguna WABA del negocio '
              f'{business_id}. Puede estar en otro Business Manager.')
-        return
+        return {}
 
     real_waba, real_name, real_disp = encontrada
     ok(f'El numero {objetivo} ({real_disp}) vive REALMENTE en:')
     info(f'WABA real: {real_waba}  (name="{real_name}")')
     info(f'WABA guardada en el CRM: {config.waba_id}')
-    if str(real_waba) == str(config.waba_id):
+    mismatch = str(real_waba) != str(config.waba_id)
+    if not mismatch:
         ok('Coinciden -> el waba_id del CRM es correcto.')
     else:
         fail('NO coinciden -> el CRM tiene la WABA equivocada para esta sesion.')
@@ -288,6 +290,8 @@ def descubrir_waba_real(config: ConfigMeta) -> None:
         info(f'  1. Actualiza ConfigMeta.waba_id de la sesion {config.sesion_id} a {real_waba}')
         info(f'  2. Suscribi esa WABA real a la app: POST /{real_waba}/subscribed_apps')
         info('  3. Reintenta recibir un mensaje -> ahora si deberia llegar al webhook.')
+        info('  (O usa el boton "Detectar y corregir WABA" en el diagnostico del CRM.)')
+    return {'mismatch': mismatch, 'waba_real': real_waba, 'name': real_name}
 
 
 def check_subscribed_apps(config: ConfigMeta, app_id: str) -> None:
@@ -392,16 +396,30 @@ def check_webhook_endpoint(config: ConfigMeta) -> None:
         warn(f'Respuesta inesperada (HTTP {resp.status_code}).')
 
 
-def resumen(config: ConfigMeta) -> None:
+def resumen(config: ConfigMeta, phone: dict, waba: dict) -> None:
     title('RESUMEN / SIGUIENTE PASO')
-    info('Si TODO sale OK arriba pero los entrantes de ESTE numero no llegan al')
-    info('CRM, y el otro numero (misma WABA) SI recibe -> NO es tu codigo ni la')
-    info('suscripcion. La causa tipica es COEXISTENCIA: el numero esta logueado')
-    info('en la app de WhatsApp y la app intercepta los entrantes.')
-    print()
-    info('Pista clave: el chequeo 2 (platform_type) y el status. Si status=CONNECTED')
-    info(f"y platform_type != CLOUD_API para {config.phone_number_id} -> coexistencia.")
-    info('Fix: sacar el numero de la app de WhatsApp y re-registrar en Cloud API.')
+    status = (phone or {}).get('status', '')
+    platform = (phone or {}).get('platform_type', '')
+
+    # Diagnostico dinamico segun lo encontrado, en orden de probabilidad.
+    if waba.get('mismatch'):
+        fail('CAUSA RAIZ: el waba_id guardado en el CRM es INCORRECTO.')
+        info(f"El numero vive en la WABA {waba.get('waba_real')} (\"{waba.get('name')}\"), "
+             f"pero el CRM tiene {config.waba_id}.")
+        info('Por eso Meta no entrega los entrantes (la WABA real no esta suscrita a tu app).')
+        info('FIX: boton "Detectar y corregir WABA" en el diagnostico, o corregir el')
+        info(f"     waba_id de la sesion {config.sesion_id} a {waba.get('waba_real')} y suscribirla.")
+    elif status == 'CONNECTED' and platform and platform != 'CLOUD_API':
+        fail(f'CAUSA PROBABLE: COEXISTENCIA (platform_type={platform}).')
+        info('El numero esta logueado en la app de WhatsApp y la app intercepta los')
+        info('entrantes. Fix: sacar el numero de la app y re-registrar en Cloud API.')
+    elif status != 'CONNECTED':
+        fail(f'CAUSA PROBABLE: el numero NO esta CONNECTED (status={status}).')
+        info('Completar verificacion (request_code/verify_code) y /register.')
+    else:
+        ok('No detecte una causa obvia en Graph.')
+        info('Si igual no recibe: revisa override_callback_uri (chequeo 4) y que el')
+        info('campo "messages" este suscrito (chequeo 5).')
 
 
 def main() -> None:
@@ -437,13 +455,13 @@ def main() -> None:
     print(f'phone_number_id={config.phone_number_id} | waba={config.waba_id} | app_id={app_id}')
 
     check_token(config, app_id, app_secret)
-    check_phone_number(config)
+    phone = check_phone_number(config)
     check_waba_numbers(config, phone_id_ok)
-    descubrir_waba_real(config)
+    waba = descubrir_waba_real(config)
     check_subscribed_apps(config, app_id)
     check_app_webhook_fields(config, app_id, app_secret)
     check_webhook_endpoint(config)
-    resumen(config)
+    resumen(config, phone or {}, waba or {})
     print()
 
 
