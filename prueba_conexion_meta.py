@@ -228,6 +228,68 @@ def check_waba_numbers(config: ConfigMeta, phone_id_ok: str) -> None:
                  '-> WABAs distintas. Revisa la suscripcion de ESTA WABA.')
 
 
+def _obtener_business_id() -> str:
+    try:
+        from seguridad.models import Configuracion, CredencialMetaApp
+        confi = Configuracion.get_instancia()
+        cred = CredencialMetaApp.objects.filter(configuracion=confi).first() if confi else None
+        return (cred.business_id or '') if cred else ''
+    except Exception:
+        return ''
+
+
+def descubrir_waba_real(config: ConfigMeta) -> None:
+    """Escanea las WABAs del negocio y reporta cual contiene realmente el
+    phone_number_id de la sesion. Util cuando el waba_id guardado en el CRM
+    no coincide con la WABA real del numero."""
+    title('3b. DESCUBRIR LA WABA REAL DEL NUMERO')
+    business_id = _obtener_business_id()
+    if not business_id:
+        warn('No hay Business Manager ID en Credenciales Meta App; no puedo escanear.')
+        info('Cargalo en Seguridad -> Credenciales Meta App, o buscala a mano en '
+             'WhatsApp Manager (que WABA contiene a este numero).')
+        return
+
+    objetivo = str(config.phone_number_id)
+    encontrada = None
+    for edge in ('owned_whatsapp_business_accounts', 'client_whatsapp_business_accounts'):
+        code, data = graph_get(f'{business_id}/{edge}', config.access_token,
+                               params={'fields': 'id,name,phone_numbers.limit(100){id,display_phone_number}'})
+        if code != 200:
+            warn(f'No pude leer {edge} (HTTP {code}): '
+                 f'{json.dumps(data.get("error", data), ensure_ascii=False)[:160]}')
+            continue
+        for waba in data.get('data', []):
+            nums = (waba.get('phone_numbers') or {}).get('data', [])
+            for n in nums:
+                if str(n.get('id')) == objetivo:
+                    encontrada = (waba.get('id'), waba.get('name'), n.get('display_phone_number'))
+                    break
+            if encontrada:
+                break
+        if encontrada:
+            break
+
+    print()
+    if not encontrada:
+        warn(f'No encontre el numero {objetivo} en ninguna WABA del negocio '
+             f'{business_id}. Puede estar en otro Business Manager.')
+        return
+
+    real_waba, real_name, real_disp = encontrada
+    ok(f'El numero {objetivo} ({real_disp}) vive REALMENTE en:')
+    info(f'WABA real: {real_waba}  (name="{real_name}")')
+    info(f'WABA guardada en el CRM: {config.waba_id}')
+    if str(real_waba) == str(config.waba_id):
+        ok('Coinciden -> el waba_id del CRM es correcto.')
+    else:
+        fail('NO coinciden -> el CRM tiene la WABA equivocada para esta sesion.')
+        info('FIX:')
+        info(f'  1. Actualiza ConfigMeta.waba_id de la sesion {config.sesion_id} a {real_waba}')
+        info(f'  2. Suscribi esa WABA real a la app: POST /{real_waba}/subscribed_apps')
+        info('  3. Reintenta recibir un mensaje -> ahora si deberia llegar al webhook.')
+
+
 def check_subscribed_apps(config: ConfigMeta, app_id: str) -> None:
     title('4. APPS SUSCRITAS A LA WABA  (GET /{WABA_ID}/subscribed_apps)')
     code, data = graph_get(f'{config.waba_id}/subscribed_apps', config.access_token)
@@ -377,6 +439,7 @@ def main() -> None:
     check_token(config, app_id, app_secret)
     check_phone_number(config)
     check_waba_numbers(config, phone_id_ok)
+    descubrir_waba_real(config)
     check_subscribed_apps(config, app_id)
     check_app_webhook_fields(config, app_id, app_secret)
     check_webhook_endpoint(config)
