@@ -69,6 +69,11 @@ def _log_hit(request, status_code: int, nota: str = ''):
     except Exception:
         logger.exception("MetaWebhookHit: fallo registrando hit (ignorando)")
 
+    try:
+        _alerta_webhook_debug(request.method, status_code, nota, ip, request.body)
+    except Exception:
+        logger.warning("No pude disparar la alerta debug del webhook", exc_info=True)
+
 logger = logging.getLogger(__name__)
 
 
@@ -202,15 +207,17 @@ def _render_info(request, estado='landing', status_code=200, mensaje_error=None)
 # Evento (POST)
 # ---------------------------------------------------------------------------
 
-def _alerta_webhook_debug(payload: dict, phone_number_id, config, evento):
-    """[DEBUG TEMPORAL] Manda un mail a hllerenaa1h@gmail.com cada vez que llega
-    algo al webhook, con el detalle para identificar a qué número pertenece.
+def _alerta_webhook_debug(metodo, status_code, nota, ip, raw_body):
+    """[DEBUG TEMPORAL] Manda un mail a hllerenaa1h@gmail.com ante CUALQUIER hit
+    al webhook Meta — la mínima cosa que llegue (GET, POST, body roto, lo que sea).
 
-    Sirve para diagnosticar por qué un número no recibe: confirma si Meta
-    realmente manda eventos para ese phone_number_id y si matchea un ConfigMeta.
+    Corre desde _log_hit, el punto más crudo: dispara para todo request que toque
+    el endpoint, aunque el JSON no parsee o sea un handshake. Best-effort intenta
+    sacar el phone_number_id y a qué sesión matchea, para identificar de qué número
+    vino.
 
     REMOVER cuando termine el diagnóstico (borrar esta función y su llamada en
-    _procesar_evento).
+    _log_hit).
     """
     import threading
     from django.core.mail import send_mail
@@ -218,34 +225,48 @@ def _alerta_webhook_debug(payload: dict, phone_number_id, config, evento):
 
     def _enviar():
         try:
+            phone_number_id = None
             entrantes = []
             estados = []
-            for entry in payload.get('entry') or []:
-                for change in entry.get('changes') or []:
-                    value = change.get('value') or {}
-                    for m in value.get('messages') or []:
-                        entrantes.append(f"  from={m.get('from')} tipo={m.get('type')} "
-                                         f"texto={(m.get('text') or {}).get('body', '')[:80]}")
-                    for s in value.get('statuses') or []:
-                        estados.append(f"  status={s.get('status')} dest={s.get('recipient_id')}")
+            payload = None
+            try:
+                payload = json.loads((raw_body or b'').decode('utf-8'))
+            except Exception:
+                payload = None
 
-            if config:
-                match = f"SÍ → sesión id={config.sesion_id} ({getattr(config.sesion, 'nombre', '')})"
-            else:
-                match = "NO — config_meta_no_encontrada (huérfano)"
+            if isinstance(payload, dict):
+                phone_number_id = _extraer_phone_number_id(payload)
+                for entry in payload.get('entry') or []:
+                    for change in entry.get('changes') or []:
+                        value = change.get('value') or {}
+                        for m in value.get('messages') or []:
+                            entrantes.append(f"  from={m.get('from')} tipo={m.get('type')} "
+                                             f"texto={(m.get('text') or {}).get('body', '')[:80]}")
+                        for s in value.get('statuses') or []:
+                            estados.append(f"  status={s.get('status')} dest={s.get('recipient_id')}")
+
+            match = '(no aplica)'
+            if phone_number_id:
+                cfg = ConfigMeta.objects.filter(phone_number_id=phone_number_id).first()
+                if cfg:
+                    match = f"SÍ → sesión id={cfg.sesion_id} ({getattr(cfg.sesion, 'nombre', '')})"
+                else:
+                    match = "NO — config_meta_no_encontrada (huérfano)"
 
             cuerpo = (
-                f"Llegó un evento al webhook Meta.\n\n"
+                f"Llegó algo al webhook Meta.\n\n"
                 f"Fecha: {timezone.now():%Y-%m-%d %H:%M:%S}\n"
-                f"phone_number_id: {phone_number_id}\n"
-                f"Matchea ConfigMeta: {match}\n"
-                f"Tipo de evento: {evento.tipo_evento}\n"
-                f"Firma válida: {evento.firma_valida}\n"
-                f"Evento id: {evento.id}\n\n"
+                f"Método HTTP: {metodo}\n"
+                f"Status respondido: {status_code}\n"
+                f"Nota: {nota}\n"
+                f"IP: {ip}\n"
+                f"phone_number_id: {phone_number_id or '(no venía en el body)'}\n"
+                f"Matchea ConfigMeta: {match}\n\n"
                 f"Mensajes entrantes:\n" + ("\n".join(entrantes) if entrantes else "  (ninguno)") + "\n\n"
-                f"Statuses (ACK salientes):\n" + ("\n".join(estados) if estados else "  (ninguno)") + "\n"
+                f"Statuses (ACK salientes):\n" + ("\n".join(estados) if estados else "  (ninguno)") + "\n\n"
+                f"Body crudo (primeros 600):\n{(raw_body or b'')[:600]}\n"
             )
-            asunto = f"[Webhook Meta] phone_number_id={phone_number_id or 'N/A'} · match={'SI' if config else 'NO'}"
+            asunto = f"[Webhook Meta] {metodo} {nota} · phone_number_id={phone_number_id or 'N/A'}"
             send_mail(
                 asunto, cuerpo,
                 getattr(settings, 'DEFAULT_FROM_EMAIL', None),
@@ -280,8 +301,6 @@ def _procesar_evento(request):
         firma_valida=firma_valida,
         procesado=False,
     )
-
-    _alerta_webhook_debug(payload, phone_number_id, config, evento)
 
     if not firma_valida and app_secret_org:
         evento.error_procesamiento = 'firma_hmac_invalida'
