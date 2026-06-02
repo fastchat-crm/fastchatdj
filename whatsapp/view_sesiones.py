@@ -1147,6 +1147,12 @@ def sesionesView(request):
     if criterio:
         filtros &= (Q(nombre__icontains=criterio) | Q(numero__icontains=criterio))
 
+    # Mismo criterio que el inbox /whatsapp/conversaciones/ (manager `sin_expirar`):
+    # activa = estado_conversacion=0 + no finalizada + dentro de la ventana
+    # (fecha_hora_expira >= ahora). Sin el filtro de expiración la campanita
+    # contaba de más (conversaciones vencidas que el inbox ya no muestra).
+    from django.utils import timezone as _tz
+    _ahora_conv = _tz.now()
     sesiones = (
         SesionWhatsApp.objects.filter(filtros)
         .select_related('config_meta', 'agente_ia', 'departamento_default')
@@ -1156,6 +1162,8 @@ def sesionesView(request):
                 'contacto__conversaciones',
                 filter=Q(
                     contacto__conversaciones__estado_conversacion=0,
+                    contacto__conversaciones__conversacion_finalizada=False,
+                    contacto__conversaciones__fecha_hora_expira__gte=_ahora_conv,
                     contacto__conversaciones__status=True,
                     contacto__status=True,
                 ),
