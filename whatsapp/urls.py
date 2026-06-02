@@ -9,7 +9,10 @@ from .meta_manual_view import (
     meta_manual_validar, meta_manual_conectar, meta_test_message, meta_registrar_numero,
     meta_request_code, meta_verify_code,
 )
-from .meta_diagnostico_view import meta_diagnostico, meta_suscribir_waba_action, meta_configurar_webhook_action
+from .meta_diagnostico_view import (
+    meta_diagnostico, meta_suscribir_waba_action, meta_configurar_webhook_action,
+    meta_corregir_waba_action,
+)
 from .meta_webhook_log_view import meta_webhook_log, meta_webhook_log_poll, meta_webhook_log_detalle
 from .meta_webhook_hits_view import meta_webhook_hits, meta_webhook_hits_poll, meta_webhook_hit_detalle
 from .meta_foto_perfil_view import meta_actualizar_foto_perfil
@@ -123,6 +126,7 @@ urlpatterns = [
     path('sesiones/<int:sesion_id>/verify-code/', meta_verify_code, name='whatsapp_meta_verify_code'),
     path('sesiones/<int:sesion_id>/diagnostico/', meta_diagnostico, name='whatsapp_meta_diagnostico'),
     path('sesiones/<int:sesion_id>/suscribir-waba/', meta_suscribir_waba_action, name='whatsapp_meta_suscribir_waba'),
+    path('sesiones/<int:sesion_id>/corregir-waba/', meta_corregir_waba_action, name='whatsapp_meta_corregir_waba'),
     path('sesiones/<int:sesion_id>/configurar-webhook/', meta_configurar_webhook_action, name='whatsapp_meta_configurar_webhook'),
     path('sesiones/<int:sesion_id>/webhook-log/', meta_webhook_log, name='whatsapp_meta_webhook_log'),
     path('sesiones/<int:sesion_id>/webhook-log/poll/', meta_webhook_log_poll, name='whatsapp_meta_webhook_log_poll'),

@@ -79,6 +79,73 @@ def _consultar_subscribed_apps(config: ConfigMeta, timeout: int = 10) -> dict:
     return {'ok': True, 'apps': apps, 'count': len(apps)}
 
 
+def _numero_en_su_waba(config: ConfigMeta, timeout: int = 10) -> dict:
+    """¿El phone_number_id pertenece realmente a la WABA guardada en el CRM?
+
+    GET /{waba_id}/phone_numbers y busca el phone_number_id. Detecta el caso en
+    que el CRM guardó la WABA equivocada (típico al copiar la de otro número).
+    """
+    if not (config.access_token and config.waba_id and config.phone_number_id):
+        return {'ok': False, 'error': 'Falta waba_id, phone_number_id o access_token.'}
+    try:
+        r = requests.get(
+            build_graph_url(f'/{config.waba_id}/phone_numbers'),
+            headers={'Authorization': f'Bearer {config.access_token}'},
+            params={'fields': 'id,display_phone_number'},
+            timeout=timeout,
+        )
+    except Exception as ex:
+        return {'ok': False, 'error': f'Error de red: {ex}'}
+    if r.status_code != 200:
+        try:
+            err = r.json().get('error', {}).get('message', r.text[:200])
+        except Exception:
+            err = r.text[:200]
+        return {'ok': False, 'error': err}
+    ids = [str(n.get('id')) for n in (r.json() or {}).get('data', [])]
+    return {'ok': True, 'pertenece': str(config.phone_number_id) in ids, 'ids': ids}
+
+
+def _business_id_org() -> str:
+    """Business Manager ID del singleton CredencialMetaApp (para escanear WABAs)."""
+    try:
+        from seguridad.models import Configuracion as _Conf, CredencialMetaApp as _Cred
+        confi = _Conf.get_instancia()
+        cred = _Cred.objects.filter(configuracion=confi).first() if confi else None
+        return (cred.business_id or '') if cred else ''
+    except Exception:
+        return ''
+
+
+def _descubrir_waba_real(config: ConfigMeta, timeout: int = 15) -> dict:
+    """Escanea las WABAs del negocio y devuelve la WABA real que contiene el
+    phone_number_id. Útil cuando el waba_id del CRM es incorrecto.
+
+    Devuelve {ok, waba_id, name} o {ok: False, error}.
+    """
+    business_id = _business_id_org()
+    if not business_id:
+        return {'ok': False, 'error': 'Falta Business Manager ID en Credenciales Meta App.'}
+    objetivo = str(config.phone_number_id)
+    for edge in ('owned_whatsapp_business_accounts', 'client_whatsapp_business_accounts'):
+        try:
+            r = requests.get(
+                build_graph_url(f'/{business_id}/{edge}'),
+                headers={'Authorization': f'Bearer {config.access_token}'},
+                params={'fields': 'id,name,phone_numbers.limit(100){id,display_phone_number}'},
+                timeout=timeout,
+            )
+        except Exception:
+            continue
+        if r.status_code != 200:
+            continue
+        for waba in (r.json() or {}).get('data', []):
+            nums = (waba.get('phone_numbers') or {}).get('data', [])
+            if any(str(n.get('id')) == objetivo for n in nums):
+                return {'ok': True, 'waba_id': str(waba.get('id')), 'name': waba.get('name') or ''}
+    return {'ok': False, 'error': f'No encontré el número {objetivo} en ninguna WABA del negocio.'}
+
+
 @login_required
 @secure_module
 def meta_diagnostico(request, sesion_id: int):
@@ -154,6 +221,9 @@ def meta_diagnostico(request, sesion_id: int):
     # ── Estado del webhook + WABA en Meta (Graph API live) ──
     phone_info = _consultar_phone_number(config) if config else {'ok': False, 'error': 'Sesión sin ConfigMeta.'}
     subscribed = _consultar_subscribed_apps(config) if config else {'ok': False, 'error': 'Sesión sin ConfigMeta.'}
+    en_waba = _numero_en_su_waba(config) if config else {'ok': False, 'error': 'Sesión sin ConfigMeta.'}
+    # waba_mal: el número NO pertenece a la WABA guardada → routing de entrantes roto.
+    waba_mal = bool(en_waba.get('ok') and not en_waba.get('pertenece'))
 
     # ── Business ID para deep-links de Meta (Insights + Billing) ──
     # Prioriza el de la sesión (ConfigMeta.business_account_id) y cae al
@@ -181,6 +251,16 @@ def meta_diagnostico(request, sesion_id: int):
             f'{subscribed.get("count", 0)} app(s) suscrita(s)' if subscribed.get('ok') else (subscribed.get('error') or 'desconocido')
         ),
         'fix': 'Ejecutá el curl del modal "Datos del webhook" para suscribirla.',
+    })
+    salud.append({
+        'label': 'Número pertenece a su WABA',
+        'ok': bool(en_waba.get('ok') and en_waba.get('pertenece')),
+        'detalle': (
+            'El número está en la WABA guardada.' if (en_waba.get('ok') and en_waba.get('pertenece'))
+            else ('El número NO está en la WABA guardada — waba_id incorrecto. Los entrantes no llegan.'
+                  if en_waba.get('ok') else (en_waba.get('error') or 'desconocido'))
+        ),
+        'fix': 'Usá el botón "Detectar y corregir WABA" para arreglarlo automáticamente.',
     })
     salud.append({
         'label': 'Webhook verificado en Meta',
@@ -256,6 +336,8 @@ def meta_diagnostico(request, sesion_id: int):
         'ads_access_token_mask':  ads_access_token_mask,
         'phone_info':   phone_info,
         'subscribed':   subscribed,
+        'en_waba':      en_waba,
+        'waba_mal':     waba_mal,
         'eventos_24h':            eventos_24h,
         'eventos_firma_invalida': eventos_firma_invalida,
         'eventos_con_error_24h':  eventos_con_error_24h,
@@ -273,6 +355,64 @@ def meta_diagnostico(request, sesion_id: int):
     }
     addData(request, contexto)
     return render(request, 'whatsapp/sesiones/diagnostico.html', contexto)
+
+
+@login_required
+def meta_corregir_waba_action(request, sesion_id: int):
+    """Endpoint AJAX: detecta la WABA real del número y corrige el CRM.
+
+    Cuando el número no pertenece a la WABA guardada (waba_id mal cargado), los
+    entrantes nunca llegan. Esta acción:
+      1. Escanea las WABAs del negocio y encuentra la real que contiene el número.
+      2. Actualiza ConfigMeta.waba_id (y business_account_id si aplica).
+      3. Suscribe esa WABA real a la Meta App (subscribed_apps).
+    """
+    from django.http import JsonResponse
+    from .meta_manual_view import _suscribir_waba_a_app
+
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Solo POST.'})
+
+    sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
+    if not sesion:
+        return JsonResponse({'ok': False, 'error': 'Sesión no encontrada o no es Meta.'})
+    config = getattr(sesion, 'config_meta', None)
+    if not config:
+        return JsonResponse({'ok': False, 'error': 'La sesión no tiene ConfigMeta.'})
+
+    real = _descubrir_waba_real(config)
+    if not real.get('ok'):
+        return JsonResponse({'ok': False, 'error': real.get('error') or 'No pude detectar la WABA real.'})
+
+    waba_real = real['waba_id']
+    waba_anterior = config.waba_id
+
+    if str(waba_real) == str(config.waba_id):
+        # Ya estaba bien; igual aseguramos la suscripción.
+        sub = _suscribir_waba_a_app(waba_real, config.access_token)
+        if sub.get('ok'):
+            return JsonResponse({'ok': True, 'message': f'El waba_id ya era correcto ({waba_real}). '
+                                                        'WABA suscrita a la app.'})
+        return JsonResponse({'ok': False, 'error': sub.get('error') or 'Meta rechazó la suscripción.'})
+
+    config.waba_id = waba_real
+    config.save(request)
+
+    sub = _suscribir_waba_a_app(waba_real, config.access_token)
+    logger.info("Corregido waba_id de sesión %s: %s → %s (suscripción ok=%s)",
+                sesion.id, waba_anterior, waba_real, sub.get('ok'))
+
+    if sub.get('ok'):
+        return JsonResponse({
+            'ok': True,
+            'message': f'WABA corregida: {waba_anterior} → {waba_real} ("{real.get("name", "")}") '
+                       'y suscrita a la app. Probá recibir un mensaje ahora.',
+        })
+    return JsonResponse({
+        'ok': True,
+        'message': f'WABA corregida: {waba_anterior} → {waba_real}, pero la suscripción falló: '
+                   f'{sub.get("error")}. Probá el botón "Suscribir WABA".',
+    })
 
 
 @login_required

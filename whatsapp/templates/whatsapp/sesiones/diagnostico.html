@@ -246,6 +246,24 @@
                 <h5 class="diag-card-title">
                     <i class="fa fa-link"></i> Suscripción WABA + Webhook
                 </h5>
+                {% if waba_mal %}
+                    <div class="diag-error-box">
+                        <i class="fa fa-triangle-exclamation"></i>
+                        <div>
+                            <b>WABA incorrecta para este número.</b>
+                            <p>El número <code>{{ config.phone_number_id }}</code> NO pertenece a la WABA
+                                guardada (<code>{{ config.waba_id }}</code>). Por eso Meta nunca entrega los
+                                mensajes entrantes. El botón detecta la WABA real del número, corrige el CRM
+                                y la suscribe a la app.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="conex-btn conex-btn-primary diag-action-btn" id="btn-corregir-waba"
+                            data-sesion-id="{{ sesion.id }}">
+                        <i class="fa fa-wrench"></i> Detectar y corregir WABA
+                    </button>
+                    <div id="corregir-waba-result" class="diag-action-result" hidden></div>
+                    <hr class="diag-sep">
+                {% endif %}
                 {% if subscribed.ok %}
                     <p class="diag-text">
                         <b>{{ subscribed.count }}</b> aplicación(es) suscrita(s) a esta WABA:
@@ -748,6 +766,50 @@
 
     {% csrf_token %}
     <script>
+        (function () {
+            var btn = document.getElementById('btn-corregir-waba');
+            if (!btn) return;
+            var resultBox = document.getElementById('corregir-waba-result');
+            var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+            btn.addEventListener('click', function () {
+                if (btn.disabled) return;
+                var orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Detectando WABA real...';
+                resultBox.hidden = true;
+                var fd = new FormData();
+                fd.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+                fetch('/whatsapp/sesiones/' + btn.getAttribute('data-sesion-id') + '/corregir-waba/', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'X-CSRFToken': csrf ? csrf.value : '', 'X-Requested-With': 'XMLHttpRequest'},
+                    credentials: 'same-origin',
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        if (data.ok) {
+                            resultBox.className = 'diag-action-result is-ok';
+                            resultBox.innerHTML = '<i class="fa fa-circle-check"></i> ' + (data.message || 'WABA corregida.') +
+                                ' <small>Recargá la página para confirmar.</small>';
+                            setTimeout(function () { window.location.reload(); }, 2200);
+                        } else {
+                            resultBox.className = 'diag-action-result is-error';
+                            resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> ' + (data.error || 'No se pudo corregir.');
+                        }
+                    })
+                    .catch(function () {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        resultBox.className = 'diag-action-result is-error';
+                        resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> Error de red.';
+                    });
+            });
+        })();
+
         (function () {
             var btn = document.getElementById('btn-suscribir-waba');
             if (!btn) return;
