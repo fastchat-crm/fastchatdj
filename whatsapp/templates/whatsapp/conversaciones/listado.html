@@ -2,7 +2,7 @@
 {% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
-<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v2.0">
+<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v2.1">
 <link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
 <link rel="stylesheet" href="/static/css/whatsapp/ficha_cliente.css?v1.1">
 <link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.3">
@@ -383,6 +383,8 @@
                 {% csrf_token %}
                 <input type="hidden" name="action" value="send">
                 <input type="hidden" name="pk" id="conversacion-id" value="">
+
+                <div id="wa-offline-banner" class="wa-offline-banner d-none"></div>
 
                 <div id="footer-file-preview" class="d-none mb-2 d-flex align-items-center gap-2"
                      style="font-size:.82rem;background:#e9f5ff;border-radius:8px;padding:6px 10px;">
@@ -1964,6 +1966,111 @@
         });
 
         // Enviar mensaje
+        const WA_OFFLINE_KEY = 'wa_offline_queue';
+        let _waFlushing = false;
+
+        function _waCsrf() {
+            return $('input[name="csrfmiddlewaretoken"]').first().val();
+        }
+        function _waEscape(s) {
+            return $('<div>').text(s == null ? '' : String(s)).html();
+        }
+        function _waLeerCola() {
+            try { return JSON.parse(localStorage.getItem(WA_OFFLINE_KEY) || '[]'); }
+            catch (e) { return []; }
+        }
+        function _waGuardarCola(cola) {
+            try { localStorage.setItem(WA_OFFLINE_KEY, JSON.stringify(cola)); } catch (e) {}
+            _waActualizarBanner();
+        }
+        function _waEncolar(convId, texto) {
+            const cola = _waLeerCola();
+            const item = {
+                qid: 'q' + Date.now() + Math.floor(Math.random() * 1000),
+                convId: String(convId),
+                texto: texto,
+                ts: Date.now()
+            };
+            cola.push(item);
+            _waGuardarCola(cola);
+            return item;
+        }
+        function _waBurbujaPendiente(item) {
+            return '<div class="msg-row msg-out d-flex flex-row-reverse align-items-end gap-2 mb-2 wa-pendiente" data-qid="' + item.qid + '">' +
+                '<div class="msg-col">' +
+                '<div class="msg-bubble msg-bubble-out">' +
+                '<p class="mb-0 wa-msg">' + _waEscape(item.texto) + '</p>' +
+                '<div class="msg-meta d-flex align-items-center justify-content-end gap-1">' +
+                '<span class="wa-pendiente-tag"><i class="fa fa-clock me-1"></i>En cola · se enviará al reconectar</span>' +
+                '</div></div></div></div>';
+        }
+        function _waRenderPendientes(convId) {
+            _waLeerCola()
+                .filter(function (it) { return it.convId === String(convId); })
+                .forEach(function (it) {
+                    if (!$('#mensajes-container [data-qid="' + it.qid + '"]').length) {
+                        $('#mensajes-container').append(_waBurbujaPendiente(it));
+                    }
+                });
+        }
+        function _waActualizarBanner() {
+            const $b = $('#wa-offline-banner');
+            if (!$b.length) { return; }
+            const n = _waLeerCola().length;
+            if (!navigator.onLine || n > 0) {
+                let txt = !navigator.onLine ? '<i class="fa fa-wifi-slash me-1"></i> Sin conexión.' : '<i class="fa fa-clock me-1"></i>';
+                if (n > 0) { txt += ' ' + n + ' mensaje' + (n === 1 ? '' : 's') + ' en cola.'; }
+                $b.html(txt).removeClass('d-none');
+            } else {
+                $b.addClass('d-none');
+            }
+        }
+        function _waFlush() {
+            if (_waFlushing || !navigator.onLine) { return; }
+            const cola = _waLeerCola();
+            if (!cola.length) { return; }
+            _waFlushing = true;
+            const item = cola[0];
+            const fd = new FormData();
+            fd.append('action', 'send');
+            fd.append('pk', item.convId);
+            fd.append('mensaje', item.texto);
+            fd.append('csrfmiddlewaretoken', _waCsrf());
+            $.ajax({
+                url: '/whatsapp/conversaciones/',
+                type: 'POST',
+                data: fd,
+                processData: false,
+                contentType: false,
+                success: function (response) {
+                    const rest = _waLeerCola().filter(function (it) { return it.qid !== item.qid; });
+                    _waGuardarCola(rest);
+                    const $burb = $('#mensajes-container [data-qid="' + item.qid + '"]');
+                    if (!response.error && response.mensaje_html) {
+                        if ($burb.length) {
+                            $burb.replaceWith(response.mensaje_html);
+                        } else if (String(conversacionActiva) === item.convId) {
+                            $('#mensajes-container').append(response.mensaje_html);
+                        }
+                        setTimeout(function () { scrollToBottom(); }, 200);
+                    } else {
+                        $burb.find('.wa-pendiente-tag')
+                            .html('<i class="fa fa-triangle-exclamation me-1"></i>No se pudo enviar');
+                    }
+                    _waFlushing = false;
+                    setTimeout(_waFlush, 300);
+                },
+                error: function () {
+                    _waFlushing = false;
+                }
+            });
+        }
+
+        window.addEventListener('online', function () { _waActualizarBanner(); _waFlush(); });
+        window.addEventListener('offline', function () { _waActualizarBanner(); });
+        _waActualizarBanner();
+        if (navigator.onLine) { _waFlush(); }
+
         $('#form-enviar-mensaje').submit(function(e) {
             e.preventDefault();
 
@@ -1972,6 +2079,24 @@
             const archivo = document.getElementById('archivo').files[0];
             if (!texto && !archivo) {
                 alertaWarning('Escribe un mensaje o adjunta un archivo.');
+                return;
+            }
+
+            if (!navigator.onLine) {
+                if (archivo) {
+                    alertaWarning('Sin conexión: solo se pueden encolar mensajes de texto. Quita el adjunto para enviarlo al reconectar.');
+                    return;
+                }
+                const convOff = $('#conversacion-id').val() || conversacionActiva;
+                if (!convOff) {
+                    alertaWarning('Abre una conversación primero.');
+                    return;
+                }
+                const itemOff = _waEncolar(convOff, texto);
+                $('#mensajes-container').append(_waBurbujaPendiente(itemOff));
+                form.find('input[name="mensaje"]').val('');
+                setTimeout(() => { scrollToBottom(); }, 100);
+                alertaWarning('Sin conexión. El mensaje quedó en cola y se enviará al reconectar.');
                 return;
             }
 
@@ -2019,6 +2144,17 @@
                 },
                 error: function(xhr, status, error) {
                     console.error('[enviarMensaje] ajax error', status, error, xhr.responseText);
+                    if ((xhr.status === 0 || status === 'error' || status === 'timeout') && !archivo) {
+                        const convOff = $('#conversacion-id').val() || conversacionActiva;
+                        if (convOff) {
+                            const itemOff = _waEncolar(convOff, texto);
+                            $('#mensajes-container').append(_waBurbujaPendiente(itemOff));
+                            form.find('input[name="mensaje"]').val('');
+                            setTimeout(() => { scrollToBottom(); }, 100);
+                            alertaWarning('No se pudo enviar (sin conexión). Quedó en cola para reenviar al reconectar.');
+                            return;
+                        }
+                    }
                     alertaWarning('Error al enviar mensaje: ' + error);
                 },
                 complete: function() {
@@ -2386,6 +2522,8 @@
 
                     setTimeout(() => { scrollToBottom(); }, 800);
                     conectarWebSocket(response.conversacion_id);
+                    _waRenderPendientes(response.conversacion_id);
+                    if (navigator.onLine) { _waFlush(); }
                 },
                 error: function(xhr, status, error) {
                     _cargandoMensajes = false;

@@ -558,3 +558,28 @@
     font-size: .62rem;
 }
 
+.wa-offline-banner {
+    background: #fff7ed;
+    color: #b45309;
+    border: 1px solid #fdba74;
+    border-radius: 8px;
+    padding: .35rem .6rem;
+    margin-bottom: .5rem;
+    font-size: .78rem;
+    font-weight: 600;
+}
+
+.wa-pendiente {
+    opacity: .8;
+}
+
+.wa-pendiente .msg-bubble-out {
+    border: 1px dashed #94a3b8;
+}
+
+.wa-pendiente-tag {
+    font-size: .66rem;
+    color: #64748b;
+    font-style: italic;
+}
+
