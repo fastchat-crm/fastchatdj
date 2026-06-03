@@ -928,10 +928,15 @@ SAGEST_CEDULA_URL_DEFAULT = 'https://sagest.epunemi.gob.ec/apimobile/v1/consulta
 
 @registrar_funcion(
     codigo='consultar_cedula_sagest',
-    descripcion='Recibe una cédula y trae nombres, apellidos, fecha de nacimiento y edad desde SAGEST (cascada persona → unemi → ister). Consulta interna: no requiere configurar endpoint.',
+    descripcion='Recibe una cédula y trae sus datos desde SAGEST (cascada persona → unemi → ister). Consulta interna: no requiere endpoint. Rama ok=encontrada / error=no encontrada.',
     parametros={
         'body.cedula':         'string requerido · cédula/RUC/pasaporte. Acepta {{variables.cedula}}. Si se omite, usa variables.cedula.',
         '(opcional) endpoint': 'EndpointApiChatbot · si se asigna, su base_url sobreescribe la URL interna por defecto.',
+        'RETORNA · origen':            'string · fuente que respondió (persona | unemi | api).',
+        'RETORNA · data.nombres':      'string · extraer con jsonpath "data.nombres".',
+        'RETORNA · data.apellidos':    'string · extraer con jsonpath "data.apellidos".',
+        'RETORNA · data.fecha_nacimiento': 'string YYYY-MM-DD|null · jsonpath "data.fecha_nacimiento".',
+        'RETORNA · data.edad':         'int|null · jsonpath "data.edad".',
     },
     requiere_endpoint=False,
     ejemplo_body={'cedula': '{{variables.cedula}}'},

@@ -149,7 +149,8 @@
       "PowerShell(python -m py_compile \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\crm\\\\funciones_chatbot.py\" \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\crm\\\\management\\\\commands\\\\seed_buceo_epunemi.py\"; if \\($?\\) { \"COMPILA OK\" })",
       "PowerShell($base = \"https://sagest.epunemi.gob.ec/apimobile/v1\"; foreach \\($c in @\\(\"0928541556\",\"0000000000\"\\)\\) { try { $r = \\(Invoke-WebRequest -Uri \"$base/consultacedulapersona/?cedula=$c\" -UseBasicParsing -TimeoutSec 25\\); \"[$c] HTTP $\\($r.StatusCode\\) -> $\\($r.Content\\)\" } catch { \"[$c] ERR: $\\($_.Exception.Message\\)\" } })",
       "PowerShell($base = \"https://sagest.epunemi.gob.ec/apimobile/v1\"; foreach \\($c in @\\(\"1234567899\",\"9999999999\"\\)\\) { try { $r = \\(Invoke-WebRequest -Uri \"$base/consultacedulapersona/?cedula=$c\" -UseBasicParsing -TimeoutSec 30\\); \"[$c] HTTP $\\($r.StatusCode\\) -> $\\($r.Content\\)\" } catch { \"[$c] ERR: $\\($_.Exception.Message\\)\" } })",
-      "PowerShell(python -m py_compile \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\crm\\\\view_departamento_chatbot.py\"; if \\($?\\) { \"COMPILA OK\" })"
+      "PowerShell(python -m py_compile \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\crm\\\\view_departamento_chatbot.py\"; if \\($?\\) { \"COMPILA OK\" })",
+      "PowerShell(python -m py_compile \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\crm\\\\funciones_departamento_chatbot.py\" \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\crm\\\\view_departamento_chatbot.py\" \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\crm\\\\funciones_chatbot.py\"; if \\($?\\) { \"COMPILA OK\" })"
     ]
   },
   "hooks": {

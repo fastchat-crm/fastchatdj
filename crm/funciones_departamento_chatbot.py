@@ -2319,3 +2319,81 @@ def _probar_http(request):
         'body': body_resp,
         'error': err,
     })
+
+
+def _probar_funcion(request):
+    """action=probar_funcion. Ejecuta una función registrada real (sin guardar)
+    con la config provista y devuelve etiqueta/status/body/duración. Permite
+    que el simulador en modo real ejecute nodos `funcion` de verdad en lugar de
+    mockearlos.
+
+    POST params:
+      funcion_codigo: código registrado en crm.funciones_chatbot
+      endpoint_id: pk del EndpointApiChatbot (opcional, override de URL)
+      body_json: body del nodo (soporta {{variables.x}})
+      timeout_seg: timeout opcional
+      variables_test_json: JSON {x: valor} para sustituir {{variables.x}}
+    """
+    import time
+    from .funciones_chatbot import obtener_funcion
+
+    codigo = (request.POST.get('funcion_codigo') or '').strip()
+    if not codigo:
+        return JsonResponse({'ok': False, 'error': 'funcion_codigo requerido'})
+    fn = obtener_funcion(codigo)
+    if not fn:
+        return JsonResponse({'ok': False, 'error': f'Función "{codigo}" no registrada.'})
+
+    ep = None
+    try:
+        ep_id = int(request.POST.get('endpoint_id') or 0)
+    except (TypeError, ValueError):
+        ep_id = 0
+    if ep_id:
+        ep = (EndpointApiChatbot.objects
+              .filter(pk=ep_id, status=True).select_related('credencial').first())
+
+    def _parse(name, default):
+        raw = (request.POST.get(name) or '').strip()
+        if not raw:
+            return default
+        try:
+            return json.loads(raw)
+        except (TypeError, ValueError) as ex:
+            raise ValueError(f'{name} no es JSON válido: {str(ex)[:120]}')
+
+    try:
+        body = _parse('body_json', {})
+        variables_test = _parse('variables_test_json', {})
+    except ValueError as ex:
+        return JsonResponse({'ok': False, 'error': str(ex)})
+
+    try:
+        timeout_seg = int(request.POST.get('timeout_seg') or 0) or None
+    except (TypeError, ValueError):
+        timeout_seg = None
+
+    cfg = {'funcion_codigo': codigo, 'body': body if isinstance(body, dict) else {}}
+    if timeout_seg:
+        cfg['timeout_seg'] = timeout_seg
+    variables = variables_test if isinstance(variables_test, dict) else {}
+
+    inicio = time.time()
+    try:
+        resultado = fn(None, variables, cfg, endpoint=ep) or {}
+    except Exception as ex:
+        return JsonResponse({
+            'ok': False,
+            'error': f'Excepción al ejecutar: {ex.__class__.__name__}: {str(ex)[:200]}',
+        })
+    duracion_ms = int((time.time() - inicio) * 1000)
+
+    return JsonResponse({
+        'ok': True,
+        'funcion_codigo': codigo,
+        'etiqueta': resultado.get('etiqueta') or 'error',
+        'status': resultado.get('status'),
+        'duracion_ms': duracion_ms,
+        'body': resultado.get('body') or {},
+        'error': resultado.get('error') or '',
+    })

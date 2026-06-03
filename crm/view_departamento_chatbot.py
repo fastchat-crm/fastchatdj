@@ -28,6 +28,7 @@ from .funciones_departamento_chatbot import (
     _eliminar_opcion,
     _mover_opcion,
     _probar_http,
+    _probar_funcion,
     _serializar_arbol_opciones,
     _serializar_arbol_anidado,
     _serializar_para_preview,
@@ -246,6 +247,8 @@ def departamentoChatbotsView(request):
                     return _mover_opcion(request)
                 elif action == 'probar_http':
                     return _probar_http(request)
+                elif action == 'probar_funcion':
+                    return _probar_funcion(request)
         except ValueError as ex:
             res_json.append({'error': True, "message": str(ex)})
         except FormError as ex:
