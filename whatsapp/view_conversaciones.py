@@ -76,6 +76,72 @@ def _clientes_de_conversacion(conv):
     )
 
 
+def _prefill_ficha_cliente(conv):
+    """Sugiere valores para el alta manual de Cliente a partir de las variables
+    capturadas por el flujo del chatbot tradicional + datos del contacto.
+
+    Devuelve (prefill, variables_flujo). Cubre el caso de un cliente que NO
+    terminó el flujo: el operador completa la ficha con lo que el bot alcanzó a
+    capturar ya precargado.
+    """
+    from datetime import datetime
+    import re
+
+    estado = getattr(conv, 'estado_flujo', None)
+    variables_flujo = (getattr(estado, 'variables', None) or {}) if estado else {}
+
+    norm = {}
+    for k, v in variables_flujo.items():
+        if v in (None, ''):
+            continue
+        norm[str(k).strip().lower()] = str(v).strip()
+
+    def primero(*claves):
+        for c in claves:
+            if norm.get(c):
+                return norm[c]
+        return ''
+
+    def _fecha_iso(valor):
+        valor = (valor or '').strip()
+        if not valor:
+            return ''
+        for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y'):
+            try:
+                return datetime.strptime(valor, fmt).date().isoformat()
+            except ValueError:
+                continue
+        return ''
+
+    contacto = getattr(conv, 'contacto', None)
+    nombre_contacto = ''
+    telefono_contacto = ''
+    if contacto:
+        nombre_contacto = (getattr(contacto, 'contacto_nombre', '') or '').strip()
+        telefono_contacto = (
+            (getattr(contacto, 'numero_telefono', '') or '')
+            or (getattr(contacto, 'contacto_numero', '') or '')
+        ).strip()
+
+    edad_raw = primero('edad', 'driver_age', 'age')
+    edad_digitos = ''.join(re.findall(r'\d', edad_raw))[:3]
+
+    prefill = {
+        'cedula':           primero('cedula', 'identificacion', 'documento', 'dni', 'ci'),
+        'nombres':          primero('nombres', 'nombre', 'nombre_cliente', 'first_name') or nombre_contacto,
+        'apellidos':        primero('apellidos', 'apellido', 'last_name'),
+        'email':            primero('email', 'correo', 'correo_electronico'),
+        'telefono':         primero('telefono', 'celular', 'whatsapp', 'phone') or telefono_contacto,
+        'ciudad':           primero('ciudad', 'city'),
+        'edad':             edad_digitos,
+        'fecha_nacimiento': _fecha_iso(primero('fecha_nacimiento', 'fecha_nac', 'nacimiento')),
+        'sexo':             (primero('sexo', 'genero', 'gender')[:1] or '').upper(),
+    }
+    if prefill['sexo'] not in ('M', 'F'):
+        prefill['sexo'] = ''
+    return prefill, variables_flujo
+
+
 def _reenviar_mensaje(request):
     """Reenvía un mensaje saliente que quedó en estado 'fallido'.
     Provider-agnostic: reusa el servicio de la sesión (Baileys o Meta)."""
@@ -397,10 +463,18 @@ def conversacionesView(request):
                 return JsonResponse({'error': True, 'message': str(ex)})
         elif action == 'ficha_cliente':
             try:
-                from crm.models import Cliente
+                from crm.models import CLIENTE_SEXO_CHOICES
                 conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['id']))
                 clientes = _clientes_de_conversacion(conv)
-                ctx = {'clientes': clientes, 'conv': conv}
+                prefill, variables_flujo = _prefill_ficha_cliente(conv)
+                ctx = {
+                    'clientes': clientes,
+                    'conv': conv,
+                    'prefill': prefill,
+                    'variables_flujo': variables_flujo,
+                    'sexo_choices': CLIENTE_SEXO_CHOICES,
+                    'permitir_registro_manual': True,
+                }
                 template = get_template('whatsapp/conversaciones/_modal_ficha_cliente.html')
                 return JsonResponse({'result': True, 'data': template.render(ctx, request)})
             except Exception as ex:
@@ -907,6 +981,50 @@ def conversacionesView(request):
                         'error': False,
                         'procesado_vectorstore': feedback.procesado_vectorstore,
                         'mensaje': 'Feedback guardado' + (' y agregado al vectorstore ✓' if feedback.procesado_vectorstore else ''),
+                    })
+
+                elif action == 'crear_cliente_manual':
+                    # Alta manual de la ficha del cliente desde la conversación,
+                    # para el caso en que el cliente no terminó el flujo del
+                    # chatbot tradicional. Reusa cliente_upsert (misma lógica de
+                    # origen + ClienteOrigen que el flujo automático).
+                    conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.POST['id']))
+                    if not puede_ver_conversacion(request.user, conv):
+                        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+                    cedula = (request.POST.get('cedula') or '').strip()
+                    if not cedula:
+                        return JsonResponse({'error': True, 'message': 'La cédula / identificación es obligatoria.'})
+                    variables = {
+                        'cedula':           cedula,
+                        'nombres':          (request.POST.get('nombres') or '').strip(),
+                        'apellidos':        (request.POST.get('apellidos') or '').strip(),
+                        'email':            (request.POST.get('email') or '').strip(),
+                        'telefono':         (request.POST.get('telefono') or '').strip(),
+                        'ciudad':           (request.POST.get('ciudad') or '').strip(),
+                        'edad':             (request.POST.get('edad') or '').strip(),
+                        'fecha_nacimiento': (request.POST.get('fecha_nacimiento') or '').strip(),
+                        'sexo':             (request.POST.get('sexo') or '').strip(),
+                        'notas':            (request.POST.get('notas') or '').strip(),
+                        'canal_origen':     'manual',
+                    }
+                    from crm.funciones_cliente import cliente_upsert
+                    resultado = cliente_upsert(conv, variables, {'canal_origen': 'manual'})
+                    if resultado.get('etiqueta') != 'ok':
+                        return JsonResponse({
+                            'error': True,
+                            'message': resultado.get('error') or 'No se pudo registrar el cliente.',
+                        })
+                    body = resultado.get('body') or {}
+                    creado = bool(body.get('cliente_creado'))
+                    log(f"Cliente {'registrado' if creado else 'actualizado'} manualmente "
+                        f"desde conversación {conv.id} (cédula {cedula})",
+                        request, "add" if creado else "change", obj=conv.id)
+                    return JsonResponse({
+                        'error': False,
+                        'creado': creado,
+                        'cliente_id': body.get('cliente_id'),
+                        'message': 'Cliente registrado correctamente.' if creado
+                                   else 'Ya existía un cliente con esa cédula; se actualizó la ficha.',
                     })
 
 

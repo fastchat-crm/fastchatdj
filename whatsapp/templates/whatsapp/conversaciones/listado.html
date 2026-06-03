@@ -4,7 +4,7 @@
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
 <link rel="stylesheet" href="/static/stylenew/conversaciones.css?v2.1">
 <link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
-<link rel="stylesheet" href="/static/css/whatsapp/ficha_cliente.css?v1.1">
+<link rel="stylesheet" href="/static/css/whatsapp/ficha_cliente.css?v1.2">
 <link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.3">
 {% endblock %}
 
@@ -2602,6 +2602,48 @@
             const title = $(this).attr('title');
             const action = $(this).attr('id');
             formModal(id, title, action);
+        });
+
+        $(document).on('click', '#fc-toggle-registro', function() {
+            $('#fc-registro-form').toggleClass('d-none');
+        });
+
+        $(document).on('click', '#fc-guardar', function() {
+            const convId = $('#fc-registro-form').data('conv-id');
+            const cedula = ($('#fc-cedula').val() || '').trim();
+            if (!cedula) {
+                mensajeWarning('La cédula / identificación es obligatoria.');
+                $('#fc-cedula').trigger('focus');
+                return;
+            }
+            const datos = {
+                action: 'crear_cliente_manual',
+                id: convId,
+                cedula: cedula,
+                nombres: $('#fc-nombres').val() || '',
+                apellidos: $('#fc-apellidos').val() || '',
+                email: $('#fc-email').val() || '',
+                telefono: $('#fc-telefono').val() || '',
+                ciudad: $('#fc-ciudad').val() || '',
+                edad: $('#fc-edad').val() || '',
+                fecha_nacimiento: $('#fc-fecha-nac').val() || '',
+                sexo: $('#fc-sexo').val() || '',
+                notas: $('#fc-notas').val() || '',
+            };
+            pantallaespera();
+            $.post('/whatsapp/conversaciones/', datos, function(data) {
+                $.unblockUI();
+                if (data && data.error === false) {
+                    Swal.fire({ title: 'Listo', text: data.message, type: 'success' });
+                    formModal(convId, 'Ficha del cliente', 'ficha_cliente');
+                } else {
+                    mensajeWarning((data && data.message) || 'No se pudo registrar el cliente.');
+                }
+            }, 'json').fail(function(xhr) {
+                $.unblockUI();
+                console.error('[crear_cliente_manual] fail', xhr.status, xhr.responseText);
+                mensajeWarning('Error de conexión.');
+            });
         });
 
         $('#convAccionesOffcanvas').on('click', '.dropdown-item', function () {

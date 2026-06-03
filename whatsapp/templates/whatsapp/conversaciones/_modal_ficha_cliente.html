@@ -95,4 +95,84 @@
             <small class="text-muted">Cuando el flujo complete la inscripción, el cliente aparecerá aquí.</small>
         </div>
     {% endif %}
+
+    {% if permitir_registro_manual %}
+        <div class="fc-registro">
+            <div class="fc-registro-head">
+                <div>
+                    <h6 class="fc-registro-titulo"><i class="fa fa-user-plus me-2 text-success"></i>Registrar cliente manualmente</h6>
+                    <small class="text-muted">Usá esto si el cliente no terminó el flujo. Lo que el bot alcanzó a capturar ya viene precargado.</small>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-success" id="fc-toggle-registro">
+                    <i class="fa fa-pen-to-square me-1"></i>{% if clientes %}Registrar otro{% else %}Completar ficha{% endif %}
+                </button>
+            </div>
+
+            <div id="fc-registro-form" data-conv-id="{{ conv.id }}" class="fc-registro-form {% if clientes %}d-none{% endif %}">
+                {% if variables_flujo %}
+                    <div class="fc-vars">
+                        <span class="fc-vars-title"><i class="fa fa-database me-1"></i>Datos capturados por el flujo</span>
+                        <div class="fc-vars-list">
+                            {% for k, v in variables_flujo.items %}
+                                {% if v %}<span class="fc-var-chip"><b>{{ k }}:</b> {{ v }}</span>{% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label">Cédula / Identificación *</label>
+                        <input type="text" id="fc-cedula" class="form-control form-control-sm" value="{{ prefill.cedula }}" placeholder="Obligatorio">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Nombres</label>
+                        <input type="text" id="fc-nombres" class="form-control form-control-sm" value="{{ prefill.nombres }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Apellidos</label>
+                        <input type="text" id="fc-apellidos" class="form-control form-control-sm" value="{{ prefill.apellidos }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Email</label>
+                        <input type="email" id="fc-email" class="form-control form-control-sm" value="{{ prefill.email }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Teléfono</label>
+                        <input type="text" id="fc-telefono" class="form-control form-control-sm" value="{{ prefill.telefono }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Ciudad</label>
+                        <input type="text" id="fc-ciudad" class="form-control form-control-sm" value="{{ prefill.ciudad }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Edad</label>
+                        <input type="number" min="0" id="fc-edad" class="form-control form-control-sm" value="{{ prefill.edad }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Fecha nac.</label>
+                        <input type="date" id="fc-fecha-nac" class="form-control form-control-sm" value="{{ prefill.fecha_nacimiento }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Sexo</label>
+                        <select id="fc-sexo" class="form-select form-select-sm">
+                            {% for val, lbl in sexo_choices %}
+                                <option value="{{ val }}" {% if prefill.sexo == val %}selected{% endif %}>{{ lbl }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Notas</label>
+                        <textarea id="fc-notas" rows="2" class="form-control form-control-sm"></textarea>
+                    </div>
+                </div>
+
+                <div class="fc-registro-actions">
+                    <button type="button" class="btn btn-sm btn-success" id="fc-guardar">
+                        <i class="fa fa-floppy-disk me-1"></i>Guardar cliente
+                    </button>
+                </div>
+            </div>
+        </div>
+    {% endif %}
 </div>

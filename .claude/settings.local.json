@@ -133,7 +133,11 @@
       "Bash(node --check serviceworker.js)",
       "Bash(sed -i 's#dpchat_canvas.css?v1.4#dpchat_canvas.css?v1.5#; s#dpchat_canvas.js?v1.6#dpchat_canvas.js?v1.7#' templates/crm/departamento_chatbots/editor_canvas.html)",
       "Bash(node --check static/js/dpchat_canvas.js)",
-      "Bash(node --check static/js/dpchat_editor.js)"
+      "Bash(node --check static/js/dpchat_editor.js)",
+      "PowerShell(Get-ChildItem -Path \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\" -Recurse -File | Where-Object {$_.Extension -eq \".py\"} | Select-Object -First 20 | ForEach-Object {$_.FullName})",
+      "PowerShell(Get-ChildItem -Path \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\" -Directory | Where-Object {$_.Name -ne \".venv\" -and $_.Name -ne \"__pycache__\"})",
+      "Bash(pycheck whatsapp/view_conversaciones.py)",
+      "PowerShell(python -m py_compile whatsapp\\\\view_conversaciones.py crm\\\\funciones_cliente.py; if \\($?\\) { \"OK syntax\" })"
     ]
   },
   "hooks": {
