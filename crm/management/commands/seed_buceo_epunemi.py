@@ -149,6 +149,7 @@ PASOS = [
         'codigo': 'fn_consulta_cedula', 'nombre': 'Consulta cédula (API SAGEST)',
         'funcion_codigo': 'consultar_cedula_sagest',
         'timeout_seg': 20,
+        'body': {'cedula': '{{variables.cedula}}'},
         'extrae_variables': {
             '$origen':           '$.origen',
             '$nombres':          '$.data.nombres',
@@ -612,7 +613,7 @@ class Command(BaseCommand):
             validacion_tipo = 'regex'
             validacion_expr = paso['validacion']
 
-        endpoint_obj = eps.get('rest') if t in ('llamada_http', 'llamada_funcion') else None
+        endpoint_obj = eps.get('rest') if t == 'llamada_http' else None
 
         pos_x, pos_y = COORDS.get(paso['id'], (0, 0))
 

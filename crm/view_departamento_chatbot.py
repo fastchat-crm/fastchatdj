@@ -576,12 +576,20 @@ def departamentoChatbotsView(request):
                         .select_related('nodo_origen')
                         .order_by('orden', 'id')
                     )
+                    funcion_meta = None
+                    if opcion.tipo_nodo == 'funcion':
+                        from .funciones_chatbot import FUNCIONES_REGISTRADAS
+                        cod = (cfg.get('funcion_codigo') or '').strip()
+                        meta = FUNCIONES_REGISTRADAS.get(cod)
+                        if meta:
+                            funcion_meta = {k: v for k, v in meta.items() if k != 'callable'}
                     contexto = {
                         'opcion': opcion,
                         'cfg': cfg,
                         'config_json_str': json.dumps(cfg, indent=2, ensure_ascii=False),
                         'salidas': salidas,
                         'entradas': entradas,
+                        'funcion_meta': funcion_meta,
                     }
                     template = get_template('crm/departamento_chatbots/_ficha_opcion.html')
                     return JsonResponse({'result': True, 'data': template.render(contexto)})

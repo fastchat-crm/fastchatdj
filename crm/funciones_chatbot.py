@@ -923,54 +923,57 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
 
 
 
+SAGEST_CEDULA_URL_DEFAULT = 'https://sagest.epunemi.gob.ec/apimobile/v1/consultacedulapersona/'
+
+
 @registrar_funcion(
     codigo='consultar_cedula_sagest',
-    descripcion='Consulta una cédula/RUC/pasaporte en la API SAGEST (cascada persona → unemi → ister) y devuelve nombres, apellidos, fecha de nacimiento y edad.',
+    descripcion='Recibe una cédula y trae nombres, apellidos, fecha de nacimiento y edad desde SAGEST (cascada persona → unemi → ister). Consulta interna: no requiere configurar endpoint.',
     parametros={
-        'variables.cedula': 'string requerido · cédula/RUC/pasaporte a consultar',
-        '(config) path':    'string opcional · recurso REST (default consultacedulapersona/)',
+        'body.cedula':         'string requerido · cédula/RUC/pasaporte. Acepta {{variables.cedula}}. Si se omite, usa variables.cedula.',
+        '(opcional) endpoint': 'EndpointApiChatbot · si se asigna, su base_url sobreescribe la URL interna por defecto.',
     },
-    requiere_endpoint=True,
-    ejemplo_body={},
+    requiere_endpoint=False,
+    ejemplo_body={'cedula': '{{variables.cedula}}'},
 )
 def consultar_cedula_sagest(conversacion, variables, config, endpoint=None) -> dict:
-    """GET a la API SAGEST de consulta de cédula.
+    """Consulta interna de cédula contra la API SAGEST.
 
-    Lee `variables.cedula` y hace GET a `endpoint.base_url` + recurso
-    (`config.path` o `consultacedulapersona/`) con `?cedula=`. Devuelve el
-    JSON crudo de la API como `body`, para que `config.extraer` del nodo saque
-    `data.nombres`, `data.apellidos`, `data.fecha_nacimiento`, `data.edad` y
-    `origen` igual que lo hacía el nodo HTTP.
+    Recibe la cédula por `config.body.cedula` (resuelve `{{variables.x}}`) y,
+    si no viene, cae a `variables.cedula`. Hace el GET internamente y devuelve
+    el JSON crudo de la API como `body`, para que `config.extraer` del nodo
+    saque `data.nombres`, `data.apellidos`, `data.fecha_nacimiento`,
+    `data.edad` y `origen`.
+
+    URL: por defecto interna (`SAGEST_CEDULA_URL_DEFAULT`). Si el nodo tiene un
+    EndpointApiChatbot asignado, su `base_url` + recurso (`config.path` o
+    `consultacedulapersona/`) sobreescribe el default — permite cambiar de
+    proveedor sin tocar código, manteniendo la consulta funcional out-of-the-box.
 
     Etiqueta (define la rama del flujo):
         ok    → success=true (cédula encontrada).
-        error → success=false, HTTP no-2xx, o fallo de red. La rama de error
-                lleva a la captura manual de datos.
-
-    URL: el host/base NO está hardcodeado — viene de `endpoint.base_url`
-    (editable en /crm/endpoints_api/). Solo el recurso REST tiene default.
+        error → success=false / HTTP no-2xx / fallo de red → captura manual.
     """
+    from .motor_flujo_chatbot import resolver_expresion
+
     vars_ = variables or {}
-    cedula = str(vars_.get('cedula') or '').strip()
+    contexto = {'variables': vars_, 'conversacion': conversacion}
+
+    body = _resolver_dict(config.get('body') or {}, contexto, resolver_expresion)
+    cedula = str(body.get('cedula') or vars_.get('cedula') or '').strip()
     if not cedula:
         return {'etiqueta': 'error', 'body': {}, 'status': 400,
-                'error': 'No hay cédula en las variables del flujo.'}
+                'error': 'No se recibió cédula (ni en body.cedula ni en variables.cedula).'}
 
-    if not endpoint:
-        return {'etiqueta': 'error', 'body': {}, 'status': 0,
-                'error': 'Nodo `funcion=consultar_cedula_sagest` sin endpoint '
-                         'configurado. Asignale un EndpointApiChatbot en el editor.'}
-
-    base_url = (endpoint.base_url or '').strip()
-    if not base_url:
-        return {'etiqueta': 'error', 'body': {}, 'status': 0,
-                'error': f'Endpoint "{endpoint.nombre}" no tiene base_url.'}
-
-    recurso = (config.get('path') or 'consultacedulapersona/').strip().lstrip('/')
-    url = base_url.rstrip('/') + '/' + recurso
-
-    timeout = int(config.get('timeout_seg') or endpoint.timeout_seg or 20)
-    headers = dict(endpoint.headers_default or {})
+    if endpoint and (endpoint.base_url or '').strip():
+        recurso = (config.get('path') or 'consultacedulapersona/').strip().lstrip('/')
+        url = (endpoint.base_url or '').strip().rstrip('/') + '/' + recurso
+        timeout = int(config.get('timeout_seg') or endpoint.timeout_seg or 20)
+        headers = dict(endpoint.headers_default or {})
+    else:
+        url = SAGEST_CEDULA_URL_DEFAULT
+        timeout = int(config.get('timeout_seg') or 20)
+        headers = {}
     headers.setdefault('Accept', 'application/json')
 
     try:
