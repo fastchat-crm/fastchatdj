@@ -2632,13 +2632,23 @@
             };
             pantallaespera();
             $.post('/whatsapp/conversaciones/', datos, function(data) {
-                $.unblockUI();
-                if (data && data.error === false) {
-                    Swal.fire({ title: 'Listo', text: data.message, type: 'success' });
-                    formModal(convId, 'Ficha del cliente', 'ficha_cliente');
-                } else {
+                if (!data || data.error !== false) {
+                    $.unblockUI();
                     mensajeWarning((data && data.message) || 'No se pudo registrar el cliente.');
+                    return;
                 }
+                $.get('/whatsapp/conversaciones/', {
+                    action: 'ficha_cliente', id: convId,
+                }, function(resp) {
+                    $.unblockUI();
+                    if (resp && resp.result === true) {
+                        $('.detalleProd').html(resp.data);
+                    }
+                    Swal.fire({ title: 'Listo', text: data.message, type: 'success' });
+                }, 'json').fail(function() {
+                    $.unblockUI();
+                    Swal.fire({ title: 'Listo', text: data.message, type: 'success' });
+                });
             }, 'json').fail(function(xhr) {
                 $.unblockUI();
                 console.error('[crear_cliente_manual] fail', xhr.status, xhr.responseText);
