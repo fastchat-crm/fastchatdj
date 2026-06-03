@@ -189,7 +189,7 @@ PASOS = [
     {
         'id': ID_FIX_NOMBRES, 'orden': 340, 'tipo': 'input_texto',
         'codigo': 'fix_nombres', 'nombre': 'Corregir nombres',
-        'mensaje': '👤 Escribe tus *nombres* correctamente:',
+        'mensaje': '👤 Escribe tus *nombres* correctamente (solo el nombre, sin apellidos — ej: Juan Carlos):',
         'guardar_en': 'nombres',
         'validacion': r'^[A-Za-zÁÉÍÓÚáéíóúüÜñÑ\s\-]{2,}$',
         'mensaje_error': '⚠️ Escribe tus nombres (solo letras):',
@@ -198,7 +198,7 @@ PASOS = [
     {
         'id': ID_FIX_APELLIDOS, 'orden': 350, 'tipo': 'input_texto',
         'codigo': 'fix_apellidos', 'nombre': 'Corregir apellidos',
-        'mensaje': '👤 Ahora tus *apellidos*:',
+        'mensaje': '👤 Ahora tus *apellidos* (ej: Pérez Gómez):',
         'guardar_en': 'apellidos',
         'validacion': r'^[A-Za-zÁÉÍÓÚáéíóúüÜñÑ\s\-]{2,}$',
         'mensaje_error': '⚠️ Escribe tus apellidos (solo letras):',
@@ -360,7 +360,8 @@ PASOS = [
         'codigo': 'man_nombres', 'nombre': 'Captura manual: nombres',
         'mensaje': (
             '😕 No pude validar esa cédula automáticamente. No te preocupes, '
-            'sigamos con tus datos.\n\n👤 ¿Cuáles son tus *nombres*?'
+            'sigamos con tus datos.\n\n👤 ¿Cuáles son tus *nombres*? '
+            '(solo el nombre, sin apellidos — ej: Juan Carlos)'
         ),
         'guardar_en': 'nombres',
         'validacion': r'^[A-Za-zÁÉÍÓÚáéíóúüÜñÑ\s\-]{2,}$',
@@ -370,7 +371,7 @@ PASOS = [
     {
         'id': ID_MAN_APELLIDOS, 'orden': 310, 'tipo': 'input_texto',
         'codigo': 'man_apellidos', 'nombre': 'Captura manual: apellidos',
-        'mensaje': '👤 ¿Y tus *apellidos*?',
+        'mensaje': '👤 Ahora tus *apellidos* (ej: Pérez Gómez):',
         'guardar_en': 'apellidos',
         'validacion': r'^[A-Za-zÁÉÍÓÚáéíóúüÜñÑ\s\-]{2,}$',
         'mensaje_error': '⚠️ Escribe tus apellidos (solo letras):',
