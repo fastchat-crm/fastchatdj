@@ -400,8 +400,6 @@ def contactoView(request):
         solo_duplicados = request.GET.get('solo_duplicados', '')
         mis_sesiones = SesionWhatsApp.objects.filter(status=True, usuario=request.user).distinct()
         sesion_id = leer_sesion_id(request)
-        if not sesion_id and mis_sesiones.exists():
-            sesion_id = mis_sesiones.first().id
         sesion_id = str(sesion_id) if sesion_id else ''
 
         # Números que aparecen en más de una sesión ACTIVA del usuario.
@@ -470,7 +468,7 @@ def contactoView(request):
         data["dup_sesiones_json"] = json.dumps(dup_sesiones, ensure_ascii=False)
         data["list_count"] = listado.count()
         data["url_vars"] = url_vars
-        paginador(request, listado.order_by('contacto_nombre'), 20, data, url_vars)
+        paginador(request, listado.order_by('contacto_nombre'), 21, data, url_vars)
         if 'export_to_excel' in request.GET:
             query = listado.values(
                 'contacto_nombre',
