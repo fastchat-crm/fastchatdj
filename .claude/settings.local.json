@@ -143,7 +143,9 @@
       "Bash(pycheck E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\crm\\\\management\\\\commands\\\\seed_buceo_epunemi.py)",
       "PowerShell(python -m py_compile \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\crm\\\\management\\\\commands\\\\seed_buceo_epunemi.py\"; if \\($?\\) { \"OK\" })",
       "PowerShell(try { \\(Invoke-WebRequest -Uri \"https://fguerrero.mgaseguros.ec/cotimedica-api/v1/?action=cliente&cedula=0102030405\" -UseBasicParsing -TimeoutSec 20\\).Content } catch { \"ERR: $\\($_.Exception.Message\\)\" })",
-      "PowerShell(git *)"
+      "PowerShell(git *)",
+      "PowerShell(python -m py_compile \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\crm\\\\management\\\\commands\\\\seed_buceo_epunemi.py\"; if \\($?\\) { \"COMPILA OK\" })",
+      "PowerShell(try { \\(Invoke-WebRequest -Uri \"https://sagest.epunemi.gob.ec/apimobile/v1/consultacedulapersona/?cedula=0928541556\" -UseBasicParsing -TimeoutSec 25\\).Content } catch { \"ERR: $\\($_.Exception.Message\\)\" })"
     ]
   },
   "hooks": {

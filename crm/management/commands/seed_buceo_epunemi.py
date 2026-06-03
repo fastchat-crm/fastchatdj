@@ -3,8 +3,9 @@ Seed del flujo de inscripción al curso de Buceo Industrial & Subacuático de EP
 
 Bot tradicional (motor de flujo) que:
   1. Saluda y pide la cédula (10 dígitos).
-  2. Consulta la cédula contra la API de cliente Vida Buena (GET ?action=cliente)
-     → trae encontrado, nombres, apellidos, fecha de nacimiento, edad y email.
+  2. Consulta la cédula contra la API SAGEST (GET consultacedulapersona/) que
+     busca en cascada (persona → unemi → ister) → trae success (encontrado),
+     origen, nombres, apellidos, fecha de nacimiento y edad.
   3. Valida mayoría de edad (>= 18). Si es menor, cierra cordialmente.
   4. Menú informativo (curso, requisitos, costos, duración) + opción inscribirse.
   5. Captura correo y ciudad, registra la pre-inscripción (POST) en SAGEST.
@@ -17,7 +18,7 @@ Uso:
     python manage.py seed_buceo_epunemi --reset
     python manage.py seed_buceo_epunemi --delete
     python manage.py seed_buceo_epunemi --sesion 39
-    python manage.py seed_buceo_epunemi --base-url https://fguerrero.mgaseguros.ec/cotimedica-api/v1/
+    python manage.py seed_buceo_epunemi --base-url https://sagest.epunemi.gob.ec/apimobile/v1/
 """
 
 from django.core.management.base import BaseCommand
@@ -31,10 +32,10 @@ from crm.models import (
 
 NOMBRE_DEPTO = 'EPUNEMI — Inscripción Buceo Industrial'
 
-BASE_URL_DEFAULT = 'https://fguerrero.mgaseguros.ec/cotimedica-api/v1/'
+BASE_URL_DEFAULT = 'https://sagest.epunemi.gob.ec/apimobile/v1/'
 
-CREDENCIAL_NOMBRE = 'Vida Buena REST - AllowAny'
-ENDPOINT_NOMBRE = 'Cotizador Vida Buena REST v1'
+CREDENCIAL_NOMBRE = 'SAGEST EPUNEMI REST (sin auth)'
+ENDPOINT_NOMBRE = 'SAGEST EPUNEMI apimobile v1'
 
 
 BOT = {
@@ -145,17 +146,17 @@ PASOS = [
     },
     {
         'id': ID_HTTP_CEDULA, 'orden': 30, 'tipo': 'llamada_http',
-        'codigo': 'http_consulta_cedula', 'nombre': 'GET ?action=cliente',
-        'metodo': 'GET', 'path': '',
-        'query': {'action': 'cliente', 'cedula': '{{variables.cedula}}'},
+        'codigo': 'http_consulta_cedula', 'nombre': 'GET consultacedulapersona',
+        'metodo': 'GET', 'path': 'consultacedulapersona/',
+        'query': {'cedula': '{{variables.cedula}}'},
         'timeout_seg': 20,
         'extrae_variables': {
-            '$encontrado':       '$.data.encontrado',
+            '$encontrado':       '$.success',
+            '$origen':           '$.origen',
             '$nombres':          '$.data.nombres',
             '$apellidos':        '$.data.apellidos',
             '$fecha_nacimiento': '$.data.fecha_nacimiento',
             '$edad':             '$.data.edad',
-            '$correo':           '$.data.email',
         },
         'siguiente_ok': ID_DEC_ENCONTRADO, 'siguiente_error': ID_MAN_NOMBRES,
     },
@@ -177,8 +178,7 @@ PASOS = [
         'codigo': 'confirma_datos', 'nombre': 'Confirmar nombres/apellidos',
         'mensaje': (
             'Antes de continuar, confirmemos tus datos:\n\n'
-            '👤 *{{variables.nombres}} {{variables.apellidos}}*\n'
-            '📧 {{variables.correo}}\n\n'
+            '👤 *{{variables.nombres}} {{variables.apellidos}}*\n\n'
             '¿Están correctos?'
         ),
         'guardar_en': 'confirma_datos',
@@ -742,7 +742,7 @@ class Command(BaseCommand):
             status=True,
             defaults={
                 'secretos': {},
-                'descripcion': 'API REST pública del cotizador Vida Buena (lectura de cliente por cédula).',
+                'descripcion': 'API REST pública SAGEST EPUNEMI (consulta de cédula en cascada: persona/unemi/ister).',
             },
         )
         ep, _ = EndpointApiChatbot.objects.get_or_create(
@@ -756,7 +756,7 @@ class Command(BaseCommand):
                     'Accept': 'application/json',
                 },
                 'timeout_seg': 30,
-                'descripcion': 'Endpoint base REST Vida Buena (consulta de cliente por cédula).',
+                'descripcion': 'Endpoint base SAGEST apimobile v1 (EPUNEMI) — consultacedulapersona.',
             },
         )
         if ep.credencial_id != credencial.id:
