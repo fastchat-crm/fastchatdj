@@ -3,8 +3,8 @@ Seed del flujo de inscripción al curso de Buceo Industrial & Subacuático de EP
 
 Bot tradicional (motor de flujo) que:
   1. Saluda y pide la cédula (10 dígitos).
-  2. Consulta la cédula contra la API SAGEST (GET) → trae nombres, apellidos,
-     fecha de nacimiento y edad.
+  2. Consulta la cédula contra la API de cliente Vida Buena (GET ?action=cliente)
+     → trae encontrado, nombres, apellidos, fecha de nacimiento, edad y email.
   3. Valida mayoría de edad (>= 18). Si es menor, cierra cordialmente.
   4. Menú informativo (curso, requisitos, costos, duración) + opción inscribirse.
   5. Captura correo y ciudad, registra la pre-inscripción (POST) en SAGEST.
@@ -17,7 +17,7 @@ Uso:
     python manage.py seed_buceo_epunemi --reset
     python manage.py seed_buceo_epunemi --delete
     python manage.py seed_buceo_epunemi --sesion 39
-    python manage.py seed_buceo_epunemi --base-url https://sagest.epunemi.gob.ec/apimobile/v1/
+    python manage.py seed_buceo_epunemi --base-url https://fguerrero.mgaseguros.ec/cotimedica-api/v1/
 """
 
 from django.core.management.base import BaseCommand
@@ -31,10 +31,10 @@ from crm.models import (
 
 NOMBRE_DEPTO = 'EPUNEMI — Inscripción Buceo Industrial'
 
-BASE_URL_DEFAULT = 'https://sagest.epunemi.gob.ec/apimobile/v1/'
+BASE_URL_DEFAULT = 'https://fguerrero.mgaseguros.ec/cotimedica-api/v1/'
 
-CREDENCIAL_NOMBRE = 'SAGEST EPUNEMI REST (sin auth)'
-ENDPOINT_NOMBRE = 'SAGEST EPUNEMI apimobile v1'
+CREDENCIAL_NOMBRE = 'Vida Buena REST - AllowAny'
+ENDPOINT_NOMBRE = 'Cotizador Vida Buena REST v1'
 
 
 BOT = {
@@ -61,6 +61,7 @@ BOT = {
 ID_SALUDO = 10
 ID_PEDIR_CEDULA = 20
 ID_HTTP_CEDULA = 30
+ID_DEC_ENCONTRADO = 35
 ID_EVAL_EDAD = 40
 ID_CONFIRMA_DATOS = 45
 ID_MENU = 50
@@ -78,7 +79,6 @@ ID_CONFIRMACION = 140
 ID_MAN_NOMBRES = 300
 ID_MAN_APELLIDOS = 310
 ID_MAN_EDAD = 320
-ID_MAN_CORREO = 330
 # Corrección de nombres/apellidos (desde el nodo de confirmación)
 ID_FIX_NOMBRES = 340
 ID_FIX_APELLIDOS = 350
@@ -97,6 +97,7 @@ COORDS = {
     ID_SALUDO:          (440, 40),
     ID_PEDIR_CEDULA:    (440, 180),
     ID_HTTP_CEDULA:     (440, 320),
+    ID_DEC_ENCONTRADO:  (240, 390),
     ID_EVAL_EDAD:       (440, 460),
     ID_CONFIRMA_DATOS:  (640, 460),
     ID_FIX_NOMBRES:     (640, 600),
@@ -117,7 +118,6 @@ COORDS = {
     ID_MAN_NOMBRES:     (40, 320),
     ID_MAN_APELLIDOS:   (40, 460),
     ID_MAN_EDAD:        (40, 600),
-    ID_MAN_CORREO:      (40, 740),
     # Terminales (extrema derecha)
     ID_MENOR_EDAD:      (1240, 460),
     ID_DESPEDIDA_NO:    (1240, 900),
@@ -145,17 +145,25 @@ PASOS = [
     },
     {
         'id': ID_HTTP_CEDULA, 'orden': 30, 'tipo': 'llamada_http',
-        'codigo': 'http_consulta_cedula', 'nombre': 'GET consultacedulapersona',
-        'metodo': 'GET', 'path': 'consultacedulapersona/',
-        'query': {'cedula': '{{variables.cedula}}'},
+        'codigo': 'http_consulta_cedula', 'nombre': 'GET ?action=cliente',
+        'metodo': 'GET', 'path': '',
+        'query': {'action': 'cliente', 'cedula': '{{variables.cedula}}'},
         'timeout_seg': 20,
         'extrae_variables': {
+            '$encontrado':       '$.data.encontrado',
             '$nombres':          '$.data.nombres',
             '$apellidos':        '$.data.apellidos',
             '$fecha_nacimiento': '$.data.fecha_nacimiento',
             '$edad':             '$.data.edad',
+            '$correo':           '$.data.email',
         },
-        'siguiente_ok': ID_EVAL_EDAD, 'siguiente_error': ID_MAN_NOMBRES,
+        'siguiente_ok': ID_DEC_ENCONTRADO, 'siguiente_error': ID_MAN_NOMBRES,
+    },
+    {
+        'id': ID_DEC_ENCONTRADO, 'orden': 35, 'tipo': 'decision',
+        'codigo': 'cedula_encontrada', 'nombre': '¿Cédula encontrada?',
+        'condicion': '{{variables.encontrado}} == true',
+        'siguiente_si': ID_EVAL_EDAD, 'siguiente_no': ID_MAN_NOMBRES,
     },
     {
         'id': ID_EVAL_EDAD, 'orden': 40, 'tipo': 'decision',
@@ -375,15 +383,6 @@ PASOS = [
         'guardar_en': 'edad',
         'validacion': r'^\d{1,3}$',
         'mensaje_error': '⚠️ Escribe tu edad en números (ej: 25):',
-        'siguiente': ID_MAN_CORREO,
-    },
-    {
-        'id': ID_MAN_CORREO, 'orden': 330, 'tipo': 'input_texto',
-        'codigo': 'man_correo', 'nombre': 'Captura manual: correo',
-        'mensaje': '📧 ¿Cuál es tu *correo electrónico*?',
-        'guardar_en': 'correo',
-        'validacion': r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-        'mensaje_error': '⚠️ Ese correo no parece válido. Escríbelo de nuevo:',
         'siguiente': ID_EVAL_EDAD,
     },
 
@@ -741,7 +740,7 @@ class Command(BaseCommand):
             status=True,
             defaults={
                 'secretos': {},
-                'descripcion': 'API REST pública SAGEST EPUNEMI (consulta cédula + inscripción buceo).',
+                'descripcion': 'API REST pública del cotizador Vida Buena (lectura de cliente por cédula).',
             },
         )
         ep, _ = EndpointApiChatbot.objects.get_or_create(
@@ -755,7 +754,7 @@ class Command(BaseCommand):
                     'Accept': 'application/json',
                 },
                 'timeout_seg': 30,
-                'descripcion': 'Endpoint base SAGEST apimobile v1 (EPUNEMI).',
+                'descripcion': 'Endpoint base REST Vida Buena (consulta de cliente por cédula).',
             },
         )
         if ep.credencial_id != credencial.id:

@@ -139,7 +139,9 @@
       "Bash(pycheck whatsapp/view_conversaciones.py)",
       "PowerShell(python -m py_compile whatsapp\\\\view_conversaciones.py crm\\\\funciones_cliente.py; if \\($?\\) { \"OK syntax\" })",
       "PowerShell(python -m py_compile crm\\\\models.py whatsapp\\\\models.py whatsapp\\\\forms.py whatsapp\\\\view_sesiones.py whatsapp\\\\procesar_mensaje.py cron_jobs\\\\enviar_mensaje_reconexion.py; if \\($?\\) { \"OK syntax\" })",
-      "PowerShell(python -m py_compile whatsapp\\\\models.py whatsapp\\\\forms.py whatsapp\\\\view_sesiones.py cron_jobs\\\\enviar_mensaje_reconexion.py; if \\($?\\) { \"OK syntax\" })"
+      "PowerShell(python -m py_compile whatsapp\\\\models.py whatsapp\\\\forms.py whatsapp\\\\view_sesiones.py cron_jobs\\\\enviar_mensaje_reconexion.py; if \\($?\\) { \"OK syntax\" })",
+      "Bash(pycheck E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\crm\\\\management\\\\commands\\\\seed_buceo_epunemi.py)",
+      "PowerShell(python -m py_compile \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\crm\\\\management\\\\commands\\\\seed_buceo_epunemi.py\"; if \\($?\\) { \"OK\" })"
     ]
   },
   "hooks": {
