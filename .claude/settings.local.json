@@ -141,7 +141,9 @@
       "PowerShell(python -m py_compile crm\\\\models.py whatsapp\\\\models.py whatsapp\\\\forms.py whatsapp\\\\view_sesiones.py whatsapp\\\\procesar_mensaje.py cron_jobs\\\\enviar_mensaje_reconexion.py; if \\($?\\) { \"OK syntax\" })",
       "PowerShell(python -m py_compile whatsapp\\\\models.py whatsapp\\\\forms.py whatsapp\\\\view_sesiones.py cron_jobs\\\\enviar_mensaje_reconexion.py; if \\($?\\) { \"OK syntax\" })",
       "Bash(pycheck E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\crm\\\\management\\\\commands\\\\seed_buceo_epunemi.py)",
-      "PowerShell(python -m py_compile \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\crm\\\\management\\\\commands\\\\seed_buceo_epunemi.py\"; if \\($?\\) { \"OK\" })"
+      "PowerShell(python -m py_compile \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\\\\crm\\\\management\\\\commands\\\\seed_buceo_epunemi.py\"; if \\($?\\) { \"OK\" })",
+      "PowerShell(try { \\(Invoke-WebRequest -Uri \"https://fguerrero.mgaseguros.ec/cotimedica-api/v1/?action=cliente&cedula=0102030405\" -UseBasicParsing -TimeoutSec 20\\).Content } catch { \"ERR: $\\($_.Exception.Message\\)\" })",
+      "PowerShell(git *)"
     ]
   },
   "hooks": {

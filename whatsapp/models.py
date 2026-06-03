@@ -1334,6 +1334,7 @@ ETAPAS_TRAZA = (
     # Eventos del chatbot tradicional (motor de flujo)
     ('chatbot_ruteo',   '[Chatbot] Ruteo a departamento'),
     ('chatbot_http',    '[Chatbot] Llamada HTTP del flujo'),
+    ('chatbot_funcion', '[Chatbot] Función del flujo'),
     ('chatbot_nodo',    '[Chatbot] Transición de nodo'),
     ('chatbot_error',   '[Chatbot] Error en el flujo'),
 )

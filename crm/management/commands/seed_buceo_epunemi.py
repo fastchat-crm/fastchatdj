@@ -177,7 +177,8 @@ PASOS = [
         'codigo': 'confirma_datos', 'nombre': 'Confirmar nombres/apellidos',
         'mensaje': (
             'Antes de continuar, confirmemos tus datos:\n\n'
-            '👤 *{{variables.nombres}} {{variables.apellidos}}*\n\n'
+            '👤 *{{variables.nombres}} {{variables.apellidos}}*\n'
+            '📧 {{variables.correo}}\n\n'
             '¿Están correctos?'
         ),
         'guardar_en': 'confirma_datos',
