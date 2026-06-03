@@ -3,9 +3,11 @@ Seed del flujo de inscripción al curso de Buceo Industrial & Subacuático de EP
 
 Bot tradicional (motor de flujo) que:
   1. Saluda y pide la cédula (10 dígitos).
-  2. Consulta la cédula contra la API SAGEST (GET consultacedulapersona/) que
-     busca en cascada (persona → unemi → ister) → trae success (encontrado),
-     origen, nombres, apellidos, fecha de nacimiento y edad.
+  2. Consulta la cédula con la función interna `consultar_cedula_sagest`
+     (crm.funciones_chatbot), que hace el GET a la API SAGEST (recurso
+     consultacedulapersona/, cascada persona → unemi → ister) → trae origen,
+     nombres, apellidos, fecha de nacimiento y edad. Rama ok=encontrada,
+     error=no encontrada → captura manual.
   3. Valida mayoría de edad (>= 18). Si es menor, cierra cordialmente.
   4. Menú informativo (curso, requisitos, costos, duración) + opción inscribirse.
   5. Captura correo y ciudad, registra la pre-inscripción (POST) en SAGEST.
@@ -62,7 +64,6 @@ BOT = {
 ID_SALUDO = 10
 ID_PEDIR_CEDULA = 20
 ID_HTTP_CEDULA = 30
-ID_DEC_ENCONTRADO = 35
 ID_EVAL_EDAD = 40
 ID_CONFIRMA_DATOS = 45
 ID_MENU = 50
@@ -98,7 +99,6 @@ COORDS = {
     ID_SALUDO:          (440, 40),
     ID_PEDIR_CEDULA:    (440, 180),
     ID_HTTP_CEDULA:     (440, 320),
-    ID_DEC_ENCONTRADO:  (240, 390),
     ID_EVAL_EDAD:       (440, 460),
     ID_CONFIRMA_DATOS:  (640, 460),
     ID_FIX_NOMBRES:     (640, 600),
@@ -145,26 +145,18 @@ PASOS = [
         'siguiente': ID_HTTP_CEDULA,
     },
     {
-        'id': ID_HTTP_CEDULA, 'orden': 30, 'tipo': 'llamada_http',
-        'codigo': 'http_consulta_cedula', 'nombre': 'GET consultacedulapersona',
-        'metodo': 'GET', 'path': 'consultacedulapersona/',
-        'query': {'cedula': '{{variables.cedula}}'},
+        'id': ID_HTTP_CEDULA, 'orden': 30, 'tipo': 'llamada_funcion',
+        'codigo': 'fn_consulta_cedula', 'nombre': 'Consulta cédula (API SAGEST)',
+        'funcion_codigo': 'consultar_cedula_sagest',
         'timeout_seg': 20,
         'extrae_variables': {
-            '$encontrado':       '$.success',
             '$origen':           '$.origen',
             '$nombres':          '$.data.nombres',
             '$apellidos':        '$.data.apellidos',
             '$fecha_nacimiento': '$.data.fecha_nacimiento',
             '$edad':             '$.data.edad',
         },
-        'siguiente_ok': ID_DEC_ENCONTRADO, 'siguiente_error': ID_MAN_NOMBRES,
-    },
-    {
-        'id': ID_DEC_ENCONTRADO, 'orden': 35, 'tipo': 'decision',
-        'codigo': 'cedula_encontrada', 'nombre': '¿Cédula encontrada?',
-        'condicion': '{{variables.encontrado}} == true',
-        'siguiente_si': ID_EVAL_EDAD, 'siguiente_no': ID_MAN_NOMBRES,
+        'siguiente_ok': ID_EVAL_EDAD, 'siguiente_error': ID_MAN_NOMBRES,
     },
     {
         'id': ID_EVAL_EDAD, 'orden': 40, 'tipo': 'decision',
