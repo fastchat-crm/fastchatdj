@@ -457,6 +457,8 @@ def _accion_editar(request):
     sesion.mensaje_bienvenida = (request.POST.get('mensaje_bienvenida') or '').strip() or None
     sesion.mensaje_despedida   = (request.POST.get('mensaje_despedida')   or '').strip() or None
     sesion.mensaje_handoff     = (request.POST.get('mensaje_handoff')     or '').strip() or None
+    sesion.mensaje_reconexion  = (request.POST.get('mensaje_reconexion')  or '').strip() or None
+    sesion.reconexion_activa   = (request.POST.get('reconexion_activa') in ('on', 'true', '1', 'True'))
     min_sesion_raw = (request.POST.get('min_sesion') or '').strip()
     if min_sesion_raw:
         if not min_sesion_raw.isdigit():

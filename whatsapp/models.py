@@ -71,6 +71,15 @@ class SesionWhatsApp(ModeloBase):
     mensaje_despedida = models.TextField(blank=True, null=True, verbose_name='Mensaje de despedida')
     mensaje_handoff = models.TextField(blank=True, null=True, verbose_name='Mensaje de transferencia a agente',
                                        help_text='Se envía al cliente cuando la IA transfiere a un agente humano')
+    reconexion_activa = models.BooleanField(
+        'Enviar mensajes de reconexión', default=False,
+        help_text='Si está activo, un cron horario envía el mensaje de reconexión a las '
+                  'conversaciones abiertas en silencio (dentro de la ventana de 24h).')
+    mensaje_reconexion = models.TextField(
+        blank=True, null=True, verbose_name='Mensaje de reconexión',
+        help_text='Se envía automáticamente (cron horario) a las conversaciones abiertas '
+                  'cuyo último mensaje es nuestro y llevan más de 1 hora sin respuesta del '
+                  'cliente, siempre dentro de la ventana de 24h. Requiere el check activo.')
     min_sesion = models.IntegerField(default=0, verbose_name='Minutos de sesión')
     departamentos = models.ManyToManyField('crm.DepartamentoChatBot', verbose_name='Departamentos', blank=True)
     modo_bot = models.CharField(
@@ -221,6 +230,7 @@ class SesionWhatsApp(ModeloBase):
         self.mensaje_bienvenida = remover_espacios_de_mas(self.mensaje_bienvenida)
         self.mensaje_despedida = remover_espacios_de_mas(self.mensaje_despedida)
         self.mensaje_handoff = remover_espacios_de_mas(self.mensaje_handoff)
+        self.mensaje_reconexion = remover_espacios_de_mas(self.mensaje_reconexion)
         super().save(*args, **kwargs)
 
 
@@ -566,6 +576,11 @@ class ConversacionWhatsApp(ModeloBase):
     pendiente_reconexion = models.BooleanField('Pendiente de reconexión', default=False, db_index=True)
     reconectada = models.BooleanField('Reconectada', default=False)
     iniciada_por_plantilla = models.BooleanField('Iniciada por plantilla', default=False)
+    # Nudge de reconexión en conversaciones ABIERTAS (texto libre, distinto de la
+    # sonda por plantilla de arriba). El cron horario lo pone en True al enviar el
+    # mensaje_reconexion de la sesión; se resetea a False cuando el cliente vuelve
+    # a escribir (procesar_mensaje), de modo que solo se envía un nudge por silencio.
+    reconexion_enviada = models.BooleanField('Reconexión enviada', default=False, db_index=True)
     conv_origen = models.ForeignKey(
         'self', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='reconexiones', verbose_name='Conversación de origen',

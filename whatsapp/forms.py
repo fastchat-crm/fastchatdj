@@ -18,7 +18,8 @@ class SesionWhatsAppForm(ModelFormBase):
         fields = ('nombre', 'numero', 'min_sesion', 'language', 'proveedor',
                   'modo_bot', 'agente_ia',
                   'departamentos', 'departamento_default',
-                  'mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff',)
+                  'mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff',
+                  'reconexion_activa', 'mensaje_reconexion',)
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
@@ -41,7 +42,7 @@ class SesionWhatsAppForm(ModelFormBase):
         self.fields['numero'].widget.attrs['pattern'] = '[0-9+\\-\\s]*'
         self.fields['numero'].widget.attrs['maxlength'] = '20'
         for k, v in self.fields.items():
-            if k in ('mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff',):
+            if k in ('mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff', 'mensaje_reconexion',):
                 self.fields[k].widget.attrs['rows'] = '5'
                 self.fields[k].widget.attrs['class'] = "summernote"
             if k in ('min_sesion',):

@@ -7,9 +7,15 @@
                 <i class="fa fa-id-card me-2 text-primary"></i>
                 Ficha del cliente
             </h5>
-            <a href="/crm/cliente/" class="btn btn-sm btn-outline-secondary">
-                <i class="fa fa-arrow-left me-1"></i> Volver al listado
-            </a>
+            <div class="d-flex gap-2">
+                <a href="javascript:void(0);" class="btn btn-sm btn-primary"
+                   onclick="formModal({{ filtro.pk }}, 'Editar ficha de {{ filtro.cedula }}', 'change')">
+                    <i class="fa fa-edit me-1"></i> Editar ficha
+                </a>
+                <a href="/crm/cliente/" class="btn btn-sm btn-outline-secondary">
+                    <i class="fa fa-arrow-left me-1"></i> Volver al listado
+                </a>
+            </div>
         </div>
         <div class="card-body">
 
@@ -38,7 +44,7 @@
 
                 <div class="col-md-3">
                     <label class="form-label small text-muted mb-1">Edad</label>
-                    <div>{{ filtro.edad|default:'—' }}</div>
+                    <div>{{ filtro.edad_actual|default:'—' }}</div>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small text-muted mb-1">Fecha de nacimiento</label>
@@ -112,4 +118,50 @@
         </div>
     </div>
 
+    <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <form method="post" enctype="multipart/form-data" action="/crm/cliente/" class="form">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalNombre"></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body detalleProd">
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/forms.js?version=1"></script>
+    <script>
+    function formModal(id, text, action) {
+        pantallaespera();
+        $.ajax({
+            type: "GET",
+            url: "/crm/cliente/",
+            data: {'action': action, 'id': id},
+            success: function (data) {
+                setTimeout($.unblockUI, 1);
+                if (data.result === true) {
+                    $('#modalNombre').html(text);
+                    $('.detalleProd').html(data.data);
+                    const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+                    modal.show();
+                } else {
+                    mensajeWarning(data.message);
+                }
+            },
+            error: function () {
+                setTimeout($.unblockUI, 1);
+                mensajeWarning("Error de conexión.");
+            },
+            dataType: "json"
+        });
+    }
+    </script>
 {% endblock %}

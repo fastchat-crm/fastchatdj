@@ -137,7 +137,9 @@
       "PowerShell(Get-ChildItem -Path \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\" -Recurse -File | Where-Object {$_.Extension -eq \".py\"} | Select-Object -First 20 | ForEach-Object {$_.FullName})",
       "PowerShell(Get-ChildItem -Path \"E:\\\\DESARROLLO\\\\FREELANCER\\\\fastchat\\\\fastchatdj\" -Directory | Where-Object {$_.Name -ne \".venv\" -and $_.Name -ne \"__pycache__\"})",
       "Bash(pycheck whatsapp/view_conversaciones.py)",
-      "PowerShell(python -m py_compile whatsapp\\\\view_conversaciones.py crm\\\\funciones_cliente.py; if \\($?\\) { \"OK syntax\" })"
+      "PowerShell(python -m py_compile whatsapp\\\\view_conversaciones.py crm\\\\funciones_cliente.py; if \\($?\\) { \"OK syntax\" })",
+      "PowerShell(python -m py_compile crm\\\\models.py whatsapp\\\\models.py whatsapp\\\\forms.py whatsapp\\\\view_sesiones.py whatsapp\\\\procesar_mensaje.py cron_jobs\\\\enviar_mensaje_reconexion.py; if \\($?\\) { \"OK syntax\" })",
+      "PowerShell(python -m py_compile whatsapp\\\\models.py whatsapp\\\\forms.py whatsapp\\\\view_sesiones.py cron_jobs\\\\enviar_mensaje_reconexion.py; if \\($?\\) { \"OK syntax\" })"
     ]
   },
   "hooks": {

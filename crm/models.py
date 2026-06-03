@@ -1953,6 +1953,34 @@ class Cliente(ModeloBase):
         full = f'{self.nombres} {self.apellidos}'.strip()
         return f'{self.cedula} · {full}' if full else self.cedula
 
+    @property
+    def edad_actual(self):
+        """Edad calculada en vivo a partir de la fecha de nacimiento. Si no hay
+        fecha, cae al valor `edad` capturado. Es el valor que se muestra en
+        listados/fichas (no envejece estancado)."""
+        from datetime import date as _date
+        if self.fecha_nacimiento:
+            hoy = _date.today()
+            fn = self.fecha_nacimiento
+            return hoy.year - fn.year - ((hoy.month, hoy.day) < (fn.month, fn.day))
+        return self.edad
+
+    def save(self, *args, **kwargs):
+        """Deriva `fecha_nacimiento` desde `edad` cuando solo viaja la edad
+        (caso típico del chatbot/alta manual: pedimos edad, no fecha). Así la
+        edad mostrada queda siempre calculada desde una fecha real."""
+        from datetime import date as _date, timedelta as _timedelta
+        if not self.fecha_nacimiento and self.edad is not None and int(self.edad) >= 0:
+            hoy = _date.today()
+            try:
+                self.fecha_nacimiento = hoy.replace(year=hoy.year - int(self.edad))
+            except ValueError:
+                self.fecha_nacimiento = hoy - _timedelta(days=int(self.edad) * 365)
+            uf = kwargs.get('update_fields')
+            if uf is not None and 'fecha_nacimiento' not in uf:
+                kwargs['update_fields'] = list(uf) + ['fecha_nacimiento']
+        super().save(*args, **kwargs)
+
 
 class ClienteOrigen(ModeloBase):
     """Cada CONVERSACIÓN distinta desde la que se registró/atendió a un Cliente.

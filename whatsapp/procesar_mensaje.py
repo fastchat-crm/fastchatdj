@@ -253,7 +253,12 @@ def process_incoming_message(session, event_data, channel_layer):
         if from_number != session.numero:  # sólo mensajes del cliente
             min_sesion = int(getattr(session, 'min_sesion', None) or 10)
             conversation.fecha_hora_expira = timezone.now() + timedelta(minutes=min_sesion)
-            conversation.save(update_fields=['fecha_hora_expira'])
+            campos_conv = ['fecha_hora_expira']
+            # El cliente respondió: habilitar de nuevo el nudge de reconexión.
+            if getattr(conversation, 'reconexion_enviada', False):
+                conversation.reconexion_enviada = False
+                campos_conv.append('reconexion_enviada')
+            conversation.save(update_fields=campos_conv)
 
         # Crear el mensaje
         message = MensajeWhatsApp.objects.create(

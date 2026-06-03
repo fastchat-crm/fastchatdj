@@ -62,6 +62,7 @@
                         <th>Email</th>
                         <th>Teléfono</th>
                         <th>Ciudad</th>
+                        <th class="text-center">Edad</th>
                         <th>Canal</th>
                         <th>Números de origen</th>
                         <th>Departamento origen</th>
@@ -77,6 +78,7 @@
                             <td>{{ l.email|default:'—' }}</td>
                             <td>{{ l.telefono|default:'—' }}</td>
                             <td>{{ l.ciudad|default:'—' }}</td>
+                            <td class="text-center">{{ l.edad_actual|default:'—' }}</td>
                             <td><span class="badge bg-info">{{ l.canal_origen|default:'—' }}</span></td>
                             <td>
                                 {% for o in l.origenes.all %}
