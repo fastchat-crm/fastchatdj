@@ -3306,17 +3306,15 @@
     function _fmtMetaRemain(ts) {
         const ms = ts - Date.now();
         if (ms <= 0) return null;
-        const sec = Math.floor(ms / 1000);
+        let sec = Math.floor(ms / 1000);
+        const d = Math.floor(sec / 86400);
+        sec %= 86400;
         const h = Math.floor(sec / 3600);
         const m = Math.floor((sec % 3600) / 60);
         const s = sec % 60;
-        if (h >= 24) {
-            const d = Math.floor(h / 24);
-            return d + 'd ' + (h % 24) + 'h ' + m + 'm';
-        }
-        if (h > 0) return h + 'h ' + m + 'm ' + s + 's';
-        if (m > 0) return m + 'm ' + s + 's';
-        return s + 's';
+        const pad = function (n) { return (n < 10 ? '0' : '') + n; };
+        const hms = pad(h) + ':' + pad(m) + ':' + pad(s);
+        return d > 0 ? (d + 'd ' + hms) : hms;
     }
 
     window.tickMetaCountdowns = function() {
