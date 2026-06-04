@@ -922,6 +922,96 @@ def cotizar_am_multiple(conversacion, variables, config, endpoint=None) -> dict:
     }
 
 
+
+SAGEST_CEDULA_URL_DEFAULT = 'https://sagest.epunemi.gob.ec/apimobile/v1/consultacedulapersona/'
+
+
+@registrar_funcion(
+    codigo='consultar_cedula_sagest',
+    descripcion='Recibe una cédula y trae sus datos desde SAGEST (cascada persona → unemi → ister). Consulta interna: no requiere endpoint. Rama ok=encontrada / error=no encontrada.',
+    parametros={
+        'body.cedula':         'string requerido · cédula/RUC/pasaporte. Acepta {{variables.cedula}}. Si se omite, usa variables.cedula.',
+        '(opcional) endpoint': 'EndpointApiChatbot · si se asigna, su base_url sobreescribe la URL interna por defecto.',
+        'RETORNA · origen':            'string · fuente que respondió (persona | unemi | api).',
+        'RETORNA · data.nombres':      'string · extraer con jsonpath "data.nombres".',
+        'RETORNA · data.apellidos':    'string · extraer con jsonpath "data.apellidos".',
+        'RETORNA · data.fecha_nacimiento': 'string YYYY-MM-DD|null · jsonpath "data.fecha_nacimiento".',
+        'RETORNA · data.edad':         'int|null · jsonpath "data.edad".',
+    },
+    requiere_endpoint=False,
+    ejemplo_body={'cedula': '{{variables.cedula}}'},
+)
+def consultar_cedula_sagest(conversacion, variables, config, endpoint=None) -> dict:
+    """Consulta interna de cédula contra la API SAGEST.
+
+    Recibe la cédula por `config.body.cedula` (resuelve `{{variables.x}}`) y,
+    si no viene, cae a `variables.cedula`. Hace el GET internamente y devuelve
+    el JSON crudo de la API como `body`, para que `config.extraer` del nodo
+    saque `data.nombres`, `data.apellidos`, `data.fecha_nacimiento`,
+    `data.edad` y `origen`.
+
+    URL: por defecto interna (`SAGEST_CEDULA_URL_DEFAULT`). Si el nodo tiene un
+    EndpointApiChatbot asignado, su `base_url` + recurso (`config.path` o
+    `consultacedulapersona/`) sobreescribe el default — permite cambiar de
+    proveedor sin tocar código, manteniendo la consulta funcional out-of-the-box.
+
+    Etiqueta (define la rama del flujo):
+        ok    → success=true (cédula encontrada).
+        error → success=false / HTTP no-2xx / fallo de red → captura manual.
+    """
+    from .motor_flujo_chatbot import resolver_expresion
+
+    vars_ = variables or {}
+    contexto = {'variables': vars_, 'conversacion': conversacion}
+
+    body = _resolver_dict(config.get('body') or {}, contexto, resolver_expresion)
+    cedula = str(body.get('cedula') or vars_.get('cedula') or '').strip()
+    if not cedula:
+        return {'etiqueta': 'error', 'body': {}, 'status': 400,
+                'error': 'No se recibió cédula (ni en body.cedula ni en variables.cedula).'}
+
+    if endpoint and (endpoint.base_url or '').strip():
+        recurso = (config.get('path') or 'consultacedulapersona/').strip().lstrip('/')
+        url = (endpoint.base_url or '').strip().rstrip('/') + '/' + recurso
+        timeout = int(config.get('timeout_seg') or endpoint.timeout_seg or 20)
+        headers = dict(endpoint.headers_default or {})
+    else:
+        url = SAGEST_CEDULA_URL_DEFAULT
+        timeout = int(config.get('timeout_seg') or 20)
+        headers = {}
+    headers.setdefault('Accept', 'application/json')
+
+    try:
+        r = requests.get(url, params={'cedula': cedula}, timeout=timeout, headers=headers)
+    except requests.RequestException as ex:
+        logger.exception('consultar_cedula_sagest cédula=%s falló: %s', cedula, ex)
+        return {'etiqueta': 'error', 'body': {}, 'status': 502,
+                'error': f'No pudimos consultar la cédula: {str(ex)[:200]}'}
+
+    try:
+        resp_json = r.json()
+    except ValueError:
+        resp_json = {'_raw': r.text[:1000]}
+    if not isinstance(resp_json, dict):
+        resp_json = {'success': False, '_raw': resp_json}
+
+    encontrado = bool(resp_json.get('success')) and isinstance(resp_json.get('data'), dict)
+    if not encontrado:
+        return {
+            'etiqueta': 'error',
+            'body': resp_json,
+            'status': r.status_code,
+            'error': resp_json.get('msg') or 'Cédula no encontrada.',
+        }
+
+    return {
+        'etiqueta': 'ok',
+        'body': resp_json,
+        'status': r.status_code,
+        'error': '',
+    }
+
+
 # ────────────────────────────────────────────────────────────────────
 # Helpers
 # ────────────────────────────────────────────────────────────────────

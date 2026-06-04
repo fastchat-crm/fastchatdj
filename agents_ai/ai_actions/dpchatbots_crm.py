@@ -10,6 +10,7 @@ Puntos de entrada:
 La logica de validacion HTTP / construccion de respuesta se queda en la view
 (`crm/view_departamento_chatbot.py`); aca solo vive la pieza IA y la persistencia.
 """
+import json
 import logging
 
 from django.db import transaction
@@ -149,6 +150,321 @@ def generar(*, descripcion: str, tipo_negocio: str, tono: str,
         'opciones_count': opciones_count,
         'tokens': tokens,
         'modelo': modelo,
+    }
+
+
+# ============================================================================
+# Asistente Q&A: arma un proceso pregunta->respuesta desde respuestas guiadas
+# ============================================================================
+_VALIDACIONES_OK = {'none', 'email', 'numero', 'telefono', 'cedula', 'fecha', 'ruc', 'regex'}
+
+
+def _crear_nodos_wizard(departamento, nodos_lista, parent=None, orden_inicial: int = 0) -> int:
+    """Persiste el flujo del asistente Q&A. A diferencia del generador simple,
+    respeta el `tipo` explícito de cada nodo: menu / pregunta / respuesta /
+    handoff / cta_url. El árbol se arma por `opcion_padre`; el motor avanza por
+    la rama default (subopciones) en las secuencias de preguntas encadenadas."""
+    from crm.models import OpcionDepartamentoChatBot
+
+    nombres_fallback = {
+        'pregunta': 'Pregunta', 'handoff': 'Hablar con asesor',
+        'menu': 'Menú', 'cta_url': 'Abrir enlace', 'respuesta': 'Respuesta',
+    }
+    creadas = 0
+    for i, nodo in enumerate(nodos_lista):
+        if not isinstance(nodo, dict):
+            continue
+        texto = (nodo.get('texto_boton') or nodo.get('nombre') or '').strip()
+        mensaje = (nodo.get('mensaje') or '').strip()
+        tipo_in = (nodo.get('tipo') or '').strip().lower()
+        hijos = nodo.get('hijos') or []
+        tiene_hijos = isinstance(hijos, list) and len(hijos) > 0
+
+        if tipo_in not in ('menu', 'pregunta', 'respuesta', 'handoff', 'cta_url'):
+            tipo_in = 'menu' if tiene_hijos else 'respuesta'
+        if not texto:
+            texto = nombres_fallback.get(tipo_in, 'Respuesta')
+
+        config = {}
+        variable_destino = ''
+        validacion_tipo = 'none'
+        respuesta_txt = ''
+
+        if tipo_in == 'menu':
+            tipo_nodo = 'menu'
+            if mensaje:
+                config['mensaje'] = mensaje[:1000]
+        elif tipo_in == 'pregunta':
+            tipo_nodo = 'pregunta'
+            config['pregunta'] = (nodo.get('pregunta') or mensaje or texto).strip()[:1000]
+            variable_destino = (nodo.get('variable') or '').strip()[:60]
+            val = (nodo.get('validacion') or 'none').strip().lower()
+            validacion_tipo = val if val in _VALIDACIONES_OK else 'none'
+        elif tipo_in == 'handoff':
+            tipo_nodo = 'handoff'
+            if mensaje:
+                config['mensaje'] = mensaje[:1000]
+        elif tipo_in == 'cta_url':
+            tipo_nodo = 'respuesta'
+            respuesta_txt = mensaje[:2000]
+            cta_url = (nodo.get('cta_url') or '').strip()
+            if cta_url:
+                config['cta_url'] = cta_url[:2000]
+                disp = (nodo.get('cta_display_text') or '').strip()
+                if disp:
+                    config['cta_display_text'] = disp[:20]
+        else:
+            tipo_nodo = 'respuesta'
+            respuesta_txt = (mensaje or texto)[:2000]
+
+        nueva = OpcionDepartamentoChatBot.objects.create(
+            departamento=departamento,
+            opcion_padre=parent,
+            nombre=texto[:100],
+            respuesta=respuesta_txt,
+            orden=orden_inicial + i,
+            tipo_nodo=tipo_nodo,
+            variable_destino=variable_destino,
+            validacion_tipo=validacion_tipo,
+            mensaje_error=('Dato inválido, intentá de nuevo.' if tipo_nodo == 'pregunta' else ''),
+            reintentos_max=3,
+            es_inicio=(parent is None and i == 0),
+            usuario_creacion=departamento.usuario_creacion,
+            config=config,
+        )
+        creadas += 1
+        if tiene_hijos:
+            creadas += _crear_nodos_wizard(departamento, hijos, parent=nueva)
+    return creadas
+
+
+def generar_wizard(*, descripcion: str, tipo_negocio: str, tono: str,
+                   objetivo: str, datos_cliente: str, opciones_menu: str,
+                   handoff_cuando: str, apikey_obj, usuario) -> dict:
+    """Genera un DepartamentoChatBot con un PROCESO pregunta->respuesta a partir
+    de las respuestas del asistente guiado (Q&A). Soporta captura de datos
+    (nodos `pregunta` con validación) y `handoff`.
+
+    Raises:
+        IAActionError — input inválido, JSON malformado, LLM error.
+    """
+    from crm.models import DepartamentoChatBot
+
+    descripcion = (descripcion or '').strip()
+    if len(descripcion) < 30:
+        raise IAActionError("Descripcion muy corta (minimo 30 chars).")
+    tipo_negocio = (tipo_negocio or '').strip() or 'no especificado'
+    tono = (tono or 'amable').strip() or 'amable'
+    objetivo = (objetivo or '').strip() or 'Atender la consulta del cliente.'
+    datos_cliente = (datos_cliente or '').strip() or '(ninguno)'
+    opciones_menu = (opciones_menu or '').strip() or '(ninguna especificada)'
+    handoff_cuando = (handoff_cuando or '').strip() or 'Cuando el cliente pida hablar con una persona.'
+
+    prompt = get_prompt(
+        'dpchatbots_wizard',
+        descripcion=descripcion, tipo_negocio=tipo_negocio,
+        tono=tono, tono_title=tono.title(),
+        objetivo=objetivo, datos_cliente=datos_cliente,
+        opciones_menu=opciones_menu, handoff_cuando=handoff_cuando,
+    )
+
+    payload, tokens, modelo = invocar_json(
+        prompt, apikey_obj=apikey_obj, origen='dpchatbot_wizard',
+        prompt_preview=objetivo[:300], max_tokens=16000, temperature=0.4,
+    )
+
+    nombre = (payload.get('nombre_departamento') or '').strip()
+    if not nombre:
+        raise IAActionError("La IA no devolvio nombre_departamento.")
+    bienvenida = (payload.get('mensaje_bienvenida') or '').strip()
+    nodos = payload.get('nodos') or []
+    if not isinstance(nodos, list):
+        nodos = []
+
+    res = _persistir_flujo(nombre, bienvenida, nodos, usuario)
+    res['tokens'] = tokens
+    res['modelo'] = modelo
+    return res
+
+
+def _persistir_flujo(nombre, bienvenida, nodos, usuario) -> dict:
+    """Crea el DepartamentoChatBot + nodos desde un payload de flujo ya armado.
+    Lo comparten el asistente guiado (`generar_wizard`) y el conversacional
+    (`crear_desde_borrador`)."""
+    from crm.models import DepartamentoChatBot
+    with transaction.atomic():
+        depto = DepartamentoChatBot.objects.create(
+            nombre=nombre,
+            mensaje_saludo=bienvenida,
+            activo_tradicional=True,
+            usuario_creacion=usuario,
+        )
+        opciones_count = _crear_nodos_wizard(depto, nodos, parent=None)
+    return {
+        'departamento_id': depto.id,
+        'nombre': depto.nombre,
+        'opciones_count': opciones_count,
+    }
+
+
+# ============================================================================
+# Asistente conversacional (chat multi-turno con borrador del flujo)
+# ============================================================================
+def _historial_a_texto(historial) -> str:
+    if not isinstance(historial, list):
+        return '(sin mensajes previos)'
+    lineas = []
+    for m in historial[-20:]:
+        if not isinstance(m, dict):
+            continue
+        rol = 'Operador' if (m.get('rol') == 'user') else 'Asistente'
+        txt = (m.get('texto') or '').strip()
+        if txt:
+            lineas.append(f'{rol}: {txt}')
+    return '\n'.join(lineas) or '(sin mensajes previos)'
+
+
+def conversar(*, historial, mensaje, borrador, apikey_obj, usuario=None) -> dict:
+    """Un turno del asistente conversacional. `historial` = lista de
+    {rol:'user'|'assistant', texto}. `borrador` = flujo JSON actual (o None).
+
+    Devuelve {respuesta, flujo, listo, tokens, modelo}.
+    """
+    mensaje = (mensaje or '').strip()
+    if not mensaje:
+        raise IAActionError('Mensaje vacío.')
+
+    borrador_txt = '(aún no hay borrador)'
+    if isinstance(borrador, dict) and borrador:
+        try:
+            borrador_txt = json.dumps(borrador, ensure_ascii=False)[:8000]
+        except (TypeError, ValueError):
+            borrador_txt = '(borrador no serializable)'
+
+    prompt = get_prompt(
+        'dpchatbots_chat',
+        historial=_historial_a_texto(historial),
+        borrador=borrador_txt,
+        mensaje=mensaje,
+    )
+    payload, tokens, modelo = invocar_json(
+        prompt, apikey_obj=apikey_obj, origen='dpchatbot_chat',
+        prompt_preview=mensaje[:300], max_tokens=16000, temperature=0.5,
+    )
+    flujo = payload.get('flujo')
+    if not isinstance(flujo, dict):
+        flujo = borrador if isinstance(borrador, dict) else None
+    return {
+        'respuesta': (payload.get('respuesta') or '').strip(),
+        'flujo': flujo,
+        'listo': bool(payload.get('listo')),
+        'tokens': tokens,
+        'modelo': modelo,
+    }
+
+
+def crear_desde_borrador(*, flujo, usuario) -> dict:
+    """Persiste el flujo acordado en el chat. `flujo` = dict con
+    nombre_departamento, mensaje_bienvenida, nodos[]."""
+    if not isinstance(flujo, dict):
+        raise IAActionError('Borrador inválido.')
+    nombre = (flujo.get('nombre_departamento') or '').strip()
+    if not nombre:
+        raise IAActionError('El borrador todavía no tiene nombre de departamento.')
+    bienvenida = (flujo.get('mensaje_bienvenida') or '').strip()
+    nodos = flujo.get('nodos') or []
+    if not isinstance(nodos, list) or not nodos:
+        raise IAActionError('El borrador todavía no tiene pasos definidos.')
+    return _persistir_flujo(nombre, bienvenida, nodos, usuario)
+
+
+# ============================================================================
+# Editar un departamento existente por chat (cargar como borrador + reemplazar)
+# ============================================================================
+_TIPOS_BORRADOR = {'menu', 'pregunta', 'respuesta', 'handoff', 'cta_url'}
+
+
+def _arbol_a_nodos_borrador(arbol) -> list:
+    """Convierte el árbol de `obtener_arbol_opciones()` al esquema de nodos del
+    asistente (reverso de `_crear_nodos_wizard`). Solo cubre el árbol por
+    `opcion_padre`; flujos con aristas complejas del canvas se aproximan."""
+    out = []
+    for n in arbol:
+        cfg = n.get('config') or {}
+        tipo = n.get('tipo_nodo') or 'respuesta'
+        if tipo not in _TIPOS_BORRADOR:
+            tipo = 'menu' if n.get('hijos') else 'respuesta'
+        nd = {
+            'tipo': tipo,
+            'texto_boton': n.get('nombre') or '',
+            'mensaje': cfg.get('mensaje') or n.get('respuesta') or '',
+        }
+        if tipo == 'pregunta':
+            nd['pregunta'] = cfg.get('pregunta') or n.get('respuesta') or ''
+            nd['variable'] = n.get('variable_destino') or ''
+            nd['validacion'] = n.get('validacion_tipo') or 'none'
+        if cfg.get('cta_url'):
+            nd['tipo'] = 'cta_url'
+            nd['cta_url'] = cfg.get('cta_url')
+            nd['cta_display_text'] = cfg.get('cta_display_text') or ''
+        hijos = n.get('hijos') or []
+        if hijos:
+            nd['hijos'] = _arbol_a_nodos_borrador(hijos)
+        out.append(nd)
+    return out
+
+
+def serializar_a_borrador(depto) -> dict:
+    """Vuelca un DepartamentoChatBot existente al esquema de borrador del
+    asistente, para precargarlo en el chat de edición."""
+    return {
+        'nombre_departamento': depto.nombre,
+        'descripcion_departamento': '',
+        'mensaje_bienvenida': depto.mensaje_saludo or '',
+        'nodos': _arbol_a_nodos_borrador(depto.obtener_arbol_opciones()),
+    }
+
+
+def actualizar_desde_borrador(*, departamento_id, flujo, usuario) -> dict:
+    """Reemplaza el flujo de un departamento existente con el borrador del chat:
+    soft-delete de nodos y aristas previas, recrea desde el borrador y resetea
+    los estados de conversación en vuelo de ese depto."""
+    from crm.models import (
+        DepartamentoChatBot, OpcionDepartamentoChatBot,
+        ConexionNodoChatbot, EstadoFlujoChatbot,
+    )
+    if not isinstance(flujo, dict):
+        raise IAActionError('Borrador inválido.')
+    depto = DepartamentoChatBot.objects.filter(id=departamento_id, status=True).first()
+    if not depto:
+        raise IAActionError('Departamento no encontrado.')
+    nodos = flujo.get('nodos') or []
+    if not isinstance(nodos, list) or not nodos:
+        raise IAActionError('El borrador todavía no tiene pasos definidos.')
+    nombre = (flujo.get('nombre_departamento') or '').strip() or depto.nombre
+    bienvenida = (flujo.get('mensaje_bienvenida') or '').strip()
+
+    with transaction.atomic():
+        ConexionNodoChatbot.objects.filter(
+            nodo_origen__departamento=depto, status=True,
+        ).update(status=False)
+        OpcionDepartamentoChatBot.objects.filter(
+            departamento=depto, status=True,
+        ).update(status=False)
+        EstadoFlujoChatbot.objects.filter(
+            departamento=depto, status=True,
+        ).update(nodo_actual=None, intentos=0)
+
+        depto.nombre = nombre[:100]
+        if bienvenida:
+            depto.mensaje_saludo = bienvenida
+        depto.save()
+        opciones_count = _crear_nodos_wizard(depto, nodos, parent=None)
+
+    return {
+        'departamento_id': depto.id,
+        'nombre': depto.nombre,
+        'opciones_count': opciones_count,
     }
 
 

@@ -872,10 +872,29 @@
 .cm-header-right {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     flex-shrink: 0;
     flex-wrap: wrap;
     justify-content: flex-end;
+}
+
+.cm-header-info,
+.cm-header-acciones {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cm-header-info {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.cm-header-acciones {
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+    padding-left: 8px;
+    border-left: 1px solid var(--chat-border);
 }
 
 .cm-messages {

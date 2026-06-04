@@ -3,7 +3,7 @@ import sys
 from datetime import date
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render, redirect
 from django.template.loader import get_template
@@ -11,7 +11,7 @@ from django.template.loader import get_template
 from core.funciones import addData, mi_paginador, secure_module, log, paginador
 from core.funciones_adicionales import ordenar_modulos_url, salva_logs
 from seguridad.forms import ModuloForm
-from seguridad.models import Modulo, ModuloGrupo
+from seguridad.models import Modulo, ModuloGrupo, GroupModulo
 from django.contrib import messages
 
 
@@ -134,6 +134,55 @@ def modulossistemaView(request):
                         return HttpResponse(json.dumps({'result': False, 'mensaje': 'Orden inválido'}))
                     except Exception as ex:
                         return HttpResponse(json.dumps({'result': False, 'mensaje': str(ex)}))
+                elif action == 'guardar_grupos_modulo':
+                    pk_modulo = int(request.POST.get('pk_modulo') or 0)
+                    grupos_ids = [int(g) for g in request.POST.getlist('c_grupos', []) if g.isdigit()]
+                    modulo = model.objects.filter(pk=pk_modulo, status=True).first()
+                    if not modulo:
+                        res_json.append({'error': True, 'message': 'Module not found.'})
+                    else:
+                        grupos_actuales = set(ModuloGrupo.objects.filter(modulos=modulo, status=True).values_list('pk', flat=True))
+                        grupos_nuevos = set(grupos_ids)
+                        a_agregar = grupos_nuevos - grupos_actuales
+                        a_quitar = grupos_actuales - grupos_nuevos
+                        for gid in a_agregar:
+                            mg = ModuloGrupo.objects.filter(pk=gid, status=True).first()
+                            if mg:
+                                mg.modulos.add(modulo)
+                        for gid in a_quitar:
+                            mg = ModuloGrupo.objects.filter(pk=gid, status=True).first()
+                            if mg:
+                                mg.modulos.remove(modulo)
+                        log(f"Synced groups for module {modulo.__str__()}: +{len(a_agregar)} / -{len(a_quitar)}", request, "change")
+                        res_json.append({
+                            'error': False,
+                            'message': f"Groups updated (+{len(a_agregar)} / -{len(a_quitar)}).",
+                            'reload': True
+                        })
+                elif action == 'extraer_urls':
+                    from fastchatdj.urls import urls_sistema
+                    nuevas = []
+                    existentes_urls = set(model.objects.values_list('url', flat=True))
+                    for u in urls_sistema:
+                        if not u.get("sub_urls"):
+                            continue
+                        for idx, su in enumerate(u["sub_urls"]):
+                            mod_url = "/{}{}".format(u["url"], su["url"])
+                            if mod_url in existentes_urls:
+                                continue
+                            mod_obj = model.objects.create(
+                                orden=idx,
+                                nombre=su["nombre"],
+                                url=mod_url,
+                            )
+                            existentes_urls.add(mod_url)
+                            nuevas.append(mod_obj.id)
+                    log(f"Extracted {len(nuevas)} new URLs from sistema", request, "add")
+                    return JsonResponse({
+                        'error': False,
+                        'creadas': len(nuevas),
+                        'message': f"{len(nuevas)} new URL(s) added." if nuevas else "No new URLs to add."
+                    })
         except ValueError as ex:
             res_json.append({'error': True,
                              "message": str(ex)
@@ -170,10 +219,43 @@ def modulossistemaView(request):
                 data["pk"] = pk
                 data["form"] = Formulario(instance=modulo, ver=True)
                 return render(request, 'seguridad/modulossistema/form.html', data)
+            elif action == 'grupos_modulo':
+                pk_modulo = int(request.GET.get('id') or 0)
+                modulo = model.objects.filter(pk=pk_modulo, status=True).first()
+                if not modulo:
+                    return JsonResponse({'result': False, 'message': 'Module not found.'})
+                grupos_actuales_ids = set(ModuloGrupo.objects.filter(modulos=modulo, status=True).values_list('pk', flat=True))
+                data['modulo'] = modulo
+                data['grupos'] = ModuloGrupo.objects.filter(status=True).order_by('prioridad', 'nombre')
+                data['grupos_actuales_ids'] = grupos_actuales_ids
+                template = get_template('seguridad/modulossistema/form_grupos.html')
+                return JsonResponse({'result': True, 'data': template.render(data)})
 
         criterio, filtros, url_vars =  request.GET.get('criterio', ''), Q(status=True), ''
         ister, homologacion, postulate = request.GET.get('ister',''), request.GET.get('homologacion',''), request.GET.get('postulate','')
+        usadas = request.GET.get('usadas', '')
+        grupo_id = request.GET.get('grupo', '')
+        rol_id = request.GET.get('rol', '')
+        orden = request.GET.get('orden', 'id_desc')
 
+        if grupo_id.isdigit():
+            data['grupo_sel'] = int(grupo_id)
+            url_vars += f'&grupo={grupo_id}'
+            filtros = filtros & Q(modulogrupo__id=int(grupo_id), modulogrupo__status=True)
+        if rol_id.isdigit():
+            data['rol_sel'] = int(rol_id)
+            url_vars += f'&rol={rol_id}'
+            filtros = filtros & Q(groupmodulo__id=int(rol_id), groupmodulo__status=True)
+        if usadas in ('1', '0'):
+            data['usadas'] = usadas
+            url_vars += f'&usadas={usadas}'
+            ids_usadas = list(
+                x for x in ModuloGrupo.objects.filter(status=True).values_list('modulos__id', flat=True).distinct() if x
+            )
+            if usadas == '1':
+                filtros = filtros & Q(id__in=ids_usadas)
+            else:
+                filtros = filtros & ~Q(id__in=ids_usadas)
         if ister:
             data['ister'] = ister
             url_vars += f'&ister={ister}'
@@ -212,8 +294,34 @@ def modulossistemaView(request):
         #                 orden = u["sub_urls"].index(su)
         #                 mod_obj = Modulo.objects.create(orden=orden, nombre=su["nombre"], url=mod_url)
         #                 log(f"Sistema creo modulo {mod_obj.__str__()}", request, "add")
-        qs_modulos = model.objects.filter(filtros)
+        orden_map = {
+            'id_desc': '-id',
+            'id_asc': 'id',
+            'nombre_asc': 'nombre',
+            'nombre_desc': '-nombre',
+            'fecha_asc': 'fecha_registro',
+            'fecha_desc': '-fecha_registro',
+        }
+        order_field = orden_map.get(orden, '-id')
+        data['orden'] = orden
+        if orden != 'id_desc':
+            url_vars += f'&orden={orden}'
+
+        qs_modulos = (
+            model.objects.filter(filtros)
+            .prefetch_related('modulogrupo_set', 'groupmodulo_set__group')
+            .annotate(roles_count=Count('groupmodulo', filter=Q(groupmodulo__status=True), distinct=True))
+            .distinct()
+        )
         data["list_count"] = qs_modulos.count()
         data["url_vars"] = url_vars
-        paginador(request, qs_modulos.order_by('-id'), 20, data, url_vars)
+        from datetime import datetime, timedelta
+        data["umbral_reciente"] = datetime.now() - timedelta(days=7)
+        ids_usadas_set = set(
+            x for x in ModuloGrupo.objects.filter(status=True).values_list('modulos__id', flat=True).distinct() if x
+        )
+        data["ids_usadas"] = ids_usadas_set
+        data["grupos_filtro"] = ModuloGrupo.objects.filter(status=True).order_by('nombre')
+        data["roles_filtro"] = GroupModulo.objects.filter(status=True).select_related('group').order_by('group__name')
+        paginador(request, qs_modulos.order_by(order_field), 20, data, url_vars)
         return render(request, 'seguridad/modulossistema/listado.html', data)

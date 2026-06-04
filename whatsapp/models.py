@@ -71,6 +71,15 @@ class SesionWhatsApp(ModeloBase):
     mensaje_despedida = models.TextField(blank=True, null=True, verbose_name='Mensaje de despedida')
     mensaje_handoff = models.TextField(blank=True, null=True, verbose_name='Mensaje de transferencia a agente',
                                        help_text='Se envía al cliente cuando la IA transfiere a un agente humano')
+    reconexion_activa = models.BooleanField(
+        'Enviar mensajes de reconexión', default=False,
+        help_text='Si está activo, un cron horario envía el mensaje de reconexión a las '
+                  'conversaciones abiertas en silencio (dentro de la ventana de 24h).')
+    mensaje_reconexion = models.TextField(
+        blank=True, null=True, verbose_name='Mensaje de reconexión',
+        help_text='Se envía automáticamente (cron horario) a las conversaciones abiertas '
+                  'cuyo último mensaje es nuestro y llevan más de 1 hora sin respuesta del '
+                  'cliente, siempre dentro de la ventana de 24h. Requiere el check activo.')
     min_sesion = models.IntegerField(default=0, verbose_name='Minutos de sesión')
     departamentos = models.ManyToManyField('crm.DepartamentoChatBot', verbose_name='Departamentos', blank=True)
     modo_bot = models.CharField(
@@ -158,6 +167,47 @@ class SesionWhatsApp(ModeloBase):
     def obtener_perfiles(self):
         return self.perfilsesionwhatsapp_set.filter(status=True).order_by('usuario__first_name')
 
+    def usuarios_asignados(self):
+        perfiles = [p for p in self.perfilsesionwhatsapp_set.all() if p.status]
+        supervisores = [p for p in perfiles if p.rol == 'supervisor']
+        agentes = [p for p in perfiles if p.rol == 'asesor']
+        ordenados = supervisores + agentes
+        limite = 4
+        visibles = ordenados[:limite]
+        restantes = ordenados[limite:]
+
+        def _nombre(perfil):
+            nombre = getattr(perfil.usuario, 'full_name', '') or ''
+            if callable(nombre):
+                nombre = nombre()
+            return (nombre or '').strip() or perfil.usuario.username
+
+        return {
+            'supervisores': supervisores,
+            'agentes': agentes,
+            'total': len(perfiles),
+            'visibles': visibles,
+            'extra': len(restantes),
+            'extra_titulo': ', '.join(_nombre(p) for p in restantes),
+        }
+
+    def rol_de_usuario(self, usuario):
+        if not usuario or not getattr(usuario, 'id', None):
+            return None
+        if self.usuario_id == usuario.id:
+            return 'supervisor'
+        perfil = self.perfilsesionwhatsapp_set.filter(usuario_id=usuario.id, status=True).first()
+        return perfil.rol if perfil else None
+
+    def es_supervisor(self, usuario):
+        return self.rol_de_usuario(usuario) == 'supervisor'
+
+    def es_asesor(self, usuario):
+        return self.rol_de_usuario(usuario) == 'asesor'
+
+    def es_participante(self, usuario):
+        return self.rol_de_usuario(usuario) is not None
+
     def is_empty_session(self):
         from django.utils import timezone
         cb = getattr(self, 'config_baileys', None)
@@ -172,14 +222,15 @@ class SesionWhatsApp(ModeloBase):
             self.ultima_conexion = timezone.now()
         else:
             self.ultima_conexion = None
-        if self.min_sesion and self.min_sesion > 720:
-            raise ValueError("El tiempo de sesión no puede superar las 12 horas (720 minutos).")
+        if self.min_sesion and self.min_sesion > 1440:
+            raise ValueError("El tiempo de sesión no puede superar las 24 horas (1440 minutos).")
         if not self.min_sesion:
             self.min_sesion = 60
         # Limpiar espacios en blanco de los mensajes
         self.mensaje_bienvenida = remover_espacios_de_mas(self.mensaje_bienvenida)
         self.mensaje_despedida = remover_espacios_de_mas(self.mensaje_despedida)
         self.mensaje_handoff = remover_espacios_de_mas(self.mensaje_handoff)
+        self.mensaje_reconexion = remover_espacios_de_mas(self.mensaje_reconexion)
         super().save(*args, **kwargs)
 
 
@@ -384,6 +435,12 @@ ESTADOS_CONVERSACION = (
     (1, 'Cerrado'),
 )
 
+ESTADOS_ATENCION = (
+    ('abierta', 'Abierta'),
+    ('pendiente', 'Pendiente'),
+    ('resuelta', 'Resuelta'),
+)
+
 ESTADO_MENSAJE_CHOICES = (
     ("MENU_DEPARTAMENTOS", "Menú Departamentos"),
     ("DEPARTAMENTO_ESCOGIDO", "Departamento Escogido"),
@@ -444,6 +501,14 @@ class ConversacionWhatsApp(ModeloBase):
         related_name='conversaciones_asignadas', verbose_name='Asignado a'
     )
     fecha_asignacion = models.DateTimeField('Fecha de asignación', null=True, blank=True)
+    estado_atencion = models.CharField(
+        'Estado de atención', max_length=12, choices=ESTADOS_ATENCION, default='abierta',
+        help_text='Flujo de inbox: abierta → pendiente (esperando) → resuelta. Independiente del cierre técnico.'
+    )
+    snooze_hasta = models.DateTimeField(
+        'Pospuesta hasta', null=True, blank=True,
+        help_text='Si está en el futuro, la conversación se oculta del inbox hasta esa fecha (un cron la reabre).'
+    )
     nota_interna = models.TextField('Nota interna', blank=True, default='')
     primer_agente = models.ForeignKey(
         Usuario, on_delete=models.SET_NULL, null=True, blank=True,
@@ -501,6 +566,24 @@ class ConversacionWhatsApp(ModeloBase):
         'Proveedor de atencion', max_length=20, choices=PROVEEDORES_SESION,
         blank=True, default='', db_index=True,
         help_text='Servicio con el que se atendio esta conversacion (baileys/meta/etc). Se congela al crearla.'
+    )
+
+    # Reconexión por plantilla. Cuando un agente envía una plantilla Meta a una
+    # conversación finalizada, esta NO se reactiva: queda en estado 1 marcada
+    # como sonda (pendiente_reconexion=True) hasta que el cliente responda. Al
+    # responder, el webhook crea una conversación nueva (iniciada_por_plantilla)
+    # enlazada por conv_origen, y esta sonda pasa a reconectada=True.
+    pendiente_reconexion = models.BooleanField('Pendiente de reconexión', default=False, db_index=True)
+    reconectada = models.BooleanField('Reconectada', default=False)
+    iniciada_por_plantilla = models.BooleanField('Iniciada por plantilla', default=False)
+    # Nudge de reconexión en conversaciones ABIERTAS (texto libre, distinto de la
+    # sonda por plantilla de arriba). El cron horario lo pone en True al enviar el
+    # mensaje_reconexion de la sesión; se resetea a False cuando el cliente vuelve
+    # a escribir (procesar_mensaje), de modo que solo se envía un nudge por silencio.
+    reconexion_enviada = models.BooleanField('Reconexión enviada', default=False, db_index=True)
+    conv_origen = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='reconexiones', verbose_name='Conversación de origen',
     )
 
     class Meta:
@@ -649,6 +732,28 @@ class ConversacionWhatsApp(ModeloBase):
     @property
     def atendida_por_messenger(self):
         return self.proveedor_efectivo == 'messenger'
+
+    @cached_property
+    def vence_meta_en(self):
+        if not self.atendida_por_meta:
+            return None
+        sesion = getattr(self, 'sesion', None)
+        if not sesion:
+            return None
+        ultimo_entrante = (
+            self.mensajes
+            .exclude(remitente=sesion.numero)
+            .order_by('-fecha')
+            .first()
+        )
+        if not ultimo_entrante or not ultimo_entrante.fecha:
+            return None
+        return ultimo_entrante.fecha + relativedelta(hours=24)
+
+    @cached_property
+    def vence_meta_expirada(self):
+        vence = self.vence_meta_en
+        return bool(vence and timezone.now() > vence)
 
     @cached_property
     def from_number(self):
@@ -879,11 +984,27 @@ class ConversacionWhatsApp(ModeloBase):
             return conv, False
         min_sesion = int(getattr(contacto.sesion, 'min_sesion', None) or 10)
         proveedor_snapshot = getattr(contacto.sesion, 'proveedor', '') or ''
+        # Si el contacto tiene una sonda de reconexión pendiente (plantilla
+        # enviada a una conversación finalizada), esta nueva conversación es la
+        # reconexión: la enlazamos y cerramos la sonda.
+        pendiente = (
+            cls.objects
+            .filter(contacto=contacto, estado_conversacion=1,
+                    pendiente_reconexion=True, reconectada=False)
+            .order_by('-fecha_fin_conversacion', '-id')
+            .first()
+        )
         conv = cls.objects.create(
             contacto=contacto,
             fecha_hora_expira=timezone.now() + relativedelta(minutes=min_sesion),
             proveedor_atencion=proveedor_snapshot,
+            iniciada_por_plantilla=bool(pendiente),
+            conv_origen=pendiente,
         )
+        if pendiente:
+            pendiente.pendiente_reconexion = False
+            pendiente.reconectada = True
+            pendiente.save(update_fields=['pendiente_reconexion', 'reconectada'])
         return conv, True
 
 
@@ -1047,6 +1168,109 @@ class MenuRapidoSesion(ModeloBase):
         return f'{self.sesion_id} · {self.nombre}'
 
 
+class RespuestaRapidaSesion(ModeloBase):
+    """Mensaje de texto guardado y reutilizable por sesión.
+
+    El operador registra respuestas frecuentes (ej. "Saludo inicial",
+    "Datos de pago", "Horario de atención"). Mientras atiende una
+    conversación, abre el panel de respuestas rápidas en el composer,
+    elige una y su texto se carga en la caja de mensaje para editarlo
+    antes de enviar. No se envía automáticamente.
+    """
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='respuestas_rapidas', verbose_name='Sesión',
+    )
+    titulo = models.CharField('Título', max_length=80,
+                              help_text='Nombre corto para identificar la respuesta (ej. Saludo inicial).')
+    cuerpo = models.TextField('Mensaje', default='',
+                              help_text='Texto que se cargará en la caja de mensaje para editar y enviar.')
+
+    class Meta:
+        verbose_name = 'Respuesta rápida de sesión'
+        verbose_name_plural = 'Respuestas rápidas de sesión'
+        ordering = ['titulo']
+
+    def __str__(self):
+        return f'{self.sesion_id} · {self.titulo}'
+
+
+class RespuestaRapidaGlobal(ModeloBase):
+    """Respuesta rápida reutilizable en TODAS las sesiones, invocable por /atajo.
+
+    A diferencia de `RespuestaRapidaSesion` (atada a una sesión), estas viven
+    a nivel plataforma. El operador escribe `/atajo ` en la caja de mensaje y
+    el texto se expande para editarlo antes de enviar. No se envía solo.
+    """
+    atajo = models.CharField(
+        'Atajo', max_length=40,
+        help_text="Se invoca escribiendo /atajo en el chat (sin la barra). Ej: saludo, pago, horario."
+    )
+    titulo = models.CharField('Título', max_length=80,
+                              help_text='Nombre corto para identificar la respuesta.')
+    cuerpo = models.TextField('Mensaje', default='',
+                              help_text='Texto que reemplaza al /atajo en la caja de mensaje.')
+
+    class Meta:
+        verbose_name = 'Respuesta rápida global'
+        verbose_name_plural = 'Respuestas rápidas globales'
+        ordering = ['atajo']
+
+    def __str__(self):
+        return f'/{self.atajo} — {self.titulo}'
+
+
+class CampoPersonalizadoContacto(ModeloBase):
+    """Definición de un campo personalizado para contactos (a nivel plataforma).
+
+    Permite extender la ficha del contacto sin tocar el modelo. Cada definición
+    genera un input en el formulario de contacto; el valor por contacto vive en
+    `ValorCampoContacto`.
+    """
+    TIPOS = (
+        ('texto', 'Texto'),
+        ('numero', 'Número'),
+        ('fecha', 'Fecha'),
+        ('booleano', 'Sí / No'),
+        ('opciones', 'Lista de opciones'),
+    )
+    nombre = models.CharField('Nombre / etiqueta', max_length=80)
+    clave = models.SlugField('Clave interna', max_length=60, unique=True,
+                             help_text='Identificador sin espacios (ej. cumpleanos, nivel_membresia).')
+    tipo = models.CharField('Tipo', max_length=12, choices=TIPOS, default='texto')
+    opciones = models.JSONField('Opciones', default=list, blank=True,
+                                help_text='Solo para tipo "Lista de opciones": ["A","B","C"].')
+    orden = models.PositiveSmallIntegerField('Orden', default=0)
+
+    class Meta:
+        verbose_name = 'Campo personalizado de contacto'
+        verbose_name_plural = 'Campos personalizados de contacto'
+        ordering = ['orden', 'nombre']
+
+    def __str__(self):
+        return f'{self.nombre} ({self.tipo})'
+
+
+class ValorCampoContacto(ModeloBase):
+    """Valor de un campo personalizado para un contacto concreto."""
+    campo = models.ForeignKey(
+        CampoPersonalizadoContacto, on_delete=models.CASCADE,
+        related_name='valores', verbose_name='Campo',
+    )
+    contacto = models.ForeignKey(
+        Contacto, on_delete=models.CASCADE,
+        related_name='valores_personalizados', verbose_name='Contacto',
+    )
+    valor = models.TextField('Valor', blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Valor de campo personalizado'
+        verbose_name_plural = 'Valores de campos personalizados'
+
+    def __str__(self):
+        return f'{self.contacto_id} · {self.campo_id} = {self.valor[:30]}'
+
+
 class MensajeWhatsAppProgramado(ModeloBase):
     contacto = models.ForeignKey(Contacto, on_delete=models.CASCADE, related_name='mensajes_programados')
     fecha = models.DateField(verbose_name='Fecha de envío programado', blank=True, null=True)
@@ -1110,6 +1334,7 @@ ETAPAS_TRAZA = (
     # Eventos del chatbot tradicional (motor de flujo)
     ('chatbot_ruteo',   '[Chatbot] Ruteo a departamento'),
     ('chatbot_http',    '[Chatbot] Llamada HTTP del flujo'),
+    ('chatbot_funcion', '[Chatbot] Función del flujo'),
     ('chatbot_nodo',    '[Chatbot] Transición de nodo'),
     ('chatbot_error',   '[Chatbot] Error en el flujo'),
 )
@@ -1352,12 +1577,49 @@ class ConfigMeta(ModeloBase):
                   '(modo previo a Tech Provider). False si pasó por el popup OAuth.'
     )
 
+    # Marketing API (anuncios Click-to-WhatsApp)
+    ad_account_id = models.CharField(
+        'Cuenta publicitaria (act_XXXX)', max_length=64, blank=True, default='',
+        help_text='ID de la cuenta de anuncios de Meta (formato act_XXXXXXXX). '
+                  'Necesario para traer nombres de campaña/anuncio y gasto vía Marketing API.'
+    )
+    ads_access_token = EncryptedTextField(
+        'Token de anuncios (opcional)', blank=True, default='',
+        help_text='Token con scope ads_read. Si se deja vacío se usa access_token '
+                  '(siempre que ese token tenga permiso de anuncios).'
+    )
+    ads_ultima_sincronizacion = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         verbose_name = 'Configuracion Meta'
         verbose_name_plural = 'Configuraciones Meta'
 
     def __str__(self):
         return f"Meta · WABA {self.waba_id} · {self.display_phone_number or self.phone_number_id}"
+
+
+class AnuncioMetaCache(ModeloBase):
+    """Caché de nombres de anuncio/campaña resueltos vía Marketing API.
+
+    Evita pegarle a la Graph API en cada apertura de conversación o cada carga
+    de Analytics: una vez resuelto un `ad_id`, guardamos sus nombres legibles y
+    los reusamos hasta que se vuelvan a refrescar.
+    """
+    ad_id = models.CharField('Ad ID', max_length=100, unique=True, db_index=True)
+    ad_name = models.CharField('Nombre del anuncio', max_length=300, blank=True, default='')
+    adset_id = models.CharField('Adset ID', max_length=100, blank=True, default='')
+    adset_name = models.CharField('Nombre del adset', max_length=300, blank=True, default='')
+    campaign_id = models.CharField('Campaign ID', max_length=100, blank=True, default='', db_index=True)
+    campaign_name = models.CharField('Nombre de la campaña', max_length=300, blank=True, default='')
+    effective_status = models.CharField('Estado del anuncio', max_length=40, blank=True, default='')
+    ultima_sync = models.DateTimeField('Última sincronización', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Caché de anuncio Meta'
+        verbose_name_plural = 'Caché de anuncios Meta'
+
+    def __str__(self):
+        return f'{self.ad_id} · {self.campaign_name or self.ad_name or "—"}'
 
 
 CATEGORIAS_PLANTILLA = (
@@ -2235,6 +2497,10 @@ class WebhookSaliente(ModeloBase):
     fallos_consecutivos = models.PositiveIntegerField('Fallos consecutivos', default=0)
     ultimo_error = models.TextField(blank=True, default='')
     ultima_entrega = models.DateTimeField(null=True, blank=True)
+    proximo_intento = models.DateTimeField(
+        'Próximo intento permitido', null=True, blank=True,
+        help_text='Backoff exponencial: hasta esta fecha no se reintenta tras fallos consecutivos.'
+    )
 
     class Meta:
         verbose_name = 'Webhook saliente'
@@ -2264,9 +2530,16 @@ class EntregaWebhookSaliente(models.Model):
         ordering = ['-fecha']
 
 
+ROLES_SESION = (
+    ('asesor', 'Agente'),
+    ('supervisor', 'Supervisor'),
+)
+
+
 class PerfilSesionWhatsApp(ModeloBase):
     sesion = models.ForeignKey(SesionWhatsApp, on_delete=models.CASCADE, null=True, blank=True, verbose_name='Sesión WhatsApp')
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, verbose_name='Usuario')
+    rol = models.CharField(max_length=20, choices=ROLES_SESION, default='asesor', verbose_name='Role')
 
     class Meta:
         verbose_name = 'Perfil Sesión WhatsApp'

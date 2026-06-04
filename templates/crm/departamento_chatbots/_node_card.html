@@ -4,6 +4,7 @@
      data-padre="{{ op.opcion_padre_id|default_if_none:'' }}"
      data-nivel="{{ nivel }}"
      data-tipo="{{ op.tipo_nodo }}"
+     data-funcion="{% if op.tipo_nodo == 'funcion' %}{{ op.config.funcion_codigo|default:'' }}{% endif %}"
      style="margin-left: {{ nivel|add:nivel|add:nivel }}0px;">
     <div class="dp-node-row">
 

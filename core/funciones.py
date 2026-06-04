@@ -724,11 +724,39 @@ def decrypt_sesion_id(token, default=None):
         return default
 
 
-def leer_sesion_id(request, default=None):
-    """Lee el id de sesión desde request.GET, probando 'sesion' y 'sesion_id'.
-    Soporta valor cifrado (nuevo) o crudo (legacy, durante rollout)."""
+WA_SESION_ACTIVA_KEY = 'wa_sesion_id'
+
+
+def leer_sesion_id(request, default=None, persistir=True):
+    """Resuelve el id de sesión activa para la request.
+
+    Prioridad:
+      1. Querystring 'sesion'/'sesion_id' (deep-link). Acepta token cifrado o
+         id crudo. Si viene, además fija la sesión global en request.session.
+      2. Selección global del usuario en request.session[WA_SESION_ACTIVA_KEY].
+         Valor 0/None significa "Todas las sesiones" → se devuelve default.
+    """
     raw = request.GET.get('sesion') or request.GET.get('sesion_id') or ''
-    return decrypt_sesion_id(raw, default=default)
+    sid = decrypt_sesion_id(raw, default=None)
+    if sid is not None:
+        if persistir and hasattr(request, 'session'):
+            request.session[WA_SESION_ACTIVA_KEY] = sid
+        return sid
+    if hasattr(request, 'session'):
+        gsid = request.session.get(WA_SESION_ACTIVA_KEY)
+        if gsid:
+            return gsid
+    return default
+
+
+def set_wa_sesion_activa(request, sid):
+    """Fija la sesión global del usuario. sid entero válido, o 0 para 'Todas'."""
+    try:
+        sid = int(sid or 0)
+    except (TypeError, ValueError):
+        sid = 0
+    request.session[WA_SESION_ACTIVA_KEY] = sid
+    return sid
 
 
 def postFormJson(request, nombre_post_aud, Forms=(), link_listado='', varurl=""):
@@ -971,6 +999,31 @@ def logCron(proceso, detalle, exito=False):
             detalle=detalle,
             conexito=exito
         )
+        # Aviso por correo solo ante fallo (y solo cuando es un log nuevo, así la
+        # deduplicación de 3h evita spam). No agrega crons: es event-driven.
+        if not exito:
+            _notificar_fallo_cron(proceso, detalle)
+
+
+def _notificar_fallo_cron(proceso, detalle):
+    """Manda un correo a los responsables cuando un proceso/cron falla.
+    Best-effort: si el correo falla, no rompe el logueo del cron."""
+    try:
+        from django.conf import settings
+        from django.core.mail import send_mail
+        destinatarios = getattr(settings, 'CHATBOT_ERROR_NOTIFY_EMAILS', []) or []
+        if not destinatarios:
+            return
+        asunto = f'[fastchat] Falló el proceso: {proceso}'
+        cuerpo = (
+            f'El proceso "{proceso}" reportó un fallo.\n\n'
+            f'Detalle:\n{detalle}\n\n'
+            f'Fecha: {timezone.now():%Y-%m-%d %H:%M}\n\n'
+            f'Aviso automático. Se deduplica: máximo 1 correo cada 3h por el mismo error.'
+        )
+        send_mail(asunto, cuerpo, settings.DEFAULT_FROM_EMAIL, destinatarios, fail_silently=True)
+    except Exception:
+        pass
 
 
 def notificacion(titulo, cuerpo, destinatario, url, prioridad, tipo=1, request=None):

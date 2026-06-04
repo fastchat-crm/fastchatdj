@@ -13,12 +13,44 @@ from core.custom_models import FormError
 from core.funciones import addData, paginador, secure_module, log, remover_caracteres_especiales_unicode, generar_nombre, leer_sesion_id, encrypt_sesion_id
 from core.funciones_adicionales import convertir_archivo_a_base64
 from core.funciones_excel_panda import export_query_to_excel
+from core.validadores import validate_file_size_3mb
 from seguridad.templatetags.templatefunctions import encrypt
 from .forms import ContactoForm, MensajeWhatsAppProgramadoForm, AddContactoForm
-from .models import Contacto, SesionWhatsApp, MensajeWhatsAppProgramado
+from .models import Contacto, SesionWhatsApp, MensajeWhatsAppProgramado, EtiquetaContacto
 from django.contrib import messages
 
 from .services import get_whatsapp_service
+
+
+def _campos_para_contacto(contacto):
+    """Lista [{def, valor}] de campos personalizados definidos, con el valor
+    del contacto (o '' si no tiene)."""
+    from .models import CampoPersonalizadoContacto, ValorCampoContacto
+    defs = CampoPersonalizadoContacto.objects.filter(status=True).order_by('orden', 'nombre')
+    valores = {}
+    if contacto and contacto.pk:
+        valores = {
+            v.campo_id: v.valor
+            for v in ValorCampoContacto.objects.filter(contacto=contacto, status=True)
+        }
+    return [{'def': d, 'valor': valores.get(d.id, '')} for d in defs]
+
+
+def _guardar_campos_personalizados(request, contacto):
+    """Persiste los valores de campos personalizados enviados como
+    `campo_pers_<id>` en el POST."""
+    from .models import CampoPersonalizadoContacto, ValorCampoContacto
+    for d in CampoPersonalizadoContacto.objects.filter(status=True):
+        key = f'campo_pers_{d.id}'
+        if key not in request.POST:
+            continue
+        valor = (request.POST.get(key) or '').strip()
+        vc = ValorCampoContacto.objects.filter(campo=d, contacto=contacto, status=True).first()
+        if vc:
+            vc.valor = valor
+            vc.save()
+        elif valor:
+            ValorCampoContacto.objects.create(campo=d, contacto=contacto, valor=valor)
 
 
 @login_required
@@ -55,11 +87,99 @@ def contactoView(request):
                             imagen_base64 = convertir_archivo_a_base64(file)
                             form.instance.contacto_foto = imagen_base64
                         form.save()
+                        _guardar_campos_personalizados(request, form.instance)
                         log(f"Registro un contacto {form.instance.__str__()}", request, "add", obj=form.instance.id)
                         messages.success(request, f"Contacto {form.instance.contacto_nombre} registrado correctamente")
                         res_json.append({'error': False, "reload": True})
                     else:
                         raise FormError(form)
+
+                elif action == 'importar':
+                    import pandas as pd
+                    sesion = SesionWhatsApp.objects.filter(
+                        pk=request.POST.get('sesion'), status=True, usuario=request.user,
+                    ).first()
+                    if not sesion:
+                        raise ValueError("Select a valid session.")
+                    archivo = request.FILES.get('archivo')
+                    if not archivo:
+                        raise ValueError("No file provided.")
+                    ext = (archivo.name or '').rsplit('.', 1)[-1].lower() if '.' in (archivo.name or '') else ''
+                    if ext not in ('xlsx', 'xls', 'csv'):
+                        raise ValueError("Allowed file types: xlsx, xls, csv.")
+                    validate_file_size_3mb(archivo)
+                    df = pd.read_csv(archivo, dtype=str) if ext == 'csv' else pd.read_excel(archivo, dtype=str)
+                    df.columns = [str(c).strip().lower() for c in df.columns]
+                    if 'numero' not in df.columns:
+                        raise ValueError("Missing required column: numero.")
+
+                    etiqueta_default = (request.POST.get('etiqueta') or '').strip()
+                    cache_etiquetas = {}
+
+                    def _get_etiqueta(nombre_tag):
+                        nombre_tag = (nombre_tag or '').strip()
+                        if not nombre_tag:
+                            return None
+                        clave = nombre_tag.lower()
+                        if clave in cache_etiquetas:
+                            return cache_etiquetas[clave]
+                        et = EtiquetaContacto.objects.filter(
+                            usuario_creacion=request.user, nombre__iexact=nombre_tag,
+                        ).first()
+                        if not et:
+                            et = EtiquetaContacto(nombre=nombre_tag)
+                            et.save(request)
+                        cache_etiquetas[clave] = et
+                        return et
+
+                    def _val(v):
+                        return '' if (v is None or str(v).strip().lower() == 'nan') else str(v).strip()
+
+                    creados = omitidos = fallidos = 0
+                    errores = []
+                    for idx, row in df.iterrows():
+                        fila = int(idx) + 2
+                        try:
+                            with transaction.atomic():
+                                numero = ''.join(c for c in str(row.get('numero') or '') if c.isdigit())
+                                if not (9 <= len(numero) <= 12):
+                                    fallidos += 1
+                                    errores.append({'fila': fila, 'motivo': 'Invalid phone number.'})
+                                    continue
+                                if Contacto.objects.filter(sesion=sesion, contacto_numero=numero).exists():
+                                    omitidos += 1
+                                    continue
+                                contacto = Contacto(
+                                    sesion=sesion,
+                                    contacto_numero=numero,
+                                    from_number=f'{numero}@s.whatsapp.net',
+                                    numero_telefono=numero,
+                                    contacto_nombre=_val(row.get('nombre')),
+                                    canal='whatsapp',
+                                    estado='activo',
+                                )
+                                contacto.save(request)
+                                tags = []
+                                if etiqueta_default:
+                                    tags.append(etiqueta_default)
+                                tags += [t for t in _val(row.get('etiquetas')).split(',') if t.strip()]
+                                for t in tags:
+                                    et = _get_etiqueta(t)
+                                    if et:
+                                        contacto.etiquetas.add(et)
+                                creados += 1
+                        except Exception as ex:
+                            fallidos += 1
+                            errores.append({'fila': fila, 'motivo': str(ex)})
+                    log(f"Importó contactos a sesión {sesion.id}: {creados} creados, {omitidos} omitidos, {fallidos} fallidos",
+                        request, "add", obj=sesion.id)
+                    return JsonResponse({
+                        'error': False,
+                        'creados': creados,
+                        'omitidos': omitidos,
+                        'fallidos': fallidos,
+                        'errores': errores[:50],
+                    })
 
                 elif action == 'change':
                     filtro = model.objects.get(pk=int(encrypt(request.POST['pk'])))
@@ -72,6 +192,7 @@ def contactoView(request):
                             imagen_base64 = convertir_archivo_a_base64(file)
                             form.instance.contacto_foto = imagen_base64
                         form.save()
+                        _guardar_campos_personalizados(request, form.instance)
                         log(f"Edito un contacto  {form.instance.__str__()}", request, "change", obj=form.instance.id)
                         res_json.append({'error': False, "reload": True})
                     else:
@@ -197,6 +318,7 @@ def contactoView(request):
                     data["form"] = form = AddContactoForm()
                     form.fields['sesion'].queryset = SesionWhatsApp.objects.filter(status=True, usuario=request.user).distinct()
                     form.fields['numero_telefono'].initial = '593'
+                    data["campos_personalizados"] = _campos_para_contacto(None)
                     template = get_template("whatsapp/contacto/form.html")
                     return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:
@@ -209,6 +331,7 @@ def contactoView(request):
                     data["filtro"] = filtro
                     data["pk"] = pk
                     data["form"] = Formulario(instance=filtro)
+                    data["campos_personalizados"] = _campos_para_contacto(filtro)
                     template = get_template("whatsapp/contacto/form.html")
                     return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:
@@ -277,8 +400,6 @@ def contactoView(request):
         solo_duplicados = request.GET.get('solo_duplicados', '')
         mis_sesiones = SesionWhatsApp.objects.filter(status=True, usuario=request.user).distinct()
         sesion_id = leer_sesion_id(request)
-        if not sesion_id and mis_sesiones.exists():
-            sesion_id = mis_sesiones.first().id
         sesion_id = str(sesion_id) if sesion_id else ''
 
         # Números que aparecen en más de una sesión ACTIVA del usuario.
@@ -347,7 +468,7 @@ def contactoView(request):
         data["dup_sesiones_json"] = json.dumps(dup_sesiones, ensure_ascii=False)
         data["list_count"] = listado.count()
         data["url_vars"] = url_vars
-        paginador(request, listado.order_by('contacto_nombre'), 20, data, url_vars)
+        paginador(request, listado.order_by('contacto_nombre'), 21, data, url_vars)
         if 'export_to_excel' in request.GET:
             query = listado.values(
                 'contacto_nombre',

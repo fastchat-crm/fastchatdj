@@ -1,0 +1,262 @@
+{% load templatefunctions %}
+<div class="pc-wrap">
+
+    <p class="pc-sub muted">
+        <b>{{ sesion.nombre|default:sesion.numero }}</b> · WABA {{ cfg.waba_id }} · {{ cfg.display_phone_number|default:cfg.phone_number_id }}
+    </p>
+
+    <div class="pc-intro">
+        <i class="fa fa-circle-info"></i>
+        <div>
+            <b>Ya enlazaste el número, pero todavía falta configurar Meta para producción.</b>
+            Esta guía te lleva paso a paso por las hojas de <b>Meta Business Suite</b> y
+            <b>Meta for Developers</b> que tenés que tocar. Los enlaces ya van con tu
+            <code>Business ID</code> y tu WABA cargados.
+        </div>
+    </div>
+
+    {% if numero_conectado %}
+    <div class="pc-critico pc-critico-ok">
+        <div class="pc-critico-icon"><i class="fa fa-circle-check"></i></div>
+        <div class="pc-critico-body">
+            <h6>Número registrado en Cloud API (CONNECTED)</h6>
+            <p>El número ya está registrado y operativo: envía y recibe mensajes. No necesitás
+                registrarlo de nuevo. Si querés revisar el estado en detalle, abrí el
+                <b>Diagnóstico</b> de la sesión.</p>
+        </div>
+    </div>
+    {% else %}
+    <div class="pc-critico">
+        <div class="pc-critico-icon"><i class="fa fa-triangle-exclamation"></i></div>
+        <div class="pc-critico-body">
+            <h6>Paso crítico — Registrar el número en Cloud API</h6>
+            <p>Si los envíos fallan con <code>(#133010) Account not registered</code>, el número está
+                en estado <b>PENDING</b> y falta registrarlo con el PIN de 6 dígitos. Hacelo con un click
+                desde el <b>Diagnóstico</b> de la sesión (botón "Registrar número"). Sin este paso no se
+                envían ni reciben mensajes.</p>
+            <a href="/whatsapp/sesiones/{{ sesion.id }}/diagnostico/" class="pc-open-btn">
+                <i class="fa fa-stethoscope"></i> Ir al Diagnóstico para registrar
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <ol class="pc-steps">
+
+        <li class="pc-step {% if cfg.webhook_verificado_en %}is-done{% endif %}">
+            <div class="pc-step-num">1</div>
+            <div class="pc-step-body">
+                <div class="pc-step-head">
+                    <h6>Webhook (Callback URL + Verify Token)</h6>
+                    {% if cfg.webhook_verificado_en %}
+                        <span class="pc-badge pc-badge-ok"><i class="fa fa-circle-check"></i> Verificado</span>
+                    {% else %}
+                        <span class="pc-badge pc-badge-warn"><i class="fa fa-clock"></i> Pendiente</span>
+                    {% endif %}
+                </div>
+                <p class="pc-where"><b>Hoja:</b> Meta for Developers → tu App → <i>WhatsApp → Configuration</i> → bloque <i>Webhook</i>.</p>
+                <div class="pc-copy-row">
+                    <label>Callback URL</label>
+                    <input type="text" id="pc-wh-url" value="{{ webhook_url }}" readonly>
+                    <button type="button" class="webhook-copy-btn" data-pc-copy="pc-wh-url"><i class="fa fa-copy"></i></button>
+                </div>
+                <div class="pc-copy-row">
+                    <label>Verify Token</label>
+                    <input type="password" id="pc-wh-token" value="{{ cfg.webhook_verify_token }}" readonly>
+                    <button type="button" class="webhook-copy-btn" id="pc-wh-token-eye" title="Mostrar/ocultar"><i class="fa fa-eye"></i></button>
+                    <button type="button" class="webhook-copy-btn" data-pc-copy="pc-wh-token"><i class="fa fa-copy"></i></button>
+                </div>
+                <p class="pc-checklist-title">Una vez pegado, marcá los campos:</p>
+                <ul class="pc-fields">
+                    <li><code>messages</code></li>
+                    <li><code>message_template_status_update</code></li>
+                    <li><code>account_review_update</code></li>
+                    <li><code>phone_number_quality_update</code></li>
+                </ul>
+                {% if app_id %}
+                    <a href="https://developers.facebook.com/apps/{{ app_id }}/whatsapp-business/wa-settings/" target="_blank" rel="noopener" class="pc-open-btn">
+                        <i class="fa fa-up-right-from-square"></i> Abrir Webhook en Meta
+                    </a>
+                {% endif %}
+                <p class="pc-where mt-2"><i class="fa fa-bolt"></i> <b>Atajo:</b> el
+                    <a href="/whatsapp/sesiones/{{ sesion.id }}/diagnostico/">Diagnóstico</a> tiene un botón
+                    "Configurar webhook en Meta" que hace este paso con un click (no hace falta tocar el panel).</p>
+            </div>
+        </li>
+
+        <li class="pc-step {% if cfg.verified_name %}is-done{% endif %}">
+            <div class="pc-step-num">2</div>
+            <div class="pc-step-body">
+                <div class="pc-step-head">
+                    <h6>Display Name (nombre visible del negocio)</h6>
+                    {% if cfg.verified_name %}
+                        <span class="pc-badge pc-badge-ok"><i class="fa fa-circle-check"></i> {{ cfg.verified_name }}</span>
+                    {% else %}
+                        <span class="pc-badge pc-badge-warn"><i class="fa fa-clock"></i> Sin aprobar</span>
+                    {% endif %}
+                </div>
+                <p class="pc-where"><b>Hoja:</b> WhatsApp Manager → <i>Phone Numbers</i> → click en el número → tab <i>Settings → WhatsApp Business Profile → Profile name</i>.</p>
+                <p>Pedí la aprobación del nombre visible que verán tus clientes en el chat. Meta lo revisa manualmente (~24–48h). Tiene que coincidir con el negocio real / razón social.</p>
+                <div class="pc-warn">
+                    <i class="fa fa-triangle-exclamation"></i>
+                    Si el primer envío sale como <i>"+593 99 999 9999"</i> en vez del nombre del negocio, es porque este paso falta.
+                </div>
+                <a href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers/?{% if bid %}business_id={{ bid }}&{% endif %}asset_id={{ cfg.waba_id }}&nav_ref=whatsapp_manager&tab=phone-numbers&phone_number_id={{ cfg.phone_number_id }}" target="_blank" rel="noopener" class="pc-open-btn">
+                    <i class="fa fa-up-right-from-square"></i> Abrir número en WhatsApp Manager
+                </a>
+            </div>
+        </li>
+
+        <li class="pc-step">
+            <div class="pc-step-num">3</div>
+            <div class="pc-step-body">
+                <div class="pc-step-head">
+                    <h6>Perfil del número (about, web, email, dirección)</h6>
+                    <span class="pc-badge pc-badge-info"><i class="fa fa-pen"></i> Manual</span>
+                </div>
+                <p class="pc-where"><b>Hoja:</b> WhatsApp Manager → <i>Phone Numbers</i> → click en el número → tab <i>Profile</i>.</p>
+                <p>Completá la ficha pública del número — lo que ve el cliente al tocar el avatar del chat:</p>
+                <ul class="pc-fields pc-fields-2col">
+                    <li><b>About</b> — frase corta (~139 chars)</li>
+                    <li><b>Description</b> — descripción larga del negocio</li>
+                    <li><b>Address</b> — dirección física</li>
+                    <li><b>Email</b> — contacto del negocio</li>
+                    <li><b>Websites</b> — hasta 2 URLs</li>
+                    <li><b>Vertical</b> — rubro (retail, educación, etc.)</li>
+                </ul>
+                <a href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers/?{% if bid %}business_id={{ bid }}&{% endif %}asset_id={{ cfg.waba_id }}&nav_ref=whatsapp_manager&tab=phone-numbers&phone_number_id={{ cfg.phone_number_id }}" target="_blank" rel="noopener" class="pc-open-btn">
+                    <i class="fa fa-up-right-from-square"></i> Abrir Profile del número
+                </a>
+            </div>
+        </li>
+
+        <li class="pc-step {% if cfg.business_verification_status == 'VERIFIED' %}is-done{% endif %}">
+            <div class="pc-step-num">4</div>
+            <div class="pc-step-body">
+                <div class="pc-step-head">
+                    <h6>Business Verification (verificación del negocio)</h6>
+                    {% if cfg.business_verification_status == 'VERIFIED' %}
+                        <span class="pc-badge pc-badge-ok"><i class="fa fa-circle-check"></i> Verificado</span>
+                    {% elif cfg.business_verification_status %}
+                        <span class="pc-badge pc-badge-warn"><i class="fa fa-clock"></i> {{ cfg.business_verification_status }}</span>
+                    {% else %}
+                        <span class="pc-badge pc-badge-warn"><i class="fa fa-clock"></i> Sin verificar</span>
+                    {% endif %}
+                </div>
+                <p class="pc-where"><b>Hoja:</b> Business Settings → <i>Security Center → Business Verification → Start Verification</i>.</p>
+                <p>Subí RUC / documentos legales del negocio. Sin esto, Meta te deja en el tier mínimo (<b>250 conversaciones / 24h</b>) y no podés activar plantillas marketing en algunos países.</p>
+                <a href="https://business.facebook.com/settings/security{% if bid %}?business_id={{ bid }}{% endif %}" target="_blank" rel="noopener" class="pc-open-btn">
+                    <i class="fa fa-up-right-from-square"></i> Abrir Security Center
+                </a>
+            </div>
+        </li>
+
+        <li class="pc-step {% if n_plantillas_aprobadas %}is-done{% endif %}">
+            <div class="pc-step-num">5</div>
+            <div class="pc-step-body">
+                <div class="pc-step-head">
+                    <h6>Plantillas (Message Templates)</h6>
+                    {% if n_plantillas_aprobadas %}
+                        <span class="pc-badge pc-badge-ok"><i class="fa fa-circle-check"></i> {{ n_plantillas_aprobadas }} aprobada(s)</span>
+                    {% else %}
+                        <span class="pc-badge pc-badge-warn"><i class="fa fa-clock"></i> Ninguna aprobada</span>
+                    {% endif %}
+                </div>
+                <p class="pc-where"><b>Hoja:</b> WhatsApp Manager → <i>Message Templates → Create Template</i>. También desde el CRM en <a href="/whatsapp/plantillas/?sesion={{ sesion.id|encrypt_id }}">Plantillas WhatsApp</a>.</p>
+                <p>Fuera de la ventana de <b>24h</b> Meta solo deja enviar plantillas aprobadas. Creá al menos una de <b>Utility</b> (notificación / confirmación) para arrancar.</p>
+                <a href="https://business.facebook.com/latest/whatsapp_manager/message_templates?{% if bid %}business_id={{ bid }}&{% endif %}asset_id={{ cfg.waba_id }}" target="_blank" rel="noopener" class="pc-open-btn">
+                    <i class="fa fa-up-right-from-square"></i> Abrir Message Templates en Meta
+                </a>
+            </div>
+        </li>
+
+        <li class="pc-step">
+            <div class="pc-step-num">6</div>
+            <div class="pc-step-body">
+                <div class="pc-step-head">
+                    <h6>Two-step verification (PIN de 6 dígitos)</h6>
+                    <span class="pc-badge pc-badge-info"><i class="fa fa-lock"></i> Recomendado</span>
+                </div>
+                <p class="pc-where"><b>Hoja:</b> WhatsApp Manager → <i>Phone Numbers</i> → click en el número → tab <i>Settings → Two-step verification</i>.</p>
+                <p>Definí un PIN de 6 dígitos para el número. Sin esto, cualquiera con acceso al SIM podría reclamar el número y desconectarlo del CRM. Guardalo en el password manager — Meta lo pide cada vez que se registra el número.</p>
+                <a href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers/?{% if bid %}business_id={{ bid }}&{% endif %}asset_id={{ cfg.waba_id }}&nav_ref=whatsapp_manager&tab=phone-numbers&phone_number_id={{ cfg.phone_number_id }}" target="_blank" rel="noopener" class="pc-open-btn">
+                    <i class="fa fa-up-right-from-square"></i> Abrir Settings del número
+                </a>
+            </div>
+        </li>
+
+        <li class="pc-step">
+            <div class="pc-step-num">7</div>
+            <div class="pc-step-body">
+                <div class="pc-step-head">
+                    <h6>App Mode: Live (no Development)</h6>
+                    <span class="pc-badge pc-badge-warn"><i class="fa fa-toggle-off"></i> Revisar</span>
+                </div>
+                <p class="pc-where"><b>Hoja:</b> Meta for Developers → tu App → barra superior, switch <b>App Mode</b> de <i>Development</i> → <i>Live</i>.</p>
+                <p>En modo <i>Development</i>, Meta solo entrega mensajes desde números agregados como <i>testers</i> y la app no aparece como pública. Cambialo a <b>Live</b> antes de pasar a producción. Requiere haber completado <i>App Review</i> si pediste permisos avanzados.</p>
+                {% if app_id %}
+                    <a href="https://developers.facebook.com/apps/{{ app_id }}/settings/basic/" target="_blank" rel="noopener" class="pc-open-btn">
+                        <i class="fa fa-up-right-from-square"></i> Abrir Settings de la App
+                    </a>
+                {% endif %}
+            </div>
+        </li>
+
+    </ol>
+
+    <div class="pc-tip">
+        <i class="fa fa-lightbulb"></i>
+        Cuando termines, volvé al kebab del card y abrí <b>Resumen y pasos siguientes</b> para ver el % de configuración completa.
+    </div>
+
+</div>
+
+<script>
+    (function () {
+        var root = document.querySelector('#modalDetalle .pc-wrap');
+        if (!root) return;
+
+        function flash(btn) {
+            if (!btn) return;
+            var icon = btn.querySelector('i');
+            var orig = icon ? icon.className : '';
+            if (icon) icon.className = 'fa fa-check';
+            btn.classList.add('is-copied');
+            setTimeout(function () {
+                if (icon) icon.className = orig || 'fa fa-copy';
+                btn.classList.remove('is-copied');
+            }, 1400);
+        }
+
+        function copy(text, btn) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function () { flash(btn); });
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); flash(btn); } catch (e) {}
+                document.body.removeChild(ta);
+            }
+        }
+
+        root.querySelectorAll('[data-pc-copy]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var el = root.querySelector('#' + btn.getAttribute('data-pc-copy'));
+                if (!el) return;
+                copy(el.value !== undefined ? el.value : el.textContent, btn);
+            });
+        });
+
+        var eye = root.querySelector('#pc-wh-token-eye');
+        var tok = root.querySelector('#pc-wh-token');
+        if (eye && tok) {
+            eye.addEventListener('click', function () {
+                tok.type = tok.type === 'password' ? 'text' : 'password';
+            });
+        }
+    })();
+</script>

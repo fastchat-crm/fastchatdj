@@ -29,6 +29,7 @@
 Deep-dive technical references for specific modules live under `.ai/docs/`. **Always read the relevant doc before touching the corresponding module** — they capture views, templates, JS, WebSocket flows, and business rules that aren't obvious from the code alone.
 
 - `.ai/docs/conversaciones.md` — `whatsapp/conversaciones/` and `whatsapp/conversaciones-finalizadas/`: views, helpers, GET/POST actions, listing filters, partials, JS patterns, WebSocket consumers (`ChatConsumer`, `SessionRoomConsumer`), webhook → broadcast flow, 6h reactivation window, Meta template flow, and rules for adding actions/filters/panels/message types.
+- `.ai/docs/asignacion_asesores.md` — single source of truth for **who attends** a conversation (the WhatsApp session via `PerfilSesionWhatsApp`, not departments), the assignment chain (`candidatos_ordenados`), workload + availability selection, flow notifications, and the traditional chatbot motor (`motor_flujo_chatbot.py`): accent-insensitive matching, re-show on invalid input, timeout→handoff, anti-rewind. Read before touching asesor assignment or the flow engine.
 
 ## Server & Background Jobs
 
@@ -105,7 +106,9 @@ Always check the current version in the template before incrementing.
 
 ## Language & Copy
 
-All visible text in views and templates must be in **English**: `titulo`, alert messages, button labels, column headers, log messages, `messages.success/error`, and exception strings. Backend variable names may remain in Spanish (`criterio`, `filtro`, `listado`) for consistency with the existing codebase.
+Todo texto visible para el usuario en views y templates debe estar en **español**: `titulo`, mensajes de alertas y SweetAlert, labels de botones, encabezados de columnas, mensajes de log, `messages.success/error`, strings de excepciones, copys de ayuda, badges, tooltips y `JsonResponse({'message': ...})`. Los nombres de variables backend se mantienen en español (`criterio`, `filtro`, `listado`, `usuarios`) — siempre fue la convención. Términos técnicos universales (push, URL, endpoint, service worker, API, Meta, WhatsApp) no se traducen.
+
+Detalles y ejemplos en `.ai/docs/lenguaje.md`.
 
 ## Soft Delete
 

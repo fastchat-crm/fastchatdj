@@ -1,20 +1,33 @@
 const jstreeGrupoUrls = $('#jstree-grupos-urls');
 const formArbolUrl = $('#formArbolUrl');
 
+function readJstreeData(elId) {
+    var raw = $('#' + elId).attr('data-jstree');
+    if (!raw) return {};
+    try {
+        return JSON.parse(raw);
+    } catch (e) {
+        return {};
+    }
+}
+
+function writeJstreeData(elId, obj) {
+    $('#' + elId).attr('data-jstree', JSON.stringify(obj));
+}
+
 jstreeGrupoUrls.jstree({
     "core": {
         "themes": {
             "responsive": false
         },
         "check_callback": function (operation, node, node_parent, node_position, more) {
-            // operation can be 'create_node', 'rename_node', 'delete_node', 'move_node', 'copy_node' or 'edit'
-            // in case of 'rename_node' node_position is filled with the new node name
-            // console.log(more)
-            // return node_parent.parent==='#'
-            if (operation === 'move_node') {
-                return node_parent.parent === '#' && node.children.length === 0 && !node.data.jstree.is_parent;
+            if (operation === 'move_node' || operation === 'copy_node') {
+                if (!node || !node_parent) return false;
+                if (node.parent === '#') return false;
+                if (!node_parent.parent || node_parent.parent !== '#') return false;
+                return true;
             }
-            return false;
+            return true;
         },
     },
     "types": {
@@ -25,7 +38,16 @@ jstreeGrupoUrls.jstree({
             "icon": "fa fa-file text-inverse fa-lg"
         }
     },
-    "plugins": ["wholerow", "noclose", "dnd", "types"]
+    "dnd": {
+        "copy": false,
+        "is_draggable": function (nodes) {
+            for (var i = 0; i < nodes.length; i++) {
+                if (!nodes[i].parent || nodes[i].parent === '#') return false;
+            }
+            return true;
+        }
+    },
+    "plugins": ["wholerow", "dnd", "types"]
 });
 
 jstreeGrupoUrls.bind("move_node.jstree", function (e, data) {
@@ -34,32 +56,33 @@ jstreeGrupoUrls.bind("move_node.jstree", function (e, data) {
     }
     var grupos = $(this).children('ul').children('li').toArray();
     for (var i = 0; i < grupos.length; i++) {
-        var padre = jstreeGrupoUrls.jstree(true).get_node($(grupos[i]).attr('id'));
-        var grupo_pk = padre.state.grupo_pk;
-        if (padre.children.length > 0 && padre.state.is_parent) {
-            var hijos = padre.children;
-            for (var j = 0; j < hijos.length; j++) {
-                var hijo = jstreeGrupoUrls.jstree(true).get_node(hijos[j]);
-                var hijoState = JSON.parse($(`#${hijos[j]}`).attr("data-jstree"));
-                hijoState.pk_destino = grupo_pk;
-                hijoState.orden = j;
-                $(`#${hijos[j]}`).attr("data-jstree", JSON.stringify(hijoState));
-                var datosMod = JSON.parse($(`#${hijo.state.input_id}`).val());
-                datosMod.orden = j;
-                datosMod.pk_destino = grupo_pk;
-                $(`#${hijo.state.input_id}`).val(JSON.stringify(datosMod));
+        var grupoEl = grupos[i];
+        var grupoId = $(grupoEl).attr('id');
+        var padreData = readJstreeData(grupoId);
+        var grupo_pk = padreData.grupo_pk;
+        if (!grupo_pk) continue;
+        var padre = jstreeGrupoUrls.jstree(true).get_node(grupoId);
+        if (padre.children.length === 0 || !padreData.is_parent) continue;
+        var hijos = padre.children;
+        for (var j = 0; j < hijos.length; j++) {
+            var hijoId = hijos[j];
+            var hijoState = readJstreeData(hijoId);
+            hijoState.pk_destino = grupo_pk;
+            hijoState.orden = j;
+            writeJstreeData(hijoId, hijoState);
+            var inputId = hijoState.input_id;
+            if (!inputId) continue;
+            var $inp = $('#' + inputId);
+            if (!$inp.length) continue;
+            var datosMod;
+            try {
+                datosMod = JSON.parse($inp.val());
+            } catch (e) {
+                continue;
             }
+            datosMod.orden = j;
+            datosMod.pk_destino = grupo_pk;
+            $inp.val(JSON.stringify(datosMod));
         }
     }
-    // var children = data.node.children;
-    // var parent = this.get_node(data.parent);
-    // if (children.length === 0) {
-    //     var inp = jstreeModulosUrls.jstree(true).get_node(data.parent).children;
-    //     for (var i = 0; i < inp.length; i++) {
-    //         var mod = jstreeModulosUrls.jstree(true).get_node(inp[i]);
-    //         var datosMod = JSON.parse($(`#${mod.state.input_id}`).val());
-    //         datosMod.orden = i;
-    //         $(`#${mod.state.input_id}`).val(JSON.stringify(datosMod));
-    //     }
-    // }
 });

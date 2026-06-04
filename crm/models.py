@@ -1178,9 +1178,6 @@ class DepartamentoChatBot(ModeloBase):
 
         return construir(hijos_por_padre.get(None, []))
 
-    def obtener_perfiles(self):
-        return self.perfildepartamentochatbot_set.filter(status=True).order_by('usuario__first_name')
-
     def nodo_inicio(self):
         return self.opciondepartamentochatbot_set.filter(es_inicio=True, status=True).first() \
             or self.opciondepartamentochatbot_set.filter(opcion_padre__isnull=True, status=True).order_by('orden').first()
@@ -1505,18 +1502,6 @@ class EstadoFlujoChatbot(ModeloBase):
         self.intentos = 0
         self.finalizado = False
         self.en_handoff = False
-
-
-class PerfilDepartamentoChatBot(ModeloBase):
-    departamento = models.ForeignKey(DepartamentoChatBot, on_delete=models.SET_NULL, null=True, blank=True)
-    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE)
-
-    class Meta:
-        verbose_name = 'Perfil Negocio ChatBot'
-        verbose_name_plural = 'Perfiles Negocios ChatBot'
-
-    def __str__(self):
-        return f"{self.usuario.get_full_name()} - {self.departamento.nombre if self.departamento else 'Sin departamento'}"
 
 
 # ---------------------------------------------------------------------------
@@ -1919,6 +1904,7 @@ class Cliente(ModeloBase):
     apellidos = models.CharField('Apellidos', max_length=150, blank=True, default='')
     email = models.EmailField('Email', blank=True, default='')
     telefono = models.CharField('Teléfono', max_length=30, blank=True, default='')
+    ciudad = models.CharField('Ciudad', max_length=120, blank=True, default='')
     edad = models.PositiveSmallIntegerField('Edad', null=True, blank=True)
     fecha_nacimiento = models.DateField('Fecha de nacimiento', null=True, blank=True)
     sexo = models.CharField('Sexo', max_length=1, choices=CLIENTE_SEXO_CHOICES, blank=True, default='')
@@ -1966,3 +1952,80 @@ class Cliente(ModeloBase):
     def __str__(self):
         full = f'{self.nombres} {self.apellidos}'.strip()
         return f'{self.cedula} · {full}' if full else self.cedula
+
+    @property
+    def edad_actual(self):
+        """Edad calculada en vivo a partir de la fecha de nacimiento. Si no hay
+        fecha, cae al valor `edad` capturado. Es el valor que se muestra en
+        listados/fichas (no envejece estancado)."""
+        from datetime import date as _date
+        if self.fecha_nacimiento:
+            hoy = _date.today()
+            fn = self.fecha_nacimiento
+            return hoy.year - fn.year - ((hoy.month, hoy.day) < (fn.month, fn.day))
+        return self.edad
+
+    def save(self, *args, **kwargs):
+        """Deriva `fecha_nacimiento` desde `edad` cuando solo viaja la edad
+        (caso típico del chatbot/alta manual: pedimos edad, no fecha). Así la
+        edad mostrada queda siempre calculada desde una fecha real."""
+        from datetime import date as _date, timedelta as _timedelta
+        if not self.fecha_nacimiento and self.edad is not None and int(self.edad) >= 0:
+            hoy = _date.today()
+            try:
+                self.fecha_nacimiento = hoy.replace(year=hoy.year - int(self.edad))
+            except ValueError:
+                self.fecha_nacimiento = hoy - _timedelta(days=int(self.edad) * 365)
+            uf = kwargs.get('update_fields')
+            if uf is not None and 'fecha_nacimiento' not in uf:
+                kwargs['update_fields'] = list(uf) + ['fecha_nacimiento']
+        super().save(*args, **kwargs)
+
+
+class ClienteOrigen(ModeloBase):
+    """Cada CONVERSACIÓN distinta desde la que se registró/atendió a un Cliente.
+
+    Un mismo cliente (cédula) puede originarse de varias conversaciones (4-5),
+    posiblemente desde distintos números/sesiones. Guardamos 1 fila por
+    (cliente, conversación) — así se ven TODAS las conversaciones de origen, cada
+    una con su número/sesión. Si la misma conversación vuelve a registrarlo, se
+    incrementa `veces`.
+    """
+    cliente = models.ForeignKey(
+        Cliente, on_delete=models.CASCADE, related_name='origenes',
+        verbose_name='Cliente',
+    )
+    numero = models.CharField('Número de origen', max_length=50, blank=True, default='')
+    contacto = models.ForeignKey(
+        'whatsapp.Contacto', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+', verbose_name='Contacto',
+    )
+    conversacion = models.ForeignKey(
+        'whatsapp.ConversacionWhatsApp', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+', verbose_name='Conversación',
+    )
+    sesion = models.ForeignKey(
+        'whatsapp.SesionWhatsApp', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+', verbose_name='Sesión',
+    )
+    departamento = models.ForeignKey(
+        'crm.DepartamentoChatBot', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+', verbose_name='Departamento',
+    )
+    canal = models.CharField('Canal', max_length=30, blank=True, default='chatbot')
+    veces = models.PositiveIntegerField('Veces que escribió', default=1)
+    fecha_ultima = models.DateTimeField('Última vez', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Origen de cliente'
+        verbose_name_plural = 'Orígenes de cliente'
+        ordering = ['-fecha_ultima']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cliente', 'conversacion'],
+                name='uniq_cliente_origen_conv',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.cliente_id} · {self.numero or "?"}'

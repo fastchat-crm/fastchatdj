@@ -2,8 +2,10 @@
 {% load templatefunctions %}
 {% block head %}
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
-<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.5">
+<link rel="stylesheet" href="/static/stylenew/conversaciones.css?v2.1">
 <link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
+<link rel="stylesheet" href="/static/css/whatsapp/ficha_cliente.css?v1.2">
+<link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.3">
 {% endblock %}
 
 {% block content %}
@@ -69,6 +71,9 @@
                 <a href="/whatsapp/conversaciones-finalizadas/" class="cs-tab-btn cs-tab-link bloqueo_pantalla" id="resolved_chats_tab">
                     <i class="fa fa-check-circle me-1"></i>Finalizadas
                 </a>
+                <a href="/whatsapp/conversaciones-pendiente-reconexion/" class="cs-tab-btn cs-tab-link bloqueo_pantalla" id="pending_reconnection_tab">
+                    <i class="fa fa-hourglass-half me-1"></i>Pendientes
+                </a>
             </div>
 
             <div class="cs-filter-bar" id="filtros-rapidos">
@@ -127,6 +132,13 @@
                 </div>
             </div>
             <div class="cm-header-right">
+                    <div class="cm-header-info">
+                        <div class="d-none" id="meta-countdown-header">
+                            <span class="meta-countdown badge bg-warning text-dark" id="meta-countdown-badge"
+                                  title="Tiempo restante en la ventana de 24 horas de Meta">
+                                <i class="fa fa-clock me-1"></i><span class="meta-countdown-val">—</span>
+                            </span>
+                        </div>
                         <!-- Atribución (referral CTWA / IG ad) -->
                         <div class="d-none" id="referral-container">
                             <a id="referral-badge"
@@ -149,12 +161,24 @@
                                 <span class="text-muted" style="font-size:.65rem;" id="tokens-detalle"></span>
                             </span>
                         </div>
+                        <!-- Classification inline selector -->
+                        <div class="d-none" id="clasificacion-inline-container">
+                            <select id="clasificacion-inline-select"
+                                    class="form-select form-select-sm clasificacion-inline-select"
+                                    title="Change classification">
+                                {% for val, label in ESTADOS_CLASIFICACION %}
+                                    <option value="{{ val }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                         <!-- Asignado a -->
                         <div class="d-none" id="asignado-container">
                             <span class="badge bg-light text-dark border" id="asignado-badge" title="Asignado a">
                                 <i class="fa fa-user-circle me-1"></i><span id="asignado-nombre">—</span>
                             </span>
                         </div>
+                    </div>
+                    <div class="cm-header-acciones">
                         <!-- Toggle bot -->
                         <div class="d-none" id="bot-toggle-container">
                             <button class="btn btn-sm" id="btn-toggle-bot" title="Activar/pausar el bot (chatbot tradicional o agente IA) en esta conversación"
@@ -168,11 +192,24 @@
                                 <i class="fa fa-check-circle"></i> Terminar
                             </a>
                         </div>
-                        <div class="dropdown d-inline d-none" id="dropdowns-btn">
-                            <a href="javascript:void(0)" class="btn btn-sm btn-default" data-bs-toggle="dropdown" data-bs-strategy="fixed">
+                        <div class="d-inline d-none" id="dropdowns-btn">
+                            <a href="javascript:void(0)" class="btn btn-sm btn-default"
+                               role="button" data-bs-toggle="offcanvas" data-bs-target="#convAccionesOffcanvas"
+                               aria-controls="convAccionesOffcanvas" title="Acciones de la conversación">
                                 <i class="fa fa-ellipsis-v"></i>
                             </a>
-                            <div class="dropdown-menu dropdown-menu-end">
+                        </div>
+                        <div class="offcanvas offcanvas-end cs-acciones-offcanvas" tabindex="-1"
+                             id="convAccionesOffcanvas" aria-labelledby="convAccionesOffcanvasLabel"
+                             data-bs-scroll="true">
+                            <div class="offcanvas-header">
+                                <h5 class="offcanvas-title" id="convAccionesOffcanvasLabel">
+                                    <i class="fa fa-ellipsis-v me-2 text-muted"></i> Acciones de la conversación
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+                            </div>
+                            <div class="offcanvas-body">
+                                <div class="cs-oc-section">Datos del contacto</div>
                                 <a href="javascript:void(0)" class="dropdown-item form_modal" id="cambiar-nombre-contacto" title="Cambiar nombre de contacto">
                                     <i class="fa fa-user-edit me-2"></i> Cambiar nombre de contacto
                                 </a>
@@ -188,7 +225,14 @@
                                 <a class="dropdown-item" href="javascript:void(0)" id="ver-historial-cliente" title="Ver conversaciones pasadas del cliente">
                                     <i class="fa fa-history me-2 text-secondary"></i> Historial del cliente
                                 </a>
-                                <div class="dropdown-divider"></div>
+                                <a class="dropdown-item form_modal" href="javascript:void(0)" id="ficha_cliente" title="Ficha del cliente">
+                                    <i class="fa fa-id-card me-2 text-primary"></i> Ficha del cliente
+                                </a>
+                                <a class="dropdown-item" href="javascript:void(0)" id="ver-logs-conversacion" title="Ver logs / trazas de esta conversación">
+                                    <i class="fa fa-clipboard-list me-2 text-secondary"></i> Logs de esta conversación
+                                </a>
+
+                                <div class="cs-oc-section">Paneles</div>
                                 <a class="dropdown-item" href="javascript:void(0)"
                                    onclick="toggleEstadisticasPanel()">
                                     <i class="fa fa-chart-line me-2 text-primary"></i> Estadísticas
@@ -202,24 +246,44 @@
                                     <i class="fa fa-lock me-2 text-warning" id="icon-bloquear-cierre"></i>
                                     <span id="label-bloquear-cierre">Bloquear cierre automático</span>
                                 </a>
+
+                                <div class="cs-oc-section">Estado de atención</div>
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="setEstadoAtencion('pendiente')" title="Marcar como pendiente">
+                                    <i class="fa fa-hourglass-half me-2 text-warning"></i> Marcar pendiente
+                                </a>
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="setEstadoAtencion('resuelta')" title="Marcar como resuelta">
+                                    <i class="fa fa-circle-check me-2 text-success"></i> Marcar resuelta
+                                </a>
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="posponerConversacion(60)" title="Posponer 1 hora">
+                                    <i class="fa fa-clock me-2 text-secondary"></i> Posponer 1h
+                                </a>
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="posponerConversacion(240)" title="Posponer 4 horas">
+                                    <i class="fa fa-clock me-2 text-secondary"></i> Posponer 4h
+                                </a>
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="reabrirConversacion()" title="Reabrir (quitar pospuesta/estado)">
+                                    <i class="fa fa-rotate-left me-2 text-primary"></i> Reabrir
+                                </a>
                                 <a class="dropdown-item d-none" href="javascript:void(0)" id="btn-reiniciar-flujo"
                                    onclick="reiniciarFlujoChatbot()"
                                    title="Reiniciar el flujo del chatbot tradicional desde el nodo de inicio">
                                     <i class="fa fa-redo me-2 text-primary"></i> Reiniciar flujo del chatbot
                                 </a>
+
                                 {% if request.user.is_superuser %}
-                                    <div class="dropdown-divider"></div>
+                                    <div class="cs-oc-section">Avanzado</div>
                                     <a class="dropdown-item" href="javascript:void(0)" id="ver-webhook-conv"
                                        onclick="abrirWebhookConv()" title="Endpoint para inyectar mensajes desde un proceso externo">
-                                        <i class="fa fa-plug me-2 text-success"></i> Ver webhook API <span class="badge bg-success ms-1" style="font-size:.62rem;">SUPERUSER</span>
+                                        <i class="fa fa-plug me-2 text-success"></i> Ver webhook API <span class="badge bg-success ms-1 cs-oc-badge">SUPERUSER</span>
                                     </a>
                                 {% endif %}
-                                <div class="dropdown-divider"></div>
+
+                                <div class="cs-oc-section cs-oc-section-danger">Finalizar</div>
                                 <a class="dropdown-item" href="javascript:void(0)" id="terminar-sin-despedida" title="Terminar sin despedida">
                                     <i class="fa fa-times me-2 text-danger"></i> Terminar sin despedida
                                 </a>
                             </div>
                         </div>
+                    </div>
             </div>
         </div>
 
@@ -320,6 +384,8 @@
                 <input type="hidden" name="action" value="send">
                 <input type="hidden" name="pk" id="conversacion-id" value="">
 
+                <div id="wa-offline-banner" class="wa-offline-banner d-none"></div>
+
                 <div id="footer-file-preview" class="d-none mb-2 d-flex align-items-center gap-2"
                      style="font-size:.82rem;background:#e9f5ff;border-radius:8px;padding:6px 10px;">
                     <i class="fa fa-file-alt text-primary" id="footer-file-icon"></i>
@@ -335,17 +401,21 @@
                         <div id="emoji-picker-popup"></div>
                     </div>
 
+                    <button type="button" id="respuestas-btn" title="Respuestas rápidas guardadas">
+                        <i class="fa fa-clipboard-list"></i>
+                        <span class="badge-count" id="respuestas-badge" style="display:none;">0</span>
+                    </button>
+
                     <label for="archivo" class="cm-attach-label" title="Adjuntar archivo">
                         <i class="fa fa-paperclip"></i>
                     </label>
                     <input type="file" id="archivo" name="archivo" style="display:none;"
                            accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar">
 
-                    <div style="position:relative;flex-shrink:0;">
-                        <button type="button" id="plantillas-btn" title="Enviar plantilla Meta pre-aprobada">
-                            <i class="fa fa-layer-group"></i>
-                            <span class="badge-count" id="plantillas-badge" style="display:none;">0</span>
-                        </button>
+                    <button type="button" id="plantillas-btn" title="Enviar plantilla Meta pre-aprobada">
+                        <i class="fa fa-layer-group"></i>
+                        <span class="badge-count" id="plantillas-badge" style="display:none;">0</span>
+                    </button>
                                 <div id="plantillas-panel">
                                     <div class="pp-header">
                                         <span><i class="fa fa-layer-group me-1"></i>Plantillas aprobadas</span>
@@ -376,10 +446,9 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
                     <input type="text" class="form-control border-0 cm-text-input" name="mensaje" id="footer-mensaje-input"
-                           placeholder="Escribe un mensaje...">
+                           placeholder="Escribe un mensaje...  (usa /atajo para respuestas rápidas)">
 
                     <button type="submit" id="footer-send-btn" class="cm-send-btn">
                         <i class="fa fa-paper-plane"></i>
@@ -387,6 +456,8 @@
                 </div>
             </form>
         </div>
+
+        {{ atajos_globales|json_script:"atajos-globales-data" }}
 
         <div id="offline-overlay" class="offline-overlay d-none">
             <div class="offline-overlay-card">
@@ -399,6 +470,51 @@
     </main>
 
 </div>
+
+    <div class="modal fade" id="modalRespuestasRapidas" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title"><i class="fa fa-clipboard-list text-success me-2"></i>Respuestas rápidas</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="rp-vista-lista">
+                        <div class="d-flex gap-2 mb-2">
+                            <input type="search" id="respuestas-search" class="form-control form-control-sm flex-grow-1" placeholder="Buscar respuesta...">
+                            <button type="button" id="rp-nueva-btn" class="btn btn-sm btn-success flex-shrink-0">
+                                <i class="fa fa-plus me-1"></i>Nueva
+                            </button>
+                        </div>
+                        <div class="rp-list" id="respuestas-list">
+                            <div class="rp-empty">Cargando...</div>
+                        </div>
+                    </div>
+                    <div id="rp-vista-form" class="d-none">
+                        <input type="hidden" id="rp-edit-id" value="">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Título</label>
+                            <input type="text" id="rp-edit-titulo" class="form-control form-control-sm" maxlength="80" placeholder="Ej: Saludo inicial">
+                        </div>
+                        <div class="mb-2">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <label class="form-label small mb-0">Mensaje</label>
+                                <button type="button" id="rp-emoji-btn" class="btn btn-sm btn-light py-0" title="Insertar emoji">😊</button>
+                            </div>
+                            <textarea id="rp-edit-cuerpo" class="form-control form-control-sm" rows="4" maxlength="4096" placeholder="Texto que se cargará en la caja de mensaje."></textarea>
+                            <div id="rp-emoji-popup" class="rp-emoji-inline d-none"></div>
+                        </div>
+                        <div class="d-flex justify-content-end gap-2">
+                            <button type="button" id="rp-cancelar-btn" class="btn btn-sm btn-light">Cancelar</button>
+                            <button type="button" id="rp-guardar-btn" class="btn btn-sm btn-success">
+                                <i class="fa fa-save me-1"></i>Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="modal fade" id="modalDetalle" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -818,6 +934,57 @@
         }
     }
 
+    const _CLASIF_COLOR_PREFIX = 'badge-';
+    const _BADGE_PALETTE = ['badge-secondary', 'badge-info', 'badge-warning', 'badge-primary', 'badge-success', 'badge-danger'];
+    $(document).on('change', '#clasificacion-inline-select', function() {
+        const $sel = $(this);
+        const convId = $('#clasificacion-inline-container').data('conv-id');
+        if (!convId) return;
+        const prevVal = $sel.data('prev-val');
+        const newVal = $sel.val();
+        $sel.prop('disabled', true);
+        $.ajax({
+            url: '',
+            type: 'POST',
+            data: {
+                action: 'cambiar-clasificacion',
+                pk: convId,
+                clasificacion: newVal,
+                inline: '1',
+                csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()
+            },
+            dataType: 'json'
+        }).done(function(arr) {
+            $sel.prop('disabled', false);
+            const r = Array.isArray(arr) ? arr[0] : arr;
+            if (!r || r.error) {
+                if (typeof prevVal !== 'undefined') $sel.val(prevVal);
+                mensajeWarning((r && r.message) || 'Could not update classification.');
+                return;
+            }
+            $sel.data('prev-val', newVal);
+            const $card = $(`#lista-conversaciones .conversacion-item[data-id="${convId}"]`);
+            if ($card.length) {
+                const $badge = $card.find('.ci-badges .ci-badge.badge').filter(function() {
+                    for (const c of _BADGE_PALETTE) if ($(this).hasClass(c)) return true;
+                    return false;
+                }).first();
+                if ($badge.length) {
+                    _BADGE_PALETTE.forEach(c => $badge.removeClass(c));
+                    $badge.addClass(_CLASIF_COLOR_PREFIX + r.clasificacion_color)
+                          .text(r.clasificacion_label);
+                }
+            }
+        }).fail(function() {
+            $sel.prop('disabled', false);
+            if (typeof prevVal !== 'undefined') $sel.val(prevVal);
+            mensajeWarning('Server error updating classification.');
+        });
+    });
+    $(document).on('focus', '#clasificacion-inline-select', function() {
+        $(this).data('prev-val', $(this).val());
+    });
+
     let _bloquearCierreActual = false;
     function toggleBloquearCierre() {
         const id = $('#conversacion-id').val();
@@ -837,6 +1004,30 @@
         const modalEl = document.getElementById('modalReiniciarFlujo');
         if (!modalEl) return;
         bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+
+    function setEstadoAtencion(estado) {
+        const id = $('#conversacion-id').val();
+        if (!id) return;
+        $.post('', { action: 'cambiar_estado_atencion', pk: id, estado: estado, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
+            .done(function (r) { if (r.error) { alertaWarning(r.message || 'No se pudo cambiar el estado.'); } })
+            .fail(function () { alertaWarning('Error de red.'); });
+    }
+
+    function posponerConversacion(minutos) {
+        const id = $('#conversacion-id').val();
+        if (!id) return;
+        $.post('', { action: 'posponer_conversacion', pk: id, minutos: minutos, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
+            .done(function (r) { if (r.error) { alertaWarning(r.message || 'No se pudo posponer.'); } })
+            .fail(function () { alertaWarning('Error de red.'); });
+    }
+
+    function reabrirConversacion() {
+        const id = $('#conversacion-id').val();
+        if (!id) return;
+        $.post('', { action: 'reabrir_conversacion', pk: id, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
+            .done(function (r) { if (r.error) { alertaWarning(r.message || 'No se pudo reabrir.'); } })
+            .fail(function () { alertaWarning('Error de red.'); });
     }
 
     $(document).on('click', '#btn-confirmar-reiniciar-flujo', function() {
@@ -951,6 +1142,8 @@
                     if (data.from_me) {
                         setTimeout(refrescarEstadisticas, 1000);
                     }
+                } else if (data.type === 'presencia_agente') {
+                    mostrarPresenciaAgente(data);
                 }
             };
 
@@ -997,10 +1190,10 @@
                     } else {
                         cargarConversaciones($('#sesion-selector').val(), $('#search-conversacion').val(), filtroActivo);
                     }
-                    // Re-marcar la conv activa (replaceWith pierde la clase)
                     if (conversacionActiva) {
                         $(`.conversacion-item[data-id="${conversacionActiva}"]`).addClass('active');
                     }
+                    if (typeof window.tickMetaCountdowns === 'function') window.tickMetaCountdowns();
                     // Sonido + toast + notif nativa solo para entrantes del cliente
                     if (!data.from_me) {
                         notificarNuevoMensaje(data.contacto_nombre || 'Nuevo mensaje', {
@@ -1041,15 +1234,6 @@
                     document.body.classList.add('chat-mobile-open');
                 }
             }, 600);
-        {% else %}
-            (function () {
-                var saved = null;
-                try { saved = localStorage.getItem('wa_last_conv_active'); } catch (e) {}
-                if (!saved) return;
-                setTimeout(function () {
-                    if (typeof cargarMensajes === 'function') cargarMensajes(saved);
-                }, 600);
-            })();
         {% endif %}
 
         function scrollToBottom(smooth = false) {
@@ -1329,6 +1513,212 @@
         cargarMenusRapidos();
         $('#sesion-selector').on('change.menusrapidos', cargarMenusRapidos);
 
+        // ================ Respuestas rápidas (texto guardado) ================
+        // Se cargan por sesión y se insertan en la caja de mensaje para editar.
+        var _respuestasCache = [];
+
+        function cargarRespuestasRapidas() {
+            var sesionId = $('#sesion-selector').val();
+            if (!sesionId) { _respuestasCache = []; _actualizarBadgeRespuestas(); return Promise.resolve(); }
+            return _mrPostSesionAction('respuesta_rapida_listar', {sesion_id: sesionId}).then(function (r) {
+                _respuestasCache = (r && !r.error) ? (r.items || []) : [];
+                _actualizarBadgeRespuestas();
+                renderRespuestasRapidas($('#respuestas-search').val());
+                if (conversacionActiva) {
+                    $('#respuestas-btn').addClass('visible');
+                }
+            }).catch(function () { _respuestasCache = []; _actualizarBadgeRespuestas(); });
+        }
+
+        function _actualizarBadgeRespuestas() {
+            var badge = document.getElementById('respuestas-badge');
+            if (!badge) return;
+            if (_respuestasCache.length) {
+                badge.textContent = _respuestasCache.length;
+                badge.style.display = '';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        function renderRespuestasRapidas(filtro) {
+            var cont = document.getElementById('respuestas-list');
+            if (!cont) return;
+            var q = (filtro || '').trim().toLowerCase();
+            var items = _respuestasCache.filter(function (r) {
+                if (!q) return true;
+                return (r.titulo || '').toLowerCase().indexOf(q) !== -1 ||
+                       (r.cuerpo || '').toLowerCase().indexOf(q) !== -1;
+            });
+            if (!items.length) {
+                cont.innerHTML = '<div class="rp-empty">' +
+                    (_respuestasCache.length ? 'Sin coincidencias.'
+                        : 'No hay respuestas guardadas para esta sesión.<br><small class="text-muted">Creálas en Sesiones → ⋮ → Respuestas rápidas.</small>') +
+                    '</div>';
+                return;
+            }
+            cont.innerHTML = items.map(function (r) {
+                return '<div class="rp-item d-flex align-items-start gap-2" data-resp-id="' + r.id + '">' +
+                    '<div class="rp-item-main flex-grow-1" data-resp-id="' + r.id + '" title="Cargar en la caja de mensaje">' +
+                        '<div class="rp-item-titulo">' + escHtmlMr(r.titulo) + '</div>' +
+                        '<div class="rp-item-cuerpo">' + escHtmlMr(r.cuerpo) + '</div>' +
+                    '</div>' +
+                    '<div class="rp-item-acc flex-shrink-0 d-flex gap-1">' +
+                        '<button type="button" class="btn btn-sm btn-light rp-edit-item" data-id="' + r.id + '" title="Editar"><i class="fa fa-pen"></i></button>' +
+                        '<button type="button" class="btn btn-sm btn-light rp-del-item" data-id="' + r.id + '" title="Eliminar"><i class="fa fa-trash text-danger"></i></button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        }
+
+        var _modalRespuestas = null;
+
+        function _getModalRespuestas() {
+            if (!_modalRespuestas) {
+                var el = document.getElementById('modalRespuestasRapidas');
+                if (el) _modalRespuestas = bootstrap.Modal.getOrCreateInstance(el);
+            }
+            return _modalRespuestas;
+        }
+
+        function _rpMostrarLista() {
+            $('#rp-emoji-popup').addClass('d-none');
+            $('#rp-vista-form').addClass('d-none');
+            $('#rp-vista-lista').removeClass('d-none');
+        }
+
+        function _rpMostrarForm(resp) {
+            $('#rp-emoji-popup').addClass('d-none');
+            $('#rp-edit-id').val(resp ? resp.id : '');
+            $('#rp-edit-titulo').val(resp ? resp.titulo : '');
+            if (resp) {
+                $('#rp-edit-cuerpo').val(resp.cuerpo || '');
+            } else {
+                var inp = document.getElementById('footer-mensaje-input');
+                $('#rp-edit-cuerpo').val(inp ? (inp.value || '') : '');
+            }
+            $('#rp-vista-lista').addClass('d-none');
+            $('#rp-vista-form').removeClass('d-none');
+            setTimeout(function () { $('#rp-edit-titulo').focus(); }, 50);
+        }
+
+        function abrirModalRespuestas() {
+            var m = _getModalRespuestas();
+            if (!m) return;
+            $('#respuestas-search').val('');
+            _rpMostrarLista();
+            renderRespuestasRapidas('');
+            m.show();
+            setTimeout(function () { $('#respuestas-search').focus(); }, 250);
+        }
+
+        function cerrarModalRespuestas() {
+            var m = _getModalRespuestas();
+            if (m) m.hide();
+        }
+
+        $('#respuestas-btn').on('click', function (e) {
+            e.preventDefault();
+            abrirModalRespuestas();
+        });
+
+        $(document).on('input', '#respuestas-search', function () {
+            renderRespuestasRapidas($(this).val());
+        });
+
+        $(document).on('click', '#respuestas-list .rp-item-main', function () {
+            var id = $(this).data('resp-id');
+            var resp = (_respuestasCache || []).find(function (r) { return String(r.id) === String(id); });
+            if (!resp) return;
+            var input = document.getElementById('footer-mensaje-input');
+            if (input) {
+                input.value = resp.cuerpo || '';
+                input.focus();
+                input.dispatchEvent(new Event('input', {bubbles: true}));
+            }
+            cerrarModalRespuestas();
+        });
+
+        $('#rp-nueva-btn').on('click', function () { _rpMostrarForm(null); });
+        $('#rp-cancelar-btn').on('click', _rpMostrarLista);
+
+        var _rpEmojiBuilt = false;
+        function _rpBuildEmojiPicker() {
+            if (_rpEmojiBuilt) return;
+            var popup = document.getElementById('rp-emoji-popup');
+            if (!popup || typeof _emojis === 'undefined') return;
+            var html = '';
+            for (var cat in _emojis) {
+                if (!Object.prototype.hasOwnProperty.call(_emojis, cat)) continue;
+                html += '<div class="emoji-cat-title">' + cat + '</div><div class="emoji-grid">';
+                html += _emojis[cat].map(function (e) { return '<span class="e" data-e="' + e + '">' + e + '</span>'; }).join('');
+                html += '</div>';
+            }
+            popup.innerHTML = html;
+            _rpEmojiBuilt = true;
+        }
+
+        $('#rp-emoji-btn').on('click', function (e) {
+            e.stopPropagation();
+            _rpBuildEmojiPicker();
+            $('#rp-emoji-popup').toggleClass('d-none');
+        });
+
+        $(document).on('click', '#rp-emoji-popup .e', function () {
+            var emoji = this.getAttribute('data-e');
+            if (!emoji) return;
+            var ta = document.getElementById('rp-edit-cuerpo');
+            if (!ta) return;
+            var start = ta.selectionStart, end = ta.selectionEnd, val = ta.value;
+            ta.value = val.slice(0, start) + emoji + val.slice(end);
+            ta.selectionStart = ta.selectionEnd = start + emoji.length;
+            ta.focus();
+        });
+
+        $(document).on('click', '#respuestas-list .rp-edit-item', function (e) {
+            e.stopPropagation();
+            var id = $(this).data('id');
+            var resp = (_respuestasCache || []).find(function (r) { return String(r.id) === String(id); });
+            if (resp) _rpMostrarForm(resp);
+        });
+
+        $(document).on('click', '#respuestas-list .rp-del-item', function (e) {
+            e.stopPropagation();
+            var id = $(this).data('id');
+            var sesionId = $('#sesion-selector').val();
+            var doDelete = function () {
+                _mrPostSesionAction('respuesta_rapida_eliminar', {sesion_id: sesionId, id: id}).then(function (r) {
+                    if (r.error) { if (typeof toastr !== 'undefined') toastr.error(r.message || 'Error'); return; }
+                    cargarRespuestasRapidas();
+                });
+            };
+            if (window.Swal) {
+                Swal.fire({
+                    title: '¿Eliminar respuesta?', type: 'warning', showCancelButton: true,
+                    confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar', confirmButtonColor: '#d33',
+                }).then(function (res) { if (res.value) doDelete(); });
+            } else if (confirm('¿Eliminar respuesta?')) { doDelete(); }
+        });
+
+        $('#rp-guardar-btn').on('click', function () {
+            var sesionId = $('#sesion-selector').val();
+            if (!sesionId) { if (typeof toastr !== 'undefined') toastr.warning('Seleccioná una sesión.'); return; }
+            var titulo = $('#rp-edit-titulo').val().trim();
+            var cuerpo = $('#rp-edit-cuerpo').val().trim();
+            if (!titulo) { $('#rp-edit-titulo').focus(); if (typeof toastr !== 'undefined') toastr.warning('El título es obligatorio.'); return; }
+            if (!cuerpo) { $('#rp-edit-cuerpo').focus(); if (typeof toastr !== 'undefined') toastr.warning('El mensaje es obligatorio.'); return; }
+            _mrPostSesionAction('respuesta_rapida_guardar', {
+                sesion_id: sesionId, id: $('#rp-edit-id').val() || '', titulo: titulo, cuerpo: cuerpo,
+            }).then(function (r) {
+                if (r.error) { if (typeof toastr !== 'undefined') toastr.error(r.message || 'Error al guardar'); return; }
+                if (typeof toastr !== 'undefined') toastr.success(r.message || 'Guardado');
+                cargarRespuestasRapidas().then(_rpMostrarLista);
+            });
+        });
+
+        cargarRespuestasRapidas();
+        $('#sesion-selector').on('change.respuestasrapidas', cargarRespuestasRapidas);
+
         // Webhook API modal (solo superuser — el botón ya viene oculto si no lo es)
         window.copiarTexto = function(elId) {
             var el = document.getElementById(elId);
@@ -1400,12 +1790,12 @@
 
         // CTA de la alerta "sesión pausada": foco + scroll al combo + flash
         $(document).on('click', '#btn-cambiar-sesion-pausada', function() {
-            var $sel = $('#sesion-selector');
-            if (!$sel.length) return;
-            $('html, body').animate({ scrollTop: $sel.offset().top - 90 }, 250);
-            $sel.addClass('flash-attention').focus();
-            try { $sel[0].showPicker && $sel[0].showPicker(); } catch (e) {}
-            setTimeout(function() { $sel.removeClass('flash-attention'); }, 1600);
+            var sel = document.getElementById('wa-global-sesion');
+            if (!sel) return;
+            sel.classList.add('flash-attention');
+            sel.focus();
+            try { sel.showPicker && sel.showPicker(); } catch (e) {}
+            setTimeout(function() { sel.classList.remove('flash-attention'); }, 1600);
         });
 
         // Cambiar de sesión
@@ -1420,7 +1810,7 @@
             sessionWebSocket(sesionId, filtroActivo);
             $('#mensajes-container').html('<div class="text-center p-5"><i class="fa fa-comments fa-4x text-muted mb-3"></i><p>Selecciona una conversación para ver los mensajes</p></div>');
             $('#chat-footer').hide();
-            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container').addClass('d-none');
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #clasificacion-inline-container').addClass('d-none');
             $('#stats-panel, #control-respuestas-panel').addClass('d-none');
             $('#contacto-nombre').text('Selecciona una conversación');
             $('#conv-id-badge').hide();
@@ -1493,7 +1883,7 @@
             $('#conv-id-badge').hide();
             $('#conv-fecha-inicio').hide();
             $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
-            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container').addClass('d-none').hide();
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #clasificacion-inline-container').addClass('d-none').hide();
             $('#stats-panel, #control-respuestas-panel, #menus-rapidos-bar').addClass('d-none');
             $('#chat-footer').addClass('d-none').hide();
             if (typeof resetHistorialCliente === 'function') resetHistorialCliente();
@@ -1511,9 +1901,176 @@
               event: "sendPresenceUpdate"
             }));
             quitPresenceUpdate();
+            notificarAgenteEscribiendo();
+        });
+
+        let _presenciaTimer = null;
+        let _presenciaActiva = false;
+        function notificarAgenteEscribiendo() {
+            if (!chatSocket) return;
+            if (!_presenciaActiva) {
+                chatSocket.send(JSON.stringify({ event: 'agenteEscribiendo' }));
+                _presenciaActiva = true;
+            }
+            clearTimeout(_presenciaTimer);
+            _presenciaTimer = setTimeout(function () {
+                if (chatSocket) { chatSocket.send(JSON.stringify({ event: 'agenteDejoEscribir' })); }
+                _presenciaActiva = false;
+            }, 4000);
+        }
+
+        let _presenciaOcultarTimer = null;
+        function mostrarPresenciaAgente(data) {
+            let banner = document.getElementById('agente-presencia');
+            const cont = document.getElementById('mensajes-container');
+            if (!cont) return;
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'agente-presencia';
+                banner.className = 'alert alert-warning py-1 px-2 small mb-1 d-none';
+                cont.parentNode.insertBefore(banner, cont);
+            }
+            if (data.activo) {
+                banner.innerHTML = '<i class="fa fa-user-pen me-1"></i><strong>' +
+                    (data.nombre || 'Otro agente') + '</strong> está respondiendo…';
+                banner.classList.remove('d-none');
+                clearTimeout(_presenciaOcultarTimer);
+                _presenciaOcultarTimer = setTimeout(function () {
+                    banner.classList.add('d-none');
+                }, 8000);
+            } else {
+                banner.classList.add('d-none');
+            }
+        }
+
+        let _atajosGlobales = {};
+        (function cargarAtajosGlobales() {
+            try {
+                const el = document.getElementById('atajos-globales-data');
+                if (!el) return;
+                (JSON.parse(el.textContent || '[]') || []).forEach(function (a) {
+                    if (a && a.atajo) { _atajosGlobales[String(a.atajo).toLowerCase()] = a.cuerpo || ''; }
+                });
+            } catch (e) { /* sin atajos */ }
+        })();
+
+        $(document).on('keyup', '#footer-mensaje-input', function () {
+            const inp = this;
+            const m = (inp.value || '').match(/^\/(\w+)\s$/);
+            if (!m) return;
+            const cuerpo = _atajosGlobales[m[1].toLowerCase()];
+            if (cuerpo !== undefined) {
+                inp.value = cuerpo;
+                inp.focus();
+            }
         });
 
         // Enviar mensaje
+        const WA_OFFLINE_KEY = 'wa_offline_queue';
+        let _waFlushing = false;
+
+        function _waCsrf() {
+            return $('input[name="csrfmiddlewaretoken"]').first().val();
+        }
+        function _waEscape(s) {
+            return $('<div>').text(s == null ? '' : String(s)).html();
+        }
+        function _waLeerCola() {
+            try { return JSON.parse(localStorage.getItem(WA_OFFLINE_KEY) || '[]'); }
+            catch (e) { return []; }
+        }
+        function _waGuardarCola(cola) {
+            try { localStorage.setItem(WA_OFFLINE_KEY, JSON.stringify(cola)); } catch (e) {}
+            _waActualizarBanner();
+        }
+        function _waEncolar(convId, texto) {
+            const cola = _waLeerCola();
+            const item = {
+                qid: 'q' + Date.now() + Math.floor(Math.random() * 1000),
+                convId: String(convId),
+                texto: texto,
+                ts: Date.now()
+            };
+            cola.push(item);
+            _waGuardarCola(cola);
+            return item;
+        }
+        function _waBurbujaPendiente(item) {
+            return '<div class="msg-row msg-out d-flex flex-row-reverse align-items-end gap-2 mb-2 wa-pendiente" data-qid="' + item.qid + '">' +
+                '<div class="msg-col">' +
+                '<div class="msg-bubble msg-bubble-out">' +
+                '<p class="mb-0 wa-msg">' + _waEscape(item.texto) + '</p>' +
+                '<div class="msg-meta d-flex align-items-center justify-content-end gap-1">' +
+                '<span class="wa-pendiente-tag"><i class="fa fa-clock me-1"></i>En cola · se enviará al reconectar</span>' +
+                '</div></div></div></div>';
+        }
+        function _waRenderPendientes(convId) {
+            _waLeerCola()
+                .filter(function (it) { return it.convId === String(convId); })
+                .forEach(function (it) {
+                    if (!$('#mensajes-container [data-qid="' + it.qid + '"]').length) {
+                        $('#mensajes-container').append(_waBurbujaPendiente(it));
+                    }
+                });
+        }
+        function _waActualizarBanner() {
+            const $b = $('#wa-offline-banner');
+            if (!$b.length) { return; }
+            const n = _waLeerCola().length;
+            if (!navigator.onLine || n > 0) {
+                let txt = !navigator.onLine ? '<i class="fa fa-wifi-slash me-1"></i> Sin conexión.' : '<i class="fa fa-clock me-1"></i>';
+                if (n > 0) { txt += ' ' + n + ' mensaje' + (n === 1 ? '' : 's') + ' en cola.'; }
+                $b.html(txt).removeClass('d-none');
+            } else {
+                $b.addClass('d-none');
+            }
+        }
+        function _waFlush() {
+            if (_waFlushing || !navigator.onLine) { return; }
+            const cola = _waLeerCola();
+            if (!cola.length) { return; }
+            _waFlushing = true;
+            const item = cola[0];
+            const fd = new FormData();
+            fd.append('action', 'send');
+            fd.append('pk', item.convId);
+            fd.append('mensaje', item.texto);
+            fd.append('csrfmiddlewaretoken', _waCsrf());
+            $.ajax({
+                url: '/whatsapp/conversaciones/',
+                type: 'POST',
+                data: fd,
+                processData: false,
+                contentType: false,
+                success: function (response) {
+                    const rest = _waLeerCola().filter(function (it) { return it.qid !== item.qid; });
+                    _waGuardarCola(rest);
+                    const $burb = $('#mensajes-container [data-qid="' + item.qid + '"]');
+                    if (!response.error && response.mensaje_html) {
+                        if ($burb.length) {
+                            $burb.replaceWith(response.mensaje_html);
+                        } else if (String(conversacionActiva) === item.convId) {
+                            $('#mensajes-container').append(response.mensaje_html);
+                        }
+                        setTimeout(function () { scrollToBottom(); }, 200);
+                    } else {
+                        $burb.find('.wa-pendiente-tag')
+                            .html('<i class="fa fa-triangle-exclamation me-1"></i>No se pudo enviar');
+                    }
+                    _waFlushing = false;
+                    setTimeout(_waFlush, 300);
+                },
+                error: function () {
+                    _waFlushing = false;
+                }
+            });
+        }
+
+        window.addEventListener('online', function () { _waActualizarBanner(); _waFlush(); });
+        window.addEventListener('offline', function () { _waActualizarBanner(); });
+        _waActualizarBanner();
+        if (navigator.onLine) { _waFlush(); }
+
         $('#form-enviar-mensaje').submit(function(e) {
             e.preventDefault();
 
@@ -1522,6 +2079,24 @@
             const archivo = document.getElementById('archivo').files[0];
             if (!texto && !archivo) {
                 alertaWarning('Escribe un mensaje o adjunta un archivo.');
+                return;
+            }
+
+            if (!navigator.onLine) {
+                if (archivo) {
+                    alertaWarning('Sin conexión: solo se pueden encolar mensajes de texto. Quita el adjunto para enviarlo al reconectar.');
+                    return;
+                }
+                const convOff = $('#conversacion-id').val() || conversacionActiva;
+                if (!convOff) {
+                    alertaWarning('Abre una conversación primero.');
+                    return;
+                }
+                const itemOff = _waEncolar(convOff, texto);
+                $('#mensajes-container').append(_waBurbujaPendiente(itemOff));
+                form.find('input[name="mensaje"]').val('');
+                setTimeout(() => { scrollToBottom(); }, 100);
+                alertaWarning('Sin conexión. El mensaje quedó en cola y se enviará al reconectar.');
                 return;
             }
 
@@ -1550,6 +2125,10 @@
                         form.find('input[name="archivo"]').val('');
                         $('#footer-file-preview').addClass('d-none');
 
+                        if (response.fallido) {
+                            alertaWarning(response.message || 'El mensaje no se envió y quedó como fallido. Puedes reenviarlo.');
+                        }
+
                         // Scroll al final
                         setTimeout(() => {
                             scrollToBottom();
@@ -1565,6 +2144,17 @@
                 },
                 error: function(xhr, status, error) {
                     console.error('[enviarMensaje] ajax error', status, error, xhr.responseText);
+                    if ((xhr.status === 0 || status === 'error' || status === 'timeout') && !archivo) {
+                        const convOff = $('#conversacion-id').val() || conversacionActiva;
+                        if (convOff) {
+                            const itemOff = _waEncolar(convOff, texto);
+                            $('#mensajes-container').append(_waBurbujaPendiente(itemOff));
+                            form.find('input[name="mensaje"]').val('');
+                            setTimeout(() => { scrollToBottom(); }, 100);
+                            alertaWarning('No se pudo enviar (sin conexión). Quedó en cola para reenviar al reconectar.');
+                            return;
+                        }
+                    }
                     alertaWarning('Error al enviar mensaje: ' + error);
                 },
                 complete: function() {
@@ -1573,6 +2163,81 @@
                         .html('<i class="fa fa-paper-plane"></i>');
                 }
             });
+        });
+
+        $(document).on('click', '.btn-reenviar', function () {
+            const btn = $(this);
+            const msgId = btn.data('msg-id');
+            const original = btn.html();
+            btn.prop('disabled', true)
+                .html('<span class="spinner-border spinner-border-sm" role="status" style="width:11px;height:11px;border-width:2px;"></span>');
+            const fd = new FormData();
+            fd.append('action', 'reenviar_mensaje');
+            fd.append('id', msgId);
+            fd.append('csrfmiddlewaretoken', $('input[name="csrfmiddlewaretoken"]').first().val());
+            $.ajax({
+                url: '/whatsapp/conversaciones/',
+                type: 'POST',
+                data: fd,
+                processData: false,
+                contentType: false,
+                success: function (response) {
+                    if (!response.error && response.mensaje_html) {
+                        btn.closest('.msg-row').replaceWith(response.mensaje_html);
+                    } else {
+                        alertaWarning('No se pudo reenviar: ' + (response.message || 'error'));
+                        btn.prop('disabled', false).html(original);
+                        if (response.requiere_plantilla && $('#plantillas-btn').hasClass('visible')) {
+                            $('#plantillas-btn').trigger('click');
+                        }
+                    }
+                },
+                error: function () {
+                    alertaWarning('Error de red al reenviar.');
+                    btn.prop('disabled', false).html(original);
+                }
+            });
+        });
+
+        function _postAccionMensaje(extraData, btn, original) {
+            const fd = new FormData();
+            Object.keys(extraData).forEach(k => fd.append(k, extraData[k]));
+            fd.append('csrfmiddlewaretoken', $('input[name="csrfmiddlewaretoken"]').first().val());
+            $.ajax({
+                url: '/whatsapp/conversaciones/',
+                type: 'POST', data: fd, processData: false, contentType: false,
+                success: function (response) {
+                    if (!response.error && response.mensaje_html) {
+                        btn.closest('.msg-row').replaceWith(response.mensaje_html);
+                    } else {
+                        alertaWarning(response.message || 'No se pudo procesar.');
+                        if (btn) btn.prop('disabled', false).html(original);
+                    }
+                },
+                error: function () {
+                    alertaWarning('Error de red.');
+                    if (btn) btn.prop('disabled', false).html(original);
+                }
+            });
+        }
+
+        $(document).on('click', '.btn-editar-mensaje', function () {
+            const btn = $(this);
+            const actual = btn.data('texto') || '';
+            const nuevo = window.prompt('Editar mensaje (solo Baileys):', actual);
+            if (nuevo === null) return;
+            if (!nuevo.trim()) { alertaWarning('El texto no puede estar vacío.'); return; }
+            const original = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" style="width:11px;height:11px;border-width:2px;"></span>');
+            _postAccionMensaje({ action: 'editar_mensaje', id: btn.data('msg-id'), texto: nuevo }, btn, original);
+        });
+
+        $(document).on('click', '.btn-eliminar-mensaje', function () {
+            const btn = $(this);
+            if (!window.confirm('¿Eliminar este mensaje para todos? (solo Baileys)')) return;
+            const original = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" style="width:11px;height:11px;border-width:2px;"></span>');
+            _postAccionMensaje({ action: 'eliminar_mensaje', id: btn.data('msg-id') }, btn, original);
         });
 
         function actualizarMensaje(mensajeId, accion, nuevoContenido) {
@@ -1680,16 +2345,15 @@
                 success: function(response) {
                     $('#lista-conversaciones').html(response.html);
 
-                    // Si hay una conversación activa, marcarla
                     if (conversacionActiva) {
                         const $reactivated = $(`.conversacion-item[data-id="${conversacionActiva}"]`).addClass('active');
                         $reactivated[0]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
                     }
 
-                    // Si no hay conversaciones, mostrar mensaje
                     if ($('#lista-conversaciones .conversacion-item').length === 0) {
                         $('#lista-conversaciones').html('<div class="p-3 text-center"><p class="text-muted">No hay conversaciones disponibles</p></div>');
                     }
+                    if (typeof window.tickMetaCountdowns === 'function') window.tickMetaCountdowns();
                 },
                 error: function(xhr, status, error) {
                     $('#lista-conversaciones').html('<div class="p-3 text-center"><p class="text-danger">Error al cargar conversaciones: ' + error + '</p></div>');
@@ -1703,6 +2367,7 @@
                             '#asignar-conversacion',
                             '#terminar-sin-despedida',
                             '#marcar-resuelto',
+                            '#ficha_cliente',
                             ]
 
         function cargarMensajes(conversacionId) {
@@ -1714,8 +2379,10 @@
             if (chatSocket) { chatSocket.close(); chatSocket = null; }
 
             // Ocultar controles + empty state mientras carga
-            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #chat-footer').addClass('d-none').hide();
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #chat-footer, #clasificacion-inline-container').addClass('d-none').hide();
             $('#stats-panel, #control-respuestas-panel').addClass('d-none');
+            $('#respuestas-btn').removeClass('visible');
+            cerrarModalRespuestas();
             $('#cm-empty-state').hide();
             $('#mensajes-container')
                 .addClass('is-loading')
@@ -1750,10 +2417,8 @@
 
                     if (response.estado_active) {
                         $('#resolver-btn').removeClass('d-none').show();
-                        try { localStorage.setItem('wa_last_conv_active', String(conversacionId)); } catch (e) {}
                     } else {
                         $('#resolver-btn').addClass('d-none').hide();
-                        try { localStorage.removeItem('wa_last_conv_active'); } catch (e) {}
                     }
                     $('#dropdowns-btn').removeClass('d-none').show();
 
@@ -1781,6 +2446,15 @@
                         $('#asignado-container').addClass('d-none').hide();
                     }
 
+                    if (typeof response.clasificacion_id !== 'undefined') {
+                        $('#clasificacion-inline-select').val(String(response.clasificacion_id));
+                        $('#clasificacion-inline-container')
+                            .data('conv-id', conversacionId)
+                            .removeClass('d-none').show();
+                    } else {
+                        $('#clasificacion-inline-container').addClass('d-none').hide();
+                    }
+
                     // Fecha inicio conversación
                     if (response.fecha_inicio) {
                         $('#conv-fecha-inicio').text('Inicio: ' + response.fecha_inicio).show();
@@ -1793,9 +2467,10 @@
                     var $refBadge = $('#referral-badge');
                     var ref = response.referral;
                     if (ref) {
-                        // Label corto: usa headline si hay, sino "Anuncio"
-                        var label = ref.headline ? ref.headline.slice(0, 40) : 'Anuncio';
-                        if (ref.headline && ref.headline.length > 40) label += '…';
+                        // Label corto: campaña > headline > "Anuncio"
+                        var labelBase = ref.campaign_name || ref.headline || 'Anuncio';
+                        var label = labelBase.slice(0, 40);
+                        if (labelBase.length > 40) label += '…';
                         $('#referral-label').text(label);
 
                         // Link al post/ad source si Meta lo entrega
@@ -1807,12 +2482,15 @@
 
                         // Tooltip rico con la info completa
                         var tooltipHtml = '';
-                        if (ref.headline) tooltipHtml += '<b>' + $('<div>').text(ref.headline).html() + '</b><br>';
-                        if (ref.body)     tooltipHtml += '<small>' + $('<div>').text(ref.body).html() + '</small><br>';
-                        if (ref.source_type)   tooltipHtml += '<i>Fuente:</i> ' + ref.source_type + '<br>';
-                        if (ref.media_type)    tooltipHtml += '<i>Media:</i> ' + ref.media_type + '<br>';
-                        if (ref.campaign_id)   tooltipHtml += '<i>Campaign:</i> <code>' + ref.campaign_id + '</code><br>';
-                        if (ref.ad_id)         tooltipHtml += '<i>Ad:</i> <code>' + ref.ad_id + '</code><br>';
+                        var escTip = function (s) { return $('<div>').text(s == null ? '' : s).html(); };
+                        if (ref.campaign_name) tooltipHtml += '<b>Campaña:</b> ' + escTip(ref.campaign_name) + '<br>';
+                        if (ref.ad_name)       tooltipHtml += '<b>Anuncio:</b> ' + escTip(ref.ad_name) + '<br>';
+                        if (ref.headline) tooltipHtml += '<b>' + escTip(ref.headline) + '</b><br>';
+                        if (ref.body)     tooltipHtml += '<small>' + escTip(ref.body) + '</small><br>';
+                        if (ref.source_type)   tooltipHtml += '<i>Fuente:</i> ' + escTip(ref.source_type) + '<br>';
+                        if (ref.media_type)    tooltipHtml += '<i>Media:</i> ' + escTip(ref.media_type) + '<br>';
+                        if (!ref.campaign_name && ref.campaign_id) tooltipHtml += '<i>Campaign:</i> <code>' + escTip(ref.campaign_id) + '</code><br>';
+                        if (!ref.ad_name && ref.ad_id)             tooltipHtml += '<i>Ad:</i> <code>' + escTip(ref.ad_id) + '</code><br>';
                         if (!tooltipHtml) tooltipHtml = 'Vino de un anuncio de Meta';
 
                         // Recrear tooltip de Bootstrap (destruye el viejo si existe)
@@ -1834,6 +2512,9 @@
                     $('#chat-footer').removeClass('d-none').show();
                     $('#conversacion-id').val(response.conversacion_id);
 
+                    // Boton de respuestas rápidas — visible al abrir cualquier conversación
+                    $('#respuestas-btn').addClass('visible');
+
                     // Boton de plantillas Meta — visible solo si la sesion es Meta Y hay plantillas aprobadas
                     mostrarPlantillasSiMeta(response.es_meta === true, response.conversacion_id);
 
@@ -1841,11 +2522,12 @@
 
                     setTimeout(() => { scrollToBottom(); }, 800);
                     conectarWebSocket(response.conversacion_id);
+                    _waRenderPendientes(response.conversacion_id);
+                    if (navigator.onLine) { _waFlush(); }
                 },
                 error: function(xhr, status, error) {
                     _cargandoMensajes = false;
                     console.error('[cargarMensajes] ajax error', status, error, xhr.responseText);
-                    try { localStorage.removeItem('wa_last_conv_active'); } catch (e) {}
                     $('#mensajes-container').removeClass('is-loading').html('<div class="p-3 text-center"><p class="text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error al cargar mensajes: ' + error + '</p></div>');
                 }
             });
@@ -1922,6 +2604,72 @@
             formModal(id, title, action);
         });
 
+        $(document).on('click', '#fc-toggle-registro', function() {
+            $('#fc-registro-form').toggleClass('d-none');
+        });
+
+        $(document).on('click', '#fc-guardar', function() {
+            const convId = $('#fc-registro-form').data('conv-id');
+            const cedula = ($('#fc-cedula').val() || '').trim();
+            if (!cedula) {
+                mensajeWarning('La cédula / identificación es obligatoria.');
+                $('#fc-cedula').trigger('focus');
+                return;
+            }
+            const datos = {
+                action: 'crear_cliente_manual',
+                id: convId,
+                cedula: cedula,
+                nombres: $('#fc-nombres').val() || '',
+                apellidos: $('#fc-apellidos').val() || '',
+                email: $('#fc-email').val() || '',
+                telefono: $('#fc-telefono').val() || '',
+                ciudad: $('#fc-ciudad').val() || '',
+                edad: $('#fc-edad').val() || '',
+                fecha_nacimiento: $('#fc-fecha-nac').val() || '',
+                sexo: $('#fc-sexo').val() || '',
+                notas: $('#fc-notas').val() || '',
+            };
+            pantallaespera();
+            $.post('/whatsapp/conversaciones/', datos, function(data) {
+                if (!data || data.error !== false) {
+                    $.unblockUI();
+                    mensajeWarning((data && data.message) || 'No se pudo registrar el cliente.');
+                    return;
+                }
+                $.get('/whatsapp/conversaciones/', {
+                    action: 'ficha_cliente', id: convId,
+                }, function(resp) {
+                    $.unblockUI();
+                    if (resp && resp.result === true) {
+                        $('.detalleProd').html(resp.data);
+                    }
+                    Swal.fire({ title: 'Listo', text: data.message, type: 'success' });
+                }, 'json').fail(function() {
+                    $.unblockUI();
+                    Swal.fire({ title: 'Listo', text: data.message, type: 'success' });
+                });
+            }, 'json').fail(function(xhr) {
+                $.unblockUI();
+                console.error('[crear_cliente_manual] fail', xhr.status, xhr.responseText);
+                mensajeWarning('Error de conexión.');
+            });
+        });
+
+        $('#convAccionesOffcanvas').on('click', '.dropdown-item', function () {
+            const el = document.getElementById('convAccionesOffcanvas');
+            if (!el || !window.bootstrap) { return; }
+            const oc = bootstrap.Offcanvas.getOrCreateInstance(el);
+            if (oc) { oc.hide(); }
+        });
+
+        $(document).on('click', '#ver-logs-conversacion', function(e) {
+            e.preventDefault();
+            const id = $(this).attr('data-id') || conversacionActiva;
+            if (!id) { return; }
+            window.open('/whatsapp/trazas/?conversacion=' + id, '_blank');
+        });
+
         $('#marcar-resuelto').on('click', function(e) {
             e.preventDefault();
             const id = $(this).data('id');
@@ -1944,7 +2692,6 @@
                         $.unblockUI();
                         const data_ = data[0];
                         if (!data_.error) {
-                            try { localStorage.removeItem('wa_last_conv_active'); } catch (e) {}
                             window.location.href = data_.url;
                         } else {
                             console.error('[marcar-resuelto] backend error', data_);
@@ -2319,7 +3066,6 @@
                         $.unblockUI();
                         const data_ = data[0];
                         if (!data_.error) {
-                            try { localStorage.removeItem('wa_last_conv_active'); } catch (e) {}
                             window.location.href = data_.url;
                         } else {
                             console.error('[terminar-sin-despedida] backend error', data_);
@@ -2556,5 +3302,111 @@
             }
         }).catch(err => { console.error('[feedback] network error', err); });
     }
+
+    function _fmtMetaRemain(ts) {
+        const ms = ts - Date.now();
+        if (ms <= 0) return null;
+        let sec = Math.floor(ms / 1000);
+        const d = Math.floor(sec / 86400);
+        sec %= 86400;
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s = sec % 60;
+        const pad = function (n) { return (n < 10 ? '0' : '') + n; };
+        const hms = pad(h) + ':' + pad(m) + ':' + pad(s);
+        return d > 0 ? (d + 'd ' + hms) : hms;
+    }
+
+    window.tickMetaCountdowns = function() {
+        document.querySelectorAll('.meta-countdown[data-vence]').forEach(function(el) {
+            const raw = el.getAttribute('data-vence');
+            if (!raw) return;
+            const ts = Date.parse(raw);
+            if (isNaN(ts)) return;
+            const valEl = el.querySelector('.meta-countdown-val');
+            const txt = _fmtMetaRemain(ts);
+            if (txt === null) {
+                el.classList.remove('bg-warning', 'text-dark');
+                el.classList.add('bg-danger');
+                el.removeAttribute('data-vence');
+                const icon = el.querySelector('i.fa');
+                if (icon) icon.className = 'fa fa-hourglass-end me-1';
+                if (valEl) valEl.textContent = 'Vencido';
+            } else if (valEl) {
+                valEl.textContent = txt;
+            }
+        });
+    };
+    setInterval(window.tickMetaCountdowns, 1000);
+    $(document).ready(window.tickMetaCountdowns);
+
+    function _sincronizarCountdownHeader(convId) {
+        var item = $('#lista-conversaciones [data-id="' + convId + '"]');
+        var src = item.find('.meta-countdown').first();
+        var hdr = $('#meta-countdown-header');
+        var badge = $('#meta-countdown-badge');
+        if (src.length) {
+            var vence = src.attr('data-vence');
+            badge.removeClass('bg-warning text-dark bg-danger');
+            if (vence) {
+                badge.attr('data-vence', vence).addClass('bg-warning text-dark');
+                badge.find('i').attr('class', 'fa fa-clock me-1');
+            } else {
+                badge.removeAttr('data-vence').addClass('bg-danger');
+                badge.find('i').attr('class', 'fa fa-hourglass-end me-1');
+                badge.find('.meta-countdown-val').text('Vencido');
+            }
+            hdr.removeClass('d-none').show();
+        } else {
+            badge.removeAttr('data-vence');
+            hdr.addClass('d-none').hide();
+        }
+        if (typeof window.tickMetaCountdowns === 'function') setTimeout(window.tickMetaCountdowns, 80);
+    }
+
+    function _headerVentanaVencida() {
+        var hdr = document.getElementById('meta-countdown-header');
+        if (!hdr || hdr.classList.contains('d-none')) return false;
+        var badge = document.getElementById('meta-countdown-badge');
+        if (!badge) return false;
+        var raw = badge.getAttribute('data-vence');
+        if (!raw) return true;
+        var ts = Date.parse(raw);
+        return !isNaN(ts) && (ts - Date.now() <= 0);
+    }
+
+    $(document).on('click', '.cargar-conversacion', function () {
+        _sincronizarCountdownHeader($(this).data('id'));
+    });
+
+    var _formEnviar = document.getElementById('form-enviar-mensaje');
+    if (_formEnviar) {
+        _formEnviar.addEventListener('submit', function (e) {
+            if (_headerVentanaVencida()) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                if (window.Swal) {
+                    Swal.fire('Ventana de 24 horas vencida',
+                        'No se puede enviar texto libre: pasaron más de 24 horas desde el último mensaje del cliente. Usa una plantilla aprobada de Meta para retomar la conversación.',
+                        'warning');
+                } else {
+                    alert('La ventana de 24 horas de Meta venció. Usa una plantilla aprobada para retomar la conversación.');
+                }
+            }
+        }, true);
+    }
+
+    (function() {
+        const IDLE_RELOAD_MS = 30 * 60 * 1000;
+        let _lastActivity = Date.now();
+        const _markActive = function() { _lastActivity = Date.now(); };
+        ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart', 'scroll', 'visibilitychange']
+            .forEach(function(ev) { window.addEventListener(ev, _markActive, { passive: true }); });
+        setInterval(function() {
+            if (document.visibilityState === 'hidden') return;
+            if (Date.now() - _lastActivity < IDLE_RELOAD_MS) return;
+            try { window.location.reload(); } catch (e) {}
+        }, 60000);
+    })();
 </script>
 {% endblock %}

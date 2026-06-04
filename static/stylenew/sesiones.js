@@ -356,9 +356,10 @@
         if (valConectar) valConectar.disabled = true;
     }
 
-    function valRenderOk(data) {
+    function valRenderOk(data, modo) {
+        var esRevalidar = modo === 'revalidar';
         if (valStatusDot) valStatusDot.className = 'man-val-status-dot is-ok';
-        if (valTitle) valTitle.textContent = 'Credenciales válidas';
+        if (valTitle) valTitle.textContent = esRevalidar ? 'Credenciales revalidadas' : 'Credenciales válidas';
 
         var qrColor = (data.quality_rating || 'UNKNOWN').toLowerCase();
         var qrBadge = qrColor === 'green' ? 'is-green'
@@ -380,6 +381,9 @@
             rows += '<div class="man-val-row"><span class="man-val-key"><i class="fa fa-star"></i> Quality rating</span><span class="man-val-val"><span class="man-val-pill ' + qrBadge + '">' + data.quality_rating + '</span></span></div>';
         }
 
+        var hint = esRevalidar
+            ? '<div class="man-val-hint"><i class="fa fa-circle-check"></i> Los datos quedaron sincronizados con Meta. Podés cerrar esta ventana.</div>'
+            : '<div class="man-val-hint"><i class="fa fa-lightbulb"></i> Pulsá <b>Conectar sesión</b> para guardar y empezar a recibir mensajes.</div>';
         if (valBody) {
             valBody.innerHTML =
                 '<div class="man-val-msg is-ok">' +
@@ -387,9 +391,9 @@
                 '<div><b>Meta confirmó los IDs y el token.</b><p>Lo que detectamos:</p></div>' +
                 '</div>' +
                 '<div class="man-val-grid">' + rows + '</div>' +
-                '<div class="man-val-hint"><i class="fa fa-lightbulb"></i> Pulsá <b>Conectar sesión</b> para guardar y empezar a recibir mensajes.</div>';
+                hint;
         }
-        if (valConectar) valConectar.disabled = false;
+        if (valConectar && !esRevalidar) valConectar.disabled = false;
 
         // Autocompletar el "Número visible" del form si el campo está vacío.
         if (data.display_phone_number) {
@@ -476,6 +480,79 @@
         rebindFormsJs();
     }
 
+    function escaparHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function renderCambiarNombre(nombreActual, metaUrl) {
+        var linkMeta = metaUrl
+            ? '<a href="' + escaparHtml(metaUrl) + '" target="_blank" rel="noopener" class="cn-meta-link">' +
+              '<i class="fa fa-up-right-from-square"></i> Validar / ver estado del nombre en Meta</a>'
+            : '';
+        return '<div class="detail-wrap">' +
+            '<div class="detail-head">' +
+                '<div><h5><i class="fa fa-signature me-1 text-primary"></i> Cambiar nombre del número</h5>' +
+                '<p class="muted">Display Name que ven los clientes en WhatsApp</p></div>' +
+                '<button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>' +
+            '</div>' +
+            '<div class="detail-body">' +
+                '<p class="cn-help">Meta lo revisa (minutos a días) y debe reflejar tu marca/negocio — nombres ' +
+                'genéricos o de rol suelen rechazarse. El número sigue operando con el nombre actual durante la revisión.</p>' +
+                '<div class="conex-data-block">' +
+                    '<label class="cn-label" for="cn-input">Nuevo nombre para mostrar</label>' +
+                    '<input type="text" id="cn-input" class="form-control" maxlength="60" autocomplete="off" ' +
+                    'value="' + escaparHtml(nombreActual || '') + '">' +
+                    '<button type="button" class="conex-btn conex-btn-primary valcx-cta" id="cn-enviar">' +
+                    '<i class="fa fa-paper-plane"></i> Enviar a revisión de Meta</button>' +
+                    linkMeta +
+                    '<div id="cn-result" class="valcx-verdict" hidden></div>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
+    }
+
+    function renderValidacionConexion(data) {
+        var filas = (data.pasos || []).map(function (p) {
+            var icono, clase;
+            if (p.ok === true) { icono = 'fa-circle-check'; clase = 'is-ok'; }
+            else if (p.ok === false) { icono = 'fa-circle-xmark'; clase = 'is-bad'; }
+            else { icono = 'fa-circle-question'; clase = 'is-warn'; }
+            return '<li class="valcx-step ' + clase + '">' +
+                '<i class="fa ' + icono + '"></i>' +
+                '<div class="valcx-step-body"><span class="valcx-step-label">' + escaparHtml(p.label) + '</span>' +
+                '<span class="valcx-step-detail">' + escaparHtml(p.detalle) + '</span></div>' +
+                '</li>';
+        }).join('');
+
+        var verdClase = data.falla ? (data.waba_mal ? 'is-warn' : 'is-bad') : 'is-ok';
+        var verdIcono = data.falla ? 'fa-triangle-exclamation' : 'fa-circle-check';
+
+        var accionBtn = '';
+        if (data.falla) {
+            accionBtn = '<a class="conex-btn conex-btn-primary valcx-cta" href="' +
+                escaparHtml(data.diagnostico_url) + '"><i class="fa fa-wrench"></i> ' +
+                'Ir al diagnóstico a ejecutar correcciones</a>';
+        } else {
+            accionBtn = '<a class="conex-btn conex-btn-ghost valcx-cta" href="' +
+                escaparHtml(data.diagnostico_url) + '"><i class="fa fa-stethoscope"></i> Ver diagnóstico</a>';
+        }
+
+        return '<div class="detail-wrap">' +
+            '<div class="detail-head">' +
+                '<div><h5><i class="fa fa-clipboard-check me-1 text-primary"></i> Validación de conexión</h5>' +
+                '<p class="muted">Sesión <b>' + escaparHtml(data.sesion_nombre) + '</b> · chequeos contra Meta</p></div>' +
+                '<button type="button" class="detail-close" data-cerrar-detail><i class="fa fa-times"></i></button>' +
+            '</div>' +
+            '<div class="detail-body">' +
+                '<ul class="valcx-steps">' + filas + '</ul>' +
+                '<div class="valcx-verdict ' + verdClase + '"><i class="fa ' + verdIcono + '"></i> ' +
+                    escaparHtml(data.verdicto) + '</div>' +
+                accionBtn +
+            '</div>' +
+        '</div>';
+    }
+
     // ---------- Re-attach forms.js (handler global de POST + AJAX) ----------
     // forms.js bindea `$('form:not(...)').submit(...)` al cargar — los forms
     // dentro de partials AJAX no estaban presentes en ese momento. Quitamos
@@ -512,25 +589,46 @@
         if (modal && modal.classList.contains('open')) return cerrarModal();
     });
 
-    // ---------- Kebab menu ----------
+    // ---------- Offcanvas lateral de acciones ----------
+    function abrirAccionesOffcanvas(card) {
+        var oc = document.getElementById('acc-offcanvas');
+        var bd = document.getElementById('acc-offcanvas-backdrop');
+        var body = document.getElementById('acc-offcanvas-body');
+        var title = document.getElementById('acc-offcanvas-title');
+        var menu = card ? card.querySelector('[data-kebab-menu]') : null;
+        if (!oc || !body || !menu) return;
+        oc.setAttribute('data-sesion-id', card.getAttribute('data-sesion-id') || '');
+        oc.setAttribute('data-sesion-nombre', card.getAttribute('data-sesion-nombre') || '');
+        oc.setAttribute('data-sesion-numero', card.getAttribute('data-sesion-numero') || '');
+        oc.setAttribute('data-meta-url', card.getAttribute('data-meta-url') || '');
+        if (title) title.textContent = card.getAttribute('data-sesion-nombre') || 'Acciones';
+        body.innerHTML = menu.innerHTML;
+        oc.classList.add('open');
+        oc.setAttribute('aria-hidden', 'false');
+        if (bd) { bd.classList.add('open'); bd.setAttribute('aria-hidden', 'false'); }
+    }
+
+    function cerrarAccionesOffcanvas() {
+        var oc = document.getElementById('acc-offcanvas');
+        var bd = document.getElementById('acc-offcanvas-backdrop');
+        if (oc) { oc.classList.remove('open'); oc.setAttribute('aria-hidden', 'true'); }
+        if (bd) { bd.classList.remove('open'); bd.setAttribute('aria-hidden', 'true'); }
+    }
+
     document.addEventListener('click', function (e) {
         var toggle = e.target.closest('[data-kebab-toggle]');
         if (toggle) {
-            var menu = toggle.parentElement.querySelector('[data-kebab-menu]');
-            // Cerrar todos los demás
-            document.querySelectorAll('[data-kebab-menu]').forEach(function (m) {
-                if (m !== menu) m.classList.remove('open');
-            });
-            if (menu) menu.classList.toggle('open');
+            var card = toggle.closest('.conex-card');
+            if (card) abrirAccionesOffcanvas(card);
             e.stopPropagation();
             return;
         }
-        // Click fuera: cerrar todos
-        if (!e.target.closest('[data-kebab-menu]')) {
-            document.querySelectorAll('[data-kebab-menu]').forEach(function (m) {
-                m.classList.remove('open');
-            });
+        if (e.target.closest('#acc-offcanvas-close') || e.target.closest('#acc-offcanvas-backdrop')) {
+            cerrarAccionesOffcanvas();
         }
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') cerrarAccionesOffcanvas();
     });
 
     // ---------- Baileys QR ----------
@@ -616,7 +714,45 @@
         });
     }
 
-    // ---------- Filtros chip ----------
+    function _updateBulkCount() {
+        var n = document.querySelectorAll('.conex-card .conex-bulk-cb:checked').length;
+        var elN = document.getElementById('conex-bulk-count');
+        var btn = document.getElementById('conex-bulk-delete');
+        if (elN) elN.textContent = String(n);
+        if (btn) btn.disabled = (n === 0);
+    }
+
+    function _ensureBulkCheckbox(card) {
+        if (card.querySelector('.conex-bulk-cb-wrap')) return;
+        var wrap = document.createElement('label');
+        wrap.className = 'conex-bulk-cb-wrap';
+        wrap.title = 'Select for bulk delete';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'conex-bulk-cb';
+        cb.setAttribute('data-sesion-id', card.getAttribute('data-sesion-id') || '');
+        cb.addEventListener('click', function (e) { e.stopPropagation(); });
+        cb.addEventListener('change', _updateBulkCount);
+        wrap.appendChild(cb);
+        card.appendChild(wrap);
+    }
+
+    function _setBulkMode(on) {
+        var bar = document.getElementById('conex-bulk-bar');
+        if (bar) bar.classList.toggle('d-none', !on);
+        document.querySelectorAll('.conex-card').forEach(function (card) {
+            if (on) {
+                _ensureBulkCheckbox(card);
+                card.classList.add('conex-card-bulk-mode');
+            } else {
+                card.classList.remove('conex-card-bulk-mode');
+                var cb = card.querySelector('.conex-bulk-cb');
+                if (cb) cb.checked = false;
+            }
+        });
+        _updateBulkCount();
+    }
+
     document.querySelectorAll('.conex-chip').forEach(function (chip) {
         chip.addEventListener('click', function () {
             document.querySelectorAll('.conex-chip').forEach(function (c) {
@@ -624,176 +760,105 @@
             });
             chip.classList.add('active');
             var f = chip.getAttribute('data-filtro');
+            var attr = chip.getAttribute('data-attr');
+            var val = chip.getAttribute('data-val');
             document.querySelectorAll('.conex-card').forEach(function (card) {
-                var est = card.getAttribute('data-estado');
-                card.style.display = (f === 'todas' || est === f) ? '' : 'none';
+                var show;
+                if (f === 'todas') {
+                    show = true;
+                } else if (attr) {
+                    show = card.getAttribute('data-' + attr) === val;
+                } else {
+                    show = card.getAttribute('data-estado') === f;
+                }
+                card.style.display = show ? '' : 'none';
             });
+            _setBulkMode(f === 'pausadas');
         });
     });
 
-    // ---------- Modal: Datos del webhook (Meta) ----------
-    var webhookModal = document.getElementById('webhook-info-modal');
-    var webhookBody = document.getElementById('webhook-info-body');
-    var webhookLink = document.getElementById('webhook-info-meta-link');
+    var bulkSelectAll = document.getElementById('conex-bulk-select-all');
+    if (bulkSelectAll) bulkSelectAll.addEventListener('click', function () {
+        document.querySelectorAll('.conex-card').forEach(function (card) {
+            if (card.style.display === 'none') return;
+            var cb = card.querySelector('.conex-bulk-cb');
+            if (cb) cb.checked = true;
+        });
+        _updateBulkCount();
+    });
 
-    function copyToClipboard(text, btn) {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(function () {
-                copyFlash(btn);
-            });
+    var bulkClear = document.getElementById('conex-bulk-clear');
+    if (bulkClear) bulkClear.addEventListener('click', function () {
+        document.querySelectorAll('.conex-card .conex-bulk-cb').forEach(function (cb) {
+            cb.checked = false;
+        });
+        _updateBulkCount();
+    });
+
+    var bulkDelete = document.getElementById('conex-bulk-delete');
+    if (bulkDelete) bulkDelete.addEventListener('click', function () {
+        var ids = Array.from(document.querySelectorAll('.conex-card .conex-bulk-cb:checked'))
+            .map(function (cb) { return cb.getAttribute('data-sesion-id'); })
+            .filter(function (x) { return !!x; });
+        if (!ids.length) return;
+        var msg = 'Soft-delete ' + ids.length + ' session(s)? They will be marked status=False.';
+        if (typeof Swal === 'undefined') {
+            if (!confirm(msg)) return;
+            _doBulkDelete(ids);
         } else {
-            var ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
-            ta.select();
-            try {
-                document.execCommand('copy');
-                copyFlash(btn);
-            } catch (e) {
-            }
-            document.body.removeChild(ta);
+            Swal.fire({
+                title: msg,
+                text: 'This action sets status=False (recoverable manually in DB).',
+                type: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, delete',
+                cancelButtonText: 'Cancel'
+            }).then(function (r) { if (r.value) _doBulkDelete(ids); });
         }
-    }
-
-    function copyFlash(btn) {
-        if (!btn) return;
-        var icon = btn.querySelector('i');
-        var orig = icon ? icon.className : '';
-        if (icon) icon.className = 'fa fa-check';
-        btn.classList.add('is-copied');
-        setTimeout(function () {
-            if (icon) icon.className = orig || 'fa fa-copy';
-            btn.classList.remove('is-copied');
-        }, 1400);
-    }
-
-    function cerrarWebhookModal() {
-        if (!webhookModal) return;
-        webhookModal.classList.remove('open');
-        webhookModal.setAttribute('aria-hidden', 'true');
-    }
-
-    document.querySelectorAll('[data-webhook-close]').forEach(function (b) {
-        b.addEventListener('click', cerrarWebhookModal);
     });
-    if (webhookModal) {
-        webhookModal.addEventListener('click', function (e) {
-            if (e.target === webhookModal) cerrarWebhookModal();
+
+    function _doBulkDelete(ids) {
+        postAccion({ action: 'delete_bulk', ids: ids.join(',') }).then(function (r) {
+            if (r && r.error) {
+                mostrarToast(r.message || 'Bulk delete failed.', 'err');
+                return;
+            }
+            mostrarToast((r && r.message) || 'Deleted.', 'ok');
+            setTimeout(function () { window.location.reload(); }, 600);
         });
     }
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && webhookModal && webhookModal.classList.contains('open')) cerrarWebhookModal();
+
+    var bulkDeleteOrphans = document.getElementById('conex-bulk-delete-orphans');
+    if (bulkDeleteOrphans) bulkDeleteOrphans.addEventListener('click', function () {
+        var msg = 'Soft-delete ALL paused orphan sessions (no contacts)?';
+        if (typeof Swal === 'undefined') {
+            if (!confirm(msg)) return;
+            _doBulkOrphan();
+        } else {
+            Swal.fire({
+                title: msg,
+                text: 'Removes every paused session that has zero contacts.',
+                type: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, clean up',
+                cancelButtonText: 'Cancel'
+            }).then(function (r) { if (r.value) _doBulkOrphan(); });
+        }
     });
 
-    function abrirWebhookInfo(sesionId) {
-        if (!webhookModal) return;
-        webhookModal.classList.add('open');
-        webhookModal.setAttribute('aria-hidden', 'false');
-        if (webhookBody) {
-            webhookBody.innerHTML = '<div class="man-val-loader"><i class="fa fa-spinner fa-spin"></i><p>Cargando datos del webhook...</p></div>';
-        }
-        if (webhookLink) webhookLink.style.display = 'none';
-
-        fetch('/whatsapp/meta/webhook-info/' + sesionId + '/', {credentials: 'same-origin'})
-            .then(function (r) {
-                return r.json();
-            })
-            .then(function (data) {
-                if (!data.ok) {
-                    webhookBody.innerHTML =
-                        '<div class="man-val-msg is-error">' +
-                        '<i class="fa fa-circle-xmark"></i>' +
-                        '<div><b>No pude cargar.</b><p>' + (data.error || 'Error desconocido') + '</p></div></div>';
-                    return;
-                }
-
-                var verificadoBadge = data.webhook_verificado_en
-                    ? '<span class="webhook-badge is-ok"><i class="fa fa-circle-check"></i> Verificado en Meta</span>'
-                    : '<span class="webhook-badge is-warn"><i class="fa fa-clock"></i> Pendiente de verificación</span>';
-
-                webhookBody.innerHTML =
-                    '<div class="webhook-status">' + verificadoBadge +
-                    '<small>Sesión: <b>' + (data.display_phone_number || data.phone_number_id) + '</b></small>' +
-                    '</div>' +
-
-                    '<div class="webhook-step">' +
-                    '<div class="webhook-step-num">1</div>' +
-                    '<div class="webhook-step-body">' +
-                    '<div class="webhook-step-title">Callback URL <small>(pega esto en Meta)</small></div>' +
-                    '<div class="webhook-copy-row">' +
-                    '<input type="text" class="webhook-copy-input" id="wh-url" value="' + data.webhook_url + '" readonly>' +
-                    '<button type="button" class="webhook-copy-btn" data-copy-target="wh-url"><i class="fa fa-copy"></i></button>' +
-                    '</div>' +
-                    '</div>' +
-                    '</div>' +
-
-                    '<div class="webhook-step">' +
-                    '<div class="webhook-step-num">2</div>' +
-                    '<div class="webhook-step-body">' +
-                    '<div class="webhook-step-title">Verify Token <small>(token único de esta sesión)</small></div>' +
-                    '<div class="webhook-copy-row">' +
-                    '<input type="password" class="webhook-copy-input" id="wh-token" value="' + data.verify_token + '" readonly>' +
-                    '<button type="button" class="webhook-copy-btn" id="wh-token-eye" title="Mostrar/ocultar"><i class="fa fa-eye"></i></button>' +
-                    '<button type="button" class="webhook-copy-btn" data-copy-target="wh-token"><i class="fa fa-copy"></i></button>' +
-                    '</div>' +
-                    '</div>' +
-                    '</div>' +
-
-                    '<div class="webhook-step">' +
-                    '<div class="webhook-step-num">3</div>' +
-                    '<div class="webhook-step-body">' +
-                    '<div class="webhook-step-title">Suscribir la WABA <small>(comando curl)</small></div>' +
-                    '<div class="webhook-curl">' +
-                    '<code id="wh-curl">curl -X POST "https://graph.facebook.com/v19.0/' + data.waba_id + '/subscribed_apps" \\\n  -H "Authorization: Bearer &lt;ACCESS_TOKEN&gt;"</code>' +
-                    '<button type="button" class="webhook-copy-btn webhook-copy-btn-inline" data-copy-target="wh-curl"><i class="fa fa-copy"></i> Copiar</button>' +
-                    '</div>' +
-                    '<small class="webhook-hint">Reemplazá <code>&lt;ACCESS_TOKEN&gt;</code> por el token de esta sesión. Una vez por WABA.</small>' +
-                    '</div>' +
-                    '</div>' +
-
-                    '<div class="webhook-instructions">' +
-                    '<b><i class="fa fa-list-check"></i> Pasos en Meta for Developers:</b>' +
-                    '<ol>' +
-                    '<li>Abrí la app → menú <b>Webhooks</b> → seleccioná <b>WhatsApp Business Account</b>.</li>' +
-                    '<li>Pulsá <b>Subscribe to this object</b> (o <b>Edit</b> si ya hay uno).</li>' +
-                    '<li>Pegá la <b>Callback URL</b> (paso 1) y el <b>Verify Token</b> (paso 2).</li>' +
-                    '<li>Click <b>Verify and Save</b> → Meta hace handshake con tu app.</li>' +
-                    '<li>Activá los campos: <code>messages</code>, <code>message_template_status_update</code>, <code>account_review_update</code>, <code>phone_number_quality_update</code>.</li>' +
-                    '<li>Corré el curl del paso 3 para suscribir la WABA específica.</li>' +
-                    '</ol>' +
-                    '</div>';
-
-                // Bindings de los botones copy del modal
-                webhookBody.querySelectorAll('[data-copy-target]').forEach(function (btn) {
-                    btn.addEventListener('click', function () {
-                        var t = btn.getAttribute('data-copy-target');
-                        var el = document.getElementById(t);
-                        if (!el) return;
-                        var txt = el.value !== undefined ? el.value : el.textContent;
-                        copyToClipboard(txt, btn);
-                    });
-                });
-                var tokenEye = document.getElementById('wh-token-eye');
-                var tokenInp = document.getElementById('wh-token');
-                if (tokenEye && tokenInp) {
-                    tokenEye.addEventListener('click', function () {
-                        var isPwd = tokenInp.type === 'password';
-                        tokenInp.type = isPwd ? 'text' : 'password';
-                    });
-                }
-                if (webhookLink && data.meta_webhooks_url) {
-                    webhookLink.href = data.meta_webhooks_url;
-                    webhookLink.style.display = 'inline-flex';
-                }
-            })
-            .catch(function () {
-                webhookBody.innerHTML =
-                    '<div class="man-val-msg is-error">' +
-                    '<i class="fa fa-circle-xmark"></i>' +
-                    '<div><b>Error de red.</b><p>No pude conectar al backend.</p></div></div>';
-            });
+    function _doBulkOrphan() {
+        postAccion({ action: 'delete_pausadas_huerfanas' }).then(function (r) {
+            if (r && r.error) {
+                mostrarToast(r.message || 'Cleanup failed.', 'err');
+                return;
+            }
+            mostrarToast((r && r.message) || 'Cleanup done.', 'ok');
+            setTimeout(function () { window.location.reload(); }, 600);
+        });
     }
 
     // ---------- Modal: Eco / Test envío (Meta) ----------
@@ -830,9 +895,13 @@
         ecoResultado.innerHTML = html;
     }
 
-    function abrirEco(sesionId, nombre) {
+    function abrirEco(sesionId, nombre, numero) {
         ecoSesionId = sesionId;
-        if (ecoFromLabel) ecoFromLabel.textContent = nombre || ('sesión #' + sesionId);
+        if (ecoFromLabel) {
+            var etiqueta = nombre || ('sesión #' + sesionId);
+            if (numero) etiqueta += ' (' + numero + ')';
+            ecoFromLabel.textContent = etiqueta;
+        }
         if (ecoNumero) ecoNumero.value = '';
         if (ecoMensaje) ecoMensaje.value = 'Hola! Este es un mensaje de prueba desde el CRM. Si lo recibís, la conexión funciona.';
         if (ecoResultado) ecoResultado.classList.add('d-none');
@@ -1062,16 +1131,18 @@
         if (!btn) return;
         // Ignorar el toggle activa/pausa — lo maneja el listener `change`.
         if (btn.getAttribute('data-action') === 'toggle-activo') return;
-        var card = btn.closest('.conex-card');
-        if (!card) return;
-        var sesionId = card.getAttribute('data-sesion-id');
-        var nombre = card.getAttribute('data-sesion-nombre') || '';
+        // El contexto puede venir de la card o del offcanvas lateral (donde
+        // se clonan las acciones). Tomamos el que aplique.
+        var ctx = btn.closest('.conex-card') || btn.closest('#acc-offcanvas');
+        if (!ctx) return;
+        var card = ctx;
+        var sesionId = ctx.getAttribute('data-sesion-id');
+        var nombre = ctx.getAttribute('data-sesion-nombre') || '';
+        var numero = ctx.getAttribute('data-sesion-numero') || '';
         var action = btn.getAttribute('data-action');
 
-        // Cerrar kebab abierto
-        document.querySelectorAll('[data-kebab-menu]').forEach(function (m) {
-            m.classList.remove('open');
-        });
+        // Cerrar el offcanvas de acciones al elegir una.
+        cerrarAccionesOffcanvas();
 
         if (action === 'editar') {
             fetchPartial('editar_modal', sesionId).then(function (r) {
@@ -1094,6 +1165,12 @@
                 if (!r.ok) return mostrarToast(r.message || 'No se pudo cargar el resumen.', 'err');
                 abrirDetail(r.html);
             });
+        } else if (action === 'post-conexion') {
+            if (typeof formModal === 'function') {
+                formModal(sesionId, '<i class="fa fa-list-check me-1"></i> Configurar en Facebook — ' + nombre, 'post-conexion');
+            } else {
+                mostrarToast('formModal no disponible.', 'err');
+            }
         } else if (action === 'plantilla-prueba') {
             fetchPartial('plantilla_modal', sesionId).then(function (r) {
                 if (!r.ok) return mostrarToast(r.message || 'No se pudo abrir la plantilla.', 'err');
@@ -1117,7 +1194,7 @@
                         verified_name: r.verified_name,
                         display_phone_number: r.display_phone_number,
                         quality_rating: r.quality_rating,
-                    });
+                    }, 'revalidar');
                     // Inyectar info extra abajo
                     var body = document.getElementById('man-val-body');
                     if (body && (r.messaging_limit_tier || r.ultima_sincronizacion)) {
@@ -1139,15 +1216,114 @@
                     }
                 }
             });
-        } else if (action === 'webhook-info') {
-            abrirWebhookInfo(sesionId);
+        } else if (action === 'validar-conexion') {
+            abrirDetail('<div class="valcx-wrap"><div class="valcx-loading">' +
+                '<i class="fa fa-spinner fa-spin"></i> Validando conexión con Meta...</div></div>');
+            fetch('/whatsapp/sesiones/' + sesionId + '/validar-conexion/', {
+                method: 'GET',
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
+                credentials: 'same-origin',
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.ok) {
+                        abrirDetail('<div class="valcx-wrap"><div class="valcx-verdict is-bad">' +
+                            '<i class="fa fa-circle-xmark"></i> ' + (data.error || 'No se pudo validar.') +
+                            '</div></div>');
+                        return;
+                    }
+                    abrirDetail(renderValidacionConexion(data));
+                })
+                .catch(function () {
+                    abrirDetail('<div class="valcx-wrap"><div class="valcx-verdict is-bad">' +
+                        '<i class="fa fa-circle-xmark"></i> Error de red al validar.</div></div>');
+                });
+        } else if (action === 'cambiar-nombre') {
+            abrirDetail(renderCambiarNombre(nombre, card.getAttribute('data-meta-url') || ''));
+            var cnBtn = document.getElementById('cn-enviar');
+            var cnInput = document.getElementById('cn-input');
+            var cnResult = document.getElementById('cn-result');
+            if (cnInput) cnInput.focus();
+            if (cnBtn) cnBtn.addEventListener('click', function () {
+                if (cnBtn.disabled) return;
+                var nuevo = (cnInput.value || '').trim();
+                if (nuevo.length < 3) {
+                    cnResult.hidden = false;
+                    cnResult.className = 'valcx-verdict is-bad';
+                    cnResult.innerHTML = '<i class="fa fa-circle-xmark"></i> El nombre debe tener al menos 3 caracteres.';
+                    return;
+                }
+                var orig = cnBtn.innerHTML;
+                cnBtn.disabled = true;
+                cnBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Enviando a Meta...';
+                cnResult.hidden = true;
+                var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+                var fd = new FormData();
+                fd.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+                fd.append('nombre', nuevo);
+                fetch('/whatsapp/sesiones/' + sesionId + '/cambiar-nombre/', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'X-CSRFToken': csrf ? csrf.value : '', 'X-Requested-With': 'XMLHttpRequest'},
+                    credentials: 'same-origin',
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        cnBtn.disabled = false;
+                        cnBtn.innerHTML = orig;
+                        var linkHtml = data.meta_url
+                            ? '<br><br><a href="' + escaparHtml(data.meta_url) + '" target="_blank" rel="noopener" ' +
+                              'class="conex-btn conex-btn-primary" style="text-decoration:none">' +
+                              '<i class="fa fa-up-right-from-square"></i> Validar/ver estado en Meta</a>'
+                            : '';
+                        if (window.Swal && Swal.fire) {
+                            Swal.fire({
+                                type: data.ok ? 'success' : 'error',
+                                title: data.ok ? 'Enviado a revisión de Meta' : 'No se pudo cambiar',
+                                html: escaparHtml(data.ok ? data.message : (data.error || 'Error.')) + linkHtml,
+                                confirmButtonText: 'Entendido',
+                            });
+                        } else {
+                            cnResult.hidden = false;
+                            cnResult.className = 'valcx-verdict ' + (data.ok ? 'is-ok' : 'is-bad');
+                            cnResult.innerHTML = (data.ok ? '<i class="fa fa-circle-check"></i> ' : '<i class="fa fa-circle-xmark"></i> ') +
+                                escaparHtml(data.ok ? data.message : (data.error || 'Error.')) + linkHtml;
+                        }
+                    })
+                    .catch(function () {
+                        cnBtn.disabled = false;
+                        cnBtn.innerHTML = orig;
+                        if (window.Swal && Swal.fire) {
+                            Swal.fire({type: 'error', title: 'Error de red', confirmButtonText: 'Cerrar'});
+                        } else {
+                            cnResult.hidden = false;
+                            cnResult.className = 'valcx-verdict is-bad';
+                            cnResult.innerHTML = '<i class="fa fa-circle-xmark"></i> Error de red.';
+                        }
+                    });
+            });
         } else if (action === 'datos-transporte') {
             fetchPartial('datos_transporte_modal', sesionId).then(function (r) {
                 if (!r.ok) return mostrarToast(r.message || 'No se pudo abrir.', 'err');
                 abrirDetail(r.html);
             });
+        } else if (action === 'respuestas-rapidas') {
+            fetchPartial('respuestas_rapidas_modal', sesionId).then(function (r) {
+                if (!r.ok) return mostrarToast(r.message || 'No se pudo abrir.', 'err');
+                abrirDetail(r.html);
+            });
+        } else if (action === 'menus-rapidos') {
+            fetchPartial('menus_rapidos_modal', sesionId).then(function (r) {
+                if (!r.ok) return mostrarToast(r.message || 'No se pudo abrir.', 'err');
+                abrirDetail(r.html);
+            });
+        } else if (action === 'ads-config') {
+            fetchPartial('ads_config_modal', sesionId).then(function (r) {
+                if (!r.ok) return mostrarToast(r.message || 'No se pudo abrir.', 'err');
+                abrirDetail(r.html);
+            });
         } else if (action === 'test-eco') {
-            abrirEco(sesionId, nombre);
+            abrirEco(sesionId, nombre, numero);
         } else if (action === 'cambiar-foto') {
             abrirCambiarFoto(sesionId, nombre);
         } else if (action === 'baileys-verificar') {

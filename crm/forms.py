@@ -189,10 +189,6 @@ class DepartamentoChatBotForm(ModelFormBase):
         return instance
 
 
-class AddPerfilDepartamentoChatBotForm(FormModeloBase):
-    usuarios = forms.ModelMultipleChoiceField(label='Personas', queryset=Usuario.objects.filter(status=True))
-
-
 _CFG_RANGES = {
     'cfg_faiss_k':            (1, 20),
     'cfg_faiss_fetch_k':      (5, 80),
@@ -480,7 +476,7 @@ class ClienteForm(ModelFormBase):
     class Meta:
         model = Cliente
         fields = (
-            'cedula', 'nombres', 'apellidos', 'email', 'telefono',
+            'cedula', 'nombres', 'apellidos', 'email', 'telefono', 'ciudad',
             'edad', 'fecha_nacimiento', 'sexo', 'canal_origen',
             'contacto_origen', 'conversacion_origen', 'sesion_origen',
             'departamento_origen', 'notas',

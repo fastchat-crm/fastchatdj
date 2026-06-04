@@ -2,6 +2,7 @@
 {% load static %}
 {% block head %}
     <link rel="stylesheet" href="{% static 'stylenew/dpto_a_agente_ia.css' %}?v1.1">
+    <link rel="stylesheet" href="/static/css/crm/asistente_chat.css?v1.0">
 {% endblock %}
 {% block content %}
 
@@ -48,6 +49,11 @@
                    title="Generar un departamento + opciones automáticamente describiendo tu negocio">
                     <i class="fa fa-wand-magic-sparkles me-1"></i> Crear con IA
                 </a>
+                <a href="javascript:void(0);" class="btn btn-primary btn-sm"
+                   onclick="abrirAsistenteChat()"
+                   title="Construí el flujo conversando: la IA te pregunta, vos refinás y creás el departamento">
+                    <i class="fa fa-comments me-1"></i> Asistente IA (chat)
+                </a>
             {% else %}
                 <button type="button" class="btn btn-outline-secondary btn-sm" disabled
                         title="Para habilitar 'Crear con IA' configurá una API Key IA del sistema en /seguridad/configuracion/ y activá el switch 'Features de IA del sistema'">
@@ -79,14 +85,14 @@
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end"
                                     aria-labelledby="dropdownMenuButton-{{ l.pk }}">
+                                    {% if ia_disponible %}
                                     <li>
-                                        <a class="dropdown-item"
-                                           onclick="formModal({{ l.pk }}, 'Asignación de usuarios {{ l }}', 'addUsers')"
-                                           href="javascript:void(0);">
-                                            <i class="fas fa-users me-2 text-success"></i>Usuarios
+                                        <a class="dropdown-item" href="javascript:void(0);"
+                                           onclick="abrirAsistenteChat({{ l.pk }}, '{{ l.nombre|escapejs }}')">
+                                            <i class="fa fa-comments me-2 text-primary"></i>Editar con chat (IA)
                                         </a>
                                     </li>
-                                    <li class="dropdown-divider"></li>
+                                    {% endif %}
                                     <li>
                                         <a class="dropdown-item" href="javascript:void(0);"
                                            onclick="abrirModalGenerarAgente({{ l.pk }}, '{{ l.nombre|escapejs }}')">
@@ -149,10 +155,6 @@
                             <div class="dpchat-counter" title="Conexiones del grafo">
                                 <span class="dpchat-counter__num">{{ l.count_conexiones }}</span>
                                 <span class="dpchat-counter__lbl">Conexiones</span>
-                            </div>
-                            <div class="dpchat-counter" title="Asesores asignados">
-                                <span class="dpchat-counter__num">{{ l.count_usuarios }}</span>
-                                <span class="dpchat-counter__lbl">Usuarios</span>
                             </div>
                             <div class="dpchat-counter" title="Palabras clave de entrada">
                                 <span class="dpchat-counter__num">{{ l.count_palabras }}</span>
@@ -269,12 +271,86 @@
                         </select>
                     </div>
 
+                    <hr class="my-3">
+                    <div class="alert alert-warning py-2 small mb-3">
+                        <i class="fa fa-list-check me-1"></i>
+                        <b>Asistente guiado (Q&amp;A).</b> Respondé estas preguntas y la IA arma un
+                        proceso <b>pregunta→respuesta</b> con captura de datos y derivación a un asesor.
+                        Dejá vacío lo que no aplique.
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">¿Qué quiere lograr el cliente en este flujo?</label>
+                        <input type="text" class="form-control form-control-sm" id="ia_objetivo"
+                               placeholder="Ej: Cotizar un seguro · Agendar una cita · Reportar un problema">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">¿Qué datos necesitás pedirle al cliente?</label>
+                        <textarea class="form-control form-control-sm" id="ia_datos" rows="3"
+                                  placeholder="Uno por línea. Ej:&#10;Nombre completo&#10;Cédula&#10;Correo electrónico&#10;Teléfono"></textarea>
+                        <small class="text-muted">La IA crea un paso por cada dato, con validación (email, cédula, teléfono…).</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">¿Qué opciones querés ofrecer en el menú principal?</label>
+                        <textarea class="form-control form-control-sm" id="ia_opciones" rows="3"
+                                  placeholder="Una por línea. Ej:&#10;Cotizar&#10;Estado de mi trámite&#10;Hablar con un asesor"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">¿Cuándo pasar a un asesor humano?</label>
+                        <input type="text" class="form-control form-control-sm" id="ia_handoff"
+                               placeholder="Ej: Si pide hablar con alguien o si el bot no entiende la consulta">
+                    </div>
+
                     <div id="ia_resultado" class="alert d-none mb-0"></div>
                 </div>
                 <div class="modal-footer py-2">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-warning btn-sm" id="btnGenerarIA">
-                        <i class="fa fa-wand-magic-sparkles me-1"></i> Generar con IA
+                    <button type="button" class="btn btn-outline-warning btn-sm" id="btnGenerarIA">
+                        <i class="fa fa-wand-magic-sparkles me-1"></i> Menú rápido
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btnGenerarWizard">
+                        <i class="fa fa-list-check me-1"></i> Armar proceso (Q&amp;A)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if ia_disponible %}
+    <div class="modal fade" id="modalAsistenteChat" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h5 class="modal-title">
+                        <i class="fa fa-comments me-2 text-primary"></i>
+                        Asistente IA (chat)
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 small mb-2">
+                        <i class="fa fa-circle-info me-1"></i>
+                        Conversá con la IA: te va preguntando y arma el flujo. Pedile cambios
+                        (ej. <i>"agregá un paso que pida la placa"</i>). Cuando esté listo, creás el departamento.
+                    </div>
+                    <div id="chat-mensajes" class="chat-asistente mb-2"></div>
+                    <div id="chat-borrador-info" class="chat-borrador d-none small mb-2"></div>
+                    <div class="input-group">
+                        <textarea id="chat-input" class="form-control form-control-sm" rows="2"
+                                  placeholder="Escribí acá… (ej: 'Es una óptica, quiero que el cliente agende una cita')"></textarea>
+                        <button class="btn btn-primary btn-sm" type="button" id="chat-enviar">
+                            <i class="fa fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-success btn-sm" id="chat-crear" disabled>
+                        <i class="fa fa-circle-check me-1"></i> Crear departamento
                     </button>
                 </div>
             </div>
@@ -470,7 +546,6 @@
                                         <div><b>Endpoints API distintos:</b> <span id="dup_dpto_endpoints" class="badge bg-secondary"></span>
                                             <small class="text-muted">(se reutilizan, no se clonan)</small>
                                         </div>
-                                        <div><b>Usuarios asignados:</b> <span id="dup_dpto_usuarios" class="badge bg-success"></span></div>
                                     </div>
                                 </div>
                             </div>
@@ -527,119 +602,6 @@
                     mensajeWarning("Error de conexión.");
                 },
                 dataType: "json"
-            });
-        }
-
-
-        function guardarUsuarios(pk) {
-            const $select = $('#id_usuarios');
-            const userIds = $select.val();
-
-            if (!userIds || userIds.length === 0) {
-                alertaWarning('Debes seleccionar al menos un usuario.');
-                return;
-            }
-
-
-            $.ajax({
-                type: 'POST',
-                url: '{{ request.path }}',
-                async: false,
-                data: {
-                    csrfmiddlewaretoken: '{{ csrf_token }}',
-                    action: 'guardar_usuarios',
-                    pk: pk,
-                    usuarios: JSON.stringify(userIds),
-                },
-                dataType: "json",
-                beforeSend: function () {
-                    pantallaespera();
-                },
-            }).done(function (response) {
-                setTimeout($.unblockUI, 1);
-                if (response.result) {
-                    $select.val(null).trigger('change');
-
-                    const table = $('.tableUsuarios').DataTable();
-
-                    response.usuarios.forEach(function (user) {
-                        const existe = $(`#tbody_participantes tr[data-usuario-id="${user.id}"]`).length > 0;
-                        if (!existe) {
-                            const fotoHtml = user.foto
-                                ? `<a href="${user.foto}" data-fancybox="image" data-width="2048" data-height="1365" title="${user.documento}">
-                                            <img class="rounded-circle me-3" src="${user.foto}" width="60" height="60" alt="${user.documento}">
-                                       </a>`
-                                : `<div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3"
-                                           style="width: 60px; height: 60px;">
-                                           <i class="fas fa-user fa-2x text-secondary"></i>
-                                       </div>`;
-
-                            const nombreHtml = `
-                                    <div class="d-flex align-items-center">
-                                        ${fotoHtml}
-                                        <div class="info-top">
-                                            <span>${user.documento}</span><br>
-                                            <span><b>${user.nombre}</b></span>
-                                            ${user.email ? `<br><a href="mailto:${user.email}"><i class="fa fa-envelope"></i> ${user.email}</a>` : ''}
-                                            ${user.telcelular ? `<br><a href="javascript:void(0)" onclick="contactWS('${user.telcelular}', '${user.nombre}')">
-                                                                    <i class="fa-brands fa-whatsapp"></i> +593 ${user.telcelular}</a>` : ''}
-                                        </div>
-                                    </div>`;
-
-                            const accionHtml = `
-                                    <a href="javascript:void(0)" onclick="eliminarajaxusuarios(${user.id_relacion}, '', 'eliminar_usuario', this)" class="btn btn-danger btn-mini">
-                                        <i class="fa fa-trash"></i>
-                                    </a>`;
-
-                            const rowNode = table.row.add([
-                                nombreHtml,
-                                accionHtml
-                            ]).draw(false).node();
-                            $(rowNode).find('td:eq(1)').addClass('text-center');
-                            $(rowNode).attr('data-usuario-id', user.id).hide().fadeIn('slow');
-                        }
-                    });
-
-                    alertaSuccess('Usuarios agregados correctamente.');
-                } else {
-                    alertaWarning(response.message || 'Ocurrió un error.');
-                }
-            }).fail(function (jqXHR, textStatus, errorThrown) {
-                setTimeout($.unblockUI, 1);
-                mensajeWarning('Error en el servidor');
-            }).always(function () {
-            });
-        }
-
-        function eliminarajaxusuarios(pk, nombre, accion, btn = null, titulo = `Estas a punto de eliminar este registro ${nombre}`) {
-            Swal.fire({
-                title: `${titulo}`,
-                text: "Esta acción es irreversible",
-                type: 'warning',
-                showCancelButton: true,
-                allowOutsideClick: false,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Sí, deseo hacerlo!',
-                cancelButtonText: 'Cancelar'
-            }).then((result) => {
-                if (result.value) {
-                    pantallaespera();
-                    $.post("{{ request.path }}", {'action': accion, 'id': pk}, function (data) {
-                        setTimeout($.unblockUI, 1);
-                        if (data.error === false) {
-                            if (btn) {
-                                const $row = $(btn).closest('tr');
-                                $row.fadeOut(200, function () {
-                                    $row.remove();
-                                });
-                            }
-                            alertaSuccess('Registro eliminado correctamente');
-                        } else {
-                            alertaWarning(data.message || "Ocurrió un error");
-                        }
-                    }, "json");
-                }
             });
         }
 
@@ -798,7 +760,6 @@
                 document.getElementById('dup_dpto_nodos').textContent = d.count_opciones;
                 document.getElementById('dup_dpto_conexiones').textContent = d.count_conexiones;
                 document.getElementById('dup_dpto_endpoints').textContent = d.count_endpoints;
-                document.getElementById('dup_dpto_usuarios').textContent = d.count_usuarios;
 
                 const palWrap = document.getElementById('dup_dpto_palabras_wrap');
                 const palCont = document.getElementById('dup_dpto_palabras');
@@ -984,6 +945,10 @@
             document.getElementById('ia_descripcion').value = '';
             document.getElementById('ia_tono').value = 'amable';
             document.getElementById('ia_charcount').textContent = '0';
+            document.getElementById('ia_objetivo').value = '';
+            document.getElementById('ia_datos').value = '';
+            document.getElementById('ia_opciones').value = '';
+            document.getElementById('ia_handoff').value = '';
             const res = document.getElementById('ia_resultado');
             res.classList.add('d-none');
             res.innerHTML = '';
@@ -1067,6 +1032,228 @@
                 res.classList.add('alert-danger');
                 res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Error de red: ' + ex.message;
             }
+        });
+
+        document.getElementById('btnGenerarWizard').addEventListener('click', async function () {
+            const desc = document.getElementById('ia_descripcion').value.trim();
+            const res = document.getElementById('ia_resultado');
+            const btn = this;
+
+            if (desc.length < 30) {
+                res.classList.remove('d-none', 'alert-success', 'alert-info');
+                res.classList.add('alert-danger');
+                res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Describí el negocio con más detalle (mínimo 30 caracteres).';
+                return;
+            }
+
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Armando proceso...';
+            res.classList.remove('d-none', 'alert-danger', 'alert-success');
+            res.classList.add('alert-info');
+            res.innerHTML = '<i class="fa fa-robot me-1"></i> La IA está armando tu proceso pregunta→respuesta... 5-15 segundos.';
+
+            const fd = new FormData();
+            fd.append('action', 'generar_con_ia_wizard');
+            fd.append('csrfmiddlewaretoken', document.querySelector('input[name=csrfmiddlewaretoken]').value);
+            fd.append('descripcion', desc);
+            fd.append('tipo_negocio', document.getElementById('ia_negocio_tipo').value.trim());
+            fd.append('tono', document.getElementById('ia_tono').value);
+            fd.append('objetivo', document.getElementById('ia_objetivo').value.trim());
+            fd.append('datos_cliente', document.getElementById('ia_datos').value.trim());
+            fd.append('opciones_menu', document.getElementById('ia_opciones').value.trim());
+            fd.append('handoff_cuando', document.getElementById('ia_handoff').value.trim());
+
+            try {
+                const r = await fetch('{{ request.path }}', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'X-Requested-With': 'XMLHttpRequest'},
+                    credentials: 'same-origin',
+                });
+                const data = await r.json();
+                btn.disabled = false;
+                btn.innerHTML = orig;
+
+                if (data.error) {
+                    res.classList.remove('alert-info', 'alert-success');
+                    res.classList.add('alert-danger');
+                    res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> ' + (data.message || 'Error generando el proceso.');
+                    return;
+                }
+
+                res.classList.remove('alert-info', 'alert-danger');
+                res.classList.add('alert-success');
+                res.innerHTML =
+                    '<i class="fa fa-circle-check me-1"></i> <b>Proceso creado:</b> ' +
+                    (data.nombre || '') +
+                    ' con ' + (data.opciones_count || 0) + ' nodos. Recargando...';
+                setTimeout(() => window.location.reload(), 1500);
+
+            } catch (ex) {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                res.classList.remove('alert-info', 'alert-success');
+                res.classList.add('alert-danger');
+                res.innerHTML = '<i class="fa fa-circle-xmark me-1"></i> Error de red: ' + ex.message;
+            }
+        });
+
+        let _chatModalInstance = null;
+        let _chatHistorial = [];
+        let _chatBorrador = null;
+        let _chatEditDeptId = null;
+
+        async function abrirAsistenteChat(deptId, deptNombre) {
+            const el = document.getElementById('modalAsistenteChat');
+            if (!el) return;
+            if (!_chatModalInstance) _chatModalInstance = new bootstrap.Modal(el);
+            _chatHistorial = [];
+            _chatBorrador = null;
+            _chatEditDeptId = deptId || null;
+            document.getElementById('chat-mensajes').innerHTML = '';
+            document.getElementById('chat-input').value = '';
+            const info = document.getElementById('chat-borrador-info');
+            info.classList.add('d-none');
+            info.innerHTML = '';
+            const crear = document.getElementById('chat-crear');
+            crear.disabled = true;
+            crear.innerHTML = _chatEditDeptId
+                ? '<i class="fa fa-floppy-disk me-1"></i> Guardar cambios'
+                : '<i class="fa fa-circle-check me-1"></i> Crear departamento';
+            _chatModalInstance.show();
+
+            if (_chatEditDeptId) {
+                _chatBurbuja('ia', 'Cargando el flujo actual de "' + (deptNombre || 'este departamento') + '"…');
+                try {
+                    const r = await fetch('{{ request.path }}?action=wizard_cargar_borrador&id=' + _chatEditDeptId, {
+                        headers: {'X-Requested-With': 'XMLHttpRequest'}, credentials: 'same-origin',
+                    });
+                    const data = await r.json();
+                    if (data.error) {
+                        _chatBurbuja('ia', '⚠️ ' + (data.message || 'No se pudo cargar el flujo.'));
+                        return;
+                    }
+                    _chatBorrador = data.flujo || null;
+                    _chatActualizarBorrador(false);
+                    _chatBurbuja('ia', 'Listo, cargué el flujo de "' + (data.nombre || '') + '". ¿Qué querés cambiar? Ej: "agregá un paso que pida la placa", "quitá la opción de promociones", "cambiá el saludo".');
+                } catch (ex) {
+                    _chatBurbuja('ia', '⚠️ Error de red al cargar: ' + ex.message);
+                }
+            } else {
+                _chatBurbuja('ia', '¡Hola! Soy tu asistente para crear el chatbot. Contame: ¿qué hace tu negocio y qué querés que resuelva este flujo?');
+            }
+        }
+
+        function _chatBurbuja(rol, texto) {
+            const cont = document.getElementById('chat-mensajes');
+            const div = document.createElement('div');
+            div.className = 'chat-burbuja ' + (rol === 'user' ? 'chat-user' : 'chat-ia');
+            div.textContent = texto;
+            cont.appendChild(div);
+            cont.scrollTop = cont.scrollHeight;
+            return div;
+        }
+
+        function _chatActualizarBorrador(listo) {
+            const info = document.getElementById('chat-borrador-info');
+            const crear = document.getElementById('chat-crear');
+            if (_chatBorrador && Array.isArray(_chatBorrador.nodos) && _chatBorrador.nodos.length) {
+                const n = _chatBorrador.nodos.length;
+                const nombre = _chatBorrador.nombre_departamento || '(sin nombre)';
+                info.innerHTML = '<i class="fa fa-diagram-project me-1"></i> Borrador: <b>' + nombre + '</b> · ' + n + ' paso(s)' + (listo ? ' · <span class="text-success fw-bold">listo para crear</span>' : '');
+                info.classList.remove('d-none');
+                crear.disabled = false;
+            } else {
+                crear.disabled = true;
+            }
+        }
+
+        async function _chatEnviar() {
+            const input = document.getElementById('chat-input');
+            const mensaje = input.value.trim();
+            if (!mensaje) return;
+            input.value = '';
+            _chatBurbuja('user', mensaje);
+            _chatHistorial.push({rol: 'user', texto: mensaje});
+
+            const typing = _chatBurbuja('ia', 'Escribiendo…');
+            typing.classList.add('chat-typing');
+            const btnEnviar = document.getElementById('chat-enviar');
+            btnEnviar.disabled = true;
+
+            const fd = new FormData();
+            fd.append('action', 'wizard_chat');
+            fd.append('csrfmiddlewaretoken', document.querySelector('input[name=csrfmiddlewaretoken]').value);
+            fd.append('mensaje', mensaje);
+            fd.append('historial', JSON.stringify(_chatHistorial));
+            fd.append('borrador', _chatBorrador ? JSON.stringify(_chatBorrador) : '');
+
+            try {
+                const r = await fetch('{{ request.path }}', {
+                    method: 'POST', body: fd,
+                    headers: {'X-Requested-With': 'XMLHttpRequest'}, credentials: 'same-origin',
+                });
+                const data = await r.json();
+                typing.remove();
+                btnEnviar.disabled = false;
+                if (data.error) {
+                    _chatBurbuja('ia', '⚠️ ' + (data.message || 'Error.'));
+                    return;
+                }
+                const resp = data.respuesta || '(sin respuesta)';
+                _chatBurbuja('ia', resp);
+                _chatHistorial.push({rol: 'assistant', texto: resp});
+                if (data.flujo) { _chatBorrador = data.flujo; }
+                _chatActualizarBorrador(data.listo);
+            } catch (ex) {
+                typing.remove();
+                btnEnviar.disabled = false;
+                _chatBurbuja('ia', '⚠️ Error de red: ' + ex.message);
+            }
+        }
+
+        async function _chatCrear() {
+            if (!_chatBorrador) return;
+            const crear = document.getElementById('chat-crear');
+            const orig = crear.innerHTML;
+            crear.disabled = true;
+            crear.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Guardando…';
+            const fd = new FormData();
+            fd.append('csrfmiddlewaretoken', document.querySelector('input[name=csrfmiddlewaretoken]').value);
+            fd.append('flujo', JSON.stringify(_chatBorrador));
+            if (_chatEditDeptId) {
+                fd.append('action', 'wizard_actualizar');
+                fd.append('departamento_id', _chatEditDeptId);
+            } else {
+                fd.append('action', 'wizard_crear');
+            }
+            try {
+                const r = await fetch('{{ request.path }}', {
+                    method: 'POST', body: fd,
+                    headers: {'X-Requested-With': 'XMLHttpRequest'}, credentials: 'same-origin',
+                });
+                const data = await r.json();
+                if (data.error) {
+                    crear.disabled = false;
+                    crear.innerHTML = orig;
+                    _chatBurbuja('ia', '⚠️ ' + (data.message || 'Error al guardar.'));
+                    return;
+                }
+                const verbo = _chatEditDeptId ? 'actualizado' : 'creado';
+                _chatBurbuja('ia', '✅ Departamento "' + (data.nombre || '') + '" ' + verbo + ' con ' + (data.opciones_count || 0) + ' nodos. Recargando…');
+                setTimeout(() => window.location.reload(), 1400);
+            } catch (ex) {
+                crear.disabled = false;
+                crear.innerHTML = orig;
+                _chatBurbuja('ia', '⚠️ Error de red: ' + ex.message);
+            }
+        }
+
+        document.getElementById('chat-enviar').addEventListener('click', _chatEnviar);
+        document.getElementById('chat-crear').addEventListener('click', _chatCrear);
+        document.getElementById('chat-input').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); _chatEnviar(); }
         });
         {% endif %}
     </script>

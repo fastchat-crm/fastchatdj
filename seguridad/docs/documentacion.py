@@ -16,6 +16,7 @@ DOCS_SIDEBAR = [
         'titulo': 'Inicio',
         'items': [
             {'nombre': 'Plataforma FastChat DJ', 'slug': 'plataforma'},
+            {'nombre': 'Novedades', 'slug': 'novedades'},
             {'nombre': 'Conectar con plataformas', 'slug': 'conectar-whatsapp-business'},
         ],
     },
@@ -45,7 +46,9 @@ DOCS_SIDEBAR = [
     },
     {
         'titulo': 'Para desarrolladores',
-        'items': [],
+        'items': [
+            {'nombre': 'Webhooks', 'slug': 'webhooks'},
+        ],
     },
 ]
 
@@ -99,10 +102,33 @@ def _hoja_mensajeria_instantanea(request):
     return render(request, 'docs/mensajeria_instantanea.html', data)
 
 
+def _hoja_webhooks(request):
+    """Referencia de webhooks: entrantes (Meta/Baileys/IG/Messenger/heartbeat/trace)
+    y saliente (integraciones). Explica la función de cada uno."""
+    data = _ctx_sidebar(
+        request,
+        slug_actual='webhooks',
+        titulo_pagina='Webhooks',
+    )
+    return render(request, 'docs/webhooks.html', data)
+
+
+def _hoja_novedades(request):
+    """Resumen de las funciones nuevas de la plataforma."""
+    data = _ctx_sidebar(
+        request,
+        slug_actual='novedades',
+        titulo_pagina='Novedades de la plataforma',
+    )
+    return render(request, 'docs/novedades.html', data)
+
+
 HOJAS = {
     'plataforma': _hoja_plataforma,
     'conectar-whatsapp-business': _hoja_conectar_whatsapp_business,
     'mensajeria-instantanea': _hoja_mensajeria_instantanea,
+    'webhooks': _hoja_webhooks,
+    'novedades': _hoja_novedades,
 }
 
 

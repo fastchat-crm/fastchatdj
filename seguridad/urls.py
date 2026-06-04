@@ -15,6 +15,7 @@ from .view_modulogrupo import modulo_grupo
 from .view_modulos_sistema import modulossistemaView
 from .docs.documentacion import documentacionView
 from .view_mailing import mailingView
+from .view_webpush_broadcast import webpush_broadcast
 
 seguridad_urls = (
     {
@@ -81,6 +82,11 @@ seguridad_urls = (
         "nombre": "Email Administration",
         "url": 'administracion-mails/',
         "vista": mailingView,
+    },
+    {
+        "nombre": "Push broadcast",
+        "url": 'webpush-broadcast/',
+        "vista": webpush_broadcast,
     },
 )
 

@@ -102,19 +102,6 @@
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Sesion</label>
-                            <div class="input-group">
-                                <select class="form-control select2" name="sesion">
-                                    <option value="">Todas las sesiones</option>
-                                    {% for s in sesiones_meta %}
-                                    <option value="{{ s.id }}" {% if sesion_sel == s.id %}selected{% endif %}>
-                                        {{ s.nombre|default:s.numero }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
                             <label class="form-label">Estado</label>
                             <select class="form-select" name="estado">
                                 <option value="">Todos los estados</option>

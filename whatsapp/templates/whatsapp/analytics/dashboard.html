@@ -24,17 +24,6 @@
                 </small>
             </div>
             <form method="GET" class="row g-2 align-items-end mb-0">
-                <div class="col-md-4">
-                    <label class="form-label small mb-1">Sesión</label>
-                    <select name="sesion" class="form-select select2">
-                        <option value="">Todas las sesiones</option>
-                        {% for s in sesiones %}
-                            <option value="{{ s.id }}" {% if sesion_sel == s.id %}selected{% endif %}>
-                                {{ s.nombre|default:s.numero }} · {{ s.get_proveedor_display }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
                 <div class="col-md-2">
                     <label class="form-label small mb-1">Rango rápido</label>
                     <select name="dias" class="form-select"
@@ -109,7 +98,7 @@
         <div class="col-12"><div class="card"><div class="card-body">
             <h6>ROI por campaña CTWA (atribución Meta Ads)</h6>
             <table class="table table-sm" id="tblCtwa"><thead>
-                <tr><th>Campaign ID</th><th>Ad ID</th><th>Conversaciones</th><th>Leads</th><th>Clientes</th><th>Conv. %</th></tr>
+                <tr><th>Campaña</th><th>Anuncio</th><th>Conversaciones</th><th>Leads</th><th>Clientes</th><th>Conv. %</th></tr>
             </thead><tbody></tbody></table>
         </div></div></div>
         <div class="col-12"><div class="card"><div class="card-body">
@@ -213,9 +202,12 @@ async function load(){
     });
     // CTWA tabla
     const tb = document.querySelector('#tblCtwa tbody');
+    const esc = s => $('<div>').text(s == null ? '' : s).html();
     d.roi_ctwa.forEach(r => {
         const conv = r.total ? ((r.clientes/r.total)*100).toFixed(1) : 0;
-        tb.innerHTML += `<tr><td>${r.campaign_id||'—'}</td><td>${r.ad_id||'—'}</td><td>${r.total}</td><td>${r.leads}</td><td>${r.clientes}</td><td>${conv}%</td></tr>`;
+        const camp = r.campaign_name ? esc(r.campaign_name) : `<code>${esc(r.campaign_id||'—')}</code>`;
+        const anun = r.ad_name ? esc(r.ad_name) : `<code>${esc(r.ad_id||'—')}</code>`;
+        tb.innerHTML += `<tr><td>${camp}</td><td>${anun}</td><td>${r.total}</td><td>${r.leads}</td><td>${r.clientes}</td><td>${conv}%</td></tr>`;
     });
     if(!d.roi_ctwa.length) tb.innerHTML = '<tr><td colspan="6" class="text-muted text-center">Sin conversaciones CTWA en este rango</td></tr>';
     // Forecast

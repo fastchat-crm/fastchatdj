@@ -2,9 +2,17 @@
 {# Card individual de sesion en el tablero. Reusable como partial (AJAX poll). #}
 <div class="conex-card{% if not sesion.activo %} conex-card-pausada{% endif %}" data-sesion-id="{{ sesion.id }}"
      data-sesion-nombre="{{ sesion.nombre|default:sesion.numero|escape }}"
+     data-sesion-numero="{% if sesion.es_meta and sesion.config_meta and sesion.config_meta.display_phone_number %}{{ sesion.config_meta.display_phone_number|escape }}{% elif sesion.numero %}+{{ sesion.numero|escape }}{% endif %}"
      data-estado="{{ sesion.estado }}"
      data-activo="{{ sesion.activo|yesno:'1,0' }}"
-     data-proveedor="{{ sesion.proveedor }}">
+     data-proveedor="{{ sesion.proveedor }}"
+     {% if sesion.es_meta and sesion.config_meta and sesion.config_meta.waba_id %}data-meta-url="https://business.facebook.com/latest/whatsapp_manager/phone_numbers/?{% if sesion.config_meta.business_account_id %}business_id={{ sesion.config_meta.business_account_id }}&{% endif %}asset_id={{ sesion.config_meta.waba_id }}&nav_ref=whatsapp_manager&tab=phone-numbers{% if sesion.config_meta.phone_number_id %}&phone_number_id={{ sesion.config_meta.phone_number_id }}{% endif %}"{% endif %}>
+
+    <div class="card-bell{% if sesion.conv_abiertas %} has-abiertas{% endif %}"
+         title="{{ sesion.conv_abiertas|default:0 }} conversación(es) abierta(s)">
+        <i class="fa fa-bell"></i>
+        <span class="card-bell-count">{{ sesion.conv_abiertas|default:0 }}</span>
+    </div>
 
     <div class="card-top">
         <div class="card-avatar">
@@ -64,20 +72,33 @@
                 </button>
                 <a href="/whatsapp/horarios/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
                         class="fa fa-business-time"></i> Horarios</a>
+                <a href="/whatsapp/sesiones/{{ sesion.id }}/mensajes-rapidos/?tab=respuestas" class="kebab-item"><i
+                        class="fa fa-clipboard-list"></i> Respuestas rápidas</a>
+                <a href="/whatsapp/sesiones/{{ sesion.id }}/mensajes-rapidos/?tab=menus" class="kebab-item"><i
+                        class="fa fa-list-ul"></i> Menús rápidos</a>
                 {% if sesion.es_meta %}
                     <div class="kebab-sep"></div>
                     <div class="kebab-heading">Meta Cloud API</div>
                     <button type="button" class="kebab-item" data-action="resumen"><i class="fa fa-clipboard-check"></i>
                         Resumen y pasos siguientes
                     </button>
+                    <button type="button" class="kebab-item" data-action="post-conexion"><i class="fa fa-list-check text-primary"></i>
+                        Configurar en Facebook (post-conexión)
+                    </button>
                     <button type="button" class="kebab-item" data-action="meta-validar"><i
                             class="fa fa-satellite-dish text-success"></i> Revalidar número con Meta
+                    </button>
+                    <button type="button" class="kebab-item" data-action="validar-conexion"><i
+                            class="fa fa-clipboard-check text-success"></i> Validar conexión (chequeos)
+                    </button>
+                    <button type="button" class="kebab-item" data-action="cambiar-nombre"><i
+                            class="fa fa-signature"></i> Cambiar nombre del número
                     </button>
                     <button type="button" class="kebab-item" data-action="datos-transporte"><i
                             class="fa fa-id-card"></i> Datos del transporte (Meta)
                     </button>
                     {% if sesion.config_meta and sesion.config_meta.waba_id %}
-                        <a href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers?asset_id={{ sesion.config_meta.waba_id }}{% if sesion.config_meta.business_account_id %}&business_id={{ sesion.config_meta.business_account_id }}{% endif %}&ir_qe_exposed=1"
+                        <a href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers/?{% if sesion.config_meta.business_account_id %}business_id={{ sesion.config_meta.business_account_id }}&{% endif %}asset_id={{ sesion.config_meta.waba_id }}&nav_ref=whatsapp_manager&tab=phone-numbers{% if sesion.config_meta.phone_number_id %}&phone_number_id={{ sesion.config_meta.phone_number_id }}{% endif %}"
                            target="_blank" rel="noopener" class="kebab-item">
                             <i class="fa-brands fa-meta"></i> Editar número en Meta Business
                         </a>
@@ -91,9 +112,6 @@
                     </button>
                     <div class="kebab-sep"></div>
                     <div class="kebab-heading">Meta Administración</div>
-                    <button type="button" class="kebab-item" data-action="webhook-info"><i class="fa fa-link"></i> Datos
-                        del webhook (Meta)
-                    </button>
                     <button type="button" class="kebab-item" data-action="plantilla-prueba"><i
                             class="fa fa-file-lines"></i> Enviar plantilla de prueba
                     </button>
@@ -105,6 +123,9 @@
                             class="fa fa-plus-circle"></i> Nueva campaña</a>
                     <a href="/whatsapp/analytics/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
                             class="fa fa-chart-line"></i> Analytics de esta sesión</a>
+                    <button type="button" class="kebab-item" data-action="ads-config"><i
+                            class="fa-brands fa-facebook text-primary"></i> Conectar anuncios (Click-to-WhatsApp)
+                    </button>
                 {% else %}
                     <div class="kebab-sep"></div>
                     <div class="kebab-heading">Baileys (Node.js)</div>
@@ -191,30 +212,70 @@
             {% endif %}
             {% with deptos=sesion.departamentos.all %}
                 {% if deptos %}
-                    <div class="card-subinfo">
-                        <i class="fa fa-layer-group"></i> Departamentos:
-                        {% for d in deptos %}
-                            <span class="text-primary">{{ d.nombre }}{% if d.id == sesion.departamento_default_id %} ★{% endif %}</span>{% if not forloop.last %} {% endif %}
-                        {% endfor %}
+                    <div class="card-block">
+                        <div class="card-block-label"><i class="fa fa-layer-group"></i> Departamentos</div>
+                        <div class="card-chips">
+                            {% for d in deptos %}
+                                <span class="depto-chip{% if d.id == sesion.departamento_default_id %} depto-chip-default{% endif %}" title="{% if d.id == sesion.departamento_default_id %}Flujo principal{% endif %}">
+                                    {% if d.id == sesion.departamento_default_id %}<i class="fa fa-star"></i> {% endif %}{{ d.nombre }}
+                                </span>
+                            {% endfor %}
+                        </div>
                     </div>
                 {% endif %}
             {% endwith %}
         {% endif %}
+
+        {% with usuarios=sesion.usuarios_asignados %}
+            {% if usuarios.total %}
+                <div class="card-block">
+                    <div class="card-block-label">
+                        <span><i class="fa fa-users"></i> Asesores asignados</span>
+                        <span class="asesor-counts">
+                            <span class="asesor-count asesor-count-sup" title="Supervisores que atienden">
+                                <i class="fa fa-user-shield"></i>{{ usuarios.supervisores|length }}
+                            </span>
+                            <span class="asesor-count asesor-count-ag" title="Agentes que atienden">
+                                <i class="fa fa-headset"></i>{{ usuarios.agentes|length }}
+                            </span>
+                        </span>
+                    </div>
+                    <div class="card-chips">
+                        {% for p in usuarios.visibles %}
+                            {% if p.rol == 'supervisor' %}
+                                <span class="user-chip user-chip-supervisor" title="Supervisor: {{ p.usuario.full_name|default:p.usuario.username }}">
+                                    <i class="fa fa-user-shield"></i> {{ p.usuario.full_name|default:p.usuario.username }}
+                                </span>
+                            {% else %}
+                                <span class="user-chip user-chip-agente" title="Agente: {{ p.usuario.full_name|default:p.usuario.username }}">
+                                    <i class="fa fa-headset"></i> {{ p.usuario.full_name|default:p.usuario.username }}
+                                </span>
+                            {% endif %}
+                        {% endfor %}
+                        {% if usuarios.extra %}
+                            <span class="user-chip user-chip-extra" title="{{ usuarios.extra_titulo }}">
+                                +{{ usuarios.extra }} más
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+        {% endwith %}
     </div>
 
     <div class="card-footer">
         <a href="/whatsapp/conversaciones/?sesion={{ sesion.id|encrypt_id }}" class="btn-quick">
             <i class="fa fa-comments"></i> Conversaciones
         </a>
-        {% if sesion.es_meta %}
-            <button type="button" class="btn-quick btn-quick-info" data-action="webhook-info"
-                    title="Ver URL del webhook + verify token para configurar en Meta">
-                <i class="fa fa-link"></i> Webhook
-            </button>
-        {% endif %}
         {% if sesion.es_baileys and sesion.estado != 'conectado' %}
             <button type="button" class="btn-quick btn-quick-warn" data-action="baileys-reconnect">
                 <i class="fa fa-qrcode"></i> Escanear QR
+            </button>
+        {% endif %}
+        {% if sesion.es_meta and sesion.config_meta and not sesion.config_meta.webhook_verificado_en %}
+            <button type="button" class="btn-quick btn-quick-warn" data-action="post-conexion"
+                    title="Faltan pasos para dejar el número en producción">
+                <i class="fa fa-list-check"></i> Completar configuración
             </button>
         {% endif %}
     </div>

@@ -8,9 +8,10 @@ ALLOWED_HOSTS = ["*"]
 
 WKHTMLTOPDF_DEBUG = True
 # SESSION CONFIGURATION
-# SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_AGE = 28800
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 365 * 5
+SESSION_SAVE_EVERY_REQUEST = True
 
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -152,6 +153,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'pwa.context_processors.pwa_settings',
+                'whatsapp.context_processors.selector_sesion',
             ],
         },
     },

@@ -208,7 +208,7 @@
                         (en <code>crm/funciones_chatbot.py</code>). La función:
                         <ul>
                             <li>POSTea al webhook externo (URL leída desde el <code>EndpointApiChatbot</code> asociado al nodo — editable desde <a href="/crm/endpoints_api/">/crm/endpoints_api/</a>).</li>
-                            <li>El motor del flujo, viendo <code>config.envia_correo=true</code>, dispara email a los asesores del depto (<a href="/crm/departamentos_chatbots/">PerfilDepartamentoChatBot</a>) cuando la función retorna <code>ok</code>.</li>
+                            <li>El motor del flujo, viendo <code>config.envia_correo=true</code>, notifica a los asesores disponibles del número (configurados en la sesión de WhatsApp vía <code>PerfilSesionWhatsApp</code>) cuando la función retorna <code>ok</code>.</li>
                             <li>La función devuelve <code>{etiqueta: 'ok'|'error', body, status, error}</code> para que el flujo elija rama <code>ok</code> o <code>error</code>.</li>
                         </ul>
                     </li>

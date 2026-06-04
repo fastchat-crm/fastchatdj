@@ -95,6 +95,7 @@ def trazasView(request):
     )
 
     numero = (request.GET.get('numero') or '').strip()
+    conversacion_filtro = (request.GET.get('conversacion') or '').strip()
     sesion_filtro = leer_sesion_id(request)
     etapa_filtro = request.GET.get('etapa') or ''
     nivel_filtro = request.GET.get('nivel') or ''
@@ -109,6 +110,14 @@ def trazasView(request):
         filtros &= Q(numero__icontains=numero)
         data['numero'] = numero
         url_vars += f'&numero={numero}'
+    if conversacion_filtro:
+        try:
+            conv_pk = int(conversacion_filtro)
+            filtros &= Q(conversacion_id=conv_pk)
+            data['conversacion_sel'] = conv_pk
+            url_vars += f'&conversacion={conv_pk}'
+        except (TypeError, ValueError):
+            pass
     if sesion_filtro:
         filtros &= Q(sesion_id=sesion_filtro)
         data['sesion_sel'] = int(sesion_filtro)

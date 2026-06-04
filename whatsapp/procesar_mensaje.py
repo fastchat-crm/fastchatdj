@@ -253,7 +253,12 @@ def process_incoming_message(session, event_data, channel_layer):
         if from_number != session.numero:  # sólo mensajes del cliente
             min_sesion = int(getattr(session, 'min_sesion', None) or 10)
             conversation.fecha_hora_expira = timezone.now() + timedelta(minutes=min_sesion)
-            conversation.save(update_fields=['fecha_hora_expira'])
+            campos_conv = ['fecha_hora_expira']
+            # El cliente respondió: habilitar de nuevo el nudge de reconexión.
+            if getattr(conversation, 'reconexion_enviada', False):
+                conversation.reconexion_enviada = False
+                campos_conv.append('reconexion_enviada')
+            conversation.save(update_fields=campos_conv)
 
         # Crear el mensaje
         message = MensajeWhatsApp.objects.create(
@@ -314,6 +319,76 @@ def process_incoming_message(session, event_data, channel_layer):
             )
 
         transaction.on_commit(_broadcast_message_events)
+
+        if from_number != session.numero:
+            _contact_label = (
+                getattr(contacto, 'contacto_nombre', None)
+                or getattr(contacto, 'contacto_numero', None)
+                or from_number
+                or 'Contacto'
+            )
+            _preview = (message_text or '').strip()[:120]
+            _sesion_label = (
+                getattr(session, 'nombre', None)
+                or getattr(session, 'numero', None)
+                or 'WhatsApp'
+            )
+            _push_url = '/whatsapp/conversaciones/'
+            _is_new_conv = bool(created)
+
+            def _push_to_team():
+                throttle_key = f'wa_push_throttle_{_conv_id}'
+                if not _is_new_conv and cache.get(throttle_key):
+                    return
+                try:
+                    from pwa.notificaciones import enviar_push_usuario
+                except Exception:
+                    return
+                from .models import PerfilSesionWhatsApp
+                from autenticacion.models import Usuario
+                targets = set()
+                if session.usuario_id:
+                    targets.add(session.usuario_id)
+                try:
+                    team_ids = list(
+                        PerfilSesionWhatsApp.objects
+                        .filter(sesion_id=session.id, status=True,
+                                usuario__status=True, usuario__is_active=True)
+                        .values_list('usuario_id', flat=True)
+                    )
+                    targets.update(team_ids)
+                except Exception:
+                    logger.exception('Push: error fetching team for sesion=%s', session.id)
+                if not targets:
+                    return
+                if _is_new_conv:
+                    head = f'Nueva conversación · {_sesion_label}'
+                    tag = f'wa-newconv-{_conv_id}'
+                    tipo = 'wa.conversacion.nueva'
+                else:
+                    head = f'Nuevo mensaje · {_sesion_label}'
+                    tag = f'wa-msg-{_conv_id}'
+                    tipo = 'wa.mensaje.nuevo'
+                body = f'{_contact_label}: {_preview}' if _preview else _contact_label
+                for u in Usuario.objects.filter(id__in=targets):
+                    try:
+                        enviar_push_usuario(
+                            u,
+                            head=head,
+                            body=body,
+                            url=_push_url,
+                            tag=tag,
+                            extra={
+                                'tipo': tipo,
+                                'sesion_id': _session_id,
+                                'conversacion_id': _conv_id,
+                            },
+                        )
+                    except Exception:
+                        logger.exception('Push failed user=%s conv=%s', u.id, _conv_id)
+                cache.set(throttle_key, 1, 30)
+
+            transaction.on_commit(_push_to_team)
 
         # ── Cortar envío si Node ya nos avisó que está rate-limited ──
         # Evita amplificar la saturación enviando bienvenida/IA/avisos durante la ventana.

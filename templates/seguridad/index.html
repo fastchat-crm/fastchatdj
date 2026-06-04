@@ -5,7 +5,7 @@
 
 {% block head %}
   <link rel="stylesheet" href="{% static 'stylenew/panel_principal.css' %}?v1.0">
-  <link rel="stylesheet" href="/static/stylenew/sesiones.css">
+  <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.0">
 {% endblock %}
 
 {% block content %}
@@ -161,6 +161,11 @@
               <div class="conex-grid">
                 {% for s in sesiones_activas %}
                   <div class="conex-card{% if not s.activo %} conex-card-pausada{% endif %}">
+                    <div class="card-bell{% if s.convs_abiertas %} has-abiertas{% endif %}"
+                         title="{{ s.convs_abiertas|default:0 }} conversación(es) abierta(s)">
+                      <i class="fa fa-bell"></i>
+                      <span class="card-bell-count">{{ s.convs_abiertas|default:0 }}</span>
+                    </div>
                     {% if not s.activo %}
                       <span class="badge-pausada" title="Sesión pausada — no procesa mensajes ni consume API">
                         <i class="fa fa-pause-circle"></i> PAUSADA
@@ -234,6 +239,11 @@
                             <i class="fa fa-robot"></i> Agente IA: <b>{{ s.agente_ia.nombre }}</b>
                           </div>
                         {% endif %}
+                      {% endif %}
+                      {% if s.ultima_conv %}
+                        <div class="card-subinfo">
+                          <i class="fa fa-clock"></i> Última conversación: <b>{{ s.ultima_conv|naturaltime }}</b>
+                        </div>
                       {% endif %}
                     </div>
                   </div>

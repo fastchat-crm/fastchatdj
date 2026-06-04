@@ -161,6 +161,29 @@
                     <span class="text-danger">⚠️ Sin funcion_codigo</span>
                 {% endif %}
             </div>
+            {% if funcion_meta %}
+                <div class="small mt-1 text-muted">{{ funcion_meta.descripcion }}</div>
+                <div class="small mt-1">
+                    {% if funcion_meta.requiere_endpoint %}
+                        <span class="badge bg-warning text-dark"><i class="fa fa-link me-1"></i>Requiere endpoint</span>
+                    {% else %}
+                        <span class="badge bg-light text-muted border">Endpoint opcional</span>
+                    {% endif %}
+                </div>
+                {% if funcion_meta.parametros %}
+                    <div class="small mt-1"><strong>Parámetros:</strong>
+                        <ul class="mb-0 mt-1" style="font-size:.72rem;">
+                            {% for nombre, desc in funcion_meta.parametros.items %}
+                                <li><code>{{ nombre }}</code> — {{ desc }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+            {% elif cfg.funcion_codigo %}
+                <div class="small mt-1">
+                    <span class="badge bg-danger"><i class="fa fa-triangle-exclamation me-1"></i>Código no registrado en crm/funciones_chatbot.py</span>
+                </div>
+            {% endif %}
             {% if opcion.endpoint %}
                 <div class="small mt-1">
                     <strong>Endpoint asociado:</strong> {{ opcion.endpoint.nombre }}

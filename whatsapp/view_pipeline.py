@@ -179,9 +179,18 @@ def pipelineView(request):
                     mensajes = []
                     contacto_numero = contacto.contacto_numero
                     contacto_nombre = contacto.contacto_nombre or contacto_numero or 'Client'
+                    # Dirección igual que el inbox (mensajes_partial.html): saliente
+                    # si el remitente es el número de la sesión, o si lo generó IA /
+                    # sistema / un agente. El resto es entrante del cliente. Comparar
+                    # contra el contacto falla porque Meta guarda el remitente
+                    # entrante con sufijo (@s.whatsapp.net) y no matchea.
+                    sesion_numero = (conv.sesion.numero or '') if conv.sesion_id else ''
                     for m in reversed(list(mensajes_qs)):
-                        es_entrante = (m.remitente == contacto_numero)
-                        tipo_msg = 'in' if es_entrante else ('ia' if m.ia_generado else 'out')
+                        es_saliente = (
+                            (sesion_numero and m.remitente == sesion_numero)
+                            or m.ia_generado or m.es_automatico or bool(m.agente_id)
+                        )
+                        tipo_msg = ('ia' if m.ia_generado else 'out') if es_saliente else 'in'
                         if tipo_msg == 'in':
                             remitente_label = contacto_nombre
                         elif tipo_msg == 'ia':
@@ -201,6 +210,12 @@ def pipelineView(request):
                             'fecha': m.fecha.strftime('%d/%m/%Y %H:%M') if m.fecha else '',
                         })
                     from core.funciones import encrypt_sesion_id
+                    from django.template.loader import get_template
+                    from .view_conversaciones import _clientes_de_conversacion
+                    _clientes = _clientes_de_conversacion(conv)
+                    clientes_html = get_template(
+                        'whatsapp/conversaciones/_modal_ficha_cliente.html'
+                    ).render({'clientes': _clientes, 'conv': conv}, request)
                     finalizada = bool(conv.conversacion_finalizada)
                     conv_token = encrypt_sesion_id(conv.id)
                     if finalizada:
@@ -238,6 +253,8 @@ def pipelineView(request):
                             'usuario': (card.usuario_creacion.get_full_name() if card.usuario_creacion else '—') or (card.usuario_creacion.username if card.usuario_creacion else '—'),
                         },
                         'comentarios': comentarios,
+                        'clientes_html': clientes_html,
+                        'clientes_count': len(_clientes),
                         'conversacion': {
                             'id': conv.id,
                             'nombre': contacto.contacto_nombre or contacto_numero,

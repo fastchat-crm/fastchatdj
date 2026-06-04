@@ -5,6 +5,9 @@ Uso (desde la raíz del proyecto, con la venv activa):
     python prueba_meta_webhook.py                # Test handshake (GET) sobre todas las ConfigMeta
     python prueba_meta_webhook.py --evento       # Además simula un evento POST con HMAC valido
     python prueba_meta_webhook.py --sesion 22    # Solo prueba la ConfigMeta de esa sesión
+    python prueba_meta_webhook.py --sesion 39 --evento --from 593987654321 --texto "hola"
+                                                 # Inyecta un entrante simulado a la sesión 39
+                                                 # con remitente/texto reales (dispara el bot)
 
 Casos que cubre:
   1. GET handshake con verify_token de cada ConfigMeta — confirma 200 y devuelve challenge.
@@ -80,8 +83,12 @@ def probar_handshake(base: str, config: ConfigMeta) -> bool:
     return False
 
 
-def construir_evento_simulado(config: ConfigMeta) -> dict:
-    """Payload Meta-shape de un mensaje entrante 'hola' simulado."""
+def construir_evento_simulado(config: ConfigMeta, from_num: str = '593999999999',
+                              texto: str = '[PRUEBA] hola desde prueba_meta_webhook.py') -> dict:
+    """Payload Meta-shape de un mensaje entrante simulado.
+
+    from_num y texto se pueden personalizar (--from / --texto) para reproducir
+    un mensaje real y disparar el bot/flujo de la sesion."""
     ts = str(int(time.time()))
     return {
         'object': 'whatsapp_business_account',
@@ -97,14 +104,14 @@ def construir_evento_simulado(config: ConfigMeta) -> dict:
                     },
                     'contacts': [{
                         'profile': {'name': 'Probador Webhook'},
-                        'wa_id':   '593999999999',
+                        'wa_id':   from_num,
                     }],
                     'messages': [{
-                        'from':      '593999999999',
+                        'from':      from_num,
                         'id':        f'wamid.PRUEBA_{ts}',
                         'timestamp': ts,
                         'type':      'text',
-                        'text':      {'body': '[PRUEBA] hola desde prueba_meta_webhook.py'},
+                        'text':      {'body': texto},
                     }],
                 },
             }],
@@ -112,12 +119,12 @@ def construir_evento_simulado(config: ConfigMeta) -> dict:
     }
 
 
-def probar_post_evento(base: str, config: ConfigMeta) -> bool:
+def probar_post_evento(base: str, config: ConfigMeta, from_num: str, texto: str) -> bool:
     app_secret = get_meta_app_secret()
     if not app_secret:
         print("  ⚠️  Sin app_secret cargado — Django acepta sin firmar (modo permisivo).")
 
-    payload = construir_evento_simulado(config)
+    payload = construir_evento_simulado(config, from_num=from_num, texto=texto)
     raw_body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
 
     headers = {'Content-Type': 'application/json'}
@@ -163,6 +170,10 @@ def main():
     p.add_argument('--base',   help='URL base (default: settings.URL_GENERAL)')
     p.add_argument('--sesion', type=int, help='Probar solo esta sesion_id')
     p.add_argument('--evento', action='store_true', help='Simular POST de mensaje entrante')
+    p.add_argument('--from', dest='from_num', default='593999999999',
+                   help='Numero remitente (wa_id) del mensaje simulado')
+    p.add_argument('--texto', default='[PRUEBA] hola desde prueba_meta_webhook.py',
+                   help='Texto del mensaje entrante simulado')
     args = p.parse_args()
 
     base = base_url(args.base)
@@ -186,7 +197,7 @@ def main():
         if probar_handshake(base, c):
             ok_handshake += 1
             if args.evento:
-                if probar_post_evento(base, c):
+                if probar_post_evento(base, c, args.from_num, args.texto):
                     ok_post += 1
 
     print("\n=== Resumen ===")

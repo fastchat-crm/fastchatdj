@@ -18,7 +18,8 @@ class SesionWhatsAppForm(ModelFormBase):
         fields = ('nombre', 'numero', 'min_sesion', 'language', 'proveedor',
                   'modo_bot', 'agente_ia',
                   'departamentos', 'departamento_default',
-                  'mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff',)
+                  'mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff',
+                  'reconexion_activa', 'mensaje_reconexion',)
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
@@ -41,7 +42,7 @@ class SesionWhatsAppForm(ModelFormBase):
         self.fields['numero'].widget.attrs['pattern'] = '[0-9+\\-\\s]*'
         self.fields['numero'].widget.attrs['maxlength'] = '20'
         for k, v in self.fields.items():
-            if k in ('mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff',):
+            if k in ('mensaje_bienvenida', 'mensaje_despedida', 'mensaje_handoff', 'mensaje_reconexion',):
                 self.fields[k].widget.attrs['rows'] = '5'
                 self.fields[k].widget.attrs['class'] = "summernote"
             if k in ('min_sesion',):
@@ -278,11 +279,21 @@ class CambiarNombreContactoForm(ModelFormBase):
 
 
 class _AgentChoiceField(forms.ModelChoiceField):
+    def __init__(self, *args, **kwargs):
+        self.roles_map = kwargs.pop('roles_map', None) or {}
+        super().__init__(*args, **kwargs)
+
     def label_from_instance(self, obj):
         label = obj.get_full_name() or obj.username
+        partes = []
+        rol = self.roles_map.get(obj.id)
+        if rol:
+            partes.append(rol)
         carga = getattr(obj, 'carga', 0)
         if carga:
-            label += f'  ({carga} activa{"s" if carga != 1 else ""})'
+            partes.append(f'{carga} activo{"" if carga == 1 else "s"}')
+        if partes:
+            label += f'  ({" · ".join(partes)})'
         return label
 
 
@@ -294,13 +305,6 @@ class AsignarAgenteForm(ModelFormBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        agentes = Usuario.objects.filter(is_active=True).annotate(
-            carga=Count(
-                'conversaciones_asignadas',
-                filter=Q(conversaciones_asignadas__conversacion_finalizada=False)
-            )
-        ).order_by('first_name')
-
         sesion = None
         try:
             if self.instance and self.instance.pk:
@@ -308,21 +312,40 @@ class AsignarAgenteForm(ModelFormBase):
         except Exception:
             sesion = None
 
-        from .models import PerfilSesionWhatsApp
+        # Pool por sesión/número (fuente única). El asesor se configura en la
+        # sesión vía PerfilSesionWhatsApp (supervisor o agente). Idéntico pool
+        # que usa la auto-asignación.
+        from .models import PerfilSesionWhatsApp, ROLES_SESION
+        roles_map = {}
         if sesion is not None:
-            ids_pool = list(
+            roles_choices = dict(ROLES_SESION)
+            perfiles = list(
                 PerfilSesionWhatsApp.objects
                 .filter(sesion=sesion, status=True)
-                .values_list('usuario_id', flat=True)
+                .values_list('usuario_id', 'rol')
             )
-            agentes = agentes.filter(id__in=ids_pool)
+            ids_pool = [uid for uid, _ in perfiles]
+            roles_map = {uid: roles_choices.get(rol, rol) for uid, rol in perfiles}
+
+            agentes = Usuario.objects.filter(
+                is_active=True, id__in=ids_pool
+            ).annotate(
+                carga=Count(
+                    'conversaciones_asignadas',
+                    filter=Q(
+                        conversaciones_asignadas__conversacion_finalizada=False,
+                        conversaciones_asignadas__contacto__sesion=sesion,
+                    )
+                )
+            ).order_by('carga', 'first_name')
         else:
-            agentes = agentes.none()
+            agentes = Usuario.objects.none()
 
         self.fields['asignado_a'] = _AgentChoiceField(
             queryset=agentes,
             required=False,
             label='Asignar a',
+            roles_map=roles_map,
         )
         self.fields['asignado_a'].widget.attrs['class'] = 'jselect2'
         self.fields['asignado_a'].widget.attrs['col'] = '12'

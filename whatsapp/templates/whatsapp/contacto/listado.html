@@ -11,20 +11,6 @@
             <form method="GET" class="mb-0">
                 <div class="row g-3">
                     <div class="col-md-4">
-                        <label class="form-label">Sesiones</label>
-                        <div class="input-group">
-                            <select name="sesion_id" id="sesion_id" class="form-control border-start-0 select2">
-                                <option value="">Todos</option>
-                                {% for i in mis_sesiones %}
-                                    <option value="{{ i.pk }}"
-                                            {% if i.pk == sesion_id %} selected {% endif %}>
-                                        {{ i }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
                         <label class="form-label">Búsqueda general</label>
                         <div class="input-group">
                             <span class="input-group-text border-end-0">
@@ -66,9 +52,15 @@
 
     {# ───────── Toolbar ───────── #}
     <div class="cont-toolbar">
+    <div class="">
         <a href="javascript:void(0);" class="btn btn-success btn-sm" onclick="formModal(0, 'Agregar {{ titulo }}', 'add')">
             <i class="fas fa-plus-circle me-2"></i> Nuevo {{ titulo }}
         </a>
+        <a href="javascript:void(0);" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalImportarContactos">
+            <i class="fas fa-file-import me-2"></i> Importar contactos
+        </a>
+
+    </div>
         <div class="cont-count">
             <b>{{ list_count }}</b> contacto{{ list_count|pluralize }}
             {% if solo_duplicados %} · solo duplicados{% endif %}
@@ -211,6 +203,8 @@
             </div>
         </div>
     </div>
+
+    {% include "whatsapp/contacto/modal_importar.html" %}
 {% endblock %}
 
 {% block jscript %}

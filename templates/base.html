@@ -31,6 +31,8 @@
     {% include 'pwa/meta_tags.html' %}
     <link rel="stylesheet" href="/static/css/pwa/install_bar.css?v1.1">
     <link rel="stylesheet" href="/static/css/pwa/push_optin.css?v1.0">
+    <link rel="stylesheet" href="/static/stylenew/selector_sesion_global.css?v1.2">
+    <script src="/static/stylenew/selector_sesion_global.js?v1.2" defer></script>
     {% block head %}{% endblock %}
     <script>
         {% if activar_cambio_clave %}
@@ -71,6 +73,61 @@
                         <button type="button"><i class="iconoir-search"></i></button>
                     </form>
                 </li>
+                {% if wa_selector_sesiones %}
+                    <li class="topbar-item wa-sesion-li dropdown">
+                        <button type="button" id="wa-global-sesion" class="wa-sesion-control"
+                                data-bs-toggle="dropdown" data-bs-auto-close="true"
+                                aria-expanded="false"
+                                data-csrf="{{ csrf_token }}" data-url="/whatsapp/sesion-activa/"
+                                title="Sesión de WhatsApp activa">
+                            <i class="fab fa-whatsapp wa-sesion-icon"></i>
+                            <span class="wa-sesion-label">
+                                {% if wa_selector_activa %}{{ wa_selector_activa.nombre|default:wa_selector_activa.numero }}{% else %}Todas las sesiones{% endif %}
+                            </span>
+                            <i class="fa fa-chevron-down wa-sesion-chevron"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end wa-sesion-menu" aria-labelledby="wa-global-sesion">
+                            <li>
+                                <button type="button"
+                                        class="dropdown-item wa-sesion-item {% if not wa_selector_activa_id %}is-active{% endif %}"
+                                        data-sesion-id="0">
+                                    <span class="wa-sesion-item-icon"><i class="fa fa-layer-group"></i></span>
+                                    <span class="wa-sesion-item-body">
+                                        <span class="wa-sesion-item-name">Todas las sesiones</span>
+                                        <span class="wa-sesion-item-meta">Vista agregada</span>
+                                    </span>
+                                    {% if not wa_selector_activa_id %}<i class="fa fa-check wa-sesion-item-check"></i>{% endif %}
+                                </button>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% for s in wa_selector_sesiones %}
+                                <li>
+                                    <button type="button"
+                                            class="dropdown-item wa-sesion-item {% if wa_selector_activa_id == s.id %}is-active{% endif %} {% if not s.activo %}is-paused{% endif %}"
+                                            data-sesion-id="{{ s.id }}">
+                                        <span class="wa-sesion-item-icon proveedor-{{ s.proveedor }}">
+                                            {% if s.proveedor == 'meta' %}<i class="fab fa-meta"></i>
+                                            {% elif s.proveedor == 'baileys' %}<i class="fa fa-qrcode"></i>
+                                            {% elif s.proveedor == 'instagram' %}<i class="fab fa-instagram"></i>
+                                            {% elif s.proveedor == 'messenger' %}<i class="fab fa-facebook-messenger"></i>
+                                            {% else %}<i class="fab fa-whatsapp"></i>{% endif %}
+                                        </span>
+                                        <span class="wa-sesion-item-body">
+                                            <span class="wa-sesion-item-name">{{ s.nombre|default:s.numero }}</span>
+                                            <span class="wa-sesion-item-meta">
+                                                <span class="wa-sesion-dot estado-{{ s.estado }}"></span>
+                                                {{ s.get_estado_display|default:s.estado }}
+                                                {% if s.numero %} · +{{ s.numero }}{% endif %}
+                                                {% if not s.activo %} · <span class="wa-sesion-pausa">Pausada</span>{% endif %}
+                                            </span>
+                                        </span>
+                                        {% if wa_selector_activa_id == s.id %}<i class="fa fa-check wa-sesion-item-check"></i>{% endif %}
+                                    </button>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </li>
+                {% endif %}
                 <li class="topbar-item">
                     <a class="nav-link nav-icon" href="javascript:void(0);" id="light-dark-mode">
                         <i class="icofont-sun dark-mode"></i>
@@ -222,17 +279,6 @@
                         </li>
                     {% endfor %}
                 </ul>
-
-                <div class="update-msg text-center">
-                    <div class="d-flex justify-content-center align-items-center thumb-lg update-icon-box rounded-circle mx-auto">
-                        <i class="fas fa-lightbulb h3 align-self-center mb-0 text-primary"></i>
-                    </div>
-                    <h5 class="mt-3">¿Buscas optimizar?</h5>
-                    <p class="mb-3 text-muted">Aumenta la eficiencia de tu asistente de WhatsApp con nuestros planes
-                        premium.</p>
-                    <a href="javascript:void(0);" class="btn text-primary shadow-sm rounded-pill">Contactar a un
-                        asesor</a>
-                </div>
             </div>
         </div>
     </div>

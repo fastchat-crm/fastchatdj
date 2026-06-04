@@ -16,6 +16,7 @@ from autenticacion.view_perfil import perfilView
 from core.ajax import ConsultasAjax
 from crm.urls import crm_urls
 from fastchatdj.view_clearsitedata import clearSiteDataView
+from fastchatdj.view_health import health_view
 from fastchatdj import settings
 from fastchatdj.view_redirect import redirectView, redirectToUrlView
 from seguridad.api_mensajeria import enviar_mensaje_view
@@ -86,6 +87,7 @@ urls_sistema = (
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('health/', health_view, name='health_check'),
     path('', home_view),
     path('panel/', index),
     path('notificaciones/', notificacionesView),

@@ -3,7 +3,7 @@
 
 {% block head %}
     <link rel="stylesheet" href="{% static 'stylenew/sesiones.css' %}">
-    <link rel="stylesheet" href="{% static 'stylenew/diagnostico.css' %}">
+    <link rel="stylesheet" href="{% static 'stylenew/diagnostico.css' %}?v1.2">
     <link rel="stylesheet" href="{% static 'stylenew/json-pretty.css' %}">
     <script src="{% static 'javascript/json-pretty.js' %}"></script>
 {% endblock %}
@@ -176,6 +176,60 @@
                             <td>{{ phone_info.data.name_status|default:'—' }}</td>
                         </tr>
                     </table>
+                    {% if phone_info.data.status != 'CONNECTED' %}
+                        <hr class="diag-sep">
+                        <div class="diag-warn-box">
+                            <i class="fa fa-triangle-exclamation"></i>
+                            <div>
+                                <b>Número sin registrar en Cloud API.</b>
+                                <p>Mientras el status no sea <code>CONNECTED</code> todo envío falla con
+                                    <code>(#133010) Account not registered</code>. Ingresá el PIN de
+                                    verificación en dos pasos (6 dígitos) para registrarlo. Si nunca configuraste
+                                    uno, elegí un PIN nuevo.</p>
+                            </div>
+                        </div>
+                        {% if phone_info.data.status == 'PENDING' %}
+                            <div class="diag-warn-box">
+                                <i class="fa fa-mobile-screen"></i>
+                                <div>
+                                    <b>Paso 1 — Verificar propiedad del número.</b>
+                                    <p>El número está en <code>PENDING</code>. Pedí el código de verificación: Meta
+                                        lo envía por SMS o llamada al número. Después ingresalo para confirmar.</p>
+                                </div>
+                            </div>
+                            <div class="diag-registrar-row">
+                                <select id="request-code-metodo" class="form-control">
+                                    <option value="SMS">SMS</option>
+                                    <option value="VOICE">Llamada de voz</option>
+                                </select>
+                                <button type="button" class="conex-btn diag-action-btn" id="btn-request-code"
+                                        data-sesion-id="{{ sesion.id }}">
+                                    <i class="fa fa-paper-plane"></i> Pedir código
+                                </button>
+                            </div>
+                            <div id="request-code-result" class="diag-action-result" hidden></div>
+                            <div class="diag-registrar-row">
+                                <input type="text" id="verify-code" class="form-control" inputmode="numeric"
+                                       maxlength="6" placeholder="Código recibido (6 dígitos)" autocomplete="off">
+                                <button type="button" class="conex-btn diag-action-btn" id="btn-verify-code"
+                                        data-sesion-id="{{ sesion.id }}">
+                                    <i class="fa fa-check-double"></i> Verificar código
+                                </button>
+                            </div>
+                            <div id="verify-code-result" class="diag-action-result" hidden></div>
+                            <hr class="diag-sep">
+                            <p class="diag-step-label"><b>Paso 2 — Registrar con un PIN de 6 dígitos.</b></p>
+                        {% endif %}
+                        <div class="diag-registrar-row">
+                            <input type="text" id="registrar-pin" class="form-control" inputmode="numeric"
+                                   maxlength="6" placeholder="PIN de 6 dígitos" autocomplete="off">
+                            <button type="button" class="conex-btn conex-btn-primary diag-action-btn" id="btn-registrar-numero"
+                                    data-sesion-id="{{ sesion.id }}">
+                                <i class="fa fa-id-card"></i> Registrar número
+                            </button>
+                        </div>
+                        <div id="registrar-numero-result" class="diag-action-result" hidden></div>
+                    {% endif %}
                 {% else %}
                     <div class="diag-error-box">
                         <i class="fa fa-circle-xmark"></i>
@@ -192,6 +246,24 @@
                 <h5 class="diag-card-title">
                     <i class="fa fa-link"></i> Suscripción WABA + Webhook
                 </h5>
+                {% if waba_mal %}
+                    <div class="diag-error-box">
+                        <i class="fa fa-triangle-exclamation"></i>
+                        <div>
+                            <b>WABA incorrecta para este número.</b>
+                            <p>El número <code>{{ config.phone_number_id }}</code> NO pertenece a la WABA
+                                guardada (<code>{{ config.waba_id }}</code>). Por eso Meta nunca entrega los
+                                mensajes entrantes. El botón detecta la WABA real del número, corrige el CRM
+                                y la suscribe a la app.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="conex-btn conex-btn-primary diag-action-btn" id="btn-corregir-waba"
+                            data-sesion-id="{{ sesion.id }}">
+                        <i class="fa fa-wrench"></i> Detectar y corregir WABA
+                    </button>
+                    <div id="corregir-waba-result" class="diag-action-result" hidden></div>
+                    <hr class="diag-sep">
+                {% endif %}
                 {% if subscribed.ok %}
                     <p class="diag-text">
                         <b>{{ subscribed.count }}</b> aplicación(es) suscrita(s) a esta WABA:
@@ -262,6 +334,125 @@
                         </td>
                     </tr>
                 </table>
+
+                <hr class="diag-sep">
+                <p class="diag-text"><b>Datos para configurar el webhook en Meta</b></p>
+                <div class="diag-copy-field">
+                    <span class="diag-copy-label">Callback URL</span>
+                    <code class="diag-copy-value" id="webhook-callback-url">{{ webhook_url }}</code>
+                    <button type="button" class="diag-copy-btn" data-copy-target="webhook-callback-url"
+                            title="Copiar"><i class="fa fa-copy"></i></button>
+                </div>
+                <div class="diag-copy-field">
+                    <span class="diag-copy-label">Verify token</span>
+                    <code class="diag-copy-value" id="webhook-verify-token">{{ config.webhook_verify_token }}</code>
+                    <button type="button" class="diag-copy-btn" data-copy-target="webhook-verify-token"
+                            title="Copiar"><i class="fa fa-copy"></i></button>
+                </div>
+
+                {% if not config.webhook_verificado_en %}
+                    <div class="diag-warn-box mt-2">
+                        <i class="fa fa-triangle-exclamation"></i>
+                        <div>
+                            <b>Webhook sin verificar.</b>
+                            <p>Configuralo automáticamente en Meta con un click (equivale al
+                                "Verify and Save" del panel). El webhook es a nivel app: con una vez
+                                alcanza para todos los números.</p>
+                        </div>
+                    </div>
+                    {% if meta_app_id and meta_app_secret_ok %}
+                        <button type="button" class="conex-btn conex-btn-primary diag-action-btn" id="btn-configurar-webhook"
+                                data-sesion-id="{{ sesion.id }}">
+                            <i class="fa fa-bolt"></i> Configurar webhook en Meta
+                        </button>
+                        <div id="configurar-webhook-result" class="diag-action-result" hidden></div>
+                    {% else %}
+                        <div class="diag-error-box">
+                            <i class="fa fa-circle-xmark"></i>
+                            <div>
+                                <b>Faltan App ID / App Secret.</b>
+                                <p>Cargá las credenciales de la Meta App en Seguridad → Credenciales Meta App,
+                                    o configurá el webhook a mano con los datos de arriba.</p>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        {# ───────── Detalle completo de la sesión ───────── #}
+        <div class="diag-card">
+            <h5 class="diag-card-title">
+                <i class="fa fa-clipboard-list"></i> Detalle de la sesión
+                <small>(valores registrados en el CRM)</small>
+            </h5>
+            <div class="diag-detalle-grid">
+                <div class="diag-detalle-block">
+                    <h6 class="diag-detalle-h"><i class="fa fa-circle-info"></i> Identificación</h6>
+                    <table class="diag-kv">
+                        <tr><td>Nombre</td><td>{{ sesion.nombre|default:'—' }}</td></tr>
+                        <tr><td>Número</td><td><code>{{ sesion.numero|default:'—' }}</code></td></tr>
+                        <tr><td>Estado</td><td><span class="diag-pill diag-pill-{{ sesion.estado|lower }}">{{ sesion.get_estado_display }}</span></td></tr>
+                        <tr><td>Proveedor</td><td>{{ sesion.get_proveedor_display }}</td></tr>
+                        <tr><td>Sesión activa</td><td>{% if sesion.activo %}<span class="diag-pill diag-pill-green">Sí</span>{% else %}<span class="diag-pill diag-pill-yellow">No</span>{% endif %}</td></tr>
+                        <tr><td>Asesor asignado</td><td>{{ sesion.usuario.full_name|default:sesion.usuario.username|default:'—' }}</td></tr>
+                        <tr><td>ID externo proveedor</td><td><code class="diag-truncate" title="{{ sesion.session_id }}">{{ sesion.session_id|default:'—' }}</code></td></tr>
+                        <tr><td>Última conexión</td><td>{% if sesion.ultima_conexion %}{{ sesion.ultima_conexion|date:"Y-m-d H:i" }}{% else %}—{% endif %}</td></tr>
+                        <tr><td>Registrada</td><td>{{ sesion.fecha_registro|date:"Y-m-d H:i" }}</td></tr>
+                    </table>
+                </div>
+
+                <div class="diag-detalle-block">
+                    <h6 class="diag-detalle-h"><i class="fa fa-fingerprint"></i> Identificadores Meta</h6>
+                    <table class="diag-kv">
+                        <tr><td>WABA ID</td><td><code>{{ config.waba_id|default:'—' }}</code></td></tr>
+                        <tr><td>Phone Number ID</td><td><code>{{ config.phone_number_id|default:'—' }}</code></td></tr>
+                        <tr><td>Business Account ID</td><td><code>{{ config.business_account_id|default:'—' }}</code></td></tr>
+                        <tr><td>Número visible</td><td>{{ config.display_phone_number|default:'—' }}</td></tr>
+                        <tr><td>Nombre verificado</td><td>{{ config.verified_name|default:'—' }}</td></tr>
+                        <tr><td>App ID (org)</td><td><code>{{ meta_app_id|default:'—' }}</code></td></tr>
+                        <tr><td>Access token</td><td><code>{{ access_token_mask|default:'—' }}</code></td></tr>
+                        <tr><td>Alta manual</td><td>{% if config.alta_manual %}Sí{% else %}No (Embedded Signup){% endif %}</td></tr>
+                    </table>
+                </div>
+
+                <div class="diag-detalle-block">
+                    <h6 class="diag-detalle-h"><i class="fa fa-gauge-high"></i> Estado en Meta</h6>
+                    <table class="diag-kv">
+                        <tr><td>Quality rating</td><td><span class="diag-pill diag-pill-{{ config.quality_rating|default:'unknown'|lower }}">{{ config.get_quality_rating_display }}</span></td></tr>
+                        <tr><td>Límite de mensajería</td><td>{{ config.get_messaging_limit_tier_display|default:'—' }}</td></tr>
+                        <tr><td>Verificación del negocio</td><td>{{ config.business_verification_status|default:'—' }}</td></tr>
+                        <tr><td>Webhook verificado</td><td>{% if config.webhook_verificado_en %}<span class="diag-pill diag-pill-green">{{ config.webhook_verificado_en|date:"Y-m-d H:i" }}</span>{% else %}<span class="diag-pill diag-pill-yellow">Pendiente</span>{% endif %}</td></tr>
+                        <tr><td>Última sync Graph</td><td>{% if config.ultima_sincronizacion %}{{ config.ultima_sincronizacion|date:"Y-m-d H:i" }}{% else %}—{% endif %}</td></tr>
+                    </table>
+                </div>
+
+                <div class="diag-detalle-block">
+                    <h6 class="diag-detalle-h"><i class="fa fa-robot"></i> Bot y mensajería</h6>
+                    <table class="diag-kv">
+                        <tr><td>Modo del bot</td><td>{{ sesion.get_modo_bot_display }}</td></tr>
+                        <tr><td>Agente IA</td><td>{{ sesion.agente_ia|default:'—' }}</td></tr>
+                        <tr><td>Idioma</td><td>{{ sesion.get_language_display }}</td></tr>
+                        <tr><td>Zona horaria</td><td>{{ sesion.zona_horaria|default:'—' }}</td></tr>
+                        <tr><td>Minutos de sesión</td><td>{{ sesion.min_sesion }}</td></tr>
+                        <tr><td>Auto-asignar (round-robin)</td><td>{% if sesion.auto_asignar_round_robin %}Sí{% else %}No{% endif %}</td></tr>
+                        <tr><td>Departamento de entrada</td><td>{{ sesion.departamento_default|default:'—' }}</td></tr>
+                        <tr><td>Mensaje de bienvenida</td><td>{{ sesion.mensaje_bienvenida|default:'—'|truncatechars:80 }}</td></tr>
+                        <tr><td>Mensaje de despedida</td><td>{{ sesion.mensaje_despedida|default:'—'|truncatechars:80 }}</td></tr>
+                        <tr><td>Mensaje de transferencia</td><td>{{ sesion.mensaje_handoff|default:'—'|truncatechars:80 }}</td></tr>
+                        <tr><td>Mensaje fuera de horario</td><td>{{ sesion.mensaje_fuera_horario|default:'—'|truncatechars:80 }}</td></tr>
+                    </table>
+                </div>
+
+                <div class="diag-detalle-block">
+                    <h6 class="diag-detalle-h"><i class="fa fa-bullhorn"></i> Anuncios (Marketing API)</h6>
+                    <table class="diag-kv">
+                        <tr><td>Cuenta publicitaria</td><td><code>{{ config.ad_account_id|default:'—' }}</code></td></tr>
+                        <tr><td>Token de anuncios</td><td><code>{{ ads_access_token_mask|default:'—' }}</code></td></tr>
+                        <tr><td>Pixel Meta (CAPI)</td><td>{{ sesion.pixel_meta|default:'—' }}</td></tr>
+                        <tr><td>Última sync anuncios</td><td>{% if config.ads_ultima_sincronizacion %}{{ config.ads_ultima_sincronizacion|date:"Y-m-d H:i" }}{% else %}—{% endif %}</td></tr>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -576,6 +767,50 @@
     {% csrf_token %}
     <script>
         (function () {
+            var btn = document.getElementById('btn-corregir-waba');
+            if (!btn) return;
+            var resultBox = document.getElementById('corregir-waba-result');
+            var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+            btn.addEventListener('click', function () {
+                if (btn.disabled) return;
+                var orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Detectando WABA real...';
+                resultBox.hidden = true;
+                var fd = new FormData();
+                fd.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+                fetch('/whatsapp/sesiones/' + btn.getAttribute('data-sesion-id') + '/corregir-waba/', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'X-CSRFToken': csrf ? csrf.value : '', 'X-Requested-With': 'XMLHttpRequest'},
+                    credentials: 'same-origin',
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        if (data.ok) {
+                            resultBox.className = 'diag-action-result is-ok';
+                            resultBox.innerHTML = '<i class="fa fa-circle-check"></i> ' + (data.message || 'WABA corregida.') +
+                                ' <small>Recargá la página para confirmar.</small>';
+                            setTimeout(function () { window.location.reload(); }, 2200);
+                        } else {
+                            resultBox.className = 'diag-action-result is-error';
+                            resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> ' + (data.error || 'No se pudo corregir.');
+                        }
+                    })
+                    .catch(function () {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        resultBox.className = 'diag-action-result is-error';
+                        resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> Error de red.';
+                    });
+            });
+        })();
+
+        (function () {
             var btn = document.getElementById('btn-suscribir-waba');
             if (!btn) return;
             var resultBox = document.getElementById('suscribir-waba-result');
@@ -607,6 +842,225 @@
                         } else {
                             resultBox.className = 'diag-action-result is-error';
                             resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> ' + (data.error || 'Falló la suscripción.');
+                        }
+                    })
+                    .catch(function () {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        resultBox.className = 'diag-action-result is-error';
+                        resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> Error de red.';
+                    });
+            });
+        })();
+
+        (function () {
+            var btn = document.getElementById('btn-registrar-numero');
+            if (!btn) return;
+            var pinInput = document.getElementById('registrar-pin');
+            var resultBox = document.getElementById('registrar-numero-result');
+            var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+            btn.addEventListener('click', function () {
+                if (btn.disabled) return;
+                var pin = (pinInput.value || '').trim();
+                if (!/^\d{6}$/.test(pin)) {
+                    resultBox.hidden = false;
+                    resultBox.className = 'diag-action-result is-error';
+                    resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> El PIN debe ser de 6 dígitos.';
+                    return;
+                }
+                var orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Registrando en Meta...';
+                resultBox.hidden = true;
+                var fd = new FormData();
+                fd.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+                fd.append('pin', pin);
+                fetch('/whatsapp/sesiones/' + btn.getAttribute('data-sesion-id') + '/registrar-numero/', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'X-CSRFToken': csrf ? csrf.value : '', 'X-Requested-With': 'XMLHttpRequest'},
+                    credentials: 'same-origin',
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        if (data.ok) {
+                            resultBox.className = 'diag-action-result is-ok';
+                            resultBox.innerHTML = '<i class="fa fa-circle-check"></i> ' + (data.message || 'Número registrado.') +
+                                ' <small>Recargá la página para confirmar.</small>';
+                            setTimeout(function () { window.location.reload(); }, 1800);
+                        } else {
+                            resultBox.className = 'diag-action-result is-error';
+                            resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> ' + (data.error || 'Falló el registro.');
+                        }
+                    })
+                    .catch(function () {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        resultBox.className = 'diag-action-result is-error';
+                        resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> Error de red.';
+                    });
+            });
+        })();
+
+        (function () {
+            var btn = document.getElementById('btn-request-code');
+            if (!btn) return;
+            var metodoSel = document.getElementById('request-code-metodo');
+            var resultBox = document.getElementById('request-code-result');
+            var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+            btn.addEventListener('click', function () {
+                if (btn.disabled) return;
+                var orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Solicitando...';
+                resultBox.hidden = true;
+                var fd = new FormData();
+                fd.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+                fd.append('metodo', metodoSel ? metodoSel.value : 'SMS');
+                fetch('/whatsapp/sesiones/' + btn.getAttribute('data-sesion-id') + '/request-code/', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'X-CSRFToken': csrf ? csrf.value : '', 'X-Requested-With': 'XMLHttpRequest'},
+                    credentials: 'same-origin',
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        if (data.ok) {
+                            resultBox.className = 'diag-action-result is-ok';
+                            resultBox.innerHTML = '<i class="fa fa-circle-check"></i> ' + (data.message || 'Código enviado.');
+                        } else {
+                            resultBox.className = 'diag-action-result is-error';
+                            resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> ' + (data.error || 'Falló la solicitud.');
+                        }
+                    })
+                    .catch(function () {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        resultBox.className = 'diag-action-result is-error';
+                        resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> Error de red.';
+                    });
+            });
+        })();
+
+        (function () {
+            var btn = document.getElementById('btn-verify-code');
+            if (!btn) return;
+            var codeInput = document.getElementById('verify-code');
+            var resultBox = document.getElementById('verify-code-result');
+            var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+            btn.addEventListener('click', function () {
+                if (btn.disabled) return;
+                var code = (codeInput.value || '').trim();
+                if (!/^\d{6}$/.test(code)) {
+                    resultBox.hidden = false;
+                    resultBox.className = 'diag-action-result is-error';
+                    resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> El código debe ser de 6 dígitos.';
+                    return;
+                }
+                var orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Verificando...';
+                resultBox.hidden = true;
+                var fd = new FormData();
+                fd.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+                fd.append('code', code);
+                fetch('/whatsapp/sesiones/' + btn.getAttribute('data-sesion-id') + '/verify-code/', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'X-CSRFToken': csrf ? csrf.value : '', 'X-Requested-With': 'XMLHttpRequest'},
+                    credentials: 'same-origin',
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        if (data.ok) {
+                            resultBox.className = 'diag-action-result is-ok';
+                            resultBox.innerHTML = '<i class="fa fa-circle-check"></i> ' + (data.message || 'Número verificado.');
+                        } else {
+                            resultBox.className = 'diag-action-result is-error';
+                            resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> ' + (data.error || 'Falló la verificación.');
+                        }
+                    })
+                    .catch(function () {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        resultBox.className = 'diag-action-result is-error';
+                        resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> Error de red.';
+                    });
+            });
+        })();
+
+        (function () {
+            var btns = document.querySelectorAll('.diag-copy-btn');
+            btns.forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var target = document.getElementById(btn.getAttribute('data-copy-target'));
+                    if (!target) return;
+                    var texto = target.textContent || '';
+                    var orig = btn.innerHTML;
+                    var done = function () {
+                        btn.innerHTML = '<i class="fa fa-check"></i>';
+                        setTimeout(function () { btn.innerHTML = orig; }, 1200);
+                    };
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(texto).then(done).catch(function () {});
+                    } else {
+                        var ta = document.createElement('textarea');
+                        ta.value = texto;
+                        document.body.appendChild(ta);
+                        ta.select();
+                        try { document.execCommand('copy'); } catch (e) {}
+                        document.body.removeChild(ta);
+                        done();
+                    }
+                });
+            });
+        })();
+
+        (function () {
+            var btn = document.getElementById('btn-configurar-webhook');
+            if (!btn) return;
+            var resultBox = document.getElementById('configurar-webhook-result');
+            var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+            btn.addEventListener('click', function () {
+                if (btn.disabled) return;
+                var orig = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Configurando en Meta...';
+                resultBox.hidden = true;
+                var fd = new FormData();
+                fd.append('csrfmiddlewaretoken', csrf ? csrf.value : '');
+                fetch('/whatsapp/sesiones/' + btn.getAttribute('data-sesion-id') + '/configurar-webhook/', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {'X-CSRFToken': csrf ? csrf.value : '', 'X-Requested-With': 'XMLHttpRequest'},
+                    credentials: 'same-origin',
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        btn.disabled = false;
+                        btn.innerHTML = orig;
+                        resultBox.hidden = false;
+                        if (data.ok) {
+                            resultBox.className = 'diag-action-result is-ok';
+                            resultBox.innerHTML = '<i class="fa fa-circle-check"></i> ' + (data.message || 'Webhook configurado.') +
+                                ' <small>Recargá la página para confirmar.</small>';
+                            setTimeout(function () { window.location.reload(); }, 2200);
+                        } else {
+                            resultBox.className = 'diag-action-result is-error';
+                            resultBox.innerHTML = '<i class="fa fa-circle-xmark"></i> ' + (data.error || 'Falló la configuración.');
                         }
                     })
                     .catch(function () {

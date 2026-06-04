@@ -1,0 +1,60 @@
+/* Reusa los partials de respuestas/menús (pensados para modal) dentro de una
+   página con pestañas. Neutraliza el "chrome" de modal. */
+.mr-page .detail-wrap {
+    padding: 0;
+    box-shadow: none;
+    border: 0;
+    max-width: 100%;
+}
+.mr-page .detail-close {
+    display: none;
+}
+.mr-page .detail-head {
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: .6rem;
+    margin-bottom: 1rem;
+}
+.mr-page .detail-body {
+    padding: 0;
+    max-height: none;
+    overflow: visible;
+}
+
+/* Filas de opciones del menú rápido */
+.mr-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+.mr-toolbar .muted {
+    font-size: .85rem;
+    flex: 1;
+    min-width: 200px;
+}
+.mr-opcion-row {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+    margin-bottom: .5rem;
+}
+.mr-opcion-row .mr-op-etq {
+    flex: 0 0 40%;
+}
+.mr-opcion-row .mr-op-val {
+    flex: 1;
+}
+.mr-opcion-row input {
+    padding: .4rem .6rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: .85rem;
+}
+.mr-opcion-row .mr-op-del {
+    flex: 0 0 auto;
+}
+#mr-opciones-lista {
+    margin-bottom: .6rem;
+}

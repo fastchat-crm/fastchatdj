@@ -20,6 +20,7 @@
     <div class="detail-body">
 
         {% if sesion.es_meta and config_meta %}
+        <div id="meta-cred-panel" data-pk="{{ sesion.id }}">
             <div class="conex-data-block">
                 <div class="conex-data-head">
                     <i class="fa fa-circle-check text-success me-1"></i>
@@ -29,18 +30,22 @@
                 <div class="form-row form-row-two">
                     <div>
                         <label>WABA ID</label>
-                        <input type="text" value="{{ config_meta.waba_id|default:'—' }}" readonly>
+                        <input type="text" name="waba_id" data-edit-field="1"
+                               value="{{ config_meta.waba_id|default:'' }}" readonly>
                     </div>
                     <div>
                         <label>Phone Number ID</label>
-                        <input type="text" value="{{ config_meta.phone_number_id|default:'—' }}" readonly>
+                        <input type="text" name="phone_number_id" data-edit-field="1"
+                               value="{{ config_meta.phone_number_id|default:'' }}" readonly>
                     </div>
                 </div>
 
                 <div class="form-row form-row-two">
                     <div>
                         <label>Número visible</label>
-                        <input type="text" value="{{ config_meta.display_phone_number|default:'—' }}" readonly>
+                        <input type="text" name="display_phone_number" data-edit-field="1"
+                               value="{{ config_meta.display_phone_number|default:'' }}" readonly
+                               placeholder="(Meta lo trae al validar)">
                     </div>
                     <div>
                         <label>Nombre verificado</label>
@@ -59,6 +64,48 @@
                         <input type="text"
                                value="{% if config_meta.messaging_limit_tier %}{{ config_meta.get_messaging_limit_tier_display }}{% else %}—{% endif %}"
                                readonly>
+                    </div>
+                </div>
+            </div>
+
+            <div class="conex-data-block">
+                <div class="conex-data-head">
+                    <i class="fa fa-key text-warning me-1"></i>
+                    <span>Credenciales y vínculos</span>
+                </div>
+
+                <div class="form-row form-row-two">
+                    <div>
+                        <label>Business Account ID</label>
+                        <input type="text" name="business_account_id" data-edit-field="1"
+                               value="{{ config_meta.business_account_id|default:'' }}" readonly
+                               placeholder="(opcional)">
+                    </div>
+                    <div>
+                        <label>Alta manual</label>
+                        <input type="text"
+                               value="{% if config_meta.alta_manual %}Sí (carga manual de IDs){% else %}No (Embedded Signup){% endif %}"
+                               readonly>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <label>Access Token <small class="muted">(System User long-lived · cifrado con Fernet en BD)</small></label>
+                    <div class="cm-pwd-wrap cm-pwd-wrap-two">
+                        <input type="text" id="meta-token-view-{{ sesion.id }}" name="access_token"
+                               data-edit-field="1"
+                               data-real-token="{{ config_meta.access_token|default:'' }}"
+                               value="" readonly autocomplete="off" spellcheck="false">
+                        <button type="button" class="cm-pwd-toggle cm-pwd-toggle-copy" tabindex="-1"
+                                data-copy-token="meta-token-view-{{ sesion.id }}"
+                                aria-label="Copiar token" title="Copiar token completo">
+                            <i class="fa fa-copy"></i>
+                        </button>
+                        <button type="button" class="cm-pwd-toggle" tabindex="-1"
+                                id="meta-token-eye-{{ sesion.id }}"
+                                aria-label="Mostrar/ocultar token" title="Mostrar/ocultar token">
+                            <i class="fa fa-eye"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -86,19 +133,32 @@
 
                 <div class="form-row">
                     <label>Verify token <small class="muted">(para validar el webhook con Meta)</small></label>
-                    <input type="text"
-                           value="{{ config_meta.webhook_verify_token|default:'' }}"
-                           placeholder="(autogenerado al crear la sesión)" readonly>
+                    <div class="cm-pwd-wrap">
+                        <input type="text" id="meta-verify-token-{{ sesion.id }}"
+                               value="{{ config_meta.webhook_verify_token|default:'' }}"
+                               placeholder="(autogenerado al crear la sesión)" readonly>
+                        <button type="button" class="cm-pwd-toggle" tabindex="-1"
+                                data-copy-input="meta-verify-token-{{ sesion.id }}"
+                                aria-label="Copiar verify token" title="Copiar verify token">
+                            <i class="fa fa-copy"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div class="conex-data-actions">
+            <div class="conex-data-feedback d-none" id="meta-feedback-{{ sesion.id }}"></div>
+
+            <div class="conex-data-actions" id="meta-actions-view-{{ sesion.id }}">
+                <button type="button" class="conex-btn conex-btn-primary btn-sm" id="btn-edit-meta"
+                        data-pk="{{ sesion.id }}">
+                    <i class="fa fa-pen-to-square me-1"></i> Editar credenciales
+                </button>
                 <button type="button" class="conex-btn conex-btn-light btn-sm" id="btn-resync-meta"
                         data-pk="{{ sesion.id }}"
                         title="Vuelve a consultar Graph API y refresca display_phone, quality y tier.">
                     <i class="fa fa-rotate me-1"></i> Resincronizar con Meta
                 </button>
-                <a href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers?asset_id={{ config_meta.waba_id }}{% if config_meta.business_account_id %}&business_id={{ config_meta.business_account_id }}{% endif %}&ir_qe_exposed=1"
+                <a href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers/?{% if config_meta.business_account_id %}business_id={{ config_meta.business_account_id }}&{% endif %}asset_id={{ config_meta.waba_id }}&nav_ref=whatsapp_manager&tab=phone-numbers{% if config_meta.phone_number_id %}&phone_number_id={{ config_meta.phone_number_id }}{% endif %}"
                    target="_blank" rel="noopener" class="conex-btn conex-btn-light btn-sm">
                     <i class="fa fa-external-link me-1"></i> Abrir en Meta Business
                 </a>
@@ -107,6 +167,22 @@
                     <i class="fa fa-stethoscope me-1"></i> Diagnóstico completo
                 </a>
             </div>
+
+            <div class="conex-data-actions d-none" id="meta-actions-edit-{{ sesion.id }}">
+                <button type="button" class="conex-btn conex-btn-light btn-sm" id="btn-test-meta"
+                        data-pk="{{ sesion.id }}">
+                    <i class="fa fa-satellite-dish me-1"></i> Probar conexión
+                </button>
+                <button type="button" class="conex-btn conex-btn-primary btn-sm" id="btn-save-meta"
+                        data-pk="{{ sesion.id }}">
+                    <i class="fa fa-floppy-disk me-1"></i> Guardar y reconectar
+                </button>
+                <button type="button" class="conex-btn conex-btn-ghost btn-sm" id="btn-cancel-meta"
+                        data-pk="{{ sesion.id }}">
+                    <i class="fa fa-xmark me-1"></i> Cancelar
+                </button>
+            </div>
+        </div>
 
         {% elif sesion.es_baileys %}
             <div class="conex-data-block">
@@ -212,47 +288,216 @@
 {% if sesion.es_meta and config_meta %}
 <script>
     (function () {
-        const $btn = document.getElementById('btn-resync-meta');
-        if (!$btn) return;
-        $btn.addEventListener('click', function () {
-            const pk = $btn.dataset.pk;
-            if (!pk) return;
-            const orig = $btn.innerHTML;
-            $btn.disabled = true;
-            $btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Sincronizando...';
+        const panel = document.getElementById('meta-cred-panel');
+        if (!panel) return;
+        const PK = panel.dataset.pk;
 
+        const tokenInput = document.getElementById('meta-token-view-' + PK);
+        const tokenEye = document.getElementById('meta-token-eye-' + PK);
+        const feedback = document.getElementById('meta-feedback-' + PK);
+        const actionsView = document.getElementById('meta-actions-view-' + PK);
+        const actionsEdit = document.getElementById('meta-actions-edit-' + PK);
+
+        const realToken = tokenInput ? (tokenInput.dataset.realToken || '') : '';
+        const maskToken = function (s) {
+            if (!s) return '';
+            if (s.length <= 10) return '•'.repeat(s.length);
+            return s.slice(0, 4) + '•'.repeat(24) + s.slice(-6);
+        };
+
+        if (tokenInput) {
+            tokenInput.value = maskToken(realToken);
+            tokenInput.dataset.masked = '1';
+        }
+        const setEyeIcon = function (isMasked) {
+            if (!tokenEye) return;
+            const icon = tokenEye.querySelector('i');
+            if (icon) icon.className = isMasked ? 'fa fa-eye' : 'fa fa-eye-slash';
+        };
+
+        const flashIcon = function (btn, tempClass) {
+            const icon = btn.querySelector('i');
+            if (!icon) return;
+            const orig = icon.className;
+            icon.className = tempClass;
+            setTimeout(function () { icon.className = orig; }, 1100);
+        };
+
+        const copyToClipboard = function (text, btn) {
+            if (!text) return;
+            const done = function () { flashIcon(btn, 'fa fa-check text-success'); };
+            const fail = function () { flashIcon(btn, 'fa fa-triangle-exclamation text-danger'); };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(done).catch(fail);
+            } else {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    done();
+                } catch (e) { fail(); }
+            }
+        };
+
+        panel.querySelectorAll('[data-copy-token]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const inp = document.getElementById(btn.dataset.copyToken);
+                if (!inp) return;
+                copyToClipboard(inp.dataset.realToken || inp.value || '', btn);
+            });
+        });
+
+        panel.querySelectorAll('[data-copy-input]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const inp = document.getElementById(btn.dataset.copyInput);
+                if (!inp) return;
+                copyToClipboard(inp.value || '', btn);
+            });
+        });
+
+        if (tokenEye && tokenInput) {
+            tokenEye.addEventListener('click', function () {
+                if (panel.dataset.editing === '1') {
+                    tokenInput.type = tokenInput.type === 'text' ? 'password' : 'text';
+                    setEyeIcon(tokenInput.type === 'password');
+                    return;
+                }
+                const isMasked = tokenInput.dataset.masked === '1';
+                tokenInput.value = isMasked ? realToken : maskToken(realToken);
+                tokenInput.dataset.masked = isMasked ? '0' : '1';
+                setEyeIcon(!isMasked);
+            });
+        }
+
+        const showFeedback = function (kind, msg) {
+            if (!feedback) return;
+            feedback.className = 'conex-data-feedback feedback-' + kind;
+            feedback.textContent = msg;
+        };
+        const hideFeedback = function () {
+            if (feedback) feedback.classList.add('d-none');
+        };
+
+        const editableFields = panel.querySelectorAll('[data-edit-field]');
+
+        const setEditing = function (on) {
+            panel.dataset.editing = on ? '1' : '0';
+            editableFields.forEach(function (inp) {
+                if (on && inp.dataset.original === undefined) {
+                    inp.dataset.original = inp === tokenInput ? realToken : inp.value;
+                }
+                if (on) inp.removeAttribute('readonly');
+                else inp.setAttribute('readonly', 'readonly');
+            });
+            if (tokenInput) {
+                if (on) {
+                    tokenInput.type = 'password';
+                    tokenInput.value = realToken;
+                    setEyeIcon(true);
+                } else {
+                    tokenInput.type = 'text';
+                    tokenInput.value = maskToken(realToken);
+                    tokenInput.dataset.masked = '1';
+                    setEyeIcon(true);
+                }
+            }
+            actionsView.classList.toggle('d-none', on);
+            actionsEdit.classList.toggle('d-none', !on);
+        };
+
+        const buildData = function (action) {
             const fd = new FormData();
-            fd.append('action', 'meta_validar');
-            fd.append('id', pk);
+            fd.append('action', action);
+            fd.append('id', PK);
+            editableFields.forEach(function (inp) {
+                if (inp.name) fd.append(inp.name, (inp.value || '').trim());
+            });
             const csrf = document.querySelector('[name=csrfmiddlewaretoken]');
             if (csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+            return fd;
+        };
 
-            fetch(window.location.pathname, {
-                method: 'POST', body: fd,
+        const post = function (action, btn, loadingLabel) {
+            hideFeedback();
+            btn.disabled = true;
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> ' + loadingLabel;
+            return fetch(window.location.pathname, {
+                method: 'POST', body: buildData(action),
                 headers: {'X-Requested-With': 'XMLHttpRequest'},
                 credentials: 'same-origin',
-            })
-                .then(r => r.json())
-                .then(data => {
-                    $btn.disabled = false;
-                    $btn.innerHTML = orig;
-                    if (window.Swal) {
-                        Swal.fire({
-                            icon: data.error ? 'error' : 'success',
-                            title: data.error ? 'Error' : 'Sincronizado',
-                            text: data.message || 'Datos actualizados desde Meta.',
-                            timer: 1800, showConfirmButton: false,
-                        });
-                    }
-                    if (!data.error && typeof window.refrescarCardSesion === 'function') {
-                        window.refrescarCardSesion(pk);
-                    }
-                })
-                .catch(() => {
-                    $btn.disabled = false;
-                    $btn.innerHTML = orig;
-                    alert('Error de red al sincronizar.');
-                });
+            }).then(function (r) { return r.json(); })
+              .then(function (data) {
+                  btn.disabled = false;
+                  btn.innerHTML = orig;
+                  return data;
+              }).catch(function (err) {
+                  btn.disabled = false;
+                  btn.innerHTML = orig;
+                  throw err;
+              });
+        };
+
+        const btnEdit = document.getElementById('btn-edit-meta');
+        if (btnEdit) btnEdit.addEventListener('click', function () { hideFeedback(); setEditing(true); });
+
+        const btnCancel = document.getElementById('btn-cancel-meta');
+        if (btnCancel) btnCancel.addEventListener('click', function () {
+            editableFields.forEach(function (inp) {
+                if (inp.dataset.original !== undefined && inp !== tokenInput) inp.value = inp.dataset.original;
+            });
+            hideFeedback();
+            setEditing(false);
+        });
+
+        const btnTest = document.getElementById('btn-test-meta');
+        if (btnTest) btnTest.addEventListener('click', function () {
+            post('meta_test_credenciales', btnTest, 'Probando...').then(function (data) {
+                if (data.error) {
+                    showFeedback('error', data.message || 'Connection failed.');
+                } else {
+                    const extra = [data.display_phone_number, data.verified_name].filter(Boolean).join(' · ');
+                    showFeedback('ok', (data.message || 'Meta accepted the credentials.') + (extra ? ' · ' + extra : ''));
+                }
+            }).catch(function () { showFeedback('error', 'Network error.'); });
+        });
+
+        const btnSave = document.getElementById('btn-save-meta');
+        if (btnSave) btnSave.addEventListener('click', function () {
+            post('meta_actualizar_credenciales', btnSave, 'Guardando...').then(function (data) {
+                if (data.error) {
+                    showFeedback('error', data.message || 'Save failed.');
+                    return;
+                }
+                showFeedback('ok', data.message || 'Saved.');
+                if (typeof window.refrescarCardSesion === 'function') window.refrescarCardSesion(PK);
+                setTimeout(function () {
+                    const closeBtn = document.querySelector('[data-cerrar-detail]');
+                    if (closeBtn) closeBtn.click();
+                }, 1400);
+            }).catch(function () { showFeedback('error', 'Network error.'); });
+        });
+
+        const btnResync = document.getElementById('btn-resync-meta');
+        if (btnResync) btnResync.addEventListener('click', function () {
+            post('meta_validar', btnResync, 'Sincronizando...').then(function (data) {
+                if (window.Swal) {
+                    Swal.fire({
+                        icon: data.error ? 'error' : 'success',
+                        title: data.error ? 'Error' : 'Sincronizado',
+                        text: data.message || 'Datos actualizados desde Meta.',
+                        timer: 1800, showConfirmButton: false,
+                    });
+                }
+                if (!data.error && typeof window.refrescarCardSesion === 'function') {
+                    window.refrescarCardSesion(PK);
+                }
+            }).catch(function () { showFeedback('error', 'Network error.'); });
         });
     })();
 </script>

@@ -164,25 +164,26 @@
                 <label>Duración de la sesión (minutos)</label>
                 <input type="number" class="form-control" name="min_sesion" id="inp-min-sesion"
                        value="{{ sesion.min_sesion|default:60 }}"
-                       min="1" max="720" step="1" placeholder="60"
+                       min="1" max="1440" step="1" placeholder="60"
                        oninput="window.marcarPresetMinSesion && window.marcarPresetMinSesion()">
                 <div class="d-flex flex-wrap gap-1 mt-2" id="min-sesion-presets">
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="60"  onclick="window.setMinSesion(60)">1 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="120" onclick="window.setMinSesion(120)">2 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="180" onclick="window.setMinSesion(180)">3 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="240" onclick="window.setMinSesion(240)">4 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="300" onclick="window.setMinSesion(300)">5 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="360" onclick="window.setMinSesion(360)">6 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="420" onclick="window.setMinSesion(420)">7 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="480" onclick="window.setMinSesion(480)">8 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="540" onclick="window.setMinSesion(540)">9 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="600" onclick="window.setMinSesion(600)">10 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="660" onclick="window.setMinSesion(660)">11 h</button>
-                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="720" onclick="window.setMinSesion(720)">12 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="60"   onclick="window.setMinSesion(60)">1 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="120"  onclick="window.setMinSesion(120)">2 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="240"  onclick="window.setMinSesion(240)">4 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="360"  onclick="window.setMinSesion(360)">6 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="480"  onclick="window.setMinSesion(480)">8 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="600"  onclick="window.setMinSesion(600)">10 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="720"  onclick="window.setMinSesion(720)">12 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="840"  onclick="window.setMinSesion(840)">14 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="960"  onclick="window.setMinSesion(960)">16 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="1080" onclick="window.setMinSesion(1080)">18 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="1200" onclick="window.setMinSesion(1200)">20 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="1320" onclick="window.setMinSesion(1320)">22 h</button>
+                    <button type="button" class="conex-btn conex-btn-light btn-sm" data-min="1440" onclick="window.setMinSesion(1440)">24 h</button>
                 </div>
                 <small class="muted d-block mt-1">
-                    Minutos de inactividad antes de cerrar la conversación. Máx 720 (12 h) —
-                    la ventana de servicio de WhatsApp es 24 h desde el último mensaje del contacto.
+                    Minutos de inactividad antes de cerrar la conversación. Máx 1440 (24 h, 23:59) —
+                    coincide con la ventana de servicio de WhatsApp desde el último mensaje del contacto.
                 </small>
             </div>
             <script>
@@ -205,6 +206,22 @@
                 <label>Mensaje al transferir a humano</label>
                 <textarea name="mensaje_handoff" rows="2"
                           placeholder="Te conectamos con un asesor...">{{ sesion.mensaje_handoff|default:'' }}</textarea>
+            </div>
+
+            <div class="form-row">
+                <label class="d-flex align-items-center gap-2">
+                    <input type="checkbox" name="reconexion_activa" value="on"
+                           {% if sesion.reconexion_activa %}checked{% endif %}>
+                    Enviar mensajes de reconexión automáticos
+                </label>
+                <small class="text-muted">Activa el cron horario que reengancha conversaciones abiertas en silencio.</small>
+            </div>
+
+            <div class="form-row">
+                <label>Mensaje de reconexión</label>
+                <textarea name="mensaje_reconexion" rows="2"
+                          placeholder="¿Sigues ahí? Seguimos atentos a tu mensaje 👋">{{ sesion.mensaje_reconexion|default:'' }}</textarea>
+                <small class="text-muted">Se envía solo (cron horario) a conversaciones abiertas cuyo último mensaje es nuestro y llevan +1 h sin respuesta, dentro de la ventana de 24 h. Requiere el check de arriba activo.</small>
             </div>
         </div>
 

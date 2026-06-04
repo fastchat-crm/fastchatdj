@@ -1,10 +1,18 @@
 from django.urls import re_path, path
 
 from .view_conversaciones_finalizadas import conversacionesFinalizadasView
-from .view_sesiones import sesionesView
+from .view_conversaciones_pendiente_reconexion import conversacionesPendienteReconexionView
+from .view_sesiones import sesionesView, mensajes_rapidos_view
+from .view_sesion_activa import set_sesion_activa
 from .meta_oauth_view import meta_oauth_start, meta_oauth_callback
-from .meta_manual_view import meta_manual_validar, meta_manual_conectar, meta_webhook_info, meta_test_message
-from .meta_diagnostico_view import meta_diagnostico, meta_suscribir_waba_action
+from .meta_manual_view import (
+    meta_manual_validar, meta_manual_conectar, meta_test_message, meta_registrar_numero,
+    meta_request_code, meta_verify_code,
+)
+from .meta_diagnostico_view import (
+    meta_diagnostico, meta_suscribir_waba_action, meta_configurar_webhook_action,
+    meta_corregir_waba_action, meta_validar_conexion_action, meta_cambiar_nombre_action,
+)
 from .meta_webhook_log_view import meta_webhook_log, meta_webhook_log_poll, meta_webhook_log_detalle
 from .meta_webhook_hits_view import meta_webhook_hits, meta_webhook_hits_poll, meta_webhook_hit_detalle
 from .meta_foto_perfil_view import meta_actualizar_foto_perfil
@@ -26,6 +34,7 @@ from .view_pipeline import pipelineView
 from .view_campanas import campanasView
 from .view_horarios import horariosView
 from .view_analytics import analyticsView
+from .view_supervision import supervisionView
 from . import api_rest
 
 whatsapp_urls = (
@@ -45,12 +54,17 @@ whatsapp_urls = (
         "vista": conversacionesFinalizadasView,
     },
     {
+        "nombre": "Conversaciones pendiente reconexión",
+        "url": 'conversaciones-pendiente-reconexion/',
+        "vista": conversacionesPendienteReconexionView,
+    },
+    {
         "nombre": "Contactos",
         "url": 'contacto/',
         "vista": contactoView,
     },
     {
-        "nombre": "Trazas IA",
+        "nombre": "Trazas / Logs (IA y conversaciones)",
         "url": 'trazas/',
         "vista": trazasView,
     },
@@ -89,6 +103,11 @@ whatsapp_urls = (
         "url": 'analytics/',
         "vista": analyticsView,
     },
+    {
+        "nombre": "Supervision",
+        "url": 'supervision/',
+        "vista": supervisionView,
+    },
 )
 
 urlpatterns = [
@@ -101,10 +120,17 @@ urlpatterns = [
     path('meta/oauth/callback/', meta_oauth_callback, name='whatsapp_meta_oauth_callback'),
     path('meta/manual/validar/', meta_manual_validar, name='whatsapp_meta_manual_validar'),
     path('meta/manual/conectar/', meta_manual_conectar, name='whatsapp_meta_manual_conectar'),
-    path('meta/webhook-info/<int:sesion_id>/', meta_webhook_info, name='whatsapp_meta_webhook_info'),
     path('meta/test-message/<int:sesion_id>/', meta_test_message, name='whatsapp_meta_test_message'),
+    path('sesiones/<int:sesion_id>/mensajes-rapidos/', mensajes_rapidos_view, name='whatsapp_mensajes_rapidos'),
+    path('sesiones/<int:sesion_id>/registrar-numero/', meta_registrar_numero, name='whatsapp_meta_registrar_numero'),
+    path('sesiones/<int:sesion_id>/request-code/', meta_request_code, name='whatsapp_meta_request_code'),
+    path('sesiones/<int:sesion_id>/verify-code/', meta_verify_code, name='whatsapp_meta_verify_code'),
     path('sesiones/<int:sesion_id>/diagnostico/', meta_diagnostico, name='whatsapp_meta_diagnostico'),
     path('sesiones/<int:sesion_id>/suscribir-waba/', meta_suscribir_waba_action, name='whatsapp_meta_suscribir_waba'),
+    path('sesiones/<int:sesion_id>/corregir-waba/', meta_corregir_waba_action, name='whatsapp_meta_corregir_waba'),
+    path('sesiones/<int:sesion_id>/validar-conexion/', meta_validar_conexion_action, name='whatsapp_meta_validar_conexion'),
+    path('sesiones/<int:sesion_id>/cambiar-nombre/', meta_cambiar_nombre_action, name='whatsapp_meta_cambiar_nombre'),
+    path('sesiones/<int:sesion_id>/configurar-webhook/', meta_configurar_webhook_action, name='whatsapp_meta_configurar_webhook'),
     path('sesiones/<int:sesion_id>/webhook-log/', meta_webhook_log, name='whatsapp_meta_webhook_log'),
     path('sesiones/<int:sesion_id>/webhook-log/poll/', meta_webhook_log_poll, name='whatsapp_meta_webhook_log_poll'),
     path('sesiones/<int:sesion_id>/webhook-log/<int:evento_id>/', meta_webhook_log_detalle, name='whatsapp_meta_webhook_log_detalle'),
@@ -114,6 +140,7 @@ urlpatterns = [
     path('sesiones/<int:sesion_id>/profile-picture/', meta_actualizar_foto_perfil, name='whatsapp_meta_foto_perfil'),
     path('instagram_webhook/', instagram_webhook, name='whatsapp_instagram_webhook'),
     path('messenger_webhook/', messenger_webhook, name='whatsapp_messenger_webhook'),
+    path('sesion-activa/', set_sesion_activa, name='whatsapp_set_sesion_activa'),
     path('sync-contacts/', sync_contacts_view, name='sync_contacts'),
     path('whatsapp/update-profile/', update_profile_view, name='update_profile'),
 

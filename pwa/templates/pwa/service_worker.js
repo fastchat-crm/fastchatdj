@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fastchat-pwa-v2';
+const CACHE_NAME = 'fastchat-pwa-v3';
 const OFFLINE_URL = '/offline/';
 
 self.addEventListener('install', (event) => {
