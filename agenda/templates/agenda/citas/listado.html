@@ -554,7 +554,8 @@
                 eventOverlap: false,
                 allDaySlot: false,
                 nowIndicator: true,
-                height: 'auto',
+                height: '75vh',
+                expandRows: true,
                 events: async (info, success, failure) => {
                     try {
                         const j = await postCita({
