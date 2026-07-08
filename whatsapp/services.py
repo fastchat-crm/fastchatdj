@@ -667,4 +667,7 @@ def get_whatsapp_service(sesion=None, proveedor: str | None = None):
     if prov == 'messenger':
         from .services_instagram import MessengerService
         return MessengerService()
+    if prov == 'tiktok':
+        from tiktok.servicio import TikTokService
+        return TikTokService()
     return WhatsAppService()

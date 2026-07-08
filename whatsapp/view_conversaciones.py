@@ -961,19 +961,25 @@ def conversacionesView(request):
 
                             # 2. Agregar al FAISS si está configurado (compatibilidad)
                             if agente.vectorstore_path and agente.apikey.filter(estado=True).exists():
-                                apikey_obj = agente.apikey.filter(estado=True).first()
-                                provider = {2: 'gemini', 3: 'openai'}.get(apikey_obj.proveedor, 'gemini')
+                                apikey_obj = (
+                                    agente.apikey.filter(estado=True, proveedor__in=(2, 3, 5)).first()
+                                    or agente.apikey.filter(estado=True).first()
+                                )
                                 try:
                                     from agents_ai.vectorstore_manager import VectorStoreManager
                                     import os
                                     from django.conf import settings
                                     storage = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
-                                    vsm = VectorStoreManager(storage, provider, apikey_obj.descripcion)
-                                    vsm.add_correction(agente.vectorstore_path, pregunta, correccion)
+                                    vs_abs = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path)
+                                    vsm = VectorStoreManager(
+                                        storage, apikey_obj.proveedor, apikey_obj.descripcion,
+                                        base_url=(getattr(apikey_obj, 'base_url', '') or None)
+                                    )
+                                    vsm.add_correction(vs_abs, pregunta, correccion)
                                     feedback.procesado_vectorstore = True
                                     feedback.save(update_fields=['procesado_vectorstore'])
-                                    from agents_ai.agente_consultor import AgenteConsultor
-                                    AgenteConsultor._faiss_cache.clear()
+                                    from agents_ai.consultor.retrieval import invalidate_vectorstore_cache
+                                    invalidate_vectorstore_cache(vs_abs)
                                 except Exception as ex:
                                     log(f"Error al agregar corrección al vectorstore: {ex}", request, "error")
 

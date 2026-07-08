@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block head %}
+    <link rel="stylesheet" href="/static/css/instagram/publicaciones_listado.css?v1.0">
+{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0">
+
+        <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
+            <i class="fa fa-images fa-2x"></i>
+            <div>
+                <strong>Publicaciones de tu cuenta</strong><br>
+                <small>
+                    Se cargan en vivo desde Instagram con sus métricas. El contador
+                    <span class="badge bg-primary">nuevos</span> indica comentarios sin atender en el
+                    <a href="/instagram/comentarios/">inbox de comentarios</a>.
+                </small>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-6">
+                            <label class="form-label">Cuenta</label>
+                            <select name="cuenta" class="form-select">
+                                {% for c in cuentas %}
+                                    <option value="{{ c.id }}"
+                                            {% if cuenta_seleccionada and cuenta_seleccionada.id == c.id %}selected{% endif %}>
+                                        {{ c.nombre }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-sync me-1"></i> Cargar publicaciones
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if error_api %}
+            <div class="alert alert-danger">
+                No se pudieron cargar las publicaciones: {{ error_api }}
+            </div>
+        {% endif %}
+
+        {% if not cuentas %}
+            <div class="alert alert-warning">
+                No tienes cuentas Instagram conectadas.
+                <a href="/instagram/cuentas/">Conecta una cuenta</a> para ver sus publicaciones.
+            </div>
+        {% endif %}
+
+        <div class="row g-3">
+            {% for p in publicaciones %}
+                <div class="col-md-3">
+                    <div class="card post-card position-relative">
+                        {% if p.comentarios_nuevos %}
+                            <span class="badge bg-primary badge-nuevos">{{ p.comentarios_nuevos }} nuevos</span>
+                        {% endif %}
+                        {% if p.media_type == 'VIDEO' %}
+                            <img src="{{ p.thumbnail_url|default:p.media_url }}" class="post-media" alt="Video">
+                        {% else %}
+                            <img src="{{ p.media_url }}" class="post-media" alt="Publicación">
+                        {% endif %}
+                        <div class="card-body">
+                            <div class="post-caption mb-2">{{ p.caption_corto|default:"Sin descripción" }}</div>
+                            <div class="post-metricas mb-2">
+                                <i class="fa fa-heart text-danger"></i> {{ p.like_count|default:0 }}
+                                &nbsp;·&nbsp;
+                                <i class="fa fa-comment"></i> {{ p.comments_count|default:0 }}
+                                &nbsp;·&nbsp;
+                                <i class="fa fa-inbox"></i> {{ p.comentarios_crm }} en CRM
+                            </div>
+                            <div class="d-flex gap-2">
+                                <a href="{{ p.permalink }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fab fa-instagram"></i> Ver post
+                                </a>
+                                <a href="/instagram/comentarios/?criterio={{ p.id }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fa fa-comments"></i> Comentarios
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% empty %}
+                {% if cuenta_seleccionada and not error_api %}
+                    <div class="col-12">
+                        <div class="alert alert-light text-center text-muted">
+                            Esta cuenta no tiene publicaciones o aún no se pudieron cargar.
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+{% endblock %}

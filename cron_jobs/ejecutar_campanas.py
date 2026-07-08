@@ -27,9 +27,52 @@ from whatsapp.models import Campana, EnvioCampana, Contacto, MensajeWhatsAppProg
 from whatsapp.services import get_whatsapp_service
 
 
+_TIER_A_LIMITE = {
+    'TIER_50': 50,
+    'TIER_250': 250,
+    'TIER_1K': 1000,
+    'TIER_10K': 10000,
+    'TIER_100K': 100000,
+    'TIER_UNLIMITED': 0,
+}
+
+
+def _limite_diario_sesion(campana: Campana) -> int:
+    """Tope de envíos por día para la sesión de la campaña. 0 = sin límite.
+
+    Manual (campana.limite_diario) manda; si es 0, en sesiones Meta se usa el
+    messaging_limit_tier del número (protege el tier ante Meta).
+    """
+    manual = getattr(campana, 'limite_diario', 0) or 0
+    if manual:
+        return manual
+    try:
+        if campana.sesion.proveedor == 'meta':
+            tier = (campana.sesion.config_meta.messaging_limit_tier or '').strip()
+            return _TIER_A_LIMITE.get(tier, 1000)
+    except Exception:
+        return 1000
+    return 0
+
+
+def _enviados_hoy_sesion(sesion) -> int:
+    from datetime import timedelta as _td
+    inicio = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
+    return EnvioCampana.objects.filter(
+        campana__sesion=sesion, estado='enviado',
+        fecha_envio__gte=inicio, fecha_envio__lt=inicio + _td(days=1),
+    ).count()
+
+
 def _construir_audiencia(campana: Campana):
-    """Calcula el queryset de contactos objetivo según filtros de la campaña."""
-    qs = Contacto.objects.filter(sesion=campana.sesion, status=True)
+    """Calcula el queryset de contactos objetivo según filtros de la campaña.
+
+    Excluye contactos dados de baja (opt-out) y números inválidos en WhatsApp.
+    """
+    qs = Contacto.objects.filter(
+        sesion=campana.sesion, status=True,
+        opt_out=False, whatsapp_invalido=False,
+    )
     canales = campana.canales or []
     if canales:
         qs = qs.filter(canal__in=canales)
@@ -75,16 +118,35 @@ def _despachar_campana(campana: Campana):
         if not (campana.ventana_inicio <= hora <= campana.ventana_fin):
             return 0
 
+    lote = campana.throttle_por_minuto
+    limite_dia = _limite_diario_sesion(campana)
+    if limite_dia:
+        restante_hoy = limite_dia - _enviados_hoy_sesion(campana.sesion)
+        if restante_hoy <= 0:
+            logCron(
+                'Campañas',
+                f'Campaña {campana.id}: tope diario de la sesión alcanzado ({limite_dia}). '
+                f'Continúa mañana.', True,
+            )
+            return 0
+        lote = min(lote, restante_hoy)
+
     pendientes = (
         EnvioCampana.objects
         .filter(campana=campana, estado='pendiente', status=True)
         .select_related('contacto', 'contacto__sesion')
-        [:campana.throttle_por_minuto]
+        [:lote]
     )
 
     service = get_whatsapp_service(campana.sesion)
     enviados_now = 0
     for envio in pendientes:
+        if envio.contacto.opt_out or envio.contacto.whatsapp_invalido:
+            envio.estado = 'fallido'
+            envio.error = 'Contacto excluido: dado de baja (opt-out) o número inválido en WhatsApp.'
+            envio.save(update_fields=['estado', 'error'])
+            campana.total_fallidos = (campana.total_fallidos or 0) + 1
+            continue
         envio.estado = 'enviando'
         envio.intentos += 1
         envio.save(update_fields=['estado', 'intentos'])
@@ -118,9 +180,18 @@ def _despachar_campana(campana: Campana):
                 campana.total_enviados = (campana.total_enviados or 0) + 1
             else:
                 envio.estado = 'fallido'
-                envio.error = str(res.get('error') or 'desconocido')[:2000]
+                err_txt = str(res.get('error') or 'desconocido')
+                envio.error = err_txt[:2000]
                 envio.save(update_fields=['estado', 'error'])
                 campana.total_fallidos = (campana.total_fallidos or 0) + 1
+                try:
+                    from whatsapp.opt_out import marcar_numero_invalido, marcar_opt_out
+                    if '131030' in err_txt:
+                        marcar_numero_invalido(envio.contacto)
+                    elif '131050' in err_txt:
+                        marcar_opt_out(envio.contacto, motivo='meta_131050')
+                except Exception:
+                    pass
         except Exception as e:
             envio.estado = 'fallido'
             envio.error = str(e)[:2000]

@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% load templatefunctions %}
+
+{% block content %}
+    <div class="container-fluid p-0">
+
+        <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
+            <i class="fab fa-instagram fa-2x"></i>
+            <div>
+                <strong>Conversaciones de Instagram</strong><br>
+                <small>
+                    Todos los DMs de tus cuentas Instagram. El chat en vivo, la IA y la asignación de asesores
+                    funcionan en el <a href="/whatsapp/conversaciones/">inbox general</a>; desde aquí abres
+                    cualquier conversación directamente.
+                </small>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label">Búsqueda</label>
+                            <div class="input-group">
+                                <span class="input-group-text border-end-0">
+                                    <i class="fa fa-search text-muted"></i>
+                                </span>
+                                <input type="text" class="form-control border-start-0"
+                                       placeholder="Nombre o ID del contacto" name="criterio"
+                                       value="{{ criterio|default:'' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Cuenta</label>
+                            <select name="cuenta" class="form-select">
+                                <option value="">Todas</option>
+                                {% for c in cuentas %}
+                                    <option value="{{ c.id }}" {% if cuenta_filtro == c.id %}selected{% endif %}>
+                                        {{ c.nombre }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Estado</label>
+                            <select name="estado" class="form-select">
+                                <option value="">Todos</option>
+                                <option value="abierta" {% if estado == 'abierta' %}selected{% endif %}>Abierta</option>
+                                <option value="pendiente" {% if estado == 'pendiente' %}selected{% endif %}>Pendiente</option>
+                                <option value="resuelta" {% if estado == 'resuelta' %}selected{% endif %}>Resuelta</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i> Filtrar
+                                </button>
+                                {% if url_vars %}
+                                    <a href="{{ request.path }}" class="btn btn-default">
+                                        <i class="fas fa-times"></i> Limpiar
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="mb-0">Conversaciones</h4>
+                <small class="text-muted">
+                    {{ list_count|default:0 }} conversación{{ list_count|default:0|pluralize:"es" }}
+                </small>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-striped align-middle">
+                    <thead>
+                    <tr>
+                        <th>Contacto</th>
+                        <th>Cuenta</th>
+                        <th>Asignada a</th>
+                        <th>Estado</th>
+                        <th>IA</th>
+                        <th>Inicio</th>
+                        <th style="width:130px">Acciones</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for conv in listado %}
+                        <tr>
+                            <td><strong>{{ conv.contacto.contacto_nombre|default:conv.contacto.contacto_numero }}</strong></td>
+                            <td><small>{{ conv.contacto.sesion.nombre }}</small></td>
+                            <td>
+                                {% if conv.asignado_a %}
+                                    {{ conv.asignado_a.get_full_name }}
+                                {% else %}
+                                    <span class="text-muted">Sin asignar</span>
+                                {% endif %}
+                            </td>
+                            <td><span class="badge bg-secondary">{{ conv.get_estado_atencion_display|default:conv.estado_atencion }}</span></td>
+                            <td>
+                                {% if conv.ai_activo %}
+                                    <span class="badge bg-success">Activa</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Apagada</span>
+                                {% endif %}
+                            </td>
+                            <td><small>{{ conv.fecha_registro|date:"d/m/Y H:i" }}</small></td>
+                            <td>
+                                <a class="btn btn-sm btn-primary"
+                                   href="/whatsapp/conversaciones/?conv={{ conv.id|encrypt_id }}">
+                                    <i class="fa fa-comments"></i> Abrir chat
+                                </a>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">
+                                Aún no hay conversaciones de Instagram. Cuando alguien escriba un DM a una
+                                cuenta conectada, aparecerá aquí.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% include 'paginacion.html' %}
+            </div>
+        </div>
+    </div>
+{% endblock %}

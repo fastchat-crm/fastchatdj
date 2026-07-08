@@ -255,6 +255,12 @@ class AgentesIA(ModeloBase):
         help_text='Cuando la conversación se hace larga, se conserva el primer mensaje sustantivo del cliente '
                   'como "ancla" para mantener el bot enfocado en el tema original. Rango: 100–400. Default: 180.'
     )
+    memoria_rag_activa = models.BooleanField(
+        default=True, verbose_name='Memoria de conversaciones previas (RAG)',
+        help_text='El agente indexa cada pregunta→respuesta válida en un FAISS de memoria propio y '
+                  'reutiliza en consultas futuras lo ya respondido a otros clientes. Aprende y mejora '
+                  'entre conversaciones sin gastar tokens LLM (solo embeddings).'
+    )
 
     # ── Persona del bot (humanización) ─────────────────────────────────────
     # Preset que rellena de un click los 5 campos siguientes. Si el usuario
@@ -652,7 +658,8 @@ class AgentesIA(ModeloBase):
             vs_manager = VectorStoreManager(
                 storage_dir=base_dir,
                 provider=apikeyobj.proveedor,  # int — el provider registry lo resuelve
-                apikey=apikeyobj.descripcion
+                apikey=apikeyobj.descripcion,
+                base_url=(getattr(apikeyobj, 'base_url', '') or None)
             )
             documentos = []
             for detalle in detalles:
@@ -803,6 +810,24 @@ TIPO_DATO_ENLACE = (
     (5, 'CSV'),
 )
 
+def _registrar_error_entrenamiento(agente_id, mensaje):
+    """Guarda el error de entrenamiento donde la UI pueda mostrarlo (cache 1h).
+
+    Reemplaza a los viejos `print()` silenciosos — el inspector RAG y el
+    reproceso leen esta clave para avisarle al usuario qué fuente falló.
+    """
+    import logging
+    logging.getLogger(__name__).warning("Entrenamiento agente %s: %s", agente_id, mensaje)
+    try:
+        from django.core.cache import cache
+        clave = f'entrenamiento_errores_{agente_id}'
+        errores = cache.get(clave) or []
+        errores.append(str(mensaje)[:300])
+        cache.set(clave, errores[-10:], 3600)
+    except Exception:
+        pass
+
+
 class DetalleAgentesAI(ModeloBase):
     agente = models.ForeignKey(AgentesIA, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Agente')
     tipo = models.PositiveSmallIntegerField(choices=TIPO_DETALLE_AGENTE_AI, default=1, verbose_name='Tipo de detalle')
@@ -810,7 +835,11 @@ class DetalleAgentesAI(ModeloBase):
     tipo_dato_enlace = models.PositiveSmallIntegerField(choices=TIPO_DATO_ENLACE, default=1, verbose_name='Tipo de dato retorna')
     archivo = models.FileField(
         upload_to='detalles_agentes/', blank=True, null=True, verbose_name='Archivo adjunto',
-        validators=[FileExtensionValidator(["pdf", 'csv', 'json', 'xlsx']), FileMaxSizeInMbValidator(10)]
+        validators=[FileExtensionValidator([
+            'pdf', 'csv', 'json', 'xlsx', 'txt', 'md',
+            'doc', 'docx', 'ppt', 'pptx', 'odt', 'odp', 'ods', 'rtf', 'epub', 'html', 'htm',
+            'png', 'jpg', 'jpeg', 'tif', 'tiff', 'bmp', 'webp',
+        ]), FileMaxSizeInMbValidator(10)]
     )
     descripcion = models.TextField(blank=True, null=True, verbose_name='Descripción del detalle')
 
@@ -852,8 +881,16 @@ class DetalleAgentesAI(ModeloBase):
                 raw_docs = _VM._extract_raw_text(detalle.archivo.path)
                 if raw_docs:
                     textos_raw.append(raw_docs)
+                else:
+                    _registrar_error_entrenamiento(
+                        agente.id,
+                        f"'{os.path.basename(detalle.archivo.name)}' sin texto legible — "
+                        f"¿PDF escaneado sin OCR o formato sin soporte (Tika apagado)?"
+                    )
             except Exception as e:
-                print(f"Error extrayendo texto de {detalle.archivo}: {e}")
+                _registrar_error_entrenamiento(
+                    agente.id, f"Error extrayendo texto de '{os.path.basename(detalle.archivo.name)}': {e}"
+                )
 
         for detalle in detalles_texto:
             if detalle.descripcion:
@@ -892,7 +929,8 @@ class DetalleAgentesAI(ModeloBase):
                 vs_manager = VectorStoreManager(
                     storage_dir=base_dir,
                     provider=apikeyobj.proveedor,  # int — el provider registry lo resuelve
-                    apikey=apikeyobj.descripcion
+                    apikey=apikeyobj.descripcion,
+                    base_url=(getattr(apikeyobj, 'base_url', '') or None)
                 )
                 documentos = []
                 for detalle in detalles_archivo:
@@ -913,7 +951,7 @@ class DetalleAgentesAI(ModeloBase):
                     vs_path = vs_manager.build_and_save(documentos, nombre_vs)
                     agente.vectorstore_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
             except Exception as e:
-                print(f"Error construyendo FAISS: {e}")
+                _registrar_error_entrenamiento(agente.id, f"Error construyendo el índice FAISS: {e}")
             break
 
         agente.save()
@@ -923,6 +961,9 @@ PROVEEDOR_CHOICES = (
     (2, 'GEMINI'),
     (3, 'OPEN IA'),
     (4, 'CLAUDE'),
+    (5, 'OLLAMA'),
+    (6, 'DEEPSEEK'),
+    (7, 'HUAWEI MAAS'),
 )
 
 class ApiKeyIA(ModeloBase):
@@ -934,6 +975,12 @@ class ApiKeyIA(ModeloBase):
         verbose_name='Modelo LLM',
         help_text='Modelo concreto a usar con esta API Key. Debe ser compatible con el proveedor '
                   '(Gemini con keys Gemini, GPT con OpenAI, Claude con Anthropic). Vacío = usa el default del provider.'
+    )
+    base_url = models.CharField(
+        max_length=300, blank=True, default='', verbose_name='Base URL',
+        help_text='Endpoint del proveedor para servicios auto-hospedados u OpenAI-compatibles '
+                  '(Ollama: http://host:11434, Huawei MaaS: URL del despliegue). '
+                  'Vacío = URL por defecto del proveedor.'
     )
     usuario = models.CharField(max_length=100, blank=True, null=True, verbose_name='Usuario')
     contrasena = models.CharField(max_length=100, blank=True, null=True, verbose_name='Contraseña')
@@ -1619,6 +1666,56 @@ class AccionFinConversacion(ModeloBase):
             return self.plantilla_mensaje.format(**contexto)
         except (KeyError, ValueError):
             return self.plantilla_mensaje
+
+
+class PreguntaEvaluacionAgente(ModeloBase):
+    """Pregunta de prueba guardada por agente — la suite de evaluación las
+    ejecuta en lote contra el agente real para medir qué responde bien."""
+    agente = models.ForeignKey(
+        AgentesIA, on_delete=models.CASCADE,
+        related_name='preguntas_evaluacion', verbose_name='Agente'
+    )
+    pregunta = models.TextField(verbose_name='Pregunta de prueba')
+    criterio = models.TextField(
+        blank=True, default='', verbose_name='Criterio de éxito',
+        help_text='Qué debería contener o cumplir la respuesta (opcional). '
+                  'Ej: "debe mencionar el precio de la pizza familiar".'
+    )
+
+    class Meta:
+        verbose_name = 'Pregunta de evaluación de agente'
+        verbose_name_plural = 'Preguntas de evaluación de agente'
+        ordering = ['id']
+
+    def __str__(self):
+        return f"[{self.agente_id}] {self.pregunta[:60]}"
+
+
+class EvaluacionAgente(ModeloBase):
+    """Corrida de la suite de evaluación: respuestas reales + veredicto del juez LLM."""
+    agente = models.ForeignKey(
+        AgentesIA, on_delete=models.CASCADE,
+        related_name='evaluaciones', verbose_name='Agente'
+    )
+    score = models.DecimalField(
+        max_digits=4, decimal_places=1, default=0,
+        verbose_name='Score global (0-10)'
+    )
+    total_preguntas = models.PositiveSmallIntegerField(default=0, verbose_name='Preguntas evaluadas')
+    aprobadas = models.PositiveSmallIntegerField(default=0, verbose_name='Preguntas aprobadas')
+    resultados = models.JSONField(
+        default=list, blank=True, verbose_name='Resultados por pregunta',
+        help_text='[{pregunta, respuesta, uso_datos, inventa, cumple_criterio, score, comentario}]'
+    )
+    tokens_total = models.IntegerField(default=0, verbose_name='Tokens consumidos')
+
+    class Meta:
+        verbose_name = 'Evaluación de agente'
+        verbose_name_plural = 'Evaluaciones de agente'
+        ordering = ['-fecha_registro']
+
+    def __str__(self):
+        return f"Evaluación #{self.pk} de {self.agente} — {self.score}/10"
 
 
 class AuditoriaAgenteIA(models.Model):

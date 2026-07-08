@@ -25,6 +25,7 @@ from django.views.decorators.csrf import csrf_exempt
 from channels.layers import get_channel_layer
 
 from .common_meta import validar_firma_hmac as _validar_hmac_shared
+from .funciones_comentarios import guardar_comentario_instagram
 from .models import (
     ConfigInstagram,
     ConfigMessenger,
@@ -206,6 +207,9 @@ def _procesar_post_social(request, ConfigCls, canal):
                 evento_interno = _social_a_evento_interno_v2(m, canal)
                 if evento_interno:
                     process_incoming_message(sesion, evento_interno, channel_layer)
+            for change in entry.get('changes') or []:
+                if canal == 'instagram' and change.get('field') == 'comments':
+                    guardar_comentario_instagram(sesion, config, change.get('value') or {})
     except Exception as e:
         logger.exception("Error procesando %s webhook: %s", canal, e)
         _traza(

@@ -1,20 +1,23 @@
 import json
 import re
-from langchain_community.chat_models import ChatOpenAI
-from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from .memoria_django import DjangoChatMessageHistory
+from .memoria.historial import DjangoChatMessageHistory
+from .providers import get_provider
+
+_MAX_TOKENS_RESUMEN = 2000
 
 
 class AgenteResumidor:
     def __init__(self, provider, apikey, model_name=None, conversacion=None,
-                 apikey_obj=None, agente_obj=None):
-        self.provider = provider == 2 and 'gemini' or provider == 3 and 'openai'
+                 apikey_obj=None, agente_obj=None, base_url=None):
+        # Provider: acepta string o int — resuelto por el registry (soporta
+        # Gemini, OpenAI, Claude, Ollama, DeepSeek, Huawei MaaS).
+        self._provider_obj = get_provider(provider)
+        self.provider = self._provider_obj.name
         self.apikey = apikey
+        self.base_url = (base_url or (getattr(apikey_obj, 'base_url', '') or '')).strip() or None
         modelo_cfg = (getattr(apikey_obj, 'modelo', '') or '').strip() if apikey_obj else ''
         self.model_name = model_name or modelo_cfg or self.default_model()
-        self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
         self.conversacion = conversacion
         self.apikey_obj = apikey_obj
@@ -25,24 +28,16 @@ class AgenteResumidor:
         )
 
     def default_model(self):
-        return "gpt-4o-mini" if self.provider == "openai" else "gemini-2.5-flash"
-
-    def _get_embeddings(self):
-        if self.provider == "gemini":
-            return GoogleGenerativeAIEmbeddings(
-                model="models/text-embedding-004", google_api_key=self.apikey
-            )
-        elif self.provider == "openai":
-            return OpenAIEmbeddings(openai_api_key=self.apikey)
-        raise ValueError("Proveedor de embedding no soportado")
+        return self._provider_obj.default_model()
 
     def _get_llm(self):
-        if self.provider == "gemini":
-            return ChatGoogleGenerativeAI(model=self.model_name, google_api_key=self.apikey)
-        elif self.provider == "openai":
-            from langchain_community.chat_models import ChatOpenAI
-            return ChatOpenAI(model_name=self.model_name, openai_api_key=self.apikey)
-        raise ValueError("Proveedor de LLM no soportado")
+        return self._provider_obj.get_llm(
+            apikey=self.apikey,
+            model_name=self.model_name,
+            max_output_tokens=_MAX_TOKENS_RESUMEN,
+            temperature=0.2,
+            base_url=self.base_url,
+        )
 
     def _get_texto_chat(self) -> str:
         if not self._historia:

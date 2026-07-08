@@ -1,0 +1,20 @@
+.badge-estado-conectado {
+    background: #198754;
+}
+
+.badge-estado-pendiente {
+    background: #ffc107;
+    color: #212529;
+}
+
+.badge-estado-error {
+    background: #dc3545;
+}
+
+.badge-estado-desconectado {
+    background: #6c757d;
+}
+
+.banner-beta {
+    border-left: 4px solid #010101;
+}

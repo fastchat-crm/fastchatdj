@@ -619,6 +619,28 @@ def _procesar_status_meta(status: dict, sesion: SesionWhatsApp, evento: EventoMe
             except Exception:
                 logger.exception("Broadcast ACK Meta fallo msg=%s", mensaje.id)
 
+    # Acciones automáticas según el código de error de Meta (no reintentar,
+    # proteger la calidad del número):
+    #   131030 → el número no existe en WhatsApp → marcar contacto inválido
+    #   131050 → el usuario bloqueó marketing → baja automática (opt-out)
+    #   131047 → ventana 24h vencida → requiere plantilla (se anota en la traza)
+    accion_codigo = ''
+    if estado == 'failed' and codigo_meta and mensaje and mensaje.conversacion_id:
+        try:
+            contacto = mensaje.conversacion.contacto
+            if contacto is not None:
+                from .opt_out import marcar_numero_invalido, marcar_opt_out
+                if int(codigo_meta) == 131030:
+                    marcar_numero_invalido(contacto)
+                    accion_codigo = 'contacto_marcado_invalido'
+                elif int(codigo_meta) == 131050:
+                    marcar_opt_out(contacto, motivo='meta_131050')
+                    accion_codigo = 'contacto_opt_out_automatico'
+                elif int(codigo_meta) == 131047:
+                    accion_codigo = 'requiere_plantilla_reenganche'
+        except Exception:
+            logger.exception("Accion automatica por codigo Meta %s fallo", codigo_meta)
+
     # Traza — etapa y nivel segun estado
     if estado == 'sent':
         etapa, nivel = 'mensaje_enviado', 'info'
@@ -632,6 +654,8 @@ def _procesar_status_meta(status: dict, sesion: SesionWhatsApp, evento: EventoMe
         detalle['error'] = detalle_error
         if codigo_meta:
             detalle['codigo_meta'] = codigo_meta
+        if accion_codigo:
+            detalle['accion_automatica'] = accion_codigo
 
     _traza(
         etapa=etapa, sesion=sesion,

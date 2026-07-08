@@ -250,6 +250,7 @@ def _procesar_texto(mensaje, agente, apikey_obj, provider, model_name, session_i
         contexto_estatico=agente.contexto_estatico or None,
         perfil=agente.perfil,
         agente=agente,
+        base_url=(getattr(apikey_obj, 'base_url', '') or None),
     )
 
     if agente.requiere_tools():

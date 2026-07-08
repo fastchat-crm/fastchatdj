@@ -1,0 +1,27 @@
+from django.urls import re_path
+
+from .view_comentarios import comentariosTikTokView
+from .view_conversaciones import conversacionesTikTokView
+from .view_cuentas import cuentasView
+
+tiktok_urls = (
+    {
+        "nombre": "Cuentas TikTok",
+        "url": 'cuentas/',
+        "vista": cuentasView,
+    },
+    {
+        "nombre": "Conversaciones TikTok",
+        "url": 'conversaciones/',
+        "vista": conversacionesTikTokView,
+    },
+    {
+        "nombre": "Comentarios TikTok",
+        "url": 'comentarios/',
+        "vista": comentariosTikTokView,
+    },
+)
+
+urlpatterns = []
+for u in tiktok_urls:
+    urlpatterns.append(re_path(r'^{}$'.format(u["url"]), u["vista"]))

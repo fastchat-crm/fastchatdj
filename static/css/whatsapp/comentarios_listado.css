@@ -1,0 +1,55 @@
+.comentario-texto {
+    max-width: 420px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    white-space: normal;
+}
+
+.comentario-respuesta {
+    max-width: 420px;
+    font-size: .8rem;
+    color: #6c757d;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.comentario-autor {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.badge-estado-nuevo {
+    background: #0d6efd;
+}
+
+.badge-estado-respondido {
+    background: #198754;
+}
+
+.badge-estado-oculto {
+    background: #6c757d;
+}
+
+.badge-canal-instagram {
+    background: linear-gradient(45deg, #833ab4, #fd1d1d, #fcb045);
+    color: #fff;
+}
+
+.badge-canal-tiktok {
+    background: #010101;
+    color: #fff;
+}
+
+.resumen-comentarios .card {
+    min-width: 150px;
+}
+
+.resumen-comentarios .num {
+    font-size: 1.4rem;
+    font-weight: 700;
+    line-height: 1;
+}

@@ -214,7 +214,7 @@ _CFG_RANGES_FLOAT = {
     'humaniz_escritura_max_seg':   (2.0,  15.0, 0.5),
 }
 
-_SWITCH_FIELDS = ('anotar_listas', 'humanizar_timing')
+_SWITCH_FIELDS = ('anotar_listas', 'humanizar_timing', 'memoria_rag_activa')
 
 
 class AgentesIAForm(ModelFormBase):
@@ -226,7 +226,7 @@ class AgentesIAForm(ModelFormBase):
             'nombre', 'apikey', 'prompt_template', 'anotar_listas',
             'cfg_faiss_k', 'cfg_faiss_fetch_k', 'cfg_max_context_chars', 'cfg_max_static_chars',
             'cfg_history_turns', 'cfg_user_snippet', 'cfg_ai_snippet',
-            'cfg_max_output_tokens', 'cfg_topic_anchor_chars',
+            'cfg_max_output_tokens', 'cfg_topic_anchor_chars', 'memoria_rag_activa',
             # Humanizacion (preset + persona + estilo + timing)
             'personalidad_preset',
             'nombre_bot', 'mensaje_bienvenida', 'personalidad', 'tono', 'estilo_escritura', 'temperature',
@@ -365,14 +365,15 @@ class FaqAgenteForm(ModelFormBase):
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 
 
-_PREFIJO_MODELO_POR_PROVEEDOR = {2: 'gemini-', 3: 'gpt-', 4: 'claude-'}
-_NOMBRE_PROVEEDOR = {2: 'Gemini', 3: 'OpenAI', 4: 'Claude'}
+_PREFIJO_MODELO_POR_PROVEEDOR = {2: 'gemini-', 3: 'gpt-', 4: 'claude-', 6: 'deepseek-'}
+_NOMBRE_PROVEEDOR = {2: 'Gemini', 3: 'OpenAI', 4: 'Claude', 5: 'Ollama', 6: 'DeepSeek', 7: 'Huawei MaaS'}
+_PROVEEDORES_REQUIEREN_BASE_URL = (7,)
 
 
 class ApiKeyIAForm(ModelFormBase):
     class Meta:
         model = ApiKeyIA
-        fields = ('alias', 'proveedor', 'modelo', 'descripcion', 'usuario', 'contrasena', 'estado')
+        fields = ('alias', 'proveedor', 'modelo', 'descripcion', 'base_url', 'usuario', 'contrasena', 'estado')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
@@ -387,6 +388,10 @@ class ApiKeyIAForm(ModelFormBase):
                 self.fields[k].widget.attrs['col'] = '3'
             if k in ('descripcion',):
                 self.fields[k].widget.attrs['col'] = '12'
+            if k in ('base_url',):
+                self.fields[k].required = False
+                self.fields[k].widget.attrs['col'] = '12'
+                self.fields[k].widget.attrs['placeholder'] = 'http://localhost:11434 (Ollama) · URL del despliegue (Huawei MaaS) · vacío = default'
             if k in ('proveedor',):
                 self.fields[k].widget.attrs['class'] = "form-control jselect"
                 self.fields[k].widget.attrs['col'] = '6'
@@ -400,11 +405,17 @@ class ApiKeyIAForm(ModelFormBase):
         cleaned = super().clean()
         proveedor = cleaned.get('proveedor')
         modelo = (cleaned.get('modelo') or '').strip()
+        base_url = (cleaned.get('base_url') or '').strip()
         if proveedor and modelo:
             prefijo = _PREFIJO_MODELO_POR_PROVEEDOR.get(proveedor)
             if prefijo and not modelo.startswith(prefijo):
                 nombre = _NOMBRE_PROVEEDOR.get(proveedor, 'el proveedor seleccionado')
-                self.add_error('modelo', f'The selected model is not compatible with {nombre}. Choose a model starting with "{prefijo}" or leave it empty to use the default.')
+                self.add_error('modelo', f'El modelo seleccionado no es compatible con {nombre}. Elige un modelo que empiece con "{prefijo}" o déjalo vacío para usar el default.')
+        if proveedor in _PROVEEDORES_REQUIEREN_BASE_URL and not base_url:
+            nombre = _NOMBRE_PROVEEDOR.get(proveedor, 'este proveedor')
+            self.add_error('base_url', f'{nombre} requiere la Base URL del despliegue.')
+        if proveedor in (2, 3, 4) and base_url:
+            cleaned['base_url'] = ''
         return cleaned
 
 

@@ -418,6 +418,21 @@ def process_incoming_message(session, event_data, channel_layer):
             return JsonResponse({'status': 'ok', 'rate_limited': True, 'retry_after_s': _retry_s})
 
         whatsapp_service = get_whatsapp_service(session)
+
+        # ── GUARD: opt-out (BAJA/STOP) — respetar de inmediato, sin pasar por el bot ──
+        try:
+            from .opt_out import procesar_mensaje_entrante as _procesar_opt_out
+            _resultado_baja = _procesar_opt_out(contacto, message_text or '', whatsapp_service, session)
+            if _resultado_baja:
+                _traza(
+                    etapa='webhook_recibido', sesion=session, conversacion=conversation,
+                    mensaje=message, numero=from_number, nivel='warning',
+                    detalle={'opt_out': _resultado_baja, 'texto': (message_text or '')[:80]},
+                )
+                return JsonResponse({'status': 'ok', 'opt_out': _resultado_baja})
+        except Exception:
+            logger.exception("Guard opt-out falló (continúa flujo normal)")
+
         primer_mensaje = not conversation.bienvenida_enviado
         numero_opcion_respondido = (message_text or '').replace(' ', '')
         numero_opcion_respondido = numero_opcion_respondido.isdigit() and numero_opcion_respondido or -1
@@ -522,7 +537,7 @@ def process_incoming_message(session, event_data, channel_layer):
                 detalle={'modo_bot': 'ninguno', 'accion': 'mensaje_guardado_sin_respuesta'},
             )
             return JsonResponse({'status': 'ok', 'modo': 'ninguno', 'sin_respuesta': True})
-        if _modo_bot == 'tradicional':
+        if _modo_bot in ('tradicional', 'hibrido'):
             if not conversation.ai_activo:
                 _traza(
                     etapa='motor_flujo_pausado', sesion=session, conversacion=conversation, mensaje=message,
@@ -534,7 +549,7 @@ def process_incoming_message(session, event_data, channel_layer):
                         'motivo': 'bot_pausado_por_asesor_humano',
                     },
                 )
-                return JsonResponse({'status': 'ok', 'modo': 'tradicional_pausado'})
+                return JsonResponse({'status': 'ok', 'modo': f'{_modo_bot}_pausado'})
             _ex_motor = None
             try:
                 from crm.motor_flujo_chatbot import procesar_mensaje_tradicional
@@ -567,10 +582,19 @@ def process_incoming_message(session, event_data, channel_layer):
 
             # El motor manejó la conversación → cortar aquí.
             if _res_motor and (_res_motor.manejado or _res_motor.handoff or _res_motor.finalizado):
-                return JsonResponse({'status': 'ok', 'modo': 'tradicional'})
+                return JsonResponse({'status': 'ok', 'modo': _modo_bot})
 
             # Modo tradicional puro: sin match → no delegamos a IA.
-            return JsonResponse({'status': 'ok', 'modo': 'tradicional_sin_match'})
+            if _modo_bot == 'tradicional':
+                return JsonResponse({'status': 'ok', 'modo': 'tradicional_sin_match'})
+
+            # Modo híbrido: sin match en el flujo → cae al pipeline IA de abajo.
+            _traza(
+                etapa='hibrido_fallback_ia', sesion=session, conversacion=conversation, mensaje=message,
+                numero=from_number, nivel='info',
+                detalle={'modo_bot': 'hibrido', 'accion': 'sin_match_delegado_a_ia',
+                         'fallback_ia_flag': bool(_res_motor and _res_motor.fallback_ia)},
+            )
 
         departamentos = conversation.sesion.departamentos.all().annotate(
             numero_opcion=Window(
@@ -695,6 +719,7 @@ def process_incoming_message(session, event_data, channel_layer):
                             detectar_fin=detectar_fin_llm,
                             perfil=agente.perfil,
                             agente=agente,
+                            base_url=(getattr(apikey, 'base_url', '') or None),
                         )
                         _traza(
                             etapa='llm_invocado', sesion=session, conversacion=conversation, mensaje=message,

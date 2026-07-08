@@ -27,6 +27,8 @@ from .heartbeat_view import heartbeat_receiver
 from .trace_receiver_view import trace_receiver
 from .meta_webhook_view import meta_webhook
 from .meta_social_webhook_view import instagram_webhook, messenger_webhook
+from .tiktok_webhook_view import tiktok_webhook
+from .view_comentarios import comentariosView
 from .view_plantillas import plantillasView
 from .view_tarifas import tarifasView
 from .view_etiquetas import etiquetasView
@@ -62,6 +64,11 @@ whatsapp_urls = (
         "nombre": "Contactos",
         "url": 'contacto/',
         "vista": contactoView,
+    },
+    {
+        "nombre": "Comentarios de redes sociales",
+        "url": 'comentarios/',
+        "vista": comentariosView,
     },
     {
         "nombre": "Trazas / Logs (IA y conversaciones)",
@@ -140,6 +147,7 @@ urlpatterns = [
     path('sesiones/<int:sesion_id>/profile-picture/', meta_actualizar_foto_perfil, name='whatsapp_meta_foto_perfil'),
     path('instagram_webhook/', instagram_webhook, name='whatsapp_instagram_webhook'),
     path('messenger_webhook/', messenger_webhook, name='whatsapp_messenger_webhook'),
+    path('tiktok_webhook/', tiktok_webhook, name='whatsapp_tiktok_webhook'),
     path('sesion-activa/', set_sesion_activa, name='whatsapp_set_sesion_activa'),
     path('sync-contacts/', sync_contacts_view, name='sync_contacts'),
     path('whatsapp/update-profile/', update_profile_view, name='update_profile'),

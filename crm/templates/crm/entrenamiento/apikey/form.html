@@ -35,8 +35,13 @@
 (function() {
     'use strict';
     // Filtra el combo de modelos según el proveedor seleccionado.
-    // Prefijos por provider: 2=Gemini (gemini-*), 3=OpenAI (gpt-*), Claude (claude-*)
     const PREFIJOS = { '2': 'gemini-', '3': 'gpt-', '4': 'claude-' };
+    const LISTAS = {
+        '5': ['llama3.1', 'llama3.2', 'qwen2.5', 'mistral', 'deepseek-r1'],
+        '6': ['deepseek-chat', 'deepseek-reasoner'],
+        '7': ['DeepSeek-V3', 'DeepSeek-R1', 'Qwen3-32B']
+    };
+    const USAN_BASE_URL = ['5', '6', '7'];
 
     function filtrarModelos() {
         const $prov = $('#id_proveedor');
@@ -45,6 +50,7 @@
 
         const provVal = String($prov.val() || '');
         const prefijo = PREFIJOS[provVal] || null;
+        const lista = LISTAS[provVal] || null;
 
         // Guardar el valor actual antes de reconstruir
         const valorActual = $modelo.val();
@@ -55,13 +61,17 @@
             const v = $opt.attr('value') || '';
             // Opción vacía (default) siempre visible
             if (v === '') { $opt.prop('hidden', false).prop('disabled', false); return; }
-            if (!prefijo) {
+            let match;
+            if (lista) {
+                match = lista.indexOf(v) !== -1;
+            } else if (prefijo) {
+                match = v.startsWith(prefijo);
+            } else {
                 // Proveedor desconocido: mostrar todos (fallback defensivo)
                 $opt.prop('hidden', false).prop('disabled', false);
                 if (!primerValido) primerValido = v;
                 return;
             }
-            const match = v.startsWith(prefijo);
             $opt.prop('hidden', !match).prop('disabled', !match);
             if (match && !primerValido) primerValido = v;
         });
@@ -73,13 +83,19 @@
         }
 
         // Mostrar texto guía bajo el combo
-        const labels = { '2': 'Gemini', '3': 'OpenAI', '4': 'Claude' };
+        const labels = { '2': 'Gemini', '3': 'OpenAI', '4': 'Claude', '5': 'Ollama', '6': 'DeepSeek', '7': 'Huawei MaaS' };
         const prov_label = labels[provVal] || 'este proveedor';
         let $hint = $modelo.siblings('.modelo-hint');
         if (!$hint.length) {
             $hint = $('<div class="form-text small modelo-hint"></div>').insertAfter($modelo);
         }
         $hint.html('<i class="fas fa-info-circle text-primary me-1"></i>Solo se muestran modelos compatibles con <strong>' + prov_label + '</strong>.');
+
+        const $baseUrl = $('#id_base_url');
+        if ($baseUrl.length) {
+            const visible = USAN_BASE_URL.indexOf(provVal) !== -1;
+            $baseUrl.closest('.col-lg-12, [class*="col-"]').toggle(visible);
+        }
     }
 
     $(document).on('change', '#id_proveedor', filtrarModelos);

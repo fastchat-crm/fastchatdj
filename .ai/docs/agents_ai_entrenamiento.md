@@ -9,6 +9,89 @@ todos los call sites externos que disparan inferencia.
 
 ---
 
+## 0. Reestructura + mejoras (2026-07-08)
+
+**Nueva estructura de paquetes** (los imports públicos viejos siguen funcionando
+vía shims):
+
+```
+agents_ai/
+├── agente_consultor.py     # clase AgenteConsultor (solo la clase; helpers movidos)
+├── agente_resumidor.py     # migrado al provider registry (soporta todos los providers)
+├── consultor/              # NUEVO
+│   ├── clasificacion.py    # regex saludos/acks/consultas amplias
+│   └── retrieval.py        # cache FAISS mtime, BM25, híbrida, trim, sección relevante
+├── memoria/                # NUEVO
+│   ├── historial.py        # DjangoChatMessageHistory (ex memoria_django.py)
+│   └── rag_conversaciones.py  # memoria RAG por agente (aprende de conversaciones)
+├── rag/                    # NUEVO
+│   ├── tika_client.py      # cliente Apache Tika (extracción + OCR spa+eng)
+│   ├── extraccion.py       # tubería única: Tika primero, loaders locales de respaldo
+│   └── vectorstore.py      # VectorStoreManager (ex vectorstore_manager.py)
+├── providers/              # + openai_compat.py, ollama.py, deepseek.py, huawei.py
+├── prompts/                # NUEVO — prompts centralizados
+│   ├── plantillas.py       # PROMPT_TEMPLATES (ex core/constantes.py)
+│   └── personalidades.py   # PERSONALIDAD_PRESETS + CHOICES + FRASES_RELLENO
+├── consumo.py              # NUEVO — PRECIO_USD_POR_1K_TOKENS + costo_usd() (dashboard consumo)
+├── memoria_django.py       # SHIM → memoria/historial.py
+└── vectorstore_manager.py  # SHIM → rag/vectorstore.py
+```
+
+`core/constantes.py` re-exporta los prompts desde `agents_ai.prompts` (compat).
+El dashboard de consumo (`consumo_apikey`/`consumo_detalle` en
+`crm/view_mientrenamiento.py`) ahora devuelve `costo_usd` + tabla `por_modelo`
+usando `agents_ai/consumo.py` — cierra el gap §7.3.
+
+**Providers nuevos**: 5=OLLAMA (local), 6=DEEPSEEK, 7=HUAWEI MAAS — todos
+OpenAI-compatibles vía `ChatOpenAI` + `ApiKeyIA.base_url` (campo nuevo).
+`get_llm/get_embeddings` ahora aceptan `base_url=None`. Providers sin embeddings
+(Claude/DeepSeek/Huawei) ya no rompen `AgenteConsultor.__init__` — el agente
+sigue en Modo A (contexto estático + FAQs) sin FAISS.
+
+**Apache Tika**: URL + switch en `seguridad.Configuracion.tika_url/tika_activo`
+(panel Configuración, badge de estado con acción AJAX `estado_tika`). Amplía
+formatos de entrenamiento (doc/docx/ppt/pptx/odt/rtf/epub/html/imágenes con OCR).
+Extraer texto no gasta tokens LLM.
+
+**Memoria RAG por agente**: FAISS en `{MEDIA}/vectorstores/agente_<id>_memoria/`.
+Cada Q→A válida se indexa en background (solo embeddings) y se recupera como
+bloque compacto (k=3, ≤900 chars) en `_construir_contexto`. Switch por agente:
+`AgentesIA.memoria_rag_activa` (default True). Dedupe por score ≤0.05, tope
+4000 docs, excluye la conversación actual.
+
+**Suite de evaluación** (2026-07-08): modelos `PreguntaEvaluacionAgente` +
+`EvaluacionAgente` (crm/models.py, junto a AuditoriaAgenteIA); motor en
+`crm/funciones_evaluacion_agente.py` (`ejecutar_evaluacion`: corre las
+preguntas contra el AgenteConsultor real con conversacion=None — no toca
+historial ni memoria — y un juez LLM batch califica uso_datos/inventa/
+criterio/score 0-10 en UNA llamada force_json). Acciones AJAX:
+`eval_datos` (GET), `eval_pregunta_save/delete`, `eval_ejecutar` (POST) en
+view_mientrenamiento; botón 🧪 en la card del agente. Consumo registrado
+origen='auditor'.
+
+**Reproceso RAG**: `agents_ai/rag/reproceso.py` (`reprocesar_agente`) —
+extracción → chunking+embeddings → verificación → resumen precomputado del
+negocio en `contexto_estatico` (1 llamada LLM, consumo origen='resumidor').
+Acción `reprocesar_rag` + botón 🔄. Errores de entrenamiento visibles vía
+cache `entrenamiento_errores_<agente_id>` (helper
+`_registrar_error_entrenamiento` en crm/models.py, mostrado en el inspector RAG).
+
+**Monitoreo en vivo**: acción GET `resumen_vivo` en `whatsapp/view_trazas.py`
+(por sesión, última hora: eventos, respuestas IA, errores, tokens y costo USD
+vía `agents_ai/consumo.py`) + panel con auto-refresh 15s en
+`whatsapp/templates/whatsapp/trazas/listado.html`.
+
+**Wizard**: ya era de 3 pasos; ahora al crear redirige directo al **chat de
+prueba** (`chat_url`) en vez del editor de 8 tabs.
+
+**Migraciones pendientes** (el developer corre makemigrations/migrate):
+`Configuracion.tika_activo/tika_url`, `ApiKeyIA.base_url`,
+`AgentesIA.memoria_rag_activa`, `Contacto.opt_out/whatsapp_invalido/...`,
+`Campana.limite_diario`, `PreguntaEvaluacionAgente`, `EvaluacionAgente`,
+choices de proveedor y validators de archivo.
+
+---
+
 ## 1. Overview
 
 **Dos apps, un solo subsistema:**
@@ -672,6 +755,16 @@ Exception común: `IAActionError` (`base.py:25`) — safe to display.
 ---
 
 ## 13. Gaps conocidos / candidatos a reingeniería
+
+> Resueltos 2026-07: (a) todos los providers ahora pasan timeout + max_retries
+> al cliente LangChain (`providers/base.py`: 60s cloud / 120s Ollama-compat /
+> 30s embeddings, 1 retry) — antes Gemini reintentaba 6 veces con backoff y un
+> provider caído colgaba el webhook minutos por cada API Key del agente;
+> (b) BM25 cacheado por path+mtime (`consultor/retrieval.py:_get_bm25_cached`)
+> — antes se re-tokenizaba todo el docstore en cada mensaje; (c) clientes
+> LLM/embeddings cacheados por config (`providers.get_llm_cached` /
+> `get_embeddings_cached`) — reuso de pool de conexiones entre mensajes;
+> (d) `listas_memoria` se carga lazy solo en `consultar_con_listas`.
 
 1. **Embedding tokens NO trackeados** — costo invisible. Sugerencia: agregar
    `origen='embedding'` a `ConsumoTokenIA` y llamar desde `build_and_save()`.

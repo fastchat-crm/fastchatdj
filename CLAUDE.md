@@ -30,6 +30,11 @@ Deep-dive technical references for specific modules live under `.ai/docs/`. **Al
 
 - `.ai/docs/conversaciones.md` — `whatsapp/conversaciones/` and `whatsapp/conversaciones-finalizadas/`: views, helpers, GET/POST actions, listing filters, partials, JS patterns, WebSocket consumers (`ChatConsumer`, `SessionRoomConsumer`), webhook → broadcast flow, 6h reactivation window, Meta template flow, and rules for adding actions/filters/panels/message types.
 - `.ai/docs/asignacion_asesores.md` — single source of truth for **who attends** a conversation (the WhatsApp session via `PerfilSesionWhatsApp`, not departments), the assignment chain (`candidatos_ordenados`), workload + availability selection, flow notifications, and the traditional chatbot motor (`motor_flujo_chatbot.py`): accent-insensitive matching, re-show on invalid input, timeout→handoff, anti-rewind. Read before touching asesor assignment or the flow engine.
+- `.ai/docs/instagram_comentarios.md` — social comments inbox (`ComentarioSocial`), the `instagram/` and `tiktok/` control-layer apps, and the multichannel roadmap.
+- `.ai/docs/tiktok_integracion.md` — TikTok Business Messaging API plan (beta approval, OAuth, webhook).
+- `meta/README.md` — what each file in the `meta/` Graph API package is for.
+
+**Doc-sync rule:** whenever you create or modify a file inside `agents_ai/`, `whatsapp/`, `meta/`, `instagram/`, `tiktok/`, `cron_jobs/` or (future) `facebook/`, update the module's `.md` in the same change — the folder's `README.md` and/or the matching doc under `.ai/docs/`. If none exists yet, create it. A code change in those folders is not complete until its doc reflects it. **One `.md` per folder/module** — never one per `.py` file; document each script as a section inside the folder's single `README.md`.
 
 ## Server & Background Jobs
 

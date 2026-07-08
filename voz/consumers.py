@@ -396,5 +396,6 @@ class VozWebConsumer(AsyncWebsocketConsumer):
             contexto_estatico=agente.contexto_estatico or None,
             perfil=agente.perfil,
             agente=agente,
+            base_url=(getattr(apikey_obj, 'base_url', '') or None),
         )
         return consultor, (agente.descripcion or '')

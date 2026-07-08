@@ -32,12 +32,14 @@ PROVEEDORES_SESION = (
     ('meta',      'Meta Cloud API'),
     ('instagram', 'Instagram DM'),
     ('messenger', 'Facebook Messenger'),
+    ('tiktok',    'TikTok Business'),
 )
 
 CANALES_ORIGEN = (
     ('whatsapp',  'WhatsApp'),
     ('instagram', 'Instagram'),
     ('messenger', 'Messenger'),
+    ('tiktok',    'TikTok'),
     ('otro',      'Otro'),
 )
 
@@ -54,6 +56,7 @@ MODOS_BOT = (
     ('ninguno',     'Sin bot (sólo humanos)'),
     ('tradicional', 'Chatbot tradicional (flujo/menús/APIs)'),
     ('ia',          'Agente IA'),
+    ('hibrido',     'Híbrido (flujo primero, IA si no hay match)'),
 )
 
 
@@ -145,6 +148,10 @@ class SesionWhatsApp(ModeloBase):
     @property
     def es_messenger(self):
         return self.proveedor == 'messenger'
+
+    @property
+    def es_tiktok(self):
+        return self.proveedor == 'tiktok'
 
     def is_connected(self):
         return self.estado == 'conectado'
@@ -306,6 +313,25 @@ class Contacto(ModeloBase):
         blank=True, null=True,
         verbose_name='Referral Meta (CTWA)',
         help_text='Datos del Click-to-WhatsApp ad por el que entró el contacto.'
+    )
+    # Protección del número — opt-out y números inválidos quedan fuera de
+    # campañas/masivos automáticamente (calidad Meta).
+    opt_out = models.BooleanField(
+        default=False, db_index=True, verbose_name='Baja de mensajes masivos (opt-out)',
+        help_text='El contacto pidió no recibir más mensajes masivos (escribió BAJA/STOP '
+                  'o Meta reportó que bloqueó marketing). Se excluye de campañas.'
+    )
+    fecha_opt_out = models.DateTimeField(
+        blank=True, null=True, verbose_name='Fecha de baja'
+    )
+    motivo_opt_out = models.CharField(
+        max_length=30, blank=True, default='', verbose_name='Motivo de baja',
+        help_text='keyword (escribió baja/stop) o meta_131050 (Meta reportó bloqueo de marketing).'
+    )
+    whatsapp_invalido = models.BooleanField(
+        default=False, db_index=True, verbose_name='Número inválido en WhatsApp',
+        help_text='Marcado automáticamente cuando Meta responde que el número no existe '
+                  'en WhatsApp (error 131030). Se excluye de campañas.'
     )
 
     def get_foto_gris(self):
@@ -654,6 +680,23 @@ class ConversacionWhatsApp(ModeloBase):
                         self.resumen_conversacion = resumen_analisis
                     else:
                         self.resumen_conversacion = consultor.resumir()
+                    # Consolidar aprendizaje: el resumen de la conversación cerrada
+                    # se indexa en la memoria RAG del agente — reutiliza el resumen
+                    # ya generado, solo cuesta 1 embedding (cero tokens LLM extra).
+                    try:
+                        if self.resumen_conversacion and getattr(agente, 'memoria_rag_activa', True):
+                            from agents_ai.providers import get_provider
+                            from agents_ai.memoria.rag_conversaciones import guardar_conocimiento
+                            _emb = get_provider(apikey.proveedor).get_embeddings(
+                                apikey.descripcion,
+                                base_url=(getattr(apikey, 'base_url', '') or None),
+                            )
+                            guardar_conocimiento(
+                                agente.id, _emb, self.resumen_conversacion,
+                                origen='resumen_conversacion', conversacion_id=str(self.id),
+                            )
+                    except Exception:
+                        pass
                 except Exception:
                     continue
                 break
@@ -732,6 +775,10 @@ class ConversacionWhatsApp(ModeloBase):
     @property
     def atendida_por_messenger(self):
         return self.proveedor_efectivo == 'messenger'
+
+    @property
+    def atendida_por_tiktok(self):
+        return self.proveedor_efectivo == 'tiktok'
 
     @cached_property
     def vence_meta_en(self):
@@ -2193,6 +2240,12 @@ class Campana(ModeloBase):
         'Throttle (msg/min)', default=20,
         help_text='Tope de envíos por minuto para no gatillar rate limits.'
     )
+    limite_diario = models.PositiveIntegerField(
+        'Límite diario de envíos', default=0,
+        help_text='Tope de mensajes por día para esta sesión (todas sus campañas). '
+                  '0 = automático: en Meta usa el tier del número (50/250/1K/…), '
+                  'en QR sin límite.'
+    )
 
     # Ejecución
     fecha_inicio_real = models.DateTimeField('Inicio real', null=True, blank=True)
@@ -2378,6 +2431,34 @@ class ConfigInstagram(ModeloBase):
         return f"IG · {self.username or self.ig_user_id}"
 
 
+class ConfigTikTok(ModeloBase):
+    """Configuración TikTok Business Messaging por sesión. OneToOne con sesión
+    de proveedor='tiktok'. Los tokens llegan por OAuth de la cuenta Business."""
+    sesion = models.OneToOneField(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='config_tiktok', verbose_name='Sesión'
+    )
+    business_id = models.CharField('Business Account ID', max_length=120, db_index=True,
+                                   blank=True, default='')
+    open_id = models.CharField('Open ID', max_length=120, blank=True, default='',
+                               help_text='Identificador de la cuenta autorizada vía OAuth.')
+    username = models.CharField('@username', max_length=150, blank=True, default='')
+    access_token = models.TextField('Access Token', blank=True, default='')
+    refresh_token = models.TextField('Refresh Token', blank=True, default='')
+    token_expira_en = models.DateTimeField('Token expira en', null=True, blank=True)
+    webhook_verify_token = models.CharField(max_length=60, blank=True, default='')
+    webhook_verificado_en = models.DateTimeField(null=True, blank=True)
+    ultima_sincronizacion = models.DateTimeField(null=True, blank=True)
+    error_mensaje = models.TextField('Último error', blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Configuración TikTok'
+        verbose_name_plural = 'Configuraciones TikTok'
+
+    def __str__(self):
+        return f"TikTok · {self.username or self.business_id or self.sesion_id}"
+
+
 class ConfigMessenger(ModeloBase):
     """Configuración Messenger Platform (Facebook Page) por sesión."""
     sesion = models.OneToOneField(
@@ -2547,3 +2628,68 @@ class PerfilSesionWhatsApp(ModeloBase):
 
     def __str__(self):
         return f"{self.usuario.get_full_name()} - {self.sesion.nombre if self.sesion else 'Sin sesión'}"
+
+
+# ----------------------------------------------------------------------------
+# Comentarios de redes sociales (Instagram hoy; TikTok cuando se integre)
+# ----------------------------------------------------------------------------
+
+CANALES_COMENTARIO = (
+    ('instagram', 'Instagram'),
+    ('tiktok', 'TikTok'),
+)
+
+ESTADOS_COMENTARIO = (
+    ('nuevo', 'Nuevo'),
+    ('respondido', 'Respondido'),
+    ('oculto', 'Oculto'),
+)
+
+
+class ComentarioSocial(ModeloBase):
+    """Comentario recibido en una publicación de un canal social. Inbox de
+    moderación: responder públicamente, ocultar, o pasar al autor a DM para
+    convertirlo en conversación (lead) del pipeline normal."""
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='comentarios_sociales', verbose_name='Sesión'
+    )
+    canal = models.CharField(
+        'Canal', max_length=20, choices=CANALES_COMENTARIO,
+        default='instagram', db_index=True
+    )
+    comment_id = models.CharField('ID externo del comentario', max_length=120, unique=True)
+    parent_id = models.CharField('ID comentario padre', max_length=120, blank=True, default='')
+    media_id = models.CharField('ID de la publicación', max_length=120, blank=True, default='', db_index=True)
+    autor_external_id = models.CharField('ID externo del autor', max_length=120, blank=True, default='')
+    autor_username = models.CharField('Usuario autor', max_length=150, blank=True, default='')
+    texto = models.TextField('Comentario', blank=True, default='')
+    fecha_comentario = models.DateTimeField('Fecha del comentario', null=True, blank=True, db_index=True)
+    estado = models.CharField(
+        'Estado', max_length=20, choices=ESTADOS_COMENTARIO,
+        default='nuevo', db_index=True
+    )
+    respuesta_texto = models.TextField('Respuesta pública', blank=True, default='')
+    respondido_por = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='comentarios_respondidos', verbose_name='Respondido por'
+    )
+    respondido_en = models.DateTimeField('Respondido en', null=True, blank=True)
+    dm_enviado = models.BooleanField('DM enviado', default=False)
+    conversacion = models.ForeignKey(
+        ConversacionWhatsApp, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='comentarios_origen', verbose_name='Conversación generada'
+    )
+    payload_json = models.JSONField('Payload original', default=dict, blank=True)
+
+    class Meta:
+        verbose_name = 'Comentario social'
+        verbose_name_plural = 'Comentarios sociales'
+        ordering = ['-fecha_comentario', '-id']
+        indexes = [
+            models.Index(fields=['canal', 'estado', '-fecha_comentario']),
+        ]
+
+    def __str__(self):
+        autor = self.autor_username or self.autor_external_id
+        return f"{self.get_canal_display()} · @{autor}: {(self.texto or '')[:40]}"

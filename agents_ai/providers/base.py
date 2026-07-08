@@ -12,6 +12,15 @@ Para agregar un proveedor nuevo:
 """
 from abc import ABC, abstractmethod
 
+# Presupuestos de red compartidos por todos los providers. Sin timeout explícito
+# los SDKs cuelgan el hilo del webhook minutos enteros (Gemini reintenta 6 veces
+# con backoff exponencial por defecto) antes de pasar a la siguiente API Key.
+LLM_TIMEOUT_SEGUNDOS = 60
+LLM_TIMEOUT_LOCAL_SEGUNDOS = 120  # modelos auto-hospedados (Ollama) generan más lento
+LLM_MAX_RETRIES = 1
+EMBEDDINGS_TIMEOUT_SEGUNDOS = 30
+EMBEDDINGS_MAX_RETRIES = 1
+
 
 class BaseProvider(ABC):
     """Interfaz que cada proveedor de LLM debe implementar."""
@@ -24,12 +33,17 @@ class BaseProvider(ABC):
         ...
 
     @abstractmethod
-    def get_llm(self, apikey: str, model_name: str, max_output_tokens: int, temperature: float = 0.1):
-        """Devuelve una instancia LangChain del LLM."""
+    def get_llm(self, apikey: str, model_name: str, max_output_tokens: int, temperature: float = 0.1,
+                base_url: str | None = None):
+        """Devuelve una instancia LangChain del LLM.
+
+        `base_url` — endpoint alternativo para providers auto-hospedados u
+        OpenAI-compatibles (Ollama, Huawei MaaS). Los providers cloud lo ignoran.
+        """
         ...
 
     @abstractmethod
-    def get_embeddings(self, apikey: str):
+    def get_embeddings(self, apikey: str, base_url: str | None = None):
         """Devuelve una instancia LangChain de embeddings para FAISS."""
         ...
 

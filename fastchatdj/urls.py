@@ -29,6 +29,8 @@ from django.conf.urls.static import static
 from core.consultas import consultas
 from seguridad.view_notificaciones import notificacionesView
 from whatsapp.urls import whatsapp_urls
+from instagram.urls import instagram_urls
+from tiktok.urls import tiktok_urls
 from agenda.urls import agenda_urls
 
 confi = Configuracion.get_instancia()
@@ -64,6 +66,22 @@ urls_sistema = (
         "url": 'whatsapp/',
         "sub_urls": whatsapp_urls,
         "include": include('whatsapp.urls'),
+        "name": None,
+        "vista": None
+    },
+    {
+        "nombre": "Instagram",
+        "url": 'instagram/',
+        "sub_urls": instagram_urls,
+        "include": include('instagram.urls'),
+        "name": None,
+        "vista": None
+    },
+    {
+        "nombre": "TikTok",
+        "url": 'tiktok/',
+        "sub_urls": tiktok_urls,
+        "include": include('tiktok.urls'),
         "name": None,
         "vista": None
     },

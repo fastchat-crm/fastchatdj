@@ -1062,6 +1062,20 @@
             </div>
         </div>
 
+        <p class="section-header mt-3">🧠 Memoria entre conversaciones</p>
+        <div class="row g-2">
+            <div class="col-md-12">
+                <div class="d-flex align-items-center gap-2">
+                    {{ form.memoria_rag_activa }}
+                    <label class="form-label small mb-0 fw-semibold" for="{{ form.memoria_rag_activa.id_for_label }}">
+                        {{ form.memoria_rag_activa.label }}
+                    </label>
+                </div>
+                <div class="form-text">{{ form.memoria_rag_activa.help_text }}</div>
+                <div class="invalid-feedback" id="errorMessagememoria_rag_activa"></div>
+            </div>
+        </div>
+
         <p class="section-header mt-3">💬 Cuánta conversación recuerda</p>
         <div class="row g-2">
             <div class="col-md-6">

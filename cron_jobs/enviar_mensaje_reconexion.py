@@ -58,6 +58,8 @@ conversaciones = ConversacionWhatsApp.objects.filter(
     reconexion_enviada=False,
     contacto__sesion__activo=True,
     contacto__sesion__reconexion_activa=True,
+    contacto__opt_out=False,
+    contacto__whatsapp_invalido=False,
 ).exclude(
     Q(contacto__sesion__mensaje_reconexion__isnull=True)
     | Q(contacto__sesion__mensaje_reconexion='')

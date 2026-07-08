@@ -24,6 +24,58 @@ def trazasView(request):
     }
     addData(request, data)
 
+    # AJAX: resumen en vivo por sesión (para el panel con auto-refresh)
+    if request.GET.get('action') == 'resumen_vivo':
+        try:
+            from datetime import timedelta
+            from django.utils import timezone
+            from django.db.models import Sum
+            from crm.models import ConsumoTokenIA
+            from agents_ai.consumo import costo_usd
+
+            minutos = min(int(request.GET.get('minutos') or 60), 24 * 60)
+            desde = timezone.now() - timedelta(minutes=minutos)
+
+            filas = []
+            sesiones = SesionWhatsApp.objects.filter(status=True, activo=True)
+            for s in sesiones:
+                qs = TrazaMensajeIA.objects.filter(sesion=s, fecha__gte=desde)
+                total = qs.count()
+                if total == 0:
+                    continue
+                errores = qs.filter(nivel='error').count()
+                enviados = qs.filter(etapa='mensaje_enviado').count()
+                consumo = (
+                    ConsumoTokenIA.objects
+                    .filter(conversacion__contacto__sesion=s, fecha__gte=desde)
+                    .values('modelo')
+                    .annotate(entrada=Sum('tokens_entrada'), salida=Sum('tokens_salida'))
+                )
+                tokens = 0
+                costo = 0.0
+                for c in consumo:
+                    tokens += (c['entrada'] or 0) + (c['salida'] or 0)
+                    costo += costo_usd(c['modelo'], c['entrada'] or 0, c['salida'] or 0)
+                ultima_error = (
+                    qs.filter(nivel='error').order_by('-fecha')
+                    .values_list('etapa', flat=True).first() or ''
+                )
+                filas.append({
+                    'sesion_id': s.id,
+                    'sesion': s.nombre or s.numero or f'Sesión {s.id}',
+                    'numero': s.numero or '',
+                    'eventos': total,
+                    'respuestas': enviados,
+                    'errores': errores,
+                    'ultimo_error': ultima_error,
+                    'tokens': tokens,
+                    'costo_usd': round(costo, 4),
+                })
+            filas.sort(key=lambda f: (f['errores'], f['eventos']), reverse=True)
+            return JsonResponse({'result': True, 'minutos': minutos, 'sesiones': filas})
+        except Exception as ex:
+            return JsonResponse({'result': False, 'message': str(ex)})
+
     # AJAX: ver timeline completo de un mensaje o conversacion
     if request.GET.get('action') == 'ver_timeline':
         try:

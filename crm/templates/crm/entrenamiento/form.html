@@ -550,6 +550,25 @@
                                                     {% endif %}
                                                 </div>
 
+                                                <div class="agent-keys mb-2">
+                                                    {% if l.num_sesiones %}
+                                                        <span class="api-key-badge ok"
+                                                              title="{% for su in l.sesiones_uso %}{{ su.canal }}: {{ su.nombre }}{% if not forloop.last %} · {% endif %}{% endfor %}">
+                                                            <i class="fas fa-share-alt"></i>
+                                                            En {{ l.num_sesiones }} sesión{{ l.num_sesiones|pluralize:"es" }}
+                                                        </span>
+                                                        {% for su in l.sesiones_uso|slice:":3" %}
+                                                            <span class="api-key-badge" title="{{ su.canal }} · {{ su.nombre }}">
+                                                                <i class="fas fa-plug"></i> {{ su.canal }}
+                                                            </span>
+                                                        {% endfor %}
+                                                    {% else %}
+                                                        <span class="api-key-badge no-keys" title="Asigna este agente a una sesión en el tablero de sesiones">
+                                                            <i class="fas fa-unlink"></i> Sin sesiones asignadas
+                                                        </span>
+                                                    {% endif %}
+                                                </div>
+
                                                 {# Action buttons #}
                                                 <div class="agent-actions">
                                                     <a href="javascript:void(0)" class="btn-ag proc"
@@ -570,6 +589,26 @@
                                                     {% endif %}
                                                     <a href="?action=procedimiento&id={{ l.pk }}" class="btn-ag edit">
                                                         <i class="fas fa-edit"></i> Editar
+                                                    </a>
+                                                    <a href="javascript:void(0)" class="btn-ag"
+                                                       onclick="inspeccionarRag({{ l.pk }})"
+                                                       title="Ver el conocimiento indexado del agente (RAG)">
+                                                        <i class="fas fa-database"></i>
+                                                    </a>
+                                                    <a href="javascript:void(0)" class="btn-ag"
+                                                       onclick="duplicarAgente({{ l.pk }}, '{{ l.nombre }}')"
+                                                       title="Duplicar agente con toda su configuración y conocimiento">
+                                                        <i class="fas fa-clone"></i>
+                                                    </a>
+                                                    <a href="javascript:void(0)" class="btn-ag"
+                                                       onclick="reprocesarRag({{ l.pk }}, '{{ l.nombre }}')"
+                                                       title="Reprocesar el conocimiento: extracción, embeddings, verificación y resumen del negocio">
+                                                        <i class="fas fa-sync-alt"></i>
+                                                    </a>
+                                                    <a href="javascript:void(0)" class="btn-ag"
+                                                       onclick="evaluarAgente({{ l.pk }}, '{{ l.nombre }}')"
+                                                       title="Evaluar el agente: preguntas de prueba con veredicto y score">
+                                                        <i class="fas fa-vial"></i>
                                                     </a>
                                                     <a href="javascript:void(0)" class="btn-ag del"
                                                        onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteagente')"
@@ -807,6 +846,37 @@
                             <div class="card border-0 bg-light text-center py-3">
                                 <div class="h4 mb-0 text-warning fw-bold" id="c-salida">—</div>
                                 <div class="small text-muted mt-1">Tokens respuesta</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="card border-0 bg-light text-center py-3">
+                                <div class="h4 mb-0 text-danger fw-bold" id="c-costo">—</div>
+                                <div class="small text-muted mt-1">Costo estimado (USD)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-12">
+                            <p class="small fw-semibold text-muted text-uppercase mb-2" style="letter-spacing:.05em">
+                                <i class="fas fa-dollar-sign me-1"></i>Costo por modelo (estimado según pricing del proveedor)
+                            </p>
+                            <div class="table-responsive" style="max-height:220px;overflow-y:auto">
+                                <table class="table table-sm table-hover">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th>Modelo</th>
+                                            <th class="text-end">Llamadas</th>
+                                            <th class="text-end">Tokens entrada</th>
+                                            <th class="text-end">Tokens salida</th>
+                                            <th class="text-end">Tokens total</th>
+                                            <th class="text-end">Costo USD</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="consumo-tbody-modelos">
+                                        <tr><td colspan="6" class="text-center text-muted py-3">Selecciona un rango y pulsa Consultar</td></tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -2535,6 +2605,222 @@
     let _consumoApikeyId = null;
     const _RUTA = '{{ request.path }}';
 
+    function duplicarAgente(pk, nombre) {
+        Swal.fire({
+            type: 'question',
+            title: 'Duplicar agente',
+            html: 'Se creará <b>' + nombre + ' (copia)</b> con toda su configuración, conocimiento, FAQs y herramientas.<br><small class="text-muted">El conocimiento se copia tal cual — sin gastar tokens de embeddings.</small>',
+            showCancelButton: true,
+            confirmButtonText: 'Duplicar',
+            cancelButtonText: 'Cancelar'
+        }).then(function (r) {
+            if (!r.value) return;
+            pantallaespera();
+            $.post(_RUTA, {
+                action: 'duplicar_agente', id: pk,
+                csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').first().val()
+            }, function (res) {
+                setTimeout($.unblockUI, 1);
+                const data = Array.isArray(res) ? res[0] : res;
+                if (data && !data.error) { location.reload(); }
+                else { alertaWarning((data && data.message) || 'No se pudo duplicar el agente.'); }
+            }, 'json').fail(function () {
+                setTimeout($.unblockUI, 1);
+                alertaWarning('Error de conexión al duplicar.');
+            });
+        });
+    }
+
+    function evaluarAgente(pk, nombre) {
+        pantallaespera();
+        $.get(_RUTA, { action: 'eval_datos', id: pk }, function (res) {
+            setTimeout($.unblockUI, 1);
+            if (!res.result) { alertaWarning(res.message || 'Error'); return; }
+            let html = '<div class="text-start small">';
+            if (res.historial && res.historial.length) {
+                html += '<div class="mb-2">Historial: ';
+                res.historial.forEach(function (h) {
+                    const col = h.score >= 7 ? 'success' : (h.score >= 5 ? 'warning' : 'danger');
+                    html += '<span class="badge bg-' + col + ' me-1" title="' + escHtml(h.fecha) + ' · ' + h.aprobadas + '/' + h.total + ' aprobadas">' + h.score + '</span>';
+                });
+                html += '</div>';
+            }
+            html += '<div class="fw-semibold mb-1">Preguntas de prueba (' + res.preguntas.length + ')</div>';
+            if (!res.preguntas.length) {
+                html += '<p class="text-muted">Sin preguntas aún — agrega la primera abajo.</p>';
+            } else {
+                html += '<ul class="mb-2">';
+                res.preguntas.forEach(function (p) {
+                    html += '<li>' + escHtml(p.pregunta) +
+                        (p.criterio ? ' <span class="text-muted">(' + escHtml(p.criterio) + ')</span>' : '') +
+                        ' <a href="javascript:void(0)" class="text-danger" onclick="evalPreguntaDelete(' + p.id + ',' + pk + ')" title="Quitar"><i class="fas fa-times"></i></a></li>';
+                });
+                html += '</ul>';
+            }
+            html += '<div class="mb-2">' +
+                '<input type="text" class="form-control form-control-sm mb-1" id="eval-pregunta" placeholder="Nueva pregunta de prueba, ej: ¿Cuánto cuesta la pizza familiar?">' +
+                '<input type="text" class="form-control form-control-sm mb-1" id="eval-criterio" placeholder="Criterio de éxito (opcional), ej: debe dar el precio exacto">' +
+                '<button class="btn btn-sm btn-outline-primary" onclick="evalPreguntaAdd(' + pk + ')"><i class="fas fa-plus me-1"></i>Agregar pregunta</button>' +
+            '</div>';
+            html += '</div>';
+            Swal.fire({
+                title: '🧪 Evaluación de ' + escHtml(res.agente),
+                html: html,
+                width: 680,
+                showCancelButton: true,
+                confirmButtonText: 'Ejecutar evaluación',
+                cancelButtonText: 'Cerrar'
+            }).then(function (r) {
+                if (r.value) evalEjecutar(pk, nombre);
+            });
+        }, 'json').fail(function () { setTimeout($.unblockUI, 1); alertaWarning('Error de conexión.'); });
+    }
+
+    function evalPreguntaAdd(pk) {
+        const pregunta = (document.getElementById('eval-pregunta').value || '').trim();
+        if (!pregunta) { return; }
+        $.post(_RUTA, {
+            action: 'eval_pregunta_save', agente_id: pk,
+            pregunta: pregunta, criterio: document.getElementById('eval-criterio').value || '',
+            csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').first().val()
+        }, function () { evaluarAgente(pk, ''); }, 'json');
+    }
+
+    function evalPreguntaDelete(id, pk) {
+        $.post(_RUTA, {
+            action: 'eval_pregunta_delete', id: id,
+            csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').first().val()
+        }, function () { evaluarAgente(pk, ''); }, 'json');
+    }
+
+    function evalEjecutar(pk, nombre) {
+        pantallaespera();
+        $.post(_RUTA, {
+            action: 'eval_ejecutar', id: pk,
+            csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').first().val()
+        }, function (res) {
+            setTimeout($.unblockUI, 1);
+            const data = Array.isArray(res) ? res[0] : res;
+            if (!data || data.error) { alertaWarning((data && data.message) || 'No se pudo ejecutar.'); return; }
+            const col = data.score >= 7 ? 'success' : (data.score >= 5 ? 'warning' : 'danger');
+            let html = '<div class="text-start small">' +
+                '<div class="mb-2"><span class="badge bg-' + col + '" style="font-size:1rem;">Score ' + data.score + '/10</span> ' +
+                '<span class="badge bg-secondary">' + data.aprobadas + '/' + data.total + ' aprobadas</span> ' +
+                '<span class="badge bg-light text-dark">' + fmtN(data.tokens) + ' tokens</span></div>';
+            (data.resultados || []).forEach(function (x) {
+                const icono = x.aprobada ? '<i class="fas fa-check-circle text-success me-1"></i>' : '<i class="fas fa-times-circle text-danger me-1"></i>';
+                html += '<div class="p-2 border rounded mb-1">' +
+                    '<b>' + icono + escHtml(x.pregunta) + '</b> <span class="badge bg-secondary">' + x.score + '/10</span>' +
+                    (x.inventa ? ' <span class="badge bg-danger">inventa</span>' : '') +
+                    (x.uso_datos ? ' <span class="badge bg-success">usa datos</span>' : ' <span class="badge bg-warning text-dark">sin datos</span>') +
+                    '<div class="mt-1" style="white-space:pre-wrap;max-height:90px;overflow:auto;">' + escHtml(x.respuesta) + '</div>' +
+                    (x.comentario ? '<div class="text-muted mt-1"><i class="fas fa-gavel me-1"></i>' + escHtml(x.comentario) + '</div>' : '') +
+                '</div>';
+            });
+            html += '</div>';
+            Swal.fire({ title: '🧪 Resultado de ' + escHtml(nombre || ''), html: html, width: 720, confirmButtonText: 'Cerrar' });
+        }, 'json').fail(function () { setTimeout($.unblockUI, 1); alertaWarning('Error de conexión.'); });
+    }
+
+    function reprocesarRag(pk, nombre) {
+        Swal.fire({
+            type: 'question',
+            title: 'Reprocesar conocimiento',
+            html: 'Se reconstruye el RAG de <b>' + nombre + '</b>: extracción de texto → fragmentación → embeddings → verificación → resumen del negocio (1 llamada LLM).<br><small class="text-muted">Puede tardar según la cantidad de documentos.</small>',
+            showCancelButton: true,
+            confirmButtonText: 'Reprocesar',
+            cancelButtonText: 'Cancelar'
+        }).then(function (r) {
+            if (!r.value) return;
+            pantallaespera();
+            $.post(_RUTA, {
+                action: 'reprocesar_rag', id: pk,
+                csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').first().val()
+            }, function (res) {
+                setTimeout($.unblockUI, 1);
+                const data = Array.isArray(res) ? res[0] : res;
+                if (!data || data.error) { alertaWarning((data && data.message) || 'No se pudo reprocesar.'); return; }
+                let html = '<div class="text-start small">';
+                html += '<div class="mb-2"><span class="badge bg-primary me-1">' + escHtml(data.modo || '') + '</span>';
+                if (data.chunks_total) html += '<span class="badge bg-secondary">' + data.chunks_total + ' fragmentos</span>';
+                html += '</div>';
+                (data.etapas || []).forEach(function (e) {
+                    const icono = e.ok ? '<i class="fas fa-check-circle text-success me-1"></i>' : '<i class="fas fa-times-circle text-danger me-1"></i>';
+                    html += '<div class="p-2 border rounded mb-1"><b>' + icono + escHtml(e.etapa) + '</b><br>' + escHtml(e.detalle) + '</div>';
+                });
+                html += '</div>';
+                Swal.fire({
+                    title: (data.ok ? '✅ ' : '⚠️ ') + 'Reproceso de ' + escHtml(nombre),
+                    html: html,
+                    width: 640,
+                    confirmButtonText: 'Cerrar'
+                });
+            }, 'json').fail(function () {
+                setTimeout($.unblockUI, 1);
+                alertaWarning('Error de conexión al reprocesar.');
+            });
+        });
+    }
+
+    function inspeccionarRag(pk, q) {
+        pantallaespera();
+        $.get(_RUTA, { action: 'rag_inspeccionar', id: pk, q: q || '' }, function (res) {
+            setTimeout($.unblockUI, 1);
+            if (!res.result) { alertaWarning(res.message || 'No se pudo inspeccionar.'); return; }
+            const esc = escHtml;
+            let html = '<div class="text-start small">';
+            html += '<div class="mb-2">' +
+                '<span class="badge bg-primary me-1">' + esc(res.modo) + '</span>' +
+                '<span class="badge bg-secondary me-1">' + fmtN(res.conocimiento.chunks_total) + ' fragmentos</span>' +
+                '<span class="badge bg-info me-1">' + fmtN(res.memoria.chunks_total) + ' memorias</span>' +
+                '<span class="badge bg-success me-1">' + fmtN(res.faqs_aprobadas) + ' FAQs</span>' +
+                '<span class="badge bg-light text-dark">' + fmtN(res.contexto_estatico_chars) + ' chars estáticos</span>' +
+            '</div>';
+            if (res.fuentes && res.fuentes.length) {
+                html += '<div class="fw-semibold mb-1">Fuentes de entrenamiento</div><ul class="mb-2">';
+                res.fuentes.forEach(function (f) {
+                    html += '<li>[' + esc(f.tipo) + '] ' + esc(f.archivo || f.enlace || f.descripcion || '—') + '</li>';
+                });
+                html += '</ul>';
+            }
+            if (res.errores_entrenamiento && res.errores_entrenamiento.length) {
+                html += '<div class="alert alert-warning py-2 px-2 mb-2"><b>⚠️ Errores del último entrenamiento</b><ul class="mb-0">';
+                res.errores_entrenamiento.forEach(function (e) { html += '<li>' + esc(e) + '</li>'; });
+                html += '</ul></div>';
+            }
+            html += '<div class="input-group input-group-sm mb-2">' +
+                '<input type="text" class="form-control" id="rag-q" value="' + esc(res.busqueda || '') + '" placeholder="Probar una búsqueda: ¿qué recupera el agente?">' +
+                '<button class="btn btn-primary" onclick="inspeccionarRag(' + pk + ', document.getElementById(\'rag-q\').value)">Buscar</button>' +
+            '</div>';
+            const titulo = res.busqueda ? 'Fragmentos recuperados para la búsqueda' : 'Muestra del conocimiento indexado';
+            html += '<div class="fw-semibold mb-1">' + titulo + '</div>';
+            if (!res.conocimiento.muestra.length) {
+                html += '<p class="text-muted">Sin fragmentos' + (res.embeddings_ok ? '' : ' (la API Key del agente no soporta embeddings)') + '.</p>';
+            } else {
+                res.conocimiento.muestra.forEach(function (c) {
+                    html += '<div class="p-2 border rounded mb-1 bg-light" style="white-space:pre-wrap;max-height:120px;overflow:auto;">' + esc(c.contenido) + '</div>';
+                });
+            }
+            if (res.memoria.muestra && res.memoria.muestra.length) {
+                html += '<div class="fw-semibold mb-1 mt-2">Memoria de conversaciones previas</div>';
+                res.memoria.muestra.slice(0, 3).forEach(function (c) {
+                    html += '<div class="p-2 border rounded mb-1" style="background:#eef7ff;white-space:pre-wrap;max-height:100px;overflow:auto;">' + esc(c.contenido) + '</div>';
+                });
+            }
+            html += '</div>';
+            Swal.fire({
+                title: '🧠 Conocimiento de ' + esc(res.agente),
+                html: html,
+                width: 720,
+                showConfirmButton: true,
+                confirmButtonText: 'Cerrar'
+            });
+        }, 'json').fail(function () {
+            setTimeout($.unblockUI, 1);
+            alertaWarning('Error de conexión.');
+        });
+    }
+
     function fmtN(n) { return Number(n || 0).toLocaleString('es-EC'); }
 
     function cargarConsumo() {
@@ -2553,6 +2839,23 @@
             document.getElementById('c-total').textContent    = fmtN(res.totales.total);
             document.getElementById('c-entrada').textContent  = fmtN(res.totales.entrada);
             document.getElementById('c-salida').textContent   = fmtN(res.totales.salida);
+            document.getElementById('c-costo').textContent    = '$' + Number(res.totales.costo_usd || 0).toFixed(4);
+
+            const tbodyModelos = document.getElementById('consumo-tbody-modelos');
+            if (!res.por_modelo || !res.por_modelo.length) {
+                tbodyModelos.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Sin datos</td></tr>';
+            } else {
+                tbodyModelos.innerHTML = res.por_modelo.map(m =>
+                    `<tr>
+                        <td><code>${escHtml(m.modelo)}</code></td>
+                        <td class="text-end">${fmtN(m.llamadas)}</td>
+                        <td class="text-end">${fmtN(m.entrada)}</td>
+                        <td class="text-end">${fmtN(m.salida)}</td>
+                        <td class="text-end fw-semibold">${fmtN(m.total)}</td>
+                        <td class="text-end fw-bold text-danger">$${Number(m.costo_usd || 0).toFixed(4)}</td>
+                    </tr>`
+                ).join('');
+            }
 
             // Ocultar panel detalle al recargar
             $('#consumo-detalle-panel').hide();

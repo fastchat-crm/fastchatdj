@@ -36,6 +36,15 @@ def configuracion(request):
         res_json = []
         if 'action' in request.POST:
             action = request.POST["action"]
+            if action == 'estado_tika':
+                from agents_ai.rag.tika_client import ping_tika
+                url_prueba = (request.POST.get('url') or '').strip()
+                if not url_prueba and not getattr(confi, 'tika_activo', False):
+                    return JsonResponse({'state': True, 'estado': {
+                        'activo': False, 'error': 'Servicio Tika desactivado en la configuración.'
+                    }})
+                estado = ping_tika(url=url_prueba or None)
+                return JsonResponse({'state': True, 'estado': estado})
             try:
                 with transaction.atomic():
                     if action == 'eliminar_icono':

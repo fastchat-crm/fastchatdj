@@ -1,0 +1,35 @@
+.badge-estado-conectado {
+    background: #198754;
+}
+
+.badge-estado-pendiente {
+    background: #ffc107;
+    color: #212529;
+}
+
+.badge-estado-error {
+    background: #dc3545;
+}
+
+.badge-estado-desconectado {
+    background: #6c757d;
+}
+
+.token-truncado {
+    max-width: 160px;
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+    font-family: monospace;
+    font-size: .75rem;
+}
+
+.guia-conexion ol {
+    margin-bottom: 0;
+}
+
+.candidatos-detectados {
+    display: none;
+}

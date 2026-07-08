@@ -1,0 +1,241 @@
+{% extends 'base.html' %}
+{% block head %}
+    <link rel="stylesheet" href="/static/css/tiktok/cuentas_listado.css?v1.0">
+{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0">
+
+        <div class="alert alert-warning banner-beta mb-3">
+            <strong><i class="fab fa-tiktok"></i> Canal en preparación</strong><br>
+            <small>
+                La API de mensajes de TikTok (Business Messaging) está en <b>beta</b> y requiere aprobación de
+                TikTok. Pre-registra aquí tus cuentas Business: al llegar la aprobación se activan sin
+                re-registrar nada. Requisitos: cuenta <b>TikTok Business</b> registrada fuera de EE. UU. / EEA /
+                Suiza / Reino Unido.
+                <a href="/seguridad/documentacion/?pagina=conectar-instagram-tiktok">Ver guía completa</a>.
+            </small>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-8">
+                            <label class="form-label">Búsqueda</label>
+                            <div class="input-group">
+                                <span class="input-group-text border-end-0">
+                                    <i class="fa fa-search text-muted"></i>
+                                </span>
+                                <input type="text" class="form-control border-start-0"
+                                       placeholder="Nombre o @username" name="criterio"
+                                       value="{{ criterio|default:'' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i> Filtrar
+                                </button>
+                                {% if url_vars %}
+                                    <a href="{{ request.path }}" class="btn btn-default">
+                                        <i class="fas fa-times"></i> Limpiar
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="mb-0">Cuentas registradas</h4>
+                <small class="text-muted">
+                    {{ list_count|default:0 }} cuenta{{ list_count|default:0|pluralize }}
+                    · Webhook: <code>{{ webhook_url }}</code>
+                </small>
+            </div>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCuenta">
+                <i class="fa fa-plus"></i> Registrar cuenta
+            </button>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-striped align-middle">
+                    <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>@username</th>
+                        <th>Business ID</th>
+                        <th>Tokens OAuth</th>
+                        <th>Estado</th>
+                        <th>Activa</th>
+                        <th style="width:150px">Acciones</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for s in listado %}
+                        <tr data-id="{{ s.id }}">
+                            <td><strong>{{ s.nombre }}</strong></td>
+                            <td>@{{ s.config_tiktok.username|default:"—" }}</td>
+                            <td><small>{{ s.config_tiktok.business_id|default:"—" }}</small></td>
+                            <td>
+                                {% if s.config_tiktok.access_token %}
+                                    <span class="badge bg-success">Cargados</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Pendientes de OAuth</span>
+                                {% endif %}
+                            </td>
+                            <td><span class="badge badge-estado-{{ s.estado }}">{{ s.get_estado_display }}</span></td>
+                            <td>
+                                {% if s.activo %}
+                                    <span class="badge bg-success">Sí</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">No</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-secondary btn-edit"
+                                        data-id="{{ s.id }}" data-nombre="{{ s.nombre }}"
+                                        data-username="{{ s.config_tiktok.username }}"
+                                        data-business="{{ s.config_tiktok.business_id }}"
+                                        title="Editar">
+                                    <i class="fa fa-pen"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-warning btn-toggle" data-id="{{ s.id }}"
+                                        title="Activar/Suspender">
+                                    <i class="fa fa-power-off"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger btn-del" data-id="{{ s.id }}"
+                                        data-nombre="{{ s.nombre }}" title="Eliminar">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">
+                                Aún no hay cuentas TikTok registradas. Pre-registra la primera para dejarla lista.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% include 'paginacion.html' %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalCuenta" tabindex="-1">
+        <div class="modal-dialog">
+            <form class="modal-content" id="formCuenta">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Registrar cuenta TikTok</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="add">
+                    <input type="hidden" name="pk" value="">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre interno *</label>
+                        <input type="text" name="nombre" class="form-control" required maxlength="150"
+                               placeholder="Ej: TikTok Marca">
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">@username *</label>
+                            <input type="text" name="username" class="form-control" required maxlength="150">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Business Account ID</label>
+                            <input type="text" name="business_id" class="form-control" maxlength="120">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Access Token (OAuth)</label>
+                        <textarea name="access_token" class="form-control" rows="2"
+                                  placeholder="Se llenará al autorizar por OAuth cuando la API esté aprobada"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Refresh Token (OAuth)</label>
+                        <textarea name="refresh_token" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script>
+        (function () {
+            const modalEl = document.getElementById('modalCuenta');
+            const modal = new bootstrap.Modal(modalEl);
+            const form = document.getElementById('formCuenta');
+
+            function csrf() {
+                return form.querySelector('[name=csrfmiddlewaretoken]').value;
+            }
+
+            document.querySelectorAll('.btn-edit').forEach(btn => btn.addEventListener('click', () => {
+                form.reset();
+                form.action.value = 'change';
+                form.pk.value = btn.dataset.id;
+                form.nombre.value = btn.dataset.nombre;
+                form.username.value = btn.dataset.username;
+                form.business_id.value = btn.dataset.business;
+                modalEl.querySelector('.modal-title').textContent = 'Editar cuenta TikTok';
+                modal.show();
+            }));
+
+            modalEl.addEventListener('show.bs.modal', (e) => {
+                if (!e.relatedTarget) return;
+                form.reset();
+                form.action.value = 'add';
+                form.pk.value = '';
+                modalEl.querySelector('.modal-title').textContent = 'Registrar cuenta TikTok';
+            });
+
+            form.addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const fd = new FormData(form);
+                const r = await fetch('', {method: 'POST', body: fd, headers: {'X-Requested-With': 'XMLHttpRequest'}});
+                const j = await r.json();
+                if (j.error) {
+                    alert(j.message || 'Error');
+                    return;
+                }
+                location.reload();
+            });
+
+            async function accion(accionNombre, id, confirmMsg) {
+                if (confirmMsg && !confirm(confirmMsg)) return;
+                const fd = new FormData();
+                fd.append('action', accionNombre);
+                fd.append('pk', id);
+                fd.append('csrfmiddlewaretoken', csrf());
+                const r = await fetch('', {method: 'POST', body: fd});
+                const j = await r.json();
+                if (j.error) {
+                    alert(j.message || 'Error');
+                    return;
+                }
+                location.reload();
+            }
+
+            document.querySelectorAll('.btn-toggle').forEach(btn =>
+                btn.addEventListener('click', () => accion('toggle_activo', btn.dataset.id)));
+            document.querySelectorAll('.btn-del').forEach(btn =>
+                btn.addEventListener('click', () => accion('delete', btn.dataset.id,
+                    '¿Eliminar la cuenta "' + btn.dataset.nombre + '"?')));
+        })();
+    </script>
+{% endblock %}

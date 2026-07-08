@@ -1,0 +1,284 @@
+{% extends 'base.html' %}
+{% load templatefunctions %}
+{% block head %}
+    <link rel="stylesheet" href="/static/css/whatsapp/comentarios_listado.css?v1.0">
+{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0">
+
+        <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
+            <i class="fab fa-instagram fa-2x"></i>
+            <div>
+                <strong>¿Para qué sirve este inbox?</strong><br>
+                <small>
+                    Aquí llegan los <strong>comentarios de tus publicaciones</strong> de Instagram (y TikTok cuando se
+                    integre). Puedes <strong>responder públicamente</strong>, <strong>ocultar</strong> comentarios
+                    inapropiados o <strong>enviar un DM privado</strong> al autor: cuando responda, la conversación
+                    aparecerá en <a href="/whatsapp/conversaciones/">Conversaciones</a> y seguirá el pipeline normal
+                    (IA, asignación de asesores, etiquetas). El DM privado solo puede enviarse dentro de los
+                    <strong>7 días</strong> posteriores al comentario.
+                </small>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3 resumen-comentarios">
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body py-2">
+                        <div class="num text-primary">{{ total_nuevos|default:0 }}</div>
+                        <small class="text-muted">Nuevos</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body py-2">
+                        <div class="num text-success">{{ total_respondidos|default:0 }}</div>
+                        <small class="text-muted">Respondidos</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body py-2">
+                        <div class="num text-secondary">{{ total_ocultos|default:0 }}</div>
+                        <small class="text-muted">Ocultos</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label">Búsqueda</label>
+                            <div class="input-group">
+                                <span class="input-group-text border-end-0">
+                                    <i class="fa fa-search text-muted"></i>
+                                </span>
+                                <input type="text" class="form-control border-start-0"
+                                       placeholder="Texto del comentario, autor o publicación" name="criterio"
+                                       value="{{ criterio|default:'' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Cuenta</label>
+                            <select name="sesion" class="form-select">
+                                <option value="">Todas</option>
+                                {% for s in sesiones_sociales %}
+                                    <option value="{{ s.id }}" {% if sesion_filtro == s.id %}selected{% endif %}>
+                                        {{ s.nombre }} ({{ s.get_proveedor_display }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Estado</label>
+                            <select name="estado" class="form-select">
+                                <option value="">Todos</option>
+                                <option value="nuevo" {% if estado == 'nuevo' %}selected{% endif %}>Nuevo</option>
+                                <option value="respondido" {% if estado == 'respondido' %}selected{% endif %}>Respondido</option>
+                                <option value="oculto" {% if estado == 'oculto' %}selected{% endif %}>Oculto</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i> Filtrar
+                                </button>
+                                {% if url_vars %}
+                                    <a href="{{ request.path }}" class="btn btn-default">
+                                        <i class="fas fa-times"></i> Limpiar
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="mb-0">Comentarios</h4>
+                <small class="text-muted">
+                    {{ list_count|default:0 }} comentario{{ list_count|default:0|pluralize }}
+                    encontrado{{ list_count|default:0|pluralize }}
+                </small>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-striped align-middle">
+                    <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Canal</th>
+                        <th>Cuenta</th>
+                        <th>Autor</th>
+                        <th>Comentario</th>
+                        <th>Estado</th>
+                        <th style="width:180px">Acciones</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for c in listado %}
+                        <tr data-id="{{ c.id }}">
+                            <td class="text-nowrap"><small>{{ c.fecha_comentario|date:"d/m/Y H:i" }}</small></td>
+                            <td>
+                                <span class="badge badge-canal-{{ c.canal }}">{{ c.get_canal_display }}</span>
+                            </td>
+                            <td><small>{{ c.sesion.nombre }}</small></td>
+                            <td class="comentario-autor">@{{ c.autor_username|default:c.autor_external_id }}</td>
+                            <td>
+                                <div class="comentario-texto">{{ c.texto }}</div>
+                                {% if c.respuesta_texto %}
+                                    <div class="comentario-respuesta">
+                                        <i class="fa fa-reply"></i> {{ c.respuesta_texto }}
+                                    </div>
+                                {% endif %}
+                                {% if c.dm_enviado %}
+                                    <span class="badge bg-info text-dark mt-1"><i class="fa fa-paper-plane"></i> DM enviado</span>
+                                {% endif %}
+                                {% if c.conversacion %}
+                                    <a href="/whatsapp/conversaciones/?conv={{ c.conversacion.id|encrypt_id }}"
+                                       class="badge bg-success mt-1 text-decoration-none">
+                                        <i class="fa fa-comments"></i> Ver conversación
+                                    </a>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge badge-estado-{{ c.estado }}">{{ c.get_estado_display }}</span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary btn-responder"
+                                        data-id="{{ c.id }}" data-autor="{{ c.autor_username|default:c.autor_external_id }}"
+                                        title="Responder públicamente">
+                                    <i class="fa fa-reply"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-info btn-dm"
+                                        data-id="{{ c.id }}" data-autor="{{ c.autor_username|default:c.autor_external_id }}"
+                                        title="Enviar DM privado">
+                                    <i class="fa fa-paper-plane"></i>
+                                </button>
+                                {% if c.estado == 'oculto' %}
+                                    <button class="btn btn-sm btn-outline-secondary btn-mostrar"
+                                            data-id="{{ c.id }}" title="Volver a mostrar">
+                                        <i class="fa fa-eye"></i>
+                                    </button>
+                                {% else %}
+                                    <button class="btn btn-sm btn-outline-danger btn-ocultar"
+                                            data-id="{{ c.id }}" title="Ocultar comentario">
+                                        <i class="fa fa-eye-slash"></i>
+                                    </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">
+                                Aún no hay comentarios. Cuando alguien comente tus publicaciones conectadas,
+                                aparecerán aquí.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% include 'paginacion.html' %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalRespuesta" tabindex="-1">
+        <div class="modal-dialog">
+            <form class="modal-content" id="formRespuesta">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Responder comentario</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="responder">
+                    <input type="hidden" name="pk" value="">
+                    <p class="small text-muted mb-2" id="respuestaDestino"></p>
+                    <div class="mb-2">
+                        <label class="form-label">Mensaje *</label>
+                        <textarea name="texto" class="form-control" rows="4" required
+                                  placeholder="Escribe tu respuesta"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Enviar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script>
+        (function () {
+            const modalEl = document.getElementById('modalRespuesta');
+            const modal = new bootstrap.Modal(modalEl);
+            const form = document.getElementById('formRespuesta');
+            const destino = document.getElementById('respuestaDestino');
+            const titulo = modalEl.querySelector('.modal-title');
+
+            function abrirModal(accion, id, autor) {
+                form.reset();
+                form.action.value = accion;
+                form.pk.value = id;
+                if (accion === 'responder') {
+                    titulo.textContent = 'Responder comentario';
+                    destino.textContent = 'Respuesta pública al comentario de @' + autor + '.';
+                } else {
+                    titulo.textContent = 'Enviar DM privado';
+                    destino.textContent = 'Mensaje directo privado para @' + autor + '. Si responde, la conversación aparecerá en el inbox.';
+                }
+                modal.show();
+            }
+
+            document.querySelectorAll('.btn-responder').forEach(btn =>
+                btn.addEventListener('click', () => abrirModal('responder', btn.dataset.id, btn.dataset.autor)));
+            document.querySelectorAll('.btn-dm').forEach(btn =>
+                btn.addEventListener('click', () => abrirModal('enviar_dm', btn.dataset.id, btn.dataset.autor)));
+
+            form.addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const fd = new FormData(form);
+                const r = await fetch('', {method: 'POST', body: fd, headers: {'X-Requested-With': 'XMLHttpRequest'}});
+                const j = await r.json();
+                if (j.error) {
+                    alert(j.message || 'Error');
+                    return;
+                }
+                location.reload();
+            });
+
+            async function accionSimple(accion, id, confirmMsg) {
+                if (confirmMsg && !confirm(confirmMsg)) return;
+                const fd = new FormData();
+                fd.append('action', accion);
+                fd.append('pk', id);
+                fd.append('csrfmiddlewaretoken', form.querySelector('[name=csrfmiddlewaretoken]').value);
+                const r = await fetch('', {method: 'POST', body: fd});
+                const j = await r.json();
+                if (j.error) {
+                    alert(j.message || 'Error');
+                    return;
+                }
+                location.reload();
+            }
+
+            document.querySelectorAll('.btn-ocultar').forEach(btn =>
+                btn.addEventListener('click', () => accionSimple('ocultar', btn.dataset.id, '¿Ocultar este comentario de la publicación?')));
+            document.querySelectorAll('.btn-mostrar').forEach(btn =>
+                btn.addEventListener('click', () => accionSimple('mostrar', btn.dataset.id, '¿Volver a mostrar este comentario?')));
+        })();
+    </script>
+{% endblock %}

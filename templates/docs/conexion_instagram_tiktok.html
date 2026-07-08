@@ -1,0 +1,278 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/stylenew/docs.css">
+{% endblock %}
+
+{% block content %}
+<div class="docs-page">
+
+    <aside class="docs-sidebar">
+        <div class="docs-sidebar-search">
+            <i class="fa fa-search"></i>
+            <input type="text" placeholder="Buscar en la documentación...">
+        </div>
+        {% for seccion in sidebar %}
+            <div class="docs-sb-group">
+                <h6 class="docs-sb-title">{{ seccion.titulo }}</h6>
+                {% if seccion.items %}
+                    <ul class="docs-sb-list">
+                        {% for item in seccion.items %}
+                            <li>
+                                <a href="/seguridad/documentacion/?pagina={{ item.slug }}"
+                                   class="docs-sb-item {% if item.slug == slug_actual %}active{% endif %}">
+                                    {{ item.nombre }}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <span class="docs-sb-empty">Próximamente</span>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </aside>
+
+    <main class="docs-main">
+
+        <nav class="docs-breadcrumb" aria-label="breadcrumb">
+            {% for crumb in breadcrumb %}
+                {% if crumb.url %}
+                    <a href="{{ crumb.url }}">{{ crumb.nombre }}</a>
+                {% else %}
+                    <span>{{ crumb.nombre }}</span>
+                {% endif %}
+                {% if not forloop.last %}<i class="fa fa-chevron-right docs-bc-sep"></i>{% endif %}
+            {% endfor %}
+        </nav>
+
+        <article class="docs-article">
+
+            <header class="docs-hero">
+                <h1><i class="fab fa-instagram me-2 text-danger"></i> Instagram y TikTok — conexión y tokens</h1>
+                <p class="docs-hero-lead">
+                    Guía técnica: cómo funciona la integración por dentro, cómo obtener los tokens de acceso
+                    de cada plataforma y cómo registrar la cuenta para recibir DMs y comentarios.
+                </p>
+            </header>
+
+            <section class="docs-section">
+                <h2>Cómo funciona por dentro</h2>
+                <p>Instagram, Messenger y (a futuro) TikTok <b>no son módulos separados</b>: son proveedores de la
+                    misma infraestructura de sesiones de WhatsApp. Una cuenta conectada es una
+                    <b>sesión</b> con <code>proveedor='instagram'</code> y una configuración propia con sus credenciales.</p>
+                <table class="table table-sm small mb-3">
+                    <thead><tr><th style="width:240px;">Pieza</th><th>Qué hace</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><b>Sesión</b> (<code>SesionWhatsApp</code>)</td>
+                            <td>Representa la cuenta conectada. Define el agente IA, asesores asignados, horarios y modo de bot — igual que un número de WhatsApp.</td>
+                        </tr>
+                        <tr>
+                            <td><b>Configuración del canal</b> (<code>ConfigInstagram</code>)</td>
+                            <td>Guarda <code>ig_user_id</code>, <code>page_id</code>, <code>@username</code>, el <b>Page Access Token</b> y el <code>webhook_verify_token</code>.</td>
+                        </tr>
+                        <tr>
+                            <td><b>Webhook entrante</b></td>
+                            <td><code>/whatsapp/instagram_webhook/</code> — recibe DMs y comentarios firmados por Meta (HMAC-SHA256 con el App Secret).</td>
+                        </tr>
+                        <tr>
+                            <td><b>Pipeline compartido</b></td>
+                            <td>Todo DM entrante pasa por el mismo procesador que WhatsApp: crea Contacto y Conversación, dispara el agente IA, asigna asesor y notifica por WebSocket al inbox.</td>
+                        </tr>
+                        <tr>
+                            <td><b>Inbox de comentarios</b></td>
+                            <td><a href="/whatsapp/comentarios/">Comentarios de redes sociales</a> — los comentarios de publicaciones llegan por el mismo webhook y se moderan ahí: responder, ocultar o pasar a DM.</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="alert alert-info small">
+                    <b>Flujo de lead desde un comentario:</b> comentario en tu publicación → aparece en el inbox de
+                    comentarios → respondes públicamente y/o envías un <b>DM privado</b> (Meta lo permite hasta 7 días
+                    después del comentario) → el autor responde el DM → se crea la conversación en el inbox normal →
+                    IA + asesores lo trabajan como cualquier lead.
+                </div>
+            </section>
+
+            <section class="docs-section">
+                <h2>Instagram — requisitos previos</h2>
+                <ol>
+                    <li>Cuenta de Instagram tipo <b>Business</b> o <b>Creator</b> (se cambia gratis desde la app: Configuración → Tipo de cuenta).</li>
+                    <li>Una <b>Página de Facebook</b> vinculada a esa cuenta de Instagram (Meta Business Suite → Configuración → Cuentas vinculadas).</li>
+                    <li>Una <b>App de Meta</b> en <a href="https://developers.facebook.com" target="_blank">developers.facebook.com</a> de tipo <b>Negocios</b>, con los productos <b>Messenger</b> y <b>Webhooks</b> agregados.</li>
+                    <li>En la conversación de Instagram: Configuración → Privacidad → Mensajes → <b>Permitir acceso a mensajes</b> (connected tools) activado.</li>
+                </ol>
+            </section>
+
+            <section class="docs-section">
+                <h2>Instagram — cómo sacar los tokens (paso a paso)</h2>
+                <h5>1. Permisos que debe tener el token</h5>
+                <p>El token que usa la plataforma es un <b>Page Access Token</b> (token de la página de Facebook
+                    vinculada). Debe incluir estos permisos:</p>
+                <ul>
+                    <li><code>instagram_basic</code> — leer el perfil IG vinculado.</li>
+                    <li><code>instagram_manage_messages</code> — enviar y recibir DMs.</li>
+                    <li><code>instagram_manage_comments</code> — leer, responder y ocultar comentarios.</li>
+                    <li><code>pages_show_list</code>, <code>pages_manage_metadata</code> — listar páginas y suscribir el webhook.</li>
+                    <li><code>pages_messaging</code>, <code>pages_read_engagement</code> — mensajería de la página.</li>
+                </ul>
+                <h5>2. Generar el token en Graph API Explorer</h5>
+                <ol>
+                    <li>Abre <a href="https://developers.facebook.com/tools/explorer/" target="_blank">Graph API Explorer</a> y selecciona tu App.</li>
+                    <li>En «User or Page» elige <b>Get User Access Token</b> y marca los permisos de la lista anterior. Autoriza.</li>
+                    <li>Consulta <code>GET /me/accounts</code>: la respuesta lista tus páginas con su <code>id</code> (ese es el <b>page_id</b>) y su <code>access_token</code> (ese es el <b>Page Access Token</b>).</li>
+                </ol>
+                <h5>3. Convertir el token a larga duración</h5>
+                <p>El token del Explorer dura ~1 hora. Intercámbialo por uno de larga duración (60 días) con el
+                    App ID y App Secret de tu App:</p>
+                <pre><code>GET https://graph.facebook.com/v21.0/oauth/access_token
+    ?grant_type=fb_exchange_token
+    &client_id={app_id}
+    &client_secret={app_secret}
+    &fb_exchange_token={token_de_usuario_corto}</code></pre>
+                <p>Con ese token de usuario largo, vuelve a pedir <code>GET /me/accounts</code>: el
+                    <b>Page Access Token</b> que devuelve <b>no expira</b> mientras no cambies la contraseña ni
+                    revoques permisos. Ese es el que se guarda en la plataforma.</p>
+                <h5>4. Obtener el ig_user_id</h5>
+                <pre><code>GET https://graph.facebook.com/v21.0/{page_id}
+    ?fields=instagram_business_account
+    &access_token={page_access_token}</code></pre>
+                <p>El campo <code>instagram_business_account.id</code> es el <b>ig_user_id</b> (empieza con 17...).</p>
+            </section>
+
+            <section class="docs-section">
+                <h2>Instagram — configurar el webhook</h2>
+                <ol>
+                    <li>En la App de Meta: <b>Webhooks → Instagram → Suscribirse</b>.</li>
+                    <li>Callback URL: <code>https://tu-dominio/whatsapp/instagram_webhook/</code>.</li>
+                    <li>Verify token: el mismo valor guardado en <code>webhook_verify_token</code> de la configuración de la cuenta. Meta hace un GET de verificación; si el token coincide, queda verificado.</li>
+                    <li>Suscribir los campos: <code>messages</code>, <code>messaging_postbacks</code> y <b><code>comments</code></b> (este último es el que alimenta el inbox de comentarios).</li>
+                    <li>Suscribir la App a la página:
+                        <pre><code>POST https://graph.facebook.com/v21.0/{page_id}/subscribed_apps
+    ?subscribed_fields=messages,messaging_postbacks,feed
+    &access_token={page_access_token}</code></pre>
+                    </li>
+                </ol>
+                <div class="alert alert-warning small">
+                    Los eventos llegan firmados con el <b>App Secret</b> (header <code>X-Hub-Signature-256</code>).
+                    El App ID y App Secret de la App de Meta se registran una sola vez en la configuración global de
+                    credenciales Meta de la plataforma; sin eso la firma se rechaza.
+                </div>
+            </section>
+
+            <section class="docs-section">
+                <h2>Instagram — registrar la cuenta en la plataforma</h2>
+                <p>Con los datos anteriores, entra a <a href="/instagram/cuentas/">Instagram → Cuentas</a>,
+                    pulsa <b>Conectar cuenta</b> y pega el token: el botón <b>Detectar automáticamente</b>
+                    extrae solo el Page ID, IG User ID y @username. Datos que usa la conexión:</p>
+                <table class="table table-sm small mb-3">
+                    <thead><tr><th style="width:220px;">Dato</th><th>De dónde sale</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>proveedor</code></td><td><code>instagram</code> (tipo de sesión).</td></tr>
+                        <tr><td><code>ig_user_id</code></td><td>Paso 4 de tokens.</td></tr>
+                        <tr><td><code>page_id</code></td><td>Respuesta de <code>/me/accounts</code>.</td></tr>
+                        <tr><td><code>username</code></td><td>El @usuario de la cuenta IG.</td></tr>
+                        <tr><td><code>access_token</code></td><td>Page Access Token de larga duración (paso 3).</td></tr>
+                        <tr><td><code>webhook_verify_token</code></td><td>Cadena aleatoria que tú defines; debe coincidir con la puesta en el panel de Webhooks de Meta.</td></tr>
+                    </tbody>
+                </table>
+                <p>Una vez creada la sesión: asigna asesores, agente IA y horarios igual que a cualquier número de
+                    WhatsApp. Los DMs entran a <a href="/whatsapp/conversaciones/">Conversaciones</a> y los
+                    comentarios a <a href="/whatsapp/comentarios/">Comentarios de redes sociales</a>.</p>
+            </section>
+
+            <section class="docs-section">
+                <h2>TikTok — estado y cómo se conectará</h2>
+                <div class="alert alert-secondary small">
+                    <b>Estado:</b> integración planificada, aún no disponible. La API de mensajes de TikTok
+                    (Business Messaging API) está en <b>beta</b> y requiere aprobación previa de TikTok.
+                </div>
+                <h5>Requisitos del cliente</h5>
+                <ol>
+                    <li>Convertir la cuenta TikTok a <b>Business</b> (gratis, desde la app: Configuración → Cuenta → Cambiar a cuenta de empresa).</li>
+                    <li>La cuenta debe estar registrada <b>fuera</b> de EE. UU., Espacio Económico Europeo, Suiza y Reino Unido (Ecuador sí aplica).</li>
+                </ol>
+                <h5>Cómo se obtienen los tokens en TikTok</h5>
+                <ol>
+                    <li>Registrar una App de desarrollador en <a href="https://business-api.tiktok.com/portal" target="_blank">business-api.tiktok.com/portal</a> y solicitar acceso a <b>Business Messaging API</b> (beta). Es el trámite lento: sin aprobación no hay DMs.</li>
+                    <li>Aprobada la App, TikTok entrega <code>app_id</code> y <code>app_secret</code>.</li>
+                    <li>La conexión de cada cuenta es por <b>OAuth</b>: el cliente pulsa «Conectar TikTok», autoriza en TikTok y la plataforma recibe un <code>access_token</code> + <code>refresh_token</code> de su cuenta Business (no hay tokens manuales como en Meta).</li>
+                    <li>El webhook se registra vía API contra <code>https://tu-dominio/whatsapp/tiktok_webhook/</code> para recibir DMs; los comentarios se sincronizan con la Comments API (<code>comment/list</code>, <code>comment/reply</code>).</li>
+                </ol>
+                <h5>Qué cubrirá la integración</h5>
+                <ul>
+                    <li><b>Fase 1 — DMs:</b> conversaciones TikTok en el mismo inbox, con IA y asignación de asesores.</li>
+                    <li><b>Fase 2 — Comentarios:</b> los comentarios de videos entran al mismo inbox de comentarios: responder, ocultar y pasar a DM.</li>
+                </ul>
+                <div class="alert alert-info small">
+                    La plataforma ya tiene todo pre-construido: el webhook
+                    <code>/whatsapp/tiktok_webhook/</code> está activo, el servicio de envío está listo y en
+                    <a href="/tiktok/cuentas/">TikTok → Cuentas</a> puedes pre-registrar tus cuentas Business con
+                    asesores e IA configurados. Al llegar la aprobación de TikTok solo se cargan los tokens OAuth
+                    y el canal queda operativo.
+                </div>
+            </section>
+
+            <section class="docs-section">
+                <h2>Cómo usar el canal día a día (cliente / asesor)</h2>
+                <table class="table table-sm small mb-3">
+                    <thead><tr><th style="width:260px;">Pantalla</th><th>Qué haces ahí</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><a href="/instagram/cuentas/">Instagram → Cuentas</a></td>
+                            <td>Conectar cuentas (token + detección automática), probar conexión, suspender o eliminar. Cada cuenta es una sesión: asígnale agente IA, asesores y horarios desde el tablero de sesiones.</td>
+                        </tr>
+                        <tr>
+                            <td><a href="/instagram/conversaciones/">Instagram → Conversaciones</a></td>
+                            <td>Ver todos los DMs del canal y abrir cualquiera en el chat en vivo (botón "Abrir chat").</td>
+                        </tr>
+                        <tr>
+                            <td><a href="/instagram/comentarios/">Instagram → Comentarios</a></td>
+                            <td>Moderar comentarios de tus posts: responder públicamente, ocultar, o <b>enviar DM privado</b> para convertir al autor en lead (7 días de ventana).</td>
+                        </tr>
+                        <tr>
+                            <td><a href="/instagram/publicaciones/">Instagram → Publicaciones</a></td>
+                            <td>Ver tus posts con likes/comentarios y cuántos comentarios nuevos tienes por post en el CRM.</td>
+                        </tr>
+                        <tr>
+                            <td><a href="/tiktok/cuentas/">TikTok → Cuentas</a></td>
+                            <td>Pre-registrar cuentas Business para dejarlas listas mientras se aprueba la API.</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <h5>Modos de bot por sesión (aplican a todos los canales)</h5>
+                <ul>
+                    <li><b>Agente IA</b>: la IA responde todo lo que llegue.</li>
+                    <li><b>Chatbot tradicional</b>: solo el flujo de menús/APIs; sin match no responde.</li>
+                    <li><b>Híbrido</b>: primero intenta el flujo tradicional; si el mensaje no coincide con ningún
+                        menú/palabra clave, lo responde el agente IA. Ideal para menús de autoservicio con IA de respaldo.</li>
+                    <li><b>Sin bot</b>: solo humanos; los mensajes se guardan y esperan al asesor.</li>
+                </ul>
+                <p class="small">En <a href="/crm/entrenamiento/">Agentes IA</a> cada tarjeta muestra ahora
+                    <b>en cuántas sesiones</b> está el agente y de qué canal — así sabes qué agente atiende
+                    WhatsApp, cuál Instagram, etc.</p>
+            </section>
+
+            <section class="docs-section">
+                <h2>Checklist del administrador</h2>
+                <ol>
+                    <li><b>Activar los canales</b>: Seguridad → Configuración → switches
+                        <code>canal_instagram_activo</code> / <code>canal_tiktok_activo</code> (controlan las cards
+                        del modal "Agregar conexión" del tablero).</li>
+                    <li><b>Credenciales Meta App</b> (una sola vez): App ID + App Secret en Seguridad →
+                        Credenciales Meta — con eso se valida la firma de los webhooks de Instagram/Messenger.</li>
+                    <li><b>Módulos y permisos</b>: Seguridad → Módulos del sistema → "extraer URLs" para que
+                        aparezcan los bloques <code>/instagram/...</code> y <code>/tiktok/...</code>; asignarlos a un
+                        grupo del sidebar y a los roles que corresponda.</li>
+                    <li><b>Webhook de Instagram</b>: en la App de Meta suscribir los campos
+                        <code>messages</code> y <code>comments</code> apuntando a
+                        <code>/whatsapp/instagram_webhook/</code>.</li>
+                    <li><b>TikTok</b>: aplicar a la Business Messaging API (beta) en
+                        business-api.tiktok.com/portal — es el único bloqueante externo del canal.</li>
+                </ol>
+            </section>
+
+        </article>
+    </main>
+</div>
+{% endblock %}

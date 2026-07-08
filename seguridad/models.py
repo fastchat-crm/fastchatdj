@@ -260,6 +260,20 @@ class Configuracion(ModeloBase):
                   'opciones "Crear con IA" no aparecen.'
     )
 
+    # ── Apache Tika (extracción de texto para el entrenamiento IA) ──
+    tika_activo = models.BooleanField(
+        default=True, verbose_name='Servicio Apache Tika activo',
+        help_text='Extrae texto de PDF/Word/PowerPoint/imágenes (OCR) para entrenar agentes IA '
+                  'sin gastar tokens LLM. Si está OFF se usan solo los extractores locales '
+                  '(pdf, csv, json, xlsx, txt).'
+    )
+    tika_url = models.CharField(
+        max_length=300, blank=True, default='https://tika.exducereonline.com',
+        verbose_name='URL servicio Apache Tika',
+        help_text='Endpoint HTTP del servidor Tika (ej: http://host:9998). Para OCR de PDFs '
+                  'escaneados el servidor debe tener Tesseract (imagen docker -full).'
+    )
+
     @staticmethod
     def get_instancia():
         from core.funciones import db_table_exists

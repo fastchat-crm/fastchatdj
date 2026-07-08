@@ -143,6 +143,7 @@ def chat_agente_view(request, agente_enc_id):
                     detectar_fin=detectar_fin_llm,
                     perfil=agente.perfil,
                     agente=agente,
+                    base_url=(getattr(apikey_obj, 'base_url', '') or None),
                 )
                 traza_etapas.append({
                     'etapa': 'consultor_listo',
@@ -302,6 +303,24 @@ def _billing_info_por_proveedor(proveedor):
             'proveedor': 'Anthropic Claude',
             'billing_url': 'https://console.anthropic.com/settings/billing',
             'docs_url': 'https://docs.anthropic.com/claude/reference/rate-limits',
+        }
+    if proveedor == 5:
+        return {
+            'proveedor': 'Ollama (local)',
+            'billing_url': '',
+            'docs_url': 'https://docs.ollama.com',
+        }
+    if proveedor == 6:
+        return {
+            'proveedor': 'DeepSeek',
+            'billing_url': 'https://platform.deepseek.com/usage',
+            'docs_url': 'https://api-docs.deepseek.com/quick_start/rate_limit',
+        }
+    if proveedor == 7:
+        return {
+            'proveedor': 'Huawei Cloud MaaS',
+            'billing_url': 'https://console.huaweicloud.com/modelarts',
+            'docs_url': 'https://support.huaweicloud.com/intl/en-us/modelarts/index.html',
         }
     return {'proveedor': 'LLM', 'billing_url': '', 'docs_url': ''}
 
@@ -523,6 +542,7 @@ def _procesar_audio(tmp_path, filename, texto_adicional, apikey_obj, provider, a
         contexto_estatico=agente.contexto_estatico or None,
         perfil=agente.perfil,
         agente=agente,
+        base_url=(getattr(apikey_obj, 'base_url', '') or None),
     )
     resultado = consultor.consultar(pregunta, agente.descripcion)
 

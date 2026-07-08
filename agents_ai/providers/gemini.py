@@ -1,7 +1,12 @@
 """Provider para Google Gemini (Generative AI)."""
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
-from .base import BaseProvider
+from .base import (
+    BaseProvider,
+    LLM_TIMEOUT_SEGUNDOS,
+    LLM_MAX_RETRIES,
+    EMBEDDINGS_TIMEOUT_SEGUNDOS,
+)
 
 
 class GeminiProvider(BaseProvider):
@@ -10,18 +15,21 @@ class GeminiProvider(BaseProvider):
     def default_model(self) -> str:
         return "gemini-2.5-flash"
 
-    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1):
+    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1, base_url=None):
         return ChatGoogleGenerativeAI(
             model=model_name,
             google_api_key=apikey,
             max_output_tokens=max_output_tokens,
             temperature=temperature,
+            timeout=LLM_TIMEOUT_SEGUNDOS,
+            max_retries=LLM_MAX_RETRIES,
         )
 
-    def get_embeddings(self, apikey):
+    def get_embeddings(self, apikey, base_url=None):
         return GoogleGenerativeAIEmbeddings(
             model="models/text-embedding-004",
             google_api_key=apikey,
+            request_options={'timeout': EMBEDDINGS_TIMEOUT_SEGUNDOS},
         )
 
     def extract_tokens(self, ai_message) -> tuple[int, int]:

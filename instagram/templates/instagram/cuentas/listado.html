@@ -1,0 +1,328 @@
+{% extends 'base.html' %}
+{% block head %}
+    <link rel="stylesheet" href="/static/css/instagram/cuentas_listado.css?v1.0">
+{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0">
+
+        <div class="alert alert-info guia-conexion mb-3">
+            <div class="row">
+                <div class="col-md-8">
+                    <strong><i class="fab fa-instagram"></i> ¿Cómo conectar una cuenta?</strong>
+                    <ol class="small mt-2">
+                        <li>Convierte tu cuenta Instagram a <b>Business</b> y vincúlala a una página de Facebook.</li>
+                        <li>Genera un <b>Page Access Token</b> de larga duración con los permisos
+                            <code>instagram_basic</code>, <code>instagram_manage_messages</code> y
+                            <code>instagram_manage_comments</code>.</li>
+                        <li>Pulsa <b>Conectar cuenta</b>, pega el token y usa <b>Detectar automáticamente</b>:
+                            la plataforma extrae sola el Page ID, IG User ID y @username.</li>
+                        <li>Configura el webhook en tu App de Meta con la URL y el verify token que se muestran abajo.</li>
+                    </ol>
+                </div>
+                <div class="col-md-4">
+                    <div class="small">
+                        <b>Webhook (App de Meta):</b><br>
+                        <code>{{ webhook_url }}</code><br><br>
+                        <a href="/seguridad/documentacion/?pagina=conectar-instagram-tiktok" class="btn btn-sm btn-outline-primary">
+                            <i class="fa fa-book"></i> Guía completa de tokens
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-8">
+                            <label class="form-label">Búsqueda</label>
+                            <div class="input-group">
+                                <span class="input-group-text border-end-0">
+                                    <i class="fa fa-search text-muted"></i>
+                                </span>
+                                <input type="text" class="form-control border-start-0"
+                                       placeholder="Nombre o @username" name="criterio"
+                                       value="{{ criterio|default:'' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i> Filtrar
+                                </button>
+                                {% if url_vars %}
+                                    <a href="{{ request.path }}" class="btn btn-default">
+                                        <i class="fas fa-times"></i> Limpiar
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="mb-0">Cuentas conectadas</h4>
+                <small class="text-muted">
+                    {{ list_count|default:0 }} cuenta{{ list_count|default:0|pluralize }}
+                </small>
+            </div>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCuenta">
+                <i class="fa fa-plus"></i> Conectar cuenta
+            </button>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-striped align-middle">
+                    <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>@username</th>
+                        <th>IG User ID</th>
+                        <th>Page ID</th>
+                        <th>Verify token</th>
+                        <th>Estado</th>
+                        <th>Activa</th>
+                        <th style="width:170px">Acciones</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for s in listado %}
+                        <tr data-id="{{ s.id }}">
+                            <td><strong>{{ s.nombre }}</strong></td>
+                            <td>@{{ s.config_instagram.username|default:"—" }}</td>
+                            <td><small>{{ s.config_instagram.ig_user_id }}</small></td>
+                            <td><small>{{ s.config_instagram.page_id }}</small></td>
+                            <td>
+                                <span class="token-truncado" title="{{ s.config_instagram.webhook_verify_token }}">
+                                    {{ s.config_instagram.webhook_verify_token }}
+                                </span>
+                            </td>
+                            <td><span class="badge badge-estado-{{ s.estado }}">{{ s.get_estado_display }}</span></td>
+                            <td>
+                                {% if s.activo %}
+                                    <span class="badge bg-success">Sí</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">No</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-success btn-probar" data-id="{{ s.id }}"
+                                        title="Probar conexión">
+                                    <i class="fa fa-plug"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary btn-edit"
+                                        data-id="{{ s.id }}" data-nombre="{{ s.nombre }}"
+                                        data-ig="{{ s.config_instagram.ig_user_id }}"
+                                        data-page="{{ s.config_instagram.page_id }}"
+                                        data-username="{{ s.config_instagram.username }}"
+                                        title="Editar">
+                                    <i class="fa fa-pen"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-warning btn-toggle" data-id="{{ s.id }}"
+                                        title="Activar/Suspender">
+                                    <i class="fa fa-power-off"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger btn-del" data-id="{{ s.id }}"
+                                        data-nombre="{{ s.nombre }}" title="Eliminar">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted">
+                                Aún no hay cuentas Instagram conectadas. Pulsa "Conectar cuenta" para agregar la primera.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% include 'paginacion.html' %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalCuenta" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <form class="modal-content" id="formCuenta">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Conectar cuenta Instagram</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="add">
+                    <input type="hidden" name="pk" value="">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre interno *</label>
+                        <input type="text" name="nombre" class="form-control" required maxlength="150"
+                               placeholder="Ej: Instagram Ventas">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Access Token (Page) *</label>
+                        <div class="input-group">
+                            <textarea name="access_token" class="form-control" rows="2" required
+                                      placeholder="Pega aquí el Page Access Token de larga duración"></textarea>
+                            <button type="button" class="btn btn-outline-primary" id="btnDetectar">
+                                <i class="fa fa-magic"></i> Detectar automáticamente
+                            </button>
+                        </div>
+                        <small class="text-muted">Con el token pegado, la detección llena solos los campos de abajo.</small>
+                    </div>
+                    <div class="mb-3 candidatos-detectados" id="zonaCandidatos">
+                        <label class="form-label">Cuentas encontradas</label>
+                        <select class="form-select" id="selectCandidato"></select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">IG User ID *</label>
+                            <input type="text" name="ig_user_id" class="form-control" required maxlength="100">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Page ID *</label>
+                            <input type="text" name="page_id" class="form-control" required maxlength="100">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">@username</label>
+                            <input type="text" name="username" class="form-control" maxlength="120">
+                        </div>
+                    </div>
+                    <div class="alert alert-light small mb-0">
+                        Al guardar se probará la conexión automáticamente y se generará el
+                        <b>verify token</b> del webhook. Luego configura el webhook en tu App de Meta con la URL
+                        mostrada arriba y suscribe los campos <code>messages</code> y <code>comments</code>.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar y conectar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script>
+        (function () {
+            const modalEl = document.getElementById('modalCuenta');
+            const modal = new bootstrap.Modal(modalEl);
+            const form = document.getElementById('formCuenta');
+            const zona = document.getElementById('zonaCandidatos');
+            const selectCand = document.getElementById('selectCandidato');
+            let candidatos = [];
+
+            function csrf() {
+                return form.querySelector('[name=csrfmiddlewaretoken]').value;
+            }
+
+            document.getElementById('btnDetectar').addEventListener('click', async () => {
+                const token = form.access_token.value.trim();
+                if (!token) {
+                    alert('Pega primero el Access Token.');
+                    return;
+                }
+                const fd = new FormData();
+                fd.append('action', 'autodetectar');
+                fd.append('access_token', token);
+                fd.append('csrfmiddlewaretoken', csrf());
+                const r = await fetch('', {method: 'POST', body: fd});
+                const j = await r.json();
+                if (j.error) {
+                    alert(j.message || 'No se pudo detectar.');
+                    return;
+                }
+                candidatos = j.candidatos || [];
+                if (!candidatos.length) {
+                    alert('No se encontraron cuentas Instagram Business con ese token.');
+                    return;
+                }
+                selectCand.innerHTML = '';
+                candidatos.forEach((c, i) => {
+                    const opt = document.createElement('option');
+                    opt.value = i;
+                    opt.textContent = '@' + (c.username || c.ig_user_id) + ' · ' + (c.page_name || c.page_id);
+                    selectCand.appendChild(opt);
+                });
+                zona.style.display = candidatos.length > 1 ? 'block' : 'none';
+                aplicarCandidato(0);
+            });
+
+            function aplicarCandidato(i) {
+                const c = candidatos[i];
+                if (!c) return;
+                form.ig_user_id.value = c.ig_user_id || '';
+                form.page_id.value = c.page_id || '';
+                form.username.value = c.username || '';
+                if (c.page_access_token) form.access_token.value = c.page_access_token;
+                if (!form.nombre.value && c.username) form.nombre.value = 'Instagram @' + c.username;
+            }
+
+            selectCand.addEventListener('change', () => aplicarCandidato(parseInt(selectCand.value, 10)));
+
+            document.querySelectorAll('.btn-edit').forEach(btn => btn.addEventListener('click', () => {
+                form.reset();
+                form.action.value = 'change';
+                form.pk.value = btn.dataset.id;
+                form.nombre.value = btn.dataset.nombre;
+                form.ig_user_id.value = btn.dataset.ig;
+                form.page_id.value = btn.dataset.page;
+                form.username.value = btn.dataset.username;
+                zona.style.display = 'none';
+                modalEl.querySelector('.modal-title').textContent = 'Editar cuenta Instagram';
+                modal.show();
+            }));
+
+            modalEl.addEventListener('show.bs.modal', (e) => {
+                if (!e.relatedTarget) return;
+                form.reset();
+                form.action.value = 'add';
+                form.pk.value = '';
+                zona.style.display = 'none';
+                modalEl.querySelector('.modal-title').textContent = 'Conectar cuenta Instagram';
+            });
+
+            form.addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const fd = new FormData(form);
+                const r = await fetch('', {method: 'POST', body: fd, headers: {'X-Requested-With': 'XMLHttpRequest'}});
+                const j = await r.json();
+                if (j.error) {
+                    alert(j.message || 'Error');
+                    return;
+                }
+                location.reload();
+            });
+
+            async function accion(accionNombre, id, confirmMsg) {
+                if (confirmMsg && !confirm(confirmMsg)) return;
+                const fd = new FormData();
+                fd.append('action', accionNombre);
+                fd.append('pk', id);
+                fd.append('csrfmiddlewaretoken', csrf());
+                const r = await fetch('', {method: 'POST', body: fd});
+                const j = await r.json();
+                if (j.error) {
+                    alert(j.message || 'Error');
+                    return;
+                }
+                if (j.message) alert(j.message);
+                location.reload();
+            }
+
+            document.querySelectorAll('.btn-probar').forEach(btn =>
+                btn.addEventListener('click', () => accion('probar', btn.dataset.id)));
+            document.querySelectorAll('.btn-toggle').forEach(btn =>
+                btn.addEventListener('click', () => accion('toggle_activo', btn.dataset.id)));
+            document.querySelectorAll('.btn-del').forEach(btn =>
+                btn.addEventListener('click', () => accion('delete', btn.dataset.id,
+                    '¿Eliminar la cuenta "' + btn.dataset.nombre + '"? Sus conversaciones se conservan.')));
+        })();
+    </script>
+{% endblock %}

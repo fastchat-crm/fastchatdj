@@ -1,0 +1,32 @@
+.post-card {
+    height: 100%;
+}
+
+.post-card .post-media {
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
+    border-radius: .375rem .375rem 0 0;
+    background: #f1f3f5;
+}
+
+.post-card .post-caption {
+    font-size: .8rem;
+    color: #495057;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 3.6em;
+}
+
+.post-card .post-metricas {
+    font-size: .8rem;
+    color: #6c757d;
+}
+
+.post-card .badge-nuevos {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+}

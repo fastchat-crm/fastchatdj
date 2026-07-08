@@ -84,6 +84,137 @@ class InstagramService:
         )
         return {'success': 200 <= r.status_code < 300, 'status': r.status_code, 'body': r.text[:500]}
 
+    def obtener_perfil(self, session_id):
+        """Valida el token: GET /{ig_user_id}?fields=username,name,followers_count."""
+        config = self._config(session_id)
+        if not config:
+            return {'success': False, 'error': 'config_instagram_no_encontrada'}
+        try:
+            r = requests.get(
+                f'{GRAPH_API_BASE}/{config.ig_user_id}',
+                params={
+                    'fields': 'username,name,followers_count,media_count,profile_picture_url',
+                    'access_token': config.access_token,
+                },
+                timeout=15,
+            )
+            ok = 200 <= r.status_code < 300
+            data = r.json() if r.headers.get('content-type', '').startswith('application/json') else {}
+            return {
+                'success': ok,
+                'status':  r.status_code,
+                'perfil':  data if ok else None,
+                'error':   None if ok else (data.get('error') or r.text[:400]),
+            }
+        except Exception as e:
+            logger.exception("IG obtener perfil error")
+            return {'success': False, 'error': str(e)}
+
+    def listar_publicaciones(self, session_id, limite=25):
+        """GET /{ig_user_id}/media con métricas básicas por publicación."""
+        config = self._config(session_id)
+        if not config:
+            return {'success': False, 'error': 'config_instagram_no_encontrada'}
+        try:
+            r = requests.get(
+                f'{GRAPH_API_BASE}/{config.ig_user_id}/media',
+                params={
+                    'fields': 'id,caption,media_type,media_url,thumbnail_url,'
+                              'permalink,timestamp,comments_count,like_count',
+                    'limit': limite,
+                    'access_token': config.access_token,
+                },
+                timeout=20,
+            )
+            ok = 200 <= r.status_code < 300
+            data = r.json() if r.headers.get('content-type', '').startswith('application/json') else {}
+            return {
+                'success':        ok,
+                'status':         r.status_code,
+                'publicaciones':  data.get('data', []) if ok else [],
+                'error':          None if ok else (data.get('error') or r.text[:400]),
+            }
+        except Exception as e:
+            logger.exception("IG listar publicaciones error")
+            return {'success': False, 'error': str(e)}
+
+    def responder_comentario(self, session_id, comment_id, texto):
+        """Respuesta pública a un comentario: POST /{comment_id}/replies."""
+        config = self._config(session_id)
+        if not config:
+            return {'success': False, 'error': 'config_instagram_no_encontrada'}
+        try:
+            r = requests.post(
+                f'{GRAPH_API_BASE}/{comment_id}/replies',
+                params={'access_token': config.access_token},
+                json={'message': texto},
+                timeout=15,
+            )
+            ok = 200 <= r.status_code < 300
+            data = r.json() if r.headers.get('content-type', '').startswith('application/json') else {}
+            return {
+                'success':  ok,
+                'status':   r.status_code,
+                'reply_id': data.get('id'),
+                'error':    None if ok else (data.get('error') or r.text[:400]),
+            }
+        except Exception as e:
+            logger.exception("IG responder comentario error")
+            return {'success': False, 'error': str(e)}
+
+    def ocultar_comentario(self, session_id, comment_id, ocultar=True):
+        """Oculta/muestra un comentario: POST /{comment_id} con `hide`."""
+        config = self._config(session_id)
+        if not config:
+            return {'success': False, 'error': 'config_instagram_no_encontrada'}
+        try:
+            r = requests.post(
+                f'{GRAPH_API_BASE}/{comment_id}',
+                params={'access_token': config.access_token},
+                json={'hide': bool(ocultar)},
+                timeout=15,
+            )
+            ok = 200 <= r.status_code < 300
+            data = r.json() if r.headers.get('content-type', '').startswith('application/json') else {}
+            return {
+                'success': ok,
+                'status':  r.status_code,
+                'error':   None if ok else (data.get('error') or r.text[:400]),
+            }
+        except Exception as e:
+            logger.exception("IG ocultar comentario error")
+            return {'success': False, 'error': str(e)}
+
+    def enviar_dm_desde_comentario(self, session_id, comment_id, texto):
+        """Private reply: DM al autor de un comentario (ventana de 7 días).
+        POST /{page_id}/messages con recipient.comment_id."""
+        config = self._config(session_id)
+        if not config:
+            return {'success': False, 'error': 'config_instagram_no_encontrada'}
+        payload = {
+            'recipient': {'comment_id': comment_id},
+            'message':   {'text': texto},
+        }
+        try:
+            r = requests.post(
+                f'{GRAPH_API_BASE}/{config.page_id}/messages',
+                params={'access_token': config.access_token},
+                json=payload,
+                timeout=15,
+            )
+            ok = 200 <= r.status_code < 300
+            data = r.json() if r.headers.get('content-type', '').startswith('application/json') else {}
+            return {
+                'success':      ok,
+                'status':       r.status_code,
+                'message_id':   data.get('message_id'),
+                'recipient_id': data.get('recipient_id'),
+                'error':        None if ok else (data.get('error') or r.text[:400]),
+            }
+        except Exception as e:
+            logger.exception("IG private reply error")
+            return {'success': False, 'error': str(e)}
+
     def send_presence_update(self, session_id, to, presence='composing'):
         return {'success': True, 'skipped': 'instagram_presence_no_soportado'}
 

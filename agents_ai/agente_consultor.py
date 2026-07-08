@@ -1,19 +1,31 @@
 import logging
 import os
-import re
-import threading
-import unicodedata
 import json
 from dataclasses import dataclass
 
 from langchain_core.prompts import PromptTemplate
-from .providers import get_provider
-from langchain_community.vectorstores import FAISS
+from .providers import get_provider, get_llm_cached, get_embeddings_cached
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langchain_core.tools import tool
 
 from whatsapp.models import ConversacionWhatsApp
-from .memoria_django import DjangoChatMessageHistory
+from .memoria.historial import DjangoChatMessageHistory
+from .consultor.clasificacion import (
+    normalizar_texto,
+    _es_saludo,
+    _es_ack_simple,
+    _es_consulta_amplia,
+    _GREETING_WORDS,
+)
+from .consultor.retrieval import (
+    _get_vectorstore_cached,
+    invalidate_vectorstore_cache,
+    _get_bm25_cached,
+    _hybrid_search,
+    _dedup_preservando_orden,
+    _trim_contexto,
+    _extraer_seccion_relevante,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -54,225 +66,9 @@ _MAX_OUTPUT_TOKENS = 3000   # tokens de salida — suficiente para menús comple
 _TOPIC_ANCHOR_CHARS = 180   # chars del primer mensaje sustantivo como ancla de tema
 # Para consultas amplias en Modo A (sin FAISS) se envía el contexto_estatico completo sin cap
 
-# Palabras que NO se añaden como ancla semántica al query FAISS
-_GREETING_WORDS = frozenset({
-    'hola', 'hi', 'hello', 'hey', 'buenas', 'buenos', 'saludos',
-    'ok', 'okay', 'si', 'sí', 'no', 'gracias', 'thanks',
-})
-
-# Mensajes de confirmación breve — se salta FAISS, solo historial
-_ACK_RE = re.compile(
-    r'^(ok|okay|okey|entendido|perfecto|excelente|bien|claro|ya|dale|listo|genial|'
-    r'super|chévere|chevere|gracias|thanks|de acuerdo|muy bien|está bien|👍|'
-    r'de acuerdo|eso es todo|nada más|nada mas)[\s!.,]*$',
-    re.IGNORECASE | re.UNICODE,
-)
-
-# ---------------------------------------------------------------------------
-# FAISS in-memory cache — keyed by path, invalidated cuando index.faiss cambia
-# ---------------------------------------------------------------------------
-_faiss_cache: dict[str, tuple[float, object]] = {}
-_cache_lock = threading.Lock()
-
-
-def _get_vectorstore_cached(path: str, embeddings) -> object | None:
-    """Carga FAISS desde disco con cache basado en mtime."""
-    index_file = os.path.join(path, 'index.faiss')
-    try:
-        mtime = os.path.getmtime(index_file)
-    except OSError:
-        return None
-
-    with _cache_lock:
-        cached = _faiss_cache.get(path)
-        if cached is not None and cached[0] == mtime:
-            return cached[1]
-        vs = FAISS.load_local(path, embeddings, allow_dangerous_deserialization=True)
-        _faiss_cache[path] = (mtime, vs)
-        return vs
-
-
-def invalidate_vectorstore_cache(path: str) -> None:
-    """Llamar después de reconstruir un vectorstore para forzar recarga."""
-    with _cache_lock:
-        _faiss_cache.pop(path, None)
-
-
-# ---------------------------------------------------------------------------
-# Detección de saludos y acks — sin llamada al LLM
-# ---------------------------------------------------------------------------
-_GREETING_RE = re.compile(
-    r'^(hola+|hi+|hello+|hey+|ey+|buenas?|buenos\s+d[ií]as?|buenas?\s+tardes?'
-    r'|buenas?\s+noches?|buen\s+d[ií]a|saludos?|qu[eé]\s+tal|c[oó]mo\s+est[aá]s?'
-    r'|good\s+morning|good\s+afternoon|good\s+evening)\W*$',
-    re.IGNORECASE | re.UNICODE,
-)
-
-
-def _es_saludo(texto: str) -> bool:
-    return bool(_GREETING_RE.match(texto.strip()))
-
-
-def _es_ack_simple(texto: str) -> bool:
-    """True si el mensaje es una confirmación breve que no necesita buscar en FAISS."""
-    t = texto.strip()
-    return len(t) <= 30 and bool(_ACK_RE.match(t))
-
-
-_AMPLIA_RE = re.compile(
-    r'(men[uú]|carta|qu[eé]\s+tiene[sn]?|qu[eé]\s+ofrecen?|lista\s+de|cat[aá]logo'
-    r'|todas?\s+(las?|los?)\s+opciones?|todo\s+lo\s+que|todos?\s+(los?|las?)\s+platos?'
-    r'|qu[eé]\s+hay|productos?|servicios?|precios?\s+de\s+todo|todo\s+el\s+men[uú]'
-    r'|qu[eé]\s+venden?|qu[eé]\s+sirven?|qu[eé]\s+tienen\s+disponible)',
-    re.IGNORECASE | re.UNICODE,
-)
-
-
-def _es_consulta_amplia(texto: str) -> bool:
-    """True si el usuario pide información amplia (menú completo, catálogo, lista de productos)."""
-    return bool(_AMPLIA_RE.search(texto.strip()))
-
-
-# ---------------------------------------------------------------------------
-# Utilidades
-# ---------------------------------------------------------------------------
-
-def normalizar_texto(texto: str) -> str:
-    texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('utf-8')
-    texto = re.sub(r'[^a-zA-Z0-9\s]', '', texto)
-    return texto.lower()
-
-
-def _dedup_preservando_orden(docs) -> list:
-    """Elimina chunks duplicados respetando el ranking MMR."""
-    seen = set()
-    result = []
-    for d in docs:
-        key = d.page_content
-        if key not in seen:
-            seen.add(key)
-            result.append(d)
-    return result
-
-
-_STOP_WORDS_ES = frozenset({
-    'dame', 'quiero', 'tienes', 'tiene', 'puedo', 'como', 'para', 'cual',
-    'que', 'del', 'los', 'las', 'una', 'uno', 'con', 'sin', 'por', 'pero',
-    'hay', 'hay', 'este', 'esta', 'ese', 'esa', 'algo', 'todo',
-})
-
-
-def _extraer_seccion_relevante(texto: str, query: str, max_chars: int) -> str:
-    """
-    Mode A (sin FAISS): extrae la sección del documento más relevante al query.
-    Busca keywords del query en el texto, retrocede al encabezado de sección más
-    cercano (===, ---, ###) e incluye prefijo del documento + sección encontrada.
-    Si no hay match, devuelve los primeros max_chars.
-    """
-    palabras = [
-        w for w in re.findall(r'\w+', query.lower())
-        if len(w) > 3 and w not in _STOP_WORDS_ES
-    ]
-    if not palabras:
-        return texto[:max_chars]
-
-    # Posición del primer keyword encontrado en el documento
-    mejor_pos = len(texto)
-    for palabra in palabras:
-        pos = texto.lower().find(palabra)
-        if 0 <= pos < mejor_pos:
-            mejor_pos = pos
-
-    if mejor_pos == len(texto):
-        return texto[:max_chars]
-
-    # Retroceder al inicio de sección más cercano (=== o ---) antes del match
-    _SEPARADORES = re.compile(r'(?m)^(?:===|---|###|\*\*\*)')
-    seccion_inicio = 0
-    for m in _SEPARADORES.finditer(texto):
-        if m.start() <= mejor_pos:
-            seccion_inicio = m.start()
-        else:
-            break
-
-    # Prefijo del documento (primeras líneas con el nombre/encabezado)
-    prefijo_fin = min(300, seccion_inicio)
-    prefijo = texto[:prefijo_fin].strip()
-    presupuesto_seccion = max_chars - len(prefijo) - 10  # margen para "\n...\n"
-    seccion = texto[seccion_inicio: seccion_inicio + presupuesto_seccion]
-
-    if prefijo and not seccion.startswith(prefijo):
-        return f"{prefijo}\n...\n{seccion}"
-    return seccion
-
-
-def _build_bm25(vs):
-    """
-    Construye un índice BM25 desde los documentos almacenados en el docstore FAISS.
-    BM25 busca por keywords exactas; complementa la búsqueda semántica de FAISS.
-    Devuelve None si rank_bm25 no está instalado o el vectorstore está vacío.
-    """
-    if not vs:
-        return None
-    try:
-        from langchain_community.retrievers import BM25Retriever
-        docs = [d for d in vs.docstore._dict.values() if getattr(d, 'page_content', '').strip()]
-        if not docs:
-            return None
-        retriever = BM25Retriever.from_documents(docs)
-        retriever.k = _FAISS_K
-        return retriever
-    except Exception as e:
-        logger.debug("BM25 no disponible (rank_bm25 no instalado?): %s", e)
-        return None
-
-
-def _hybrid_search(vs, bm25, query: str, k: int, lambda_mult: float) -> list:
-    """
-    Búsqueda híbrida BM25 + FAISS MMR.
-    - BM25 : recupera por keywords exactas (nombres de productos, términos específicos)
-    - FAISS: recupera por similitud semántica
-    Los resultados BM25 van primero (mayor precisión exacta), luego FAISS.
-    Duplicados eliminados por contenido.
-    """
-    docs_kw  = []
-    docs_sem = []
-
-    if bm25:
-        try:
-            bm25.k = k
-            docs_kw = bm25.get_relevant_documents(query)
-        except Exception as e:
-            logger.debug("BM25 search error: %s", e)
-
-    if vs:
-        try:
-            docs_sem = vs.max_marginal_relevance_search(
-                query, k=k, fetch_k=k * 3, lambda_mult=lambda_mult
-            )
-        except Exception as e:
-            logger.debug("FAISS MMR search error: %s", e)
-
-    return _dedup_preservando_orden(docs_kw + docs_sem)
-
-
-def _trim_contexto(docs, max_chars: int = _MAX_CONTEXT_CHARS) -> str:
-    """Une los chunks más relevantes hasta el techo de caracteres."""
-    partes = []
-    total = 0
-    for d in docs:
-        chunk = d.page_content.strip()
-        if not chunk:
-            continue
-        if total + len(chunk) > max_chars:
-            restante = max_chars - total
-            if restante > 200:
-                partes.append(chunk[:restante])
-            break
-        partes.append(chunk)
-        total += len(chunk)
-    return "\n\n".join(partes)
-
+# La clasificación de mensajes (saludos/acks/consultas amplias) vive en
+# consultor/clasificacion.py y el retrieval (cache FAISS, BM25, híbrida,
+# recortes) en consultor/retrieval.py.
 
 # ---------------------------------------------------------------------------
 # AgenteConsultor
@@ -292,11 +88,13 @@ class AgenteConsultor:
         detectar_fin: bool = False,
         perfil=None,
         agente=None,
+        base_url=None,
     ):
         # Provider: acepta string ('gemini', 'openai') o int (2, 3) — ver providers/__init__.py
         self._provider_obj = get_provider(provider)
         self.provider = self._provider_obj.name  # mantiene API pública previa para compat
         self.apikey = apikey
+        self.base_url = (base_url or '').strip() or None
         self.model_name = model_name or self.default_model()
         self.vectorstore_path = vectorstore_path
         self.vectorstore_enlaces_path = vectorstore_enlaces_path
@@ -355,12 +153,20 @@ class AgenteConsultor:
         except (TypeError, ValueError):
             self.cfg_temperature = 0.75
 
+        # Memoria RAG por agente — aprende de conversaciones previas (True salvo
+        # que el agente la desactive explícitamente).
+        self.cfg_memoria_activa = (
+            agente is not None and bool(getattr(agente, 'memoria_rag_activa', True))
+        )
+
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
         self.vectorstore = self._load_vectorstore()
         self.vectorstore_enlaces = self._load_vectorstore_enlaces()
-        self._bm25 = _build_bm25(self.vectorstore)
-        self._bm25_enlaces = _build_bm25(self.vectorstore_enlaces)
+        self._bm25 = _get_bm25_cached(self.vectorstore_path, self.vectorstore, self.cfg_faiss_k)
+        self._bm25_enlaces = _get_bm25_cached(
+            self.vectorstore_enlaces_path, self.vectorstore_enlaces, self.cfg_faiss_k
+        )
         self.conversacion: ConversacionWhatsApp = conversacion
 
         # Historial — acceso directo, sin ConversationBufferMemory (era dead code)
@@ -399,8 +205,8 @@ class AgenteConsultor:
         self._prompt_tpl = PromptTemplate.from_template(f'{_tpl_text}\n')
 
         self.listas_memoria: dict = {}
+        self._listas_cargadas = False  # lazy — solo el flujo con tools las necesita
         self._faq_ids_usadas: list = []  # rellenado por _construir_contexto
-        self._cargar_listas_desde_memoria()
 
     # ------------------------------------------------------------------
     # Setup
@@ -409,17 +215,47 @@ class AgenteConsultor:
     def default_model(self) -> str:
         return self._provider_obj.default_model()
 
+    _PROVEEDORES_CON_EMBEDDINGS = (2, 3, 5)
+
     def _get_embeddings(self):
-        return self._provider_obj.get_embeddings(self.apikey)
+        # Providers sin API de embeddings (Claude, DeepSeek, Huawei) no bloquean
+        # el chat: se busca otra API Key del agente que sí soporte embeddings
+        # (Gemini/OpenAI/Ollama) para mantener FAISS y memoria; si no hay,
+        # el agente sigue en Modo A (contexto estático + FAQs).
+        try:
+            return get_embeddings_cached(self._provider_obj, self.apikey, base_url=self.base_url)
+        except NotImplementedError as exc:
+            if self.agente is not None:
+                try:
+                    keys = self.agente.apikey.filter(
+                        estado=True, status=True,
+                        proveedor__in=self._PROVEEDORES_CON_EMBEDDINGS,
+                    ).exclude(descripcion='')
+                    for k in keys:
+                        try:
+                            return get_embeddings_cached(
+                                get_provider(k.proveedor),
+                                k.descripcion,
+                                base_url=(getattr(k, 'base_url', '') or None),
+                            )
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+            logger.warning("Provider %s sin embeddings y sin key alternativa — se omite FAISS: %s",
+                           self.provider, exc)
+            return None
 
     def _get_llm(self):
         # Temperature configurable por agente. Default 0.75 = humano natural.
         # Cada preset puede pisar este valor (ej: formal=0.50, vendedor=0.90).
-        return self._provider_obj.get_llm(
+        return get_llm_cached(
+            self._provider_obj,
             apikey=self.apikey,
             model_name=self.model_name,
             max_output_tokens=self.cfg_max_output_tokens,
             temperature=self.cfg_temperature,
+            base_url=self.base_url,
         )
 
     def _load_vectorstore(self):
@@ -642,6 +478,9 @@ class AgenteConsultor:
     # ------------------------------------------------------------------
 
     def _cargar_listas_desde_memoria(self):
+        if self._listas_cargadas:
+            return
+        self._listas_cargadas = True
         h = self._historia
         if not h:
             return
@@ -711,6 +550,7 @@ class AgenteConsultor:
         _presupuesto = self.cfg_max_context_chars
         _es_amplia = False
         _query_faiss = pregunta
+        _query_vector = None
 
         if _es_ack:
             contexto = ""
@@ -731,9 +571,24 @@ class AgenteConsultor:
                 _lambda = 0.65
                 _presupuesto = self.cfg_max_context_chars
 
-            docs = _hybrid_search(self.vectorstore, self._bm25, _query_faiss, _k, _lambda)
+            # UNA sola llamada de embedding del query, compartida entre
+            # documentos, enlaces y memoria (evita 2 roundtrips extra por mensaje).
+            if self.embeddings is not None and (
+                self.vectorstore is not None or self.vectorstore_enlaces is not None
+                or self._memoria_disponible()
+            ):
+                try:
+                    _query_vector = self.embeddings.embed_query(_query_faiss)
+                except Exception as exc:
+                    logger.debug("embed_query falló — búsqueda estándar: %s", exc)
+
+            docs = _hybrid_search(
+                self.vectorstore, self._bm25, _query_faiss, _k, _lambda,
+                query_vector=_query_vector,
+            )
             docs_enlaces = _hybrid_search(
-                self.vectorstore_enlaces, self._bm25_enlaces, _query_faiss, _k, _lambda
+                self.vectorstore_enlaces, self._bm25_enlaces, _query_faiss, _k, _lambda,
+                query_vector=_query_vector,
             )
             logger.debug(
                 "Hybrid: %d docs + %d enlaces (amplia=%s, bm25=%s)",
@@ -790,7 +645,67 @@ class AgenteConsultor:
             if _sin_datos:
                 _sin_datos = False
 
+        # ── Memoria RAG — respuestas aprendidas en conversaciones previas ──
+        if not _es_ack:
+            bloque_memoria = self._construir_bloque_memoria(_query_faiss, _query_vector)
+            if bloque_memoria:
+                contexto = f"{contexto}\n\n{bloque_memoria}" if contexto else bloque_memoria
+
         return contexto, _sin_datos
+
+    def _memoria_disponible(self) -> bool:
+        if not (self.cfg_memoria_activa and self.agente is not None):
+            return False
+        try:
+            from .memoria.rag_conversaciones import memoria_existe
+            return memoria_existe(self.agente.id)
+        except Exception:
+            return False
+
+    def _construir_bloque_memoria(self, query: str, query_vector=None) -> str:
+        """Bloque compacto con pares pregunta→respuesta de conversaciones previas."""
+        if not (self.cfg_memoria_activa and self.agente is not None and self.embeddings is not None):
+            return ''
+        try:
+            from .memoria.rag_conversaciones import recuperar_memoria
+            conv_id = str(self.conversacion.id) if self.conversacion else None
+            return recuperar_memoria(
+                self.agente.id, self.embeddings, query,
+                excluir_conversacion=conv_id,
+                query_vector=query_vector,
+            )
+        except Exception as exc:
+            logger.debug("Memoria RAG no disponible: %s", exc)
+            return ''
+
+    def _memorizar_interaccion(self, pregunta: str, respuesta: str, sin_datos: bool) -> None:
+        """Indexa el par pregunta→respuesta en la memoria del agente (background).
+
+        Debounce por agente (cache 10s): en ráfagas de mensajes se descartan
+        escrituras intermedias para no apilar hilos ni reescribir el índice
+        en cada mensaje.
+        """
+        if sin_datos or not respuesta:
+            return
+        if not (self.cfg_memoria_activa and self.agente is not None and self.embeddings is not None):
+            return
+        # Solo conversaciones REALES de WhatsApp alimentan la memoria — los
+        # chats de prueba/simulador/voz usan SimpleNamespace y quedan fuera
+        # para no contaminar el conocimiento de producción.
+        if not isinstance(self.conversacion, ConversacionWhatsApp):
+            return
+        try:
+            from django.core.cache import cache
+            if not cache.add(f'memoria_rag_write_{self.agente.id}_{self.conversacion.id}', 1, 10):
+                return
+            from .memoria.rag_conversaciones import guardar_interaccion_async
+            conv_id = str(self.conversacion.id) if self.conversacion else None
+            guardar_interaccion_async(
+                self.agente.id, self.embeddings, pregunta, respuesta,
+                conversacion_id=conv_id,
+            )
+        except Exception as exc:
+            logger.debug("No se pudo memorizar la interacción: %s", exc)
 
     def _construir_bloque_apis(self) -> str:
         """Trae el texto de las fuentes API (tipo=1) sin recurrir a embeddings.
@@ -955,6 +870,7 @@ class AgenteConsultor:
             h.add_ai_message(respuesta)
 
         self._incrementar_hits_faqs()
+        self._memorizar_interaccion(pregunta, respuesta, _sin_datos)
 
         return ConsultaResultado(
             respuesta=respuesta, fin_detectado=fin_detectado,
@@ -1048,6 +964,7 @@ class AgenteConsultor:
         en un loop acotado a 3 iteraciones. Mantiene fallback al parseo JSON legacy
         para prompts de agentes antiguos que siguen emitiendo JSON en vez de tool calls.
         """
+        self._cargar_listas_desde_memoria()
         contexto_previo = self._contexto_previo()
 
         bienvenida = self._saludo_primer_mensaje(pregunta)
@@ -1124,6 +1041,7 @@ class AgenteConsultor:
             h.add_ai_message(respuesta)
 
         self._incrementar_hits_faqs()
+        self._memorizar_interaccion(pregunta, respuesta, _sin_datos)
 
         return ConsultaResultado(
             respuesta=respuesta, fin_detectado=fin_detectado,
@@ -1167,6 +1085,7 @@ class AgenteConsultor:
 
     def _consultar_con_listas_legacy(self, pregunta: str, descripcion_agente: str = '') -> ConsultaResultado:
         """Ruta de fallback cuando bind_tools no está soportado por el proveedor."""
+        self._cargar_listas_desde_memoria()
         resultado = self.consultar(pregunta, descripcion_agente)
         tools = self._build_tools()
         tool_map = {t.name: t for t in tools}

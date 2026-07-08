@@ -108,6 +108,8 @@ INSTALLED_APPS = [
     'area_geografica.apps.AreaGeograficaConfig',
     'public.apps.PublicConfig',
     'whatsapp.apps.WhatsappConfig',
+    'instagram.apps.InstagramConfig',
+    'tiktok.apps.TiktokConfig',
     'crm.apps.CrmConfig',
     'agents_ai.apps.AgentsAiConfig',
     'voz.apps.VozConfig',
