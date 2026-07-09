@@ -17,6 +17,7 @@ from django.db.models import F
 from django.utils import timezone
 
 from whatsapp.models import ConfigMeta, PlantillaWhatsApp, SesionWhatsApp
+from whatsapp.servicio_canal_base import ServicioCanalBase
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +129,7 @@ GRAPH_API_VERSION = 'v22.0'
 GRAPH_API_BASE = f'https://graph.facebook.com/{GRAPH_API_VERSION}'
 
 
-class MetaWhatsAppService:
+class MetaWhatsAppService(ServicioCanalBase):
     """Interfaz paralela a WhatsAppService pero contra Meta Cloud API.
 
     Los metodos aceptan `session_id` como primer parametro para mantener la

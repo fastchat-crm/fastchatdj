@@ -1,22 +1,13 @@
-.badge-estado-conectado {
-    background: #198754;
+.guia-conexion ol {
+    margin-bottom: 0;
 }
 
-.badge-estado-pendiente {
-    background: #ffc107;
-    color: #212529;
-}
-
-.badge-estado-error {
-    background: #dc3545;
-}
-
-.badge-estado-desconectado {
-    background: #6c757d;
+.candidatos-detectados {
+    display: none;
 }
 
 .token-truncado {
-    max-width: 160px;
+    max-width: 180px;
     display: inline-block;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -26,10 +17,34 @@
     font-size: .75rem;
 }
 
-.guia-conexion ol {
-    margin-bottom: 0;
+.ig-avatar {
+    background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+    color: #fff;
 }
 
-.candidatos-detectados {
-    display: none;
+.canal-badge.canal-instagram {
+    background: linear-gradient(45deg, #f09433 0%, #dc2743 50%, #bc1888 100%);
+    color: #fff;
+}
+
+.pane-hero-icon.ig-grad {
+    background: linear-gradient(45deg, #f09433 0%, #dc2743 50%, #bc1888 100%);
+    color: #fff;
+}
+
+.conex-canal .ic.ic-wa {
+    background: #d4f5e3;
+    color: #25d366;
+}
+
+.conex-canal .ic.ic-tk {
+    background: #000;
+    color: #fff;
+}
+
+#formCuenta .pane-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: .5rem;
+    margin-top: .5rem;
 }

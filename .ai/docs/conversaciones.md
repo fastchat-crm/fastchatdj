@@ -13,8 +13,11 @@ dos vistas paralelas que comparten layout (`base_chat.html`) y partials, pero
 difieren en queryset, footer y acciones permitidas.
 
 **Vistas:**
-- `whatsapp/view_conversaciones.py:141` → `conversacionesView` — chats activos
-  (`estado_conversacion=0`).
+- `whatsapp/view_conversaciones.py` → `conversacionesView(request, canal_fijo=None)` — chats activos
+  (`estado_conversacion=0`). Con `canal_fijo` ('instagram'/'tiktok') el mismo inbox se acota a las
+  sesiones de ese proveedor: `/instagram/conversaciones/` y `/tiktok/conversaciones/` son wrappers
+  directos (2026-07). Por eso el JS de `listado.html` usa `{{ ruta }}` (request.path) y NO URLs
+  hardcodeadas a `/whatsapp/conversaciones/` — mantener esa regla al agregar acciones.
 - `whatsapp/view_conversaciones_finalizadas.py:35` → `conversacionesFinalizadasView`
   — chats cerrados (`estado_conversacion=1`).
 

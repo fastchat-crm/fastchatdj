@@ -50,18 +50,18 @@ capa de control** (`instagram/`, `tiktok/`) que NO duplican modelos: reusan
 
 | URL | Vista | Qué hace |
 |---|---|---|
-| `/instagram/cuentas/` | `instagram/view_cuentas.py` | Conectar cuenta IG: form manual + acción `autodetectar` (con el token extrae page_id/ig_user_id/username vía `/me/accounts`), probar conexión, activar/suspender, eliminar (soft). Crea `SesionWhatsApp(proveedor='instagram', session_id='instagram-<ig_user_id>')` + `ConfigInstagram`. |
+| `/instagram/sesiones/` (antes `cuentas/`) | `instagram/view_cuentas.py` | Conectar sesión IG: cards estilo tablero WhatsApp + modal con sidebar de canales; acción `autodetectar` (con el token extrae page_id/ig_user_id/username vía `/me/accounts`), probar conexión, activar/suspender, eliminar (soft). Crea `SesionWhatsApp(proveedor='instagram', session_id='instagram-<ig_user_id>')` + `ConfigInstagram`. |
 | `/instagram/conversaciones/` | `instagram/view_conversaciones.py` | Listado DMs IG con deep-link `?conv=<encrypt_id>` al inbox compartido. |
 | `/instagram/comentarios/` | wrapper de `whatsapp.view_comentarios.comentariosView(canal_fijo='instagram')` | Inbox comentarios solo IG. |
-| `/instagram/publicaciones/` | `instagram/view_posts.py` | Grilla en vivo (`InstagramService.listar_publicaciones`) con likes/comentarios + conteo de comentarios nuevos en CRM por `media_id`. |
-| `/tiktok/cuentas/` | `tiktok/view_cuentas.py` | Pre-registro de cuentas (crea `SesionWhatsApp(proveedor='tiktok')` + `ConfigTikTok`); banner de estado beta. |
+| `/instagram/publicaciones/` | `instagram/view_posts.py` | Grilla en vivo (`InstagramService.listar_publicaciones`) con likes/comentarios + conteo de comentarios nuevos en CRM por `media_id`. Modal de moderación tipo post por publicación (`action=comentarios_post`, partial `_comentarios_post.html`): responder/ocultar/mostrar/DM sin salir de la grilla (POST delega en `_procesar_accion` del inbox de comentarios). |
+| `/tiktok/sesiones/` (antes `cuentas/`) | `tiktok/view_cuentas.py` | Pre-registro de sesiones (crea `SesionWhatsApp(proveedor='tiktok')` + `ConfigTikTok`); cards estilo tablero + banner de estado beta. |
 | `/tiktok/conversaciones/` | `tiktok/view_conversaciones.py` | Listado (vacío hasta aprobar API). |
 | `/tiktok/comentarios/` | wrapper `canal_fijo='tiktok'` | Inbox comentarios TikTok (fase 2). |
 
 Cambios de soporte: `PROVEEDORES_SESION` += `tiktok`, property `es_tiktok`, modelo
 `ConfigTikTok` (OneToOne, tokens OAuth + refresh). El modal "Agregar conexión" del tablero
 (`whatsapp/templates/whatsapp/sesiones/tablero.html`) ya no abre panes "próximamente" para
-IG/TikTok: **redirige** a `/instagram/cuentas/` y `/tiktok/cuentas/`.
+IG/TikTok: **redirige** a `/instagram/sesiones/` y `/tiktok/sesiones/` (URLs renombradas de `cuentas/` a `sesiones/` el 2026-07-08; el seed de módulos usa las nuevas).
 
 Doc de servicios Meta: `meta/README.md` (para qué es cada archivo del paquete).
 
@@ -85,8 +85,10 @@ Doc de servicios Meta: `meta/README.md` (para qué es cada archivo del paquete).
 
 ## Roadmap pendiente (acordado con el usuario)
 
-1. **Selector global de sesión multicanal** (feature futura, pedido explícito): el combo global de
-   "sesión activa" (`leer_sesion_id` / `set_sesion_activa`) debe funcionar por canal
-   (whatsapp/instagram/tiktok/facebook).
+1. ~~Selector global de sesión multicanal~~ **HECHO 2026-07-08**: el dropdown de sesión activa del
+   navbar (`templates/base.html` + `static/stylenew/selector_sesion_global.{css,js}`) lista sesiones
+   de todos los proveedores con chips de filtro por canal (WhatsApp/Instagram/TikTok, los 3 activos
+   por defecto) e ícono TikTok propio. `whatsapp/context_processors.py::selector_sesion` ya era
+   multicanal (no filtra por proveedor).
 2. **App `facebook/`** (Messenger) espejo de `instagram/` — `ConfigMessenger` ya existe.
 3. **TikTok**: aprobación beta + OAuth + refresh de tokens (cron) + comentarios por polling.

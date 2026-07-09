@@ -31,8 +31,8 @@
     {% include 'pwa/meta_tags.html' %}
     <link rel="stylesheet" href="/static/css/pwa/install_bar.css?v1.1">
     <link rel="stylesheet" href="/static/css/pwa/push_optin.css?v1.0">
-    <link rel="stylesheet" href="/static/stylenew/selector_sesion_global.css?v1.2">
-    <script src="/static/stylenew/selector_sesion_global.js?v1.2" defer></script>
+    <link rel="stylesheet" href="/static/stylenew/selector_sesion_global.css?v1.3">
+    <script src="/static/stylenew/selector_sesion_global.js?v1.3" defer></script>
     {% block head %}{% endblock %}
     <script>
         {% if activar_cambio_clave %}
@@ -100,8 +100,19 @@
                                 </button>
                             </li>
                             <li><hr class="dropdown-divider"></li>
+                            <li class="wa-sesion-filtros">
+                                <button type="button" class="wa-canal-chip active" data-canal="whatsapp">
+                                    <i class="fab fa-whatsapp"></i> WhatsApp
+                                </button>
+                                <button type="button" class="wa-canal-chip active" data-canal="instagram">
+                                    <i class="fab fa-instagram"></i> Instagram
+                                </button>
+                                <button type="button" class="wa-canal-chip active" data-canal="tiktok">
+                                    <i class="fab fa-tiktok"></i> TikTok
+                                </button>
+                            </li>
                             {% for s in wa_selector_sesiones %}
-                                <li>
+                                <li data-canal="{% if s.proveedor == 'instagram' or s.proveedor == 'messenger' %}instagram{% elif s.proveedor == 'tiktok' %}tiktok{% else %}whatsapp{% endif %}">
                                     <button type="button"
                                             class="dropdown-item wa-sesion-item {% if wa_selector_activa_id == s.id %}is-active{% endif %} {% if not s.activo %}is-paused{% endif %}"
                                             data-sesion-id="{{ s.id }}">
@@ -110,6 +121,7 @@
                                             {% elif s.proveedor == 'baileys' %}<i class="fa fa-qrcode"></i>
                                             {% elif s.proveedor == 'instagram' %}<i class="fab fa-instagram"></i>
                                             {% elif s.proveedor == 'messenger' %}<i class="fab fa-facebook-messenger"></i>
+                                            {% elif s.proveedor == 'tiktok' %}<i class="fab fa-tiktok"></i>
                                             {% else %}<i class="fab fa-whatsapp"></i>{% endif %}
                                         </span>
                                         <span class="wa-sesion-item-body">

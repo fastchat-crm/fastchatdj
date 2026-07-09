@@ -7,8 +7,8 @@ from .view_posts import publicacionesView
 
 instagram_urls = (
     {
-        "nombre": "Cuentas Instagram",
-        "url": 'cuentas/',
+        "nombre": "Sesiones Instagram",
+        "url": 'sesiones/',
         "vista": cuentasView,
     },
     {

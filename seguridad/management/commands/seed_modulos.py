@@ -11,7 +11,9 @@ Flags opcionales:
   --authoritative  El archivo es la unica fuente de verdad. Resetea el M2M
                    de cada seccion y del Staff a exactamente lo del mapa.
   --reset          Soft-delete (status=False) los Modulos cuya url no este
-                   en el mapa. Solo tiene sentido con --authoritative.
+                   en el mapa Y las ModuloGrupo cuyo nombre no este en
+                   SECCIONES (reemplaza la segmentacion vieja del sidebar).
+                   Solo tiene sentido con --authoritative.
   --dry-run        No escribe, solo reporta el plan.
 
 Uso:
@@ -32,33 +34,41 @@ ADMIN_GROUP_NAME = 'Staff'
 
 SECCIONES = [
     {
-        'nombre':    'Inbox',
-        'icono':     'fa fa-comments',
+        'nombre':    'WhatsApp',
+        'icono':     'fab fa-whatsapp',
         'prioridad': 10,
         'modulos': [
-            ('/whatsapp/conversaciones/',            'Conversaciones',          10),
-            ('/whatsapp/conversaciones-finalizadas/','Conversaciones cerradas', 20),
-            ('/whatsapp/contacto/',                  'Contactos',               30),
-            ('/whatsapp/pipeline/',                  'Pipeline de ventas',      40),
-            ('/whatsapp/etiquetas/',                 'Etiquetas',               50),
+            ('/whatsapp/sesiones/',                  'Sesiones',                 10),
+            ('/whatsapp/conversaciones/',            'Conversaciones',           20),
+            ('/whatsapp/conversaciones-finalizadas/','Conversaciones cerradas',  30),
+            ('/whatsapp/conversaciones-pendiente-reconexion/', 'Pendientes de reconexión', 40),
+            ('/whatsapp/contacto/',                  'Contactos',                50),
+            ('/whatsapp/etiquetas/',                 'Etiquetas',                60),
+            ('/whatsapp/pipeline/',                  'Pipeline de ventas',       70),
+            ('/whatsapp/plantillas/',                'Plantillas Meta',          80),
+            ('/whatsapp/campanas/',                  'Campañas masivas',         90),
+            ('/whatsapp/horarios/',                  'Horarios de atención',    100),
         ],
     },
     {
-        'nombre':    'Canales',
-        'icono':     'fa fa-plug',
+        'nombre':    'Instagram',
+        'icono':     'fab fa-instagram',
         'prioridad': 20,
         'modulos': [
-            ('/whatsapp/sesiones/', 'Sesiones WhatsApp', 10),
+            ('/instagram/sesiones/',       'Sesiones',       10),
+            ('/instagram/conversaciones/', 'Conversaciones', 20),
+            ('/instagram/comentarios/',    'Comentarios',    30),
+            ('/instagram/publicaciones/',  'Publicaciones',  40),
         ],
     },
     {
-        'nombre':    'Mensajeria saliente',
-        'icono':     'fa fa-paper-plane',
+        'nombre':    'TikTok',
+        'icono':     'fab fa-tiktok',
         'prioridad': 30,
         'modulos': [
-            ('/whatsapp/plantillas/', 'Plantillas Meta',     10),
-            ('/whatsapp/campanas/',   'Campanas masivas',    20),
-            ('/whatsapp/horarios/',   'Horarios de atencion',30),
+            ('/tiktok/sesiones/',       'Sesiones',       10),
+            ('/tiktok/conversaciones/', 'Conversaciones', 20),
+            ('/tiktok/comentarios/',    'Comentarios',    30),
         ],
     },
     {
@@ -66,81 +76,88 @@ SECCIONES = [
         'icono':     'fa fa-robot',
         'prioridad': 40,
         'modulos': [
-            ('/crm/entrenamiento/',          'Entrenamiento IA',          10),
-            ('/crm/entrenamiento/wizard/',   'Crear agente (rapido)',     15),
-            ('/crm/departamentos_chatbots/', 'Flujos chatbot',            20),
-            ('/crm/endpoints_api/',          'Endpoints API',             25),
-            ('/whatsapp/trazas/',            'Trazas IA',                 30),
+            ('/crm/entrenamiento/',          'Entrenamiento IA',      10),
+            ('/crm/entrenamiento/wizard/',   'Crear agente (rápido)', 20),
+            ('/crm/departamentos_chatbots/', 'Flujos chatbot',        30),
+            ('/crm/endpoints_api/',          'Endpoints API',         40),
+            ('/whatsapp/trazas/',            'Trazas IA',             50),
         ],
     },
     {
-        'nombre':    'CRM',
-        'icono':     'fa fa-briefcase',
+        'nombre':    'Analítica',
+        'icono':     'fa fa-chart-line',
         'prioridad': 50,
         'modulos': [
-            ('/crm/perfil_empresa/',      'Perfil de empresa',   10),
-            ('/crm/industria/',           'Industria',           20),
-            ('/crm/actividad_economica/', 'Actividad economica', 30),
+            ('/whatsapp/analytics/',   'Analytics',   10),
+            ('/whatsapp/supervision/', 'Supervisión', 20),
         ],
     },
     {
-        'nombre':    'Analitica',
-        'icono':     'fa fa-chart-line',
+        'nombre':    'Agenda',
+        'icono':     'fa fa-calendar-days',
         'prioridad': 60,
         'modulos': [
-            ('/whatsapp/analytics/', 'Analytics', 10),
+            ('/agenda/citas/',         'Citas',                   10),
+            ('/agenda/configuracion/', 'Configuración de agenda', 20),
         ],
     },
     {
-        'nombre':    'Areas geograficas',
-        'icono':     'fa fa-globe',
+        'nombre':    'Meta',
+        'icono':     'fab fa-meta',
         'prioridad': 70,
         'modulos': [
-            ('/area-geografica/pais/',      'Pais',      10),
+            ('/seguridad/credencial-meta/', 'Credenciales Meta App', 10),
+            ('/whatsapp/tarifas/',          'Tarifas Meta',          20),
+        ],
+    },
+    {
+        'nombre':    'Administración de usuarios',
+        'icono':     'fa fa-users-gear',
+        'prioridad': 80,
+        'modulos': [
+            ('/autenticacion/usuario/',  'Administrativos',  10),
+            ('/autenticacion/personas/', 'Clientes',         20),
+            ('/crm/cliente/',            'Clientes CRM',     30),
+            ('/seguridad/empresas/',     'Empresas',         40),
+            ('/seguridad/grupo/',        'Roles de usuario', 50),
+        ],
+    },
+    {
+        'nombre':    'Áreas geográficas',
+        'icono':     'fa fa-globe',
+        'prioridad': 90,
+        'modulos': [
+            ('/area-geografica/pais/',      'País',      10),
             ('/area-geografica/provincia/', 'Provincia', 20),
             ('/area-geografica/ciudad/',    'Ciudad',    30),
         ],
     },
     {
-        'nombre':    'Administracion de usuarios',
-        'icono':     'fa fa-users-gear',
-        'prioridad': 80,
-        'modulos': [
-            ('/autenticacion/usuario/',  'Administrativos', 10),
-            ('/autenticacion/personas/', 'Clientes',        20),
-            ('/seguridad/empresas/',     'Empresas',        30),
-        ],
-    },
-    {
-        'nombre':    'Configuracion',
+        'nombre':    'Configuración del sistema',
         'icono':     'fa fa-sliders',
-        'prioridad': 90,
-        'modulos': [
-            ('/seguridad/configuracion/',        'Configuracion del sitio', 10),
-            ('/seguridad/credencial-meta/',      'Credenciales Meta',       20),
-            ('/seguridad/terminosycondiciones/', 'Terminos y condiciones',  30),
-        ],
-    },
-    {
-        'nombre':    'Documentacion',
-        'icono':     'fa fa-book',
-        'prioridad': 95,
-        'modulos': [
-            ('/seguridad/documentacion/', 'Documentacion general', 10),
-        ],
-    },
-    {
-        'nombre':    'Sistemas',
-        'icono':     'fa fa-gears',
         'prioridad': 100,
         'modulos': [
-            ('/seguridad/grupo/',               'Roles de usuario',      10),
-            ('/seguridad/modulogrupo/',         'Secciones del sidebar', 20),
-            ('/seguridad/modulo/urls/',         'Mantenimiento URLs',    30),
-            ('/seguridad/arbol-de-url/',        'Arbol de URLs',         40),
-            ('/seguridad/arbol-de-grupos-url/', 'Arbol de grupos',       50),
-            ('/seguridad/auditoria/',           'Auditoria',             60),
-            ('/seguridad/databasebackup/',      'Backup BD',             70),
+            ('/seguridad/configuracion/',         'Configuración del sitio',   10),
+            ('/crm/perfil_empresa/',              'Perfil de empresa',         20),
+            ('/crm/industria/',                   'Industria',                 30),
+            ('/crm/actividad_economica/',         'Actividad económica',       40),
+            ('/seguridad/terminosycondiciones/',  'Términos y condiciones',    50),
+            ('/seguridad/administracion-mails/',  'Administración de correos', 60),
+            ('/seguridad/webpush-broadcast/',     'Push broadcast',            70),
+            ('/seguridad/documentacion/',         'Documentación',             80),
+        ],
+    },
+    {
+        'nombre':    'Mantenimientos',
+        'icono':     'fa fa-gears',
+        'prioridad': 110,
+        'modulos': [
+            ('/seguridad/modulogrupo/',         'Secciones del sidebar', 10),
+            ('/seguridad/modulo/urls/',         'Mantenimiento URLs',    20),
+            ('/seguridad/arbol-de-url/',        'Árbol de URLs',         30),
+            ('/seguridad/arbol-de-grupos-url/', 'Árbol de grupos',       40),
+            ('/seguridad/auditoria/',           'Auditoría',             50),
+            ('/seguridad/databasebackup/',      'Backup BD',             60),
         ],
     },
 ]
@@ -181,6 +198,7 @@ class Command(BaseCommand):
             self._asignar_staff(modulos_por_url, authoritative)
             if reset:
                 self._desactivar_huerfanos(modulos_por_url)
+                self._desactivar_secciones_huerfanas()
 
         self.stdout.write(self.style.SUCCESS('Listo.'))
 
@@ -284,6 +302,25 @@ class Command(BaseCommand):
                 f'  Grupo "{ADMIN_GROUP_NAME}": +{len(nuevos)} modulo(s) agregado(s). '
                 f'Total vinculados preservados.'
             )
+
+    def _desactivar_secciones_huerfanas(self):
+        """Marca status=False las ModuloGrupo cuyo nombre no aparece en SECCIONES.
+
+        Es lo que permite reemplazar la segmentacion vieja del sidebar
+        (Inbox/Canales/CRM/...) por la nueva sin dejar secciones fantasma.
+        """
+        nombres_validos = {s['nombre'] for s in SECCIONES}
+        huerfanas = ModuloGrupo.objects.filter(status=True).exclude(nombre__in=nombres_validos)
+        n = huerfanas.count()
+        if n:
+            self.stdout.write(self.style.WARNING(
+                f'  {n} seccion(es) huerfana(s) desactivada(s):'
+            ))
+            for mg in huerfanas:
+                self.stdout.write(f'      - {mg.nombre}')
+            huerfanas.update(status=False)
+        else:
+            self.stdout.write('  Sin secciones huerfanas.')
 
     def _desactivar_huerfanos(self, modulos_por_url):
         """Marca status=False los Modulos cuya url no aparece en SECCIONES."""

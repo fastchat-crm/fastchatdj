@@ -1,0 +1,76 @@
+<div class="row g-2">
+    <input type="hidden" name="action" value="depurar_urls">
+    <div class="col-12">
+        <div class="alert alert-warning border mb-2 d-flex justify-content-between align-items-center">
+            <div>
+                <div class="fw-semibold">URLs huérfanas detectadas: {{ total_huerfanos }}</div>
+                <div class="small">Estas URLs están registradas en la tabla pero ya no existen en el diccionario del sistema. Marca las que quieres eliminar (borrado lógico).</div>
+            </div>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="check_todas_depurar" checked>
+                <label class="form-check-label small" for="check_todas_depurar">Todas</label>
+            </div>
+        </div>
+    </div>
+    <div class="col-12">
+        {% for g in grupos_huerfanos %}
+            <div class="card mb-2">
+                <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                    <div class="form-check mb-0">
+                        <input class="form-check-input check-app-depurar" type="checkbox"
+                               id="check_dep_app_{{ forloop.counter }}" checked>
+                        <label class="form-check-label fw-semibold" for="check_dep_app_{{ forloop.counter }}">
+                            {{ g.app }}
+                        </label>
+                    </div>
+                    <span class="badge bg-warning text-dark">{{ g.modulos|length }} URL(s)</span>
+                </div>
+                <div class="card-body py-2">
+                    {% for m in g.modulos %}
+                        <div class="form-check py-1">
+                            <input class="form-check-input check-depurar-item" type="checkbox" name="c_modulos"
+                                   value="{{ m.id }}" id="dep_check_{{ m.id }}" checked>
+                            <label class="form-check-label" for="dep_check_{{ m.id }}">
+                                {{ m.nombre }}
+                                <span class="text-muted small ms-1">{{ m.url }}</span>
+                            </label>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="border-top my-3"></div>
+
+<div class="d-flex justify-content-end">
+    <button type="button" class="btn btn-secondary btn-sm me-1" data-bs-dismiss="modal">
+        <i class="fa fa-window-close me-1"></i>Cancelar
+    </button>
+    <button type="submit" class="btn btn-danger btn-sm">
+        <i class="fa fa-broom me-1"></i>Depurar seleccionadas
+    </button>
+</div>
+
+<script>
+    $('.check-app-depurar').on('change', function () {
+        $(this).closest('.card').find('.check-depurar-item').prop('checked', this.checked);
+        sincronizarCheckDepurar();
+    });
+    $('.check-depurar-item').on('change', function () {
+        var card = $(this).closest('.card');
+        var total = card.find('.check-depurar-item').length;
+        var marcados = card.find('.check-depurar-item:checked').length;
+        card.find('.check-app-depurar').prop('checked', total === marcados);
+        sincronizarCheckDepurar();
+    });
+    $('#check_todas_depurar').on('change', function () {
+        $('.check-depurar-item, .check-app-depurar').prop('checked', this.checked);
+    });
+    function sincronizarCheckDepurar() {
+        var total = $('.check-depurar-item').length;
+        var marcados = $('.check-depurar-item:checked').length;
+        $('#check_todas_depurar').prop('checked', total === marcados);
+    }
+</script>

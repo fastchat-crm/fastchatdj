@@ -1,30 +1,51 @@
 {% extends 'base.html' %}
 {% block head %}
-    <link rel="stylesheet" href="/static/css/instagram/cuentas_listado.css?v1.0">
+    <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.0">
+    <link rel="stylesheet" href="/static/css/instagram/cuentas_listado.css?v1.1">
 {% endblock %}
 
 {% block content %}
-    <div class="container-fluid p-0">
+    <div class="conex-page">
+
+        <div class="conex-header">
+            <div class="conex-header-left">
+                <div>
+                    <h3 class="conex-title">Sesiones Instagram</h3>
+                    <p class="conex-subtitle">Conecta cuentas Instagram Business y controla su estado desde un solo
+                        lugar.</p>
+                </div>
+            </div>
+            <div class="conex-header-right">
+                <form method="GET" class="conex-search mb-0">
+                    <i class="fa fa-search"></i>
+                    <input type="text" name="criterio" placeholder="Buscar por nombre o @username..."
+                           value="{{ criterio|default:'' }}">
+                </form>
+                <button type="button" class="conex-btn conex-btn-primary" id="btn-abrir-modal">
+                    <i class="fa fa-plus me-1"></i> Nueva conexión
+                </button>
+            </div>
+        </div>
 
         <div class="alert alert-info guia-conexion mb-3">
             <div class="row">
                 <div class="col-md-8">
-                    <strong><i class="fab fa-instagram"></i> ¿Cómo conectar una cuenta?</strong>
+                    <strong><i class="fab fa-instagram"></i> ¿Cómo conectar una sesión?</strong>
                     <ol class="small mt-2">
                         <li>Convierte tu cuenta Instagram a <b>Business</b> y vincúlala a una página de Facebook.</li>
                         <li>Genera un <b>Page Access Token</b> de larga duración con los permisos
                             <code>instagram_basic</code>, <code>instagram_manage_messages</code> y
                             <code>instagram_manage_comments</code>.</li>
-                        <li>Pulsa <b>Conectar cuenta</b>, pega el token y usa <b>Detectar automáticamente</b>:
-                            la plataforma extrae sola el Page ID, IG User ID y @username.</li>
-                        <li>Configura el webhook en tu App de Meta con la URL y el verify token que se muestran abajo.</li>
+                        <li>Pulsa <b>Nueva conexión</b>, pega el token y usa <b>Detectar automáticamente</b>.</li>
+                        <li>Configura el webhook en tu App de Meta con la URL y el verify token de la tarjeta.</li>
                     </ol>
                 </div>
                 <div class="col-md-4">
                     <div class="small">
                         <b>Webhook (App de Meta):</b><br>
                         <code>{{ webhook_url }}</code><br><br>
-                        <a href="/seguridad/documentacion/?pagina=conectar-instagram-tiktok" class="btn btn-sm btn-outline-primary">
+                        <a href="/seguridad/documentacion/?pagina=conectar-instagram-tiktok"
+                           class="btn btn-sm btn-outline-primary">
                             <i class="fa fa-book"></i> Guía completa de tokens
                         </a>
                     </div>
@@ -32,178 +53,206 @@
             </div>
         </div>
 
-        <div class="card mb-3">
-            <div class="card-body">
-                <form method="GET" class="mb-0">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-8">
-                            <label class="form-label">Búsqueda</label>
-                            <div class="input-group">
-                                <span class="input-group-text border-end-0">
-                                    <i class="fa fa-search text-muted"></i>
-                                </span>
-                                <input type="text" class="form-control border-start-0"
-                                       placeholder="Nombre o @username" name="criterio"
-                                       value="{{ criterio|default:'' }}">
-                            </div>
+        <div class="conex-grid" id="conex-grid">
+            {% for s in listado %}
+                <div class="conex-card{% if not s.activo %} conex-card-pausada{% endif %}" data-sesion-id="{{ s.id }}">
+                    <div class="card-top">
+                        <div class="card-avatar">
+                            <span class="avatar-fallback ig-avatar"><i class="fab fa-instagram"></i></span>
+                            <span class="avatar-status status-{{ s.estado }}"
+                                  title="{{ s.get_estado_display|default:s.estado }}"></span>
                         </div>
-                        <div class="col-md-4">
-                            <div class="d-flex gap-2">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-search me-1"></i> Filtrar
-                                </button>
-                                {% if url_vars %}
-                                    <a href="{{ request.path }}" class="btn btn-default">
-                                        <i class="fas fa-times"></i> Limpiar
-                                    </a>
+                        <div class="card-head">
+                            <div class="card-nombre">
+                                {{ s.nombre }}
+                                {% if not s.activo %}
+                                    <span class="badge-pausada" title="Sesión suspendida — no procesa mensajes">
+                                        <i class="fa fa-pause-circle"></i> SUSPENDIDA
+                                    </span>
                                 {% endif %}
                             </div>
+                            <div class="card-num">@{{ s.config_instagram.username|default:"sin username" }}</div>
                         </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <div>
-                <h4 class="mb-0">Cuentas conectadas</h4>
-                <small class="text-muted">
-                    {{ list_count|default:0 }} cuenta{{ list_count|default:0|pluralize }}
-                </small>
-            </div>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCuenta">
-                <i class="fa fa-plus"></i> Conectar cuenta
-            </button>
-        </div>
-
-        <div class="card">
-            <div class="card-body">
-                <table class="table table-striped align-middle">
-                    <thead>
-                    <tr>
-                        <th>Nombre</th>
-                        <th>@username</th>
-                        <th>IG User ID</th>
-                        <th>Page ID</th>
-                        <th>Verify token</th>
-                        <th>Estado</th>
-                        <th>Activa</th>
-                        <th style="width:170px">Acciones</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {% for s in listado %}
-                        <tr data-id="{{ s.id }}">
-                            <td><strong>{{ s.nombre }}</strong></td>
-                            <td>@{{ s.config_instagram.username|default:"—" }}</td>
-                            <td><small>{{ s.config_instagram.ig_user_id }}</small></td>
-                            <td><small>{{ s.config_instagram.page_id }}</small></td>
-                            <td>
-                                <span class="token-truncado" title="{{ s.config_instagram.webhook_verify_token }}">
-                                    {{ s.config_instagram.webhook_verify_token }}
-                                </span>
-                            </td>
-                            <td><span class="badge badge-estado-{{ s.estado }}">{{ s.get_estado_display }}</span></td>
-                            <td>
-                                {% if s.activo %}
-                                    <span class="badge bg-success">Sí</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">No</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <button class="btn btn-sm btn-outline-success btn-probar" data-id="{{ s.id }}"
-                                        title="Probar conexión">
-                                    <i class="fa fa-plug"></i>
+                        <label class="conex-toggle"
+                               title="{% if s.activo %}Suspender la sesión{% else %}Reactivar la sesión{% endif %}">
+                            <input type="checkbox" class="conex-toggle-input btn-toggle" data-id="{{ s.id }}"
+                                   {% if s.activo %}checked{% endif %}>
+                            <span class="conex-toggle-slider"></span>
+                            <span class="conex-toggle-label">{% if s.activo %}Activa{% else %}Suspendida{% endif %}</span>
+                        </label>
+                        <div class="card-kebab-wrap">
+                            <button type="button" class="btn-kebab" aria-label="Opciones" data-kebab-toggle>
+                                <i class="fa fa-ellipsis-vertical"></i>
+                            </button>
+                            <div class="kebab-menu" data-kebab-menu>
+                                <div class="kebab-heading">Acciones de sesión</div>
+                                <button type="button" class="kebab-item btn-probar" data-id="{{ s.id }}">
+                                    <i class="fa fa-plug text-success"></i> Probar conexión
                                 </button>
-                                <button class="btn btn-sm btn-outline-secondary btn-edit"
+                                <button type="button" class="kebab-item btn-edit"
                                         data-id="{{ s.id }}" data-nombre="{{ s.nombre }}"
                                         data-ig="{{ s.config_instagram.ig_user_id }}"
                                         data-page="{{ s.config_instagram.page_id }}"
-                                        data-username="{{ s.config_instagram.username }}"
-                                        title="Editar">
-                                    <i class="fa fa-pen"></i>
+                                        data-username="{{ s.config_instagram.username }}">
+                                    <i class="fa fa-pen"></i> Modificar
                                 </button>
-                                <button class="btn btn-sm btn-outline-warning btn-toggle" data-id="{{ s.id }}"
-                                        title="Activar/Suspender">
-                                    <i class="fa fa-power-off"></i>
+                                <div class="kebab-sep"></div>
+                                <div class="kebab-heading">Canal Instagram</div>
+                                <a href="/instagram/conversaciones/" class="kebab-item">
+                                    <i class="fa fa-comments"></i> Conversaciones
+                                </a>
+                                <a href="/instagram/comentarios/" class="kebab-item">
+                                    <i class="fa fa-comment-dots"></i> Comentarios
+                                </a>
+                                <a href="/instagram/publicaciones/" class="kebab-item">
+                                    <i class="fa fa-images"></i> Publicaciones
+                                </a>
+                                <div class="kebab-sep"></div>
+                                <div class="kebab-heading">Acciones críticas</div>
+                                <button type="button" class="kebab-item kebab-danger btn-del"
+                                        data-id="{{ s.id }}" data-nombre="{{ s.nombre }}">
+                                    <i class="fa fa-trash"></i> Eliminar sesión
                                 </button>
-                                <button class="btn btn-sm btn-outline-danger btn-del" data-id="{{ s.id }}"
-                                        data-nombre="{{ s.nombre }}" title="Eliminar">
-                                    <i class="fa fa-trash"></i>
-                                </button>
-                            </td>
-                        </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="8" class="text-center text-muted">
-                                Aún no hay cuentas Instagram conectadas. Pulsa "Conectar cuenta" para agregar la primera.
-                            </td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-                {% include 'paginacion.html' %}
-            </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="card-tags">
+                            <span class="canal-badge canal-instagram"><i class="fab fa-instagram"></i> Instagram</span>
+                            <span class="estado-badge estado-{{ s.estado }}">
+                                <span class="dot"></span> {{ s.get_estado_display|default:s.estado }}
+                            </span>
+                        </div>
+                        <div class="card-subinfo"><i class="fa fa-id-badge"></i> IG User ID:
+                            <b>{{ s.config_instagram.ig_user_id|default:"—" }}</b></div>
+                        <div class="card-subinfo"><i class="fa fa-flag"></i> Page ID:
+                            <b>{{ s.config_instagram.page_id|default:"—" }}</b></div>
+                        <div class="card-subinfo"><i class="fa fa-key"></i> Verify token:
+                            <code class="token-truncado"
+                                  title="{{ s.config_instagram.webhook_verify_token }}">{{ s.config_instagram.webhook_verify_token|default:"—" }}</code>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <a href="/instagram/conversaciones/" class="btn-quick">
+                            <i class="fa fa-comments"></i> Conversaciones
+                        </a>
+                        <a href="/instagram/comentarios/" class="btn-quick">
+                            <i class="fa fa-comment-dots"></i> Comentarios
+                        </a>
+                        <a href="/instagram/publicaciones/" class="btn-quick">
+                            <i class="fa fa-images"></i> Publicaciones
+                        </a>
+                    </div>
+                </div>
+            {% empty %}
+                <div class="conex-empty">
+                    <i class="fab fa-instagram"></i>
+                    <h4>Aún no has conectado ninguna sesión Instagram</h4>
+                    <p>Pulsa <b>Nueva conexión</b>, pega el Page Access Token y deja que la detección automática haga el
+                        resto.</p>
+                </div>
+            {% endfor %}
         </div>
+        {% include 'paginacion.html' %}
     </div>
 
-    <div class="modal fade" id="modalCuenta" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <form class="modal-content" id="formCuenta">
-                {% csrf_token %}
-                <div class="modal-header">
-                    <h5 class="modal-title">Conectar cuenta Instagram</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" name="action" value="add">
-                    <input type="hidden" name="pk" value="">
-                    <div class="mb-3">
-                        <label class="form-label">Nombre interno *</label>
-                        <input type="text" name="nombre" class="form-control" required maxlength="150"
-                               placeholder="Ej: Instagram Ventas">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Access Token (Page) *</label>
-                        <div class="input-group">
-                            <textarea name="access_token" class="form-control" rows="2" required
-                                      placeholder="Pega aquí el Page Access Token de larga duración"></textarea>
-                            <button type="button" class="btn btn-outline-primary" id="btnDetectar">
-                                <i class="fa fa-magic"></i> Detectar automáticamente
-                            </button>
+    <div class="conex-modal-backdrop" id="conex-modal" aria-hidden="true">
+        <div class="conex-modal" role="dialog" aria-label="Nueva conexión">
+            <div class="conex-modal-header">
+                <h4>Enlazar un nuevo canal</h4>
+                <button type="button" class="conex-modal-close" id="btn-cerrar-modal" aria-label="Cerrar">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="conex-modal-body">
+                <aside class="conex-sidebar">
+                    <button class="conex-canal" type="button"
+                            onclick="window.location.href='/whatsapp/sesiones/'">
+                        <span class="ic ic-wa"><i class="fab fa-whatsapp"></i></span>
+                        WhatsApp Business
+                    </button>
+                    <button class="conex-canal active" data-canal="instagram">
+                        <span class="ic ig-grad"><i class="fab fa-instagram"></i></span>
+                        Instagram
+                    </button>
+                    <button class="conex-canal" type="button"
+                            onclick="window.location.href='/tiktok/sesiones/'">
+                        <span class="ic ic-tk"><i class="fab fa-tiktok"></i></span>
+                        TikTok
+                    </button>
+                </aside>
+                <section class="conex-panel">
+                    <div class="pane" data-pane="instagram">
+                        <div class="pane-hero">
+                            <div class="pane-hero-icon ig-grad"><i class="fab fa-instagram"></i></div>
+                            <div class="pane-hero-body">
+                                <h5 class="pane-title mb-1">Conectar cuenta Instagram Business</h5>
+                                <p class="pane-hero-text mb-0">
+                                    Recibe DMs y comentarios de tus publicaciones en el inbox, responde con IA y
+                                    convierte seguidores en clientes.
+                                </p>
+                            </div>
                         </div>
-                        <small class="text-muted">Con el token pegado, la detección llena solos los campos de abajo.</small>
+                        <a href="/seguridad/documentacion/?pagina=conectar-instagram-tiktok" class="pane-link">
+                            <i class="fa fa-book-open me-1"></i> Aprende cómo conectar
+                        </a>
+                        <form id="formCuenta" novalidate>
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="add">
+                            <input type="hidden" name="pk" value="">
+                            <div class="mb-3">
+                                <label class="form-label">Nombre interno *</label>
+                                <input type="text" name="nombre" class="form-control" required maxlength="150"
+                                       placeholder="Ej: Instagram Ventas">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Access Token (Page) *</label>
+                                <div class="input-group">
+                                    <textarea name="access_token" class="form-control" rows="2" required
+                                              placeholder="Pega aquí el Page Access Token de larga duración"></textarea>
+                                    <button type="button" class="btn btn-outline-primary" id="btnDetectar">
+                                        <i class="fa fa-magic"></i> Detectar automáticamente
+                                    </button>
+                                </div>
+                                <small class="text-muted">Con el token pegado, la detección llena solos los campos de
+                                    abajo.</small>
+                            </div>
+                            <div class="mb-3 candidatos-detectados" id="zonaCandidatos">
+                                <label class="form-label">Cuentas encontradas</label>
+                                <select class="form-select" id="selectCandidato"></select>
+                            </div>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">IG User ID *</label>
+                                    <input type="text" name="ig_user_id" class="form-control" required maxlength="100">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Page ID *</label>
+                                    <input type="text" name="page_id" class="form-control" required maxlength="100">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">@username</label>
+                                    <input type="text" name="username" class="form-control" maxlength="120">
+                                </div>
+                            </div>
+                            <div class="alert alert-light small">
+                                Al guardar se probará la conexión automáticamente y se generará el
+                                <b>verify token</b> del webhook. Luego configura el webhook en tu App de Meta con la URL
+                                <code>{{ webhook_url }}</code> y suscribe los campos <code>messages</code> y
+                                <code>comments</code>.
+                            </div>
+                            <div class="pane-actions">
+                                <button type="button" class="conex-btn conex-btn-light" id="btn-cancelar-modal">
+                                    Cancelar
+                                </button>
+                                <button type="submit" class="conex-btn conex-btn-primary">
+                                    Guardar y conectar <i class="fa fa-arrow-right ms-1"></i>
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                    <div class="mb-3 candidatos-detectados" id="zonaCandidatos">
-                        <label class="form-label">Cuentas encontradas</label>
-                        <select class="form-select" id="selectCandidato"></select>
-                    </div>
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-4">
-                            <label class="form-label">IG User ID *</label>
-                            <input type="text" name="ig_user_id" class="form-control" required maxlength="100">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Page ID *</label>
-                            <input type="text" name="page_id" class="form-control" required maxlength="100">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">@username</label>
-                            <input type="text" name="username" class="form-control" maxlength="120">
-                        </div>
-                    </div>
-                    <div class="alert alert-light small mb-0">
-                        Al guardar se probará la conexión automáticamente y se generará el
-                        <b>verify token</b> del webhook. Luego configura el webhook en tu App de Meta con la URL
-                        mostrada arriba y suscribe los campos <code>messages</code> y <code>comments</code>.
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Guardar y conectar</button>
-                </div>
-            </form>
+                </section>
+            </div>
         </div>
     </div>
 {% endblock %}
@@ -211,8 +260,7 @@
 {% block jscript %}
     <script>
         (function () {
-            const modalEl = document.getElementById('modalCuenta');
-            const modal = new bootstrap.Modal(modalEl);
+            const backdrop = document.getElementById('conex-modal');
             const form = document.getElementById('formCuenta');
             const zona = document.getElementById('zonaCandidatos');
             const selectCand = document.getElementById('selectCandidato');
@@ -222,10 +270,48 @@
                 return form.querySelector('[name=csrfmiddlewaretoken]').value;
             }
 
+            function abrirModal(titulo) {
+                backdrop.querySelector('.conex-modal-header h4').textContent = titulo || 'Enlazar un nuevo canal';
+                backdrop.classList.add('open');
+                backdrop.setAttribute('aria-hidden', 'false');
+            }
+
+            function cerrarModal() {
+                backdrop.classList.remove('open');
+                backdrop.setAttribute('aria-hidden', 'true');
+            }
+
+            document.getElementById('btn-abrir-modal').addEventListener('click', () => {
+                form.reset();
+                form.action.value = 'add';
+                form.pk.value = '';
+                zona.style.display = 'none';
+                abrirModal('Enlazar un nuevo canal');
+            });
+            document.getElementById('btn-cerrar-modal').addEventListener('click', cerrarModal);
+            document.getElementById('btn-cancelar-modal').addEventListener('click', cerrarModal);
+            backdrop.addEventListener('click', (e) => {
+                if (e.target === backdrop) cerrarModal();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && backdrop.classList.contains('open')) cerrarModal();
+            });
+
+            document.addEventListener('click', (e) => {
+                const toggle = e.target.closest('[data-kebab-toggle]');
+                document.querySelectorAll('[data-kebab-menu].open').forEach(m => {
+                    if (!toggle || m !== toggle.parentElement.querySelector('[data-kebab-menu]')) m.classList.remove('open');
+                });
+                if (toggle) {
+                    const menu = toggle.parentElement.querySelector('[data-kebab-menu]');
+                    menu.classList.toggle('open');
+                }
+            });
+
             document.getElementById('btnDetectar').addEventListener('click', async () => {
                 const token = form.access_token.value.trim();
                 if (!token) {
-                    alert('Pega primero el Access Token.');
+                    mensajeWarning('Pega primero el Access Token.');
                     return;
                 }
                 const fd = new FormData();
@@ -235,12 +321,12 @@
                 const r = await fetch('', {method: 'POST', body: fd});
                 const j = await r.json();
                 if (j.error) {
-                    alert(j.message || 'No se pudo detectar.');
+                    mensajeWarning(j.message || 'No se pudo detectar.');
                     return;
                 }
                 candidatos = j.candidatos || [];
                 if (!candidatos.length) {
-                    alert('No se encontraron cuentas Instagram Business con ese token.');
+                    mensajeWarning('No se encontraron cuentas Instagram Business con ese token.');
                     return;
                 }
                 selectCand.innerHTML = '';
@@ -275,18 +361,8 @@
                 form.page_id.value = btn.dataset.page;
                 form.username.value = btn.dataset.username;
                 zona.style.display = 'none';
-                modalEl.querySelector('.modal-title').textContent = 'Editar cuenta Instagram';
-                modal.show();
+                abrirModal('Editar sesión Instagram');
             }));
-
-            modalEl.addEventListener('show.bs.modal', (e) => {
-                if (!e.relatedTarget) return;
-                form.reset();
-                form.action.value = 'add';
-                form.pk.value = '';
-                zona.style.display = 'none';
-                modalEl.querySelector('.modal-title').textContent = 'Conectar cuenta Instagram';
-            });
 
             form.addEventListener('submit', async (ev) => {
                 ev.preventDefault();
@@ -294,14 +370,13 @@
                 const r = await fetch('', {method: 'POST', body: fd, headers: {'X-Requested-With': 'XMLHttpRequest'}});
                 const j = await r.json();
                 if (j.error) {
-                    alert(j.message || 'Error');
+                    mensajeWarning(j.message || 'Error');
                     return;
                 }
                 location.reload();
             });
 
-            async function accion(accionNombre, id, confirmMsg) {
-                if (confirmMsg && !confirm(confirmMsg)) return;
+            async function accion(accionNombre, id) {
                 const fd = new FormData();
                 fd.append('action', accionNombre);
                 fd.append('pk', id);
@@ -309,20 +384,32 @@
                 const r = await fetch('', {method: 'POST', body: fd});
                 const j = await r.json();
                 if (j.error) {
-                    alert(j.message || 'Error');
+                    mensajeWarning(j.message || 'Error');
                     return;
                 }
-                if (j.message) alert(j.message);
-                location.reload();
+                if (j.message) {
+                    Swal.fire({title: j.message, type: 'success', timer: 1800, showConfirmButton: false});
+                }
+                setTimeout(() => location.reload(), 900);
             }
 
             document.querySelectorAll('.btn-probar').forEach(btn =>
                 btn.addEventListener('click', () => accion('probar', btn.dataset.id)));
             document.querySelectorAll('.btn-toggle').forEach(btn =>
-                btn.addEventListener('click', () => accion('toggle_activo', btn.dataset.id)));
+                btn.addEventListener('change', () => accion('toggle_activo', btn.dataset.id)));
             document.querySelectorAll('.btn-del').forEach(btn =>
-                btn.addEventListener('click', () => accion('delete', btn.dataset.id,
-                    '¿Eliminar la cuenta "' + btn.dataset.nombre + '"? Sus conversaciones se conservan.')));
+                btn.addEventListener('click', () => {
+                    Swal.fire({
+                        title: `¿Eliminar la sesión "${btn.dataset.nombre}"?`,
+                        text: 'Sus conversaciones se conservan.',
+                        type: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Sí, eliminar',
+                        cancelButtonText: 'Cancelar'
+                    }).then((res) => {
+                        if (res.value) accion('delete', btn.dataset.id);
+                    });
+                }));
         })();
     </script>
 {% endblock %}

@@ -1,7 +1,9 @@
 """Publicaciones de Instagram: grilla en vivo desde Graph API con métricas y
-acceso a los comentarios de cada post."""
+moderación de comentarios por post (modal tipo post, sin salir de la grilla)."""
 from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
 from django.shortcuts import render
+from django.template.loader import get_template
 
 from core.funciones import addData, secure_module
 from meta.instagram import InstagramService
@@ -23,6 +25,25 @@ def publicacionesView(request):
         proveedor='instagram'
     ).order_by('nombre')
     data['cuentas'] = cuentas
+
+    if request.method == 'POST':
+        from whatsapp.view_comentarios import _procesar_accion
+        return _procesar_accion(request, sesiones_vista_completa(request.user))
+
+    if request.GET.get('action') == 'comentarios_post':
+        media_id = (request.GET.get('media_id') or '').strip()
+        if not media_id:
+            return JsonResponse({'result': False, 'message': 'Publicación no indicada.'})
+        comentarios = list(
+            ComentarioSocial.objects.filter(
+                status=True, media_id=media_id, sesion__in=cuentas
+            ).select_related('respondido_por', 'conversacion')
+            .order_by('-fecha_comentario', '-id')[:100]
+        )
+        data['comentarios_post'] = comentarios
+        data['media_id'] = media_id
+        template = get_template('instagram/publicaciones/_comentarios_post.html')
+        return JsonResponse({'result': True, 'data': template.render(data), 'total': len(comentarios)})
 
     cuenta = None
     cuenta_id = (request.GET.get('cuenta') or '').strip()

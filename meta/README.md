@@ -19,7 +19,7 @@
 | `perfiles.py` | Verificadores de perfil por canal: pingean Graph con las credenciales de cada `Config*` y persisten los datos visibles (username / page_name / display_phone) + `ultima_sincronizacion`. Devuelven `(ok, info)` listos para JSON. |
 | `capi.py` | Sender de Meta Conversions API (CAPI): dispara eventos Lead / Purchase / CompleteRegistration al Pixel/Dataset con `ctwa_clid` cuando existe (cierra el loop ad → conversión). Cada envío queda auditado en `whatsapp.EventoCAPI`. |
 | `whatsapp.py` | `MetaWhatsAppService` — sender de WhatsApp Cloud API (texto, media, plantillas). Misma interfaz pública que `whatsapp.services.WhatsAppService` (Baileys) para que el resto del código sea agnóstico al transporte. |
-| `instagram.py` | `InstagramService` y `MessengerService` — DMs vía Graph (`POST /{page_id}/messages`), y desde 2026-07: perfil (`obtener_perfil`), publicaciones (`listar_publicaciones`), comentarios (`responder_comentario`, `ocultar_comentario`) y private reply (`enviar_dm_desde_comentario`). Messenger hereda de Instagram cambiando solo el resolver de config. |
+| `instagram.py` | `InstagramService` y `MessengerService` — DMs vía Graph (`POST /{page_id}/messages`), y desde 2026-07: perfil (`obtener_perfil`), publicaciones (`listar_publicaciones`), comentarios (`responder_comentario`, `ocultar_comentario`) y private reply (`enviar_dm_desde_comentario`). Messenger hereda de Instagram cambiando solo el resolver de config. `send_text_message` parte textos > 1000 chars en envíos secuenciales (límite de la Graph API para IG/Messenger). |
 
 ## Cómo se enruta un envío
 
@@ -34,6 +34,20 @@ messenger → meta.instagram.MessengerService
 tiktok    → tiktok.servicio.TikTokService  (Business Messaging API — no es Meta;
              vive en la app tiktok/)
 ```
+
+## Contrato común de canal (2026-07)
+
+Todos los senders heredan de `whatsapp/servicio_canal_base.py::ServicioCanalBase`,
+que ES el contrato del dispatcher: `send_text_message` (obligatorio),
+`send_media_message` (firma completa con `file_path`/`file_content`/`media_url`/
+`conversacion_id`), `send_presence_update`/`quit_presence_update` (no-op default),
+y capacidades opcionales con default degradado (`edit_message`, `delete_message`,
+`send_template`, `sync_transcribe_audio`, `get_user_image`, `check_session_status`,
+`close_session`, `format_phone_number`). Un canal que no soporta una capacidad
+devuelve `{'success': False, 'error': <mensaje en español>}` en vez de romper con
+AttributeError en el pipeline compartido. Al crear un canal nuevo (ej. `facebook/`):
+heredar de `ServicioCanalBase`, implementar `send_text_message` y registrar el
+proveedor en `get_whatsapp_service`.
 
 ## Convenciones
 

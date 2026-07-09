@@ -18,8 +18,8 @@ def cuentasView(request):
         return _procesar_accion(request)
 
     data = {
-        'titulo': 'Cuentas Instagram',
-        'descripcion': 'Conecta cuentas Instagram Business y controla su estado',
+        'titulo': 'Sesiones Instagram',
+        'descripcion': 'Conecta sesiones Instagram Business y controla su estado',
         'ruta': request.path,
     }
     addData(request, data)

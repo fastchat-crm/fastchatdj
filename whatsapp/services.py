@@ -13,9 +13,10 @@ from django.conf import settings
 from core.decoradores import sync_to_async_function
 from core.funciones_adicionales import get_image_as_base64
 from .models import SesionWhatsApp, WhatsAppWebhook, Contacto, MensajeWhatsApp
+from .servicio_canal_base import ServicioCanalBase
 
 
-class WhatsAppService:
+class WhatsAppService(ServicioCanalBase):
     def __init__(self):
         self.base_url = settings.WHATSAPP_API_URL
         self.headers = {

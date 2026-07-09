@@ -7,6 +7,7 @@ from typing import Optional
 import requests
 
 from whatsapp.models import ConfigInstagram, SesionWhatsApp
+from whatsapp.servicio_canal_base import ServicioCanalBase
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ GRAPH_API_VERSION = 'v21.0'
 GRAPH_API_BASE = f'https://graph.facebook.com/{GRAPH_API_VERSION}'
 
 
-class InstagramService:
+class InstagramService(ServicioCanalBase):
     """Envía mensajes desde una cuenta Instagram Business vinculada a una FB Page.
 
     Docs: https://developers.facebook.com/docs/messenger-platform/instagram/
@@ -29,38 +30,54 @@ class InstagramService:
             return None
         return getattr(sesion, 'config_instagram', None)
 
+    _LIMITE_CHARS_MENSAJE = 1000
+
     def send_text_message(self, session_id, to, text, conversacion_id=None, simularEscritura=False):
         config = self._config(session_id)
         if not config:
             return {'success': False, 'error': 'config_instagram_no_encontrada'}
         recipient_id = to.split('@')[0] if '@' in (to or '') else to
-        payload = {
-            'recipient': {'id': recipient_id},
-            'message':   {'text': text},
-            'messaging_type': 'RESPONSE',
-        }
-        try:
-            r = requests.post(
-                f'{GRAPH_API_BASE}/{config.page_id}/messages',
-                params={'access_token': config.access_token},
-                json=payload,
-                timeout=15,
-            )
-            ok = 200 <= r.status_code < 300
-            data = r.json() if r.headers.get('content-type', '').startswith('application/json') else {}
-            return {
-                'success':    ok,
-                'status':     r.status_code,
-                'message_id': data.get('message_id'),
-                'error':      None if ok else (data.get('error') or r.text[:400]),
+        # Instagram/Messenger rechazan mensajes > 1000 chars (error 100) y el
+        # cliente no recibe nada — se entrega en partes secuenciales.
+        from whatsapp.servicio_canal_base import partir_texto_por_limite
+        partes = partir_texto_por_limite(text, self._LIMITE_CHARS_MENSAJE) or ['']
+        resultado = {'success': False, 'error': 'texto_vacio'}
+        for parte in partes:
+            payload = {
+                'recipient': {'id': recipient_id},
+                'message':   {'text': parte},
+                'messaging_type': 'RESPONSE',
             }
-        except Exception as e:
-            logger.exception("IG send error")
-            return {'success': False, 'error': str(e)}
+            try:
+                r = requests.post(
+                    f'{GRAPH_API_BASE}/{config.page_id}/messages',
+                    params={'access_token': config.access_token},
+                    json=payload,
+                    timeout=15,
+                )
+                ok = 200 <= r.status_code < 300
+                data = r.json() if r.headers.get('content-type', '').startswith('application/json') else {}
+                resultado = {
+                    'success':    ok,
+                    'status':     r.status_code,
+                    'message_id': data.get('message_id'),
+                    'error':      None if ok else (data.get('error') or r.text[:400]),
+                }
+                if not ok:
+                    return resultado
+            except Exception as e:
+                logger.exception("IG send error")
+                return {'success': False, 'error': str(e)}
+        return resultado
 
-    def send_media_message(self, session_id, to, caption=None, file_content=None,
-                           filename=None, media_url=None, media_type='image'):
-        """media_type: image|video|audio|file. Usa `media_url` (URL pública) en Graph."""
+    def send_media_message(self, session_id, to, file_path=None, file_content=None,
+                           caption=None, filename=None, media_url=None,
+                           media_type='image', conversacion_id=None, **kwargs):
+        """media_type: image|video|audio|file. Usa `media_url` (URL pública) en Graph.
+
+        `file_path`/`file_content`/`conversacion_id` forman parte del contrato
+        común (`ServicioCanalBase`); Instagram Graph solo acepta URL pública,
+        así que sin `media_url` se responde con error claro."""
         config = self._config(session_id)
         if not config:
             return {'success': False, 'error': 'config_instagram_no_encontrada'}

@@ -245,3 +245,48 @@ html[data-bs-theme="dark"] .wa-sesion-item:hover {
         display: none;
     }
 }
+
+.wa-sesion-filtros {
+    display: flex;
+    gap: 6px;
+    padding: 6px 12px 8px;
+    flex-wrap: wrap;
+}
+
+.wa-canal-chip {
+    border: 1px solid #dee2e6;
+    background: #f8f9fa;
+    color: #6c757d;
+    border-radius: 999px;
+    font-size: 12px;
+    padding: 3px 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+
+.wa-canal-chip.active {
+    background: #e7f0ff;
+    border-color: #9ec5fe;
+    color: #0d6efd;
+}
+
+.wa-canal-chip.active[data-canal="whatsapp"] {
+    background: #d4f5e3;
+    border-color: #7fdcaa;
+    color: #128c4b;
+}
+
+.wa-canal-chip.active[data-canal="instagram"] {
+    background: #fde7f1;
+    border-color: #f2a2c5;
+    color: #cc2366;
+}
+
+.wa-canal-chip.active[data-canal="tiktok"] {
+    background: #e9e9e9;
+    border-color: #b5b5b5;
+    color: #010101;
+}

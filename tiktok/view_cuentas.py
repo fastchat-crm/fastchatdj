@@ -19,8 +19,8 @@ def cuentasView(request):
         return _procesar_accion(request)
 
     data = {
-        'titulo': 'Cuentas TikTok',
-        'descripcion': 'Pre-registra cuentas TikTok Business para activarlas al aprobar la API',
+        'titulo': 'Sesiones TikTok',
+        'descripcion': 'Pre-registra sesiones TikTok Business para activarlas al aprobar la API',
         'ruta': request.path,
     }
     addData(request, data)

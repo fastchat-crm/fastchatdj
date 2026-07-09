@@ -306,18 +306,31 @@ def _gestionar_atencion(request, action):
     return JsonResponse({'error': False})
 
 
+_TITULOS_INBOX_CANAL = {
+    'instagram': 'Conversaciones Instagram',
+    'tiktok': 'Conversaciones TikTok',
+    'messenger': 'Conversaciones Messenger',
+}
+
+
 @login_required
 @secure_module
-def conversacionesView(request):
+def conversacionesView(request, canal_fijo=None):
+    titulo = _TITULOS_INBOX_CANAL.get(canal_fijo, 'Conversaciones WhatsApp')
     data = {
-        'titulo': 'Conversaciones WhatsApp',
-        'modulo': 'Conversaciones WhatsApp',
-        'ruta': request.path
+        'titulo': titulo,
+        'modulo': titulo,
+        'ruta': request.path,
+        'canal_fijo': canal_fijo or '',
     }
     addData(request, data)
 
     # Todas las sesiones visibles para el usuario (dueño, participante o superuser).
+    # Con canal_fijo (wrappers /instagram/ y /tiktok/) el inbox queda acotado a
+    # las sesiones de ese proveedor — mismo layout y acciones que WhatsApp.
     sesiones = sesiones_visibles(request.user).order_by('-ultima_conexion')
+    if canal_fijo:
+        sesiones = sesiones.filter(proveedor=canal_fijo)
     data['sesiones'] = sesiones
 
     # Sesión seleccionada (por defecto la primera)

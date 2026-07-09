@@ -2037,7 +2037,7 @@
             fd.append('mensaje', item.texto);
             fd.append('csrfmiddlewaretoken', _waCsrf());
             $.ajax({
-                url: '/whatsapp/conversaciones/',
+                url: '{{ ruta }}',
                 type: 'POST',
                 data: fd,
                 processData: false,
@@ -2110,7 +2110,7 @@
                 .html('<span class="spinner-border spinner-border-sm" role="status" style="width:14px;height:14px;border-width:2px;"></span>');
 
             $.ajax({
-                url: '/whatsapp/conversaciones/',
+                url: '{{ ruta }}',
                 type: 'POST',
                 data: formData,
                 processData: false,  // Importante para FormData
@@ -2176,7 +2176,7 @@
             fd.append('id', msgId);
             fd.append('csrfmiddlewaretoken', $('input[name="csrfmiddlewaretoken"]').first().val());
             $.ajax({
-                url: '/whatsapp/conversaciones/',
+                url: '{{ ruta }}',
                 type: 'POST',
                 data: fd,
                 processData: false,
@@ -2204,7 +2204,7 @@
             Object.keys(extraData).forEach(k => fd.append(k, extraData[k]));
             fd.append('csrfmiddlewaretoken', $('input[name="csrfmiddlewaretoken"]').first().val());
             $.ajax({
-                url: '/whatsapp/conversaciones/',
+                url: '{{ ruta }}',
                 type: 'POST', data: fd, processData: false, contentType: false,
                 success: function (response) {
                     if (!response.error && response.mensaje_html) {
@@ -2333,7 +2333,7 @@
         function cargarConversaciones(sesionId = null, query = '', filtro = '') {
             $('#lista-conversaciones').html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2">Cargando conversaciones...</p></div>');
 
-            let url = '/whatsapp/conversaciones/?load_conversations=true';
+            let url = '{{ ruta }}?load_conversations=true';
             if (sesionId) url += '&sesion=' + sesionId;
             if (query)    url += '&criterio=' + encodeURIComponent(query);
             if (filtro)   url += '&' + filtro;
@@ -2389,7 +2389,7 @@
                 .html('<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2 text-muted small mb-0">Cargando mensajes...</p></div>');
 
             $.ajax({
-                url: '/whatsapp/conversaciones/?action=ver_mensajes&pk=' + conversacionId,
+                url: '{{ ruta }}?action=ver_mensajes&pk=' + conversacionId,
                 type: 'GET',
                 success: function(response) {
                     _cargandoMensajes = false;
@@ -2631,13 +2631,13 @@
                 notas: $('#fc-notas').val() || '',
             };
             pantallaespera();
-            $.post('/whatsapp/conversaciones/', datos, function(data) {
+            $.post('{{ ruta }}', datos, function(data) {
                 if (!data || data.error !== false) {
                     $.unblockUI();
                     mensajeWarning((data && data.message) || 'No se pudo registrar el cliente.');
                     return;
                 }
-                $.get('/whatsapp/conversaciones/', {
+                $.get('{{ ruta }}', {
                     action: 'ficha_cliente', id: convId,
                 }, function(resp) {
                     $.unblockUI();
@@ -3253,7 +3253,7 @@
 
     /* ── Feedback IA (definidas a nivel global; el partial puede re-renderizarse) ── */
     const _fbCsrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
-    const _fbUrl  = '/whatsapp/conversaciones/';
+    const _fbUrl  = '{{ ruta }}';
 
     function feedbackOk(msgId, btn) { _sendFeedback(msgId, true, '', '', btn); }
 

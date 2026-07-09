@@ -33,7 +33,25 @@
         });
     }
 
+    function aplicarFiltroCanales() {
+        var activos = {};
+        menu.querySelectorAll('.wa-canal-chip').forEach(function (chip) {
+            activos[chip.dataset.canal] = chip.classList.contains('active');
+        });
+        menu.querySelectorAll('li[data-canal]').forEach(function (li) {
+            li.style.display = activos[li.dataset.canal] === false ? 'none' : '';
+        });
+    }
+
     menu.addEventListener('click', function (ev) {
+        var chip = ev.target.closest('.wa-canal-chip');
+        if (chip) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            chip.classList.toggle('active');
+            aplicarFiltroCanales();
+            return;
+        }
         var item = ev.target.closest('.wa-sesion-item');
         if (!item) {
             return;

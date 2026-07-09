@@ -161,28 +161,53 @@ def modulossistemaView(request):
                         })
                 elif action == 'extraer_urls':
                     from fastchatdj.urls import urls_sistema
-                    nuevas = []
-                    existentes_urls = set(model.objects.values_list('url', flat=True))
-                    for u in urls_sistema:
-                        if not u.get("sub_urls"):
-                            continue
-                        for idx, su in enumerate(u["sub_urls"]):
-                            mod_url = "/{}{}".format(u["url"], su["url"])
-                            if mod_url in existentes_urls:
+                    seleccionadas = set(request.POST.getlist('c_urls'))
+                    if not seleccionadas:
+                        res_json.append({'error': True, 'message': 'Selecciona al menos una URL para importar.'})
+                    else:
+                        nuevas = []
+                        existentes_urls = set(model.objects.values_list('url', flat=True))
+                        for u in urls_sistema:
+                            if not u.get("sub_urls"):
                                 continue
-                            mod_obj = model.objects.create(
-                                orden=idx,
-                                nombre=su["nombre"],
-                                url=mod_url,
-                            )
-                            existentes_urls.add(mod_url)
-                            nuevas.append(mod_obj.id)
-                    log(f"Extracted {len(nuevas)} new URLs from sistema", request, "add")
-                    return JsonResponse({
-                        'error': False,
-                        'creadas': len(nuevas),
-                        'message': f"{len(nuevas)} new URL(s) added." if nuevas else "No new URLs to add."
-                    })
+                            for idx, su in enumerate(u["sub_urls"]):
+                                mod_url = "/{}{}".format(u["url"], su["url"])
+                                if mod_url in existentes_urls or mod_url not in seleccionadas:
+                                    continue
+                                mod_obj = model.objects.create(
+                                    orden=idx,
+                                    nombre=su["nombre"],
+                                    url=mod_url,
+                                )
+                                existentes_urls.add(mod_url)
+                                nuevas.append(mod_obj.id)
+                        log(f"Importo {len(nuevas)} URLs nuevas del sistema", request, "add")
+                        res_json.append({
+                            'error': False,
+                            'reload': True,
+                            'message': f"{len(nuevas)} URL(s) importadas." if nuevas else "No había URLs nuevas para importar."
+                        })
+                elif action == 'depurar_urls':
+                    from fastchatdj.urls import urls_sistema
+                    ids = [int(x) for x in request.POST.getlist('c_modulos') if x.isdigit()]
+                    if not ids:
+                        res_json.append({'error': True, 'message': 'Selecciona al menos una URL para depurar.'})
+                    else:
+                        urls_diccionario = set()
+                        for u in urls_sistema:
+                            for su in (u.get("sub_urls") or []):
+                                urls_diccionario.add("/{}{}".format(u["url"], su["url"]))
+                        depuradas = 0
+                        for filtro in model.objects.filter(pk__in=ids, status=True).exclude(url__in=urls_diccionario):
+                            filtro.status = False
+                            filtro.save(request)
+                            log(f"Depuro URL huerfana {filtro.__str__()}", request, "delete")
+                            depuradas += 1
+                        res_json.append({
+                            'error': False,
+                            'reload': True,
+                            'message': f"{depuradas} URL(s) depuradas." if depuradas else "No se depuró ninguna URL."
+                        })
         except ValueError as ex:
             res_json.append({'error': True,
                              "message": str(ex)
@@ -219,6 +244,51 @@ def modulossistemaView(request):
                 data["pk"] = pk
                 data["form"] = Formulario(instance=modulo, ver=True)
                 return render(request, 'seguridad/modulossistema/form.html', data)
+            elif action == 'previa_extraer_urls':
+                from fastchatdj.urls import urls_sistema
+                existentes_urls = set(model.objects.values_list('url', flat=True))
+                grupos_urls = []
+                for u in urls_sistema:
+                    if not u.get("sub_urls"):
+                        continue
+                    pendientes = []
+                    for su in u["sub_urls"]:
+                        mod_url = "/{}{}".format(u["url"], su["url"])
+                        if mod_url in existentes_urls:
+                            continue
+                        pendientes.append({'nombre': su["nombre"], 'url': mod_url})
+                    if pendientes:
+                        grupos_urls.append({'app': u.get("nombre") or u["url"], 'urls': pendientes})
+                total_pendientes = sum(len(g['urls']) for g in grupos_urls)
+                if not total_pendientes:
+                    return JsonResponse({'result': False, 'message': 'No hay URLs nuevas para importar.'})
+                data['grupos_urls'] = grupos_urls
+                data['total_pendientes'] = total_pendientes
+                template = get_template('seguridad/modulossistema/form_extraer_urls.html')
+                return JsonResponse({'result': True, 'data': template.render(data)})
+            elif action == 'previa_depurar_urls':
+                from fastchatdj.urls import urls_sistema
+                urls_diccionario = set()
+                for u in urls_sistema:
+                    for su in (u.get("sub_urls") or []):
+                        urls_diccionario.add("/{}{}".format(u["url"], su["url"]))
+                huerfanos = list(
+                    model.objects.filter(status=True)
+                    .exclude(url__in=urls_diccionario)
+                    .order_by('url')
+                )
+                if not huerfanos:
+                    return JsonResponse({'result': False, 'message': 'No hay URLs huérfanas: todas existen en el diccionario.'})
+                grupos_huerfanos = {}
+                for m in huerfanos:
+                    seg = (m.url or '/').strip('/').split('/')[0] or '(raíz)'
+                    grupos_huerfanos.setdefault(seg, []).append(m)
+                data['grupos_huerfanos'] = [
+                    {'app': k, 'modulos': v} for k, v in sorted(grupos_huerfanos.items())
+                ]
+                data['total_huerfanos'] = len(huerfanos)
+                template = get_template('seguridad/modulossistema/form_depurar_urls.html')
+                return JsonResponse({'result': True, 'data': template.render(data)})
             elif action == 'grupos_modulo':
                 pk_modulo = int(request.GET.get('id') or 0)
                 modulo = model.objects.filter(pk=pk_modulo, status=True).first()

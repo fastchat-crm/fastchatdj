@@ -6,8 +6,8 @@ from .view_cuentas import cuentasView
 
 tiktok_urls = (
     {
-        "nombre": "Cuentas TikTok",
-        "url": 'cuentas/',
+        "nombre": "Sesiones TikTok",
+        "url": 'sesiones/',
         "vista": cuentasView,
     },
     {
