@@ -544,14 +544,34 @@
                     <div class="mb-3">
                         <i class="fa fa-satellite-dish fa-3x text-primary"></i>
                     </div>
-                    <h5 class="mb-2">Aún no hay sesiones de WhatsApp</h5>
-                    <p class="text-muted mb-4">
-                        Para ver conversaciones primero necesitás conectar al menos
-                        un canal (WhatsApp, Instagram o Messenger).
-                    </p>
-                    <a href="/whatsapp/sesiones/" class="btn btn-primary">
-                        <i class="fa fa-plus me-1"></i> Crear o conectar una sesión
-                    </a>
+                    {% if canal_fijo == 'instagram' %}
+                        <h5 class="mb-2">Aún no hay sesiones de Instagram</h5>
+                        <p class="text-muted mb-4">
+                            Para ver conversaciones primero necesitás conectar al menos
+                            una cuenta de Instagram.
+                        </p>
+                        <a href="/instagram/sesiones/" class="btn btn-primary">
+                            <i class="fa fa-plus me-1"></i> Conectar cuenta de Instagram
+                        </a>
+                    {% elif canal_fijo == 'tiktok' %}
+                        <h5 class="mb-2">Aún no hay sesiones de TikTok</h5>
+                        <p class="text-muted mb-4">
+                            Para ver conversaciones primero necesitás registrar al menos
+                            una cuenta de TikTok.
+                        </p>
+                        <a href="/tiktok/sesiones/" class="btn btn-primary">
+                            <i class="fa fa-plus me-1"></i> Registrar cuenta de TikTok
+                        </a>
+                    {% else %}
+                        <h5 class="mb-2">Aún no hay sesiones de WhatsApp</h5>
+                        <p class="text-muted mb-4">
+                            Para ver conversaciones primero necesitás conectar al menos
+                            un canal (WhatsApp, Instagram o Messenger).
+                        </p>
+                        <a href="/whatsapp/sesiones/" class="btn btn-primary">
+                            <i class="fa fa-plus me-1"></i> Crear o conectar una sesión
+                        </a>
+                    {% endif %}
                 </div>
             </div>
         </div>

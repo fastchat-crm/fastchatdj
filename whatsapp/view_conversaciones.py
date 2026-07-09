@@ -1057,9 +1057,12 @@ def conversacionesView(request, canal_fijo=None):
     filtro_sin_responder = request.GET.get('sin_responder', '')
     filtro_mis_conv = request.GET.get('mis_conv', '')
 
+    # `sesiones` ya viene acotado por canal_fijo (wrappers /instagram/ y
+    # /tiktok/): sin esto, con canal sin sesiones (sesion_seleccionada=None)
+    # el listado mostraba conversaciones de TODOS los canales.
     filtros = Q(
         contacto__status=True, status=True,
-        contacto__sesion__in=sesiones_visibles(request.user),
+        contacto__sesion__in=sesiones,
         contacto__sesion__status=True,
         estado_conversacion=0
     )
@@ -1104,8 +1107,9 @@ def conversacionesView(request, canal_fijo=None):
     from .models import ESTADOS_CLASIFICACION
     data["ESTADOS_CLASIFICACION"] = ESTADOS_CLASIFICACION
 
-    # Conteo global de conversaciones sin leer (para badge en header)
-    badge_scope = Q(contacto__sesion__in=sesiones_visibles(request.user)) & (
+    # Conteo de conversaciones sin leer (para badge en header), acotado al
+    # canal del inbox cuando hay canal_fijo.
+    badge_scope = Q(contacto__sesion__in=sesiones) & (
         Q(contacto__sesion__in=sesiones_vista_completa(request.user))
         | Q(asignado_a=request.user)
     )

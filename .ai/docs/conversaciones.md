@@ -18,6 +18,11 @@ difieren en queryset, footer y acciones permitidas.
   sesiones de ese proveedor: `/instagram/conversaciones/` y `/tiktok/conversaciones/` son wrappers
   directos (2026-07). Por eso el JS de `listado.html` usa `{{ ruta }}` (request.path) y NO URLs
   hardcodeadas a `/whatsapp/conversaciones/` — mantener esa regla al agregar acciones.
+  Desde 2026-07-09 el filtro base del listado y el badge `total_sin_leer` usan el queryset
+  `sesiones` (ya acotado por `canal_fijo`), NO `sesiones_visibles(...)` directo: antes, un canal
+  sin sesiones (`sesion_seleccionada=None`, caso TikTok) mostraba conversaciones de TODOS los
+  canales. El modal `#modalSinSesiones` de `listado.html` también es per-canal (copy + link a
+  `/instagram/sesiones/` o `/tiktok/sesiones/`). Mantener ese scoping al agregar filtros.
 - `whatsapp/view_conversaciones_finalizadas.py:35` → `conversacionesFinalizadasView`
   — chats cerrados (`estado_conversacion=1`).
 
