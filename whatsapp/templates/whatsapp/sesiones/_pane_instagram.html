@@ -1,0 +1,51 @@
+<div class="pane-hero">
+    <div class="pane-hero-icon pane-hero-ig">
+        <i class="fab fa-instagram"></i>
+    </div>
+    <div class="pane-hero-body">
+        <h5 class="pane-title mb-1">Conectar una cuenta de Instagram</h5>
+        <p class="pane-hero-text mb-0">
+            Recibe DMs y comentarios de tus publicaciones en el mismo inbox, responde con
+            agentes IA y convierte comentarios en conversaciones privadas.
+        </p>
+    </div>
+</div>
+<a href="/seguridad/documentacion/?pagina=conectar-instagram-tiktok" class="pane-link">
+    <i class="fa fa-book-open me-1"></i> Ver la guía completa de conexión
+</a>
+<div class="guia-steps">
+    <div class="guia-step">
+        <span class="guia-step-num">1</span>
+        <div class="guia-step-body">
+            <b>Cuenta Business vinculada a una página de Facebook</b>
+            <span>En la app de Instagram cambia a cuenta profesional y vincúlala a tu página desde Meta Business Suite.</span>
+        </div>
+    </div>
+    <div class="guia-step">
+        <span class="guia-step-num">2</span>
+        <div class="guia-step-body">
+            <b>Genera el Page Access Token</b>
+            <span>Usa el Graph API Explorer de Meta con los permisos de Instagram (mensajes, comentarios y páginas) y conviértelo en token de larga duración.</span>
+        </div>
+    </div>
+    <div class="guia-step">
+        <span class="guia-step-num">3</span>
+        <div class="guia-step-body">
+            <b>Crea la sesión en Instagram → Sesiones</b>
+            <span>Pega el token y pulsa "Detectar automáticamente": el sistema llena IG User ID, Page ID y @username por ti.</span>
+        </div>
+    </div>
+    <div class="guia-step">
+        <span class="guia-step-num">4</span>
+        <div class="guia-step-body">
+            <b>Configura el webhook en tu App de Meta</b>
+            <span>Suscribe los campos messages y comments con el verify token que muestra la tarjeta de la cuenta.</span>
+        </div>
+    </div>
+</div>
+<div class="pane-actions">
+    <button type="button" class="conex-btn conex-btn-light" data-cerrar>Volver</button>
+    <a href="/instagram/sesiones/" class="conex-btn conex-btn-primary">
+        <i class="fab fa-instagram me-1"></i> Ir a Sesiones de Instagram
+    </a>
+</div>

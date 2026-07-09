@@ -1,71 +1,36 @@
-.banner-beta {
-    border-left: 4px solid #010101;
+.pane-hero-ig {
+    background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
 }
 
-.tk-avatar {
-    background: #010101;
+.pane-hero-tk {
+    background: #000;
+}
+
+.canal-badge.canal-instagram {
+    background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
     color: #fff;
 }
 
 .canal-badge.canal-tiktok {
-    background: #010101;
-    color: #fff;
-}
-
-.pane-hero-icon.tk-avatar {
-    background: #010101;
-    color: #fff;
-}
-
-.conex-canal .ic.ic-wa {
-    background: #d4f5e3;
-    color: #25d366;
-}
-
-.conex-canal .ic.ic-tk {
     background: #000;
     color: #fff;
 }
 
-#formCuenta .pane-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: .5rem;
-    margin-top: .5rem;
+.avatar-fallback.avatar-ig {
+    background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+    color: #fff;
 }
 
-.guia-inline {
-    margin: .75rem 0 1rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    background: #f9fafb;
-}
-
-.guia-inline summary {
-    cursor: pointer;
-    padding: .6rem .9rem;
-    font-size: .85rem;
-    font-weight: 600;
-    color: #374151;
-    list-style: none;
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-}
-
-.guia-inline summary::-webkit-details-marker {
-    display: none;
-}
-
-.guia-inline[open] summary {
-    border-bottom: 1px solid #e5e7eb;
+.avatar-fallback.avatar-tk {
+    background: #000;
+    color: #fff;
 }
 
 .guia-steps {
     display: flex;
     flex-direction: column;
     gap: .9rem;
-    padding: .9rem;
+    margin: 1rem 0 1.25rem;
 }
 
 .guia-step {

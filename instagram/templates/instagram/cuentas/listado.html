@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block head %}
     <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.0">
-    <link rel="stylesheet" href="/static/css/instagram/cuentas_listado.css?v1.1">
+    <link rel="stylesheet" href="/static/css/instagram/cuentas_listado.css?v1.2">
 {% endblock %}
 
 {% block content %}
@@ -45,7 +45,7 @@
                         <b>Webhook (App de Meta):</b><br>
                         <code>{{ webhook_url }}</code><br><br>
                         <a href="/seguridad/documentacion/?pagina=conectar-instagram-tiktok"
-                           class="btn btn-sm btn-outline-primary">
+                           class="btn btn-sm btn-primary">
                             <i class="fa fa-book"></i> Guía completa de tokens
                         </a>
                     </div>
@@ -196,6 +196,46 @@
                         <a href="/seguridad/documentacion/?pagina=conectar-instagram-tiktok" class="pane-link">
                             <i class="fa fa-book-open me-1"></i> Aprende cómo conectar
                         </a>
+                        <details class="guia-inline">
+                            <summary><i class="fa fa-circle-question"></i> ¿Cómo obtengo las credenciales? Pasos detallados</summary>
+                            <div class="guia-steps">
+                                <div class="guia-step">
+                                    <span class="guia-step-num">1</span>
+                                    <div class="guia-step-body">
+                                        <b>Cuenta Business vinculada a una página de Facebook</b>
+                                        <span>En la app de Instagram cambia a cuenta profesional (Business) y vincúlala a tu página desde Meta Business Suite → Configuración → Cuentas vinculadas.</span>
+                                    </div>
+                                </div>
+                                <div class="guia-step">
+                                    <span class="guia-step-num">2</span>
+                                    <div class="guia-step-body">
+                                        <b>Genera un token de usuario en Graph API Explorer</b>
+                                        <span>Entra a developers.facebook.com/tools/explorer, elige tu App y pide un User Access Token con los permisos instagram_basic, instagram_manage_messages, instagram_manage_comments, pages_show_list, pages_manage_metadata y pages_messaging.</span>
+                                    </div>
+                                </div>
+                                <div class="guia-step">
+                                    <span class="guia-step-num">3</span>
+                                    <div class="guia-step-body">
+                                        <b>Conviértelo en token de larga duración</b>
+                                        <span>Intercámbialo con fb_exchange_token usando el App ID y App Secret; el Page Access Token que devuelve /me/accounts con ese token ya no expira.</span>
+                                    </div>
+                                </div>
+                                <div class="guia-step">
+                                    <span class="guia-step-num">4</span>
+                                    <div class="guia-step-body">
+                                        <b>Pega el token abajo y pulsa "Detectar automáticamente"</b>
+                                        <span>El sistema consulta /me/accounts y llena solos IG User ID, Page ID y @username.</span>
+                                    </div>
+                                </div>
+                                <div class="guia-step">
+                                    <span class="guia-step-num">5</span>
+                                    <div class="guia-step-body">
+                                        <b>Configura el webhook en tu App de Meta</b>
+                                        <span>En Webhooks → Instagram usa la URL {{ webhook_url }} con el verify token que genera la tarjeta y suscribe los campos messages y comments.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
                         <form id="formCuenta" novalidate>
                             {% csrf_token %}
                             <input type="hidden" name="action" value="add">
@@ -210,7 +250,7 @@
                                 <div class="input-group">
                                     <textarea name="access_token" class="form-control" rows="2" required
                                               placeholder="Pega aquí el Page Access Token de larga duración"></textarea>
-                                    <button type="button" class="btn btn-outline-primary" id="btnDetectar">
+                                    <button type="button" class="btn btn-primary" id="btnDetectar">
                                         <i class="fa fa-magic"></i> Detectar automáticamente
                                     </button>
                                 </div>

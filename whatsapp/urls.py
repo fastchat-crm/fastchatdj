@@ -28,7 +28,6 @@ from .trace_receiver_view import trace_receiver
 from .meta_webhook_view import meta_webhook
 from .meta_social_webhook_view import instagram_webhook, messenger_webhook
 from .tiktok_webhook_view import tiktok_webhook
-from .view_comentarios import comentariosView
 from .view_plantillas import plantillasView
 from .view_tarifas import tarifasView
 from .view_etiquetas import etiquetasView
@@ -64,11 +63,6 @@ whatsapp_urls = (
         "nombre": "Contactos",
         "url": 'contacto/',
         "vista": contactoView,
-    },
-    {
-        "nombre": "Comentarios de redes sociales",
-        "url": 'comentarios/',
-        "vista": comentariosView,
     },
     {
         "nombre": "Trazas / Logs (IA y conversaciones)",

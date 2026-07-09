@@ -6,7 +6,10 @@
 ## Qué hace
 
 Inbox de moderación de comentarios de publicaciones: los comentarios llegan por el webhook
-de Instagram ya existente, se listan en `/whatsapp/comentarios/` y el asesor puede:
+de Instagram ya existente, se listan en `/instagram/comentarios/` y `/tiktok/comentarios/`
+(la ruta genérica `/whatsapp/comentarios/` se eliminó el 2026-07-09; la vista compartida
+`whatsapp/view_comentarios.py::comentariosView` se accede solo vía los wrappers per-canal)
+y el asesor puede:
 
 - **Responder públicamente** (Graph API `POST /{comment_id}/replies`).
 - **Ocultar / volver a mostrar** (`POST /{comment_id}` con `hide`).
@@ -24,7 +27,7 @@ de Instagram ya existente, se listan en `/whatsapp/comentarios/` y el asesor pue
 | `whatsapp/view_comentarios.py` | Vista función `comentariosView`: GET listado con filtros (criterio/estado/sesión) + POST acciones (`responder`, `ocultar`, `mostrar`, `enviar_dm`). Visibilidad por `sesiones_vista_completa`. |
 | `meta/instagram.py` | Métodos nuevos de `InstagramService`: `responder_comentario`, `ocultar_comentario`, `enviar_dm_desde_comentario`. |
 | `whatsapp/meta_social_webhook_view.py` | `_procesar_post_social` ahora recorre `entry[].changes[]` y con `field == 'comments'` llama `guardar_comentario_instagram(sesion, config, value)`. Ignora ecos (autor = `ig_user_id`) y duplicados. |
-| `whatsapp/urls.py` | Entrada "Comentarios de redes sociales" → `comentarios/` en `whatsapp_urls`. |
+| `whatsapp/urls.py` | Ya NO expone `comentarios/` (eliminada 2026-07-09); las rutas de UI son `/instagram/comentarios/` y `/tiktok/comentarios/`. Los webhooks (`instagram_webhook`, `tiktok_webhook`) sí siguen en whatsapp. |
 | `whatsapp/templates/whatsapp/comentarios/listado.html` + `static/css/whatsapp/comentarios_listado.css` | UI listado + modal responder/DM. |
 | `templates/docs/conexion_instagram_tiktok.html` + `seguridad/docs/documentacion.py` | Hoja de documentación in-app: arquitectura, cómo sacar tokens IG (Page Access Token long-lived, ig_user_id, webhook `comments`), proceso TikTok. Slug `conectar-instagram-tiktok`. |
 
@@ -32,8 +35,9 @@ de Instagram ya existente, se listan en `/whatsapp/comentarios/` y el asesor pue
 
 1. `makemigrations whatsapp` + `migrate` (modelo `ComentarioSocial`).
 2. En Meta App: suscribir el campo **`comments`** del producto Instagram (además de `messages`).
-3. Registrar el módulo en el sidebar: Seguridad → Módulos del sistema → "extraer URLs" y asignar
-   `/whatsapp/comentarios/` a un `ModuloGrupo` + roles (`GroupModulo`).
+3. Registrar los módulos en el sidebar: correr `python manage.py seed_modulos` (desde 2026-07-09
+   resetea todo el catálogo, recrea las secciones — incluidas Instagram y TikTok con sus
+   `comentarios/` — y re-vincula los roles por URL).
 
 ## Limitaciones conocidas
 
@@ -59,9 +63,23 @@ capa de control** (`instagram/`, `tiktok/`) que NO duplican modelos: reusan
 | `/tiktok/comentarios/` | wrapper `canal_fijo='tiktok'` | Inbox comentarios TikTok (fase 2). |
 
 Cambios de soporte: `PROVEEDORES_SESION` += `tiktok`, property `es_tiktok`, modelo
-`ConfigTikTok` (OneToOne, tokens OAuth + refresh). El modal "Agregar conexión" del tablero
-(`whatsapp/templates/whatsapp/sesiones/tablero.html`) ya no abre panes "próximamente" para
-IG/TikTok: **redirige** a `/instagram/sesiones/` y `/tiktok/sesiones/` (URLs renombradas de `cuentas/` a `sesiones/` el 2026-07-08; el seed de módulos usa las nuevas).
+`ConfigTikTok` (OneToOne, tokens OAuth + refresh). URLs renombradas de `cuentas/` a
+`sesiones/` el 2026-07-08; el seed de módulos usa las nuevas.
+
+### Tablero "Canales conectados" multicanal (2026-07-09)
+
+- Las cards de sesiones IG/TikTok en `whatsapp/templates/whatsapp/sesiones/_card.html` son de
+  primera clase: avatar/badge por canal, `@username` desde `config_instagram`/`config_tiktok`
+  (agregados al `select_related` del tablero en `view_sesiones.py`), kebab con links al canal
+  (gestionar/conversaciones/comentarios/publicaciones) + "Usuarios asignables", footer con
+  Conversaciones y Gestionar per-canal. El toggle activo/pausada funciona (handler genérico).
+- El modal "Nueva conexión" ya no redirige ni muestra "próximamente" para IG/TikTok: los botones
+  del sidebar usan `data-canal` y abren panes con guía paso a paso
+  (`_pane_instagram.html`, `_pane_tiktok.html`) + botón a `/instagram/sesiones/` y
+  `/tiktok/sesiones/`. CSS nuevo: `static/css/whatsapp/tablero_canales.css`.
+- Los forms de cuentas IG/TikTok (`instagram/.../cuentas/listado.html`,
+  `tiktok/.../cuentas/listado.html`) tienen un `<details class="guia-inline">` con los pasos
+  detallados para obtener credenciales, condensados de la hoja `conectar-instagram-tiktok`.
 
 Doc de servicios Meta: `meta/README.md` (para qué es cada archivo del paquete).
 

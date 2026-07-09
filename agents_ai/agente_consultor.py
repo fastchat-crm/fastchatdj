@@ -188,6 +188,8 @@ class AgenteConsultor:
             'historial_contacto',
             # Horario laboral + primer mensaje (agregadas para agentes que las usen)
             'fuera_horario', 'horario_atencion', 'es_primer_mensaje',
+            # Canal de la conversación (whatsapp/instagram/tiktok/messenger)
+            'canal',
         }
         _tpl_text = prompt_template_text
         if _tpl_text:
@@ -354,6 +356,21 @@ class AgenteConsultor:
             'hora_local': hora_local,
             'primera_vez_hoy': primera_vez_hoy,
         }
+
+    def _canal_conversacion(self) -> str:
+        """Canal por el que atiende esta conversación: whatsapp/instagram/tiktok/messenger.
+
+        Los proveedores internos baileys y meta son ambos 'whatsapp' de cara al
+        prompt — al agente le importa la red social, no el transporte.
+        """
+        try:
+            sesion = self.conversacion.sesion if self.conversacion else None
+            proveedor = (getattr(sesion, 'proveedor', '') or '').lower()
+            if proveedor in ('instagram', 'tiktok', 'messenger'):
+                return proveedor
+        except Exception:
+            pass
+        return 'whatsapp'
 
     def _vars_horario(self) -> dict:
         fuera = 'false'
@@ -754,6 +771,8 @@ class AgenteConsultor:
             _vars_todas['historial_contacto'] = self._historial_persistente()
         if _input_vars & {'fuera_horario', 'horario_atencion'}:
             _vars_todas.update(self._vars_horario())
+        if 'canal' in _input_vars:
+            _vars_todas['canal'] = self._canal_conversacion()
         if 'es_primer_mensaje' in _input_vars:
             es_primero = 'false'
             try:

@@ -2,7 +2,7 @@
 {# Card individual de sesion en el tablero. Reusable como partial (AJAX poll). #}
 <div class="conex-card{% if not sesion.activo %} conex-card-pausada{% endif %}" data-sesion-id="{{ sesion.id }}"
      data-sesion-nombre="{{ sesion.nombre|default:sesion.numero|escape }}"
-     data-sesion-numero="{% if sesion.es_meta and sesion.config_meta and sesion.config_meta.display_phone_number %}{{ sesion.config_meta.display_phone_number|escape }}{% elif sesion.numero %}+{{ sesion.numero|escape }}{% endif %}"
+     data-sesion-numero="{% if sesion.es_meta and sesion.config_meta and sesion.config_meta.display_phone_number %}{{ sesion.config_meta.display_phone_number|escape }}{% elif sesion.es_instagram and sesion.config_instagram and sesion.config_instagram.username %}@{{ sesion.config_instagram.username|escape }}{% elif sesion.es_tiktok and sesion.config_tiktok and sesion.config_tiktok.username %}@{{ sesion.config_tiktok.username|escape }}{% elif sesion.numero %}+{{ sesion.numero|escape }}{% endif %}"
      data-estado="{{ sesion.estado }}"
      data-activo="{{ sesion.activo|yesno:'1,0' }}"
      data-proveedor="{{ sesion.proveedor }}"
@@ -20,6 +20,14 @@
                 <img src="{{ sesion.config_baileys.foto }}" alt="avatar">
             {% elif sesion.es_meta and sesion.config_meta.foto %}
                 <img src="{{ sesion.config_meta.foto }}" alt="avatar">
+            {% elif sesion.es_instagram %}
+                <span class="avatar-fallback avatar-ig">
+          <i class="fab fa-instagram"></i>
+        </span>
+            {% elif sesion.es_tiktok %}
+                <span class="avatar-fallback avatar-tk">
+          <i class="fab fa-tiktok"></i>
+        </span>
             {% else %}
                 <span class="avatar-fallback">
           <i class="fab fa-whatsapp"></i>
@@ -41,6 +49,12 @@
             <div class="card-num">
                 {% if sesion.es_meta and sesion.config_meta and sesion.config_meta.display_phone_number %}
                     {{ sesion.config_meta.display_phone_number }}
+                {% elif sesion.es_instagram and sesion.config_instagram and sesion.config_instagram.username %}
+                    @{{ sesion.config_instagram.username }}
+                {% elif sesion.es_tiktok and sesion.config_tiktok and sesion.config_tiktok.username %}
+                    @{{ sesion.config_tiktok.username }}
+                {% elif sesion.es_instagram or sesion.es_tiktok %}
+                    <span class="muted">Pendiente de username</span>
                 {% elif sesion.numero %}
                     +{{ sesion.numero }}
                 {% else %}
@@ -61,6 +75,28 @@
                 <i class="fa fa-ellipsis-vertical"></i>
             </button>
             <div class="kebab-menu" data-kebab-menu>
+                {% if sesion.es_instagram %}
+                    <div class="kebab-heading">Instagram</div>
+                    <a href="/instagram/sesiones/" class="kebab-item"><i class="fab fa-instagram"></i> Gestionar cuenta</a>
+                    <a href="/instagram/conversaciones/" class="kebab-item"><i class="fa fa-comments"></i> Conversaciones</a>
+                    <a href="/instagram/comentarios/" class="kebab-item"><i class="fa fa-comment-dots"></i> Comentarios</a>
+                    <a href="/instagram/publicaciones/" class="kebab-item"><i class="fa fa-images"></i> Publicaciones</a>
+                    <div class="kebab-sep"></div>
+                    <div class="kebab-heading">Acciones de Sesión</div>
+                    <button type="button" class="kebab-item" data-action="usuarios"><i class="fa fa-users"></i>
+                        Usuarios asignables
+                    </button>
+                {% elif sesion.es_tiktok %}
+                    <div class="kebab-heading">TikTok</div>
+                    <a href="/tiktok/sesiones/" class="kebab-item"><i class="fab fa-tiktok"></i> Gestionar cuenta</a>
+                    <a href="/tiktok/conversaciones/" class="kebab-item"><i class="fa fa-comments"></i> Conversaciones</a>
+                    <a href="/tiktok/comentarios/" class="kebab-item"><i class="fa fa-comment-dots"></i> Comentarios</a>
+                    <div class="kebab-sep"></div>
+                    <div class="kebab-heading">Acciones de Sesión</div>
+                    <button type="button" class="kebab-item" data-action="usuarios"><i class="fa fa-users"></i>
+                        Usuarios asignables
+                    </button>
+                {% else %}
                 <div class="kebab-heading">Acciones de Sesión</div>
                 <button type="button" class="kebab-item" data-action="editar"><i class="fa fa-pen"></i> Modificar
                 </button>
@@ -149,6 +185,7 @@
                 <button type="button" class="kebab-item" data-action="historial"><i
                         class="fa fa-clock-rotate-left"></i> Historial de conexiones
                 </button>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -159,6 +196,10 @@
                 <span class="canal-badge canal-wa-oficial"><i class="fab fa-whatsapp"></i> WhatsApp Cloud</span>
             {% elif sesion.es_baileys %}
                 <span class="canal-badge canal-baileys"><i class="fab fa-whatsapp"></i> Baileys</span>
+            {% elif sesion.es_instagram %}
+                <span class="canal-badge canal-instagram"><i class="fab fa-instagram"></i> Instagram</span>
+            {% elif sesion.es_tiktok %}
+                <span class="canal-badge canal-tiktok"><i class="fab fa-tiktok"></i> TikTok</span>
             {% else %}
                 <span class="canal-badge">{{ sesion.proveedor }}</span>
             {% endif %}
@@ -264,9 +305,25 @@
     </div>
 
     <div class="card-footer">
-        <a href="/whatsapp/conversaciones/?sesion={{ sesion.id|encrypt_id }}" class="btn-quick">
-            <i class="fa fa-comments"></i> Conversaciones
-        </a>
+        {% if sesion.es_instagram %}
+            <a href="/instagram/conversaciones/" class="btn-quick">
+                <i class="fa fa-comments"></i> Conversaciones
+            </a>
+            <a href="/instagram/sesiones/" class="btn-quick">
+                <i class="fab fa-instagram"></i> Gestionar
+            </a>
+        {% elif sesion.es_tiktok %}
+            <a href="/tiktok/conversaciones/" class="btn-quick">
+                <i class="fa fa-comments"></i> Conversaciones
+            </a>
+            <a href="/tiktok/sesiones/" class="btn-quick">
+                <i class="fab fa-tiktok"></i> Gestionar
+            </a>
+        {% else %}
+            <a href="/whatsapp/conversaciones/?sesion={{ sesion.id|encrypt_id }}" class="btn-quick">
+                <i class="fa fa-comments"></i> Conversaciones
+            </a>
+        {% endif %}
         {% if sesion.es_baileys and sesion.estado != 'conectado' %}
             <button type="button" class="btn-quick btn-quick-warn" data-action="baileys-reconnect">
                 <i class="fa fa-qrcode"></i> Escanear QR

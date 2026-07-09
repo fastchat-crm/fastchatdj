@@ -4,6 +4,7 @@
 {% block head %}
     <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.0">
     <link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.3">
+    <link rel="stylesheet" href="/static/css/whatsapp/tablero_canales.css?v1.0">
 {% endblock %}
 
 {% block content %}
@@ -120,8 +121,7 @@
                         </button>
                     {% endif %}
                     {% if canales_activos.instagram %}
-                        <button class="conex-canal" type="button"
-                                onclick="window.location.href='/instagram/sesiones/'">
+                        <button class="conex-canal" type="button" data-canal="instagram">
           <span class="ic ig-grad">
             <i class="fab fa-instagram"></i>
           </span>
@@ -137,8 +137,7 @@
                         </button>
                     {% endif %}
                     {% if canales_activos.tiktok %}
-                        <button class="conex-canal" type="button"
-                                onclick="window.location.href='/tiktok/sesiones/'">
+                        <button class="conex-canal" type="button" data-canal="tiktok">
           <span class="ic" style="background:#000;color:#fff;">
             <i class="fab fa-tiktok"></i>
           </span>
@@ -648,8 +647,8 @@
                     {% endif %}
 
                     {% if canales_activos.instagram %}
-                        <div class="pane pane-hidden pane-proximamente" data-pane="instagram">
-                            {% include 'whatsapp/sesiones/_proximamente.html' with nombre='Instagram' icono='fab fa-instagram' color='#e1306c' %}
+                        <div class="pane pane-hidden" data-pane="instagram">
+                            {% include 'whatsapp/sesiones/_pane_instagram.html' %}
                         </div>
                     {% endif %}
                     {% if canales_activos.messenger %}
@@ -658,8 +657,8 @@
                         </div>
                     {% endif %}
                     {% if canales_activos.tiktok %}
-                        <div class="pane pane-hidden pane-proximamente" data-pane="tiktok">
-                            {% include 'whatsapp/sesiones/_proximamente.html' with nombre='TikTok' icono='fab fa-tiktok' color='#000' %}
+                        <div class="pane pane-hidden" data-pane="tiktok">
+                            {% include 'whatsapp/sesiones/_pane_tiktok.html' %}
                         </div>
                     {% endif %}
 

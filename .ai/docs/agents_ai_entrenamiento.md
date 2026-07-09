@@ -764,7 +764,13 @@ Exception común: `IAActionError` (`base.py:25`) — safe to display.
 > — antes se re-tokenizaba todo el docstore en cada mensaje; (c) clientes
 > LLM/embeddings cacheados por config (`providers.get_llm_cached` /
 > `get_embeddings_cached`) — reuso de pool de conexiones entre mensajes;
-> (d) `listas_memoria` se carga lazy solo en `consultar_con_listas`.
+> (d) `listas_memoria` se carga lazy solo en `consultar_con_listas`;
+> (e) multicanal (2026-07): el pipeline IA es agnóstico al canal (IG/TikTok entran por el
+> mismo `process_incoming_message` → `AgenteConsultor`); nueva variable opcional de
+> template `{canal}` → 'whatsapp'/'instagram'/'tiktok'/'messenger'
+> (`AgenteConsultor._canal_conversacion`), y los senders IG/TikTok parten respuestas
+> > 1000 chars (`whatsapp/servicio_canal_base.py::partir_texto_por_limite`) porque la
+> Graph API rechaza mensajes largos.
 
 1. **Embedding tokens NO trackeados** — costo invisible. Sugerencia: agregar
    `origen='embedding'` a `ConsumoTokenIA` y llamar desde `build_and_save()`.

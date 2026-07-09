@@ -1,25 +1,23 @@
-"""Seed/reorganize sidebar modules and groups.
+"""Seed del sidebar: resetea y recrea Modulos y ModuloGrupos.
 
-Idempotente. Por defecto UNIFICA (merge) sin borrar:
-  - `Modulo`: get_or_create por `url`. Actualiza nombre/orden si cambian.
-    Nunca se elimina.
-  - `ModuloGrupo`: get_or_create por `nombre`. El M2M hace UNION con los
-    modulos ya asignados (no pierde vinculos manuales agregados por UI).
-  - `GroupModulo` del grupo `Staff`: UNION con los modulos del mapa.
+Comportamiento por defecto (RESET total, sin duplicados):
+  1. Toma snapshot de que URLs tenia asignadas cada rol (`GroupModulo`).
+  2. Desactiva (status=False) TODOS los `Modulo` y `ModuloGrupo` activos.
+  3. Recrea/reactiva desde `SECCIONES`:
+     - `Modulo` por `url`: si existe se reutiliza el mas antiguo y se
+       actualiza nombre/orden; duplicados por url quedan desactivados.
+     - `ModuloGrupo` por `nombre`: icono/prioridad del mapa y M2M exacto
+       (`set`) a los modulos de la seccion.
+  4. Re-vincula los roles: cada `GroupModulo` conserva los modulos cuya
+     url sigue existiendo en el mapa. El grupo `Staff` recibe TODOS.
 
-Flags opcionales:
-  --authoritative  El archivo es la unica fuente de verdad. Resetea el M2M
-                   de cada seccion y del Staff a exactamente lo del mapa.
-  --reset          Soft-delete (status=False) los Modulos cuya url no este
-                   en el mapa Y las ModuloGrupo cuyo nombre no este en
-                   SECCIONES (reemplaza la segmentacion vieja del sidebar).
-                   Solo tiene sentido con --authoritative.
-  --dry-run        No escribe, solo reporta el plan.
+Nunca se hace `.delete()`: todo borrado es soft-delete via status=False.
+
+Flags:
+  --dry-run   No escribe, solo reporta el plan.
 
 Uso:
-    python manage.py seed_modulos                   # merge seguro (default)
-    python manage.py seed_modulos --authoritative   # reescribe M2Ms exactos
-    python manage.py seed_modulos --authoritative --reset
+    python manage.py seed_modulos
     python manage.py seed_modulos --dry-run
 """
 from django.contrib.auth.models import Group
@@ -72,21 +70,39 @@ SECCIONES = [
         ],
     },
     {
-        'nombre':    'Inteligencia Artificial',
-        'icono':     'fa fa-robot',
+        'nombre':    'CRM',
+        'icono':     'fa fa-address-book',
         'prioridad': 40,
         'modulos': [
-            ('/crm/entrenamiento/',          'Entrenamiento IA',      10),
-            ('/crm/entrenamiento/wizard/',   'Crear agente (rápido)', 20),
-            ('/crm/departamentos_chatbots/', 'Flujos chatbot',        30),
-            ('/crm/endpoints_api/',          'Endpoints API',         40),
-            ('/whatsapp/trazas/',            'Trazas IA',             50),
+            ('/crm/cliente/',             'Clientes',            10),
+            ('/crm/perfil_empresa/',      'Perfil de empresa',   20),
+            ('/crm/industria/',           'Industria',           30),
+            ('/crm/actividad_economica/', 'Actividad económica', 40),
+        ],
+    },
+    {
+        'nombre':    'Inteligencia Artificial',
+        'icono':     'fa fa-robot',
+        'prioridad': 50,
+        'modulos': [
+            ('/crm/entrenamiento/',        'Entrenamiento IA',      10),
+            ('/crm/entrenamiento/wizard/', 'Crear agente (rápido)', 20),
+            ('/crm/endpoints_api/',        'Endpoints API',         30),
+            ('/whatsapp/trazas/',          'Trazas IA',             40),
+        ],
+    },
+    {
+        'nombre':    'Departamentos',
+        'icono':     'fa fa-sitemap',
+        'prioridad': 60,
+        'modulos': [
+            ('/crm/departamentos_chatbots/', 'Flujos chatbot', 10),
         ],
     },
     {
         'nombre':    'Analítica',
         'icono':     'fa fa-chart-line',
-        'prioridad': 50,
+        'prioridad': 70,
         'modulos': [
             ('/whatsapp/analytics/',   'Analytics',   10),
             ('/whatsapp/supervision/', 'Supervisión', 20),
@@ -95,7 +111,7 @@ SECCIONES = [
     {
         'nombre':    'Agenda',
         'icono':     'fa fa-calendar-days',
-        'prioridad': 60,
+        'prioridad': 80,
         'modulos': [
             ('/agenda/citas/',         'Citas',                   10),
             ('/agenda/configuracion/', 'Configuración de agenda', 20),
@@ -104,7 +120,7 @@ SECCIONES = [
     {
         'nombre':    'Meta',
         'icono':     'fab fa-meta',
-        'prioridad': 70,
+        'prioridad': 90,
         'modulos': [
             ('/seguridad/credencial-meta/', 'Credenciales Meta App', 10),
             ('/whatsapp/tarifas/',          'Tarifas Meta',          20),
@@ -113,19 +129,18 @@ SECCIONES = [
     {
         'nombre':    'Administración de usuarios',
         'icono':     'fa fa-users-gear',
-        'prioridad': 80,
+        'prioridad': 100,
         'modulos': [
             ('/autenticacion/usuario/',  'Administrativos',  10),
             ('/autenticacion/personas/', 'Clientes',         20),
-            ('/crm/cliente/',            'Clientes CRM',     30),
-            ('/seguridad/empresas/',     'Empresas',         40),
-            ('/seguridad/grupo/',        'Roles de usuario', 50),
+            ('/seguridad/empresas/',     'Empresas',         30),
+            ('/seguridad/grupo/',        'Roles de usuario', 40),
         ],
     },
     {
         'nombre':    'Áreas geográficas',
         'icono':     'fa fa-globe',
-        'prioridad': 90,
+        'prioridad': 110,
         'modulos': [
             ('/area-geografica/pais/',      'País',      10),
             ('/area-geografica/provincia/', 'Provincia', 20),
@@ -135,22 +150,19 @@ SECCIONES = [
     {
         'nombre':    'Configuración del sistema',
         'icono':     'fa fa-sliders',
-        'prioridad': 100,
+        'prioridad': 120,
         'modulos': [
-            ('/seguridad/configuracion/',         'Configuración del sitio',   10),
-            ('/crm/perfil_empresa/',              'Perfil de empresa',         20),
-            ('/crm/industria/',                   'Industria',                 30),
-            ('/crm/actividad_economica/',         'Actividad económica',       40),
-            ('/seguridad/terminosycondiciones/',  'Términos y condiciones',    50),
-            ('/seguridad/administracion-mails/',  'Administración de correos', 60),
-            ('/seguridad/webpush-broadcast/',     'Push broadcast',            70),
-            ('/seguridad/documentacion/',         'Documentación',             80),
+            ('/seguridad/configuracion/',        'Configuración del sitio',   10),
+            ('/seguridad/terminosycondiciones/', 'Términos y condiciones',    20),
+            ('/seguridad/administracion-mails/', 'Administración de correos', 30),
+            ('/seguridad/webpush-broadcast/',    'Push broadcast',            40),
+            ('/seguridad/documentacion/',        'Documentación',             50),
         ],
     },
     {
         'nombre':    'Mantenimientos',
         'icono':     'fa fa-gears',
-        'prioridad': 110,
+        'prioridad': 130,
         'modulos': [
             ('/seguridad/modulogrupo/',         'Secciones del sidebar', 10),
             ('/seguridad/modulo/urls/',         'Mantenimiento URLs',    20),
@@ -164,28 +176,19 @@ SECCIONES = [
 
 
 class Command(BaseCommand):
-    help = 'Crea/actualiza Modulos, ModuloGrupos y asigna todos al grupo Staff.'
+    help = ('Resetea el sidebar: desactiva todos los Modulos/ModuloGrupos y los '
+            'recrea desde SECCIONES sin duplicados, re-vinculando los roles por URL.')
 
     def add_arguments(self, parser):
-        parser.add_argument('--authoritative', action='store_true',
-                            help='El archivo es la unica fuente de verdad: '
-                                 'resetea el M2M de cada seccion y del grupo Staff.')
-        parser.add_argument('--reset', action='store_true',
-                            help='Soft-delete (status=False) de Modulos cuya url no este '
-                                 'en el mapa. Implica --authoritative.')
         parser.add_argument('--dry-run', action='store_true',
                             help='No escribe cambios, solo reporta.')
 
     def handle(self, *args, **opts):
         dry = opts['dry_run']
-        reset = opts['reset']
-        authoritative = opts['authoritative'] or reset
 
         total_urls = sum(len(s['modulos']) for s in SECCIONES)
-        modo = 'AUTHORITATIVE (reemplaza M2Ms)' if authoritative else 'MERGE (unifica, no borra)'
         self.stdout.write(self.style.MIGRATE_HEADING(
-            f'Sembrando {len(SECCIONES)} secciones / {total_urls} URLs '
-            f'[{modo}]...'
+            f'Sembrando {len(SECCIONES)} secciones / {total_urls} URLs [RESET total]...'
         ))
         if dry:
             self.stdout.write(self.style.WARNING('DRY RUN - no se escribe nada.'))
@@ -193,12 +196,12 @@ class Command(BaseCommand):
             return
 
         with transaction.atomic():
-            modulos_por_url = self._upsert_modulos()
-            self._upsert_secciones(modulos_por_url, authoritative)
-            self._asignar_staff(modulos_por_url, authoritative)
-            if reset:
-                self._desactivar_huerfanos(modulos_por_url)
-                self._desactivar_secciones_huerfanas()
+            snapshot_roles = self._snapshot_roles()
+            self._desactivar_todo()
+            modulos_por_url = self._recrear_modulos()
+            self._recrear_secciones(modulos_por_url)
+            self._revincular_roles(snapshot_roles, modulos_por_url)
+            self._asignar_staff(modulos_por_url)
 
         self.stdout.write(self.style.SUCCESS('Listo.'))
 
@@ -210,73 +213,84 @@ class Command(BaseCommand):
                 self.stdout.write(f"      {orden:>3}. {nombre:<28} {url}")
 
     # -------- helpers --------
-    def _upsert_modulos(self):
-        """Crea o actualiza cada Modulo. Devuelve {url: modulo}."""
+    def _snapshot_roles(self):
+        """Guarda {group_name: set(urls activas)} antes del reset."""
+        snapshot = {}
+        for gm in GroupModulo.objects.select_related('group').prefetch_related('modulos'):
+            urls = set(gm.modulos.values_list('url', flat=True))
+            snapshot[gm.group.name] = urls
+        self.stdout.write(f'  Snapshot de {len(snapshot)} rol(es) tomado.')
+        return snapshot
+
+    def _desactivar_todo(self):
+        """Soft-delete de todo el catalogo actual (nunca .delete())."""
+        n_mod = Modulo.objects.filter(status=True).update(status=False)
+        n_sec = ModuloGrupo.objects.filter(status=True).update(status=False)
+        self.stdout.write(f'  Desactivados: {n_mod} modulo(s), {n_sec} seccion(es).')
+
+    def _recrear_modulos(self):
+        """Reactiva o crea cada Modulo del mapa. Duplicados por url quedan
+        desactivados (se reutiliza siempre el registro mas antiguo).
+        Devuelve {url: modulo}."""
         out = {}
-        creados, actualizados, reactivados = 0, 0, 0
+        creados, reactivados, duplicados = 0, 0, 0
         for sec in SECCIONES:
             for url, nombre, orden in sec['modulos']:
-                mod, was_created = Modulo.objects.get_or_create(
-                    url=url, defaults={'nombre': nombre, 'orden': orden},
-                )
-                cambios = []
-                if not was_created:
-                    if mod.nombre != nombre:
-                        mod.nombre = nombre; cambios.append('nombre')
-                    if mod.orden != orden:
-                        mod.orden = orden; cambios.append('orden')
-                    if not mod.status:
-                        mod.status = True; cambios.append('reactivado')
-                        reactivados += 1
-                    if cambios:
-                        mod.save()
-                        actualizados += 1
+                existentes = list(Modulo.objects.filter(url=url).order_by('id'))
+                if existentes:
+                    mod = existentes[0]
+                    mod.nombre = nombre
+                    mod.orden = orden
+                    mod.status = True
+                    mod.save()
+                    reactivados += 1
+                    duplicados += len(existentes) - 1
                 else:
+                    mod = Modulo.objects.create(url=url, nombre=nombre, orden=orden)
                     creados += 1
                 out[url] = mod
-        self.stdout.write(f'  Modulos: {creados} creados, {actualizados} actualizados, '
-                          f'{reactivados} reactivados, {len(out)} total.')
+        self.stdout.write(f'  Modulos: {creados} creados, {reactivados} reactivados, '
+                          f'{duplicados} duplicado(s) dejados inactivos, {len(out)} total.')
         return out
 
-    def _upsert_secciones(self, modulos_por_url, authoritative):
-        """Crea/actualiza ModuloGrupo. En modo merge hace UNION al M2M; en
-        authoritative lo resetea a exactamente los modulos del mapa."""
-        creados, actualizados = 0, 0
-        total_nuevos_links = 0
+    def _recrear_secciones(self, modulos_por_url):
+        """Reactiva o crea cada ModuloGrupo del mapa con M2M exacto (set)."""
+        creadas, reactivadas, duplicadas = 0, 0, 0
         for sec in SECCIONES:
-            mg, was_created = ModuloGrupo.objects.get_or_create(
-                nombre=sec['nombre'],
-                defaults={'icono': sec['icono'], 'prioridad': sec['prioridad']},
+            existentes = list(ModuloGrupo.objects.filter(nombre=sec['nombre']).order_by('id'))
+            if existentes:
+                mg = existentes[0]
+                mg.icono = sec['icono']
+                mg.prioridad = sec['prioridad']
+                mg.status = True
+                mg.save()
+                reactivadas += 1
+                duplicadas += len(existentes) - 1
+            else:
+                mg = ModuloGrupo.objects.create(
+                    nombre=sec['nombre'], icono=sec['icono'], prioridad=sec['prioridad'],
+                )
+                creadas += 1
+            mg.modulos.set([modulos_por_url[url] for (url, _, _) in sec['modulos']])
+        self.stdout.write(f'  Secciones: {creadas} creadas, {reactivadas} reactivadas, '
+                          f'{duplicadas} duplicada(s) dejadas inactivas, {len(SECCIONES)} total.')
+
+    def _revincular_roles(self, snapshot_roles, modulos_por_url):
+        """Cada rol conserva los modulos cuya url sigue en el mapa."""
+        for gm in GroupModulo.objects.select_related('group'):
+            if gm.group.name == ADMIN_GROUP_NAME:
+                continue
+            urls_previas = snapshot_roles.get(gm.group.name, set())
+            vigentes = [modulos_por_url[u] for u in urls_previas if u in modulos_por_url]
+            perdidos = len(urls_previas) - len(vigentes)
+            gm.modulos.set(vigentes)
+            detalle = f', {perdidos} url(s) obsoleta(s) descartada(s)' if perdidos else ''
+            self.stdout.write(
+                f'  Rol "{gm.group.name}": {len(vigentes)} modulo(s) re-vinculado(s){detalle}.'
             )
-            cambios = []
-            if not was_created:
-                if mg.icono != sec['icono']:
-                    mg.icono = sec['icono']; cambios.append('icono')
-                if mg.prioridad != sec['prioridad']:
-                    mg.prioridad = sec['prioridad']; cambios.append('prioridad')
-                if not mg.status:
-                    mg.status = True; cambios.append('reactivada')
-                if cambios:
-                    mg.save()
-                    actualizados += 1
-            else:
-                creados += 1
 
-            modulos_del_mapa = [modulos_por_url[url] for (url, _, _) in sec['modulos']]
-            if authoritative:
-                mg.modulos.set(modulos_del_mapa)
-            else:
-                existentes_ids = set(mg.modulos.values_list('id', flat=True))
-                nuevos = [m for m in modulos_del_mapa if m.id not in existentes_ids]
-                if nuevos:
-                    mg.modulos.add(*nuevos)
-                    total_nuevos_links += len(nuevos)
-        modo = 'reasignado (set)' if authoritative else f'union: +{total_nuevos_links} link(s)'
-        self.stdout.write(f'  Secciones: {creados} creadas, {actualizados} actualizadas, '
-                          f'{len(SECCIONES)} total. M2M {modo}.')
-
-    def _asignar_staff(self, modulos_por_url, authoritative):
-        """Staff = admin unico. Le garantiza acceso a TODOS los modulos del mapa."""
+    def _asignar_staff(self, modulos_por_url):
+        """Staff = admin unico. Recibe TODOS los modulos del mapa."""
         group, was_created = Group.objects.get_or_create(name=ADMIN_GROUP_NAME)
         if was_created:
             self.stdout.write(self.style.WARNING(
@@ -286,53 +300,8 @@ class Command(BaseCommand):
         if not gm.status:
             gm.status = True
             gm.save()
-
         modulos = list(modulos_por_url.values())
-        if authoritative:
-            gm.modulos.set(modulos)
-            self.stdout.write(
-                f'  Grupo "{ADMIN_GROUP_NAME}" re-asignado (set) a {len(modulos)} modulos.'
-            )
-        else:
-            existentes_ids = set(gm.modulos.values_list('id', flat=True))
-            nuevos = [m for m in modulos if m.id not in existentes_ids]
-            if nuevos:
-                gm.modulos.add(*nuevos)
-            self.stdout.write(
-                f'  Grupo "{ADMIN_GROUP_NAME}": +{len(nuevos)} modulo(s) agregado(s). '
-                f'Total vinculados preservados.'
-            )
-
-    def _desactivar_secciones_huerfanas(self):
-        """Marca status=False las ModuloGrupo cuyo nombre no aparece en SECCIONES.
-
-        Es lo que permite reemplazar la segmentacion vieja del sidebar
-        (Inbox/Canales/CRM/...) por la nueva sin dejar secciones fantasma.
-        """
-        nombres_validos = {s['nombre'] for s in SECCIONES}
-        huerfanas = ModuloGrupo.objects.filter(status=True).exclude(nombre__in=nombres_validos)
-        n = huerfanas.count()
-        if n:
-            self.stdout.write(self.style.WARNING(
-                f'  {n} seccion(es) huerfana(s) desactivada(s):'
-            ))
-            for mg in huerfanas:
-                self.stdout.write(f'      - {mg.nombre}')
-            huerfanas.update(status=False)
-        else:
-            self.stdout.write('  Sin secciones huerfanas.')
-
-    def _desactivar_huerfanos(self, modulos_por_url):
-        """Marca status=False los Modulos cuya url no aparece en SECCIONES."""
-        urls_validas = set(modulos_por_url.keys())
-        huerfanos = Modulo.objects.filter(status=True).exclude(url__in=urls_validas)
-        n = huerfanos.count()
-        if n:
-            self.stdout.write(self.style.WARNING(
-                f'  {n} modulo(s) huerfano(s) desactivado(s):'
-            ))
-            for m in huerfanos:
-                self.stdout.write(f'      - {m.url} ({m.nombre})')
-            huerfanos.update(status=False)
-        else:
-            self.stdout.write('  Sin huerfanos.')
+        gm.modulos.set(modulos)
+        self.stdout.write(
+            f'  Grupo "{ADMIN_GROUP_NAME}" asignado (set) a {len(modulos)} modulos.'
+        )

@@ -65,8 +65,8 @@ Todos los canales comparten los mismos modelos, diferenciados por campos — no 
    - POST: validar firma, normalizar payload TikTok al formato interno, llamar a `process_incoming_message(session, event_data, channel_layer)` de `procesar_mensaje.py`. Desde ahí todo funciona solo: Contacto, Conversación, Mensaje, broadcast a `chat_{conv_id}` y `whatsapp_sessionroom_{session_id}`, motor IA, asignación de asesores.
 3. **Servicio de envío** — `meta/tiktok.py` con `TikTokService`, espejo de `InstagramService` (`meta/instagram.py`): POST al endpoint de envío de Business Messaging con el access token de `ConfigTikTok`.
 4. **OAuth de conexión** — flujo donde el cliente autoriza su cuenta Business: redirect a TikTok con `app_id`, callback que guarda tokens en `ConfigTikTok` y crea/activa la `SesionWhatsApp` con `proveedor='tiktok'`.
-5. **Tablero de sesiones** (`whatsapp/templates/whatsapp/sesiones/tablero.html`): card "TikTok" en el modal "Agregar conexión" (Instagram/Messenger ya tienen su slot ahí) + botón "Conectar cuenta TikTok".
-6. **Documentación en la página de sesiones**: panel/acordeón explicando al cliente los pasos: convertir cuenta a Business → clic en conectar → autorizar → listo.
+5. **Tablero de sesiones** — HECHO 2026-07-09: `whatsapp/templates/whatsapp/sesiones/tablero.html` tiene pane propio de TikTok en el modal "Nueva conexión" (`_pane_tiktok.html`: guía en pasos + botón a `/tiktok/sesiones/`) y las cards de sesiones TikTok se renderizan de primera clase en `_card.html` (badge, @username, kebab con links al canal).
+6. **Documentación en la página de sesiones** — HECHO 2026-07-09: `tiktok/templates/tiktok/cuentas/listado.html` incluye `<details class="guia-inline">` con los 5 pasos (Business → app dev/beta → pre-registro → OAuth → webhook); CSS en `static/css/tiktok/cuentas_listado.css`.
 7. **Fase 2 — comentarios**: decidir entre `tipo='comentario'` en `MensajeWhatsApp` o tab separado en conversaciones; sincronización por cron en `cron_jobs/` (polling de `comment/list`) + acción "responder" y "pasar a DM".
 
 ## 4. Requisitos externos (bloqueantes, antes de codear)

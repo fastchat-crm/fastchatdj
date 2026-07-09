@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block head %}
     <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.0">
-    <link rel="stylesheet" href="/static/css/tiktok/cuentas_listado.css?v1.1">
+    <link rel="stylesheet" href="/static/css/tiktok/cuentas_listado.css?v1.2">
 {% endblock %}
 
 {% block content %}
@@ -169,6 +169,46 @@
                         <a href="/seguridad/documentacion/?pagina=conectar-instagram-tiktok" class="pane-link">
                             <i class="fa fa-book-open me-1"></i> Aprende cómo funciona el proceso
                         </a>
+                        <details class="guia-inline">
+                            <summary><i class="fa fa-circle-question"></i> ¿Cómo obtengo el acceso? Pasos detallados</summary>
+                            <div class="guia-steps">
+                                <div class="guia-step">
+                                    <span class="guia-step-num">1</span>
+                                    <div class="guia-step-body">
+                                        <b>Convierte tu cuenta a TikTok Business</b>
+                                        <span>Desde la app: Configuración y privacidad → Cuenta → Cambiar a cuenta de empresa. La cuenta no debe estar registrada en EE. UU., EEA, Suiza ni Reino Unido.</span>
+                                    </div>
+                                </div>
+                                <div class="guia-step">
+                                    <span class="guia-step-num">2</span>
+                                    <div class="guia-step-body">
+                                        <b>Registra una app de desarrollador</b>
+                                        <span>Crea la app en business-api.tiktok.com/portal y solicita acceso a la Business Messaging API (beta); TikTok entrega el app_id y app_secret al aprobar.</span>
+                                    </div>
+                                </div>
+                                <div class="guia-step">
+                                    <span class="guia-step-num">3</span>
+                                    <div class="guia-step-body">
+                                        <b>Pre-registra la cuenta en este formulario</b>
+                                        <span>Guarda el nombre interno y el @username (y el Business ID si lo conoces); la sesión queda "Pendiente de OAuth" sin consumir API.</span>
+                                    </div>
+                                </div>
+                                <div class="guia-step">
+                                    <span class="guia-step-num">4</span>
+                                    <div class="guia-step-body">
+                                        <b>Autoriza por OAuth cuando llegue la aprobación</b>
+                                        <span>Al autorizar la cuenta Business se obtienen el access token y el refresh token; puedes pegarlos abajo o dejar que el flujo OAuth los cargue.</span>
+                                    </div>
+                                </div>
+                                <div class="guia-step">
+                                    <span class="guia-step-num">5</span>
+                                    <div class="guia-step-body">
+                                        <b>Webhook</b>
+                                        <span>Se registra vía API contra {{ webhook_url }} para recibir DMs; los comentarios se sincronizan con la Comments API.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
                         <form id="formCuenta" novalidate>
                             {% csrf_token %}
                             <input type="hidden" name="action" value="add">

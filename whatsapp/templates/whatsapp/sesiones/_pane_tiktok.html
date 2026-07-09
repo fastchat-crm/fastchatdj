@@ -1,0 +1,51 @@
+<div class="pane-hero">
+    <div class="pane-hero-icon pane-hero-tk">
+        <i class="fab fa-tiktok"></i>
+    </div>
+    <div class="pane-hero-body">
+        <h5 class="pane-title mb-1">Conectar una cuenta de TikTok</h5>
+        <p class="pane-hero-text mb-0">
+            Atiende los DMs y comentarios de tus videos desde el inbox. La Business Messaging
+            API de TikTok está en beta y requiere aprobación previa.
+        </p>
+    </div>
+</div>
+<a href="/seguridad/documentacion/?pagina=conectar-instagram-tiktok" class="pane-link">
+    <i class="fa fa-book-open me-1"></i> Ver la guía completa de conexión
+</a>
+<div class="guia-steps">
+    <div class="guia-step">
+        <span class="guia-step-num">1</span>
+        <div class="guia-step-body">
+            <b>Convierte tu cuenta a TikTok Business</b>
+            <span>Desde la app: Configuración → Cuenta → Cambiar a cuenta de empresa. La cuenta no debe estar registrada en EE. UU., EEE, Suiza ni Reino Unido.</span>
+        </div>
+    </div>
+    <div class="guia-step">
+        <span class="guia-step-num">2</span>
+        <div class="guia-step-body">
+            <b>Registra tu app y solicita la beta</b>
+            <span>Crea una app de desarrollador en business-api.tiktok.com/portal y solicita acceso a la Business Messaging API.</span>
+        </div>
+    </div>
+    <div class="guia-step">
+        <span class="guia-step-num">3</span>
+        <div class="guia-step-body">
+            <b>Pre-registra la cuenta en TikTok → Sesiones</b>
+            <span>Guarda el nombre interno y el @username; la sesión queda pendiente hasta autorizar por OAuth.</span>
+        </div>
+    </div>
+    <div class="guia-step">
+        <span class="guia-step-num">4</span>
+        <div class="guia-step-body">
+            <b>Autoriza por OAuth cuando TikTok apruebe</b>
+            <span>El access token y el refresh token se cargan automáticamente y el webhook se registra vía API.</span>
+        </div>
+    </div>
+</div>
+<div class="pane-actions">
+    <button type="button" class="conex-btn conex-btn-light" data-cerrar>Volver</button>
+    <a href="/tiktok/sesiones/" class="conex-btn conex-btn-primary">
+        <i class="fab fa-tiktok me-1"></i> Ir a Sesiones de TikTok
+    </a>
+</div>
