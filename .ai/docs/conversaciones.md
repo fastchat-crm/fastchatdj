@@ -308,6 +308,24 @@ Bajo `whatsapp/templates/whatsapp/conversaciones/`. Ambas vistas extienden
 <link rel="stylesheet" href="/static/stylenew/conversaciones.css">
 ```
 
+### Tema por canal (2026-07-09)
+
+Con `canal_fijo` (wrappers `/instagram/` y `/tiktok/`) el workspace cambia de identidad:
+
+- `base_chat.html` agrega la clase `canal-<canal_fijo>` al `<body>`, cambia el
+  `chat-brand-sub` ("Instagram Workspace" / "TikTok Workspace"), el ícono de marca
+  (`fa-instagram` / `fa-tiktok`) y el `theme-color`.
+- `static/css/whatsapp/chat_tema_canal.css` (cargado siempre en `base_chat.html`)
+  redefine sobre `body.canal-instagram` / `body.canal-tiktok` las variables
+  `--chat-primary*` y burbujas enviadas, más el gradiente del `.chat-brand-icon`,
+  el `.conversacion-item.active` y el fondo del toast `#toast-nuevo-mensaje`
+  (cuyo fondo default verde ahora vive en ese CSS, no inline).
+- En `listado.html` el toast y las notificaciones nativas dicen "Mensaje entrante
+  de Instagram/TikTok" según `canal_fijo`; el selector de sesiones muestra
+  🎵 TikTok (`sesion.es_tiktok`).
+
+Sin `canal_fijo` todo queda igual (verde WhatsApp).
+
 ### Layout — tres zonas
 
 | Zona | ID raíz | Contenido |

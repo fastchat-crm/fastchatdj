@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta content="{{ confi.descripcion }}" name="description"/>
     <link href="{{ favicon }}" rel="shortcut icon"/>
-    <meta name="theme-color" content="#22C55E">
+    <meta name="theme-color" content="{% if canal_fijo == 'instagram' %}#E1306C{% elif canal_fijo == 'tiktok' %}#FE2C55{% else %}#22C55E{% endif %}">
     <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
     <link href="/static/assets_riz/css/bootstrap.min.css?1.5" rel="stylesheet" type="text/css"/>
     <link href="/static/assets_riz/css/icons.min.css" rel="stylesheet" type="text/css"/>
@@ -15,6 +15,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap"
           rel="stylesheet">
     <link rel="stylesheet" href="/static/css/whatsapp/chat_layout.css?v2.7">
+    <link rel="stylesheet" href="/static/css/whatsapp/chat_tema_canal.css?v1.0">
     <link rel="stylesheet" href="/static/sweetalert2/sweetalert2.css">
     <link href="/static/select2/select2.min.css?1.3" rel="stylesheet">
     <link rel="stylesheet" href="/static/snackbar/dist/snackbar.min.css">
@@ -33,7 +34,7 @@
         {% endif %}
     </script>
 </head>
-<body class="chat-app-body">
+<body class="chat-app-body{% if canal_fijo %} canal-{{ canal_fijo }}{% endif %}">
 
 <nav class="chat-navbar">
     <div class="chat-navbar-inner">
@@ -43,7 +44,11 @@
             </a>
             <a href="/panel/" class="chat-navbar-brand">
                 <div class="chat-brand-icon">
-                    {% if confi.logo_sistema %}
+                    {% if canal_fijo == 'instagram' %}
+                        <i class="fa-brands fa-instagram"></i>
+                    {% elif canal_fijo == 'tiktok' %}
+                        <i class="fa-brands fa-tiktok"></i>
+                    {% elif confi.logo_sistema %}
                         <img src="/media/{{ confi.logo_sistema }}" alt="" style="width:22px;height:22px;object-fit:contain;border-radius:4px;">
                     {% else %}
                         <i class="fa fa-comments"></i>
@@ -51,7 +56,7 @@
                 </div>
                 <div class="chat-brand-text">
                     <span class="chat-brand-name">{{ alias|default:nombreempresa }}</span>
-                    <span class="chat-brand-sub">WhatsApp Workspace</span>
+                    <span class="chat-brand-sub">{% if canal_fijo == 'instagram' %}Instagram Workspace{% elif canal_fijo == 'tiktok' %}TikTok Workspace{% else %}WhatsApp Workspace{% endif %}</span>
                 </div>
             </a>
         </div>

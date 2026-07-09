@@ -13,14 +13,13 @@
 {# ── Toast de nuevo mensaje ──────────────────────────────────────────────── #}
 <div class="toast-container position-fixed bottom-0 end-0 p-3 wa-notif-toast-wrap" style="z-index:9999">
     <div id="toast-nuevo-mensaje" class="toast align-items-center text-white border-0"
-         role="alert" aria-live="assertive" aria-atomic="true"
-         style="background:linear-gradient(135deg,#25d366,#128c5e);min-width:280px;">
+         role="alert" aria-live="assertive" aria-atomic="true">
         <div class="d-flex">
             <div class="toast-body d-flex align-items-center gap-2">
-                <i class="fab fa-whatsapp fs-5"></i>
+                <i class="fab {% if canal_fijo == 'instagram' %}fa-instagram{% elif canal_fijo == 'tiktok' %}fa-tiktok{% else %}fa-whatsapp{% endif %} fs-5"></i>
                 <div>
                     <div class="fw-semibold" id="toast-nombre" style="font-size:.88rem;">Nuevo mensaje</div>
-                    <div class="text-white-75" id="toast-sub" style="font-size:.78rem;opacity:.85;">WhatsApp</div>
+                    <div class="text-white-75" id="toast-sub" style="font-size:.78rem;opacity:.85;">{% if canal_fijo == 'instagram' %}Instagram{% elif canal_fijo == 'tiktok' %}TikTok{% else %}WhatsApp{% endif %}</div>
                 </div>
             </div>
             <button type="button" class="btn-close btn-close-white me-2 m-auto"
@@ -57,7 +56,7 @@
                 <select id="sesion-selector" class="cs-session-select{% if sesion_seleccionada and not sesion_seleccionada.activo %} sesion-selector-pausada{% endif %}">
                     {% for sesion in sesiones %}
                         <option value="{{ sesion.id }}" data-activo="{{ sesion.activo|yesno:'true,false,false' }}" {% if sesion_seleccionada.id == sesion.id %}selected{% endif %}>
-                            {% if sesion.es_meta %}☁️ Meta{% elif sesion.es_baileys %}📱 Baileys{% elif sesion.es_instagram %}📸 IG{% elif sesion.es_messenger %}💬 FB{% endif %} · {{ sesion.numero }} | {{ sesion.nombre }} ({{ sesion.get_estado_display }}{% if not sesion.activo %} · ⏸ PAUSADA{% endif %})
+                            {% if sesion.es_meta %}☁️ Meta{% elif sesion.es_baileys %}📱 Baileys{% elif sesion.es_instagram %}📸 IG{% elif sesion.es_tiktok %}🎵 TikTok{% elif sesion.es_messenger %}💬 FB{% endif %} · {{ sesion.numero }} | {{ sesion.nombre }} ({{ sesion.get_estado_display }}{% if not sesion.activo %} · ⏸ PAUSADA{% endif %})
                         </option>
                     {% endfor %}
                 </select>
@@ -3160,7 +3159,7 @@
             // tag por conversación: si llega otro mensaje de la misma conv,
             // reemplaza la notif anterior en lugar de apilar.
             var n = new Notification(nombre || 'Nuevo mensaje', {
-                body: (body || 'Mensaje entrante de WhatsApp').slice(0, 140),
+                body: (body || 'Mensaje entrante de {% if canal_fijo == "instagram" %}Instagram{% elif canal_fijo == "tiktok" %}TikTok{% else %}WhatsApp{% endif %}').slice(0, 140),
                 icon: '/static/assets/img/avatar.png',
                 tag:  'wa-conv-' + (conversacionId || 'x'),
                 renotify: true,
@@ -3205,7 +3204,7 @@
     function _mostrarToast(nombre) {
         if (!_bsToast) return;
         document.getElementById('toast-nombre').textContent = nombre || 'Nuevo mensaje';
-        document.getElementById('toast-sub').textContent = 'Mensaje entrante de WhatsApp';
+        document.getElementById('toast-sub').textContent = 'Mensaje entrante de {% if canal_fijo == "instagram" %}Instagram{% elif canal_fijo == "tiktok" %}TikTok{% else %}WhatsApp{% endif %}';
         _bsToast.show();
     }
 

@@ -1,0 +1,50 @@
+#toast-nuevo-mensaje {
+    background: linear-gradient(135deg, #25d366, #128c5e);
+    min-width: 280px;
+}
+
+body.canal-instagram {
+    --chat-primary: #E1306C;
+    --chat-primary-dark: #C13584;
+    --chat-primary-light: #FBD5E5;
+    --chat-primary-muted: #FDF2F8;
+    --chat-primary-glow: rgba(225, 48, 108, .2);
+    --chat-sent-bubble: #FCE7F3;
+    --chat-sent-text: #4A1230;
+}
+
+body.canal-instagram .chat-brand-icon {
+    background: linear-gradient(135deg, #F58529 0%, #DD2A7B 50%, #8134AF 100%);
+}
+
+body.canal-instagram .conversacion-item.active {
+    background: linear-gradient(135deg, #FDF2F8 0%, #FCE7F3 100%);
+    box-shadow: 0 2px 10px rgba(225, 48, 108, .12);
+}
+
+body.canal-instagram #toast-nuevo-mensaje {
+    background: linear-gradient(135deg, #DD2A7B, #8134AF);
+}
+
+body.canal-tiktok {
+    --chat-primary: #FE2C55;
+    --chat-primary-dark: #D9203F;
+    --chat-primary-light: #FFD9E1;
+    --chat-primary-muted: #FFF1F4;
+    --chat-primary-glow: rgba(254, 44, 85, .2);
+    --chat-sent-bubble: #FFE3E9;
+    --chat-sent-text: #42101C;
+}
+
+body.canal-tiktok .chat-brand-icon {
+    background: linear-gradient(135deg, #2A2D3A 0%, #161823 100%);
+}
+
+body.canal-tiktok .conversacion-item.active {
+    background: linear-gradient(135deg, #FFF1F4 0%, #FFE3E9 100%);
+    box-shadow: 0 2px 10px rgba(254, 44, 85, .12);
+}
+
+body.canal-tiktok #toast-nuevo-mensaje {
+    background: linear-gradient(135deg, #FE2C55, #161823);
+}
