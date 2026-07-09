@@ -55,11 +55,11 @@ capa de control** (`instagram/`, `tiktok/`) que NO duplican modelos: reusan
 | URL | Vista | Qué hace |
 |---|---|---|
 | `/instagram/sesiones/` (antes `cuentas/`) | `instagram/view_cuentas.py` | Conectar sesión IG: cards estilo tablero WhatsApp + modal con sidebar de canales; acción `autodetectar` (con el token extrae page_id/ig_user_id/username vía `/me/accounts`), probar conexión, activar/suspender, eliminar (soft). Crea `SesionWhatsApp(proveedor='instagram', session_id='instagram-<ig_user_id>')` + `ConfigInstagram`. |
-| `/instagram/conversaciones/` | `instagram/view_conversaciones.py` | Listado DMs IG con deep-link `?conv=<encrypt_id>` al inbox compartido. |
+| `/instagram/conversaciones/` | `instagram/view_conversaciones.py` | Inbox en vivo acotado a IG con template propio `instagram/conversaciones/listado.html` (2026-07-09; ver `.ai/docs/conversaciones.md` § "Tema y template por canal"). |
 | `/instagram/comentarios/` | wrapper de `whatsapp.view_comentarios.comentariosView(canal_fijo='instagram')` | Inbox comentarios solo IG. |
 | `/instagram/publicaciones/` | `instagram/view_posts.py` | Grilla en vivo (`InstagramService.listar_publicaciones`) con likes/comentarios + conteo de comentarios nuevos en CRM por `media_id`. Modal de moderación tipo post por publicación (`action=comentarios_post`, partial `_comentarios_post.html`): responder/ocultar/mostrar/DM sin salir de la grilla (POST delega en `_procesar_accion` del inbox de comentarios). |
 | `/tiktok/sesiones/` (antes `cuentas/`) | `tiktok/view_cuentas.py` | Pre-registro de sesiones (crea `SesionWhatsApp(proveedor='tiktok')` + `ConfigTikTok`); cards estilo tablero + banner de estado beta. |
-| `/tiktok/conversaciones/` | `tiktok/view_conversaciones.py` | Listado (vacío hasta aprobar API). |
+| `/tiktok/conversaciones/` | `tiktok/view_conversaciones.py` | Inbox en vivo acotado a TikTok con template propio `tiktok/conversaciones/listado.html` (vacío hasta aprobar API). |
 | `/tiktok/comentarios/` | wrapper `canal_fijo='tiktok'` | Inbox comentarios TikTok (fase 2). |
 
 Cambios de soporte: `PROVEEDORES_SESION` += `tiktok`, property `es_tiktok`, modelo

@@ -315,7 +315,7 @@ _TITULOS_INBOX_CANAL = {
 
 @login_required
 @secure_module
-def conversacionesView(request, canal_fijo=None):
+def conversacionesView(request, canal_fijo=None, template='whatsapp/conversaciones/listado.html'):
     titulo = _TITULOS_INBOX_CANAL.get(canal_fijo, 'Conversaciones WhatsApp')
     data = {
         'titulo': titulo,
@@ -1224,4 +1224,4 @@ def conversacionesView(request, canal_fijo=None):
         RespuestaRapidaGlobal.objects.filter(status=True)
         .values('atajo', 'titulo', 'cuerpo')
     )
-    return render(request, 'whatsapp/conversaciones/listado.html', data)
+    return render(request, template, data)

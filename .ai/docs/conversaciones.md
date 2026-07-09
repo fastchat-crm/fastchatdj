@@ -308,9 +308,27 @@ Bajo `whatsapp/templates/whatsapp/conversaciones/`. Ambas vistas extienden
 <link rel="stylesheet" href="/static/stylenew/conversaciones.css">
 ```
 
-### Tema por canal (2026-07-09)
+### Tema y template por canal (2026-07-09)
 
-Con `canal_fijo` (wrappers `/instagram/` y `/tiktok/`) el workspace cambia de identidad:
+Cada canal tiene **su propio template de inbox** (pedido del usuario: no reutilizar
+el mismo HTML). `conversacionesView(request, canal_fijo=None, template=...)` acepta
+el template a renderizar; los wrappers pasan el suyo:
+
+| Vista | Template |
+|---|---|
+| `/whatsapp/conversaciones/` | `whatsapp/conversaciones/listado.html` (branding WhatsApp fijo) |
+| `/instagram/conversaciones/` | `instagram/templates/instagram/conversaciones/listado.html` |
+| `/tiktok/conversaciones/` | `tiktok/templates/tiktok/conversaciones/listado.html` |
+
+Las copias IG/TikTok nacieron como copia completa del listado de WhatsApp con el
+branding baked-in (ícono/toast del canal, "Mensaje entrante de Instagram/TikTok",
+link de sesión pausada y modal sin-sesiones apuntando a `/instagram/sesiones/` o
+`/tiktok/sesiones/`). Los partials `_modal_*` / `_ci_kebab_portal` y todo el JS
+embebido siguen siendo los mismos: **un cambio de lógica compartida (acciones,
+WebSocket, composer) hay que replicarlo en las tres copias**; un cambio de diseño
+de un canal se hace solo en su copia.
+
+Identidad visual (aplica a las tres, vía layout compartido):
 
 - `base_chat.html` agrega la clase `canal-<canal_fijo>` al `<body>`, cambia el
   `chat-brand-sub` ("Instagram Workspace" / "TikTok Workspace"), el ícono de marca
@@ -319,10 +337,8 @@ Con `canal_fijo` (wrappers `/instagram/` y `/tiktok/`) el workspace cambia de id
   redefine sobre `body.canal-instagram` / `body.canal-tiktok` las variables
   `--chat-primary*` y burbujas enviadas, más el gradiente del `.chat-brand-icon`,
   el `.conversacion-item.active` y el fondo del toast `#toast-nuevo-mensaje`
-  (cuyo fondo default verde ahora vive en ese CSS, no inline).
-- En `listado.html` el toast y las notificaciones nativas dicen "Mensaje entrante
-  de Instagram/TikTok" según `canal_fijo`; el selector de sesiones muestra
-  🎵 TikTok (`sesion.es_tiktok`).
+  (cuyo fondo default verde vive en ese CSS, no inline).
+- El selector de sesiones muestra 🎵 TikTok (`sesion.es_tiktok`).
 
 Sin `canal_fijo` todo queda igual (verde WhatsApp).
 
