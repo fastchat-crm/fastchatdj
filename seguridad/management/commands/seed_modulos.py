@@ -1,17 +1,13 @@
-"""Seed del sidebar: resetea y recrea Modulos y ModuloGrupos.
+"""Seed del sidebar: BORRA (delete real) todo el catalogo y lo recrea.
 
-Comportamiento por defecto (RESET total, sin duplicados):
-  1. Toma snapshot de que URLs tenia asignadas cada rol (`GroupModulo`).
-  2. Desactiva (status=False) TODOS los `Modulo` y `ModuloGrupo` activos.
-  3. Recrea/reactiva desde `SECCIONES`:
-     - `Modulo` por `url`: si existe se reutiliza el mas antiguo y se
-       actualiza nombre/orden; duplicados por url quedan desactivados.
-     - `ModuloGrupo` por `nombre`: icono/prioridad del mapa y M2M exacto
-       (`set`) a los modulos de la seccion.
-  4. Re-vincula los roles: cada `GroupModulo` conserva los modulos cuya
-     url sigue existiendo en el mapa. El grupo `Staff` recibe TODOS.
+Comportamiento (RESET destructivo):
+  1. Elimina con `.delete()` TODOS los `GroupModulo`, `ModuloGrupo` y `Modulo`.
+  2. Crea desde cero los `Modulo` y `ModuloGrupo` definidos en `SECCIONES`.
+  3. Crea (o reutiliza) el grupo `Administrador` y le asigna TODOS los modulos
+     via `GroupModulo`.
 
-Nunca se hace `.delete()`: todo borrado es soft-delete via status=False.
+ADVERTENCIA: los demas roles pierden sus URLs asignadas; hay que
+re-asignarlas desde /seguridad/arbol-de-grupos-url/.
 
 Flags:
   --dry-run   No escribe, solo reporta el plan.
@@ -27,7 +23,7 @@ from django.db import transaction
 from seguridad.models import Modulo, ModuloGrupo, GroupModulo
 
 
-ADMIN_GROUP_NAME = 'Staff'
+ADMIN_GROUP_NAME = 'Administrador'
 
 
 SECCIONES = [
@@ -176,8 +172,8 @@ SECCIONES = [
 
 
 class Command(BaseCommand):
-    help = ('Resetea el sidebar: desactiva todos los Modulos/ModuloGrupos y los '
-            'recrea desde SECCIONES sin duplicados, re-vinculando los roles por URL.')
+    help = ('Borra (delete real) todos los Modulos, ModuloGrupos y GroupModulos, '
+            'los recrea desde SECCIONES y asigna todo al grupo Administrador.')
 
     def add_arguments(self, parser):
         parser.add_argument('--dry-run', action='store_true',
@@ -188,7 +184,7 @@ class Command(BaseCommand):
 
         total_urls = sum(len(s['modulos']) for s in SECCIONES)
         self.stdout.write(self.style.MIGRATE_HEADING(
-            f'Sembrando {len(SECCIONES)} secciones / {total_urls} URLs [RESET total]...'
+            f'Sembrando {len(SECCIONES)} secciones / {total_urls} URLs [DELETE total]...'
         ))
         if dry:
             self.stdout.write(self.style.WARNING('DRY RUN - no se escribe nada.'))
@@ -196,101 +192,49 @@ class Command(BaseCommand):
             return
 
         with transaction.atomic():
-            snapshot_roles = self._snapshot_roles()
-            self._desactivar_todo()
-            modulos_por_url = self._recrear_modulos()
-            self._recrear_secciones(modulos_por_url)
-            self._revincular_roles(snapshot_roles, modulos_por_url)
-            self._asignar_staff(modulos_por_url)
+            self._borrar_todo()
+            modulos_por_url = self._crear_modulos()
+            self._crear_secciones(modulos_por_url)
+            self._asignar_administrador(modulos_por_url)
 
         self.stdout.write(self.style.SUCCESS('Listo.'))
 
-    # -------- planeacion (dry-run) --------
     def _plan(self):
         for s in SECCIONES:
             self.stdout.write(f"  [{s['prioridad']:>3}] {s['nombre']} ({s['icono']})")
             for url, nombre, orden in s['modulos']:
                 self.stdout.write(f"      {orden:>3}. {nombre:<28} {url}")
 
-    # -------- helpers --------
-    def _snapshot_roles(self):
-        """Guarda {group_name: set(urls activas)} antes del reset."""
-        snapshot = {}
-        for gm in GroupModulo.objects.select_related('group').prefetch_related('modulos'):
-            urls = set(gm.modulos.values_list('url', flat=True))
-            snapshot[gm.group.name] = urls
-        self.stdout.write(f'  Snapshot de {len(snapshot)} rol(es) tomado.')
-        return snapshot
+    def _borrar_todo(self):
+        """Delete real de todo el catalogo del sidebar y sus asignaciones."""
+        n_gm, _ = GroupModulo.objects.all().delete()
+        n_sec, _ = ModuloGrupo.objects.all().delete()
+        n_mod, _ = Modulo.objects.all().delete()
+        self.stdout.write(
+            f'  Eliminados: {n_gm} asignacion(es) de rol, {n_sec} seccion(es), '
+            f'{n_mod} modulo(s).'
+        )
 
-    def _desactivar_todo(self):
-        """Soft-delete de todo el catalogo actual (nunca .delete())."""
-        n_mod = Modulo.objects.filter(status=True).update(status=False)
-        n_sec = ModuloGrupo.objects.filter(status=True).update(status=False)
-        self.stdout.write(f'  Desactivados: {n_mod} modulo(s), {n_sec} seccion(es).')
-
-    def _recrear_modulos(self):
-        """Reactiva o crea cada Modulo del mapa. Duplicados por url quedan
-        desactivados (se reutiliza siempre el registro mas antiguo).
-        Devuelve {url: modulo}."""
+    def _crear_modulos(self):
+        """Crea cada Modulo del mapa desde cero. Devuelve {url: modulo}."""
         out = {}
-        creados, reactivados, duplicados = 0, 0, 0
         for sec in SECCIONES:
             for url, nombre, orden in sec['modulos']:
-                existentes = list(Modulo.objects.filter(url=url).order_by('id'))
-                if existentes:
-                    mod = existentes[0]
-                    mod.nombre = nombre
-                    mod.orden = orden
-                    mod.status = True
-                    mod.save()
-                    reactivados += 1
-                    duplicados += len(existentes) - 1
-                else:
-                    mod = Modulo.objects.create(url=url, nombre=nombre, orden=orden)
-                    creados += 1
-                out[url] = mod
-        self.stdout.write(f'  Modulos: {creados} creados, {reactivados} reactivados, '
-                          f'{duplicados} duplicado(s) dejados inactivos, {len(out)} total.')
+                out[url] = Modulo.objects.create(url=url, nombre=nombre, orden=orden)
+        self.stdout.write(f'  Modulos creados: {len(out)}.')
         return out
 
-    def _recrear_secciones(self, modulos_por_url):
-        """Reactiva o crea cada ModuloGrupo del mapa con M2M exacto (set)."""
-        creadas, reactivadas, duplicadas = 0, 0, 0
+    def _crear_secciones(self, modulos_por_url):
+        """Crea cada ModuloGrupo del mapa con su M2M exacto."""
         for sec in SECCIONES:
-            existentes = list(ModuloGrupo.objects.filter(nombre=sec['nombre']).order_by('id'))
-            if existentes:
-                mg = existentes[0]
-                mg.icono = sec['icono']
-                mg.prioridad = sec['prioridad']
-                mg.status = True
-                mg.save()
-                reactivadas += 1
-                duplicadas += len(existentes) - 1
-            else:
-                mg = ModuloGrupo.objects.create(
-                    nombre=sec['nombre'], icono=sec['icono'], prioridad=sec['prioridad'],
-                )
-                creadas += 1
-            mg.modulos.set([modulos_por_url[url] for (url, _, _) in sec['modulos']])
-        self.stdout.write(f'  Secciones: {creadas} creadas, {reactivadas} reactivadas, '
-                          f'{duplicadas} duplicada(s) dejadas inactivas, {len(SECCIONES)} total.')
-
-    def _revincular_roles(self, snapshot_roles, modulos_por_url):
-        """Cada rol conserva los modulos cuya url sigue en el mapa."""
-        for gm in GroupModulo.objects.select_related('group'):
-            if gm.group.name == ADMIN_GROUP_NAME:
-                continue
-            urls_previas = snapshot_roles.get(gm.group.name, set())
-            vigentes = [modulos_por_url[u] for u in urls_previas if u in modulos_por_url]
-            perdidos = len(urls_previas) - len(vigentes)
-            gm.modulos.set(vigentes)
-            detalle = f', {perdidos} url(s) obsoleta(s) descartada(s)' if perdidos else ''
-            self.stdout.write(
-                f'  Rol "{gm.group.name}": {len(vigentes)} modulo(s) re-vinculado(s){detalle}.'
+            mg = ModuloGrupo.objects.create(
+                nombre=sec['nombre'], icono=sec['icono'], prioridad=sec['prioridad'],
             )
+            mg.modulos.set([modulos_por_url[url] for (url, _, _) in sec['modulos']])
+        self.stdout.write(f'  Secciones creadas: {len(SECCIONES)}.')
 
-    def _asignar_staff(self, modulos_por_url):
-        """Staff = admin unico. Recibe TODOS los modulos del mapa."""
+    def _asignar_administrador(self, modulos_por_url):
+        """Grupo Administrador recibe TODOS los modulos del mapa."""
         group, was_created = Group.objects.get_or_create(name=ADMIN_GROUP_NAME)
         if was_created:
             self.stdout.write(self.style.WARNING(
@@ -303,5 +247,5 @@ class Command(BaseCommand):
         modulos = list(modulos_por_url.values())
         gm.modulos.set(modulos)
         self.stdout.write(
-            f'  Grupo "{ADMIN_GROUP_NAME}" asignado (set) a {len(modulos)} modulos.'
+            f'  Grupo "{ADMIN_GROUP_NAME}" asignado a {len(modulos)} modulo(s).'
         )
