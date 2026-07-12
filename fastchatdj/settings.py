@@ -34,6 +34,7 @@ with open(os.path.join(BASE_DIR, 'credenciales.json')) as json_file:
     data = json.load(json_file)
     # POSTGRES
     POSTGRES_PASSWORD = data['POSTGRES_PASSWORD']
+    POSTGRES_USER = data.get('POSTGRES_USER', 'postgres')
     POSTGRES_HOST = data['POSTGRES_HOST']
     POSTGRES_PORT = data['POSTGRES_PORT']
     POSTGRES_DBNAME = data['POSTGRES_DBNAME']
@@ -54,6 +55,8 @@ with open(os.path.join(BASE_DIR, 'credenciales.json')) as json_file:
     DOMINIO_GENERAL = data["DOMINIO_GENERAL"]
     WINDOWS = data["WINDOWS"]
     URL_GENERAL = ("https://" if USE_SSL else "http://") + DOMINIO_GENERAL
+    if not DEBUG:
+        ALLOWED_HOSTS = data.get('ALLOWED_HOSTS') or [DOMINIO_GENERAL, 'www.' + DOMINIO_GENERAL, 'localhost', '127.0.0.1']
     ADMINS = data["ADMINS"]
     CACHES_REDIS = data.get("CACHES_REDIS")
     ID_GRUPO_CLIENTE = data['ID_GRUPO_CLIENTE']
@@ -183,7 +186,7 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
         'NAME': POSTGRES_DBNAME,
-        'USER': 'postgres',
+        'USER': POSTGRES_USER,
         'PASSWORD': POSTGRES_PASSWORD,
         'HOST': POSTGRES_HOST,
         'PORT': POSTGRES_PORT,
@@ -243,7 +246,7 @@ MEDIA_URL = '/media/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 TEST_RUNNER = 'django.test.runner.DiscoverRunner'  # If you wish to delay updates to your test suite
-SESSION_SERIALIZER = 'django.contrib.sessions.serializers.PickleSerializer'
+SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'
 
 SITE_STORAGE = Path(BASE_DIR) / 'media'
 
@@ -254,7 +257,6 @@ FILE_CHARSET = 'utf-8'
 DEFAULT_CHARSET = 'utf-8'
 
 
-CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [

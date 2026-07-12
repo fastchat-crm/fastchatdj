@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from datetime import timedelta
 from decimal import Decimal
@@ -16,6 +17,8 @@ from whatsapp.models import ConversacionWhatsApp
 from fastchatdj import settings
 from agents_ai.vectorstore_manager import VectorStoreManager
 from agents_ai.providers import MODELOS_DISPONIBLES
+
+logger = logging.getLogger(__name__)
 
 # Representa las industrias generales a las que puede pertenecer un negocio
 class Industria(ModeloBase):
@@ -446,8 +449,7 @@ class AgentesIA(ModeloBase):
         detalles = self.detalleagentesai_set.filter(status=True).order_by('id')
         detalles_json = []
 
-        # Debug: imprimir cuántos detalles se encontraron
-        print(f"DEBUG: Agente {self.id} tiene {detalles.count()} detalles activos")
+        logger.debug("Agente %s tiene %s detalles activos", self.id, detalles.count())
 
         for detalle in detalles:
             detalle_data = {
@@ -464,7 +466,7 @@ class AgentesIA(ModeloBase):
             }
             detalles_json.append(detalle_data)
 
-        print(f"DEBUG: JSON generado con {len(detalles_json)} detalles")
+        logger.debug("JSON generado con %s detalles", len(detalles_json))
         return json.dumps(detalles_json)
 
     def fetch_contexto_apis(self, forzar_refresco: bool = False) -> str:
@@ -670,7 +672,7 @@ class AgentesIA(ModeloBase):
 
                     resp = requests.get(detalle.enlace, headers=headers, timeout=30)
                     if resp.status_code != 200:
-                        print(f"[build_enlaces] {detalle.enlace} → HTTP {resp.status_code}: {resp.text[:200]}")
+                        logger.warning("[build_enlaces] %s → HTTP %s: %s", detalle.enlace, resp.status_code, resp.text[:200])
                         continue
 
                     descripcion_detalle = (detalle.descripcion or '').strip()
@@ -756,8 +758,7 @@ class AgentesIA(ModeloBase):
                         documentos.extend(docs)
 
                 except Exception as e:
-                    import traceback
-                    print(f"[build_enlaces] Error procesando {detalle.enlace}: {e}\n{traceback.format_exc()}")
+                    logger.exception("[build_enlaces] Error procesando %s", detalle.enlace)
                     continue
 
             if documentos:
@@ -773,7 +774,7 @@ class AgentesIA(ModeloBase):
                             apikeyobj.estado = False
                             apikeyobj.msgerror = f'Inválida al generar embeddings: {err_msg[:400]}'
                             apikeyobj.save(update_fields=['estado', 'msgerror'])
-                            print(f"[build_enlaces] API Key #{apikeyobj.id} marcada inactiva por embedding inválido")
+                            logger.warning("[build_enlaces] API Key #%s marcada inactiva por embedding inválido", apikeyobj.id)
                         except Exception:
                             pass
                         continue  # intentar con la siguiente apikey

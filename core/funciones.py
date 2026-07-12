@@ -586,8 +586,13 @@ def addData(request, data):
         if request.user.cambio_clave and request.path != '/changepass/':
             data['activar_cambio_clave'] = request.user.cambio_clave
         if not 'perfilprincipal' in request.session:
-            request.session['perfilprincipal'] = request.user.get_perfil_per()
-        data['perfilprincipal'] = request.session['perfilprincipal'] if 'perfilprincipal' in request.session else None
+            perfil_principal = request.user.get_perfil_per()
+            request.session['perfilprincipal'] = perfil_principal.id if perfil_principal else None
+        if request.session.get('perfilprincipal'):
+            from autenticacion.models import PerfilPersona
+            data['perfilprincipal'] = PerfilPersona.objects.filter(id=request.session['perfilprincipal']).first()
+        else:
+            data['perfilprincipal'] = None
         get_filtros_anteriores(request, data, None)
         data["fecha_session_expira"] = (request.session.model.objects.get(
             pk=request.session.session_key).expire_date - timezone.now()).seconds

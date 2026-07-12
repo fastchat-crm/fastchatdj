@@ -14,8 +14,9 @@ def cambiarSesionView(request):
     login(request, userNuevaSesion)
     request.session['user_anterior'] = pkUserAnterior
     request.session['url'] = path
-    if userNuevaSesion.get_perfil_per():
-        request.session['perfilprincipal'] = userNuevaSesion.get_perfil_per()
+    perfil_nueva_sesion = userNuevaSesion.get_perfil_per()
+    if perfil_nueva_sesion:
+        request.session['perfilprincipal'] = perfil_nueva_sesion.id
     messages.success(request, "Ahora te encuentras logueado con el usuario {} - {}".format(userNuevaSesion.username,
                                                                                            userNuevaSesion.get_full_name()))
     return redirect('/panel/')
@@ -29,8 +30,9 @@ def regresarSesionView(request):
         path = request.session['url']
     logout(request)
     login(request, userAnteriorSesion)
-    if userAnteriorSesion.get_perfil_per():
-        request.session['perfilprincipal'] = userAnteriorSesion.get_perfil_per()
+    perfil_anterior_sesion = userAnteriorSesion.get_perfil_per()
+    if perfil_anterior_sesion:
+        request.session['perfilprincipal'] = perfil_anterior_sesion.id
     messages.success(request, "Regresaste a tu sesión {} - {}".format(userAnteriorSesion.username,
                                                                       userAnteriorSesion.get_full_name()))
     return redirect(path)

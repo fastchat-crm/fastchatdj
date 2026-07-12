@@ -52,7 +52,7 @@ def process_incoming_message(session, event_data, channel_layer):
         if not getattr(session, 'activo', True):
             return JsonResponse({'status': 'ok', 'session_inactive': True})
 
-        print('process_incoming_message', event_data)
+        logger.debug('process_incoming_message %s', event_data)
         # Extraer datos del mensaje
         message_id = event_data.get('id')
         from_number = event_data.get('from')
